@@ -21,13 +21,13 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -37,10 +37,16 @@ import (
 )
 
 // MessageStats tracks stats for messages.
-var MessageStats = stats.NewMultiCounters("Messages", []string{"TableName", "Metric"})
+var MessageStats = stats.NewGaugesWithMultiLabels(
+	"Messages",
+	"Stats for messages",
+	[]string{"TableName", "Metric"})
 
 // MessageDelayTimings records total latency from queueing to sent to clients.
-var MessageDelayTimings = stats.NewMultiTimings("MessageDelay", []string{"TableName"})
+var MessageDelayTimings = stats.NewMultiTimings(
+	"MessageDelay",
+	"MessageDelayTimings records total latency from queueing to client sends",
+	[]string{"TableName"})
 
 type messageReceiver struct {
 	ctx     context.Context

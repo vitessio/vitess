@@ -17,8 +17,8 @@ limitations under the License.
 package binlog
 
 import (
-	log "github.com/golang/glog"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlannotation"
 
 	"errors"

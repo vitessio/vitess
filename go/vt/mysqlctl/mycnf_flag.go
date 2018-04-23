@@ -19,7 +19,7 @@ package mysqlctl
 import (
 	"flag"
 
-	log "github.com/golang/glog"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // This file handles using command line flags to create a Mycnf object.

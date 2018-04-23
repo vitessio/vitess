@@ -27,10 +27,10 @@ import (
 	"math"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/keepalive"
 	"vitess.io/vitess/go/vt/grpccommon"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttls"
 )
 

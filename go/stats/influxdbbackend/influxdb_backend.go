@@ -28,9 +28,9 @@ import (
 	"expvar"
 	"flag"
 
-	log "github.com/golang/glog"
 	influxClient "github.com/influxdb/influxdb/client"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -96,11 +96,9 @@ func statToValue(v expvar.Var) interface{} {
 	switch v := v.(type) {
 	case *stats.Float:
 		return v.Get()
-	case *stats.Int:
+	case *stats.Counter:
 		return v.Get()
 	case stats.FloatFunc:
-		return v()
-	case stats.IntFunc:
 		return v()
 	default:
 		return v.String()

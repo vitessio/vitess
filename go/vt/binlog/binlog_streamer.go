@@ -22,13 +22,13 @@ import (
 	"io"
 	"strings"
 
-	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -37,7 +37,7 @@ import (
 )
 
 var (
-	binlogStreamerErrors = stats.NewCounters("BinlogStreamerErrors")
+	binlogStreamerErrors = stats.NewCountersWithLabels("BinlogStreamerErrors", "error count when streaming binlog", "state")
 
 	// ErrClientEOF is returned by Streamer if the stream ended because the
 	// consumer of the stream indicated it doesn't want any more events.

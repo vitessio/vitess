@@ -19,37 +19,99 @@ package stats
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/logutil"
 )
 
-// Counters is similar to expvar.Map, except that
-// it doesn't allow floats. In addition, it provides
-// a Counts method which can be used for tracking rates.
-type Counters struct {
+// logCounterNegative is for throttling adding a negative value to a counter messages in logs
+var logCounterNegative = logutil.NewThrottledLogger("StatsCounterNegative", 1*time.Minute)
+
+// Counter is expvar.Int+Get+hook
+type Counter struct {
+	i    sync2.AtomicInt64
+	help string
+}
+
+// NewCounter returns a new Counter
+func NewCounter(name string, help string) *Counter {
+	v := &Counter{help: help}
+	if name != "" {
+		publish(name, v)
+	}
+	return v
+}
+
+// Add adds the provided value to the Counter
+func (v *Counter) Add(delta int64) {
+	if delta < 0 {
+		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", v)
+	}
+	v.i.Add(delta)
+}
+
+// Reset resets the counter value to 0
+func (v *Counter) Reset() {
+	v.i.Set(int64(0))
+}
+
+// Get returns the value
+func (v *Counter) Get() int64 {
+	return v.i.Get()
+}
+
+// String is the implementation of expvar.var
+func (v *Counter) String() string {
+	return strconv.FormatInt(v.i.Get(), 10)
+}
+
+// Help returns the help string
+func (v *Counter) Help() string {
+	return v.help
+}
+
+// Gauge is an unlabeled metric whose values can go up/down.
+type Gauge struct {
+	Counter
+}
+
+// NewGauge creates a new Gauge and publishes it if name is set
+func NewGauge(name string, help string) *Gauge {
+	v := &Gauge{Counter: Counter{help: help}}
+
+	if name != "" {
+		publish(name, v)
+	}
+	return v
+}
+
+// Set sets the value
+func (v *Gauge) Set(value int64) {
+	v.Counter.i.Set(value)
+}
+
+// Add adds the provided value to the Gauge
+func (v *Gauge) Add(delta int64) {
+	v.Counter.i.Add(delta)
+}
+
+// counters is similar to expvar.Map, except that
+// it doesn't allow floats. It is used to build CountersWithLabels and GaugesWithLabels.
+type counters struct {
 	// mu only protects adding and retrieving the value (*int64) from the map,
 	// modification to the actual number (int64) should be done with atomic funcs.
 	mu     sync.RWMutex
 	counts map[string]*int64
+	help   string
 }
 
-// NewCounters create a new Counters instance. If name is set, the variable
-// gets published. The functional also accepts an optional list of tags that
-// pre-creates them initialized to 0.
-func NewCounters(name string, tags ...string) *Counters {
-	c := &Counters{counts: make(map[string]*int64)}
-	for _, tag := range tags {
-		c.counts[tag] = new(int64)
-	}
-	if name != "" {
-		publish(name, c)
-	}
-	return c
-}
-
-// String is used by expvar.
-func (c *Counters) String() string {
+// String implements expvar
+func (c *counters) String() string {
 	b := bytes.NewBuffer(make([]byte, 0, 4096))
 
 	c.mu.RLock()
@@ -69,7 +131,7 @@ func (c *Counters) String() string {
 	return b.String()
 }
 
-func (c *Counters) getValueAddr(name string) *int64 {
+func (c *counters) getValueAddr(name string) *int64 {
 	c.mu.RLock()
 	a, ok := c.counts[name]
 	c.mu.RUnlock()
@@ -92,26 +154,26 @@ func (c *Counters) getValueAddr(name string) *int64 {
 }
 
 // Add adds a value to a named counter.
-func (c *Counters) Add(name string, value int64) {
+func (c *counters) Add(name string, value int64) {
 	a := c.getValueAddr(name)
 	atomic.AddInt64(a, value)
 }
 
-// Set sets the value of a named counter.
-func (c *Counters) Set(name string, value int64) {
-	a := c.getValueAddr(name)
-	atomic.StoreInt64(a, value)
-}
-
-// Reset resets all counter values
-func (c *Counters) Reset() {
+// ResetAll resets all counter values.
+func (c *counters) ResetAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.counts = make(map[string]*int64)
 }
 
+// Reset resets a specific counter value to 0
+func (c *counters) Reset(name string) {
+	a := c.getValueAddr(name)
+	atomic.StoreInt64(a, int64(0))
+}
+
 // Counts returns a copy of the Counters' map.
-func (c *Counters) Counts() map[string]int64 {
+func (c *counters) Counts() map[string]int64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -120,6 +182,159 @@ func (c *Counters) Counts() map[string]int64 {
 		counts[k] = atomic.LoadInt64(a)
 	}
 	return counts
+}
+
+// Help returns the help string.
+func (c *counters) Help() string {
+	return c.help
+}
+
+// CountersWithLabels provides a labelName for the tagged values in Counters
+// It provides a Counts method which can be used for tracking rates.
+type CountersWithLabels struct {
+	counters
+	labelName string
+}
+
+// NewCountersWithLabels create a new Counters instance. If name is set, the variable
+// gets published. The function also accepts an optional list of tags that
+// pre-creates them initialized to 0.
+// labelName is a category name used to organize the tags in Prometheus.
+func NewCountersWithLabels(name string, help string, labelName string, tags ...string) *CountersWithLabels {
+	c := &CountersWithLabels{
+		counters: counters{
+			counts: make(map[string]*int64),
+			help:   help,
+		},
+		labelName: labelName,
+	}
+
+	for _, tag := range tags {
+		c.counts[tag] = new(int64)
+	}
+	if name != "" {
+		publish(name, c)
+	}
+	return c
+}
+
+// LabelName returns the label name.
+func (c *CountersWithLabels) LabelName() string {
+	return c.labelName
+}
+
+// Add adds a value to a named counter.
+func (c *CountersWithLabels) Add(name string, value int64) {
+	if value < 0 {
+		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", c)
+	}
+	a := c.getValueAddr(name)
+	atomic.AddInt64(a, value)
+}
+
+// GaugesWithLabels is similar to CountersWithLabels, except its values can go up and down.
+type GaugesWithLabels struct {
+	CountersWithLabels
+}
+
+// NewGaugesWithLabels creates a new GaugesWithLabels and publishes it if the name is set.
+func NewGaugesWithLabels(name string, help string, labelName string, tags ...string) *GaugesWithLabels {
+	g := &GaugesWithLabels{CountersWithLabels: CountersWithLabels{counters: counters{
+		counts: make(map[string]*int64),
+		help:   help,
+	}, labelName: labelName}}
+
+	for _, tag := range tags {
+		g.CountersWithLabels.counts[tag] = new(int64)
+	}
+	if name != "" {
+		publish(name, g)
+	}
+	return g
+}
+
+// Set sets the value of a named gauge.
+func (g *GaugesWithLabels) Set(name string, value int64) {
+	a := g.CountersWithLabels.getValueAddr(name)
+	atomic.StoreInt64(a, value)
+}
+
+// Add adds a value to a named gauge.
+func (g *GaugesWithLabels) Add(name string, value int64) {
+	a := g.getValueAddr(name)
+	atomic.AddInt64(a, value)
+}
+
+// CounterFunc converts a function that returns
+// an int64 as an expvar.
+// For implementations that differentiate between Counters/Gauges,
+// CounterFunc's values only go up (or are reset to 0)
+type CounterFunc struct {
+	Mf   MetricFunc
+	help string
+}
+
+// NewCounterFunc creates a new CounterFunc instance and publishes it if name is set
+func NewCounterFunc(name string, help string, Mf MetricFunc) *CounterFunc {
+	c := &CounterFunc{
+		Mf:   Mf,
+		help: help,
+	}
+
+	if name != "" {
+		publish(name, c)
+	}
+	return c
+}
+
+// Help returns the help string
+func (cf *CounterFunc) Help() string {
+	return cf.help
+}
+
+// String implements expvar.Var
+func (cf *CounterFunc) String() string {
+	return cf.Mf.String()
+}
+
+// MetricFunc defines an interface for things that can be exported with calls to stats.CounterFunc/stats.GaugeFunc
+type MetricFunc interface {
+	FloatVal() float64
+	String() string
+}
+
+// IntFunc converst a function that returns an int64 as both an expvar and a MetricFunc
+type IntFunc func() int64
+
+// FloatVal is the implementation of MetricFunc
+func (f IntFunc) FloatVal() float64 {
+	return float64(f())
+}
+
+// String is the implementation of expvar.var
+func (f IntFunc) String() string {
+	return strconv.FormatInt(f(), 10)
+}
+
+// GaugeFunc converts a function that returns an int64 as an expvar.
+// It's a wrapper around CounterFunc for values that go up/down
+// for implementations (like Prometheus) that need to differ between Counters and Gauges.
+type GaugeFunc struct {
+	CounterFunc
+}
+
+// NewGaugeFunc creates a new GaugeFunc instance and publishes it if name is set
+func NewGaugeFunc(name string, help string, Mf MetricFunc) *GaugeFunc {
+	i := &GaugeFunc{
+		CounterFunc: CounterFunc{
+			Mf:   Mf,
+			help: help,
+		}}
+
+	if name != "" {
+		publish(name, i)
+	}
+	return i
 }
 
 // CountersFunc converts a function that returns
@@ -152,76 +367,164 @@ func (f CountersFunc) String() string {
 	return b.String()
 }
 
-// MultiCounters is a multidimensional Counters implementation where
+// CountersWithMultiLabels is a multidimensional Counters implementation where
 // names of categories are compound names made with joining multiple
 // strings with '.'.
-type MultiCounters struct {
-	Counters
+type CountersWithMultiLabels struct {
+	counters
 	labels []string
 }
 
-// NewMultiCounters creates a new MultiCounters instance, and publishes it
+// NewCountersWithMultiLabels creates a new CountersWithMultiLabels instance, and publishes it
 // if name is set.
-func NewMultiCounters(name string, labels []string) *MultiCounters {
-	t := &MultiCounters{
-		Counters: Counters{counts: make(map[string]*int64)},
-		labels:   labels,
+func NewCountersWithMultiLabels(name string, help string, labels []string) *CountersWithMultiLabels {
+	t := &CountersWithMultiLabels{
+		counters: counters{
+			counts: make(map[string]*int64),
+			help:   help},
+		labels: labels,
 	}
 	if name != "" {
 		publish(name, t)
 	}
+
 	return t
 }
 
 // Labels returns the list of labels.
-func (mc *MultiCounters) Labels() []string {
+func (mc *CountersWithMultiLabels) Labels() []string {
 	return mc.labels
 }
 
 // Add adds a value to a named counter. len(names) must be equal to
 // len(Labels)
-func (mc *MultiCounters) Add(names []string, value int64) {
+func (mc *CountersWithMultiLabels) Add(names []string, value int64) {
 	if len(names) != len(mc.labels) {
-		panic("MultiCounters: wrong number of values in Add")
+		panic("CountersWithMultiLabels: wrong number of values in Add")
 	}
-	mc.Counters.Add(mapKey(names), value)
+	if value < 0 {
+		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", mc)
+	}
+
+	mc.counters.Add(mapKey(names), value)
+}
+
+// Reset resets the value of a named counter back to 0. len(names)
+// must be equal to len(Labels)
+func (mc *CountersWithMultiLabels) Reset(names []string) {
+	if len(names) != len(mc.labels) {
+		panic("CountersWithMultiLabels: wrong number of values in Reset")
+	}
+
+	mc.counters.Reset(mapKey(names))
+}
+
+// Counts returns a copy of the Counters' map.
+// The key is a single string where all labels are joiend by a "." e.g.
+// "label1.label2".
+func (mc *CountersWithMultiLabels) Counts() map[string]int64 {
+	return mc.counters.Counts()
+}
+
+// GaugesWithMultiLabels is a CountersWithMultiLabels implementation where the values can go up and down
+type GaugesWithMultiLabels struct {
+	CountersWithMultiLabels
+}
+
+// NewGaugesWithMultiLabels creates a new GaugesWithMultiLabels instance, and publishes it
+// if name is set.
+func NewGaugesWithMultiLabels(name string, help string, labels []string) *GaugesWithMultiLabels {
+	t := &GaugesWithMultiLabels{
+		CountersWithMultiLabels: CountersWithMultiLabels{counters: counters{
+			counts: make(map[string]*int64),
+			help:   help,
+		},
+			labels: labels,
+		}}
+	if name != "" {
+		publish(name, t)
+	}
+
+	return t
 }
 
 // Set sets the value of a named counter. len(names) must be equal to
 // len(Labels)
-func (mc *MultiCounters) Set(names []string, value int64) {
-	if len(names) != len(mc.labels) {
-		panic("MultiCounters: wrong number of values in Set")
+func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
+	if len(names) != len(mg.CountersWithMultiLabels.labels) {
+		panic("GaugesWithMultiLabels: wrong number of values in Set")
 	}
-	mc.Counters.Set(mapKey(names), value)
+	a := mg.getValueAddr(mapKey(names))
+	atomic.StoreInt64(a, value)
 }
 
-// MultiCountersFunc is a multidimensional CountersFunc implementation
+// Add adds a value to a named gauge. len(names) must be equal to
+// len(Labels)
+func (mg *GaugesWithMultiLabels) Add(names []string, value int64) {
+	if len(names) != len(mg.labels) {
+		panic("CountersWithMultiLabels: wrong number of values in Add")
+	}
+
+	mg.counters.Add(mapKey(names), value)
+}
+
+// CountersFuncWithMultiLabels is a multidimensional CountersFunc implementation
 // where names of categories are compound names made with joining
 // multiple strings with '.'.  Since the map is returned by the
 // function, we assume it's in the right format (meaning each key is
 // of the form 'aaa.bbb.ccc' with as many elements as there are in
 // Labels).
-type MultiCountersFunc struct {
+type CountersFuncWithMultiLabels struct {
 	CountersFunc
 	labels []string
+	help   string
 }
 
 // Labels returns the list of labels.
-func (mcf *MultiCountersFunc) Labels() []string {
+func (mcf *CountersFuncWithMultiLabels) Labels() []string {
 	return mcf.labels
 }
 
-// NewMultiCountersFunc creates a new MultiCountersFunc mapping to the provided
+// Help returns the help string
+func (mcf *CountersFuncWithMultiLabels) Help() string {
+	return mcf.help
+}
+
+// NewCountersFuncWithMultiLabels creates a new CountersFuncWithMultiLabels mapping to the provided
 // function.
-func NewMultiCountersFunc(name string, labels []string, f CountersFunc) *MultiCountersFunc {
-	t := &MultiCountersFunc{
+func NewCountersFuncWithMultiLabels(name string, labels []string, help string, f CountersFunc) *CountersFuncWithMultiLabels {
+	t := &CountersFuncWithMultiLabels{
 		CountersFunc: f,
 		labels:       labels,
+		help:         help,
 	}
 	if name != "" {
 		publish(name, t)
 	}
+
+	return t
+}
+
+// GaugesFuncWithMultiLabels is a wrapper around CountersFuncWithMultiLabels
+// for values that go up/down for implementations (like Prometheus) that need to differ between Counters and Gauges.
+type GaugesFuncWithMultiLabels struct {
+	CountersFuncWithMultiLabels
+}
+
+// NewGaugesFuncWithMultiLabels creates a new GaugesFuncWithMultiLabels mapping to the provided
+// function.
+func NewGaugesFuncWithMultiLabels(name string, labels []string, help string, f CountersFunc) *GaugesFuncWithMultiLabels {
+	t := &GaugesFuncWithMultiLabels{
+		CountersFuncWithMultiLabels: CountersFuncWithMultiLabels{
+			CountersFunc: f,
+			labels:       labels,
+			help:         help,
+		}}
+
+	if name != "" {
+		publish(name, t)
+	}
+
 	return t
 }
 

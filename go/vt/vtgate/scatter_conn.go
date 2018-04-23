@@ -49,7 +49,7 @@ var (
 // multiple shard level connections.
 type ScatterConn struct {
 	timings              *stats.MultiTimings
-	tabletCallErrorCount *stats.MultiCounters
+	tabletCallErrorCount *stats.CountersWithMultiLabels
 	txConn               *TxConn
 	gateway              gateway.Gateway
 	healthCheck          discovery.HealthCheck
@@ -79,11 +79,17 @@ func NewScatterConn(statsName string, txConn *TxConn, gw gateway.Gateway, hc dis
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
 	}
 	return &ScatterConn{
-		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		txConn:               txConn,
-		gateway:              gw,
-		healthCheck:          hc,
+		timings: stats.NewMultiTimings(
+			statsName,
+			"Scatter connection timings",
+			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		tabletCallErrorCount: stats.NewCountersWithMultiLabels(
+			tabletCallErrorCountStatsName,
+			"Error count from tablet calls in scatter conns",
+			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		txConn:      txConn,
+		gateway:     gw,
+		healthCheck: hc,
 	}
 }
 

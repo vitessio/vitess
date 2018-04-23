@@ -24,9 +24,8 @@ import (
 	"io"
 	"strings"
 
-	log "github.com/golang/glog"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -964,6 +963,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.KeyOpt == colKeyUniqueKey {
 		opts = append(opts, keywordStrings[UNIQUE], keywordStrings[KEY])
 	}
+	if ct.KeyOpt == colKeySpatialKey {
+		opts = append(opts, keywordStrings[SPATIAL], keywordStrings[KEY])
+	}
 	if ct.KeyOpt == colKey {
 		opts = append(opts, keywordStrings[KEY])
 	}
@@ -1075,6 +1077,22 @@ func (ct *ColumnType) SQLType() querypb.Type {
 		return sqltypes.Set
 	case keywordStrings[JSON]:
 		return sqltypes.TypeJSON
+	case keywordStrings[GEOMETRY]:
+		return sqltypes.Geometry
+	case keywordStrings[POINT]:
+		return sqltypes.Geometry
+	case keywordStrings[LINESTRING]:
+		return sqltypes.Geometry
+	case keywordStrings[POLYGON]:
+		return sqltypes.Geometry
+	case keywordStrings[GEOMETRYCOLLECTION]:
+		return sqltypes.Geometry
+	case keywordStrings[MULTIPOINT]:
+		return sqltypes.Geometry
+	case keywordStrings[MULTILINESTRING]:
+		return sqltypes.Geometry
+	case keywordStrings[MULTIPOLYGON]:
+		return sqltypes.Geometry
 	}
 	panic("unimplemented type " + ct.Type)
 }
@@ -1128,6 +1146,7 @@ type IndexInfo struct {
 	Type    string
 	Name    ColIdent
 	Primary bool
+	Spatial bool
 	Unique  bool
 }
 
@@ -1164,6 +1183,7 @@ type ColumnKeyOption int
 const (
 	colKeyNone ColumnKeyOption = iota
 	colKeyPrimary
+	colKeySpatialKey
 	colKeyUnique
 	colKeyUniqueKey
 	colKey
