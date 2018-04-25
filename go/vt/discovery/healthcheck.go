@@ -120,12 +120,12 @@ const (
 )
 
 func init() {
-	LoadTabletURLTemplate()
+	loadTabletURLTemplate()
 }
 
-// LoadTabletURLTemplate loads or reloads the URL template.
+// loadTabletURLTemplate loads or reloads the URL template.
 // Should only be used independently for testing.
-func LoadTabletURLTemplate() {
+func loadTabletURLTemplate() {
 	tabletURLTemplate = template.New("")
 	_, err := tabletURLTemplate.Parse(*tabletURLTemplateString)
 	if err != nil {
