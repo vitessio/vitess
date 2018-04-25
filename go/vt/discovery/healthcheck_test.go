@@ -602,7 +602,7 @@ func TestDebugURLFormatting(t *testing.T) {
 	if err := templ.Execute(wr, []*TabletsCacheStatus{tcs}); err != nil {
 		t.Fatalf("error executing template: %v", err)
 	}
-	expectedURL := "https://host.bastion.cell.corp"
+	expectedURL := `"https://host.bastion.cell.corp"`
 	if !strings.Contains(wr.String(), expectedURL) {
 		t.Fatalf("output missing formatted URL, expectedURL: %s , output: %s", expectedURL, wr.String())
 	}
