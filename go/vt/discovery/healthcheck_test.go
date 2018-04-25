@@ -23,6 +23,8 @@ import (
 	"html/template"
 	"io"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,9 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-
-	"strings"
-	"sync"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
