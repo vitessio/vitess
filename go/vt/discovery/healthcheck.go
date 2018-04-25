@@ -48,9 +48,8 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
-
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/grpcclient"
