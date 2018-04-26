@@ -34,13 +34,13 @@ import (
 
 var (
 	// MySQLStats shows the time histogram for operations spent on mysql side.
-	MySQLStats = stats.NewTimings("Mysql", "MySQl query time")
+	MySQLStats = stats.NewTimings("Mysql", "MySQl query time", "operation")
 	// QueryStats shows the time histogram for each type of queries.
-	QueryStats = stats.NewTimings("Queries", "MySQL query timings")
+	QueryStats = stats.NewTimings("Queries", "MySQL query timings", "plan_type")
 	// QPSRates shows the qps of QueryStats. Sample every 5 seconds and keep samples for up to 15 mins.
 	QPSRates = stats.NewRates("QPS", QueryStats, 15*60/5, 5*time.Second)
 	// WaitStats shows the time histogram for wait operations
-	WaitStats = stats.NewTimings("Waits", "Wait operations")
+	WaitStats = stats.NewTimings("Waits", "Wait operations", "type")
 	// KillStats shows number of connections being killed.
 	KillStats = stats.NewCountersWithSingleLabel("Kills", "Number of connections being killed", "query_type", "Transactions", "Queries")
 	// ErrorStats shows number of critial errors happened.
