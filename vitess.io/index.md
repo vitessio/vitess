@@ -60,21 +60,24 @@ Slack and Nozzle are swapped for aesthetics, because the icons don't align well 
         <img src="/images/users/hubspot_logo.png" alt="Hubspot" width="120">
       </div>
       <div class="col-md-3">
-        <img src="/images/users/slack_logo.png" alt="Slack" width="120">
+        <img src="/images/users/jd.jpg" alt="JD" width="120">
       </div>
     </div>
     <div class="row logo-row">
+      <div class="col-md-3">
+        <img src="/images/users/slack_logo.png" alt="Slack" width="120">
+      </div>
       <div class="col-md-3">
         <img src="/images/users/pixel_federation_logo.png" alt="Pixel Federation" width="100">
       </div>
       <div class="col-md-3">
         <img src="/images/users/quiz_of_kings_logo.jpg" alt="Quiz of Kings" width="100">
       </div>
+    </div>
+    <div class="row logo-row">
       <div class="col-md-3">
         <img src="/images/users/nozzle_logo.png" alt="Nozzle" width="60">
       </div>
-    </div>
-    <div class="row logo-row">
       <div class="col-md-3">
         <img src="/images/users/square_logo.png" alt="Square" width="120">
       </div>
