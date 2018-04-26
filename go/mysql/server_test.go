@@ -75,7 +75,80 @@ func (th *testHandler) NewConnection(c *Conn) {
 func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
-func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+func (th *testHandler) ComQuery(c *Conn, query string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+	switch query {
+	case "error":
+		return th.err
+	case "panic":
+		panic("test panic attack!")
+	case "select rows":
+		callback(selectRowsResult)
+	case "error after send":
+		callback(selectRowsResult)
+		return th.err
+	case "insert":
+		callback(&sqltypes.Result{
+			RowsAffected: 123,
+			InsertID:     123456789,
+		})
+	case "schema echo":
+		callback(&sqltypes.Result{
+			Fields: []*querypb.Field{
+				{
+					Name: "schema_name",
+					Type: querypb.Type_VARCHAR,
+				},
+			},
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.SchemaName)),
+				},
+			},
+		})
+	case "ssl echo":
+		value := "OFF"
+		if c.Capabilities&CapabilityClientSSL > 0 {
+			value = "ON"
+		}
+		callback(&sqltypes.Result{
+			Fields: []*querypb.Field{
+				{
+					Name: "ssl_flag",
+					Type: querypb.Type_VARCHAR,
+				},
+			},
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(value)),
+				},
+			},
+		})
+	case "userData echo":
+		callback(&sqltypes.Result{
+			Fields: []*querypb.Field{
+				{
+					Name: "user",
+					Type: querypb.Type_VARCHAR,
+				},
+				{
+					Name: "user_data",
+					Type: querypb.Type_VARCHAR,
+				},
+			},
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.User)),
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.UserData.Get().Username)),
+				},
+			},
+		})
+	default:
+		callback(&sqltypes.Result{})
+	}
+	return nil
+}
+
+func (th *testHandler) ComPrepare(c *Conn, query string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	switch query {
 	case "error":
 		return th.err

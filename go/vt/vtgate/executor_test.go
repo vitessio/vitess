@@ -2069,6 +2069,41 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 	}
 }
 
+func TestExecutorPrepare(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+
+	qr, err := executor.Prepare(context.Background(), "TestPrepare", session, "select * from music_user_map", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	fields := []*querypb.Field{
+		{Name: "id", Type: sqltypes.Int32},
+		{Name: "value", Type: sqltypes.VarChar},
+	}
+	wantqr := &sqltypes.Result{
+		Fields: fields,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewInt32(1), sqltypes.NewVarChar("foo")},
+		},
+		RowsAffected: 1,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("%+v, want\n%+v", qr, wantqr)
+	}
+
+	qr, err = executor.Prepare(context.Background(), "TestPrepare", session, "insert into music_user_map values(2, foo)", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantqr = &sqltypes.Result{}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("%+v, want\n%+v", qr, wantqr)
+	}
+}
+
 func makeComments(text string) sqlparser.MarginComments {
 	return sqlparser.MarginComments{Trailing: text}
 }

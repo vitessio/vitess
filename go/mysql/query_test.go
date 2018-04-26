@@ -17,8 +17,11 @@ limitations under the License.
 package mysql
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -73,6 +76,90 @@ func TestComSetOption(t *testing.T) {
 	}
 	if operation != 1 {
 		t.Errorf("parseComSetOption returned unexpected data: %v", operation)
+	}
+}
+
+func TestComPrepare(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	// Write ComPrepare packet, read it, compare.
+	query := "select * from messages where id = ?"
+	if err := cConn.writeComPrepare(query); err != nil {
+		t.Fatalf("writeComPrepare failed: %v", err)
+	}
+	data, err := sConn.ReadPacket()
+	if err != nil || len(data) == 0 || data[0] != ComPrepare {
+		t.Fatalf("sConn.ReadPacket - ComPrepare failed: %v %v", data, err)
+	}
+	got := sConn.parseComPrepare(data)
+	if got != query {
+		t.Errorf("parseComPrepare returned unexpected data: %v", query)
+	}
+}
+
+func TestComStmtExecute(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	stmtID := uint32(1)
+	flags := 0
+	newParamsBoundFlag := 1
+	parameters := []sqltypes.Value{
+		sqltypes.NewInt64(-1),
+		sqltypes.NewUint64(1),
+		sqltypes.NewFloat32(1.123),
+		sqltypes.NewFloat64(-1.123456789),
+		sqltypes.NewVarChar("foo"),
+		sqltypes.NewVarBinary("foo"),
+	}
+
+	sConn.statementID = 1
+	prepareData := &prepareData{
+		statementID: sConn.statementID,
+		paramsCount: uint16(len(parameters)),
+	}
+
+	if prepareData.paramsCount > 0 {
+		prepareData.paramsType = make([]int32, prepareData.paramsCount)
+		prepareData.bindVars = make(map[string]*querypb.BindVariable, prepareData.paramsCount)
+	}
+
+	sConn.prepareData[sConn.statementID] = prepareData
+
+	bindVars := make(map[string]*querypb.BindVariable, prepareData.paramsCount)
+	for i := uint16(0); i < prepareData.paramsCount; i++ {
+		bindVars[fmt.Sprintf("v%d", i+1)] = &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("?")}
+	}
+
+	// Write ComStmtExecute packet, read it, compare.
+	if err := cConn.writeComStmtExecute(stmtID, flags, newParamsBoundFlag, parameters); err != nil {
+		t.Fatalf("writeComPrepare failed: %v", err)
+	}
+	data, err := sConn.ReadPacket()
+	if err != nil || len(data) == 0 || data[0] != ComStmtExecute {
+		t.Fatalf("sConn.ReadPacket - ComStmtExecute failed: %v %v", data, err)
+	}
+	gotID, _, err := sConn.parseComStmtExecute(data)
+	if gotID != stmtID {
+		t.Errorf("parseComStmtExecute returned unexpected stmtID, got: %v, want: %v", gotID, stmtID)
+	}
+	for k, bv := range sConn.prepareData[sConn.statementID].bindVars {
+		i, err := strconv.Atoi(strings.TrimPrefix(k, "v"))
+		if err != nil {
+			t.Fatalf("strconv.Atoi - ComStmtExecute failed: %v", err)
+		}
+		if bv.Type != parameters[i-1].Type() || bytes.Compare(bv.Value, parameters[i-1].Raw()) != 0 {
+			t.Errorf("parseComStmtExecute returned unexpected bind variables, got: %v, want: %v", bv, parameters[i-1])
+		}
 	}
 }
 

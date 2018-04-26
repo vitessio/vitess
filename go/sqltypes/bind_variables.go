@@ -71,6 +71,11 @@ func Uint64BindVariable(v uint64) *querypb.BindVariable {
 	return ValueBindVariable(NewUint64(v))
 }
 
+// Float32BindVariable converts a float32 to a bind var.
+func Float32BindVariable(v float32) *querypb.BindVariable {
+	return ValueBindVariable(NewFloat32(v))
+}
+
 // Float64BindVariable converts a float64 to a bind var.
 func Float64BindVariable(v float64) *querypb.BindVariable {
 	return ValueBindVariable(NewFloat64(v))
@@ -99,14 +104,27 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 	case []byte:
 		return BytesBindVariable(v), nil
 	case int:
-		return &querypb.BindVariable{
-			Type:  querypb.Type_INT64,
-			Value: strconv.AppendInt(nil, int64(v), 10),
-		}, nil
+		return Int64BindVariable(int64(v)), nil
+	case uint:
+		return Uint64BindVariable(uint64(v)), nil
+	case int8:
+		return Int64BindVariable(int64(v)), nil
+	case uint8:
+		return Uint64BindVariable(uint64(v)), nil
+	case int16:
+		return Int64BindVariable(int64(v)), nil
+	case uint16:
+		return Uint64BindVariable(uint64(v)), nil
+	case int32:
+		return Int64BindVariable(int64(v)), nil
+	case uint32:
+		return Uint64BindVariable(uint64(v)), nil
 	case int64:
 		return Int64BindVariable(v), nil
 	case uint64:
 		return Uint64BindVariable(v), nil
+	case float32:
+		return Float32BindVariable(v), nil
 	case float64:
 		return Float64BindVariable(v), nil
 	case nil:

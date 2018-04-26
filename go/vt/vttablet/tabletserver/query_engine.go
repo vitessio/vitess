@@ -231,6 +231,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
 
 	qe.passthroughDMLs = sync2.NewAtomicBool(config.PassthroughDMLs)
+	qe.allowUnsafeDMLs = true
 	planbuilder.PassthroughDMLs = config.PassthroughDMLs
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)

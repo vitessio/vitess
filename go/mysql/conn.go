@@ -24,6 +24,8 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -71,6 +73,15 @@ const (
 // A Getter has a Get()
 type Getter interface {
 	Get() *querypb.VTGateCallerID
+}
+
+type prepareData struct {
+	statementID uint32
+	prepareStmt string
+	paramsCount uint16
+	paramsType  []int32
+	columnNames []string
+	bindVars    map[string]*querypb.BindVariable
 }
 
 // Conn is a connection between a client and a server, using the MySQL
@@ -184,6 +195,13 @@ type Conn struct {
 	currentEphemeralPolicy int
 	currentEphemeralPacket []byte
 	currentEphemeralBuffer *[]byte
+
+	// statementID is used to identify different statements for the same
+	// client connection.
+	statementID uint32
+
+	// Save the metadata of the connection related to the prepare operation.
+	prepareData map[uint32]*prepareData
 }
 
 // bufPool is used to allocate and free buffers in an efficient way.
@@ -195,10 +213,11 @@ func newConn(conn net.Conn) *Conn {
 	return &Conn{
 		conn: conn,
 
-		reader:   bufio.NewReaderSize(conn, connBufferSize),
-		writer:   bufio.NewWriterSize(conn, connBufferSize),
-		sequence: 0,
-		buffer:   make([]byte, connBufferSize),
+		reader:      bufio.NewReaderSize(conn, connBufferSize),
+		writer:      bufio.NewWriterSize(conn, connBufferSize),
+		sequence:    0,
+		buffer:      make([]byte, connBufferSize),
+		prepareData: make(map[uint32]*prepareData),
 	}
 }
 
@@ -856,4 +875,69 @@ func ParseErrorPacket(data []byte) error {
 	msg := string(data[pos:])
 
 	return NewSQLError(int(code), string(sqlState), "%v", msg)
+}
+
+// writePreparePacket writes a prepare query response to the wire.
+func (c *Conn) writePreparePacket(result *sqltypes.Result, prepareData *prepareData) error {
+	paramsCount := prepareData.paramsCount
+	columnCount := 0
+	if result != nil {
+		columnCount = len(result.Fields)
+	}
+	if columnCount > 0 {
+		prepareData.columnNames = make([]string, columnCount)
+	}
+
+	data := c.startEphemeralPacket(12)
+	pos := 0
+
+	pos = writeByte(data, pos, 0x00)
+	pos = writeUint32(data, pos, uint32(c.statementID))
+	pos = writeUint16(data, pos, uint16(columnCount))
+	pos = writeUint16(data, pos, uint16(paramsCount))
+	pos = writeByte(data, pos, 0x00)
+	pos = writeUint16(data, pos, 0x0000)
+
+	if err := c.writeEphemeralPacket(false); err != nil {
+		return err
+	}
+
+	if paramsCount > 0 {
+		for i := uint16(0); i < paramsCount; i++ {
+			if err := c.writeColumnDefinition(&querypb.Field{Name: "?", Type: sqltypes.VarBinary, Charset: 63}); err != nil {
+				return err
+			}
+		}
+
+		// Now send an EOF packet.
+		if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+			// With CapabilityClientDeprecateEOF, we do not send this EOF.
+			if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+				return err
+			}
+		}
+	}
+
+	if result != nil {
+		// Now send each Field.
+		for i, field := range result.Fields {
+			field.Name = strings.Replace(field.Name, "'?'", "?", -1)
+			prepareData.columnNames[i] = field.Name
+			if err := c.writeColumnDefinition(field); err != nil {
+				return err
+			}
+		}
+
+		if columnCount > 0 {
+			// Now send an EOF packet.
+			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+				// With CapabilityClientDeprecateEOF, we do not send this EOF.
+				if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return c.flush()
 }

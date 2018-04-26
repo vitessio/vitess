@@ -73,7 +73,7 @@ $VTROOT/bin/vtgate \
   -mysql_auth_server_static_file "./mysql_auth_server_static_creds.json" \
   -cell $cell \
   -cells_to_watch $cell \
-  -tablet_types_to_wait MASTER,REPLICA \
+  -tablet_types_to_wait MASTER \
   -gateway_implementation discoverygateway \
   -service_map 'grpc-vtgateservice' \
   -pid_file $VTDATAROOT/tmp/vtgate.pid \

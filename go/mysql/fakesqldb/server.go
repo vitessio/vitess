@@ -31,6 +31,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 const appendEntry = -1
@@ -316,8 +318,13 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 }
 
 // ComQuery is part of the mysql.Handler interface.
-func (db *DB) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+func (db *DB) ComQuery(c *mysql.Conn, query string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	return db.Handler.HandleQuery(c, query, callback)
+}
+
+// ComPrepare is part of the mysql.Handler interface.
+func (db *DB) ComPrepare(c *mysql.Conn, query string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+	return nil
 }
 
 // HandleQuery is the default implementation of the QueryHandler interface

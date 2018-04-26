@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	defaultMaxMessageSize = 16 * 1024 * 1024
+	defaultMaxMessageSize = 1024 * 1024 * 1024
 	// MaxMessageSize is the maximum message size which the gRPC server will
 	// accept. Larger messages will be rejected.
 	// Note: We're using 16 MiB as default value because that's the default in MySQL
