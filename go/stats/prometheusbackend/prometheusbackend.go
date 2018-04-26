@@ -142,7 +142,7 @@ func (be *PromBackend) newTiming(t *stats.Timings, name string) {
 		desc: prometheus.NewDesc(
 			be.buildPromName(name),
 			t.Help(),
-			[]string{"Histograms"}, // hard coded label key
+			[]string{t.LabelName()},
 			nil),
 	}
 
