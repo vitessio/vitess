@@ -1399,23 +1399,23 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
 			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, nil))
 			if logMethod != nil {
-				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, doubleTruncate(sql, bindVariables))
+				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables))
 			}
 		} else {
 			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables))
 			if logMethod != nil {
-				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, doubleTruncate(sql, bindVariables))
+				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables))
 			}
 		}
 	} else {
 		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
 		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
 			if logMethod != nil {
-				message = fmt.Sprintf("%v: %v", err, doubleTruncate(sql, nil))
+				message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, nil))
 			}
 		} else {
 			if logMethod != nil {
-				message = fmt.Sprintf("%v: %v", err, doubleTruncate(sql, bindVariables))
+				message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, bindVariables))
 			}
 		}
 	}
@@ -1431,7 +1431,11 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	return err
 }
 
-func doubleTruncate(sql string, bindVariables map[string]*querypb.BindVariable) string {
+// truncateSQLAndBindVars calls TruncateForLog which:
+//  splits off trailing comments, truncates the query, and re-adds the trailing comments
+// appends quoted bindvar: value pairs in sorted order
+// truncates the resulting string
+func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVariable) string {
 	truncatedQuery := sqlparser.TruncateForLog(sql)
 	buf := &bytes.Buffer{}
 	fmt.Fprintf(buf, "BindVars: {")
@@ -1440,8 +1444,9 @@ func doubleTruncate(sql string, bindVariables map[string]*querypb.BindVariable) 
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
+	var valString string
 	for _, key := range keys {
-		valString := fmt.Sprintf("%v", bindVariables[key])
+		valString = fmt.Sprintf("%v", bindVariables[key])
 		fmt.Fprintf(buf, "%s: %q", key, valString)
 	}
 	fmt.Fprintf(buf, "}")
@@ -2074,9 +2079,15 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable) s
 	buf := &bytes.Buffer{}
 	fmt.Fprintf(buf, "Sql: %q", sql)
 	fmt.Fprintf(buf, ", BindVars: {")
-	for k, v := range bindVariables {
-		valString := fmt.Sprintf("%v", v)
-		fmt.Fprintf(buf, "%s: %q", k, valString)
+	var keys []string
+	for key := range bindVariables {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var valString string
+	for _, key := range keys {
+		valString = fmt.Sprintf("%v", bindVariables[key])
+		fmt.Fprintf(buf, "%s: %q", key, valString)
 	}
 	fmt.Fprintf(buf, "}")
 	return string(buf.Bytes())
