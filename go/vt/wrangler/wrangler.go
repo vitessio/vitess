@@ -38,9 +38,10 @@ var (
 // Multiple go routines can use the same Wrangler at the same time,
 // provided they want to share the same logger / topo server / lock timeout.
 type Wrangler struct {
-	logger logutil.Logger
-	ts     *topo.Server
-	tmc    tmclient.TabletManagerClient
+	strictIdentical bool
+	logger          logutil.Logger
+	ts              *topo.Server
+	tmc             tmclient.TabletManagerClient
 }
 
 // New creates a new Wrangler object.
@@ -72,4 +73,9 @@ func (wr *Wrangler) SetLogger(logger logutil.Logger) {
 // Logger returns the logger associated with this wrangler.
 func (wr *Wrangler) Logger() logutil.Logger {
 	return wr.logger
+}
+
+// SetStrictIdentical set strict identical model.
+func (wr *Wrangler) SetStrictIdentical(si bool) {
+	wr.strictIdentical = si
 }

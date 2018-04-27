@@ -59,6 +59,8 @@ export class EmergencyRepShardFlags {
     this.flags['shard_ref']['positional'] = true;
     this.flags['tablet_alias'] = new TabletSelectFlag(1, 'tablet_alias', '', tablets);
     this.flags['tablet_alias']['positional'] = true;
+    this.flags['strict_identical'] = new IdenticalModelSelectFlag(2, 'strict_identical');
+    this.flags['strict_identical']['positional'] = true;
   }
 }
 
@@ -153,6 +155,14 @@ export class TabletSelectFlag extends DropDownFlag {
     tablets.forEach(tablet => {
       options.push({label: tablet.label, value: tablet.alias});
     });
+    this.setOptions(options);
+  }
+}
+
+export class IdenticalModelSelectFlag extends DropDownFlag {
+  constructor(position: number, id: string, value= '') {
+    super(position, id, 'Select strict model', 'Strict model check if all tablet binlog positions are identical.', value);
+    let options = [{label: 'Strict identical', value: 'true'}, {label: 'Lose identical', value: 'false'}];
     this.setOptions(options);
   }
 }
