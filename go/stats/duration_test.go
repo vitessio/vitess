@@ -22,17 +22,67 @@ import (
 	"time"
 )
 
-func TestDuration(t *testing.T) {
+func TestCounterDuration(t *testing.T) {
 	var gotname string
-	var gotv *Duration
+	var gotv *CounterDuration
 	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
-		gotv = v.(*Duration)
+		gotv = v.(*CounterDuration)
 	})
-	v := NewDuration("Duration", "help")
-	if gotname != "Duration" {
-		t.Errorf("want Duration, got %s", gotname)
+	v := NewCounterDuration("CounterDuration", "help")
+	if gotname != "CounterDuration" {
+		t.Errorf("want CounterDuration, got %s", gotname)
+	}
+	if gotv != v {
+		t.Errorf("want %#v, got %#v", v, gotv)
+	}
+	if v.Get() != 0 {
+		t.Errorf("want 0, got %v", v.Get())
+	}
+	v.Add(time.Duration(1))
+	if v.Get() != 1 {
+		t.Errorf("want 1, got %v", v.Get())
+	}
+	if v.String() != "1" {
+		t.Errorf("want 1, got %v", v.Get())
+	}
+}
+
+func TestCounterDurationFunc(t *testing.T) {
+	var gotname string
+	var gotv *CounterDurationFunc
+	clear()
+	Register(func(name string, v expvar.Var) {
+		gotname = name
+		gotv = v.(*CounterDurationFunc)
+	})
+
+	v := NewCounterDurationFunc("CounterDurationFunc", "help", func() time.Duration {
+		return time.Duration(1)
+	})
+	if gotname != "CounterDurationFunc" {
+		t.Errorf("want CounterDurationFunc, got %s", gotname)
+	}
+	if gotv != v {
+		t.Errorf("want %#v, got %#v", v, gotv)
+	}
+	if v.String() != "1" {
+		t.Errorf("want 1, got %v", v.String())
+	}
+}
+
+func TestGaugeDuration(t *testing.T) {
+	var gotname string
+	var gotv *GaugeDuration
+	clear()
+	Register(func(name string, v expvar.Var) {
+		gotname = name
+		gotv = v.(*GaugeDuration)
+	})
+	v := NewGaugeDuration("GaugeDuration", "help")
+	if gotname != "GaugeDuration" {
+		t.Errorf("want GaugeDuration, got %s", gotname)
 	}
 	if gotv != v {
 		t.Errorf("want %#v, got %#v", v, gotv)
@@ -50,26 +100,26 @@ func TestDuration(t *testing.T) {
 	}
 }
 
-func TestDurationFunc(t *testing.T) {
+func TestGaugeDurationFunc(t *testing.T) {
 	var gotname string
-	var gotv *DurationFunc
+	var gotv *GaugeDurationFunc
 	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
-		gotv = v.(*DurationFunc)
+		gotv = v.(*GaugeDurationFunc)
 	})
 
-	v := NewDurationFunc("duration", "help", func() time.Duration {
+	v := NewGaugeDurationFunc("GaugeDurationFunc", "help", func() time.Duration {
 		return time.Duration(1)
 	})
 
+	if gotname != "GaugeDurationFunc" {
+		t.Errorf("want GaugeDurationFunc, got %s", gotname)
+	}
 	if gotv != v {
 		t.Errorf("want %#v, got %#v", v, gotv)
 	}
 	if v.String() != "1" {
 		t.Errorf("want 1, got %v", v.String())
-	}
-	if gotname != "duration" {
-		t.Errorf("want duration, got %s", gotname)
 	}
 }

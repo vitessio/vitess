@@ -59,19 +59,36 @@ func TestPrometheusGaugeFunc(t *testing.T) {
 	checkHandlerForMetrics(t, name, -3)
 }
 
-func TestPrometheusDuration(t *testing.T) {
-	name := "blah_duration"
+func TestPrometheusCounterDuration(t *testing.T) {
+	name := "blah_counterduration"
 
-	d := stats.NewDuration(name, "help")
+	d := stats.NewCounterDuration(name, "help")
+	d.Add(1 * time.Second)
+
+	checkHandlerForMetrics(t, name, 1)
+}
+
+func TestPrometheusCounterDurationFunc(t *testing.T) {
+	name := "blah_counterdurationfunc"
+
+	stats.NewCounterDurationFunc(name, "help", func() time.Duration { return 1 * time.Second })
+
+	checkHandlerForMetrics(t, name, 1)
+}
+
+func TestPrometheusGaugeDuration(t *testing.T) {
+	name := "blah_gaugeduration"
+
+	d := stats.NewGaugeDuration(name, "help")
 	d.Set(1 * time.Second)
 
 	checkHandlerForMetrics(t, name, 1)
 }
 
-func TestPrometheusDurationFunc(t *testing.T) {
-	name := "blah_durationfunc"
+func TestPrometheusGaugeDurationFunc(t *testing.T) {
+	name := "blah_gaugedurationfunc"
 
-	stats.NewDurationFunc(name, "help", func() time.Duration { return 1 * time.Second })
+	stats.NewGaugeDurationFunc(name, "help", func() time.Duration { return 1 * time.Second })
 
 	checkHandlerForMetrics(t, name, 1)
 }
