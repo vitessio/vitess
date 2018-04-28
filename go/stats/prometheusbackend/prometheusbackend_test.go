@@ -197,7 +197,7 @@ func TestPrometheusCountersFuncWithMultiLabels(t *testing.T) {
 	name := "blah_countersfuncwithmultilabels"
 	labels := []string{"label1", "label2"}
 
-	stats.NewCountersFuncWithMultiLabels(name, labels, "help", func() map[string]int64 {
+	stats.NewCountersFuncWithMultiLabels(name, "help", labels, func() map[string]int64 {
 		m := make(map[string]int64)
 		m["foo.bar"] = 1
 		m["bar.baz"] = 1

@@ -261,27 +261,27 @@ func (mc *CountersWithMultiLabels) Counts() map[string]int64 {
 // Labels).
 type CountersFuncWithMultiLabels struct {
 	CountersFunc
-	labels []string
 	help   string
+	labels []string
 }
 
 // Labels returns the list of labels.
-func (mcf *CountersFuncWithMultiLabels) Labels() []string {
-	return mcf.labels
+func (c CountersFuncWithMultiLabels) Labels() []string {
+	return c.labels
 }
 
-// Help returns the help string
-func (mcf *CountersFuncWithMultiLabels) Help() string {
-	return mcf.help
+// Help returns the help string.
+func (c CountersFuncWithMultiLabels) Help() string {
+	return c.help
 }
 
 // NewCountersFuncWithMultiLabels creates a new CountersFuncWithMultiLabels
 // mapping to the provided function.
-func NewCountersFuncWithMultiLabels(name string, labels []string, help string, f CountersFunc) *CountersFuncWithMultiLabels {
+func NewCountersFuncWithMultiLabels(name, help string, labels []string, f CountersFunc) *CountersFuncWithMultiLabels {
 	t := &CountersFuncWithMultiLabels{
 		CountersFunc: f,
-		labels:       labels,
 		help:         help,
+		labels:       labels,
 	}
 	if name != "" {
 		publish(name, t)
@@ -383,12 +383,12 @@ type GaugesFuncWithMultiLabels struct {
 
 // NewGaugesFuncWithMultiLabels creates a new GaugesFuncWithMultiLabels
 // mapping to the provided function.
-func NewGaugesFuncWithMultiLabels(name string, labels []string, help string, f CountersFunc) *GaugesFuncWithMultiLabels {
+func NewGaugesFuncWithMultiLabels(name, help string, labels []string, f CountersFunc) *GaugesFuncWithMultiLabels {
 	t := &GaugesFuncWithMultiLabels{
 		CountersFuncWithMultiLabels: CountersFuncWithMultiLabels{
 			CountersFunc: f,
-			labels:       labels,
 			help:         help,
+			labels:       labels,
 		}}
 
 	if name != "" {

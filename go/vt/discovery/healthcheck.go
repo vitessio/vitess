@@ -388,8 +388,8 @@ func NewHealthCheck(retryDelay, healthCheckTimeout time.Duration) HealthCheck {
 func (hc *HealthCheckImpl) RegisterStats() {
 	stats.NewCountersFuncWithMultiLabels(
 		"HealthcheckConnections",
+		"the number of healthcheck connections registered",
 		[]string{"Keyspace", "ShardName", "TabletType"},
-		"the numb of healthcheck connections registered",
 		hc.servingConnStats)
 }
 

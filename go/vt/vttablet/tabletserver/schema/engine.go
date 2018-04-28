@@ -78,11 +78,11 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 	}
 	schemaOnce.Do(func() {
 		_ = stats.NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
-		_ = stats.NewGaugesFuncWithMultiLabels("TableRows", []string{"Table"}, "table rows created in tabletserver", se.getTableRows)
-		_ = stats.NewGaugesFuncWithMultiLabels("DataLength", []string{"Table"}, "data length in tabletserver", se.getDataLength)
-		_ = stats.NewGaugesFuncWithMultiLabels("IndexLength", []string{"Table"}, "index length in tabletserver", se.getIndexLength)
-		_ = stats.NewGaugesFuncWithMultiLabels("DataFree", []string{"Table"}, "data free in tabletserver", se.getDataFree)
-		_ = stats.NewGaugesFuncWithMultiLabels("MaxDataLength", []string{"Table"}, "max data length in tabletserver", se.getMaxDataLength)
+		_ = stats.NewGaugesFuncWithMultiLabels("TableRows", "table rows created in tabletserver", []string{"Table"}, se.getTableRows)
+		_ = stats.NewGaugesFuncWithMultiLabels("DataLength", "data length in tabletserver", []string{"Table"}, se.getDataLength)
+		_ = stats.NewGaugesFuncWithMultiLabels("IndexLength", "index length in tabletserver", []string{"Table"}, se.getIndexLength)
+		_ = stats.NewGaugesFuncWithMultiLabels("DataFree", "data free in tabletserver", []string{"Table"}, se.getDataFree)
+		_ = stats.NewGaugesFuncWithMultiLabels("MaxDataLength", "max data length in tabletserver", []string{"Table"}, se.getMaxDataLength)
 
 		http.Handle("/debug/schema", se)
 		http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
