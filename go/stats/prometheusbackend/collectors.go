@@ -7,20 +7,21 @@ import (
 	"vitess.io/vitess/go/stats"
 )
 
-type metricCollector struct {
-	counter *stats.Counter
-	desc    *prometheus.Desc
-	vt      prometheus.ValueType
+type metricFuncCollector struct {
+	// f returns the floating point value of the metric.
+	f    func() float64
+	desc *prometheus.Desc
+	vt   prometheus.ValueType
 }
 
 // Describe implements Collector.
-func (c *metricCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.desc
+func (mc *metricFuncCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- mc.desc
 }
 
 // Collect implements Collector.
-func (c *metricCollector) Collect(ch chan<- prometheus.Metric) {
-	ch <- prometheus.MustNewConstMetric(c.desc, c.vt, float64(c.counter.Get()))
+func (mc *metricFuncCollector) Collect(ch chan<- prometheus.Metric) {
+	ch <- prometheus.MustNewConstMetric(mc.desc, mc.vt, float64(mc.f()))
 }
 
 // countersWithLabelsCollector collects stats.CountersWithLabels
@@ -182,20 +183,4 @@ func (c *multiTimingsCollector) Collect(ch chan<- prometheus.Metric) {
 			makePromBucket(his.Cutoffs(), his.Buckets()),
 			labelValues...)
 	}
-}
-
-type metricFuncCollector struct {
-	cf   *stats.CounterFunc
-	desc *prometheus.Desc
-	vt   prometheus.ValueType
-}
-
-// Describe implements Collector.
-func (c *metricFuncCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.desc
-}
-
-// Collect implements Collector.
-func (c *metricFuncCollector) Collect(ch chan<- prometheus.Metric) {
-	ch <- prometheus.MustNewConstMetric(c.desc, c.vt, float64(c.cf.Mf.FloatVal()))
 }

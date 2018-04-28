@@ -25,14 +25,27 @@ import (
 
 // Duration exports a time.Duration
 type Duration struct {
-	i sync2.AtomicDuration
+	i    sync2.AtomicDuration
+	help string
 }
 
-// NewDuration returns a new Duration
-func NewDuration(name string) *Duration {
-	v := new(Duration)
+// NewDuration returns a new Duration.
+func NewDuration(name, help string) *Duration {
+	v := &Duration{
+		help: help,
+	}
 	publish(name, v)
 	return v
+}
+
+// Help implements the Variable interface.
+func (v Duration) Help() string {
+	return v.help
+}
+
+// String is the implementation of expvar.var.
+func (v Duration) String() string {
+	return strconv.FormatInt(int64(v.i.Get()), 10)
 }
 
 // Add adds the provided value to the Duration
@@ -50,21 +63,32 @@ func (v *Duration) Get() time.Duration {
 	return v.i.Get()
 }
 
-// String is the implementation of expvar.var
-func (v *Duration) String() string {
-	return strconv.FormatInt(int64(v.i.Get()), 10)
+// DurationFunc allows to provide the value via a custom function.
+type DurationFunc struct {
+	F    func() time.Duration
+	help string
 }
 
-// DurationFunc converts a function that returns
-// an time.Duration as an expvar.
-type DurationFunc func() time.Duration
+// NewDurationFunc creates a new DurationFunc instance and publishes it if name
+// is set.
+func NewDurationFunc(name string, help string, f func() time.Duration) *DurationFunc {
+	df := &DurationFunc{
+		F:    f,
+		help: help,
+	}
 
-// String is the implementation of expvar.var
-func (f DurationFunc) String() string {
-	return strconv.FormatInt(int64(f()), 10)
+	if name != "" {
+		publish(name, df)
+	}
+	return df
 }
 
-// FloatVal is the implementation of MetricFunc
-func (f DurationFunc) FloatVal() float64 {
-	return f().Seconds()
+// Help implements the Variable interface.
+func (df DurationFunc) Help() string {
+	return df.help
+}
+
+// String is the implementation of expvar.var.
+func (df DurationFunc) String() string {
+	return strconv.FormatInt(int64(df.F()), 10)
 }

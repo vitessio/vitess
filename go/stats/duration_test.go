@@ -30,7 +30,7 @@ func TestDuration(t *testing.T) {
 		gotname = name
 		gotv = v.(*Duration)
 	})
-	v := NewDuration("Duration")
+	v := NewDuration("Duration", "help")
 	if gotname != "Duration" {
 		t.Errorf("want Duration, got %s", gotname)
 	}
@@ -52,16 +52,16 @@ func TestDuration(t *testing.T) {
 
 func TestDurationFunc(t *testing.T) {
 	var gotname string
-	var gotv *CounterFunc
+	var gotv *DurationFunc
 	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
-		gotv = v.(*CounterFunc)
+		gotv = v.(*DurationFunc)
 	})
 
-	v := NewCounterFunc("duration", "help", DurationFunc(func() time.Duration {
+	v := NewDurationFunc("duration", "help", func() time.Duration {
 		return time.Duration(1)
-	}))
+	})
 
 	if gotv != v {
 		t.Errorf("want %#v, got %#v", v, gotv)

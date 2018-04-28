@@ -238,15 +238,15 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	// So that vtcombo doesn't even call it once, on the first tablet.
 	// And we can remove the tsOnce variable.
 	tsOnce.Do(func() {
-		stats.NewGaugeFunc("TabletState", "Tablet server state", stats.IntFunc(func() int64 {
+		stats.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
 			tsv.mu.Lock()
 			state := tsv.state
 			tsv.mu.Unlock()
 			return state
-		}))
-		stats.NewGaugeFunc("QueryTimeout", "Tablet server query timeout", stats.DurationFunc(tsv.QueryTimeout.Get))
-		stats.NewGaugeFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", stats.DurationFunc(tsv.qe.connTimeout.Get))
-		stats.NewGaugeFunc("BeginTimeout", "Tablet server begin timeout", stats.DurationFunc(tsv.BeginTimeout.Get))
+		})
+		stats.NewDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
+		stats.NewDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
+		stats.NewDurationFunc("BeginTimeout", "Tablet server begin timeout", tsv.BeginTimeout.Get)
 		stats.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
 	})
 	return tsv

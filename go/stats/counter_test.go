@@ -58,9 +58,9 @@ func TestGaugeFunc(t *testing.T) {
 		gotv = v.(*GaugeFunc)
 	})
 
-	v := NewGaugeFunc("name", "help", IntFunc(func() int64 {
+	v := NewGaugeFunc("name", "help", func() int64 {
 		return 1
-	}))
+	})
 	if v.String() != "1" {
 		t.Errorf("want 1, got %f", v.String())
 	}
