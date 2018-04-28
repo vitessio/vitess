@@ -27,7 +27,7 @@ import (
 
 func TestCounters(t *testing.T) {
 	clear()
-	c := NewCountersWithLabels("counter1", "help", "type")
+	c := NewCountersWithSingleLabel("counter1", "help", "label")
 	c.Add("c1", 1)
 	c.Add("c2", 1)
 	c.Add("c2", 1)
@@ -56,14 +56,14 @@ func TestCounters(t *testing.T) {
 
 func TestCountersTags(t *testing.T) {
 	clear()
-	c := NewCountersWithLabels("counterTag1", "help", "label")
+	c := NewCountersWithSingleLabel("counterTag1", "help", "label")
 	want := map[string]int64{}
 	got := c.Counts()
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("want %v, got %v", want, got)
 	}
 
-	c = NewCountersWithLabels("counterTag2", "help", "label", "tag1", "tag2")
+	c = NewCountersWithSingleLabel("counterTag2", "help", "label", "tag1", "tag2")
 	want = map[string]int64{"tag1": 0, "tag2": 0}
 	got = c.Counts()
 	if !reflect.DeepEqual(got, want) {
@@ -122,14 +122,14 @@ func TestMultiCountersDot(t *testing.T) {
 
 func TestCountersHook(t *testing.T) {
 	var gotname string
-	var gotv *CountersWithLabels
+	var gotv *CountersWithSingleLabel
 	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
-		gotv = v.(*CountersWithLabels)
+		gotv = v.(*CountersWithSingleLabel)
 	})
 
-	v := NewCountersWithLabels("counter2", "help", "type")
+	v := NewCountersWithSingleLabel("counter2", "help", "label")
 	if gotname != "counter2" {
 		t.Errorf("want counter2, got %s", gotname)
 	}
@@ -138,7 +138,7 @@ func TestCountersHook(t *testing.T) {
 	}
 }
 
-var benchCounter = NewCountersWithLabels("bench", "help", "type")
+var benchCounter = NewCountersWithSingleLabel("bench", "help", "label")
 
 func BenchmarkCounters(b *testing.B) {
 	clear()

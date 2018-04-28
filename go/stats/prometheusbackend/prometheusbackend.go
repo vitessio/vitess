@@ -41,16 +41,16 @@ func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 		be.newMetric(st, name, prometheus.GaugeValue, func() float64 { return float64(st.Get()) })
 	case *stats.GaugeFunc:
 		be.newMetric(st, name, prometheus.GaugeValue, func() float64 { return float64(st.F()) })
-	case *stats.CountersWithLabels:
-		be.newCountersWithLabels(st, name, st.LabelName(), prometheus.CounterValue)
+	case *stats.CountersWithSingleLabel:
+		be.newCountersWithSingleLabel(st, name, st.LabelName(), prometheus.CounterValue)
 	case *stats.CountersWithMultiLabels:
 		be.newCountersWithMultiLabels(st, name)
 	case *stats.CountersFuncWithMultiLabels:
 		be.newMetricsFuncWithMultiLabels(st, name, prometheus.CounterValue)
 	case *stats.GaugesFuncWithMultiLabels:
 		be.newMetricsFuncWithMultiLabels(&st.CountersFuncWithMultiLabels, name, prometheus.GaugeValue)
-	case *stats.GaugesWithLabels:
-		be.newGaugesWithLabels(st, name, st.LabelName(), prometheus.GaugeValue)
+	case *stats.GaugesWithSingleLabel:
+		be.newGaugesWithSingleLabel(st, name, st.LabelName(), prometheus.GaugeValue)
 	case *stats.GaugesWithMultiLabels:
 		be.newGaugesWithMultiLabels(st, name)
 	case *stats.CounterDuration:
@@ -70,8 +70,8 @@ func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 	}
 }
 
-func (be *PromBackend) newCountersWithLabels(c *stats.CountersWithLabels, name string, labelName string, vt prometheus.ValueType) {
-	collector := &countersWithLabelsCollector{
+func (be *PromBackend) newCountersWithSingleLabel(c *stats.CountersWithSingleLabel, name string, labelName string, vt prometheus.ValueType) {
+	collector := &countersWithSingleLabelCollector{
 		counters: c,
 		desc: prometheus.NewDesc(
 			be.buildPromName(name),
@@ -83,8 +83,8 @@ func (be *PromBackend) newCountersWithLabels(c *stats.CountersWithLabels, name s
 	prometheus.MustRegister(collector)
 }
 
-func (be *PromBackend) newGaugesWithLabels(g *stats.GaugesWithLabels, name string, labelName string, vt prometheus.ValueType) {
-	collector := &gaugesWithLabelsCollector{
+func (be *PromBackend) newGaugesWithSingleLabel(g *stats.GaugesWithSingleLabel, name string, labelName string, vt prometheus.ValueType) {
+	collector := &gaugesWithSingleLabelCollector{
 		gauges: g,
 		desc: prometheus.NewDesc(
 			be.buildPromName(name),

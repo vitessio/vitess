@@ -103,41 +103,41 @@ func checkHandlerForMetrics(t *testing.T, metric string, value int) {
 	}
 }
 
-func TestPrometheusCountersWithLabels(t *testing.T) {
-	name := "blah_counterswithlabels"
-	c := stats.NewCountersWithLabels(name, "help", "tag", "tag1", "tag2")
+func TestPrometheusCountersWithSingleLabel(t *testing.T) {
+	name := "blah_counterswithsinglelabel"
+	c := stats.NewCountersWithSingleLabel(name, "help", "label", "tag1", "tag2")
 	c.Add("tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 0)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 0)
 	c.Add("tag2", 41)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 41)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 41)
 	c.Reset("tag2")
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 0)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 0)
 }
 
-func TestPrometheusGaugesWithLabels(t *testing.T) {
-	name := "blah_gaugeswithlabels"
-	c := stats.NewGaugesWithLabels(name, "help", "tag", "tag1", "tag2")
+func TestPrometheusGaugesWithSingleLabel(t *testing.T) {
+	name := "blah_gaugeswithsinglelabel"
+	c := stats.NewGaugesWithSingleLabel(name, "help", "label", "tag1", "tag2")
 	c.Add("tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", 1)
 
 	c.Add("tag2", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 1)
 
 	c.Set("tag1", -1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", -1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", -1)
 
 	c.Reset("tag2")
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", -1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 0)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", -1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 0)
 }
 
-func checkHandlerForMetricWithLabels(t *testing.T, metric string, tagName string, tagValue string, value int) {
+func checkHandlerForMetricWithSingleLabel(t *testing.T, metric, label, tag string, value int) {
 	response := testMetricsHandler(t)
 
-	expected := fmt.Sprintf("%s_%s{%s=\"%s\"} %d", namespace, metric, tagName, tagValue, value)
+	expected := fmt.Sprintf("%s_%s{%s=\"%s\"} %d", namespace, metric, label, tag, value)
 
 	if !strings.Contains(response.Body.String(), expected) {
 		t.Fatalf("Expected %s got %s", expected, response.Body.String())
