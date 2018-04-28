@@ -61,13 +61,13 @@ func TestGaugeFunc(t *testing.T) {
 	v := NewGaugeFunc("name", "help", func() int64 {
 		return 1
 	})
-	if v.String() != "1" {
-		t.Errorf("want 1, got %v", v.String())
+	if gotname != "name" {
+		t.Errorf("want name, got %s", gotname)
 	}
 	if gotv != v {
 		t.Errorf("want %#v, got %#v", v, gotv)
 	}
-	if gotname != "name" {
-		t.Errorf("want name, got %s", gotname)
+	if v.String() != "1" {
+		t.Errorf("want 1, got %v", v.String())
 	}
 }
