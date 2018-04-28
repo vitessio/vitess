@@ -25,7 +25,7 @@ import (
 )
 
 // counters is similar to expvar.Map, except that it doesn't allow floats.
-// It is used to build CountersWithLabels and GaugesWithLabels.
+// It is used to build CountersWithSingleLabel and GaugesWithSingleLabel.
 type counters struct {
 	// mu only protects adding and retrieving the value (*int64) from the
 	// map.
@@ -118,20 +118,20 @@ func (c *counters) Help() string {
 	return c.help
 }
 
-// CountersWithLabels provides a labelName for the tagged values in Counters
+// CountersWithSingleLabel provides a labelName for the tagged values in Counters
 // It provides a Counts method which can be used for tracking rates.
-type CountersWithLabels struct {
+type CountersWithSingleLabel struct {
 	counters
 	labelName string
 }
 
-// NewCountersWithLabels create a new Counters instance.
+// NewCountersWithSingleLabel create a new Counters instance.
 // If name is set, the variable gets published.
 // The function also accepts an optional list of tags that pre-creates them
 // initialized to 0.
 // labelName is a category name used to organize the tags in Prometheus.
-func NewCountersWithLabels(name string, help string, labelName string, tags ...string) *CountersWithLabels {
-	c := &CountersWithLabels{
+func NewCountersWithSingleLabel(name string, help string, labelName string, tags ...string) *CountersWithSingleLabel {
+	c := &CountersWithSingleLabel{
 		counters: counters{
 			counts: make(map[string]*int64),
 			help:   help,
@@ -149,12 +149,12 @@ func NewCountersWithLabels(name string, help string, labelName string, tags ...s
 }
 
 // LabelName returns the label name.
-func (c *CountersWithLabels) LabelName() string {
+func (c *CountersWithSingleLabel) LabelName() string {
 	return c.labelName
 }
 
 // Add adds a value to a named counter.
-func (c *CountersWithLabels) Add(name string, value int64) {
+func (c *CountersWithSingleLabel) Add(name string, value int64) {
 	if value < 0 {
 		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", c)
 	}
@@ -288,22 +288,26 @@ func NewCountersFuncWithMultiLabels(name string, labels []string, help string, f
 	return t
 }
 
-// GaugesWithLabels is similar to CountersWithLabels, except its values can
+// GaugesWithSingleLabel is similar to CountersWithSingleLabel, except its values can
 // go up and down.
-type GaugesWithLabels struct {
-	CountersWithLabels
+type GaugesWithSingleLabel struct {
+	CountersWithSingleLabel
 }
 
-// NewGaugesWithLabels creates a new GaugesWithLabels and publishes it if
+// NewGaugesWithSingleLabel creates a new GaugesWithSingleLabel and publishes it if
 // the name is set.
-func NewGaugesWithLabels(name string, help string, labelName string, tags ...string) *GaugesWithLabels {
-	g := &GaugesWithLabels{CountersWithLabels: CountersWithLabels{counters: counters{
-		counts: make(map[string]*int64),
-		help:   help,
-	}, labelName: labelName}}
+func NewGaugesWithSingleLabel(name string, help string, labelName string, tags ...string) *GaugesWithSingleLabel {
+	g := &GaugesWithSingleLabel{
+		CountersWithSingleLabel: CountersWithSingleLabel{
+			counters: counters{
+				counts: make(map[string]*int64),
+				help:   help,
+			},
+			labelName: labelName},
+	}
 
 	for _, tag := range tags {
-		g.CountersWithLabels.counts[tag] = new(int64)
+		g.counts[tag] = new(int64)
 	}
 	if name != "" {
 		publish(name, g)
@@ -312,13 +316,13 @@ func NewGaugesWithLabels(name string, help string, labelName string, tags ...str
 }
 
 // Set sets the value of a named gauge.
-func (g *GaugesWithLabels) Set(name string, value int64) {
-	a := g.CountersWithLabels.getValueAddr(name)
+func (g *GaugesWithSingleLabel) Set(name string, value int64) {
+	a := g.getValueAddr(name)
 	atomic.StoreInt64(a, value)
 }
 
 // Add adds a value to a named gauge.
-func (g *GaugesWithLabels) Add(name string, value int64) {
+func (g *GaugesWithSingleLabel) Add(name string, value int64) {
 	a := g.getValueAddr(name)
 	atomic.AddInt64(a, value)
 }
@@ -333,10 +337,11 @@ type GaugesWithMultiLabels struct {
 // and publishes it if name is set.
 func NewGaugesWithMultiLabels(name string, help string, labels []string) *GaugesWithMultiLabels {
 	t := &GaugesWithMultiLabels{
-		CountersWithMultiLabels: CountersWithMultiLabels{counters: counters{
-			counts: make(map[string]*int64),
-			help:   help,
-		},
+		CountersWithMultiLabels: CountersWithMultiLabels{
+			counters: counters{
+				counts: make(map[string]*int64),
+				help:   help,
+			},
 			labels: labels,
 		}}
 	if name != "" {
