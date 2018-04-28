@@ -61,7 +61,7 @@ RBR will eventually be supported by Vitess.
 
 ### Data types
 
-Vitess supports data types at the MySQL 5.5 level. The newer data types like spatial or JSON are not supported yet. Additionally, the TIMESTAMP data type should not be used in a primary key or sharding column. Otherwise, Vitess cannot predict those values correctly and this may result in data corruption.
+Vitess supports all data types including newer data types like spatial and JSON. Additionally, the TIMESTAMP data type should not be used in a primary key or sharding column. Otherwise, Vitess cannot predict those values correctly and this may result in data corruption.
 
 ### No side effects
 
@@ -676,4 +676,3 @@ Orchestrator, it also means new instances will be discovered immediately,
 and the topology will automatically repopulate even if Orchestrator's
 backing store is wiped out. Note that Orchestrator will forget stale
 instances after a configurable timeout.
-
