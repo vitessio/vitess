@@ -419,6 +419,10 @@ delete_statement:
   {
     $$ = &Delete{Comments: Comments($2), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$4}}, Partitions: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
   }
+| DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
+  {
+    $$ = &Delete{Comments: Comments($2), Targets: $4, TableExprs: $6, Where: NewWhere(WhereStr, $7)}
+  }
 | DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
   {
     $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
