@@ -118,8 +118,8 @@ func (c *counters) Help() string {
 	return c.help
 }
 
-// CountersWithSingleLabel allows to publish related counters for a single
-// label (aka category).
+// CountersWithSingleLabel tracks multiple counter values for a single
+// dimension ("label").
 // It provides a Counts method which can be used for tracking rates.
 type CountersWithSingleLabel struct {
 	counters
@@ -194,9 +194,9 @@ func (f CountersFunc) String() string {
 	return b.String()
 }
 
-// CountersWithMultiLabels is a multidimensional counters implementation
-// where names of categories are compound names made with joining multiple
-// strings with '.'.
+// CountersWithMultiLabels is a multidimensional counters implementation.
+// Internally, each tuple of dimensions ("labels") is stored as a single
+// label value where all label values are joined with ".".
 type CountersWithMultiLabels struct {
 	counters
 	labels []string
@@ -291,7 +291,7 @@ func NewCountersFuncWithMultiLabels(name, help string, labels []string, f Counte
 }
 
 // GaugesWithSingleLabel is similar to CountersWithSingleLabel, except its
-// values can go up and down.
+// meant to track the current value and not a cumulative count.
 type GaugesWithSingleLabel struct {
 	CountersWithSingleLabel
 }

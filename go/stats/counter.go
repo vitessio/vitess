@@ -27,13 +27,15 @@ import (
 // logCounterNegative is for throttling adding a negative value to a counter messages in logs
 var logCounterNegative = logutil.NewThrottledLogger("StatsCounterNegative", 1*time.Minute)
 
-// Counter is expvar.Int+Get+hook
+// Counter tracks a cumulative count of a metric.
+// For a one-dimensional or multi-dimensional counter, please use
+// CountersWithSingleLabel or CountersWithMultiLabels instead.
 type Counter struct {
 	i    sync2.AtomicInt64
 	help string
 }
 
-// NewCounter returns a new Counter
+// NewCounter returns a new Counter.
 func NewCounter(name string, help string) *Counter {
 	v := &Counter{help: help}
 	if name != "" {
@@ -42,7 +44,7 @@ func NewCounter(name string, help string) *Counter {
 	return v
 }
 
-// Add adds the provided value to the Counter
+// Add adds the provided value to the Counter.
 func (v *Counter) Add(delta int64) {
 	if delta < 0 {
 		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", v)
@@ -50,22 +52,22 @@ func (v *Counter) Add(delta int64) {
 	v.i.Add(delta)
 }
 
-// Reset resets the counter value to 0
+// Reset resets the counter value to 0.
 func (v *Counter) Reset() {
 	v.i.Set(int64(0))
 }
 
-// Get returns the value
+// Get returns the value.
 func (v *Counter) Get() int64 {
 	return v.i.Get()
 }
 
-// String is the implementation of expvar.var
+// String implements the expvar.Var interface.
 func (v *Counter) String() string {
 	return strconv.FormatInt(v.i.Get(), 10)
 }
 
-// Help returns the help string
+// Help returns the help string.
 func (v *Counter) Help() string {
 	return v.help
 }
@@ -102,7 +104,10 @@ func (cf CounterFunc) String() string {
 	return strconv.FormatInt(cf.F(), 10)
 }
 
-// Gauge is an unlabeled metric whose values can go up/down.
+// Gauge tracks the current value of an integer metric.
+// The emphasis here is on *current* i.e. this is not a cumulative counter.
+// For a one-dimensional or multi-dimensional gauge, please use
+// GaugeWithSingleLabel or GaugesWithMultiLabels instead.
 type Gauge struct {
 	Counter
 }
