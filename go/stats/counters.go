@@ -24,17 +24,22 @@ import (
 	"sync/atomic"
 )
 
-// counters is similar to expvar.Map, except that
-// it doesn't allow floats. It is used to build CountersWithLabels and GaugesWithLabels.
+// counters is similar to expvar.Map, except that it doesn't allow floats.
+// It is used to build CountersWithLabels and GaugesWithLabels.
 type counters struct {
-	// mu only protects adding and retrieving the value (*int64) from the map,
-	// modification to the actual number (int64) should be done with atomic funcs.
+	// mu only protects adding and retrieving the value (*int64) from the
+	// map.
+	// The modification to the actual number (int64) must be done with
+	// atomic funcs.
+	// If a value for a given name already exists in the map, we only have
+	// to use a read-lock to retrieve it. This is an important performance
+	// optimizations because it allows to concurrently increment a counter.
 	mu     sync.RWMutex
 	counts map[string]*int64
 	help   string
 }
 
-// String implements expvar
+// String implements the expvar.Var interface.
 func (c *counters) String() string {
 	b := bytes.NewBuffer(make([]byte, 0, 4096))
 
@@ -90,7 +95,7 @@ func (c *counters) ResetAll() {
 	c.counts = make(map[string]*int64)
 }
 
-// Reset resets a specific counter value to 0
+// Reset resets a specific counter value to 0.
 func (c *counters) Reset(name string) {
 	a := c.getValueAddr(name)
 	atomic.StoreInt64(a, int64(0))
@@ -120,9 +125,10 @@ type CountersWithLabels struct {
 	labelName string
 }
 
-// NewCountersWithLabels create a new Counters instance. If name is set, the variable
-// gets published. The function also accepts an optional list of tags that
-// pre-creates them initialized to 0.
+// NewCountersWithLabels create a new Counters instance.
+// If name is set, the variable gets published.
+// The function also accepts an optional list of tags that pre-creates them
+// initialized to 0.
 // labelName is a category name used to organize the tags in Prometheus.
 func NewCountersWithLabels(name string, help string, labelName string, tags ...string) *CountersWithLabels {
 	c := &CountersWithLabels{
@@ -156,12 +162,140 @@ func (c *CountersWithLabels) Add(name string, value int64) {
 	atomic.AddInt64(a, value)
 }
 
-// GaugesWithLabels is similar to CountersWithLabels, except its values can go up and down.
+// CountersFunc converts a function that returns
+// a map of int64 as an expvar.
+type CountersFunc func() map[string]int64
+
+// Counts returns a copy of the Counters' map.
+func (f CountersFunc) Counts() map[string]int64 {
+	return f()
+}
+
+// String implements the expvar.Var interface.
+func (f CountersFunc) String() string {
+	m := f()
+	if m == nil {
+		return "{}"
+	}
+	b := bytes.NewBuffer(make([]byte, 0, 4096))
+	fmt.Fprintf(b, "{")
+	firstValue := true
+	for k, v := range m {
+		if firstValue {
+			firstValue = false
+		} else {
+			fmt.Fprintf(b, ", ")
+		}
+		fmt.Fprintf(b, "%q: %v", k, v)
+	}
+	fmt.Fprintf(b, "}")
+	return b.String()
+}
+
+// CountersWithMultiLabels is a multidimensional counters implementation
+// where names of categories are compound names made with joining multiple
+// strings with '.'.
+type CountersWithMultiLabels struct {
+	counters
+	labels []string
+}
+
+// NewCountersWithMultiLabels creates a new CountersWithMultiLabels
+// instance, and publishes it if name is set.
+func NewCountersWithMultiLabels(name string, help string, labels []string) *CountersWithMultiLabels {
+	t := &CountersWithMultiLabels{
+		counters: counters{
+			counts: make(map[string]*int64),
+			help:   help},
+		labels: labels,
+	}
+	if name != "" {
+		publish(name, t)
+	}
+
+	return t
+}
+
+// Labels returns the list of labels.
+func (mc *CountersWithMultiLabels) Labels() []string {
+	return mc.labels
+}
+
+// Add adds a value to a named counter.
+// len(names) must be equal to len(Labels)
+func (mc *CountersWithMultiLabels) Add(names []string, value int64) {
+	if len(names) != len(mc.labels) {
+		panic("CountersWithMultiLabels: wrong number of values in Add")
+	}
+	if value < 0 {
+		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", mc)
+	}
+
+	mc.counters.Add(mapKey(names), value)
+}
+
+// Reset resets the value of a named counter back to 0.
+// len(names) must be equal to len(Labels).
+func (mc *CountersWithMultiLabels) Reset(names []string) {
+	if len(names) != len(mc.labels) {
+		panic("CountersWithMultiLabels: wrong number of values in Reset")
+	}
+
+	mc.counters.Reset(mapKey(names))
+}
+
+// Counts returns a copy of the Counters' map.
+// The key is a single string where all labels are joined by a "." e.g.
+// "label1.label2".
+func (mc *CountersWithMultiLabels) Counts() map[string]int64 {
+	return mc.counters.Counts()
+}
+
+// CountersFuncWithMultiLabels is a multidimensional CountersFunc implementation
+// where names of categories are compound names made with joining
+// multiple strings with '.'.  Since the map is returned by the
+// function, we assume it's in the right format (meaning each key is
+// of the form 'aaa.bbb.ccc' with as many elements as there are in
+// Labels).
+type CountersFuncWithMultiLabels struct {
+	CountersFunc
+	labels []string
+	help   string
+}
+
+// Labels returns the list of labels.
+func (mcf *CountersFuncWithMultiLabels) Labels() []string {
+	return mcf.labels
+}
+
+// Help returns the help string
+func (mcf *CountersFuncWithMultiLabels) Help() string {
+	return mcf.help
+}
+
+// NewCountersFuncWithMultiLabels creates a new CountersFuncWithMultiLabels
+// mapping to the provided function.
+func NewCountersFuncWithMultiLabels(name string, labels []string, help string, f CountersFunc) *CountersFuncWithMultiLabels {
+	t := &CountersFuncWithMultiLabels{
+		CountersFunc: f,
+		labels:       labels,
+		help:         help,
+	}
+	if name != "" {
+		publish(name, t)
+	}
+
+	return t
+}
+
+// GaugesWithLabels is similar to CountersWithLabels, except its values can
+// go up and down.
 type GaugesWithLabels struct {
 	CountersWithLabels
 }
 
-// NewGaugesWithLabels creates a new GaugesWithLabels and publishes it if the name is set.
+// NewGaugesWithLabels creates a new GaugesWithLabels and publishes it if
+// the name is set.
 func NewGaugesWithLabels(name string, help string, labelName string, tags ...string) *GaugesWithLabels {
 	g := &GaugesWithLabels{CountersWithLabels: CountersWithLabels{counters: counters{
 		counts: make(map[string]*int64),
@@ -189,102 +323,14 @@ func (g *GaugesWithLabels) Add(name string, value int64) {
 	atomic.AddInt64(a, value)
 }
 
-// CountersFunc converts a function that returns
-// a map of int64 as an expvar.
-type CountersFunc func() map[string]int64
-
-// Counts returns a copy of the Counters' map.
-func (f CountersFunc) Counts() map[string]int64 {
-	return f()
-}
-
-// String is used by expvar.
-func (f CountersFunc) String() string {
-	m := f()
-	if m == nil {
-		return "{}"
-	}
-	b := bytes.NewBuffer(make([]byte, 0, 4096))
-	fmt.Fprintf(b, "{")
-	firstValue := true
-	for k, v := range m {
-		if firstValue {
-			firstValue = false
-		} else {
-			fmt.Fprintf(b, ", ")
-		}
-		fmt.Fprintf(b, "%q: %v", k, v)
-	}
-	fmt.Fprintf(b, "}")
-	return b.String()
-}
-
-// CountersWithMultiLabels is a multidimensional Counters implementation where
-// names of categories are compound names made with joining multiple
-// strings with '.'.
-type CountersWithMultiLabels struct {
-	counters
-	labels []string
-}
-
-// NewCountersWithMultiLabels creates a new CountersWithMultiLabels instance, and publishes it
-// if name is set.
-func NewCountersWithMultiLabels(name string, help string, labels []string) *CountersWithMultiLabels {
-	t := &CountersWithMultiLabels{
-		counters: counters{
-			counts: make(map[string]*int64),
-			help:   help},
-		labels: labels,
-	}
-	if name != "" {
-		publish(name, t)
-	}
-
-	return t
-}
-
-// Labels returns the list of labels.
-func (mc *CountersWithMultiLabels) Labels() []string {
-	return mc.labels
-}
-
-// Add adds a value to a named counter. len(names) must be equal to
-// len(Labels)
-func (mc *CountersWithMultiLabels) Add(names []string, value int64) {
-	if len(names) != len(mc.labels) {
-		panic("CountersWithMultiLabels: wrong number of values in Add")
-	}
-	if value < 0 {
-		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", mc)
-	}
-
-	mc.counters.Add(mapKey(names), value)
-}
-
-// Reset resets the value of a named counter back to 0. len(names)
-// must be equal to len(Labels)
-func (mc *CountersWithMultiLabels) Reset(names []string) {
-	if len(names) != len(mc.labels) {
-		panic("CountersWithMultiLabels: wrong number of values in Reset")
-	}
-
-	mc.counters.Reset(mapKey(names))
-}
-
-// Counts returns a copy of the Counters' map.
-// The key is a single string where all labels are joiend by a "." e.g.
-// "label1.label2".
-func (mc *CountersWithMultiLabels) Counts() map[string]int64 {
-	return mc.counters.Counts()
-}
-
-// GaugesWithMultiLabels is a CountersWithMultiLabels implementation where the values can go up and down
+// GaugesWithMultiLabels is a CountersWithMultiLabels implementation where
+// the values can go up and down.
 type GaugesWithMultiLabels struct {
 	CountersWithMultiLabels
 }
 
-// NewGaugesWithMultiLabels creates a new GaugesWithMultiLabels instance, and publishes it
-// if name is set.
+// NewGaugesWithMultiLabels creates a new GaugesWithMultiLabels instance,
+// and publishes it if name is set.
 func NewGaugesWithMultiLabels(name string, help string, labels []string) *GaugesWithMultiLabels {
 	t := &GaugesWithMultiLabels{
 		CountersWithMultiLabels: CountersWithMultiLabels{counters: counters{
@@ -300,8 +346,8 @@ func NewGaugesWithMultiLabels(name string, help string, labels []string) *Gauges
 	return t
 }
 
-// Set sets the value of a named counter. len(names) must be equal to
-// len(Labels)
+// Set sets the value of a named counter.
+// len(names) must be equal to len(Labels).
 func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
 	if len(names) != len(mg.CountersWithMultiLabels.labels) {
 		panic("GaugesWithMultiLabels: wrong number of values in Set")
@@ -310,8 +356,8 @@ func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
 	atomic.StoreInt64(a, value)
 }
 
-// Add adds a value to a named gauge. len(names) must be equal to
-// len(Labels)
+// Add adds a value to a named gauge.
+// len(names) must be equal to len(Labels).
 func (mg *GaugesWithMultiLabels) Add(names []string, value int64) {
 	if len(names) != len(mg.labels) {
 		panic("CountersWithMultiLabels: wrong number of values in Add")
@@ -320,51 +366,15 @@ func (mg *GaugesWithMultiLabels) Add(names []string, value int64) {
 	mg.counters.Add(mapKey(names), value)
 }
 
-// CountersFuncWithMultiLabels is a multidimensional CountersFunc implementation
-// where names of categories are compound names made with joining
-// multiple strings with '.'.  Since the map is returned by the
-// function, we assume it's in the right format (meaning each key is
-// of the form 'aaa.bbb.ccc' with as many elements as there are in
-// Labels).
-type CountersFuncWithMultiLabels struct {
-	CountersFunc
-	labels []string
-	help   string
-}
-
-// Labels returns the list of labels.
-func (mcf *CountersFuncWithMultiLabels) Labels() []string {
-	return mcf.labels
-}
-
-// Help returns the help string
-func (mcf *CountersFuncWithMultiLabels) Help() string {
-	return mcf.help
-}
-
-// NewCountersFuncWithMultiLabels creates a new CountersFuncWithMultiLabels mapping to the provided
-// function.
-func NewCountersFuncWithMultiLabels(name string, labels []string, help string, f CountersFunc) *CountersFuncWithMultiLabels {
-	t := &CountersFuncWithMultiLabels{
-		CountersFunc: f,
-		labels:       labels,
-		help:         help,
-	}
-	if name != "" {
-		publish(name, t)
-	}
-
-	return t
-}
-
 // GaugesFuncWithMultiLabels is a wrapper around CountersFuncWithMultiLabels
-// for values that go up/down for implementations (like Prometheus) that need to differ between Counters and Gauges.
+// for values that go up/down for implementations (like Prometheus) that
+// need to differ between Counters and Gauges.
 type GaugesFuncWithMultiLabels struct {
 	CountersFuncWithMultiLabels
 }
 
-// NewGaugesFuncWithMultiLabels creates a new GaugesFuncWithMultiLabels mapping to the provided
-// function.
+// NewGaugesFuncWithMultiLabels creates a new GaugesFuncWithMultiLabels
+// mapping to the provided function.
 func NewGaugesFuncWithMultiLabels(name string, labels []string, help string, f CountersFunc) *GaugesFuncWithMultiLabels {
 	t := &GaugesFuncWithMultiLabels{
 		CountersFuncWithMultiLabels: CountersFuncWithMultiLabels{
