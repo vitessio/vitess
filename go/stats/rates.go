@@ -37,6 +37,15 @@ type CountTracker interface {
 	Counts() map[string]int64
 }
 
+// wrappedCountTracker implements the CountTracker interface.
+// It is used in multidimensional.go to publish specific, one-dimensional
+// counters.
+type wrappedCountTracker struct {
+	f func() map[string]int64
+}
+
+func (t wrappedCountTracker) Counts() map[string]int64 { return t.f() }
+
 // Rates is capable of reporting the rate (typically QPS)
 // for any variable that satisfies the CountTracker interface.
 type Rates struct {

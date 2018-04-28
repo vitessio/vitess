@@ -34,19 +34,21 @@ type MultiTracker interface {
 func CounterForDimension(mt MultiTracker, dimension string) CountTracker {
 	for i, lab := range mt.Labels() {
 		if lab == dimension {
-			return CountersFunc(func() map[string]int64 {
-				result := make(map[string]int64)
-				for k, v := range mt.Counts() {
-					if k == "All" {
-						result[k] = v
-						continue
+			return wrappedCountTracker{
+				f: func() map[string]int64 {
+					result := make(map[string]int64)
+					for k, v := range mt.Counts() {
+						if k == "All" {
+							result[k] = v
+							continue
+						}
+						result[strings.Split(k, ".")[i]] += v
 					}
-					result[strings.Split(k, ".")[i]] += v
-				}
-				return result
-			})
+					return result
+				},
+			}
 		}
 	}
-	panic(fmt.Sprintf("label %v is not one of %v", dimension, mt.Labels()))
 
+	panic(fmt.Sprintf("label %v is not one of %v", dimension, mt.Labels()))
 }
