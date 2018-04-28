@@ -42,7 +42,7 @@ func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 	case *stats.GaugeFunc:
 		be.newMetric(st, name, prometheus.GaugeValue, func() float64 { return float64(st.F()) })
 	case *stats.CountersWithSingleLabel:
-		be.newCountersWithSingleLabel(st, name, st.LabelName(), prometheus.CounterValue)
+		be.newCountersWithSingleLabel(st, name, st.Label(), prometheus.CounterValue)
 	case *stats.CountersWithMultiLabels:
 		be.newCountersWithMultiLabels(st, name)
 	case *stats.CountersFuncWithMultiLabels:
@@ -50,7 +50,7 @@ func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 	case *stats.GaugesFuncWithMultiLabels:
 		be.newMetricsFuncWithMultiLabels(&st.CountersFuncWithMultiLabels, name, prometheus.GaugeValue)
 	case *stats.GaugesWithSingleLabel:
-		be.newGaugesWithSingleLabel(st, name, st.LabelName(), prometheus.GaugeValue)
+		be.newGaugesWithSingleLabel(st, name, st.Label(), prometheus.GaugeValue)
 	case *stats.GaugesWithMultiLabels:
 		be.newGaugesWithMultiLabels(st, name)
 	case *stats.CounterDuration:

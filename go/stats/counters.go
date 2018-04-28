@@ -118,25 +118,27 @@ func (c *counters) Help() string {
 	return c.help
 }
 
-// CountersWithSingleLabel provides a labelName for the tagged values in Counters
+// CountersWithSingleLabel allows to publish related counters for a single
+// label (aka category).
 // It provides a Counts method which can be used for tracking rates.
 type CountersWithSingleLabel struct {
 	counters
-	labelName string
+	label string
 }
 
 // NewCountersWithSingleLabel create a new Counters instance.
 // If name is set, the variable gets published.
 // The function also accepts an optional list of tags that pre-creates them
 // initialized to 0.
-// labelName is a category name used to organize the tags in Prometheus.
-func NewCountersWithSingleLabel(name string, help string, labelName string, tags ...string) *CountersWithSingleLabel {
+// label is a category name used to organize the tags. It is currently only
+// used by Prometheus, but not by the expvar package.
+func NewCountersWithSingleLabel(name, help, label string, tags ...string) *CountersWithSingleLabel {
 	c := &CountersWithSingleLabel{
 		counters: counters{
 			counts: make(map[string]*int64),
 			help:   help,
 		},
-		labelName: labelName,
+		label: label,
 	}
 
 	for _, tag := range tags {
@@ -148,9 +150,9 @@ func NewCountersWithSingleLabel(name string, help string, labelName string, tags
 	return c
 }
 
-// LabelName returns the label name.
-func (c *CountersWithSingleLabel) LabelName() string {
-	return c.labelName
+// Label returns the label name.
+func (c *CountersWithSingleLabel) Label() string {
+	return c.label
 }
 
 // Add adds a value to a named counter.
@@ -202,7 +204,7 @@ type CountersWithMultiLabels struct {
 
 // NewCountersWithMultiLabels creates a new CountersWithMultiLabels
 // instance, and publishes it if name is set.
-func NewCountersWithMultiLabels(name string, help string, labels []string) *CountersWithMultiLabels {
+func NewCountersWithMultiLabels(name, help string, labels []string) *CountersWithMultiLabels {
 	t := &CountersWithMultiLabels{
 		counters: counters{
 			counts: make(map[string]*int64),
@@ -251,7 +253,7 @@ func (mc *CountersWithMultiLabels) Counts() map[string]int64 {
 	return mc.counters.Counts()
 }
 
-// CountersFuncWithMultiLabels is a multidimensional CountersFunc implementation
+// CountersFuncWithMultiLabels is a multidimensional counters implementation
 // where names of categories are compound names made with joining
 // multiple strings with '.'.  Since the map is returned by the
 // function, we assume it's in the right format (meaning each key is
@@ -288,22 +290,23 @@ func NewCountersFuncWithMultiLabels(name string, labels []string, help string, f
 	return t
 }
 
-// GaugesWithSingleLabel is similar to CountersWithSingleLabel, except its values can
-// go up and down.
+// GaugesWithSingleLabel is similar to CountersWithSingleLabel, except its
+// values can go up and down.
 type GaugesWithSingleLabel struct {
 	CountersWithSingleLabel
 }
 
-// NewGaugesWithSingleLabel creates a new GaugesWithSingleLabel and publishes it if
-// the name is set.
-func NewGaugesWithSingleLabel(name string, help string, labelName string, tags ...string) *GaugesWithSingleLabel {
+// NewGaugesWithSingleLabel creates a new GaugesWithSingleLabel and
+// publishes it if the name is set.
+func NewGaugesWithSingleLabel(name, help, label string, tags ...string) *GaugesWithSingleLabel {
 	g := &GaugesWithSingleLabel{
 		CountersWithSingleLabel: CountersWithSingleLabel{
 			counters: counters{
 				counts: make(map[string]*int64),
 				help:   help,
 			},
-			labelName: labelName},
+			label: label,
+		},
 	}
 
 	for _, tag := range tags {
@@ -335,7 +338,7 @@ type GaugesWithMultiLabels struct {
 
 // NewGaugesWithMultiLabels creates a new GaugesWithMultiLabels instance,
 // and publishes it if name is set.
-func NewGaugesWithMultiLabels(name string, help string, labels []string) *GaugesWithMultiLabels {
+func NewGaugesWithMultiLabels(name, help string, labels []string) *GaugesWithMultiLabels {
 	t := &GaugesWithMultiLabels{
 		CountersWithMultiLabels: CountersWithMultiLabels{
 			counters: counters{
