@@ -23,72 +23,111 @@ import (
 	"vitess.io/vitess/go/sync2"
 )
 
-// Duration exports a time.Duration
-type Duration struct {
+// CounterDuration exports a time.Duration as counter.
+type CounterDuration struct {
 	i    sync2.AtomicDuration
 	help string
 }
 
-// NewDuration returns a new Duration.
-func NewDuration(name, help string) *Duration {
-	v := &Duration{
+// NewCounterDuration returns a new CounterDuration.
+func NewCounterDuration(name, help string) *CounterDuration {
+	cd := &CounterDuration{
 		help: help,
 	}
-	publish(name, v)
-	return v
+	publish(name, cd)
+	return cd
 }
 
 // Help implements the Variable interface.
-func (v Duration) Help() string {
-	return v.help
+func (cd CounterDuration) Help() string {
+	return cd.help
 }
 
 // String is the implementation of expvar.var.
-func (v Duration) String() string {
-	return strconv.FormatInt(int64(v.i.Get()), 10)
+func (cd CounterDuration) String() string {
+	return strconv.FormatInt(int64(cd.i.Get()), 10)
 }
 
-// Add adds the provided value to the Duration
-func (v *Duration) Add(delta time.Duration) {
-	v.i.Add(delta)
+// Add adds the provided value to the CounterDuration.
+func (cd *CounterDuration) Add(delta time.Duration) {
+	cd.i.Add(delta)
 }
 
-// Set sets the value
-func (v *Duration) Set(value time.Duration) {
-	v.i.Set(value)
+// Get returns the value.
+func (cd *CounterDuration) Get() time.Duration {
+	return cd.i.Get()
 }
 
-// Get returns the value
-func (v *Duration) Get() time.Duration {
-	return v.i.Get()
+// GaugeDuration exports a time.Duration as gauge.
+// In addition to CounterDuration, it also has Set() which allows overriding
+// the current value.
+type GaugeDuration struct {
+	CounterDuration
 }
 
-// DurationFunc allows to provide the value via a custom function.
-type DurationFunc struct {
+// NewGaugeDuration returns a new GaugeDuration.
+func NewGaugeDuration(name, help string) *GaugeDuration {
+	gd := &GaugeDuration{
+		CounterDuration: CounterDuration{
+			help: help,
+		},
+	}
+	publish(name, gd)
+	return gd
+}
+
+// Set sets the value.
+func (gd *GaugeDuration) Set(value time.Duration) {
+	gd.i.Set(value)
+}
+
+// CounterDurationFunc allows to provide the value via a custom function.
+type CounterDurationFunc struct {
 	F    func() time.Duration
 	help string
 }
 
-// NewDurationFunc creates a new DurationFunc instance and publishes it if name
-// is set.
-func NewDurationFunc(name string, help string, f func() time.Duration) *DurationFunc {
-	df := &DurationFunc{
+// NewCounterDurationFunc creates a new CounterDurationFunc instance and
+// publishes it if name is set.
+func NewCounterDurationFunc(name string, help string, f func() time.Duration) *CounterDurationFunc {
+	cf := &CounterDurationFunc{
 		F:    f,
 		help: help,
 	}
 
 	if name != "" {
-		publish(name, df)
+		publish(name, cf)
 	}
-	return df
+	return cf
 }
 
 // Help implements the Variable interface.
-func (df DurationFunc) Help() string {
-	return df.help
+func (cf CounterDurationFunc) Help() string {
+	return cf.help
 }
 
 // String is the implementation of expvar.var.
-func (df DurationFunc) String() string {
-	return strconv.FormatInt(int64(df.F()), 10)
+func (cf CounterDurationFunc) String() string {
+	return strconv.FormatInt(int64(cf.F()), 10)
+}
+
+// GaugeDurationFunc allows to provide the value via a custom function.
+type GaugeDurationFunc struct {
+	CounterDurationFunc
+}
+
+// NewGaugeDurationFunc creates a new GaugeDurationFunc instance and
+// publishes it if name is set.
+func NewGaugeDurationFunc(name string, help string, f func() time.Duration) *GaugeDurationFunc {
+	gf := &GaugeDurationFunc{
+		CounterDurationFunc: CounterDurationFunc{
+			F:    f,
+			help: help,
+		},
+	}
+
+	if name != "" {
+		publish(name, gf)
+	}
+	return gf
 }

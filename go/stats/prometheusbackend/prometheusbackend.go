@@ -53,11 +53,13 @@ func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 		be.newGaugesWithLabels(st, name, st.LabelName(), prometheus.GaugeValue)
 	case *stats.GaugesWithMultiLabels:
 		be.newGaugesWithMultiLabels(st, name)
-	case *stats.Duration:
-		// TODO(mberlin): For now, we only support duration as gauge value.
+	case *stats.CounterDuration:
+		be.newMetric(st, name, prometheus.CounterValue, func() float64 { return st.Get().Seconds() })
+	case *stats.CounterDurationFunc:
+		be.newMetric(st, name, prometheus.CounterValue, func() float64 { return st.F().Seconds() })
+	case *stats.GaugeDuration:
 		be.newMetric(st, name, prometheus.GaugeValue, func() float64 { return st.Get().Seconds() })
-	case *stats.DurationFunc:
-		// TODO(mberlin): For now, we only support duration as gauge value.
+	case *stats.GaugeDurationFunc:
 		be.newMetric(st, name, prometheus.GaugeValue, func() float64 { return st.F().Seconds() })
 	case *stats.Timings:
 		be.newTiming(st, name)

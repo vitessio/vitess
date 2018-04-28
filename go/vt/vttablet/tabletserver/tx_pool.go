@@ -119,7 +119,7 @@ func NewTxPool(
 	txOnce.Do(func() {
 		// Careful: conns also exports name+"xxx" vars,
 		// but we know it doesn't export Timeout.
-		stats.NewDurationFunc(prefix+"TransactionPoolTimeout", "Transaction pool timeout", axp.timeout.Get)
+		stats.NewGaugeDurationFunc(prefix+"TransactionPoolTimeout", "Transaction pool timeout", axp.timeout.Get)
 		stats.NewGaugeFunc(prefix+"TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
 	})
 	return axp
