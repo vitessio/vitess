@@ -42,9 +42,9 @@ func TestPrometheusGauge(t *testing.T) {
 
 func TestPrometheusCounterFunc(t *testing.T) {
 	name := "blah_counterfunc"
-	stats.NewCounterFunc(name, "help", stats.IntFunc(func() int64 {
+	stats.NewCounterFunc(name, "help", func() int64 {
 		return 2
-	}))
+	})
 
 	checkHandlerForMetrics(t, name, 2)
 }
@@ -52,11 +52,28 @@ func TestPrometheusCounterFunc(t *testing.T) {
 func TestPrometheusGaugeFunc(t *testing.T) {
 	name := "blah_gaugefunc"
 
-	stats.NewGaugeFunc(name, "help", stats.IntFunc(func() int64 {
+	stats.NewGaugeFunc(name, "help", func() int64 {
 		return -3
-	}))
+	})
 
 	checkHandlerForMetrics(t, name, -3)
+}
+
+func TestPrometheusDuration(t *testing.T) {
+	name := "blah_duration"
+
+	d := stats.NewDuration(name, "help")
+	d.Set(1 * time.Second)
+
+	checkHandlerForMetrics(t, name, 1)
+}
+
+func TestPrometheusDurationFunc(t *testing.T) {
+	name := "blah_durationfunc"
+
+	stats.NewDurationFunc(name, "help", func() time.Duration { return 1 * time.Second })
+
+	checkHandlerForMetrics(t, name, 1)
 }
 
 func checkHandlerForMetrics(t *testing.T, metric string, value int) {
