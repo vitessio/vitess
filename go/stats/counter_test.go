@@ -62,7 +62,7 @@ func TestGaugeFunc(t *testing.T) {
 		return 1
 	})
 	if v.String() != "1" {
-		t.Errorf("want 1, got %f", v.String())
+		t.Errorf("want 1, got %v", v.String())
 	}
 	if gotv != v {
 		t.Errorf("want %#v, got %#v", v, gotv)
