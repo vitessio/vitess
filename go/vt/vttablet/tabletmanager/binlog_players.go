@@ -434,16 +434,22 @@ func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 			defer blm.mu.Unlock()
 			return blm.maxSecondsBehindMasterUNGUARDED()
 		})
-	stats.Publish("BinlogPlayerSecondsBehindMasterMap", stats.CountersFunc(func() map[string]int64 {
-		blm.mu.Lock()
-		result := make(map[string]int64, len(blm.players))
-		for i, bpc := range blm.players {
-			sbm := bpc.binlogPlayerStats.SecondsBehindMaster.Get()
-			result[fmt.Sprintf("%v", i)] = sbm
-		}
-		blm.mu.Unlock()
-		return result
-	}))
+	stats.NewCountersFuncWithMultiLabels(
+		"BinlogPlayerSecondsBehindMasterMap",
+		"Binlog player seconds behind master per player",
+		// CAUTION: Always keep this label as "counts" because the Google
+		//          internal monitoring may depend on this specific value.
+		[]string{"counts"},
+		func() map[string]int64 {
+			blm.mu.Lock()
+			result := make(map[string]int64, len(blm.players))
+			for i, bpc := range blm.players {
+				sbm := bpc.binlogPlayerStats.SecondsBehindMaster.Get()
+				result[fmt.Sprintf("%v", i)] = sbm
+			}
+			blm.mu.Unlock()
+			return result
+		})
 	stats.Publish("BinlogPlayerSourceShardNameMap", stats.StringMapFunc(func() map[string]string {
 		blm.mu.Lock()
 		result := make(map[string]string, len(blm.players))

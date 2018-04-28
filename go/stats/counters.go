@@ -164,36 +164,6 @@ func (c *CountersWithSingleLabel) Add(name string, value int64) {
 	atomic.AddInt64(a, value)
 }
 
-// CountersFunc converts a function that returns
-// a map of int64 as an expvar.
-type CountersFunc func() map[string]int64
-
-// Counts returns a copy of the Counters' map.
-func (f CountersFunc) Counts() map[string]int64 {
-	return f()
-}
-
-// String implements the expvar.Var interface.
-func (f CountersFunc) String() string {
-	m := f()
-	if m == nil {
-		return "{}"
-	}
-	b := bytes.NewBuffer(make([]byte, 0, 4096))
-	fmt.Fprintf(b, "{")
-	firstValue := true
-	for k, v := range m {
-		if firstValue {
-			firstValue = false
-		} else {
-			fmt.Fprintf(b, ", ")
-		}
-		fmt.Fprintf(b, "%q: %v", k, v)
-	}
-	fmt.Fprintf(b, "}")
-	return b.String()
-}
-
 // CountersWithMultiLabels is a multidimensional counters implementation.
 // Internally, each tuple of dimensions ("labels") is stored as a single
 // label value where all label values are joined with ".".
@@ -259,8 +229,14 @@ func (mc *CountersWithMultiLabels) Counts() map[string]int64 {
 // function, we assume it's in the right format (meaning each key is
 // of the form 'aaa.bbb.ccc' with as many elements as there are in
 // Labels).
+//
+// Note that there is no CountersFuncWithSingleLabel object. That this
+// because such an object would be identical to this one because these
+// function-based counters have no Add() or Set() method which are different
+// for the single vs. multiple labels cases.
+// If you have only a single label, pass an array with a single element.
 type CountersFuncWithMultiLabels struct {
-	CountersFunc
+	f      func() map[string]int64
 	help   string
 	labels []string
 }
@@ -277,17 +253,43 @@ func (c CountersFuncWithMultiLabels) Help() string {
 
 // NewCountersFuncWithMultiLabels creates a new CountersFuncWithMultiLabels
 // mapping to the provided function.
-func NewCountersFuncWithMultiLabels(name, help string, labels []string, f CountersFunc) *CountersFuncWithMultiLabels {
+func NewCountersFuncWithMultiLabels(name, help string, labels []string, f func() map[string]int64) *CountersFuncWithMultiLabels {
 	t := &CountersFuncWithMultiLabels{
-		CountersFunc: f,
-		help:         help,
-		labels:       labels,
+		f:      f,
+		help:   help,
+		labels: labels,
 	}
 	if name != "" {
 		publish(name, t)
 	}
 
 	return t
+}
+
+// Counts returns a copy of the counters' map.
+func (c CountersFuncWithMultiLabels) Counts() map[string]int64 {
+	return c.f()
+}
+
+// String implements the expvar.Var interface.
+func (c CountersFuncWithMultiLabels) String() string {
+	m := c.f()
+	if m == nil {
+		return "{}"
+	}
+	b := bytes.NewBuffer(make([]byte, 0, 4096))
+	fmt.Fprintf(b, "{")
+	firstValue := true
+	for k, v := range m {
+		if firstValue {
+			firstValue = false
+		} else {
+			fmt.Fprintf(b, ", ")
+		}
+		fmt.Fprintf(b, "%q: %v", k, v)
+	}
+	fmt.Fprintf(b, "}")
+	return b.String()
 }
 
 // GaugesWithSingleLabel is similar to CountersWithSingleLabel, except its
@@ -383,12 +385,12 @@ type GaugesFuncWithMultiLabels struct {
 
 // NewGaugesFuncWithMultiLabels creates a new GaugesFuncWithMultiLabels
 // mapping to the provided function.
-func NewGaugesFuncWithMultiLabels(name, help string, labels []string, f CountersFunc) *GaugesFuncWithMultiLabels {
+func NewGaugesFuncWithMultiLabels(name, help string, labels []string, f func() map[string]int64) *GaugesFuncWithMultiLabels {
 	t := &GaugesFuncWithMultiLabels{
 		CountersFuncWithMultiLabels: CountersFuncWithMultiLabels{
-			CountersFunc: f,
-			help:         help,
-			labels:       labels,
+			f:      f,
+			help:   help,
+			labels: labels,
 		}}
 
 	if name != "" {

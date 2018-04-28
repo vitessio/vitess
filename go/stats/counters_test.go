@@ -43,15 +43,6 @@ func TestCounters(t *testing.T) {
 	if counts["c2"] != 2 {
 		t.Errorf("want 2, got %d", counts["c2"])
 	}
-	f := CountersFunc(func() map[string]int64 {
-		return map[string]int64{
-			"c1": 1,
-			"c2": 2,
-		}
-	})
-	if s := f.String(); s != want1 && s != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, s)
-	}
 }
 
 func TestCountersTags(t *testing.T) {
@@ -207,4 +198,40 @@ func BenchmarkCountersTailLatency(b *testing.B) {
 
 	close(c)
 	<-done
+}
+
+func TestCountersFuncWithMultiLabels(t *testing.T) {
+	clear()
+	f := NewCountersFuncWithMultiLabels("TestCountersFuncWithMultiLabels", "help", []string{"label1"}, func() map[string]int64 {
+		return map[string]int64{
+			"c1": 1,
+			"c2": 2,
+		}
+	})
+
+	want1 := `{"c1": 1, "c2": 2}`
+	want2 := `{"c2": 2, "c1": 1}`
+	if s := f.String(); s != want1 && s != want2 {
+		t.Errorf("want %s or %s, got %s", want1, want2, s)
+	}
+}
+
+func TestCountersFuncWithMultiLabels_Hook(t *testing.T) {
+	var gotname string
+	var gotv *CountersFuncWithMultiLabels
+	clear()
+	Register(func(name string, v expvar.Var) {
+		gotname = name
+		gotv = v.(*CountersFuncWithMultiLabels)
+	})
+
+	v := NewCountersFuncWithMultiLabels("TestCountersFuncWithMultiLabels_Hook", "help", []string{"label1"}, func() map[string]int64 {
+		return map[string]int64{}
+	})
+	if gotname != "TestCountersFuncWithMultiLabels_Hook" {
+		t.Errorf("want TestCountersFuncWithMultiLabels_Hook, got %s", gotname)
+	}
+	if gotv != v {
+		t.Errorf("want %#v, got %#v", v, gotv)
+	}
 }
