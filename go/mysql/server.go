@@ -357,7 +357,11 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 					}
 				}
 
-				return c.writeRows(qr)
+				if err := c.writeRows(qr); err != nil {
+					return err
+				}
+
+				return c.flush()
 			})
 
 			// If no field was sent, we expect an error.
