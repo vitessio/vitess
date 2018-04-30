@@ -290,6 +290,29 @@ func TestPrometheusMultiTimings_PanicWrongLength(t *testing.T) {
 	c.Add([]string{"label1"}, time.Duration(100000000))
 }
 
+func TestPrometheusHistogram(t *testing.T) {
+	name := "blah_hist"
+	hist := stats.NewHistogram(name, "help", []int64{1, 5, 10})
+	hist.Add(2)
+	hist.Add(3)
+	hist.Add(6)
+
+	response := testMetricsHandler(t)
+	var s []string
+
+	s = append(s, fmt.Sprintf("%s_%s_bucket{le=\"1\"} %d", namespace, name, 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{le=\"5\"} %d", namespace, name, 2))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{le=\"10\"} %d", namespace, name, 3))
+	s = append(s, fmt.Sprintf("%s_%s_sum %d", namespace, name, 1))
+	s = append(s, fmt.Sprintf("%s_%s_count %d", namespace, name, 3))
+
+	for _, line := range s {
+		if !strings.Contains(response.Body.String(), line) {
+			t.Fatalf("Expected result to contain %s, got %s", line, response.Body.String())
+		}
+	}
+}
+
 func testMetricsHandler(t *testing.T) *httptest.ResponseRecorder {
 	req, _ := http.NewRequest("GET", "/metrics", nil)
 	response := httptest.NewRecorder()

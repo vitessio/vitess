@@ -93,7 +93,9 @@ var (
 		"Total transaction latency for each CallerID",
 		[]string{"CallerID", "Conclusion"})
 	// ResultStats shows the histogram of number of rows returned.
-	ResultStats = stats.NewHistogram("Results", []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000})
+	ResultStats = stats.NewHistogram("Results",
+		"Distribution of rows returned",
+		[]int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000})
 	// TableaclAllowed tracks the number allows.
 	TableaclAllowed = stats.NewCountersWithMultiLabels(
 		"TableACLAllowed",

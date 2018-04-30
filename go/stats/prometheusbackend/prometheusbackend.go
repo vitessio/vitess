@@ -65,6 +65,8 @@ func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 		be.newTiming(st, name)
 	case *stats.MultiTimings:
 		be.newMultiTiming(st, name)
+	case *stats.Histogram:
+		newHistogramCollector(st, be.buildPromName(name))
 	default:
 		logUnsupported.Infof("Not exporting to Prometheus an unsupported metric type of %T: %s", st, name)
 	}
@@ -138,7 +140,8 @@ func (be *PromBackend) newMetricsFuncWithMultiLabels(cfml *stats.CountersFuncWit
 
 func (be *PromBackend) newTiming(t *stats.Timings, name string) {
 	collector := &timingsCollector{
-		t: t,
+		t:       t,
+		cutoffs: make([]float64, len(t.Cutoffs())),
 		desc: prometheus.NewDesc(
 			be.buildPromName(name),
 			t.Help(),
@@ -146,17 +149,26 @@ func (be *PromBackend) newTiming(t *stats.Timings, name string) {
 			nil),
 	}
 
+	for i, val := range t.Cutoffs() {
+		collector.cutoffs[i] = float64(val) / 1000000000
+	}
+
 	prometheus.MustRegister(collector)
 }
 
 func (be *PromBackend) newMultiTiming(mt *stats.MultiTimings, name string) {
 	collector := &multiTimingsCollector{
-		mt: mt,
+		mt:      mt,
+		cutoffs: make([]float64, len(mt.Cutoffs())),
 		desc: prometheus.NewDesc(
 			be.buildPromName(name),
 			mt.Help(),
 			labelsToSnake(mt.Labels()),
 			nil),
+	}
+
+	for i, val := range mt.Cutoffs() {
+		collector.cutoffs[i] = float64(val) / 1000000000
 	}
 
 	prometheus.MustRegister(collector)
