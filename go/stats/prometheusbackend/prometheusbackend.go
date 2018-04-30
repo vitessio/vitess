@@ -18,20 +18,20 @@ type PromBackend struct {
 }
 
 var (
-	be             *PromBackend
+	be             PromBackend
 	logUnsupported *logutil.ThrottledLogger
 )
 
 // Init initializes the Prometheus be with the given namespace.
 func Init(namespace string) {
 	http.Handle("/metrics", promhttp.Handler())
-	be := &PromBackend{namespace: namespace}
+	be.namespace = namespace
 	logUnsupported = logutil.NewThrottledLogger("PrometheusUnsupportedMetricType", 1*time.Minute)
 	stats.Register(be.publishPrometheusMetric)
 }
 
 // PublishPromMetric is used to publish the metric to Prometheus.
-func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
+func (be PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 	switch st := v.(type) {
 	case *stats.Counter:
 		newMetricFuncCollector(st, be.buildPromName(name), prometheus.CounterValue, func() float64 { return float64(st.Get()) })
@@ -73,7 +73,7 @@ func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 }
 
 // buildPromName specifies the namespace as a prefix to the metric name
-func (be *PromBackend) buildPromName(name string) string {
+func (be PromBackend) buildPromName(name string) string {
 	s := strings.TrimPrefix(normalizeMetric(name), be.namespace+"_")
 	return prometheus.BuildFQName("", be.namespace, s)
 }
