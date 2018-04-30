@@ -6,13 +6,11 @@ MySQL supports two primary modes of replication in its binary logs: statement or
 row based. Vitess supports both these modes.
 
 For schema changes, if the number of affected rows is greater > 100k (configurable), we don't allow direct application
-of DDLs the recommended tool in such cases is gh-ost
+of DDLs. The recommended tool in such cases is [gh-ost]({% link https://github.com/github/gh-ost %}).
 
-When using statement based replication, Vitess helps by rewriting Update statements,
-therefore allowing complex schema changes, while at the same time simplifying the replication stream (so
-slaves can be fast). This is described in detail below.
+Not all statements are safe for Statement Based Replication (SBR): https://dev.mysql.com/doc/refman/8.0/en/replication-rbr-safe-unsafe.html. Vitess rewrites some of these statements to be safe for SBR, and others are explicitly failed. This is described in detail below.
 
-Thus, with statement based replication, it becomes easier to perform offline
+With statement based replication, it becomes easier to perform offline
 advanced schema changes, or large data updates. Vitess’s solution is called
 schema swap (described below).
 
