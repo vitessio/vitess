@@ -42,9 +42,9 @@ var (
 	// WaitStats shows the time histogram for wait operations
 	WaitStats = stats.NewTimings("Waits", "Wait operations")
 	// KillStats shows number of connections being killed.
-	KillStats = stats.NewCountersWithLabels("Kills", "Number of connections being killed", "query_type", "Transactions", "Queries")
+	KillStats = stats.NewCountersWithSingleLabel("Kills", "Number of connections being killed", "query_type", "Transactions", "Queries")
 	// ErrorStats shows number of critial errors happened.
-	ErrorStats = stats.NewCountersWithLabels(
+	ErrorStats = stats.NewCountersWithSingleLabel(
 		"Errors",
 		"Critical errors",
 		"error_code",
@@ -67,11 +67,11 @@ var (
 		vtrpcpb.Code_DATA_LOSS.String(),
 	)
 	// InternalErrors shows number of errors from internal components.
-	InternalErrors = stats.NewCountersWithLabels("InternalErrors", "Internal component errors", "type", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
+	InternalErrors = stats.NewCountersWithSingleLabel("InternalErrors", "Internal component errors", "type", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
 	// Warnings shows number of warnings
-	Warnings = stats.NewCountersWithLabels("Warnings", "Warnings", "type", "ResultsExceeded")
+	Warnings = stats.NewCountersWithSingleLabel("Warnings", "Warnings", "type", "ResultsExceeded")
 	// Unresolved tracks unresolved items. For now it's just Prepares.
-	Unresolved = stats.NewGaugesWithLabels("Unresolved", "Unresolved items", "item_type", "Prepares")
+	Unresolved = stats.NewGaugesWithSingleLabel("Unresolved", "Unresolved items", "item_type", "Prepares")
 	// UserTableQueryCount shows number of queries received for each CallerID/table combination.
 	UserTableQueryCount = stats.NewCountersWithMultiLabels(
 		"UserTableQueryCount",
