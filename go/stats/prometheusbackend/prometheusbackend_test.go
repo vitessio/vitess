@@ -42,9 +42,9 @@ func TestPrometheusGauge(t *testing.T) {
 
 func TestPrometheusCounterFunc(t *testing.T) {
 	name := "blah_counterfunc"
-	stats.NewCounterFunc(name, "help", stats.IntFunc(func() int64 {
+	stats.NewCounterFunc(name, "help", func() int64 {
 		return 2
-	}))
+	})
 
 	checkHandlerForMetrics(t, name, 2)
 }
@@ -52,11 +52,45 @@ func TestPrometheusCounterFunc(t *testing.T) {
 func TestPrometheusGaugeFunc(t *testing.T) {
 	name := "blah_gaugefunc"
 
-	stats.NewGaugeFunc(name, "help", stats.IntFunc(func() int64 {
+	stats.NewGaugeFunc(name, "help", func() int64 {
 		return -3
-	}))
+	})
 
 	checkHandlerForMetrics(t, name, -3)
+}
+
+func TestPrometheusCounterDuration(t *testing.T) {
+	name := "blah_counterduration"
+
+	d := stats.NewCounterDuration(name, "help")
+	d.Add(1 * time.Second)
+
+	checkHandlerForMetrics(t, name, 1)
+}
+
+func TestPrometheusCounterDurationFunc(t *testing.T) {
+	name := "blah_counterdurationfunc"
+
+	stats.NewCounterDurationFunc(name, "help", func() time.Duration { return 1 * time.Second })
+
+	checkHandlerForMetrics(t, name, 1)
+}
+
+func TestPrometheusGaugeDuration(t *testing.T) {
+	name := "blah_gaugeduration"
+
+	d := stats.NewGaugeDuration(name, "help")
+	d.Set(1 * time.Second)
+
+	checkHandlerForMetrics(t, name, 1)
+}
+
+func TestPrometheusGaugeDurationFunc(t *testing.T) {
+	name := "blah_gaugedurationfunc"
+
+	stats.NewGaugeDurationFunc(name, "help", func() time.Duration { return 1 * time.Second })
+
+	checkHandlerForMetrics(t, name, 1)
 }
 
 func checkHandlerForMetrics(t *testing.T, metric string, value int) {
@@ -69,41 +103,41 @@ func checkHandlerForMetrics(t *testing.T, metric string, value int) {
 	}
 }
 
-func TestPrometheusCountersWithLabels(t *testing.T) {
-	name := "blah_counterswithlabels"
-	c := stats.NewCountersWithLabels(name, "help", "tag", "tag1", "tag2")
+func TestPrometheusCountersWithSingleLabel(t *testing.T) {
+	name := "blah_counterswithsinglelabel"
+	c := stats.NewCountersWithSingleLabel(name, "help", "label", "tag1", "tag2")
 	c.Add("tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 0)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 0)
 	c.Add("tag2", 41)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 41)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 41)
 	c.Reset("tag2")
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 0)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 0)
 }
 
-func TestPrometheusGaugesWithLabels(t *testing.T) {
-	name := "blah_gaugeswithlabels"
-	c := stats.NewGaugesWithLabels(name, "help", "tag", "tag1", "tag2")
+func TestPrometheusGaugesWithSingleLabel(t *testing.T) {
+	name := "blah_gaugeswithsinglelabel"
+	c := stats.NewGaugesWithSingleLabel(name, "help", "label", "tag1", "tag2")
 	c.Add("tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", 1)
 
 	c.Add("tag2", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 1)
 
 	c.Set("tag1", -1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", -1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", -1)
 
 	c.Reset("tag2")
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", -1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 0)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", -1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 0)
 }
 
-func checkHandlerForMetricWithLabels(t *testing.T, metric string, tagName string, tagValue string, value int) {
+func checkHandlerForMetricWithSingleLabel(t *testing.T, metric, label, tag string, value int) {
 	response := testMetricsHandler(t)
 
-	expected := fmt.Sprintf("%s_%s{%s=\"%s\"} %d", namespace, metric, tagName, tagValue, value)
+	expected := fmt.Sprintf("%s_%s{%s=\"%s\"} %d", namespace, metric, label, tag, value)
 
 	if !strings.Contains(response.Body.String(), expected) {
 		t.Fatalf("Expected %s got %s", expected, response.Body.String())
@@ -163,7 +197,7 @@ func TestPrometheusCountersFuncWithMultiLabels(t *testing.T) {
 	name := "blah_countersfuncwithmultilabels"
 	labels := []string{"label1", "label2"}
 
-	stats.NewCountersFuncWithMultiLabels(name, labels, "help", func() map[string]int64 {
+	stats.NewCountersFuncWithMultiLabels(name, "help", labels, func() map[string]int64 {
 		m := make(map[string]int64)
 		m["foo.bar"] = 1
 		m["bar.baz"] = 1

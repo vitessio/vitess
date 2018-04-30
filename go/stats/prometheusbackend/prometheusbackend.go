@@ -34,25 +34,33 @@ func Init(namespace string) {
 func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 	switch st := v.(type) {
 	case *stats.Counter:
-		be.newMetric(st, name, prometheus.CounterValue)
-	case *stats.Gauge:
-		be.newMetric(&st.Counter, name, prometheus.GaugeValue)
+		be.newMetric(st, name, prometheus.CounterValue, func() float64 { return float64(st.Get()) })
 	case *stats.CounterFunc:
-		be.newMetricFunc(st, name, prometheus.CounterValue)
+		be.newMetric(st, name, prometheus.CounterValue, func() float64 { return float64(st.F()) })
+	case *stats.Gauge:
+		be.newMetric(st, name, prometheus.GaugeValue, func() float64 { return float64(st.Get()) })
 	case *stats.GaugeFunc:
-		be.newMetricFunc(&st.CounterFunc, name, prometheus.GaugeValue)
-	case *stats.CountersWithLabels:
-		be.newCountersWithLabels(st, name, st.LabelName(), prometheus.CounterValue)
+		be.newMetric(st, name, prometheus.GaugeValue, func() float64 { return float64(st.F()) })
+	case *stats.CountersWithSingleLabel:
+		be.newCountersWithSingleLabel(st, name, st.Label(), prometheus.CounterValue)
 	case *stats.CountersWithMultiLabels:
 		be.newCountersWithMultiLabels(st, name)
 	case *stats.CountersFuncWithMultiLabels:
 		be.newMetricsFuncWithMultiLabels(st, name, prometheus.CounterValue)
 	case *stats.GaugesFuncWithMultiLabels:
 		be.newMetricsFuncWithMultiLabels(&st.CountersFuncWithMultiLabels, name, prometheus.GaugeValue)
-	case *stats.GaugesWithLabels:
-		be.newGaugesWithLabels(st, name, st.LabelName(), prometheus.GaugeValue)
+	case *stats.GaugesWithSingleLabel:
+		be.newGaugesWithSingleLabel(st, name, st.Label(), prometheus.GaugeValue)
 	case *stats.GaugesWithMultiLabels:
 		be.newGaugesWithMultiLabels(st, name)
+	case *stats.CounterDuration:
+		be.newMetric(st, name, prometheus.CounterValue, func() float64 { return st.Get().Seconds() })
+	case *stats.CounterDurationFunc:
+		be.newMetric(st, name, prometheus.CounterValue, func() float64 { return st.F().Seconds() })
+	case *stats.GaugeDuration:
+		be.newMetric(st, name, prometheus.GaugeValue, func() float64 { return st.Get().Seconds() })
+	case *stats.GaugeDurationFunc:
+		be.newMetric(st, name, prometheus.GaugeValue, func() float64 { return st.F().Seconds() })
 	case *stats.Timings:
 		be.newTiming(st, name)
 	case *stats.MultiTimings:
@@ -62,8 +70,8 @@ func (be *PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 	}
 }
 
-func (be *PromBackend) newCountersWithLabels(c *stats.CountersWithLabels, name string, labelName string, vt prometheus.ValueType) {
-	collector := &countersWithLabelsCollector{
+func (be *PromBackend) newCountersWithSingleLabel(c *stats.CountersWithSingleLabel, name string, labelName string, vt prometheus.ValueType) {
+	collector := &countersWithSingleLabelCollector{
 		counters: c,
 		desc: prometheus.NewDesc(
 			be.buildPromName(name),
@@ -75,8 +83,8 @@ func (be *PromBackend) newCountersWithLabels(c *stats.CountersWithLabels, name s
 	prometheus.MustRegister(collector)
 }
 
-func (be *PromBackend) newGaugesWithLabels(g *stats.GaugesWithLabels, name string, labelName string, vt prometheus.ValueType) {
-	collector := &gaugesWithLabelsCollector{
+func (be *PromBackend) newGaugesWithSingleLabel(g *stats.GaugesWithSingleLabel, name string, labelName string, vt prometheus.ValueType) {
+	collector := &gaugesWithSingleLabelCollector{
 		gauges: g,
 		desc: prometheus.NewDesc(
 			be.buildPromName(name),
@@ -154,25 +162,12 @@ func (be *PromBackend) newMultiTiming(mt *stats.MultiTimings, name string) {
 	prometheus.MustRegister(collector)
 }
 
-func (be *PromBackend) newMetric(c *stats.Counter, name string, vt prometheus.ValueType) {
-	collector := &metricCollector{
-		counter: c,
-		desc: prometheus.NewDesc(
-			be.buildPromName(name),
-			c.Help(),
-			nil,
-			nil),
-		vt: vt}
-
-	prometheus.MustRegister(collector)
-}
-
-func (be *PromBackend) newMetricFunc(cf *stats.CounterFunc, name string, vt prometheus.ValueType) {
+func (be *PromBackend) newMetric(v stats.Variable, name string, vt prometheus.ValueType, f func() float64) {
 	collector := &metricFuncCollector{
-		cf: cf,
+		f: f,
 		desc: prometheus.NewDesc(
 			be.buildPromName(name),
-			cf.Help(),
+			v.Help(),
 			nil,
 			nil),
 		vt: vt}

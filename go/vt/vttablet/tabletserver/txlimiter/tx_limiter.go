@@ -31,8 +31,8 @@ import (
 const unknown string = "unknown"
 
 var (
-	rejections       = stats.NewCountersWithLabels("TxLimiterRejections", "rejections from TxLimiter", "user")
-	rejectionsDryRun = stats.NewCountersWithLabels("TxLimiterRejectionsDryRun", "rejections from TxLimiter in dry run", "user")
+	rejections       = stats.NewCountersWithSingleLabel("TxLimiterRejections", "rejections from TxLimiter", "user")
+	rejectionsDryRun = stats.NewCountersWithSingleLabel("TxLimiterRejectionsDryRun", "rejections from TxLimiter in dry run", "user")
 )
 
 // TxLimiter is the transaction limiter interface.

@@ -40,7 +40,7 @@ var (
 	// QueryLogFormat controls the format of the query log (either text or json)
 	QueryLogFormat = flag.String("querylog-format", "text", "format for query logs (\"text\" or \"json\")")
 
-	sendCount      = stats.NewCountersWithLabels("StreamlogSend", "stream log send count", "logger_names")
+	sendCount      = stats.NewCountersWithSingleLabel("StreamlogSend", "stream log send count", "logger_names")
 	deliveredCount = stats.NewCountersWithMultiLabels(
 		"StreamlogDelivered",
 		"Stream log delivered",
