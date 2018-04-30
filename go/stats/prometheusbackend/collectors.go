@@ -14,6 +14,19 @@ type metricFuncCollector struct {
 	vt   prometheus.ValueType
 }
 
+func newMetricFuncCollector(v stats.Variable, name string, vt prometheus.ValueType, f func() float64) {
+	collector := &metricFuncCollector{
+		f: f,
+		desc: prometheus.NewDesc(
+			name,
+			v.Help(),
+			nil,
+			nil),
+		vt: vt}
+
+	prometheus.MustRegister(collector)
+}
+
 // Describe implements Collector.
 func (mc *metricFuncCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- mc.desc
@@ -29,6 +42,19 @@ type countersWithSingleLabelCollector struct {
 	counters *stats.CountersWithSingleLabel
 	desc     *prometheus.Desc
 	vt       prometheus.ValueType
+}
+
+func newCountersWithSingleLabelCollector(c *stats.CountersWithSingleLabel, name string, labelName string, vt prometheus.ValueType) {
+	collector := &countersWithSingleLabelCollector{
+		counters: c,
+		desc: prometheus.NewDesc(
+			name,
+			c.Help(),
+			[]string{labelName},
+			nil),
+		vt: vt}
+
+	prometheus.MustRegister(collector)
 }
 
 // Describe implements Collector.
@@ -54,6 +80,19 @@ type gaugesWithSingleLabelCollector struct {
 	vt     prometheus.ValueType
 }
 
+func newGaugesWithSingleLabelCollector(g *stats.GaugesWithSingleLabel, name string, labelName string, vt prometheus.ValueType) {
+	collector := &gaugesWithSingleLabelCollector{
+		gauges: g,
+		desc: prometheus.NewDesc(
+			name,
+			g.Help(),
+			[]string{labelName},
+			nil),
+		vt: vt}
+
+	prometheus.MustRegister(collector)
+}
+
 // Describe implements Collector.
 func (g *gaugesWithSingleLabelCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- g.desc
@@ -75,6 +114,19 @@ type metricWithMultiLabelsCollector struct {
 	desc *prometheus.Desc
 }
 
+func newMetricWithMultiLabelsCollector(cml *stats.CountersWithMultiLabels, name string) {
+	c := &metricWithMultiLabelsCollector{
+		cml: cml,
+		desc: prometheus.NewDesc(
+			name,
+			cml.Help(),
+			labelsToSnake(cml.Labels()),
+			nil),
+	}
+
+	prometheus.MustRegister(c)
+}
+
 // Describe implements Collector.
 func (c *metricWithMultiLabelsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
@@ -89,18 +141,31 @@ func (c *metricWithMultiLabelsCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-type multiGaugesCollector struct {
+type gaugesWithMultiLabelsCollector struct {
 	gml  *stats.GaugesWithMultiLabels
 	desc *prometheus.Desc
 }
 
+func newGaugesWithMultiLabelsCollector(gml *stats.GaugesWithMultiLabels, name string) {
+	c := &gaugesWithMultiLabelsCollector{
+		gml: gml,
+		desc: prometheus.NewDesc(
+			name,
+			gml.Help(),
+			labelsToSnake(gml.Labels()),
+			nil),
+	}
+
+	prometheus.MustRegister(c)
+}
+
 // Describe implements Collector.
-func (c *multiGaugesCollector) Describe(ch chan<- *prometheus.Desc) {
+func (c *gaugesWithMultiLabelsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
 }
 
 // Collect implements Collector.
-func (c *multiGaugesCollector) Collect(ch chan<- prometheus.Metric) {
+func (c *gaugesWithMultiLabelsCollector) Collect(ch chan<- prometheus.Metric) {
 	for lvs, val := range c.gml.Counts() {
 		labelValues := strings.Split(lvs, ".")
 		value := float64(val)
@@ -112,6 +177,20 @@ type metricsFuncWithMultiLabelsCollector struct {
 	cfml *stats.CountersFuncWithMultiLabels
 	desc *prometheus.Desc
 	vt   prometheus.ValueType
+}
+
+func newMetricsFuncWithMultiLabelsCollector(cfml *stats.CountersFuncWithMultiLabels, name string, vt prometheus.ValueType) {
+	collector := &metricsFuncWithMultiLabelsCollector{
+		cfml: cfml,
+		desc: prometheus.NewDesc(
+			name,
+			cfml.Help(),
+			labelsToSnake(cfml.Labels()),
+			nil),
+		vt: vt,
+	}
+
+	prometheus.MustRegister(collector)
 }
 
 // Describe implements Collector.
@@ -132,6 +211,24 @@ type timingsCollector struct {
 	t       *stats.Timings
 	cutoffs []float64
 	desc    *prometheus.Desc
+}
+
+func newTimingsCollector(t *stats.Timings, name string) {
+	collector := &timingsCollector{
+		t:       t,
+		cutoffs: make([]float64, len(t.Cutoffs())),
+		desc: prometheus.NewDesc(
+			name,
+			t.Help(),
+			[]string{t.LabelName()},
+			nil),
+	}
+
+	for i, val := range t.Cutoffs() {
+		collector.cutoffs[i] = float64(val) / 1000000000
+	}
+
+	prometheus.MustRegister(collector)
 }
 
 // Describe implements Collector.
@@ -166,6 +263,24 @@ type multiTimingsCollector struct {
 	mt      *stats.MultiTimings
 	cutoffs []float64
 	desc    *prometheus.Desc
+}
+
+func newMultiTimingsCollector(mt *stats.MultiTimings, name string) {
+	collector := &multiTimingsCollector{
+		mt:      mt,
+		cutoffs: make([]float64, len(mt.Cutoffs())),
+		desc: prometheus.NewDesc(
+			name,
+			mt.Help(),
+			labelsToSnake(mt.Labels()),
+			nil),
+	}
+
+	for i, val := range mt.Cutoffs() {
+		collector.cutoffs[i] = float64(val) / 1000000000
+	}
+
+	prometheus.MustRegister(collector)
 }
 
 // Describe implements Collector.
