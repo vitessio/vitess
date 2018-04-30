@@ -3,70 +3,18 @@
 ## Statement vs Row Based Replication
 
 MySQL supports two primary modes of replication in its binary logs: statement or
-row based.
+row based. Vitess supports both these modes.
 
-**Statement Based Replication**:
+For schema changes, if the number of affected rows is greater > 100k (configurable), we don't allow direct application
+of DDLs the recommended tool in such cases is gh-ost
 
-* The statements executed on the master are copied almost as-is in the master
-  logs.
-* The slaves replay these statements as is.
-* If the statements are expensive (especially an update with a complicated WHERE
-  clause), they will be expensive on the slaves too.
-* For current timestamp and auto-increment values, the master also puts
-  additional SET statements in the logs to make the statement have the same
-  effect, so the slaves end up with the same values.
+When using statement based replication, Vitess helps by rewriting Update statements,
+therefore allowing complex schema changes, while at the same time simplifying the replication stream (so
+slaves can be fast). This is described in detail below.
 
-**Row Based Replication**:
-
-* The statements executed on the master result in updated rows. The new full
-  values for these rows are copied to the master logs.
-* The slaves change their records for the rows they receive. The update is by
-  primary key, and contains the new values for each column, so usually it’s very
-  fast.
-* Each updated row contains the entire row, not just the columns that were
-  updated (unless the flag --binlog\_row\_image=minimal is used).
-* The replication stream is harder to read, as it contains almost binary data,
-  that don’t easily map to the original statements.
-* There is a configurable limit on how many rows can be affected by one
-  binlog event, so the master logs are not flooded.
-* The format of the logs depends on the master schema: each row has a list of
-  values, one value for each column. So if the master schema is different from
-  the slave schema, updates will misbehave (exception being if slave has extra
-  columns at the end).
-* It is possible to revert to statement based replication for some commands to
-  avoid these drawbacks (for instance for DELETE statements that affect a large
-  number of rows).
-* Schema changes always use statement based replication.
-* If comments are added to a statement, they are stripped from the
-  replication stream (as only rows are transmitted). There is a flag
-  --binlog\_rows\_query\_log\_events to add the original statement to each row
-  update, but it is costly in terms of binlog size.
-
-For the longest time, MySQL replication has been single-threaded: only one
-statement is applied by the slaves at a time. Since the master applies more
-statements in parallel, replication can fall behind on the slaves fairly easily,
-under higher load. Even though the situation has improved (parallel slave
-apply), the slave replication speed is still a limiting factor for a lot of
-applications. Since row based replication achieves higher update rates on the
-slaves in most cases, it has been the only viable option for most performance
-sensitive applications.
-
-Schema changes however are not easy to achieve with row based
-replication. Adding columns can be done offline, but removing or changing
-columns cannot easily be done (there are multiple ways to achieve this, but they
-all have limitations or performance implications, and are not that easy to
-setup).
-
-Vitess helps by using statement based replication (therefore allowing complex
-schema changes), while at the same time simplifying the replication stream (so
-slaves can be fast), by rewriting Update statements.
-
-Then, with statement based replication, it becomes easier to perform offline
+Thus, with statement based replication, it becomes easier to perform offline
 advanced schema changes, or large data updates. Vitess’s solution is called
-schema swap.
-
-We plan to also support row based replication in the future, and adapt our tools
-to provide the same features when possible. See Appendix for our plan.
+schema swap (described below).
 
 ## Rewriting Update Statements
 
