@@ -52,7 +52,7 @@ func NewTimings(name, help, labelName string, categories ...string) *Timings {
 		labelName:  labelName,
 	}
 	for _, cat := range categories {
-		t.histograms[cat] = NewGenericHistogram("", bucketCutoffs, bucketLabels, "Count", "Time")
+		t.histograms[cat] = NewGenericHistogram("", "", bucketCutoffs, bucketLabels, "Count", "Time")
 	}
 	if name != "" {
 		publish(name, t)
@@ -74,7 +74,7 @@ func (t *Timings) Add(name string, elapsed time.Duration) {
 		t.mu.Lock()
 		hist, ok = t.histograms[name]
 		if !ok {
-			hist = NewGenericHistogram("", bucketCutoffs, bucketLabels, "Count", "Time")
+			hist = NewGenericHistogram("", "", bucketCutoffs, bucketLabels, "Count", "Time")
 			t.histograms[name] = hist
 		}
 		t.mu.Unlock()

@@ -129,8 +129,9 @@ func (c *metricsFuncWithMultiLabelsCollector) Collect(ch chan<- prometheus.Metri
 }
 
 type timingsCollector struct {
-	t    *stats.Timings
-	desc *prometheus.Desc
+	t       *stats.Timings
+	cutoffs []float64
+	desc    *prometheus.Desc
 }
 
 // Describe implements Collector.
@@ -145,16 +146,15 @@ func (c *timingsCollector) Collect(ch chan<- prometheus.Metric) {
 			c.desc,
 			uint64(his.Count()),
 			float64(his.Total()),
-			makePromBucket(his.Cutoffs(), his.Buckets()),
+			makeCumulativeBuckets(c.cutoffs, his.Buckets()),
 			cat)
 	}
 }
 
-func makePromBucket(cutoffs []int64, buckets []int64) map[float64]uint64 {
+func makeCumulativeBuckets(cutoffs []float64, buckets []int64) map[float64]uint64 {
 	output := make(map[float64]uint64)
 	last := uint64(0)
-	for i := range cutoffs {
-		key := float64(cutoffs[i]) / 1000000000
+	for i, key := range cutoffs {
 		//TODO(zmagg): int64 => uint64 conversion. error if it overflows?
 		output[key] = uint64(buckets[i]) + last
 		last = output[key]
@@ -163,8 +163,9 @@ func makePromBucket(cutoffs []int64, buckets []int64) map[float64]uint64 {
 }
 
 type multiTimingsCollector struct {
-	mt   *stats.MultiTimings
-	desc *prometheus.Desc
+	mt      *stats.MultiTimings
+	cutoffs []float64
+	desc    *prometheus.Desc
 }
 
 // Describe implements Collector.
@@ -180,7 +181,46 @@ func (c *multiTimingsCollector) Collect(ch chan<- prometheus.Metric) {
 			c.desc,
 			uint64(his.Count()),
 			float64(his.Total()),
-			makePromBucket(his.Cutoffs(), his.Buckets()),
+			makeCumulativeBuckets(c.cutoffs, his.Buckets()),
 			labelValues...)
 	}
+}
+
+type histogramCollector struct {
+	h       *stats.Histogram
+	cutoffs []float64
+	desc    *prometheus.Desc
+}
+
+func newHistogramCollector(h *stats.Histogram, name string) {
+	collector := &histogramCollector{
+		h:       h,
+		cutoffs: make([]float64, len(h.Cutoffs())),
+		desc: prometheus.NewDesc(
+			name,
+			h.Help(),
+			[]string{},
+			nil),
+	}
+
+	for i, val := range h.Cutoffs() {
+		collector.cutoffs[i] = float64(val)
+	}
+
+	prometheus.MustRegister(collector)
+}
+
+// Describe implements Collector.
+func (c *histogramCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.desc
+}
+
+// Collect implements Collector.
+func (c *histogramCollector) Collect(ch chan<- prometheus.Metric) {
+	ch <- prometheus.MustNewConstHistogram(
+		c.desc,
+		uint64(c.h.Count()),
+		float64(c.h.Total()),
+		makeCumulativeBuckets(c.cutoffs, c.h.Buckets()),
+	)
 }
