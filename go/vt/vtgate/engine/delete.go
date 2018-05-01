@@ -76,21 +76,23 @@ func (del *Delete) MarshalJSON() ([]byte, error) {
 		vindexName = del.Vindex.String()
 	}
 	marshalDelete := struct {
-		Opcode           DeleteOpcode
-		Keyspace         *vindexes.Keyspace   `json:",omitempty"`
-		Query            string               `json:",omitempty"`
-		Vindex           string               `json:",omitempty"`
-		Values           []sqltypes.PlanValue `json:",omitempty"`
-		Table            string               `json:",omitempty"`
-		OwnedVindexQuery string               `json:",omitempty"`
+		Opcode               DeleteOpcode
+		Keyspace             *vindexes.Keyspace   `json:",omitempty"`
+		Query                string               `json:",omitempty"`
+		Vindex               string               `json:",omitempty"`
+		Values               []sqltypes.PlanValue `json:",omitempty"`
+		Table                string               `json:",omitempty"`
+		OwnedVindexQuery     string               `json:",omitempty"`
+		MultiShardAutocommit bool                 `json:",omitempty"`
 	}{
-		Opcode:           del.Opcode,
-		Keyspace:         del.Keyspace,
-		Query:            del.Query,
-		Vindex:           vindexName,
-		Values:           del.Values,
-		Table:            tname,
-		OwnedVindexQuery: del.OwnedVindexQuery,
+		Opcode:               del.Opcode,
+		Keyspace:             del.Keyspace,
+		Query:                del.Query,
+		Vindex:               vindexName,
+		Values:               del.Values,
+		Table:                tname,
+		OwnedVindexQuery:     del.OwnedVindexQuery,
+		MultiShardAutocommit: del.MultiShardAutocommit,
 	}
 	return jsonutil.MarshalNoEscape(marshalDelete)
 }
