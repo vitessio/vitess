@@ -2701,12 +2701,12 @@ func (node *GroupConcatExpr) replace(from, to Expr) bool {
 
 // ValuesFuncExpr represents a function call.
 type ValuesFuncExpr struct {
-	Name ColIdent
+	Name *ColName
 }
 
 // Format formats the node.
 func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("values(%s)", node.Name.String())
+	buf.Myprintf("values(%v)", node.Name)
 }
 
 func (node *ValuesFuncExpr) walkSubtree(visit Visit) error {

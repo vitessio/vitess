@@ -621,6 +621,42 @@ options:PassthroughDMLs
   "PKValues": [[1], [2]]
 }
 
+# upsert with values() func and qualified column
+"insert into a (eid, id, name) values (1, 2, 'foo') on duplicate key update name = values(a.name)"
+{
+  "PlanID": "UPSERT_PK",
+  "TableName": "a",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "insert into a(eid, id, name) values (1, 2, 'foo') on duplicate key update name = values(a.name)",
+  "OuterQuery": "insert into a(eid, id, name) values (1, 2, 'foo')",
+  "UpsertQuery": "update a set name = ('foo') where :#pk",
+  "PKValues": [[1], [2]]
+}
+
+# upsert with values() func and qualified column with improper table
+"insert into a (eid, id, name) values (1, 2, 'foo') on duplicate key update name = values(c.name)"
+"could not find qualified column c.name in table a"
+
+# upsert with values() func and qualified column and qualified table
+"insert into b.a (eid, id, name) values (1, 2, 'foo') on duplicate key update name = values(b.a.name)"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "TABLE",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "insert into b.a(eid, id, name) values (1, 2, 'foo') on duplicate key update name = values(b.a.name)"
+}
+
 # upsert with values() inside another func
 "insert into a (eid, id, name) values (1, 2, 'foo') on duplicate key update name = concat(values(name), 'foo')"
 {
@@ -722,7 +758,7 @@ options:PassthroughDMLs
 
 # upsert with mismatch values()
 "insert into a (eid, id) values (1, 2) on duplicate key update eid  = values(eid), name = values(name)"
-"could not find column name"
+"could not find column &{<nil> name { }}"
 
 # upsert pk change, with values() func
 "insert into a (eid, id) values (1, 2) on duplicate key update eid = values(eid), id = values(id)"

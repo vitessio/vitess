@@ -240,7 +240,7 @@ func isVindexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.
 						return true
 					}
 					// update on duplicate key is changing the vindex column, not supported.
-					if !valueExpr.Name.Equal(assignment.Name.Name) {
+					if !valueExpr.Name.Name.Equal(assignment.Name.Name) {
 						return true
 					}
 				}
