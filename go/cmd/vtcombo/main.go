@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtcombo"
 	"vitess.io/vitess/go/vt/vtctld"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -109,7 +110,7 @@ func main() {
 	servenv.OnClose(mysqld.Close)
 
 	// tablets configuration and init
-	if err := initTabletMap(ts, tpb, mysqld, *dbcfgs, *schemaDir, mycnf); err != nil {
+	if err := vtcombo.InitTabletMap(ts, tpb, mysqld, *dbcfgs, *schemaDir, mycnf); err != nil {
 		log.Errorf("initTabletMapProto failed: %v", err)
 		exit.Return(1)
 	}
