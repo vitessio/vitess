@@ -579,31 +579,31 @@ func (c *Conn) writeEphemeralPacket(direct bool) error {
 		// Just write c.buffer as a single buffer.
 		// It has both header and data.
 		if n, err := w.Write(c.buffer); err != nil {
-			return fmt.Errorf("Write(c.buffer) failed: %v", err)
+			return fmt.Errorf("Conn %v: Write(c.buffer) failed: %v", c.ID(), err)
 		} else if n != len(c.buffer) {
-			return fmt.Errorf("Write(c.buffer) returned a short write: %v < %v", n, len(c.buffer))
+			return fmt.Errorf("Conn %v: Write(c.buffer) returned a short write: %v < %v", c.ID(), n, len(c.buffer))
 		}
 	case ephemeralWriteSingleBuffer:
 		// Write the allocated buffer as a single buffer.
 		// It has both header and data.
 		if n, err := w.Write(c.currentEphemeralPacket); err != nil {
-			return fmt.Errorf("Write(c.currentEphemeralPacket) failed: %v", err)
+			return fmt.Errorf("Conn %v: Write(c.currentEphemeralPacket) failed: %v", c.ID(), err)
 		} else if n != len(c.currentEphemeralPacket) {
-			return fmt.Errorf("Write(c.currentEphemeralPacket) returned a short write: %v < %v", n, len(c.currentEphemeralPacket))
+			return fmt.Errorf("Conn %v: Write(c.currentEphemeralPacket) returned a short write: %v < %v", c.ID(), n, len(c.currentEphemeralPacket))
 		}
 	case ephemeralWriteBigBuffer:
 		// This is the slower path for big data.
 		// With direct=true, the caller expects a flush, so we call it
 		// manually.
 		if err := c.writePacket(c.currentEphemeralPacket); err != nil {
-			return err
+			return fmt.Errorf("Conn %v: %v", c.ID(), err)
 		}
 		if direct {
 			return c.flush()
 		}
 	case ephemeralUnused, ephemeralReadGlobalBuffer, ephemeralReadSingleBuffer, ephemeralReadBigBuffer:
 		// Programming error.
-		panic(fmt.Errorf("trying to call writeEphemeralPacket while currentEphemeralPolicy is %v", c.currentEphemeralPolicy))
+		panic(fmt.Errorf("Conn %v: trying to call writeEphemeralPacket while currentEphemeralPolicy is %v", c.ID(), c.currentEphemeralPolicy))
 	}
 
 	return nil
@@ -613,7 +613,7 @@ func (c *Conn) writeEphemeralPacket(direct bool) error {
 // This method returns a generic error, not a SQLError.
 func (c *Conn) flush() error {
 	if err := c.writer.Flush(); err != nil {
-		return fmt.Errorf("Flush() failed: %v", err)
+		return fmt.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
 	}
 	return nil
 }
