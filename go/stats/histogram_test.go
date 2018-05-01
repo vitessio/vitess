@@ -23,7 +23,7 @@ import (
 
 func TestHistogram(t *testing.T) {
 	clear()
-	h := NewHistogram("hist1", "desc1", []int64{1, 5})
+	h := NewHistogram("hist1", "help", []int64{1, 5})
 	for i := 0; i < 10; i++ {
 		h.Add(int64(i))
 	}
@@ -57,7 +57,7 @@ func TestGenericHistogram(t *testing.T) {
 	clear()
 	h := NewGenericHistogram(
 		"histgen",
-		"generic histogram",
+		"help",
 		[]int64{1, 5},
 		[]string{"one", "five", "max"},
 		"count",
@@ -79,7 +79,7 @@ func TestHistogramHook(t *testing.T) {
 	})
 
 	name := "hist2"
-	v := NewHistogram(name, "", []int64{1})
+	v := NewHistogram(name, "help", []int64{1})
 	if gotname != name {
 		t.Errorf("got %v; want %v", gotname, name)
 	}
