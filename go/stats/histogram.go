@@ -28,7 +28,6 @@ import (
 // using specified cutoffs.
 type Histogram struct {
 	help       string
-	labelName  string
 	cutoffs    []int64
 	labels     []string
 	countLabel string
@@ -167,9 +166,4 @@ func (h *Histogram) Buckets() []int64 {
 // Help returns the help string.
 func (h *Histogram) Help() string {
 	return h.help
-}
-
-// LabelName returns the label name.
-func (h *Histogram) LabelName() string {
-	return h.labelName
 }
