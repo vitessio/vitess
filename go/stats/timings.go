@@ -38,18 +38,18 @@ type Timings struct {
 	histograms map[string]*Histogram
 	hook       func(string, time.Duration)
 	help       string
-	labelName  string
+	label      string
 }
 
 // NewTimings creates a new Timings object, and publishes it if name is set.
 // categories is an optional list of categories to initialize to 0.
 // Categories that aren't initialized will be missing from the map until the
 // first time they are updated.
-func NewTimings(name, help, labelName string, categories ...string) *Timings {
+func NewTimings(name, help, label string, categories ...string) *Timings {
 	t := &Timings{
 		histograms: make(map[string]*Histogram),
 		help:       help,
-		labelName:  labelName,
+		label:      label,
 	}
 	for _, cat := range categories {
 		t.histograms[cat] = NewGenericHistogram("", "", bucketCutoffs, bucketLabels, "Count", "Time")
@@ -162,9 +162,9 @@ func (t *Timings) Help() string {
 	return t.help
 }
 
-// LabelName returns the label name.
-func (t *Timings) LabelName() string {
-	return t.labelName
+// Label returns the label name.
+func (t *Timings) Label() string {
+	return t.label
 }
 
 var bucketCutoffs = []int64{5e5, 1e6, 5e6, 1e7, 5e7, 1e8, 5e8, 1e9, 5e9, 1e10}

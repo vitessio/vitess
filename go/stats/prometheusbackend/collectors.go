@@ -220,7 +220,7 @@ func newTimingsCollector(t *stats.Timings, name string) {
 		desc: prometheus.NewDesc(
 			name,
 			t.Help(),
-			[]string{t.LabelName()},
+			[]string{t.Label()},
 			nil),
 	}
 
