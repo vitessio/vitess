@@ -49,7 +49,7 @@ type BackupHandle interface {
 	// multiple go routines once a backup has been started.
 	// The context is valid for the duration of the writes, until the
 	// WriteCloser is closed.
-	AddFile(ctx context.Context, filename string) (io.WriteCloser, error)
+	AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error)
 
 	// EndBackup stops and closes a backup. The contents should be kept.
 	// Only works for read-write backups (created by StartBackup).
