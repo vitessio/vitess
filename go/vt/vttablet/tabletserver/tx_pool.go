@@ -56,7 +56,7 @@ const txLogInterval = time.Duration(1 * time.Minute)
 
 var (
 	txOnce  sync.Once
-	txStats = stats.NewTimings("Transactions", "Transaction stats")
+	txStats = stats.NewTimings("Transactions", "Transaction stats", "operation")
 
 	txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]string{
 		querypb.ExecuteOptions_REPEATABLE_READ:  "set transaction isolation level REPEATABLE READ",

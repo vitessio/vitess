@@ -39,7 +39,7 @@ import (
 var (
 	finalizeReparentTimeout = flag.Duration("finalize_external_reparent_timeout", 30*time.Second, "Timeout for the finalize stage of a fast external reparent reconciliation.")
 
-	externalReparentStats = stats.NewTimings("ExternalReparents", "Stats from external reparentings", "NewMasterVisible", "FullRebuild")
+	externalReparentStats = stats.NewTimings("ExternalReparents", "External reparenting time", "stage", "NewMasterVisible", "FullRebuild")
 )
 
 // SetReparentFlags changes flag values. It should only be used in tests.

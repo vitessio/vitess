@@ -221,25 +221,25 @@ func checkHandlerForMetricWithMultiLabels(t *testing.T, metric string, labels []
 func TestPrometheusTimings(t *testing.T) {
 	name := "blah_timings"
 	cats := []string{"cat1", "cat2"}
-	timing := stats.NewTimings(name, "help", cats...)
+	timing := stats.NewTimings(name, "help", "category", cats...)
 	timing.Add("cat1", time.Duration(1000000000))
 
 	response := testMetricsHandler(t)
 	var s []string
 
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.0005\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.001\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.005\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.01\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.05\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.1\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.5\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"1\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"5\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"10\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"+Inf\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_sum{Histograms=\"%s\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_count{Histograms=\"%s\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.0005\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.001\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.005\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.01\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.05\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.1\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.5\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"1\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"5\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"10\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"+Inf\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_sum{category=\"%s\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_count{category=\"%s\"} %d", namespace, name, cats[0], 1))
 
 	for _, line := range s {
 		if !strings.Contains(response.Body.String(), line) {
@@ -288,6 +288,29 @@ func TestPrometheusMultiTimings_PanicWrongLength(t *testing.T) {
 
 	c := stats.NewMultiTimings("name", "help", []string{"label1", "label2"})
 	c.Add([]string{"label1"}, time.Duration(100000000))
+}
+
+func TestPrometheusHistogram(t *testing.T) {
+	name := "blah_hist"
+	hist := stats.NewHistogram(name, "help", []int64{1, 5, 10})
+	hist.Add(2)
+	hist.Add(3)
+	hist.Add(6)
+
+	response := testMetricsHandler(t)
+	var s []string
+
+	s = append(s, fmt.Sprintf("%s_%s_bucket{le=\"1\"} %d", namespace, name, 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{le=\"5\"} %d", namespace, name, 2))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{le=\"10\"} %d", namespace, name, 3))
+	s = append(s, fmt.Sprintf("%s_%s_sum %d", namespace, name, 1))
+	s = append(s, fmt.Sprintf("%s_%s_count %d", namespace, name, 3))
+
+	for _, line := range s {
+		if !strings.Contains(response.Body.String(), line) {
+			t.Fatalf("Expected result to contain %s, got %s", line, response.Body.String())
+		}
+	}
 }
 
 func testMetricsHandler(t *testing.T) *httptest.ResponseRecorder {

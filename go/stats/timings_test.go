@@ -24,7 +24,7 @@ import (
 
 func TestTimings(t *testing.T) {
 	clear()
-	tm := NewTimings("timings1", "help")
+	tm := NewTimings("timings1", "help", "category")
 	tm.Add("tag1", 500*time.Microsecond)
 	tm.Add("tag1", 1*time.Millisecond)
 	tm.Add("tag2", 1*time.Millisecond)
@@ -56,7 +56,7 @@ func TestTimingsHook(t *testing.T) {
 	})
 
 	name := "timings2"
-	v := NewTimings(name, "help")
+	v := NewTimings(name, "help", "")
 	if gotname != name {
 		t.Errorf("got %q, want %q", gotname, name)
 	}
