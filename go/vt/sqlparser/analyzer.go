@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	"regexp"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -54,12 +55,18 @@ const (
 // textual comparison to identify the statement type.
 func Preview(sql string) int {
 	trimmed := StripLeadingComments(sql)
-
 	firstWord := trimmed
+	//check if sql command begin with "(select" or "(   select"
+	if has := strings.HasPrefix(trimmed, "("); has == true {
+		reg := regexp.MustCompile(`^\([ ]*select `)
+		strarr := reg.FindAllString(strings.ToLower(trimmed), 1)
+		if strarr != nil {
+			return StmtSelect
+		}
+	}
 	if end := strings.IndexFunc(trimmed, unicode.IsSpace); end != -1 {
 		firstWord = trimmed[:end]
 	}
-
 	// Comparison is done in order of priority.
 	loweredFirstWord := strings.ToLower(firstWord)
 	switch loweredFirstWord {
