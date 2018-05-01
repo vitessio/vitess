@@ -214,18 +214,19 @@ type timingsCollector struct {
 }
 
 func newTimingsCollector(t *stats.Timings, name string) {
+	cutoffs := make([]float64, len(t.Cutoffs()))
+	for i, val := range t.Cutoffs() {
+		cutoffs[i] = float64(val) / 1000000000
+	}
+
 	collector := &timingsCollector{
 		t:       t,
-		cutoffs: make([]float64, len(t.Cutoffs())),
+		cutoffs: cutoffs,
 		desc: prometheus.NewDesc(
 			name,
 			t.Help(),
 			[]string{t.Label()},
 			nil),
-	}
-
-	for i, val := range t.Cutoffs() {
-		collector.cutoffs[i] = float64(val) / 1000000000
 	}
 
 	prometheus.MustRegister(collector)
@@ -266,18 +267,19 @@ type multiTimingsCollector struct {
 }
 
 func newMultiTimingsCollector(mt *stats.MultiTimings, name string) {
+	cutoffs := make([]float64, len(mt.Cutoffs()))
+	for i, val := range mt.Cutoffs() {
+		cutoffs[i] = float64(val) / 1000000000
+	}
+
 	collector := &multiTimingsCollector{
 		mt:      mt,
-		cutoffs: make([]float64, len(mt.Cutoffs())),
+		cutoffs: cutoffs,
 		desc: prometheus.NewDesc(
 			name,
 			mt.Help(),
 			labelsToSnake(mt.Labels()),
 			nil),
-	}
-
-	for i, val := range mt.Cutoffs() {
-		collector.cutoffs[i] = float64(val) / 1000000000
 	}
 
 	prometheus.MustRegister(collector)
@@ -308,18 +310,19 @@ type histogramCollector struct {
 }
 
 func newHistogramCollector(h *stats.Histogram, name string) {
+	cutoffs := make([]float64, len(h.Cutoffs()))
+	for i, val := range h.Cutoffs() {
+		cutoffs[i] = float64(val)
+	}
+
 	collector := &histogramCollector{
 		h:       h,
-		cutoffs: make([]float64, len(h.Cutoffs())),
+		cutoffs: cutoffs,
 		desc: prometheus.NewDesc(
 			name,
 			h.Help(),
 			[]string{},
 			nil),
-	}
-
-	for i, val := range h.Cutoffs() {
-		collector.cutoffs[i] = float64(val)
 	}
 
 	prometheus.MustRegister(collector)
