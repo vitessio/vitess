@@ -138,7 +138,8 @@ spec:
       component: vtgate
       cell: {{ $cellClean }}
 
-{{ if gt .maxReplicas .replicas }}
+{{ $maxReplicas := .maxReplicas | default .replicas }}
+{{ if gt $maxReplicas .replicas }}
 ###################################
 # optional HPA for vtgate
 ###################################
@@ -153,7 +154,7 @@ spec:
     kind: Deployment
     name: vtgate-{{ $cellClean }}
   minReplicas: {{ .replicas }}
-  maxReplicas: {{ .maxReplicas }}
+  maxReplicas: {{ $maxReplicas }}
   metrics:
   - type: Resource
     resource:
