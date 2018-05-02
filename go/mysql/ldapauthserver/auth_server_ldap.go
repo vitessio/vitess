@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/ldap.v2"
+	ldap "gopkg.in/ldap.v2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
