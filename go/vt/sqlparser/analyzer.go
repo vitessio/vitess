@@ -55,11 +55,10 @@ const (
 func Preview(sql string) int {
 	trimmed := StripLeadingComments(sql)
 
-	firstWord := trimmed
-	if end := strings.IndexFunc(trimmed, unicode.IsSpace); end != -1 {
-		firstWord = trimmed[:end]
+	firstWord := strings.TrimLeftFunc(trimmed, func(r rune) bool { return !unicode.IsLetter(r) })
+	if end := strings.IndexFunc(firstWord, unicode.IsSpace); end != -1 {
+		firstWord = firstWord[:end]
 	}
-
 	// Comparison is done in order of priority.
 	loweredFirstWord := strings.ToLower(firstWord)
 	switch loweredFirstWord {
