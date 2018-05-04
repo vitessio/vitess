@@ -174,14 +174,14 @@ func (mp *Proxy) doSet(ctx context.Context, session *ProxySession, sql string, b
 // executeSelect runs the given select statement
 func (mp *Proxy) executeSelect(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if mp.normalize {
-		query, comments := sqlparser.SplitTrailingComments(sql)
+		query, comments := sqlparser.SplitMarginComments(sql)
 		stmt, err := sqlparser.Parse(query)
 		if err != nil {
 			return nil, err
 		}
 		sqlparser.Normalize(stmt, bindVariables, "vtp")
 		normalized := sqlparser.String(stmt)
-		sql = normalized + comments
+		sql = comments.Leading + normalized + comments.Trailing
 	}
 
 	return mp.qs.Execute(ctx, mp.target, sql, bindVariables, session.TransactionID, session.Options)
@@ -190,14 +190,14 @@ func (mp *Proxy) executeSelect(ctx context.Context, session *ProxySession, sql s
 // executeDML runs the given query handling autocommit semantics
 func (mp *Proxy) executeDML(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if mp.normalize {
-		query, comments := sqlparser.SplitTrailingComments(sql)
+		query, comments := sqlparser.SplitMarginComments(sql)
 		stmt, err := sqlparser.Parse(query)
 		if err != nil {
 			return nil, err
 		}
 		sqlparser.Normalize(stmt, bindVariables, "vtp")
 		normalized := sqlparser.String(stmt)
-		sql = normalized + comments
+		sql = comments.Leading + normalized + comments.Trailing
 	}
 
 	if session.TransactionID != 0 {

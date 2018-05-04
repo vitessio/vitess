@@ -169,7 +169,7 @@ func parseSchema(sqlSchema string) ([]*sqlparser.DDL, error) {
 			break
 		}
 		s := sqlparser.StripLeadingComments(sql)
-		s, _ = sqlparser.SplitTrailingComments(sql)
+		s, _ = sqlparser.SplitMarginComments(sql)
 		s = strings.TrimSpace(s)
 		if s == "" {
 			continue

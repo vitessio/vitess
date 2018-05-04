@@ -898,21 +898,21 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			if bindVariables == nil {
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
-			query, comments := sqlparser.SplitTrailingComments(sql)
+			query, comments := sqlparser.SplitMarginComments(sql)
 			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options))
 			if err != nil {
 				return err
 			}
 			qre := &QueryExecutor{
-				query:            query,
-				trailingComments: comments,
-				bindVars:         bindVariables,
-				transactionID:    transactionID,
-				options:          options,
-				plan:             plan,
-				ctx:              ctx,
-				logStats:         logStats,
-				tsv:              tsv,
+				query:          query,
+				marginComments: comments,
+				bindVars:       bindVariables,
+				transactionID:  transactionID,
+				options:        options,
+				plan:           plan,
+				ctx:            ctx,
+				logStats:       logStats,
+				tsv:            tsv,
 			}
 			extras := tsv.watcher.ComputeExtras(options)
 			result, err = qre.Execute()
@@ -939,20 +939,20 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 			if bindVariables == nil {
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
-			query, comments := sqlparser.SplitTrailingComments(sql)
+			query, comments := sqlparser.SplitMarginComments(sql)
 			plan, err := tsv.qe.GetStreamPlan(query)
 			if err != nil {
 				return err
 			}
 			qre := &QueryExecutor{
-				query:            query,
-				trailingComments: comments,
-				bindVars:         bindVariables,
-				options:          options,
-				plan:             plan,
-				ctx:              ctx,
-				logStats:         logStats,
-				tsv:              tsv,
+				query:          query,
+				marginComments: comments,
+				bindVars:       bindVariables,
+				options:        options,
+				plan:           plan,
+				ctx:            ctx,
+				logStats:       logStats,
+				tsv:            tsv,
 			}
 			return qre.Stream(callback)
 		},
@@ -1097,7 +1097,7 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 // the query and bind variables or the table name is empty.
 func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *tabletenv.LogStats, sql string, bindVariables map[string]*querypb.BindVariable) (string, string) {
 	// Strip trailing comments so we don't pollute the query cache.
-	sql, _ = sqlparser.SplitTrailingComments(sql)
+	sql, _ = sqlparser.SplitMarginComments(sql)
 	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false /* skipQueryPlanCache */)
 	if err != nil {
 		logComputeRowSerializerKey.Errorf("failed to get plan for query: %v err: %v", sql, err)
