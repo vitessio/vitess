@@ -469,7 +469,7 @@ public class VitessStatement implements Statement {
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_NOT_ALLOWED);
         }
 
-        selectOrShowSql = StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_S);
+        selectOrShowSql = isSelectOrShow(sql);
 
         if (selectOrShowSql) {
             this.executeQuery(sql);
@@ -654,6 +654,11 @@ public class VitessStatement implements Statement {
 
     private boolean sqlIsUpsert(String sql) {
         return StringUtils.indexOfIgnoreCase(0, sql, ON_DUPLICATE_KEY_UPDATE_CLAUSE, "\"'`", "\"'`", StringUtils.SEARCH_MODE__ALL) != -1;
+    }
+
+    // TODO: make this aware of leading comments and the SET statement, but keep it fast
+    protected boolean isSelectOrShow(String sql) {
+        return StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.SQL_S) || StringUtils.startsWithIgnoreCaseAndWs(sql, Constants.OPEN_PAREN);
     }
 
     protected void checkAndBeginTransaction() throws SQLException {

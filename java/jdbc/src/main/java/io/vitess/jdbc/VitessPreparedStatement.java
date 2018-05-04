@@ -187,7 +187,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         checkOpen();
         closeOpenResultSetAndResetCount();
 
-        selectOrShowSql = StringUtils.startsWithIgnoreCaseAndWs(this.sql, Constants.SQL_S);
+        selectOrShowSql = isSelectOrShow(this.sql);
 
         if (selectOrShowSql) {
             this.executeQuery();
