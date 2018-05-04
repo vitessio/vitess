@@ -182,19 +182,15 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
     }
 
     public boolean execute() throws SQLException {
-        boolean selectOrShowSql;
-
         checkOpen();
         closeOpenResultSetAndResetCount();
 
-        selectOrShowSql = StringUtils.startsWithIgnoreCaseAndWs(this.sql, Constants.SQL_S);
-
-        if (selectOrShowSql) {
-            this.executeQuery();
-            return true;
-        } else {
+        if (!maybeSelect(this.sql)) {
             this.executeUpdate();
             return false;
+        } else {
+            this.executeQuery();
+            return true;
         }
     }
 
