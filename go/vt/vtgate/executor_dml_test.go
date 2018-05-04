@@ -293,7 +293,7 @@ func TestUpdateNormalize(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "update user set a = :vtg1 where id = :vtg2 /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
+		Sql: "/* leading */ update user set a = :vtg1 where id = :vtg2 /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1": sqltypes.TestBindVariable(int64(2)),
 			"vtg2": sqltypes.TestBindVariable(int64(1)),
@@ -314,7 +314,7 @@ func TestUpdateNormalize(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "update user set a = :vtg1 where id = :vtg2 /* trailing *//* vtgate:: filtered_replication_unfriendly */",
+		Sql: "/* leading */ update user set a = :vtg1 where id = :vtg2 /* trailing *//* vtgate:: filtered_replication_unfriendly */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1": sqltypes.TestBindVariable(int64(2)),
 			"vtg2": sqltypes.TestBindVariable(int64(1)),

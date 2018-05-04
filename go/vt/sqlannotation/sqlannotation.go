@@ -62,15 +62,15 @@ func AnnotateIfDML(sql string, keyspaceIDs [][]byte) string {
 
 // AddKeyspaceIDs returns a copy of 'sql' annotated
 // with the given keyspace id. It also appends the
-// additional trailingComments, if any.
-func AddKeyspaceIDs(sql string, keyspaceIDs [][]byte, trailingComments string) string {
+// additional marginComments, if any.
+func AddKeyspaceIDs(sql string, keyspaceIDs [][]byte, marginComments string) string {
 	encodedIDs := make([][]byte, len(keyspaceIDs))
 	for i, src := range keyspaceIDs {
 		encodedIDs[i] = make([]byte, hex.EncodedLen(len(src)))
 		hex.Encode(encodedIDs[i], src)
 	}
 	return fmt.Sprintf("%s /* vtgate:: keyspace_id:%s */%s",
-		sql, bytes.Join(encodedIDs, []byte(",")), trailingComments)
+		sql, bytes.Join(encodedIDs, []byte(",")), marginComments)
 }
 
 // ExtractKeyspaceIDS parses the annotation of the given statement and tries
@@ -80,8 +80,8 @@ func AddKeyspaceIDs(sql string, keyspaceIDs [][]byte, trailingComments string) s
 // or some other parsing error occured, keyspaceID is set to nil and err is set to a non-nil
 // error value.
 func ExtractKeyspaceIDS(sql string) (keyspaceIDs [][]byte, err error) {
-	_, comments := sqlparser.SplitTrailingComments(sql)
-	keyspaceIDString, hasKeyspaceID := extractStringBetween(comments, "/* vtgate:: keyspace_id:", " ")
+	_, comments := sqlparser.SplitMarginComments(sql)
+	keyspaceIDString, hasKeyspaceID := extractStringBetween(comments.Trailing, "/* vtgate:: keyspace_id:", " ")
 	hasUnfriendlyAnnotation := (strings.Index(sql, filteredReplicationUnfriendlyAnnotation) != -1)
 	if !hasKeyspaceID {
 		if hasUnfriendlyAnnotation {
