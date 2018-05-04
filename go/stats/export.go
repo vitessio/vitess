@@ -110,11 +110,14 @@ type PushBackend interface {
 }
 
 var pushBackends = make(map[string]PushBackend)
+var pushBackendsLock sync.Mutex
 var once sync.Once
 
 // RegisterPushBackend allows modules to register PushBackend implementations.
 // Should be called on init().
 func RegisterPushBackend(name string, backend PushBackend) {
+	pushBackendsLock.Lock()
+	defer pushBackendsLock.Unlock()
 	if _, ok := pushBackends[name]; ok {
 		log.Fatalf("PushBackend %s already exists; can't register the same name multiple times", name)
 	}
