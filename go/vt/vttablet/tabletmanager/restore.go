@@ -93,6 +93,12 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		// next health check if it thinks it should. We do not
 		// alter replication here.
 	default:
+		// If anything failed, we should reset the original tablet type
+		agent.TopoServer.UpdateTabletFields(context.Background(), tablet.Alias, func(tablet *topodatapb.Tablet) error {
+			tablet.Type = originalType
+			return nil
+		})
+		agent.refreshTablet(ctx, "failed for restore from backup")
 		return fmt.Errorf("Can't restore backup: %v", err)
 	}
 
