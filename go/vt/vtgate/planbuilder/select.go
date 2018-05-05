@@ -24,24 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-// planBuilder is the top level type for building plans.
-// It contains the current builder tree, the symtab and
-// the jointab. It can create transient planBuilders due
-// to the recursive nature of SQL.
-type planBuilder struct {
-	vschema ContextVSchema
-	jt      *jointab
-	bldr    builder
-	st      *symtab
-}
-
-func newPlanBuilder(vschema ContextVSchema, jt *jointab) *planBuilder {
-	return &planBuilder{
-		vschema: vschema,
-		jt:      jt,
-	}
-}
-
 // buildSelectPlan is the new function to build a Select plan.
 func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive engine.Primitive, err error) {
 	pb := newPlanBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
