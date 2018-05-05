@@ -511,7 +511,7 @@ func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, cal
 
 	if err := conn.StreamHealth(ctx, callback); err != nil {
 		hcc.mu.Lock()
-		hcc.conn.Close(ctx)
+		log.Infof("StreamHealth failed from %v %v/%v (%v): %v", hcc.tabletStats.Tablet.GetAlias(), hcc.tabletStats.Tablet.GetKeyspace(), hcc.tabletStats.Tablet.GetShard(), hcc.tabletStats.Tablet.GetHostname(), err)
 		hcc.conn = nil
 		hcc.tabletStats.Serving = false
 		hcc.tabletStats.LastError = err
@@ -521,6 +521,7 @@ func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, cal
 		if hc.listener != nil {
 			hc.listener.StatsUpdate(&ts)
 		}
+		conn.Close(ctx)
 		return
 	}
 	return
@@ -741,11 +742,12 @@ func (hc *HealthCheckImpl) WaitForInitialStatsUpdates() {
 // GetConnection returns the TabletConn of the given tablet.
 func (hc *HealthCheckImpl) GetConnection(key string) queryservice.QueryService {
 	hc.mu.RLock()
-	defer hc.mu.RUnlock()
 	hcc := hc.addrToConns[key]
 	if hcc == nil {
+		hc.mu.RUnlock()
 		return nil
 	}
+	hc.mu.RUnlock()
 	hcc.mu.RLock()
 	defer hcc.mu.RUnlock()
 	return hcc.conn
