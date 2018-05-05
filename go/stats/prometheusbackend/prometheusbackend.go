@@ -4,12 +4,11 @@ import (
 	"expvar"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // PromBackend implements PullBackend using Prometheus as the backing metrics storage.
@@ -18,15 +17,13 @@ type PromBackend struct {
 }
 
 var (
-	be             PromBackend
-	logUnsupported *logutil.ThrottledLogger
+	be PromBackend
 )
 
 // Init initializes the Prometheus be with the given namespace.
 func Init(namespace string) {
 	http.Handle("/metrics", promhttp.Handler())
 	be.namespace = namespace
-	logUnsupported = logutil.NewThrottledLogger("PrometheusUnsupportedMetricType", 1*time.Minute)
 	stats.Register(be.publishPrometheusMetric)
 }
 
@@ -67,8 +64,11 @@ func (be PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 		newMultiTimingsCollector(st, be.buildPromName(name))
 	case *stats.Histogram:
 		newHistogramCollector(st, be.buildPromName(name))
+	case *stats.String, stats.StringFunc, stats.StringMapFunc, *stats.Rates:
+		// silently ignore these types since they don't make sense to
+		// export to prometheus' data model
 	default:
-		logUnsupported.Infof("Not exporting to Prometheus an unsupported metric type of %T: %s", st, name)
+		log.Warningf("Not exporting to Prometheus an unsupported metric type of %T: %s", st, name)
 	}
 }
 
