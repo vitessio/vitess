@@ -140,7 +140,7 @@ func TestListBackups(t *testing.T) {
 	}
 
 	// check we cannot chaneg a backup we listed
-	if _, err := bhs[0].AddFile(ctx, "test"); err == nil {
+	if _, err := bhs[0].AddFile(ctx, "test", 0); err == nil {
 		t.Fatalf("was able to AddFile to read-only backup")
 	}
 	if err := bhs[0].EndBackup(ctx); err == nil {
@@ -166,7 +166,7 @@ func TestFileContents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fbs.StartBackup failed: %v", err)
 	}
-	wc, err := bh.AddFile(ctx, filename1)
+	wc, err := bh.AddFile(ctx, filename1, 0)
 	if err != nil {
 		t.Fatalf("bh.AddFile failed: %v", err)
 	}

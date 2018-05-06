@@ -5,9 +5,7 @@
 
 package log
 
-import (
-	glog "github.com/golang/glog"
-)
+import "github.com/golang/glog"
 
 // Level is used with V() to test log verbosity.
 type Level = glog.Level
