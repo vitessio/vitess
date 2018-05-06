@@ -386,7 +386,7 @@ func NewHealthCheck(retryDelay, healthCheckTimeout time.Duration) HealthCheck {
 
 // RegisterStats registers the connection counts stats
 func (hc *HealthCheckImpl) RegisterStats() {
-	stats.NewCountersFuncWithMultiLabels(
+	stats.NewGaugesFuncWithMultiLabels(
 		"HealthcheckConnections",
 		"the number of healthcheck connections registered",
 		[]string{"Keyspace", "ShardName", "TabletType"},
