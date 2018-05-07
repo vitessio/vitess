@@ -65,10 +65,10 @@ func (be PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 	case *stats.Histogram:
 		newHistogramCollector(st, be.buildPromName(name))
 	case *stats.String, stats.StringFunc, stats.StringMapFunc, *stats.Rates:
-		// silently ignore these types since they don't make sense to
-		// export to prometheus' data model
+		// Silently ignore these types since they don't make sense to
+		// export to Prometheus' data model.
 	default:
-		log.Warningf("Not exporting to Prometheus an unsupported metric type of %T: %s", st, name)
+		log.Fatalf("prometheus: not exporting unsupported metric type %T: %s", st, name)
 	}
 }
 
