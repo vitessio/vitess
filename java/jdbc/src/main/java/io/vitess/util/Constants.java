@@ -114,6 +114,7 @@ public class Constants {
         public static final String QUERY_FAILED = "One or more queries failed in batch execution";
         public static final String READ_ONLY =
             "Connection has been set to read only and an update was attempted";
+        public static final String ZERO_TIMESTAMP = "Zero timestamp cannot be represented as java.sql.Date";
     }
 
 
@@ -164,6 +165,10 @@ public class Constants {
         /**
          * This matches the MySQL JDBC driver convertToNull behavior.
          */
-        CONVERTTONULL
+        CONVERTTONULL,
+        /**
+         * This matches the MySQL JDBC driver exception behavior.
+         */
+        EXCEPTION
     }
 }

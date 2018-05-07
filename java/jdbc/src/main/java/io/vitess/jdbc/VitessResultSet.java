@@ -819,11 +819,16 @@ public class VitessResultSet implements ResultSet {
             return true;
         }
 
-        Constants.ZeroDateTimeBehavior zeroDateTimeBehavior =
-            this.vitessStatement.getConnection().getZeroDateTimeBehavior();
-        if (zeroDateTimeBehavior == Constants.ZeroDateTimeBehavior.CONVERTTONULL
-            && hasZeroDateTimePrefix(columnIndex)) {
-            return true;
+        if (hasZeroDateTimePrefix(columnIndex)) {
+            switch (this.vitessStatement.getConnection().getZeroDateTimeBehavior()) {
+            case GARBLE:
+                break;
+            case CONVERTTONULL:
+                return true;
+            case EXCEPTION:
+                throw new SQLException(
+                    Constants.SQLExceptionMessages.ZERO_TIMESTAMP + ": " + columnIndex);
+            }
         }
         return false;
     }
