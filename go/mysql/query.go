@@ -59,6 +59,18 @@ func (c *Conn) writeComInitDB(db string) error {
 	return nil
 }
 
+// writeComSetOption changes the connection's capability of executing multi statements.
+// Returns SQLError(CRServerGone) if it can't.
+func (c *Conn) writeComSetOption(operation uint16) error {
+	data := c.startEphemeralPacket(16 + 1)
+	data[0] = ComSetOption
+	writeUint16(data, 1, operation)
+	if err := c.writeEphemeralPacket(true); err != nil {
+		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
+	}
+	return nil
+}
+
 // readColumnDefinition reads the next Column Definition packet.
 // Returns a SQLError.
 func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
@@ -458,6 +470,11 @@ func (c *Conn) readComQueryResponse() (uint64, uint64, int, error) {
 
 func (c *Conn) parseComQuery(data []byte) string {
 	return string(data[1:])
+}
+
+func (c *Conn) parseComSetOption(data []byte) (uint16, bool) {
+	val, _, ok := readUint16(data, 1)
+	return val, ok
 }
 
 func (c *Conn) parseComInitDB(data []byte) string {

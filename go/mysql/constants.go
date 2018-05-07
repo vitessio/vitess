@@ -157,6 +157,9 @@ const (
 	// ComBinlogDump is COM_BINLOG_DUMP.
 	ComBinlogDump = 0x12
 
+	// ComSetOption is COM_SET_OPTION
+	ComSetOption = 0x1b
+
 	// ComBinlogDumpGTID is COM_BINLOG_DUMP_GTID.
 	ComBinlogDumpGTID = 0x1e
 
