@@ -47,8 +47,8 @@ var usStateNames = map[int64]string{
 }
 
 var (
-	streamCount          = stats.NewCountersWithLabels("UpdateStreamStreamCount", "update stream count", "type")
-	updateStreamErrors   = stats.NewCountersWithLabels("UpdateStreamErrors", "update stream error count", "type")
+	streamCount          = stats.NewCountersWithSingleLabel("UpdateStreamStreamCount", "update stream count", "type")
+	updateStreamErrors   = stats.NewCountersWithSingleLabel("UpdateStreamErrors", "update stream error count", "type")
 	keyrangeStatements   = stats.NewCounter("UpdateStreamKeyRangeStatements", "update stream key range statement count")
 	keyrangeTransactions = stats.NewCounter("UpdateStreamKeyRangeTransactions", "update stream key range transaction count")
 	tablesStatements     = stats.NewCounter("UpdateStreamTablesStatements", "update stream table statement count")

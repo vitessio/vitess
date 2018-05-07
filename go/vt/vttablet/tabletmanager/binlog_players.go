@@ -421,29 +421,35 @@ func NewBinlogPlayerMap(ts *topo.Server, mysqld mysqlctl.MysqlDaemon, vtClientFa
 
 // RegisterBinlogPlayerMap registers the varz for the players.
 func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
-	stats.NewGaugeFunc("BinlogPlayerMapSize", "Binlog player map size", stats.IntFunc(func() int64 {
+	stats.NewGaugeFunc("BinlogPlayerMapSize", "Binlog player map size", func() int64 {
 		blm.mu.Lock()
 		defer blm.mu.Unlock()
 		return int64(len(blm.players))
-	}))
+	})
 	stats.NewGaugeFunc(
 		"BinlogPlayerSecondsBehindMaster",
 		"Binlog player seconds behind master",
-		stats.IntFunc(func() int64 {
+		func() int64 {
 			blm.mu.Lock()
 			defer blm.mu.Unlock()
 			return blm.maxSecondsBehindMasterUNGUARDED()
-		}))
-	stats.Publish("BinlogPlayerSecondsBehindMasterMap", stats.CountersFunc(func() map[string]int64 {
-		blm.mu.Lock()
-		result := make(map[string]int64, len(blm.players))
-		for i, bpc := range blm.players {
-			sbm := bpc.binlogPlayerStats.SecondsBehindMaster.Get()
-			result[fmt.Sprintf("%v", i)] = sbm
-		}
-		blm.mu.Unlock()
-		return result
-	}))
+		})
+	stats.NewCountersFuncWithMultiLabels(
+		"BinlogPlayerSecondsBehindMasterMap",
+		"Binlog player seconds behind master per player",
+		// CAUTION: Always keep this label as "counts" because the Google
+		//          internal monitoring may depend on this specific value.
+		[]string{"counts"},
+		func() map[string]int64 {
+			blm.mu.Lock()
+			result := make(map[string]int64, len(blm.players))
+			for i, bpc := range blm.players {
+				sbm := bpc.binlogPlayerStats.SecondsBehindMaster.Get()
+				result[fmt.Sprintf("%v", i)] = sbm
+			}
+			blm.mu.Unlock()
+			return result
+		})
 	stats.Publish("BinlogPlayerSourceShardNameMap", stats.StringMapFunc(func() map[string]string {
 		blm.mu.Lock()
 		result := make(map[string]string, len(blm.players))

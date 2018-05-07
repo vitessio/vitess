@@ -71,12 +71,12 @@ func NewReplicationWatcher(se *schema.Engine, config tabletenv.TabletConfig) *Re
 		stats.NewGaugeFunc(
 			"EventTokenTimestamp",
 			"Replication watcher event token timestamp",
-			stats.IntFunc(func() int64 {
+			func() int64 {
 				if e := rpw.EventToken(); e != nil {
 					return e.Timestamp
 				}
 				return 0
-			}))
+			})
 	})
 	return rpw
 }

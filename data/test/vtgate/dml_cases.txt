@@ -921,6 +921,33 @@
   }
 }
 
+# insert with multiple rows - multi-shard autocommit
+"insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id) values (1), (2)"
+{
+  "Original": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id) values (1), (2)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
+    "Values": [[[":__seq0",":__seq1"]],[[null,null]],[[null,null]]],
+    "Table": "user",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [1,2]
+    },
+    "Prefix": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id, Name, Costly) values ",
+    "Mid": ["(:_Id0, :_Name0, :_Costly0)","(:_Id1, :_Name1, :_Costly1)"],
+    "MultiShardAutocommit": true
+  }
+}
+
 # simple replace unsharded
 "replace into unsharded values(1, 2)"
 {
@@ -1250,6 +1277,22 @@
     },
     "Query": "delete from user_extra where name = 'jose'",
     "Table": "user_extra"
+  }
+}
+
+# delete from with no index match - multi shard autocommit
+"delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'"
+{
+  "Original": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'",
+  "Instructions": {
+    "Opcode": "DeleteScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'",
+    "Table": "user_extra",
+    "MultiShardAutocommit": true
   }
 }
 

@@ -56,7 +56,7 @@ const txLogInterval = time.Duration(1 * time.Minute)
 
 var (
 	txOnce  sync.Once
-	txStats = stats.NewTimings("Transactions", "Transaction stats")
+	txStats = stats.NewTimings("Transactions", "Transaction stats", "operation")
 
 	txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]string{
 		querypb.ExecuteOptions_REPEATABLE_READ:  "set transaction isolation level REPEATABLE READ",
@@ -119,8 +119,8 @@ func NewTxPool(
 	txOnce.Do(func() {
 		// Careful: conns also exports name+"xxx" vars,
 		// but we know it doesn't export Timeout.
-		stats.NewGaugeFunc(prefix+"TransactionPoolTimeout", "Transaction pool timeout", stats.DurationFunc(axp.timeout.Get))
-		stats.NewGaugeFunc(prefix+"TransactionPoolWaiters", "Transaction pool waiters", stats.IntFunc(axp.waiters.Get))
+		stats.NewGaugeDurationFunc(prefix+"TransactionPoolTimeout", "Transaction pool timeout", axp.timeout.Get)
+		stats.NewGaugeFunc(prefix+"TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
 	})
 	return axp
 }

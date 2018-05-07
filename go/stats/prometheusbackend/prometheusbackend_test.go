@@ -42,9 +42,9 @@ func TestPrometheusGauge(t *testing.T) {
 
 func TestPrometheusCounterFunc(t *testing.T) {
 	name := "blah_counterfunc"
-	stats.NewCounterFunc(name, "help", stats.IntFunc(func() int64 {
+	stats.NewCounterFunc(name, "help", func() int64 {
 		return 2
-	}))
+	})
 
 	checkHandlerForMetrics(t, name, 2)
 }
@@ -52,11 +52,45 @@ func TestPrometheusCounterFunc(t *testing.T) {
 func TestPrometheusGaugeFunc(t *testing.T) {
 	name := "blah_gaugefunc"
 
-	stats.NewGaugeFunc(name, "help", stats.IntFunc(func() int64 {
+	stats.NewGaugeFunc(name, "help", func() int64 {
 		return -3
-	}))
+	})
 
 	checkHandlerForMetrics(t, name, -3)
+}
+
+func TestPrometheusCounterDuration(t *testing.T) {
+	name := "blah_counterduration"
+
+	d := stats.NewCounterDuration(name, "help")
+	d.Add(1 * time.Second)
+
+	checkHandlerForMetrics(t, name, 1)
+}
+
+func TestPrometheusCounterDurationFunc(t *testing.T) {
+	name := "blah_counterdurationfunc"
+
+	stats.NewCounterDurationFunc(name, "help", func() time.Duration { return 1 * time.Second })
+
+	checkHandlerForMetrics(t, name, 1)
+}
+
+func TestPrometheusGaugeDuration(t *testing.T) {
+	name := "blah_gaugeduration"
+
+	d := stats.NewGaugeDuration(name, "help")
+	d.Set(1 * time.Second)
+
+	checkHandlerForMetrics(t, name, 1)
+}
+
+func TestPrometheusGaugeDurationFunc(t *testing.T) {
+	name := "blah_gaugedurationfunc"
+
+	stats.NewGaugeDurationFunc(name, "help", func() time.Duration { return 1 * time.Second })
+
+	checkHandlerForMetrics(t, name, 1)
 }
 
 func checkHandlerForMetrics(t *testing.T, metric string, value int) {
@@ -69,41 +103,41 @@ func checkHandlerForMetrics(t *testing.T, metric string, value int) {
 	}
 }
 
-func TestPrometheusCountersWithLabels(t *testing.T) {
-	name := "blah_counterswithlabels"
-	c := stats.NewCountersWithLabels(name, "help", "tag", "tag1", "tag2")
+func TestPrometheusCountersWithSingleLabel(t *testing.T) {
+	name := "blah_counterswithsinglelabel"
+	c := stats.NewCountersWithSingleLabel(name, "help", "label", "tag1", "tag2")
 	c.Add("tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 0)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 0)
 	c.Add("tag2", 41)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 41)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 41)
 	c.Reset("tag2")
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 0)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 0)
 }
 
-func TestPrometheusGaugesWithLabels(t *testing.T) {
-	name := "blah_gaugeswithlabels"
-	c := stats.NewGaugesWithLabels(name, "help", "tag", "tag1", "tag2")
+func TestPrometheusGaugesWithSingleLabel(t *testing.T) {
+	name := "blah_gaugeswithsinglelabel"
+	c := stats.NewGaugesWithSingleLabel(name, "help", "label", "tag1", "tag2")
 	c.Add("tag1", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", 1)
 
 	c.Add("tag2", 1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 1)
 
 	c.Set("tag1", -1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", -1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", -1)
 
 	c.Reset("tag2")
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag1", -1)
-	checkHandlerForMetricWithLabels(t, name, "tag", "tag2", 0)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag1", -1)
+	checkHandlerForMetricWithSingleLabel(t, name, "label", "tag2", 0)
 }
 
-func checkHandlerForMetricWithLabels(t *testing.T, metric string, tagName string, tagValue string, value int) {
+func checkHandlerForMetricWithSingleLabel(t *testing.T, metric, label, tag string, value int) {
 	response := testMetricsHandler(t)
 
-	expected := fmt.Sprintf("%s_%s{%s=\"%s\"} %d", namespace, metric, tagName, tagValue, value)
+	expected := fmt.Sprintf("%s_%s{%s=\"%s\"} %d", namespace, metric, label, tag, value)
 
 	if !strings.Contains(response.Body.String(), expected) {
 		t.Fatalf("Expected %s got %s", expected, response.Body.String())
@@ -163,7 +197,7 @@ func TestPrometheusCountersFuncWithMultiLabels(t *testing.T) {
 	name := "blah_countersfuncwithmultilabels"
 	labels := []string{"label1", "label2"}
 
-	stats.NewCountersFuncWithMultiLabels(name, labels, "help", func() map[string]int64 {
+	stats.NewCountersFuncWithMultiLabels(name, "help", labels, func() map[string]int64 {
 		m := make(map[string]int64)
 		m["foo.bar"] = 1
 		m["bar.baz"] = 1
@@ -187,25 +221,25 @@ func checkHandlerForMetricWithMultiLabels(t *testing.T, metric string, labels []
 func TestPrometheusTimings(t *testing.T) {
 	name := "blah_timings"
 	cats := []string{"cat1", "cat2"}
-	timing := stats.NewTimings(name, "help", cats...)
+	timing := stats.NewTimings(name, "help", "category", cats...)
 	timing.Add("cat1", time.Duration(1000000000))
 
 	response := testMetricsHandler(t)
 	var s []string
 
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.0005\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.001\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.005\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.01\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.05\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.1\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"0.5\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"1\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"5\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"10\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{Histograms=\"%s\",le=\"+Inf\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_sum{Histograms=\"%s\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_count{Histograms=\"%s\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.0005\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.001\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.005\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.01\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.05\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.1\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.5\"} %d", namespace, name, cats[0], 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"1\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"5\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"10\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"+Inf\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_sum{category=\"%s\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_count{category=\"%s\"} %d", namespace, name, cats[0], 1))
 
 	for _, line := range s {
 		if !strings.Contains(response.Body.String(), line) {
@@ -254,6 +288,29 @@ func TestPrometheusMultiTimings_PanicWrongLength(t *testing.T) {
 
 	c := stats.NewMultiTimings("name", "help", []string{"label1", "label2"})
 	c.Add([]string{"label1"}, time.Duration(100000000))
+}
+
+func TestPrometheusHistogram(t *testing.T) {
+	name := "blah_hist"
+	hist := stats.NewHistogram(name, "help", []int64{1, 5, 10})
+	hist.Add(2)
+	hist.Add(3)
+	hist.Add(6)
+
+	response := testMetricsHandler(t)
+	var s []string
+
+	s = append(s, fmt.Sprintf("%s_%s_bucket{le=\"1\"} %d", namespace, name, 0))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{le=\"5\"} %d", namespace, name, 2))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{le=\"10\"} %d", namespace, name, 3))
+	s = append(s, fmt.Sprintf("%s_%s_sum %d", namespace, name, 1))
+	s = append(s, fmt.Sprintf("%s_%s_count %d", namespace, name, 3))
+
+	for _, line := range s {
+		if !strings.Contains(response.Body.String(), line) {
+			t.Fatalf("Expected result to contain %s, got %s", line, response.Body.String())
+		}
+	}
 }
 
 func testMetricsHandler(t *testing.T) *httptest.ResponseRecorder {

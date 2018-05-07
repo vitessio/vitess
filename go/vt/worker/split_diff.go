@@ -19,6 +19,7 @@ package worker
 import (
 	"fmt"
 	"html/template"
+	"sort"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -34,7 +35,6 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"sort"
 )
 
 // SplitDiffWorker executes a diff between a destination shard and its
@@ -219,7 +219,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate tablet in destination shard
 	var err error
-	sdw.destinationAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */ , sdw.cell, sdw.keyspace, sdw.shard, sdw.minHealthyRdonlyTablets)
+	sdw.destinationAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */, sdw.cell, sdw.keyspace, sdw.shard, sdw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
 	}
@@ -227,7 +227,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	// find an appropriate tablet in the source shard
 	for _, ss := range sdw.shardInfo.SourceShards {
 		if ss.Uid == sdw.sourceUID {
-			sdw.sourceAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */ , sdw.cell, sdw.keyspace, ss.Shard, sdw.minHealthyRdonlyTablets)
+			sdw.sourceAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */, sdw.cell, sdw.keyspace, ss.Shard, sdw.minHealthyRdonlyTablets)
 			if err != nil {
 				return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, ss.Shard, err)
 			}
@@ -370,7 +370,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(
-			shortCtx, sdw.destinationAlias, nil /* tables */ , sdw.excludeTables, false /* includeViews */)
+			shortCtx, sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		sdw.wr.Logger().Infof("Got schema from destination %v", sdw.destinationAlias)
@@ -381,7 +381,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		sdw.sourceSchemaDefinition, err = sdw.wr.GetSchema(
-			shortCtx, sdw.sourceAlias, nil /* tables */ , sdw.excludeTables, false /* includeViews */)
+			shortCtx, sdw.sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		sdw.wr.Logger().Infof("Got schema from source %v", sdw.sourceAlias)

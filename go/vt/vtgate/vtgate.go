@@ -89,7 +89,7 @@ var (
 	qpsByKeyspace  *stats.Rates
 	qpsByDbType    *stats.Rates
 
-	vschemaCounters *stats.CountersWithLabels
+	vschemaCounters *stats.CountersWithSingleLabel
 
 	errorsByOperation *stats.Rates
 	errorsByKeyspace  *stats.Rates
@@ -99,7 +99,7 @@ var (
 	// Error counters should be global so they can be set from anywhere
 	errorCounts *stats.CountersWithMultiLabels
 
-	warnings *stats.CountersWithLabels
+	warnings *stats.CountersWithSingleLabel
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -156,7 +156,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 
 	// vschemaCounters needs to be initialized before planner to
 	// catch the initial load stats.
-	vschemaCounters = stats.NewCountersWithLabels("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
+	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
 
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
@@ -239,7 +239,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	errorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
 	errorsByCode = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
 
-	warnings = stats.NewCountersWithLabels("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet")
+	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet")
 
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {

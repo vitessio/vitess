@@ -16,7 +16,6 @@
 
 package io.vitess.jdbc;
 
-import com.google.protobuf.ByteString;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -27,6 +26,7 @@ import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.Properties;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -35,6 +35,8 @@ import org.mockito.internal.verification.VerificationModeFactory;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+
+import com.google.protobuf.ByteString;
 
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.SimpleCursor;
@@ -266,6 +268,14 @@ public class VitessResultSetTest extends BaseTest {
         Assert.assertEquals(new BigInteger("1000"), vitessResultSet.getObject(10));
     }
 
+    @Test public void getBigInteger() throws SQLException {
+        Cursor cursor = getCursorWithRowsAsNull();
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
+        vitessResultSet.next();
+
+        Assert.assertEquals(new BigInteger("1000"), vitessResultSet.getBigInteger(10));
+    }
+
     @Test public void testgetBoolean() throws SQLException {
         Cursor cursor = getCursorWithRows();
         Cursor cursorWithRowsAsNull = getCursorWithRowsAsNull();
@@ -446,6 +456,14 @@ public class VitessResultSetTest extends BaseTest {
         VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(-1000, vitessResultSet.getInt("col9"));
+    }
+
+    @Test public void testBigIntegerbyColumnLabel() throws SQLException {
+        Cursor cursor = getCursorWithRows();
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
+        vitessResultSet.next();
+        Assert.assertEquals(new BigInteger("1000"),
+            vitessResultSet.getBigInteger("col10"));
     }
 
     @Test public void testgetFloatbyColumnLabel() throws SQLException {

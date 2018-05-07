@@ -5,6 +5,7 @@ This is an alphabetical list of known adopters of Vitess. Some have already gone
 * [BetterCloud](http://bettercloud.com)
 * [FlipKart](http://flipkart.com)
 * [HubSpot](http://product.hubspot.com/)
+* [JD](http://jd.com/)
 * [Nozzle](http://nozzle.io)
 * [Pixel Federation](http://pixelfederation.com)
 * [Quiz of Kings](http://quizofkings.com)

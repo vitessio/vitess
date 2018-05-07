@@ -66,7 +66,7 @@ func (bh *GCSBackupHandle) Name() string {
 }
 
 // AddFile implements BackupHandle.
-func (bh *GCSBackupHandle) AddFile(ctx context.Context, filename string) (io.WriteCloser, error) {
+func (bh *GCSBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if bh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}

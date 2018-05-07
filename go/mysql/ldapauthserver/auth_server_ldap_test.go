@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"gopkg.in/ldap.v2"
+	ldap "gopkg.in/ldap.v2"
 )
 
 type MockLdapClient struct{}

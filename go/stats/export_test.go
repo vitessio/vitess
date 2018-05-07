@@ -19,7 +19,6 @@ package stats
 import (
 	"expvar"
 	"testing"
-	"time"
 )
 
 func clear() {
@@ -68,111 +67,6 @@ func TestFloat(t *testing.T) {
 	})
 	if f.String() != "1.234" {
 		t.Errorf("want 1.234, got %v", f.String())
-	}
-}
-
-func TestCounter(t *testing.T) {
-	var gotname string
-	var gotv *Counter
-	clear()
-	Register(func(name string, v expvar.Var) {
-		gotname = name
-		gotv = v.(*Counter)
-	})
-	v := NewCounter("Int", "help")
-	if gotname != "Int" {
-		t.Errorf("want Int, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
-	v.Add(1)
-	if v.Get() != 1 {
-		t.Errorf("want 1, got %v", v.Get())
-	}
-	if v.String() != "1" {
-		t.Errorf("want 1, got %v", v.Get())
-	}
-	v.Reset()
-	if v.Get() != 0 {
-		t.Errorf("want 0, got %v", v.Get())
-	}
-
-}
-
-func TestGaugeFunc(t *testing.T) {
-	var gotname string
-	var gotv *GaugeFunc
-	clear()
-	Register(func(name string, v expvar.Var) {
-		gotname = name
-		gotv = v.(*GaugeFunc)
-	})
-
-	v := NewGaugeFunc("name", "help", IntFunc(func() int64 {
-		return 1
-	}))
-	if v.String() != "1" {
-		t.Errorf("want 1, got %f", v.String())
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
-	if gotname != "name" {
-		t.Errorf("want name, got %s", gotname)
-	}
-}
-
-func TestDuration(t *testing.T) {
-	var gotname string
-	var gotv *Duration
-	clear()
-	Register(func(name string, v expvar.Var) {
-		gotname = name
-		gotv = v.(*Duration)
-	})
-	v := NewDuration("Duration")
-	if gotname != "Duration" {
-		t.Errorf("want Duration, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
-	v.Set(time.Duration(5))
-	if v.Get() != 5 {
-		t.Errorf("want 5, got %v", v.Get())
-	}
-	v.Add(time.Duration(1))
-	if v.Get() != 6 {
-		t.Errorf("want 6, got %v", v.Get())
-	}
-	if v.String() != "6" {
-		t.Errorf("want 6, got %v", v.Get())
-	}
-
-}
-
-func TestDurationFunc(t *testing.T) {
-	var gotname string
-	var gotv *CounterFunc
-	clear()
-	Register(func(name string, v expvar.Var) {
-		gotname = name
-		gotv = v.(*CounterFunc)
-	})
-
-	v := NewCounterFunc("duration", "help", DurationFunc(func() time.Duration {
-		return time.Duration(1)
-	}))
-
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
-	if v.String() != "1" {
-		t.Errorf("want 1, got %v", v.String())
-	}
-	if gotname != "duration" {
-		t.Errorf("want duration, got %s", gotname)
 	}
 }
 
