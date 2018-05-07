@@ -383,7 +383,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 			// Send the end packet only sendFinished is false (results were streamed).
 			if !sendFinished {
-				if err := c.writeEndResult(); err != nil {
+				if err := c.writeEndResult(false); err != nil {
 					log.Errorf("Error writing result to %s: %v", c, err)
 					return
 				}
@@ -424,6 +424,9 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 		CapabilityClientProtocol41 |
 		CapabilityClientTransactions |
 		CapabilityClientSecureConnection |
+		CapabilityClientMultiStatements |
+		CapabilityClientMultiResults |
+		CapabilityClientPsMultiResults |
 		CapabilityClientPluginAuth |
 		CapabilityClientPluginAuthLenencClientData |
 		CapabilityClientDeprecateEOF
@@ -528,6 +531,11 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	// after SSL negotiation, do not overwrite capabilities.
 	if firstTime {
 		c.Capabilities = clientFlags & (CapabilityClientDeprecateEOF | CapabilityClientFoundRows)
+	}
+
+	// set connection capability for executing multi statements
+	if clientFlags&CapabilityClientMultiStatements > 0 {
+		c.Capabilities |= CapabilityClientMultiStatements
 	}
 
 	// Max packet size. Don't do anything with this now.
