@@ -626,7 +626,11 @@ func (hcc *healthCheckConn) update(shr *querypb.StreamHealthResponse, serving bo
 	hcc.tabletStats.TabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 	hcc.tabletStats.Stats = shr.RealtimeStats
 	hcc.tabletStats.LastError = healthErr
-	hcc.setServingState(serving, healthErr.Error())
+	reason := ""
+	if healthErr != nil {
+		reason = healthErr.Error()
+	}
+	hcc.setServingState(serving, reason)
 	return hcc.tabletStats
 }
 
