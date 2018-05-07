@@ -169,6 +169,10 @@ public class Constants {
         /**
          * This matches the MySQL JDBC driver exception behavior.
          */
-        EXCEPTION
+        EXCEPTION,
+        /**
+         * This matches the MySQL JDBC driver round behavior.
+         */
+        ROUND
     }
 }
