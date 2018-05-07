@@ -584,12 +584,16 @@ func (c *Conn) writeRows(result *sqltypes.Result) error {
 }
 
 // writeEndResult concludes the sending of a Result.
-func (c *Conn) writeEndResult() error {
+// if more is set to true, then it means there are more results afterwords
+func (c *Conn) writeEndResult(more bool) error {
 	// Send either an EOF, or an OK packet.
-	// FIXME(alainjobart) if multi result is set, can send more after this.
 	// See doc.go.
+	flag := c.StatusFlags
+	if more {
+		flag |= ServerMoreResultsExists
+	}
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-		if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+		if err := c.writeEOFPacket(flag, 0); err != nil {
 			return err
 		}
 		if err := c.flush(); err != nil {
@@ -597,7 +601,7 @@ func (c *Conn) writeEndResult() error {
 		}
 	} else {
 		// This will flush too.
-		if err := c.writeOKPacketWithEOFHeader(0, 0, c.StatusFlags, 0); err != nil {
+		if err := c.writeOKPacketWithEOFHeader(0, 0, flag, 0); err != nil {
 			return err
 		}
 	}
