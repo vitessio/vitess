@@ -398,6 +398,31 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 				log.Errorf("Error writing ComPing result to %s: %v", c, err)
 				return
 			}
+		case ComSetOption:
+			if operation, ok := c.parseComSetOption(data); ok {
+				switch operation {
+				case 0:
+					c.Capabilities |= CapabilityClientMultiStatements
+				case 1:
+					c.Capabilities &^= CapabilityClientMultiStatements
+				default:
+					log.Errorf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
+					if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
+						log.Errorf("Error writing error packet to client: %v", err)
+						return
+					}
+				}
+				if err := c.writeEndResult(false); err != nil {
+					log.Errorf("Error writeEndResult error %v ", err)
+					return
+				}
+			} else {
+				log.Errorf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
+				if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
+					log.Errorf("Error writing error packet to client: %v", err)
+					return
+				}
+			}
 		default:
 			log.Errorf("Got unhandled packet from %s, returning error: %v", c, data)
 			c.recycleReadPacket()
