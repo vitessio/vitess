@@ -500,7 +500,9 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 // hcc.mu must be locked before calling this function
 func (hcc *healthCheckConn) setServingState(serving bool, reason string) {
 	if serving != hcc.tabletStats.Serving {
-		log.Infof("Healthcheck setServingState(%v) for %v %v/%v (%v): %s",
+		// Emit the log from a separate goroutine to avoid holding
+		// the hcc lock while logging is happening
+		go log.Infof("Healthcheck setServingState(%v) for %v %v/%v (%v): %s",
 			serving,
 			hcc.tabletStats.Tablet.GetAlias(),
 			hcc.tabletStats.Tablet.GetKeyspace(),
