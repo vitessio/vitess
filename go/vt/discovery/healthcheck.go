@@ -304,6 +304,7 @@ type healthCheckConn struct {
 	conn                  queryservice.QueryService
 	streamCancelFunc      context.CancelFunc
 	tabletStats           TabletStats
+	loggedServingState    bool
 	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
 }
 
@@ -435,7 +436,7 @@ func (hc *HealthCheckImpl) finalizeConn(hcc *healthCheckConn) {
 	hccCtx := hcc.ctx
 	hcc.conn = nil
 	hcc.tabletStats.Up = false
-	hcc.tabletStats.Serving = false
+	hcc.setServingState(false, "finalizeConn closing connection")
 	// Note: checkConn() exits only when hcc.ctx.Done() is closed. Thus it's
 	// safe to simply get Err() value here and assign to LastError.
 	hcc.tabletStats.LastError = hcc.ctx.Err()
@@ -491,6 +492,32 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 	}
 }
 
+// setServingState sets the tablet state to the given value.
+//
+// If the state changes, it logs the change so that failures
+// from the health check connection are logged the first time,
+// but don't continue to log if the connection stays down.
+//
+// hcc.mu must be locked before calling this function
+func (hcc *healthCheckConn) setServingState(serving bool, reason string) {
+	if !hcc.loggedServingState || (serving != hcc.tabletStats.Serving) {
+		// Emit the log from a separate goroutine to avoid holding
+		// the hcc lock while logging is happening
+		go log.Infof("HealthCheckUpdate(Serving State): %v, tablet: %v serving => %v for %v/%v (%v) reason: %s",
+			hcc.tabletStats.Name,
+			topotools.TabletIdent(hcc.tabletStats.Tablet),
+			serving,
+			hcc.tabletStats.Tablet.GetKeyspace(),
+			hcc.tabletStats.Tablet.GetShard(),
+			hcc.tabletStats.Target.GetTabletType(),
+			reason,
+		)
+		hcc.loggedServingState = true
+	}
+
+	hcc.tabletStats.Serving = serving
+}
+
 // stream streams healthcheck responses to callback.
 func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, callback func(*querypb.StreamHealthResponse) error) {
 	hcc.mu.Lock()
@@ -515,9 +542,8 @@ func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, cal
 
 	if err := conn.StreamHealth(ctx, callback); err != nil {
 		hcc.mu.Lock()
-		log.Infof("StreamHealth failed from %v %v/%v (%v): %v", hcc.tabletStats.Tablet.GetAlias(), hcc.tabletStats.Tablet.GetKeyspace(), hcc.tabletStats.Tablet.GetShard(), hcc.tabletStats.Tablet.GetHostname(), err)
 		hcc.conn = nil
-		hcc.tabletStats.Serving = false
+		hcc.setServingState(false, err.Error())
 		hcc.tabletStats.LastError = err
 		ts := hcc.tabletStats
 		hcc.mu.Unlock()
@@ -602,10 +628,14 @@ func (hcc *healthCheckConn) update(shr *querypb.StreamHealthResponse, serving bo
 	defer hcc.mu.Unlock()
 	hcc.lastResponseTimestamp = time.Now()
 	hcc.tabletStats.Target = shr.Target
-	hcc.tabletStats.Serving = serving
 	hcc.tabletStats.TabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 	hcc.tabletStats.Stats = shr.RealtimeStats
 	hcc.tabletStats.LastError = healthErr
+	reason := "healthCheck update"
+	if healthErr != nil {
+		reason = "healthCheck update error: " + healthErr.Error()
+	}
+	hcc.setServingState(serving, reason)
 	return hcc.tabletStats
 }
 
@@ -645,8 +675,8 @@ func (hc *HealthCheckImpl) checkHealthCheckTimeout() {
 
 		//Timeout detected. Cancel the current streaming RPC and let checkConn() restart it.
 		hcc.streamCancelFunc()
-		hcc.tabletStats.Serving = false
 		hcc.tabletStats.LastError = fmt.Errorf("healthcheck timed out (latest %v)", hcc.lastResponseTimestamp)
+		hcc.setServingState(false, hcc.tabletStats.LastError.Error())
 		ts := hcc.tabletStats
 		hcc.mu.Unlock()
 		// notify downstream for serving status change
