@@ -304,6 +304,7 @@ type healthCheckConn struct {
 	conn                  queryservice.QueryService
 	streamCancelFunc      context.CancelFunc
 	tabletStats           TabletStats
+	loggedServingState    bool
 	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
 }
 
@@ -499,17 +500,19 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 //
 // hcc.mu must be locked before calling this function
 func (hcc *healthCheckConn) setServingState(serving bool, reason string) {
-	if serving != hcc.tabletStats.Serving {
+	if !hcc.loggedServingState || (serving != hcc.tabletStats.Serving) {
 		// Emit the log from a separate goroutine to avoid holding
 		// the hcc lock while logging is happening
-		go log.Infof("HealthCheckUpdate (Serving State) => %v for %v %v/%v (%v) reason: %s",
+		go log.Infof("HealthCheckUpdate(Serving State): %v, tablet: %v serving => %v for %v/%v (%v) reason: %s",
+			hcc.tabletStats.Name,
+			topotools.TabletIdent(hcc.tabletStats.Tablet),
 			serving,
-			hcc.tabletStats.Tablet.GetAlias(),
 			hcc.tabletStats.Tablet.GetKeyspace(),
 			hcc.tabletStats.Tablet.GetShard(),
-			hcc.tabletStats.Tablet.GetHostname(),
+			hcc.tabletStats.Target.GetTabletType(),
 			reason,
 		)
+		hcc.loggedServingState = true
 	}
 
 	hcc.tabletStats.Serving = serving
