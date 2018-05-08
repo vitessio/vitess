@@ -502,7 +502,7 @@ func (hcc *healthCheckConn) setServingState(serving bool, reason string) {
 	if serving != hcc.tabletStats.Serving {
 		// Emit the log from a separate goroutine to avoid holding
 		// the hcc lock while logging is happening
-		go log.Infof("Healthcheck setServingState(%v) for %v %v/%v (%v): %s",
+		go log.Infof("HealthCheckUpdate (Serving State) => %v for %v %v/%v (%v) reason: %s",
 			serving,
 			hcc.tabletStats.Tablet.GetAlias(),
 			hcc.tabletStats.Tablet.GetKeyspace(),
@@ -628,9 +628,9 @@ func (hcc *healthCheckConn) update(shr *querypb.StreamHealthResponse, serving bo
 	hcc.tabletStats.TabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 	hcc.tabletStats.Stats = shr.RealtimeStats
 	hcc.tabletStats.LastError = healthErr
-	reason := ""
+	reason := "healthCheck update"
 	if healthErr != nil {
-		reason = healthErr.Error()
+		reason = "healthCheck update error: " + healthErr.Error()
 	}
 	hcc.setServingState(serving, reason)
 	return hcc.tabletStats
