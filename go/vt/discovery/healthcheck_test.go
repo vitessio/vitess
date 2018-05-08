@@ -545,6 +545,25 @@ func TestHealthCheckTimeout(t *testing.T) {
 		t.Errorf("StreamHealth should be canceled after timeout, but is not")
 	}
 
+	// repeat the wait. There should be no error or cancelation.
+	fc.resetCanceledFlag()
+	time.Sleep(2 * timeout)
+	t.Logf(`Sleep(2 * timeout)`)
+
+	select {
+	case res = <-l.output:
+		t.Errorf(`<-l.output: %+v; want not message`, res)
+	default:
+	}
+
+	if err := checkErrorCounter("k", "s", topodatapb.TabletType_MASTER, 1); err != nil {
+		t.Errorf("%v", err)
+	}
+
+	if fc.isCanceled() {
+		t.Errorf("StreamHealth should not be canceled after timeout")
+	}
+
 	// send a healthcheck response, it should be serving again
 	input <- shr
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
@@ -692,6 +711,12 @@ func (fc *fakeConn) isCanceled() bool {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 	return fc.canceled
+}
+
+func (fc *fakeConn) resetCanceledFlag() {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	fc.canceled = false
 }
 
 func checkErrorCounter(keyspace, shard string, tabletType topodatapb.TabletType, want int64) error {
