@@ -297,13 +297,16 @@ type healthCheckConn struct {
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
+	// healthCheckTimeout specifies how long to wait for
+	// a health check update.
+	healthCheckTimeout time.Duration
+
 	// mu protects all the following fields.
 	// When locking both mutex from HealthCheck and healthCheckConn,
 	// HealthCheck.mu goes first.
 	// Note tabletStats.Tablet and tabletStats.Name are immutable.
 	mu                    sync.RWMutex
 	conn                  queryservice.QueryService
-	streamCancelFunc      context.CancelFunc
 	tabletStats           TabletStats
 	loggedServingState    bool
 	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
@@ -316,7 +319,6 @@ type HealthCheckImpl struct {
 	sendDownEvents     bool
 	retryDelay         time.Duration
 	healthCheckTimeout time.Duration
-	closeChan          chan struct{} // signals the process gorouting to terminate
 	// wg keeps track of all launched Go routines.
 	wg sync.WaitGroup
 
@@ -351,33 +353,7 @@ func NewHealthCheck(retryDelay, healthCheckTimeout time.Duration) HealthCheck {
 		addrToConns:        make(map[string]*healthCheckConn),
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
-		closeChan:          make(chan struct{}),
 	}
-
-	hc.wg.Add(1)
-	go func() {
-		defer hc.wg.Done()
-		// Start another go routine to check timeout.
-		// Currently vttablet sends healthcheck response every 20 seconds.
-		// We set the default timeout to 1 minute (20s * 3),
-		// and also perform the timeout check in sync with vttablet frequency.
-		// When we change the healthcheck frequency on vttablet,
-		// we should also adjust here.
-		t := time.NewTicker(healthCheckTimeout / 3)
-		defer t.Stop()
-		for {
-			select {
-			case <-hc.closeChan:
-				return
-			case _, ok := <-t.C:
-				if !ok {
-					// the ticker stoped
-					return
-				}
-				hc.checkHealthCheckTimeout()
-			}
-		}
-	}()
 
 	healthcheckOnce.Do(func() {
 		http.Handle("/debug/gateway", hc)
@@ -496,17 +472,55 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 
 	retryDelay := hc.retryDelay
 	for {
-		ctx, cancel := context.WithCancel(hcc.ctx)
-		hcc.mu.Lock()
-		hcc.streamCancelFunc = cancel
-		hcc.mu.Unlock()
+		streamCtx, streamCancel := context.WithCancel(hcc.ctx)
+
+		// Setup a watcher that restarts the timer every time an update is received.
+		// If a timeout occurs for a serving tablet, we make it non-serving and send
+		// a status update. The stream is also terminated so it can be retried.
+		// servingStatus feeds into the serving var, which keeps track of the serving
+		// status transmitted by the tablet.
+		servingStatus := make(chan bool, 5)
+		serving := ts.Serving
+		go func() {
+			for {
+				select {
+				case serving = <-servingStatus:
+					continue
+				case <-time.After(hcc.healthCheckTimeout):
+					// Ignore if not serving.
+					if !serving {
+						continue
+					}
+					hcc.mu.Lock()
+					hcc.tabletStats.LastError = fmt.Errorf("healthcheck timed out (latest %v)", hcc.lastResponseTimestamp)
+					hcc.setServingState(false, hcc.tabletStats.LastError.Error())
+					hcc.mu.Unlock()
+					ts := hcc.tabletStats
+					if hc.listener != nil {
+						hc.listener.StatsUpdate(&ts)
+					}
+					hcErrorCounters.Add([]string{ts.Target.Keyspace, ts.Target.Shard, topoproto.TabletTypeLString(ts.Target.TabletType)}, 1)
+					streamCancel()
+					return
+				case <-streamCtx.Done():
+					// This is a failsafe code path. If a stream terminates when
+					// a tablet is in not serving state, this function will loop
+					// forever.
+					return
+				}
+			}
+		}()
 
 		// Read stream health responses.
-		hcc.stream(ctx, hc, func(shr *querypb.StreamHealthResponse) error {
+		hcc.stream(streamCtx, hc, func(shr *querypb.StreamHealthResponse) error {
 			// We received a message. Reset the back-off.
 			retryDelay = hc.retryDelay
+			servingStatus <- shr.Serving
 			return hcc.processResponse(hc, shr)
 		})
+
+		// streamCancel to make sure the watcher goroutine terminates.
+		streamCancel()
 
 		// Streaming RPC failed e.g. because vttablet was restarted or took too long.
 		// Sleep until the next retry is up or the context is done/canceled.
@@ -667,54 +681,6 @@ func (hcc *healthCheckConn) update(shr *querypb.StreamHealthResponse, serving bo
 	return hcc.tabletStats
 }
 
-func (hc *HealthCheckImpl) checkHealthCheckTimeout() {
-	hc.mu.RLock()
-	list := make([]*healthCheckConn, 0, len(hc.addrToConns))
-	for _, hcc := range hc.addrToConns {
-		list = append(list, hcc)
-	}
-	hc.mu.RUnlock()
-	for _, hcc := range list {
-		hcc.mu.RLock()
-		if !hcc.tabletStats.Serving {
-			// ignore non-serving tablet
-			hcc.mu.RUnlock()
-			continue
-		}
-		if time.Now().Sub(hcc.lastResponseTimestamp) < hc.healthCheckTimeout {
-			// received a healthcheck response recently
-			hcc.mu.RUnlock()
-			continue
-		}
-		hcc.mu.RUnlock()
-		// mark the tablet non-serving as we have not seen a health check response for a long time
-		hcc.mu.Lock()
-		// check again to avoid race condition
-		if !hcc.tabletStats.Serving {
-			// ignore non-serving tablet
-			hcc.mu.Unlock()
-			continue
-		}
-		if time.Now().Sub(hcc.lastResponseTimestamp) < hc.healthCheckTimeout {
-			// received a healthcheck response recently
-			hcc.mu.Unlock()
-			continue
-		}
-
-		//Timeout detected. Cancel the current streaming RPC and let checkConn() restart it.
-		hcc.streamCancelFunc()
-		hcc.tabletStats.LastError = fmt.Errorf("healthcheck timed out (latest %v)", hcc.lastResponseTimestamp)
-		hcc.setServingState(false, hcc.tabletStats.LastError.Error())
-		ts := hcc.tabletStats
-		hcc.mu.Unlock()
-		// notify downstream for serving status change
-		if hc.listener != nil {
-			hc.listener.StatsUpdate(&ts)
-		}
-		hcErrorCounters.Add([]string{ts.Target.Keyspace, ts.Target.Shard, topoproto.TabletTypeLString(ts.Target.TabletType)}, 1)
-	}
-}
-
 func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
@@ -757,8 +723,9 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	key := TabletToMapKey(tablet)
 	hcc := &healthCheckConn{
-		ctx:        ctx,
-		cancelFunc: cancelFunc,
+		ctx:                ctx,
+		cancelFunc:         cancelFunc,
+		healthCheckTimeout: hc.healthCheckTimeout,
 		tabletStats: TabletStats{
 			Key:    key,
 			Tablet: tablet,
@@ -938,7 +905,6 @@ func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
 // currently executing and won't be called again.
 func (hc *HealthCheckImpl) Close() error {
 	hc.mu.Lock()
-	close(hc.closeChan)
 	for _, hcc := range hc.addrToConns {
 		hcc.cancelFunc()
 	}
