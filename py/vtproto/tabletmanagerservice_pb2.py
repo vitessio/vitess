@@ -23,1492 +23,403 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   serialized_pb=_b('\n\x1atabletmanagerservice.proto\x12\x14tabletmanagerservice\x1a\x17tabletmanagerdata.proto2\x9c\"\n\rTabletManager\x12I\n\x04Ping\x12\x1e.tabletmanagerdata.PingRequest\x1a\x1f.tabletmanagerdata.PingResponse\"\x00\x12L\n\x05Sleep\x12\x1f.tabletmanagerdata.SleepRequest\x1a .tabletmanagerdata.SleepResponse\"\x00\x12^\n\x0b\x45xecuteHook\x12%.tabletmanagerdata.ExecuteHookRequest\x1a&.tabletmanagerdata.ExecuteHookResponse\"\x00\x12X\n\tGetSchema\x12#.tabletmanagerdata.GetSchemaRequest\x1a$.tabletmanagerdata.GetSchemaResponse\"\x00\x12g\n\x0eGetPermissions\x12(.tabletmanagerdata.GetPermissionsRequest\x1a).tabletmanagerdata.GetPermissionsResponse\"\x00\x12^\n\x0bSetReadOnly\x12%.tabletmanagerdata.SetReadOnlyRequest\x1a&.tabletmanagerdata.SetReadOnlyResponse\"\x00\x12\x61\n\x0cSetReadWrite\x12&.tabletmanagerdata.SetReadWriteRequest\x1a\'.tabletmanagerdata.SetReadWriteResponse\"\x00\x12[\n\nChangeType\x12$.tabletmanagerdata.ChangeTypeRequest\x1a%.tabletmanagerdata.ChangeTypeResponse\"\x00\x12\x61\n\x0cRefreshState\x12&.tabletmanagerdata.RefreshStateRequest\x1a\'.tabletmanagerdata.RefreshStateResponse\"\x00\x12g\n\x0eRunHealthCheck\x12(.tabletmanagerdata.RunHealthCheckRequest\x1a).tabletmanagerdata.RunHealthCheckResponse\"\x00\x12p\n\x11IgnoreHealthError\x12+.tabletmanagerdata.IgnoreHealthErrorRequest\x1a,.tabletmanagerdata.IgnoreHealthErrorResponse\"\x00\x12\x61\n\x0cReloadSchema\x12&.tabletmanagerdata.ReloadSchemaRequest\x1a\'.tabletmanagerdata.ReloadSchemaResponse\"\x00\x12j\n\x0fPreflightSchema\x12).tabletmanagerdata.PreflightSchemaRequest\x1a*.tabletmanagerdata.PreflightSchemaResponse\"\x00\x12^\n\x0b\x41pplySchema\x12%.tabletmanagerdata.ApplySchemaRequest\x1a&.tabletmanagerdata.ApplySchemaResponse\"\x00\x12p\n\x11\x45xecuteFetchAsDba\x12+.tabletmanagerdata.ExecuteFetchAsDbaRequest\x1a,.tabletmanagerdata.ExecuteFetchAsDbaResponse\"\x00\x12\x7f\n\x16\x45xecuteFetchAsAllPrivs\x12\x30.tabletmanagerdata.ExecuteFetchAsAllPrivsRequest\x1a\x31.tabletmanagerdata.ExecuteFetchAsAllPrivsResponse\"\x00\x12p\n\x11\x45xecuteFetchAsApp\x12+.tabletmanagerdata.ExecuteFetchAsAppRequest\x1a,.tabletmanagerdata.ExecuteFetchAsAppResponse\"\x00\x12^\n\x0bSlaveStatus\x12%.tabletmanagerdata.SlaveStatusRequest\x1a&.tabletmanagerdata.SlaveStatusResponse\"\x00\x12g\n\x0eMasterPosition\x12(.tabletmanagerdata.MasterPositionRequest\x1a).tabletmanagerdata.MasterPositionResponse\"\x00\x12X\n\tStopSlave\x12#.tabletmanagerdata.StopSlaveRequest\x1a$.tabletmanagerdata.StopSlaveResponse\"\x00\x12m\n\x10StopSlaveMinimum\x12*.tabletmanagerdata.StopSlaveMinimumRequest\x1a+.tabletmanagerdata.StopSlaveMinimumResponse\"\x00\x12[\n\nStartSlave\x12$.tabletmanagerdata.StartSlaveRequest\x1a%.tabletmanagerdata.StartSlaveResponse\"\x00\x12\x8b\x01\n\x1aTabletExternallyReparented\x12\x34.tabletmanagerdata.TabletExternallyReparentedRequest\x1a\x35.tabletmanagerdata.TabletExternallyReparentedResponse\"\x00\x12\x82\x01\n\x17TabletExternallyElected\x12\x31.tabletmanagerdata.TabletExternallyElectedRequest\x1a\x32.tabletmanagerdata.TabletExternallyElectedResponse\"\x00\x12X\n\tGetSlaves\x12#.tabletmanagerdata.GetSlavesRequest\x1a$.tabletmanagerdata.GetSlavesResponse\"\x00\x12j\n\x0fWaitBlpPosition\x12).tabletmanagerdata.WaitBlpPositionRequest\x1a*.tabletmanagerdata.WaitBlpPositionResponse\"\x00\x12R\n\x07StopBlp\x12!.tabletmanagerdata.StopBlpRequest\x1a\".tabletmanagerdata.StopBlpResponse\"\x00\x12U\n\x08StartBlp\x12\".tabletmanagerdata.StartBlpRequest\x1a#.tabletmanagerdata.StartBlpResponse\"\x00\x12^\n\x0bRunBlpUntil\x12%.tabletmanagerdata.RunBlpUntilRequest\x1a&.tabletmanagerdata.RunBlpUntilResponse\"\x00\x12m\n\x10ResetReplication\x12*.tabletmanagerdata.ResetReplicationRequest\x1a+.tabletmanagerdata.ResetReplicationResponse\"\x00\x12[\n\nInitMaster\x12$.tabletmanagerdata.InitMasterRequest\x1a%.tabletmanagerdata.InitMasterResponse\"\x00\x12\x82\x01\n\x17PopulateReparentJournal\x12\x31.tabletmanagerdata.PopulateReparentJournalRequest\x1a\x32.tabletmanagerdata.PopulateReparentJournalResponse\"\x00\x12X\n\tInitSlave\x12#.tabletmanagerdata.InitSlaveRequest\x1a$.tabletmanagerdata.InitSlaveResponse\"\x00\x12\x61\n\x0c\x44\x65moteMaster\x12&.tabletmanagerdata.DemoteMasterRequest\x1a\'.tabletmanagerdata.DemoteMasterResponse\"\x00\x12\x85\x01\n\x18PromoteSlaveWhenCaughtUp\x12\x32.tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest\x1a\x33.tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse\"\x00\x12m\n\x10SlaveWasPromoted\x12*.tabletmanagerdata.SlaveWasPromotedRequest\x1a+.tabletmanagerdata.SlaveWasPromotedResponse\"\x00\x12X\n\tSetMaster\x12#.tabletmanagerdata.SetMasterRequest\x1a$.tabletmanagerdata.SetMasterResponse\"\x00\x12p\n\x11SlaveWasRestarted\x12+.tabletmanagerdata.SlaveWasRestartedRequest\x1a,.tabletmanagerdata.SlaveWasRestartedResponse\"\x00\x12\x8e\x01\n\x1bStopReplicationAndGetStatus\x12\x35.tabletmanagerdata.StopReplicationAndGetStatusRequest\x1a\x36.tabletmanagerdata.StopReplicationAndGetStatusResponse\"\x00\x12\x61\n\x0cPromoteSlave\x12&.tabletmanagerdata.PromoteSlaveRequest\x1a\'.tabletmanagerdata.PromoteSlaveResponse\"\x00\x12Q\n\x06\x42\x61\x63kup\x12 .tabletmanagerdata.BackupRequest\x1a!.tabletmanagerdata.BackupResponse\"\x00\x30\x01\x12r\n\x11RestoreFromBackup\x12+.tabletmanagerdata.RestoreFromBackupRequest\x1a,.tabletmanagerdata.RestoreFromBackupResponse\"\x00\x30\x01\x62\x06proto3')
   ,
   dependencies=[tabletmanagerdata__pb2.DESCRIPTOR,])
+
+
+
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
+_TABLETMANAGER = _descriptor.ServiceDescriptor(
+  name='TabletManager',
+  full_name='tabletmanagerservice.TabletManager',
+  file=DESCRIPTOR,
+  index=0,
+  options=None,
+  serialized_start=78,
+  serialized_end=4458,
+  methods=[
+  _descriptor.MethodDescriptor(
+    name='Ping',
+    full_name='tabletmanagerservice.TabletManager.Ping',
+    index=0,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._PINGREQUEST,
+    output_type=tabletmanagerdata__pb2._PINGRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='Sleep',
+    full_name='tabletmanagerservice.TabletManager.Sleep',
+    index=1,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._SLEEPREQUEST,
+    output_type=tabletmanagerdata__pb2._SLEEPRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='ExecuteHook',
+    full_name='tabletmanagerservice.TabletManager.ExecuteHook',
+    index=2,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._EXECUTEHOOKREQUEST,
+    output_type=tabletmanagerdata__pb2._EXECUTEHOOKRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='GetSchema',
+    full_name='tabletmanagerservice.TabletManager.GetSchema',
+    index=3,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._GETSCHEMAREQUEST,
+    output_type=tabletmanagerdata__pb2._GETSCHEMARESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='GetPermissions',
+    full_name='tabletmanagerservice.TabletManager.GetPermissions',
+    index=4,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._GETPERMISSIONSREQUEST,
+    output_type=tabletmanagerdata__pb2._GETPERMISSIONSRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='SetReadOnly',
+    full_name='tabletmanagerservice.TabletManager.SetReadOnly',
+    index=5,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._SETREADONLYREQUEST,
+    output_type=tabletmanagerdata__pb2._SETREADONLYRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='SetReadWrite',
+    full_name='tabletmanagerservice.TabletManager.SetReadWrite',
+    index=6,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._SETREADWRITEREQUEST,
+    output_type=tabletmanagerdata__pb2._SETREADWRITERESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='ChangeType',
+    full_name='tabletmanagerservice.TabletManager.ChangeType',
+    index=7,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._CHANGETYPEREQUEST,
+    output_type=tabletmanagerdata__pb2._CHANGETYPERESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='RefreshState',
+    full_name='tabletmanagerservice.TabletManager.RefreshState',
+    index=8,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._REFRESHSTATEREQUEST,
+    output_type=tabletmanagerdata__pb2._REFRESHSTATERESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='RunHealthCheck',
+    full_name='tabletmanagerservice.TabletManager.RunHealthCheck',
+    index=9,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._RUNHEALTHCHECKREQUEST,
+    output_type=tabletmanagerdata__pb2._RUNHEALTHCHECKRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='IgnoreHealthError',
+    full_name='tabletmanagerservice.TabletManager.IgnoreHealthError',
+    index=10,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._IGNOREHEALTHERRORREQUEST,
+    output_type=tabletmanagerdata__pb2._IGNOREHEALTHERRORRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='ReloadSchema',
+    full_name='tabletmanagerservice.TabletManager.ReloadSchema',
+    index=11,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._RELOADSCHEMAREQUEST,
+    output_type=tabletmanagerdata__pb2._RELOADSCHEMARESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='PreflightSchema',
+    full_name='tabletmanagerservice.TabletManager.PreflightSchema',
+    index=12,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._PREFLIGHTSCHEMAREQUEST,
+    output_type=tabletmanagerdata__pb2._PREFLIGHTSCHEMARESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='ApplySchema',
+    full_name='tabletmanagerservice.TabletManager.ApplySchema',
+    index=13,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._APPLYSCHEMAREQUEST,
+    output_type=tabletmanagerdata__pb2._APPLYSCHEMARESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='ExecuteFetchAsDba',
+    full_name='tabletmanagerservice.TabletManager.ExecuteFetchAsDba',
+    index=14,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._EXECUTEFETCHASDBAREQUEST,
+    output_type=tabletmanagerdata__pb2._EXECUTEFETCHASDBARESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='ExecuteFetchAsAllPrivs',
+    full_name='tabletmanagerservice.TabletManager.ExecuteFetchAsAllPrivs',
+    index=15,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._EXECUTEFETCHASALLPRIVSREQUEST,
+    output_type=tabletmanagerdata__pb2._EXECUTEFETCHASALLPRIVSRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='ExecuteFetchAsApp',
+    full_name='tabletmanagerservice.TabletManager.ExecuteFetchAsApp',
+    index=16,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._EXECUTEFETCHASAPPREQUEST,
+    output_type=tabletmanagerdata__pb2._EXECUTEFETCHASAPPRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='SlaveStatus',
+    full_name='tabletmanagerservice.TabletManager.SlaveStatus',
+    index=17,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._SLAVESTATUSREQUEST,
+    output_type=tabletmanagerdata__pb2._SLAVESTATUSRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='MasterPosition',
+    full_name='tabletmanagerservice.TabletManager.MasterPosition',
+    index=18,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._MASTERPOSITIONREQUEST,
+    output_type=tabletmanagerdata__pb2._MASTERPOSITIONRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='StopSlave',
+    full_name='tabletmanagerservice.TabletManager.StopSlave',
+    index=19,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._STOPSLAVEREQUEST,
+    output_type=tabletmanagerdata__pb2._STOPSLAVERESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='StopSlaveMinimum',
+    full_name='tabletmanagerservice.TabletManager.StopSlaveMinimum',
+    index=20,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._STOPSLAVEMINIMUMREQUEST,
+    output_type=tabletmanagerdata__pb2._STOPSLAVEMINIMUMRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='StartSlave',
+    full_name='tabletmanagerservice.TabletManager.StartSlave',
+    index=21,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._STARTSLAVEREQUEST,
+    output_type=tabletmanagerdata__pb2._STARTSLAVERESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='TabletExternallyReparented',
+    full_name='tabletmanagerservice.TabletManager.TabletExternallyReparented',
+    index=22,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._TABLETEXTERNALLYREPARENTEDREQUEST,
+    output_type=tabletmanagerdata__pb2._TABLETEXTERNALLYREPARENTEDRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='TabletExternallyElected',
+    full_name='tabletmanagerservice.TabletManager.TabletExternallyElected',
+    index=23,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._TABLETEXTERNALLYELECTEDREQUEST,
+    output_type=tabletmanagerdata__pb2._TABLETEXTERNALLYELECTEDRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='GetSlaves',
+    full_name='tabletmanagerservice.TabletManager.GetSlaves',
+    index=24,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._GETSLAVESREQUEST,
+    output_type=tabletmanagerdata__pb2._GETSLAVESRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='WaitBlpPosition',
+    full_name='tabletmanagerservice.TabletManager.WaitBlpPosition',
+    index=25,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._WAITBLPPOSITIONREQUEST,
+    output_type=tabletmanagerdata__pb2._WAITBLPPOSITIONRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='StopBlp',
+    full_name='tabletmanagerservice.TabletManager.StopBlp',
+    index=26,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._STOPBLPREQUEST,
+    output_type=tabletmanagerdata__pb2._STOPBLPRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='StartBlp',
+    full_name='tabletmanagerservice.TabletManager.StartBlp',
+    index=27,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._STARTBLPREQUEST,
+    output_type=tabletmanagerdata__pb2._STARTBLPRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='RunBlpUntil',
+    full_name='tabletmanagerservice.TabletManager.RunBlpUntil',
+    index=28,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._RUNBLPUNTILREQUEST,
+    output_type=tabletmanagerdata__pb2._RUNBLPUNTILRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='ResetReplication',
+    full_name='tabletmanagerservice.TabletManager.ResetReplication',
+    index=29,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._RESETREPLICATIONREQUEST,
+    output_type=tabletmanagerdata__pb2._RESETREPLICATIONRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='InitMaster',
+    full_name='tabletmanagerservice.TabletManager.InitMaster',
+    index=30,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._INITMASTERREQUEST,
+    output_type=tabletmanagerdata__pb2._INITMASTERRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='PopulateReparentJournal',
+    full_name='tabletmanagerservice.TabletManager.PopulateReparentJournal',
+    index=31,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._POPULATEREPARENTJOURNALREQUEST,
+    output_type=tabletmanagerdata__pb2._POPULATEREPARENTJOURNALRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='InitSlave',
+    full_name='tabletmanagerservice.TabletManager.InitSlave',
+    index=32,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._INITSLAVEREQUEST,
+    output_type=tabletmanagerdata__pb2._INITSLAVERESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='DemoteMaster',
+    full_name='tabletmanagerservice.TabletManager.DemoteMaster',
+    index=33,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._DEMOTEMASTERREQUEST,
+    output_type=tabletmanagerdata__pb2._DEMOTEMASTERRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='PromoteSlaveWhenCaughtUp',
+    full_name='tabletmanagerservice.TabletManager.PromoteSlaveWhenCaughtUp',
+    index=34,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._PROMOTESLAVEWHENCAUGHTUPREQUEST,
+    output_type=tabletmanagerdata__pb2._PROMOTESLAVEWHENCAUGHTUPRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='SlaveWasPromoted',
+    full_name='tabletmanagerservice.TabletManager.SlaveWasPromoted',
+    index=35,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._SLAVEWASPROMOTEDREQUEST,
+    output_type=tabletmanagerdata__pb2._SLAVEWASPROMOTEDRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='SetMaster',
+    full_name='tabletmanagerservice.TabletManager.SetMaster',
+    index=36,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._SETMASTERREQUEST,
+    output_type=tabletmanagerdata__pb2._SETMASTERRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='SlaveWasRestarted',
+    full_name='tabletmanagerservice.TabletManager.SlaveWasRestarted',
+    index=37,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._SLAVEWASRESTARTEDREQUEST,
+    output_type=tabletmanagerdata__pb2._SLAVEWASRESTARTEDRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='StopReplicationAndGetStatus',
+    full_name='tabletmanagerservice.TabletManager.StopReplicationAndGetStatus',
+    index=38,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._STOPREPLICATIONANDGETSTATUSREQUEST,
+    output_type=tabletmanagerdata__pb2._STOPREPLICATIONANDGETSTATUSRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='PromoteSlave',
+    full_name='tabletmanagerservice.TabletManager.PromoteSlave',
+    index=39,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._PROMOTESLAVEREQUEST,
+    output_type=tabletmanagerdata__pb2._PROMOTESLAVERESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='Backup',
+    full_name='tabletmanagerservice.TabletManager.Backup',
+    index=40,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._BACKUPREQUEST,
+    output_type=tabletmanagerdata__pb2._BACKUPRESPONSE,
+    options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='RestoreFromBackup',
+    full_name='tabletmanagerservice.TabletManager.RestoreFromBackup',
+    index=41,
+    containing_service=None,
+    input_type=tabletmanagerdata__pb2._RESTOREFROMBACKUPREQUEST,
+    output_type=tabletmanagerdata__pb2._RESTOREFROMBACKUPRESPONSE,
+    options=None,
+  ),
+])
+_sym_db.RegisterServiceDescriptor(_TABLETMANAGER)
+
+DESCRIPTOR.services_by_name['TabletManager'] = _TABLETMANAGER
 
-
-import grpc
-from grpc.beta import implementations as beta_implementations
-from grpc.beta import interfaces as beta_interfaces
-from grpc.framework.common import cardinality
-from grpc.framework.interfaces.face import utilities as face_utilities
-
-
-class TabletManagerStub(object):
-  """TabletManager is a service definition for tabletmanagerdata.TabletManager.
-
-  Various read-only methods
-
-  """
-
-  def __init__(self, channel):
-    """Constructor.
-
-    Args:
-      channel: A grpc.Channel.
-    """
-    self.Ping = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/Ping',
-        request_serializer=tabletmanagerdata__pb2.PingRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.PingResponse.FromString,
-        )
-    self.Sleep = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/Sleep',
-        request_serializer=tabletmanagerdata__pb2.SleepRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.SleepResponse.FromString,
-        )
-    self.ExecuteHook = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/ExecuteHook',
-        request_serializer=tabletmanagerdata__pb2.ExecuteHookRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.ExecuteHookResponse.FromString,
-        )
-    self.GetSchema = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/GetSchema',
-        request_serializer=tabletmanagerdata__pb2.GetSchemaRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.GetSchemaResponse.FromString,
-        )
-    self.GetPermissions = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/GetPermissions',
-        request_serializer=tabletmanagerdata__pb2.GetPermissionsRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.GetPermissionsResponse.FromString,
-        )
-    self.SetReadOnly = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/SetReadOnly',
-        request_serializer=tabletmanagerdata__pb2.SetReadOnlyRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.SetReadOnlyResponse.FromString,
-        )
-    self.SetReadWrite = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/SetReadWrite',
-        request_serializer=tabletmanagerdata__pb2.SetReadWriteRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.SetReadWriteResponse.FromString,
-        )
-    self.ChangeType = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/ChangeType',
-        request_serializer=tabletmanagerdata__pb2.ChangeTypeRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.ChangeTypeResponse.FromString,
-        )
-    self.RefreshState = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/RefreshState',
-        request_serializer=tabletmanagerdata__pb2.RefreshStateRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.RefreshStateResponse.FromString,
-        )
-    self.RunHealthCheck = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/RunHealthCheck',
-        request_serializer=tabletmanagerdata__pb2.RunHealthCheckRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.RunHealthCheckResponse.FromString,
-        )
-    self.IgnoreHealthError = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/IgnoreHealthError',
-        request_serializer=tabletmanagerdata__pb2.IgnoreHealthErrorRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.IgnoreHealthErrorResponse.FromString,
-        )
-    self.ReloadSchema = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/ReloadSchema',
-        request_serializer=tabletmanagerdata__pb2.ReloadSchemaRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.ReloadSchemaResponse.FromString,
-        )
-    self.PreflightSchema = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/PreflightSchema',
-        request_serializer=tabletmanagerdata__pb2.PreflightSchemaRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.PreflightSchemaResponse.FromString,
-        )
-    self.ApplySchema = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/ApplySchema',
-        request_serializer=tabletmanagerdata__pb2.ApplySchemaRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.ApplySchemaResponse.FromString,
-        )
-    self.ExecuteFetchAsDba = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/ExecuteFetchAsDba',
-        request_serializer=tabletmanagerdata__pb2.ExecuteFetchAsDbaRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.ExecuteFetchAsDbaResponse.FromString,
-        )
-    self.ExecuteFetchAsAllPrivs = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/ExecuteFetchAsAllPrivs',
-        request_serializer=tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsResponse.FromString,
-        )
-    self.ExecuteFetchAsApp = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/ExecuteFetchAsApp',
-        request_serializer=tabletmanagerdata__pb2.ExecuteFetchAsAppRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.ExecuteFetchAsAppResponse.FromString,
-        )
-    self.SlaveStatus = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/SlaveStatus',
-        request_serializer=tabletmanagerdata__pb2.SlaveStatusRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.SlaveStatusResponse.FromString,
-        )
-    self.MasterPosition = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/MasterPosition',
-        request_serializer=tabletmanagerdata__pb2.MasterPositionRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.MasterPositionResponse.FromString,
-        )
-    self.StopSlave = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/StopSlave',
-        request_serializer=tabletmanagerdata__pb2.StopSlaveRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.StopSlaveResponse.FromString,
-        )
-    self.StopSlaveMinimum = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/StopSlaveMinimum',
-        request_serializer=tabletmanagerdata__pb2.StopSlaveMinimumRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.StopSlaveMinimumResponse.FromString,
-        )
-    self.StartSlave = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/StartSlave',
-        request_serializer=tabletmanagerdata__pb2.StartSlaveRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.StartSlaveResponse.FromString,
-        )
-    self.TabletExternallyReparented = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/TabletExternallyReparented',
-        request_serializer=tabletmanagerdata__pb2.TabletExternallyReparentedRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.TabletExternallyReparentedResponse.FromString,
-        )
-    self.TabletExternallyElected = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/TabletExternallyElected',
-        request_serializer=tabletmanagerdata__pb2.TabletExternallyElectedRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.TabletExternallyElectedResponse.FromString,
-        )
-    self.GetSlaves = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/GetSlaves',
-        request_serializer=tabletmanagerdata__pb2.GetSlavesRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.GetSlavesResponse.FromString,
-        )
-    self.WaitBlpPosition = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/WaitBlpPosition',
-        request_serializer=tabletmanagerdata__pb2.WaitBlpPositionRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.WaitBlpPositionResponse.FromString,
-        )
-    self.StopBlp = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/StopBlp',
-        request_serializer=tabletmanagerdata__pb2.StopBlpRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.StopBlpResponse.FromString,
-        )
-    self.StartBlp = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/StartBlp',
-        request_serializer=tabletmanagerdata__pb2.StartBlpRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.StartBlpResponse.FromString,
-        )
-    self.RunBlpUntil = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/RunBlpUntil',
-        request_serializer=tabletmanagerdata__pb2.RunBlpUntilRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.RunBlpUntilResponse.FromString,
-        )
-    self.ResetReplication = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/ResetReplication',
-        request_serializer=tabletmanagerdata__pb2.ResetReplicationRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.ResetReplicationResponse.FromString,
-        )
-    self.InitMaster = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/InitMaster',
-        request_serializer=tabletmanagerdata__pb2.InitMasterRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.InitMasterResponse.FromString,
-        )
-    self.PopulateReparentJournal = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/PopulateReparentJournal',
-        request_serializer=tabletmanagerdata__pb2.PopulateReparentJournalRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.PopulateReparentJournalResponse.FromString,
-        )
-    self.InitSlave = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/InitSlave',
-        request_serializer=tabletmanagerdata__pb2.InitSlaveRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.InitSlaveResponse.FromString,
-        )
-    self.DemoteMaster = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/DemoteMaster',
-        request_serializer=tabletmanagerdata__pb2.DemoteMasterRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.DemoteMasterResponse.FromString,
-        )
-    self.PromoteSlaveWhenCaughtUp = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/PromoteSlaveWhenCaughtUp',
-        request_serializer=tabletmanagerdata__pb2.PromoteSlaveWhenCaughtUpRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.PromoteSlaveWhenCaughtUpResponse.FromString,
-        )
-    self.SlaveWasPromoted = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/SlaveWasPromoted',
-        request_serializer=tabletmanagerdata__pb2.SlaveWasPromotedRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.SlaveWasPromotedResponse.FromString,
-        )
-    self.SetMaster = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/SetMaster',
-        request_serializer=tabletmanagerdata__pb2.SetMasterRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.SetMasterResponse.FromString,
-        )
-    self.SlaveWasRestarted = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/SlaveWasRestarted',
-        request_serializer=tabletmanagerdata__pb2.SlaveWasRestartedRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.SlaveWasRestartedResponse.FromString,
-        )
-    self.StopReplicationAndGetStatus = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/StopReplicationAndGetStatus',
-        request_serializer=tabletmanagerdata__pb2.StopReplicationAndGetStatusRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.StopReplicationAndGetStatusResponse.FromString,
-        )
-    self.PromoteSlave = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/PromoteSlave',
-        request_serializer=tabletmanagerdata__pb2.PromoteSlaveRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.PromoteSlaveResponse.FromString,
-        )
-    self.Backup = channel.unary_stream(
-        '/tabletmanagerservice.TabletManager/Backup',
-        request_serializer=tabletmanagerdata__pb2.BackupRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.BackupResponse.FromString,
-        )
-    self.RestoreFromBackup = channel.unary_stream(
-        '/tabletmanagerservice.TabletManager/RestoreFromBackup',
-        request_serializer=tabletmanagerdata__pb2.RestoreFromBackupRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.RestoreFromBackupResponse.FromString,
-        )
-
-
-class TabletManagerServicer(object):
-  """TabletManager is a service definition for tabletmanagerdata.TabletManager.
-
-  Various read-only methods
-
-  """
-
-  def Ping(self, request, context):
-    """Ping returns the input payload
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def Sleep(self, request, context):
-    """Sleep sleeps for the provided duration
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def ExecuteHook(self, request, context):
-    """ExecuteHook executes the hook remotely
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def GetSchema(self, request, context):
-    """GetSchema asks the tablet for its schema
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def GetPermissions(self, request, context):
-    """GetPermissions asks the tablet for its permissions
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def SetReadOnly(self, request, context):
-    """
-    Various read-write methods
-
-
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def SetReadWrite(self, request, context):
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def ChangeType(self, request, context):
-    """ChangeType asks the remote tablet to change its type
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def RefreshState(self, request, context):
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def RunHealthCheck(self, request, context):
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def IgnoreHealthError(self, request, context):
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def ReloadSchema(self, request, context):
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def PreflightSchema(self, request, context):
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def ApplySchema(self, request, context):
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def ExecuteFetchAsDba(self, request, context):
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def ExecuteFetchAsAllPrivs(self, request, context):
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def ExecuteFetchAsApp(self, request, context):
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def SlaveStatus(self, request, context):
-    """
-    Replication related methods
-
-
-    SlaveStatus returns the current slave status.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def MasterPosition(self, request, context):
-    """MasterPosition returns the current master position
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def StopSlave(self, request, context):
-    """StopSlave makes mysql stop its replication
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def StopSlaveMinimum(self, request, context):
-    """StopSlaveMinimum stops the mysql replication after it reaches
-    the provided minimum point
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def StartSlave(self, request, context):
-    """StartSlave starts the mysql replication
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def TabletExternallyReparented(self, request, context):
-    """TabletExternallyReparented tells a tablet that its underlying MySQL is
-    currently the master. It is only used in environments (tabletmanagerdata.such as Vitess+MoB)
-    in which MySQL is reparented by some agent external to Vitess, and then
-    that agent simply notifies Vitess.
-
-    This call is idempotent with respect to a single target tablet.
-    However, the tablet assumes there is a cooling-off period following the
-    initial external reparent from A to B, before this call is repeated on any
-    tablet other than B. This assumption is configurable with the vttablet flag
-    "finalize_external_reparent_timeout".
-
-    For more information, see the design doc at go/vt-fast-failover.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def TabletExternallyElected(self, request, context):
-    """TabletExternallyElected is an notification that may be sent in
-    anticipation of potentially later sending TabletExternallyReparented.
-    The tablet can use this extra lead time to prepare to react quickly if
-    TabletExternallyReparented does follow.
-
-    This call is effectively a no-op if it is not followed by a call to
-    TabletExternallyReparented, so the external agent doing the reparent can
-    still change its mind.
-
-    The agent does not need to wait for this call or cancel it before calling
-    TabletExternallyReparented if the external reparent operation finishes
-    before TabletExternallyElected returns.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def GetSlaves(self, request, context):
-    """GetSlaves asks for the list of mysql slaves
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def WaitBlpPosition(self, request, context):
-    """WaitBlpPosition tells the remote tablet to wait until it reaches
-    the specified binolg player position
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def StopBlp(self, request, context):
-    """StopBlp asks the tablet to stop all its binlog players,
-    and returns the current position for all of them
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def StartBlp(self, request, context):
-    """StartBlp asks the tablet to restart its binlog players
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def RunBlpUntil(self, request, context):
-    """RunBlpUntil asks the tablet to restart its binlog players
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def ResetReplication(self, request, context):
-    """
-    Reparenting related functions
-
-
-    ResetReplication makes the target not replicating
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def InitMaster(self, request, context):
-    """InitMaster initializes the tablet as a master
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def PopulateReparentJournal(self, request, context):
-    """PopulateReparentJournal tells the tablet to add an entry to its
-    reparent journal
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def InitSlave(self, request, context):
-    """InitSlave tells the tablet to reparent to the master unconditionnally
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def DemoteMaster(self, request, context):
-    """DemoteMaster tells the soon-to-be-former master it's gonna change
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def PromoteSlaveWhenCaughtUp(self, request, context):
-    """PromoteSlaveWhenCaughtUp tells the remote tablet to catch up,
-    and then be the master
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def SlaveWasPromoted(self, request, context):
-    """SlaveWasPromoted tells the remote tablet it is now the master
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def SetMaster(self, request, context):
-    """SetMaster tells the slave to reparent
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def SlaveWasRestarted(self, request, context):
-    """SlaveWasRestarted tells the remote tablet its master has changed
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def StopReplicationAndGetStatus(self, request, context):
-    """StopReplicationAndGetStatus stops MySQL replication, and returns the
-    replication status
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def PromoteSlave(self, request, context):
-    """PromoteSlave makes the slave the new master
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def Backup(self, request, context):
-    """
-    Backup related methods
-
-
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def RestoreFromBackup(self, request, context):
-    """RestoreFromBackup deletes all local data and restores it from the latest backup.
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-
-def add_TabletManagerServicer_to_server(servicer, server):
-  rpc_method_handlers = {
-      'Ping': grpc.unary_unary_rpc_method_handler(
-          servicer.Ping,
-          request_deserializer=tabletmanagerdata__pb2.PingRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.PingResponse.SerializeToString,
-      ),
-      'Sleep': grpc.unary_unary_rpc_method_handler(
-          servicer.Sleep,
-          request_deserializer=tabletmanagerdata__pb2.SleepRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.SleepResponse.SerializeToString,
-      ),
-      'ExecuteHook': grpc.unary_unary_rpc_method_handler(
-          servicer.ExecuteHook,
-          request_deserializer=tabletmanagerdata__pb2.ExecuteHookRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.ExecuteHookResponse.SerializeToString,
-      ),
-      'GetSchema': grpc.unary_unary_rpc_method_handler(
-          servicer.GetSchema,
-          request_deserializer=tabletmanagerdata__pb2.GetSchemaRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.GetSchemaResponse.SerializeToString,
-      ),
-      'GetPermissions': grpc.unary_unary_rpc_method_handler(
-          servicer.GetPermissions,
-          request_deserializer=tabletmanagerdata__pb2.GetPermissionsRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.GetPermissionsResponse.SerializeToString,
-      ),
-      'SetReadOnly': grpc.unary_unary_rpc_method_handler(
-          servicer.SetReadOnly,
-          request_deserializer=tabletmanagerdata__pb2.SetReadOnlyRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.SetReadOnlyResponse.SerializeToString,
-      ),
-      'SetReadWrite': grpc.unary_unary_rpc_method_handler(
-          servicer.SetReadWrite,
-          request_deserializer=tabletmanagerdata__pb2.SetReadWriteRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.SetReadWriteResponse.SerializeToString,
-      ),
-      'ChangeType': grpc.unary_unary_rpc_method_handler(
-          servicer.ChangeType,
-          request_deserializer=tabletmanagerdata__pb2.ChangeTypeRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.ChangeTypeResponse.SerializeToString,
-      ),
-      'RefreshState': grpc.unary_unary_rpc_method_handler(
-          servicer.RefreshState,
-          request_deserializer=tabletmanagerdata__pb2.RefreshStateRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.RefreshStateResponse.SerializeToString,
-      ),
-      'RunHealthCheck': grpc.unary_unary_rpc_method_handler(
-          servicer.RunHealthCheck,
-          request_deserializer=tabletmanagerdata__pb2.RunHealthCheckRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.RunHealthCheckResponse.SerializeToString,
-      ),
-      'IgnoreHealthError': grpc.unary_unary_rpc_method_handler(
-          servicer.IgnoreHealthError,
-          request_deserializer=tabletmanagerdata__pb2.IgnoreHealthErrorRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.IgnoreHealthErrorResponse.SerializeToString,
-      ),
-      'ReloadSchema': grpc.unary_unary_rpc_method_handler(
-          servicer.ReloadSchema,
-          request_deserializer=tabletmanagerdata__pb2.ReloadSchemaRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.ReloadSchemaResponse.SerializeToString,
-      ),
-      'PreflightSchema': grpc.unary_unary_rpc_method_handler(
-          servicer.PreflightSchema,
-          request_deserializer=tabletmanagerdata__pb2.PreflightSchemaRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.PreflightSchemaResponse.SerializeToString,
-      ),
-      'ApplySchema': grpc.unary_unary_rpc_method_handler(
-          servicer.ApplySchema,
-          request_deserializer=tabletmanagerdata__pb2.ApplySchemaRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.ApplySchemaResponse.SerializeToString,
-      ),
-      'ExecuteFetchAsDba': grpc.unary_unary_rpc_method_handler(
-          servicer.ExecuteFetchAsDba,
-          request_deserializer=tabletmanagerdata__pb2.ExecuteFetchAsDbaRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.ExecuteFetchAsDbaResponse.SerializeToString,
-      ),
-      'ExecuteFetchAsAllPrivs': grpc.unary_unary_rpc_method_handler(
-          servicer.ExecuteFetchAsAllPrivs,
-          request_deserializer=tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsResponse.SerializeToString,
-      ),
-      'ExecuteFetchAsApp': grpc.unary_unary_rpc_method_handler(
-          servicer.ExecuteFetchAsApp,
-          request_deserializer=tabletmanagerdata__pb2.ExecuteFetchAsAppRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.ExecuteFetchAsAppResponse.SerializeToString,
-      ),
-      'SlaveStatus': grpc.unary_unary_rpc_method_handler(
-          servicer.SlaveStatus,
-          request_deserializer=tabletmanagerdata__pb2.SlaveStatusRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.SlaveStatusResponse.SerializeToString,
-      ),
-      'MasterPosition': grpc.unary_unary_rpc_method_handler(
-          servicer.MasterPosition,
-          request_deserializer=tabletmanagerdata__pb2.MasterPositionRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.MasterPositionResponse.SerializeToString,
-      ),
-      'StopSlave': grpc.unary_unary_rpc_method_handler(
-          servicer.StopSlave,
-          request_deserializer=tabletmanagerdata__pb2.StopSlaveRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.StopSlaveResponse.SerializeToString,
-      ),
-      'StopSlaveMinimum': grpc.unary_unary_rpc_method_handler(
-          servicer.StopSlaveMinimum,
-          request_deserializer=tabletmanagerdata__pb2.StopSlaveMinimumRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.StopSlaveMinimumResponse.SerializeToString,
-      ),
-      'StartSlave': grpc.unary_unary_rpc_method_handler(
-          servicer.StartSlave,
-          request_deserializer=tabletmanagerdata__pb2.StartSlaveRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.StartSlaveResponse.SerializeToString,
-      ),
-      'TabletExternallyReparented': grpc.unary_unary_rpc_method_handler(
-          servicer.TabletExternallyReparented,
-          request_deserializer=tabletmanagerdata__pb2.TabletExternallyReparentedRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.TabletExternallyReparentedResponse.SerializeToString,
-      ),
-      'TabletExternallyElected': grpc.unary_unary_rpc_method_handler(
-          servicer.TabletExternallyElected,
-          request_deserializer=tabletmanagerdata__pb2.TabletExternallyElectedRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.TabletExternallyElectedResponse.SerializeToString,
-      ),
-      'GetSlaves': grpc.unary_unary_rpc_method_handler(
-          servicer.GetSlaves,
-          request_deserializer=tabletmanagerdata__pb2.GetSlavesRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.GetSlavesResponse.SerializeToString,
-      ),
-      'WaitBlpPosition': grpc.unary_unary_rpc_method_handler(
-          servicer.WaitBlpPosition,
-          request_deserializer=tabletmanagerdata__pb2.WaitBlpPositionRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.WaitBlpPositionResponse.SerializeToString,
-      ),
-      'StopBlp': grpc.unary_unary_rpc_method_handler(
-          servicer.StopBlp,
-          request_deserializer=tabletmanagerdata__pb2.StopBlpRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.StopBlpResponse.SerializeToString,
-      ),
-      'StartBlp': grpc.unary_unary_rpc_method_handler(
-          servicer.StartBlp,
-          request_deserializer=tabletmanagerdata__pb2.StartBlpRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.StartBlpResponse.SerializeToString,
-      ),
-      'RunBlpUntil': grpc.unary_unary_rpc_method_handler(
-          servicer.RunBlpUntil,
-          request_deserializer=tabletmanagerdata__pb2.RunBlpUntilRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.RunBlpUntilResponse.SerializeToString,
-      ),
-      'ResetReplication': grpc.unary_unary_rpc_method_handler(
-          servicer.ResetReplication,
-          request_deserializer=tabletmanagerdata__pb2.ResetReplicationRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.ResetReplicationResponse.SerializeToString,
-      ),
-      'InitMaster': grpc.unary_unary_rpc_method_handler(
-          servicer.InitMaster,
-          request_deserializer=tabletmanagerdata__pb2.InitMasterRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.InitMasterResponse.SerializeToString,
-      ),
-      'PopulateReparentJournal': grpc.unary_unary_rpc_method_handler(
-          servicer.PopulateReparentJournal,
-          request_deserializer=tabletmanagerdata__pb2.PopulateReparentJournalRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.PopulateReparentJournalResponse.SerializeToString,
-      ),
-      'InitSlave': grpc.unary_unary_rpc_method_handler(
-          servicer.InitSlave,
-          request_deserializer=tabletmanagerdata__pb2.InitSlaveRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.InitSlaveResponse.SerializeToString,
-      ),
-      'DemoteMaster': grpc.unary_unary_rpc_method_handler(
-          servicer.DemoteMaster,
-          request_deserializer=tabletmanagerdata__pb2.DemoteMasterRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.DemoteMasterResponse.SerializeToString,
-      ),
-      'PromoteSlaveWhenCaughtUp': grpc.unary_unary_rpc_method_handler(
-          servicer.PromoteSlaveWhenCaughtUp,
-          request_deserializer=tabletmanagerdata__pb2.PromoteSlaveWhenCaughtUpRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.PromoteSlaveWhenCaughtUpResponse.SerializeToString,
-      ),
-      'SlaveWasPromoted': grpc.unary_unary_rpc_method_handler(
-          servicer.SlaveWasPromoted,
-          request_deserializer=tabletmanagerdata__pb2.SlaveWasPromotedRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.SlaveWasPromotedResponse.SerializeToString,
-      ),
-      'SetMaster': grpc.unary_unary_rpc_method_handler(
-          servicer.SetMaster,
-          request_deserializer=tabletmanagerdata__pb2.SetMasterRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.SetMasterResponse.SerializeToString,
-      ),
-      'SlaveWasRestarted': grpc.unary_unary_rpc_method_handler(
-          servicer.SlaveWasRestarted,
-          request_deserializer=tabletmanagerdata__pb2.SlaveWasRestartedRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.SlaveWasRestartedResponse.SerializeToString,
-      ),
-      'StopReplicationAndGetStatus': grpc.unary_unary_rpc_method_handler(
-          servicer.StopReplicationAndGetStatus,
-          request_deserializer=tabletmanagerdata__pb2.StopReplicationAndGetStatusRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.StopReplicationAndGetStatusResponse.SerializeToString,
-      ),
-      'PromoteSlave': grpc.unary_unary_rpc_method_handler(
-          servicer.PromoteSlave,
-          request_deserializer=tabletmanagerdata__pb2.PromoteSlaveRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.PromoteSlaveResponse.SerializeToString,
-      ),
-      'Backup': grpc.unary_stream_rpc_method_handler(
-          servicer.Backup,
-          request_deserializer=tabletmanagerdata__pb2.BackupRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.BackupResponse.SerializeToString,
-      ),
-      'RestoreFromBackup': grpc.unary_stream_rpc_method_handler(
-          servicer.RestoreFromBackup,
-          request_deserializer=tabletmanagerdata__pb2.RestoreFromBackupRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.RestoreFromBackupResponse.SerializeToString,
-      ),
-  }
-  generic_handler = grpc.method_handlers_generic_handler(
-      'tabletmanagerservice.TabletManager', rpc_method_handlers)
-  server.add_generic_rpc_handlers((generic_handler,))
-
-
-class BetaTabletManagerServicer(object):
-  """TabletManager is a service definition for tabletmanagerdata.TabletManager.
-
-  Various read-only methods
-
-  """
-  def Ping(self, request, context):
-    """Ping returns the input payload
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def Sleep(self, request, context):
-    """Sleep sleeps for the provided duration
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def ExecuteHook(self, request, context):
-    """ExecuteHook executes the hook remotely
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def GetSchema(self, request, context):
-    """GetSchema asks the tablet for its schema
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def GetPermissions(self, request, context):
-    """GetPermissions asks the tablet for its permissions
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def SetReadOnly(self, request, context):
-    """
-    Various read-write methods
-
-
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def SetReadWrite(self, request, context):
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def ChangeType(self, request, context):
-    """ChangeType asks the remote tablet to change its type
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def RefreshState(self, request, context):
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def RunHealthCheck(self, request, context):
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def IgnoreHealthError(self, request, context):
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def ReloadSchema(self, request, context):
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def PreflightSchema(self, request, context):
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def ApplySchema(self, request, context):
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def ExecuteFetchAsDba(self, request, context):
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def ExecuteFetchAsAllPrivs(self, request, context):
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def ExecuteFetchAsApp(self, request, context):
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def SlaveStatus(self, request, context):
-    """
-    Replication related methods
-
-
-    SlaveStatus returns the current slave status.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def MasterPosition(self, request, context):
-    """MasterPosition returns the current master position
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def StopSlave(self, request, context):
-    """StopSlave makes mysql stop its replication
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def StopSlaveMinimum(self, request, context):
-    """StopSlaveMinimum stops the mysql replication after it reaches
-    the provided minimum point
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def StartSlave(self, request, context):
-    """StartSlave starts the mysql replication
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def TabletExternallyReparented(self, request, context):
-    """TabletExternallyReparented tells a tablet that its underlying MySQL is
-    currently the master. It is only used in environments (tabletmanagerdata.such as Vitess+MoB)
-    in which MySQL is reparented by some agent external to Vitess, and then
-    that agent simply notifies Vitess.
-
-    This call is idempotent with respect to a single target tablet.
-    However, the tablet assumes there is a cooling-off period following the
-    initial external reparent from A to B, before this call is repeated on any
-    tablet other than B. This assumption is configurable with the vttablet flag
-    "finalize_external_reparent_timeout".
-
-    For more information, see the design doc at go/vt-fast-failover.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def TabletExternallyElected(self, request, context):
-    """TabletExternallyElected is an notification that may be sent in
-    anticipation of potentially later sending TabletExternallyReparented.
-    The tablet can use this extra lead time to prepare to react quickly if
-    TabletExternallyReparented does follow.
-
-    This call is effectively a no-op if it is not followed by a call to
-    TabletExternallyReparented, so the external agent doing the reparent can
-    still change its mind.
-
-    The agent does not need to wait for this call or cancel it before calling
-    TabletExternallyReparented if the external reparent operation finishes
-    before TabletExternallyElected returns.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def GetSlaves(self, request, context):
-    """GetSlaves asks for the list of mysql slaves
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def WaitBlpPosition(self, request, context):
-    """WaitBlpPosition tells the remote tablet to wait until it reaches
-    the specified binolg player position
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def StopBlp(self, request, context):
-    """StopBlp asks the tablet to stop all its binlog players,
-    and returns the current position for all of them
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def StartBlp(self, request, context):
-    """StartBlp asks the tablet to restart its binlog players
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def RunBlpUntil(self, request, context):
-    """RunBlpUntil asks the tablet to restart its binlog players
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def ResetReplication(self, request, context):
-    """
-    Reparenting related functions
-
-
-    ResetReplication makes the target not replicating
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def InitMaster(self, request, context):
-    """InitMaster initializes the tablet as a master
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def PopulateReparentJournal(self, request, context):
-    """PopulateReparentJournal tells the tablet to add an entry to its
-    reparent journal
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def InitSlave(self, request, context):
-    """InitSlave tells the tablet to reparent to the master unconditionnally
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def DemoteMaster(self, request, context):
-    """DemoteMaster tells the soon-to-be-former master it's gonna change
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def PromoteSlaveWhenCaughtUp(self, request, context):
-    """PromoteSlaveWhenCaughtUp tells the remote tablet to catch up,
-    and then be the master
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def SlaveWasPromoted(self, request, context):
-    """SlaveWasPromoted tells the remote tablet it is now the master
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def SetMaster(self, request, context):
-    """SetMaster tells the slave to reparent
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def SlaveWasRestarted(self, request, context):
-    """SlaveWasRestarted tells the remote tablet its master has changed
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def StopReplicationAndGetStatus(self, request, context):
-    """StopReplicationAndGetStatus stops MySQL replication, and returns the
-    replication status
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def PromoteSlave(self, request, context):
-    """PromoteSlave makes the slave the new master
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def Backup(self, request, context):
-    """
-    Backup related methods
-
-
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-  def RestoreFromBackup(self, request, context):
-    """RestoreFromBackup deletes all local data and restores it from the latest backup.
-    """
-    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
-
-
-class BetaTabletManagerStub(object):
-  """TabletManager is a service definition for tabletmanagerdata.TabletManager.
-
-  Various read-only methods
-
-  """
-  def Ping(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """Ping returns the input payload
-    """
-    raise NotImplementedError()
-  Ping.future = None
-  def Sleep(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """Sleep sleeps for the provided duration
-    """
-    raise NotImplementedError()
-  Sleep.future = None
-  def ExecuteHook(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """ExecuteHook executes the hook remotely
-    """
-    raise NotImplementedError()
-  ExecuteHook.future = None
-  def GetSchema(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """GetSchema asks the tablet for its schema
-    """
-    raise NotImplementedError()
-  GetSchema.future = None
-  def GetPermissions(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """GetPermissions asks the tablet for its permissions
-    """
-    raise NotImplementedError()
-  GetPermissions.future = None
-  def SetReadOnly(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """
-    Various read-write methods
-
-
-    """
-    raise NotImplementedError()
-  SetReadOnly.future = None
-  def SetReadWrite(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    raise NotImplementedError()
-  SetReadWrite.future = None
-  def ChangeType(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """ChangeType asks the remote tablet to change its type
-    """
-    raise NotImplementedError()
-  ChangeType.future = None
-  def RefreshState(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    raise NotImplementedError()
-  RefreshState.future = None
-  def RunHealthCheck(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    raise NotImplementedError()
-  RunHealthCheck.future = None
-  def IgnoreHealthError(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    raise NotImplementedError()
-  IgnoreHealthError.future = None
-  def ReloadSchema(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    raise NotImplementedError()
-  ReloadSchema.future = None
-  def PreflightSchema(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    raise NotImplementedError()
-  PreflightSchema.future = None
-  def ApplySchema(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    raise NotImplementedError()
-  ApplySchema.future = None
-  def ExecuteFetchAsDba(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    raise NotImplementedError()
-  ExecuteFetchAsDba.future = None
-  def ExecuteFetchAsAllPrivs(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    raise NotImplementedError()
-  ExecuteFetchAsAllPrivs.future = None
-  def ExecuteFetchAsApp(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    raise NotImplementedError()
-  ExecuteFetchAsApp.future = None
-  def SlaveStatus(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """
-    Replication related methods
-
-
-    SlaveStatus returns the current slave status.
-    """
-    raise NotImplementedError()
-  SlaveStatus.future = None
-  def MasterPosition(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """MasterPosition returns the current master position
-    """
-    raise NotImplementedError()
-  MasterPosition.future = None
-  def StopSlave(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """StopSlave makes mysql stop its replication
-    """
-    raise NotImplementedError()
-  StopSlave.future = None
-  def StopSlaveMinimum(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """StopSlaveMinimum stops the mysql replication after it reaches
-    the provided minimum point
-    """
-    raise NotImplementedError()
-  StopSlaveMinimum.future = None
-  def StartSlave(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """StartSlave starts the mysql replication
-    """
-    raise NotImplementedError()
-  StartSlave.future = None
-  def TabletExternallyReparented(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """TabletExternallyReparented tells a tablet that its underlying MySQL is
-    currently the master. It is only used in environments (tabletmanagerdata.such as Vitess+MoB)
-    in which MySQL is reparented by some agent external to Vitess, and then
-    that agent simply notifies Vitess.
-
-    This call is idempotent with respect to a single target tablet.
-    However, the tablet assumes there is a cooling-off period following the
-    initial external reparent from A to B, before this call is repeated on any
-    tablet other than B. This assumption is configurable with the vttablet flag
-    "finalize_external_reparent_timeout".
-
-    For more information, see the design doc at go/vt-fast-failover.
-    """
-    raise NotImplementedError()
-  TabletExternallyReparented.future = None
-  def TabletExternallyElected(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """TabletExternallyElected is an notification that may be sent in
-    anticipation of potentially later sending TabletExternallyReparented.
-    The tablet can use this extra lead time to prepare to react quickly if
-    TabletExternallyReparented does follow.
-
-    This call is effectively a no-op if it is not followed by a call to
-    TabletExternallyReparented, so the external agent doing the reparent can
-    still change its mind.
-
-    The agent does not need to wait for this call or cancel it before calling
-    TabletExternallyReparented if the external reparent operation finishes
-    before TabletExternallyElected returns.
-    """
-    raise NotImplementedError()
-  TabletExternallyElected.future = None
-  def GetSlaves(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """GetSlaves asks for the list of mysql slaves
-    """
-    raise NotImplementedError()
-  GetSlaves.future = None
-  def WaitBlpPosition(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """WaitBlpPosition tells the remote tablet to wait until it reaches
-    the specified binolg player position
-    """
-    raise NotImplementedError()
-  WaitBlpPosition.future = None
-  def StopBlp(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """StopBlp asks the tablet to stop all its binlog players,
-    and returns the current position for all of them
-    """
-    raise NotImplementedError()
-  StopBlp.future = None
-  def StartBlp(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """StartBlp asks the tablet to restart its binlog players
-    """
-    raise NotImplementedError()
-  StartBlp.future = None
-  def RunBlpUntil(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """RunBlpUntil asks the tablet to restart its binlog players
-    """
-    raise NotImplementedError()
-  RunBlpUntil.future = None
-  def ResetReplication(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """
-    Reparenting related functions
-
-
-    ResetReplication makes the target not replicating
-    """
-    raise NotImplementedError()
-  ResetReplication.future = None
-  def InitMaster(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """InitMaster initializes the tablet as a master
-    """
-    raise NotImplementedError()
-  InitMaster.future = None
-  def PopulateReparentJournal(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """PopulateReparentJournal tells the tablet to add an entry to its
-    reparent journal
-    """
-    raise NotImplementedError()
-  PopulateReparentJournal.future = None
-  def InitSlave(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """InitSlave tells the tablet to reparent to the master unconditionnally
-    """
-    raise NotImplementedError()
-  InitSlave.future = None
-  def DemoteMaster(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """DemoteMaster tells the soon-to-be-former master it's gonna change
-    """
-    raise NotImplementedError()
-  DemoteMaster.future = None
-  def PromoteSlaveWhenCaughtUp(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """PromoteSlaveWhenCaughtUp tells the remote tablet to catch up,
-    and then be the master
-    """
-    raise NotImplementedError()
-  PromoteSlaveWhenCaughtUp.future = None
-  def SlaveWasPromoted(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """SlaveWasPromoted tells the remote tablet it is now the master
-    """
-    raise NotImplementedError()
-  SlaveWasPromoted.future = None
-  def SetMaster(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """SetMaster tells the slave to reparent
-    """
-    raise NotImplementedError()
-  SetMaster.future = None
-  def SlaveWasRestarted(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """SlaveWasRestarted tells the remote tablet its master has changed
-    """
-    raise NotImplementedError()
-  SlaveWasRestarted.future = None
-  def StopReplicationAndGetStatus(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """StopReplicationAndGetStatus stops MySQL replication, and returns the
-    replication status
-    """
-    raise NotImplementedError()
-  StopReplicationAndGetStatus.future = None
-  def PromoteSlave(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """PromoteSlave makes the slave the new master
-    """
-    raise NotImplementedError()
-  PromoteSlave.future = None
-  def Backup(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """
-    Backup related methods
-
-
-    """
-    raise NotImplementedError()
-  def RestoreFromBackup(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
-    """RestoreFromBackup deletes all local data and restores it from the latest backup.
-    """
-    raise NotImplementedError()
-
-
-def beta_create_TabletManager_server(servicer, pool=None, pool_size=None, default_timeout=None, maximum_timeout=None):
-  request_deserializers = {
-    ('tabletmanagerservice.TabletManager', 'ApplySchema'): tabletmanagerdata__pb2.ApplySchemaRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'Backup'): tabletmanagerdata__pb2.BackupRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'ChangeType'): tabletmanagerdata__pb2.ChangeTypeRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'DemoteMaster'): tabletmanagerdata__pb2.DemoteMasterRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsAllPrivs'): tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsApp'): tabletmanagerdata__pb2.ExecuteFetchAsAppRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsDba'): tabletmanagerdata__pb2.ExecuteFetchAsDbaRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteHook'): tabletmanagerdata__pb2.ExecuteHookRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'GetPermissions'): tabletmanagerdata__pb2.GetPermissionsRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'GetSchema'): tabletmanagerdata__pb2.GetSchemaRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'GetSlaves'): tabletmanagerdata__pb2.GetSlavesRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'IgnoreHealthError'): tabletmanagerdata__pb2.IgnoreHealthErrorRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'InitMaster'): tabletmanagerdata__pb2.InitMasterRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'InitSlave'): tabletmanagerdata__pb2.InitSlaveRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'MasterPosition'): tabletmanagerdata__pb2.MasterPositionRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'Ping'): tabletmanagerdata__pb2.PingRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'PopulateReparentJournal'): tabletmanagerdata__pb2.PopulateReparentJournalRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'PreflightSchema'): tabletmanagerdata__pb2.PreflightSchemaRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'PromoteSlave'): tabletmanagerdata__pb2.PromoteSlaveRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'PromoteSlaveWhenCaughtUp'): tabletmanagerdata__pb2.PromoteSlaveWhenCaughtUpRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'RefreshState'): tabletmanagerdata__pb2.RefreshStateRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'ReloadSchema'): tabletmanagerdata__pb2.ReloadSchemaRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'ResetReplication'): tabletmanagerdata__pb2.ResetReplicationRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'RestoreFromBackup'): tabletmanagerdata__pb2.RestoreFromBackupRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'RunBlpUntil'): tabletmanagerdata__pb2.RunBlpUntilRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'RunHealthCheck'): tabletmanagerdata__pb2.RunHealthCheckRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'SetMaster'): tabletmanagerdata__pb2.SetMasterRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'SetReadOnly'): tabletmanagerdata__pb2.SetReadOnlyRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'SetReadWrite'): tabletmanagerdata__pb2.SetReadWriteRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'SlaveStatus'): tabletmanagerdata__pb2.SlaveStatusRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'SlaveWasPromoted'): tabletmanagerdata__pb2.SlaveWasPromotedRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'SlaveWasRestarted'): tabletmanagerdata__pb2.SlaveWasRestartedRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'Sleep'): tabletmanagerdata__pb2.SleepRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'StartBlp'): tabletmanagerdata__pb2.StartBlpRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'StartSlave'): tabletmanagerdata__pb2.StartSlaveRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'StopBlp'): tabletmanagerdata__pb2.StopBlpRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'StopReplicationAndGetStatus'): tabletmanagerdata__pb2.StopReplicationAndGetStatusRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'StopSlave'): tabletmanagerdata__pb2.StopSlaveRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'StopSlaveMinimum'): tabletmanagerdata__pb2.StopSlaveMinimumRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'TabletExternallyElected'): tabletmanagerdata__pb2.TabletExternallyElectedRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'TabletExternallyReparented'): tabletmanagerdata__pb2.TabletExternallyReparentedRequest.FromString,
-    ('tabletmanagerservice.TabletManager', 'WaitBlpPosition'): tabletmanagerdata__pb2.WaitBlpPositionRequest.FromString,
-  }
-  response_serializers = {
-    ('tabletmanagerservice.TabletManager', 'ApplySchema'): tabletmanagerdata__pb2.ApplySchemaResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'Backup'): tabletmanagerdata__pb2.BackupResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ChangeType'): tabletmanagerdata__pb2.ChangeTypeResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'DemoteMaster'): tabletmanagerdata__pb2.DemoteMasterResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsAllPrivs'): tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsApp'): tabletmanagerdata__pb2.ExecuteFetchAsAppResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsDba'): tabletmanagerdata__pb2.ExecuteFetchAsDbaResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteHook'): tabletmanagerdata__pb2.ExecuteHookResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'GetPermissions'): tabletmanagerdata__pb2.GetPermissionsResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'GetSchema'): tabletmanagerdata__pb2.GetSchemaResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'GetSlaves'): tabletmanagerdata__pb2.GetSlavesResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'IgnoreHealthError'): tabletmanagerdata__pb2.IgnoreHealthErrorResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'InitMaster'): tabletmanagerdata__pb2.InitMasterResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'InitSlave'): tabletmanagerdata__pb2.InitSlaveResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'MasterPosition'): tabletmanagerdata__pb2.MasterPositionResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'Ping'): tabletmanagerdata__pb2.PingResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'PopulateReparentJournal'): tabletmanagerdata__pb2.PopulateReparentJournalResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'PreflightSchema'): tabletmanagerdata__pb2.PreflightSchemaResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'PromoteSlave'): tabletmanagerdata__pb2.PromoteSlaveResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'PromoteSlaveWhenCaughtUp'): tabletmanagerdata__pb2.PromoteSlaveWhenCaughtUpResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'RefreshState'): tabletmanagerdata__pb2.RefreshStateResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ReloadSchema'): tabletmanagerdata__pb2.ReloadSchemaResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ResetReplication'): tabletmanagerdata__pb2.ResetReplicationResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'RestoreFromBackup'): tabletmanagerdata__pb2.RestoreFromBackupResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'RunBlpUntil'): tabletmanagerdata__pb2.RunBlpUntilResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'RunHealthCheck'): tabletmanagerdata__pb2.RunHealthCheckResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'SetMaster'): tabletmanagerdata__pb2.SetMasterResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'SetReadOnly'): tabletmanagerdata__pb2.SetReadOnlyResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'SetReadWrite'): tabletmanagerdata__pb2.SetReadWriteResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'SlaveStatus'): tabletmanagerdata__pb2.SlaveStatusResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'SlaveWasPromoted'): tabletmanagerdata__pb2.SlaveWasPromotedResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'SlaveWasRestarted'): tabletmanagerdata__pb2.SlaveWasRestartedResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'Sleep'): tabletmanagerdata__pb2.SleepResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'StartBlp'): tabletmanagerdata__pb2.StartBlpResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'StartSlave'): tabletmanagerdata__pb2.StartSlaveResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'StopBlp'): tabletmanagerdata__pb2.StopBlpResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'StopReplicationAndGetStatus'): tabletmanagerdata__pb2.StopReplicationAndGetStatusResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'StopSlave'): tabletmanagerdata__pb2.StopSlaveResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'StopSlaveMinimum'): tabletmanagerdata__pb2.StopSlaveMinimumResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'TabletExternallyElected'): tabletmanagerdata__pb2.TabletExternallyElectedResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'TabletExternallyReparented'): tabletmanagerdata__pb2.TabletExternallyReparentedResponse.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'WaitBlpPosition'): tabletmanagerdata__pb2.WaitBlpPositionResponse.SerializeToString,
-  }
-  method_implementations = {
-    ('tabletmanagerservice.TabletManager', 'ApplySchema'): face_utilities.unary_unary_inline(servicer.ApplySchema),
-    ('tabletmanagerservice.TabletManager', 'Backup'): face_utilities.unary_stream_inline(servicer.Backup),
-    ('tabletmanagerservice.TabletManager', 'ChangeType'): face_utilities.unary_unary_inline(servicer.ChangeType),
-    ('tabletmanagerservice.TabletManager', 'DemoteMaster'): face_utilities.unary_unary_inline(servicer.DemoteMaster),
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsAllPrivs'): face_utilities.unary_unary_inline(servicer.ExecuteFetchAsAllPrivs),
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsApp'): face_utilities.unary_unary_inline(servicer.ExecuteFetchAsApp),
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsDba'): face_utilities.unary_unary_inline(servicer.ExecuteFetchAsDba),
-    ('tabletmanagerservice.TabletManager', 'ExecuteHook'): face_utilities.unary_unary_inline(servicer.ExecuteHook),
-    ('tabletmanagerservice.TabletManager', 'GetPermissions'): face_utilities.unary_unary_inline(servicer.GetPermissions),
-    ('tabletmanagerservice.TabletManager', 'GetSchema'): face_utilities.unary_unary_inline(servicer.GetSchema),
-    ('tabletmanagerservice.TabletManager', 'GetSlaves'): face_utilities.unary_unary_inline(servicer.GetSlaves),
-    ('tabletmanagerservice.TabletManager', 'IgnoreHealthError'): face_utilities.unary_unary_inline(servicer.IgnoreHealthError),
-    ('tabletmanagerservice.TabletManager', 'InitMaster'): face_utilities.unary_unary_inline(servicer.InitMaster),
-    ('tabletmanagerservice.TabletManager', 'InitSlave'): face_utilities.unary_unary_inline(servicer.InitSlave),
-    ('tabletmanagerservice.TabletManager', 'MasterPosition'): face_utilities.unary_unary_inline(servicer.MasterPosition),
-    ('tabletmanagerservice.TabletManager', 'Ping'): face_utilities.unary_unary_inline(servicer.Ping),
-    ('tabletmanagerservice.TabletManager', 'PopulateReparentJournal'): face_utilities.unary_unary_inline(servicer.PopulateReparentJournal),
-    ('tabletmanagerservice.TabletManager', 'PreflightSchema'): face_utilities.unary_unary_inline(servicer.PreflightSchema),
-    ('tabletmanagerservice.TabletManager', 'PromoteSlave'): face_utilities.unary_unary_inline(servicer.PromoteSlave),
-    ('tabletmanagerservice.TabletManager', 'PromoteSlaveWhenCaughtUp'): face_utilities.unary_unary_inline(servicer.PromoteSlaveWhenCaughtUp),
-    ('tabletmanagerservice.TabletManager', 'RefreshState'): face_utilities.unary_unary_inline(servicer.RefreshState),
-    ('tabletmanagerservice.TabletManager', 'ReloadSchema'): face_utilities.unary_unary_inline(servicer.ReloadSchema),
-    ('tabletmanagerservice.TabletManager', 'ResetReplication'): face_utilities.unary_unary_inline(servicer.ResetReplication),
-    ('tabletmanagerservice.TabletManager', 'RestoreFromBackup'): face_utilities.unary_stream_inline(servicer.RestoreFromBackup),
-    ('tabletmanagerservice.TabletManager', 'RunBlpUntil'): face_utilities.unary_unary_inline(servicer.RunBlpUntil),
-    ('tabletmanagerservice.TabletManager', 'RunHealthCheck'): face_utilities.unary_unary_inline(servicer.RunHealthCheck),
-    ('tabletmanagerservice.TabletManager', 'SetMaster'): face_utilities.unary_unary_inline(servicer.SetMaster),
-    ('tabletmanagerservice.TabletManager', 'SetReadOnly'): face_utilities.unary_unary_inline(servicer.SetReadOnly),
-    ('tabletmanagerservice.TabletManager', 'SetReadWrite'): face_utilities.unary_unary_inline(servicer.SetReadWrite),
-    ('tabletmanagerservice.TabletManager', 'SlaveStatus'): face_utilities.unary_unary_inline(servicer.SlaveStatus),
-    ('tabletmanagerservice.TabletManager', 'SlaveWasPromoted'): face_utilities.unary_unary_inline(servicer.SlaveWasPromoted),
-    ('tabletmanagerservice.TabletManager', 'SlaveWasRestarted'): face_utilities.unary_unary_inline(servicer.SlaveWasRestarted),
-    ('tabletmanagerservice.TabletManager', 'Sleep'): face_utilities.unary_unary_inline(servicer.Sleep),
-    ('tabletmanagerservice.TabletManager', 'StartBlp'): face_utilities.unary_unary_inline(servicer.StartBlp),
-    ('tabletmanagerservice.TabletManager', 'StartSlave'): face_utilities.unary_unary_inline(servicer.StartSlave),
-    ('tabletmanagerservice.TabletManager', 'StopBlp'): face_utilities.unary_unary_inline(servicer.StopBlp),
-    ('tabletmanagerservice.TabletManager', 'StopReplicationAndGetStatus'): face_utilities.unary_unary_inline(servicer.StopReplicationAndGetStatus),
-    ('tabletmanagerservice.TabletManager', 'StopSlave'): face_utilities.unary_unary_inline(servicer.StopSlave),
-    ('tabletmanagerservice.TabletManager', 'StopSlaveMinimum'): face_utilities.unary_unary_inline(servicer.StopSlaveMinimum),
-    ('tabletmanagerservice.TabletManager', 'TabletExternallyElected'): face_utilities.unary_unary_inline(servicer.TabletExternallyElected),
-    ('tabletmanagerservice.TabletManager', 'TabletExternallyReparented'): face_utilities.unary_unary_inline(servicer.TabletExternallyReparented),
-    ('tabletmanagerservice.TabletManager', 'WaitBlpPosition'): face_utilities.unary_unary_inline(servicer.WaitBlpPosition),
-  }
-  server_options = beta_implementations.server_options(request_deserializers=request_deserializers, response_serializers=response_serializers, thread_pool=pool, thread_pool_size=pool_size, default_timeout=default_timeout, maximum_timeout=maximum_timeout)
-  return beta_implementations.server(method_implementations, options=server_options)
-
-
-def beta_create_TabletManager_stub(channel, host=None, metadata_transformer=None, pool=None, pool_size=None):
-  request_serializers = {
-    ('tabletmanagerservice.TabletManager', 'ApplySchema'): tabletmanagerdata__pb2.ApplySchemaRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'Backup'): tabletmanagerdata__pb2.BackupRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ChangeType'): tabletmanagerdata__pb2.ChangeTypeRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'DemoteMaster'): tabletmanagerdata__pb2.DemoteMasterRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsAllPrivs'): tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsApp'): tabletmanagerdata__pb2.ExecuteFetchAsAppRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsDba'): tabletmanagerdata__pb2.ExecuteFetchAsDbaRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteHook'): tabletmanagerdata__pb2.ExecuteHookRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'GetPermissions'): tabletmanagerdata__pb2.GetPermissionsRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'GetSchema'): tabletmanagerdata__pb2.GetSchemaRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'GetSlaves'): tabletmanagerdata__pb2.GetSlavesRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'IgnoreHealthError'): tabletmanagerdata__pb2.IgnoreHealthErrorRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'InitMaster'): tabletmanagerdata__pb2.InitMasterRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'InitSlave'): tabletmanagerdata__pb2.InitSlaveRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'MasterPosition'): tabletmanagerdata__pb2.MasterPositionRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'Ping'): tabletmanagerdata__pb2.PingRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'PopulateReparentJournal'): tabletmanagerdata__pb2.PopulateReparentJournalRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'PreflightSchema'): tabletmanagerdata__pb2.PreflightSchemaRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'PromoteSlave'): tabletmanagerdata__pb2.PromoteSlaveRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'PromoteSlaveWhenCaughtUp'): tabletmanagerdata__pb2.PromoteSlaveWhenCaughtUpRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'RefreshState'): tabletmanagerdata__pb2.RefreshStateRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ReloadSchema'): tabletmanagerdata__pb2.ReloadSchemaRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'ResetReplication'): tabletmanagerdata__pb2.ResetReplicationRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'RestoreFromBackup'): tabletmanagerdata__pb2.RestoreFromBackupRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'RunBlpUntil'): tabletmanagerdata__pb2.RunBlpUntilRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'RunHealthCheck'): tabletmanagerdata__pb2.RunHealthCheckRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'SetMaster'): tabletmanagerdata__pb2.SetMasterRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'SetReadOnly'): tabletmanagerdata__pb2.SetReadOnlyRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'SetReadWrite'): tabletmanagerdata__pb2.SetReadWriteRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'SlaveStatus'): tabletmanagerdata__pb2.SlaveStatusRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'SlaveWasPromoted'): tabletmanagerdata__pb2.SlaveWasPromotedRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'SlaveWasRestarted'): tabletmanagerdata__pb2.SlaveWasRestartedRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'Sleep'): tabletmanagerdata__pb2.SleepRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'StartBlp'): tabletmanagerdata__pb2.StartBlpRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'StartSlave'): tabletmanagerdata__pb2.StartSlaveRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'StopBlp'): tabletmanagerdata__pb2.StopBlpRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'StopReplicationAndGetStatus'): tabletmanagerdata__pb2.StopReplicationAndGetStatusRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'StopSlave'): tabletmanagerdata__pb2.StopSlaveRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'StopSlaveMinimum'): tabletmanagerdata__pb2.StopSlaveMinimumRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'TabletExternallyElected'): tabletmanagerdata__pb2.TabletExternallyElectedRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'TabletExternallyReparented'): tabletmanagerdata__pb2.TabletExternallyReparentedRequest.SerializeToString,
-    ('tabletmanagerservice.TabletManager', 'WaitBlpPosition'): tabletmanagerdata__pb2.WaitBlpPositionRequest.SerializeToString,
-  }
-  response_deserializers = {
-    ('tabletmanagerservice.TabletManager', 'ApplySchema'): tabletmanagerdata__pb2.ApplySchemaResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'Backup'): tabletmanagerdata__pb2.BackupResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'ChangeType'): tabletmanagerdata__pb2.ChangeTypeResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'DemoteMaster'): tabletmanagerdata__pb2.DemoteMasterResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsAllPrivs'): tabletmanagerdata__pb2.ExecuteFetchAsAllPrivsResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsApp'): tabletmanagerdata__pb2.ExecuteFetchAsAppResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteFetchAsDba'): tabletmanagerdata__pb2.ExecuteFetchAsDbaResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'ExecuteHook'): tabletmanagerdata__pb2.ExecuteHookResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'GetPermissions'): tabletmanagerdata__pb2.GetPermissionsResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'GetSchema'): tabletmanagerdata__pb2.GetSchemaResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'GetSlaves'): tabletmanagerdata__pb2.GetSlavesResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'IgnoreHealthError'): tabletmanagerdata__pb2.IgnoreHealthErrorResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'InitMaster'): tabletmanagerdata__pb2.InitMasterResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'InitSlave'): tabletmanagerdata__pb2.InitSlaveResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'MasterPosition'): tabletmanagerdata__pb2.MasterPositionResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'Ping'): tabletmanagerdata__pb2.PingResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'PopulateReparentJournal'): tabletmanagerdata__pb2.PopulateReparentJournalResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'PreflightSchema'): tabletmanagerdata__pb2.PreflightSchemaResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'PromoteSlave'): tabletmanagerdata__pb2.PromoteSlaveResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'PromoteSlaveWhenCaughtUp'): tabletmanagerdata__pb2.PromoteSlaveWhenCaughtUpResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'RefreshState'): tabletmanagerdata__pb2.RefreshStateResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'ReloadSchema'): tabletmanagerdata__pb2.ReloadSchemaResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'ResetReplication'): tabletmanagerdata__pb2.ResetReplicationResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'RestoreFromBackup'): tabletmanagerdata__pb2.RestoreFromBackupResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'RunBlpUntil'): tabletmanagerdata__pb2.RunBlpUntilResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'RunHealthCheck'): tabletmanagerdata__pb2.RunHealthCheckResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'SetMaster'): tabletmanagerdata__pb2.SetMasterResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'SetReadOnly'): tabletmanagerdata__pb2.SetReadOnlyResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'SetReadWrite'): tabletmanagerdata__pb2.SetReadWriteResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'SlaveStatus'): tabletmanagerdata__pb2.SlaveStatusResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'SlaveWasPromoted'): tabletmanagerdata__pb2.SlaveWasPromotedResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'SlaveWasRestarted'): tabletmanagerdata__pb2.SlaveWasRestartedResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'Sleep'): tabletmanagerdata__pb2.SleepResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'StartBlp'): tabletmanagerdata__pb2.StartBlpResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'StartSlave'): tabletmanagerdata__pb2.StartSlaveResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'StopBlp'): tabletmanagerdata__pb2.StopBlpResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'StopReplicationAndGetStatus'): tabletmanagerdata__pb2.StopReplicationAndGetStatusResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'StopSlave'): tabletmanagerdata__pb2.StopSlaveResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'StopSlaveMinimum'): tabletmanagerdata__pb2.StopSlaveMinimumResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'TabletExternallyElected'): tabletmanagerdata__pb2.TabletExternallyElectedResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'TabletExternallyReparented'): tabletmanagerdata__pb2.TabletExternallyReparentedResponse.FromString,
-    ('tabletmanagerservice.TabletManager', 'WaitBlpPosition'): tabletmanagerdata__pb2.WaitBlpPositionResponse.FromString,
-  }
-  cardinalities = {
-    'ApplySchema': cardinality.Cardinality.UNARY_UNARY,
-    'Backup': cardinality.Cardinality.UNARY_STREAM,
-    'ChangeType': cardinality.Cardinality.UNARY_UNARY,
-    'DemoteMaster': cardinality.Cardinality.UNARY_UNARY,
-    'ExecuteFetchAsAllPrivs': cardinality.Cardinality.UNARY_UNARY,
-    'ExecuteFetchAsApp': cardinality.Cardinality.UNARY_UNARY,
-    'ExecuteFetchAsDba': cardinality.Cardinality.UNARY_UNARY,
-    'ExecuteHook': cardinality.Cardinality.UNARY_UNARY,
-    'GetPermissions': cardinality.Cardinality.UNARY_UNARY,
-    'GetSchema': cardinality.Cardinality.UNARY_UNARY,
-    'GetSlaves': cardinality.Cardinality.UNARY_UNARY,
-    'IgnoreHealthError': cardinality.Cardinality.UNARY_UNARY,
-    'InitMaster': cardinality.Cardinality.UNARY_UNARY,
-    'InitSlave': cardinality.Cardinality.UNARY_UNARY,
-    'MasterPosition': cardinality.Cardinality.UNARY_UNARY,
-    'Ping': cardinality.Cardinality.UNARY_UNARY,
-    'PopulateReparentJournal': cardinality.Cardinality.UNARY_UNARY,
-    'PreflightSchema': cardinality.Cardinality.UNARY_UNARY,
-    'PromoteSlave': cardinality.Cardinality.UNARY_UNARY,
-    'PromoteSlaveWhenCaughtUp': cardinality.Cardinality.UNARY_UNARY,
-    'RefreshState': cardinality.Cardinality.UNARY_UNARY,
-    'ReloadSchema': cardinality.Cardinality.UNARY_UNARY,
-    'ResetReplication': cardinality.Cardinality.UNARY_UNARY,
-    'RestoreFromBackup': cardinality.Cardinality.UNARY_STREAM,
-    'RunBlpUntil': cardinality.Cardinality.UNARY_UNARY,
-    'RunHealthCheck': cardinality.Cardinality.UNARY_UNARY,
-    'SetMaster': cardinality.Cardinality.UNARY_UNARY,
-    'SetReadOnly': cardinality.Cardinality.UNARY_UNARY,
-    'SetReadWrite': cardinality.Cardinality.UNARY_UNARY,
-    'SlaveStatus': cardinality.Cardinality.UNARY_UNARY,
-    'SlaveWasPromoted': cardinality.Cardinality.UNARY_UNARY,
-    'SlaveWasRestarted': cardinality.Cardinality.UNARY_UNARY,
-    'Sleep': cardinality.Cardinality.UNARY_UNARY,
-    'StartBlp': cardinality.Cardinality.UNARY_UNARY,
-    'StartSlave': cardinality.Cardinality.UNARY_UNARY,
-    'StopBlp': cardinality.Cardinality.UNARY_UNARY,
-    'StopReplicationAndGetStatus': cardinality.Cardinality.UNARY_UNARY,
-    'StopSlave': cardinality.Cardinality.UNARY_UNARY,
-    'StopSlaveMinimum': cardinality.Cardinality.UNARY_UNARY,
-    'TabletExternallyElected': cardinality.Cardinality.UNARY_UNARY,
-    'TabletExternallyReparented': cardinality.Cardinality.UNARY_UNARY,
-    'WaitBlpPosition': cardinality.Cardinality.UNARY_UNARY,
-  }
-  stub_options = beta_implementations.stub_options(host=host, metadata_transformer=metadata_transformer, request_serializers=request_serializers, response_deserializers=response_deserializers, thread_pool=pool, thread_pool_size=pool_size)
-  return beta_implementations.dynamic_stub(channel, 'tabletmanagerservice.TabletManager', cardinalities, options=stub_options)
 # @@protoc_insertion_point(module_scope)

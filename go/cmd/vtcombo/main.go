@@ -26,18 +26,19 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtcombo"
 	"vitess.io/vitess/go/vt/vtctld"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -109,7 +110,7 @@ func main() {
 	servenv.OnClose(mysqld.Close)
 
 	// tablets configuration and init
-	if err := initTabletMap(ts, tpb, mysqld, *dbcfgs, *schemaDir, mycnf); err != nil {
+	if err := vtcombo.InitTabletMap(ts, tpb, mysqld, *dbcfgs, *schemaDir, mycnf); err != nil {
 		log.Errorf("initTabletMapProto failed: %v", err)
 		exit.Return(1)
 	}

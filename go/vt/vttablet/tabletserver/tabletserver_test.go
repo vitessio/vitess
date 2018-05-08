@@ -28,13 +28,13 @@ import (
 	"testing"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -578,6 +578,7 @@ func TestTabletServerTarget(t *testing.T) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
 	err = tsv.Commit(ctx, &target1, 1)
+	want = "invalid tablet type: MASTER"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}

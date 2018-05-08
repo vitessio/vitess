@@ -22,7 +22,7 @@ package logutil
 import (
 	stdlog "log"
 
-	log "github.com/golang/glog"
+	"vitess.io/vitess/go/vt/log"
 )
 
 type logShim struct{}

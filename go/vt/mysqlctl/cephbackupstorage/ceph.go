@@ -30,11 +30,11 @@ import (
 
 	"errors"
 
-	log "github.com/golang/glog"
 	minio "github.com/minio/minio-go"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 )
 
@@ -73,7 +73,7 @@ func (bh *CephBackupHandle) Name() string {
 }
 
 // AddFile implements BackupHandle.
-func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string) (io.WriteCloser, error) {
+func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if bh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}

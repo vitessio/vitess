@@ -31,9 +31,16 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 	if node == nil {
 		return filters
 	}
-	if node, ok := node.(*sqlparser.AndExpr); ok {
+	switch node := node.(type) {
+	case *sqlparser.AndExpr:
 		filters = splitAndExpression(filters, node.Left)
 		return splitAndExpression(filters, node.Right)
+	case *sqlparser.ParenExpr:
+		// If the inner expression is AndExpr, then we can remove
+		// the parenthesis because they are unnecessary.
+		if node, ok := node.Expr.(*sqlparser.AndExpr); ok {
+			return splitAndExpression(filters, node)
+		}
 	}
 	return append(filters, node)
 }
@@ -72,7 +79,7 @@ func skipParenthesis(node sqlparser.Expr) sqlparser.Expr {
 //
 // If an expression has no references to the current query, then the left-most
 // origin is chosen as the default.
-func findOrigin(expr sqlparser.Expr, bldr builder) (origin columnOriginator, err error) {
+func findOrigin(expr sqlparser.Expr, bldr builder) (origin builder, err error) {
 	highestOrigin := bldr.Leftmost()
 	var subroutes []*route
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -150,7 +157,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func validateSubquerySamePlan(keyspace string, bldr builder, vschema VSchema, nodes ...sqlparser.SQLNode) bool {
+func validateSubquerySamePlan(keyspace string, bldr builder, vschema ContextVSchema, nodes ...sqlparser.SQLNode) bool {
 	samePlan := true
 
 	for _, node := range nodes {

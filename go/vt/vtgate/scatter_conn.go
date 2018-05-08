@@ -49,7 +49,7 @@ var (
 // multiple shard level connections.
 type ScatterConn struct {
 	timings              *stats.MultiTimings
-	tabletCallErrorCount *stats.MultiCounters
+	tabletCallErrorCount *stats.CountersWithMultiLabels
 	txConn               *TxConn
 	gateway              gateway.Gateway
 	healthCheck          discovery.HealthCheck
@@ -79,11 +79,17 @@ func NewScatterConn(statsName string, txConn *TxConn, gw gateway.Gateway, hc dis
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
 	}
 	return &ScatterConn{
-		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		txConn:               txConn,
-		gateway:              gw,
-		healthCheck:          hc,
+		timings: stats.NewMultiTimings(
+			statsName,
+			"Scatter connection timings",
+			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		tabletCallErrorCount: stats.NewCountersWithMultiLabels(
+			tabletCallErrorCountStatsName,
+			"Error count from tablet calls in scatter conns",
+			[]string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		txConn:      txConn,
+		gateway:     gw,
+		healthCheck: hc,
 	}
 }
 
@@ -166,14 +172,12 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
-	canAutocommit bool,
+	autocommit bool,
 ) (*sqltypes.Result, error) {
 
 	// mu protects qr
 	var mu sync.Mutex
 	qr := new(sqltypes.Result)
-
-	canCommit := len(rss) == 1 && canAutocommit && session.AutocommitApproval()
 
 	err := stc.multiGoTransaction(
 		ctx,
@@ -193,7 +197,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			}
 
 			switch {
-			case canCommit:
+			case autocommit:
 				innerqr, err = stc.executeAutocommit(ctx, rs, queries[i].Sql, queries[i].BindVariables, opts)
 			case shouldBegin:
 				innerqr, transactionID, err = rs.QueryService.BeginExecute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, opts)
@@ -429,6 +433,8 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same.
+// Note we guarantee the callback will not be called concurrently
+// by mutiple go routines, through processOneStreamingResult.
 func (stc *ScatterConn) StreamExecute(
 	ctx context.Context,
 	query string,
@@ -454,6 +460,8 @@ func (stc *ScatterConn) StreamExecute(
 // StreamExecuteMulti is like StreamExecute,
 // but each shard gets its own bindVars. If len(shards) is not equal to
 // len(bindVars), the function panics.
+// Note we guarantee the callback will not be called concurrently
+// by mutiple go routines, through processOneStreamingResult.
 func (stc *ScatterConn) StreamExecuteMulti(
 	ctx context.Context,
 	query string,
@@ -509,6 +517,8 @@ func (tt *timeTracker) Record(target *querypb.Target) time.Time {
 }
 
 // MessageStream streams messages from the specified shards.
+// Note we guarantee the callback will not be called concurrently
+// by mutiple go routines, through processOneStreamingResult.
 func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error {
 	// The cancelable context is used for handling errors
 	// from individual streams.

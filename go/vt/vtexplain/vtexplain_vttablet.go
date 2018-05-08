@@ -24,13 +24,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	log "github.com/golang/glog"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -224,11 +223,11 @@ func (t *explainTablet) ExecuteBatch(ctx context.Context, target *querypb.Target
 	// Since the query is simulated being "sent" over the wire we need to
 	// copy the bindVars into the executor to avoid a data race.
 	for _, query := range queries {
-		bindVariables := sqltypes.CopyBindVariables(query.BindVariables)
+		query.BindVariables = sqltypes.CopyBindVariables(query.BindVariables)
 		t.tabletQueries = append(t.tabletQueries, &TabletQuery{
 			Time:     t.currentTime,
 			SQL:      query.Sql,
-			BindVars: bindVariables,
+			BindVars: query.BindVariables,
 		})
 	}
 	t.mu.Unlock()
@@ -423,7 +422,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 		tableColumns[table] = make(map[string]querypb.Type)
 
 		for _, col := range ddl.TableSpec.Columns {
-			colName := col.Name.String()
+			colName := strings.ToLower(col.Name.String())
 			defaultVal := ""
 			if col.Type.Default != nil {
 				defaultVal = sqlparser.String(col.Type.Default)
@@ -507,7 +506,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		}
 
 		colTypeMap := tableColumns[table.String()]
-		if colTypeMap == nil {
+		if colTypeMap == nil && table.String() != "dual" {
 			return fmt.Errorf("unable to resolve table name %s", table.String())
 		}
 
@@ -518,7 +517,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			case *sqlparser.AliasedExpr:
 				switch node := node.Expr.(type) {
 				case *sqlparser.ColName:
-					col := node.Name.String()
+					col := strings.ToLower(node.Name.String())
 					colType := colTypeMap[col]
 					if colType == querypb.Type_NULL_TYPE {
 						return fmt.Errorf("invalid column %s", col)

@@ -104,7 +104,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -116,6 +115,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/topo"
@@ -1387,7 +1387,7 @@ func commandShardReplicationFix(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("the <cell> and <keyspace/shard> arguments are required for the ShardReplicationRemove command")
+		return fmt.Errorf("the <cell> and <keyspace/shard> arguments are required for the ShardReplicationFix command")
 	}
 
 	cell := subFlags.Arg(0)

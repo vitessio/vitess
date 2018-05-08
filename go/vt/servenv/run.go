@@ -22,9 +22,9 @@ import (
 	"net/url"
 	"time"
 
-	log "github.com/golang/glog"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/proc"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -34,7 +34,7 @@ var (
 // Run starts listening for RPC and HTTP requests,
 // and blocks until it the process gets a signal.
 func Run(port int) {
-	populateListeningURL()
+	populateListeningURL(int32(port))
 	createGRPCServer()
 	onRunHooks.Fire()
 	serveGRPC()

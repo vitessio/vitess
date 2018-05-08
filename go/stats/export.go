@@ -36,8 +36,7 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
-	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var emitStats = flag.Bool("emit_stats", false, "true iff we should emit stats to push-based monitoring/stats backends")
@@ -74,6 +73,7 @@ func (vg *varGroup) register(nvh NewVarHook) {
 func (vg *varGroup) publish(name string, v expvar.Var) {
 	vg.Lock()
 	defer vg.Unlock()
+
 	expvar.Publish(name, v)
 	if vg.newVarHook != nil {
 		vg.newVarHook(name, v)
@@ -110,11 +110,14 @@ type PushBackend interface {
 }
 
 var pushBackends = make(map[string]PushBackend)
+var pushBackendsLock sync.Mutex
 var once sync.Once
 
 // RegisterPushBackend allows modules to register PushBackend implementations.
 // Should be called on init().
 func RegisterPushBackend(name string, backend PushBackend) {
+	pushBackendsLock.Lock()
+	defer pushBackendsLock.Unlock()
 	if _, ok := pushBackends[name]; ok {
 		log.Fatalf("PushBackend %s already exists; can't register the same name multiple times", name)
 	}
@@ -193,90 +196,6 @@ type FloatFunc func() float64
 // String is the implementation of expvar.var
 func (f FloatFunc) String() string {
 	return strconv.FormatFloat(f(), 'g', -1, 64)
-}
-
-// Int is expvar.Int+Get+hook
-type Int struct {
-	i sync2.AtomicInt64
-}
-
-// NewInt returns a new Int
-func NewInt(name string) *Int {
-	v := new(Int)
-	if name != "" {
-		publish(name, v)
-	}
-	return v
-}
-
-// Add adds the provided value to the Int
-func (v *Int) Add(delta int64) {
-	v.i.Add(delta)
-}
-
-// Set sets the value
-func (v *Int) Set(value int64) {
-	v.i.Set(value)
-}
-
-// Get returns the value
-func (v *Int) Get() int64 {
-	return v.i.Get()
-}
-
-// String is the implementation of expvar.var
-func (v *Int) String() string {
-	return strconv.FormatInt(v.i.Get(), 10)
-}
-
-// Duration exports a time.Duration
-type Duration struct {
-	i sync2.AtomicDuration
-}
-
-// NewDuration returns a new Duration
-func NewDuration(name string) *Duration {
-	v := new(Duration)
-	publish(name, v)
-	return v
-}
-
-// Add adds the provided value to the Duration
-func (v *Duration) Add(delta time.Duration) {
-	v.i.Add(delta)
-}
-
-// Set sets the value
-func (v *Duration) Set(value time.Duration) {
-	v.i.Set(value)
-}
-
-// Get returns the value
-func (v *Duration) Get() time.Duration {
-	return v.i.Get()
-}
-
-// String is the implementation of expvar.var
-func (v *Duration) String() string {
-	return strconv.FormatInt(int64(v.i.Get()), 10)
-}
-
-// IntFunc converts a function that returns
-// an int64 as an expvar.
-type IntFunc func() int64
-
-// String is the implementation of expvar.var
-func (f IntFunc) String() string {
-	return strconv.FormatInt(f(), 10)
-}
-
-// DurationFunc converts a function that returns
-// an time.Duration as an expvar.
-type DurationFunc func() time.Duration
-
-// String is the implementation of expvar.var
-func (f DurationFunc) String() string {
-	return strconv.FormatInt(int64(f()), 10)
 }
 
 // String is expvar.String+Get+hook

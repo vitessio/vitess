@@ -19,7 +19,6 @@ package stats
 import (
 	"expvar"
 	"testing"
-	"time"
 )
 
 func clear() {
@@ -29,8 +28,8 @@ func clear() {
 
 func TestNoHook(t *testing.T) {
 	clear()
-	v := NewInt("plainint")
-	v.Set(1)
+	v := NewCounter("plainint", "help")
+	v.Add(1)
 	if v.String() != "1" {
 		t.Errorf("want 1, got %s", v.String())
 	}
@@ -68,76 +67,6 @@ func TestFloat(t *testing.T) {
 	})
 	if f.String() != "1.234" {
 		t.Errorf("want 1.234, got %v", f.String())
-	}
-}
-
-func TestInt(t *testing.T) {
-	var gotname string
-	var gotv *Int
-	clear()
-	Register(func(name string, v expvar.Var) {
-		gotname = name
-		gotv = v.(*Int)
-	})
-	v := NewInt("Int")
-	if gotname != "Int" {
-		t.Errorf("want Int, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
-	v.Set(5)
-	if v.Get() != 5 {
-		t.Errorf("want 5, got %v", v.Get())
-	}
-	v.Add(1)
-	if v.Get() != 6 {
-		t.Errorf("want 6, got %v", v.Get())
-	}
-	if v.String() != "6" {
-		t.Errorf("want 6, got %v", v.Get())
-	}
-
-	f := IntFunc(func() int64 {
-		return 1
-	})
-	if f.String() != "1" {
-		t.Errorf("want 1, got %v", f.String())
-	}
-}
-
-func TestDuration(t *testing.T) {
-	var gotname string
-	var gotv *Duration
-	clear()
-	Register(func(name string, v expvar.Var) {
-		gotname = name
-		gotv = v.(*Duration)
-	})
-	v := NewDuration("Duration")
-	if gotname != "Duration" {
-		t.Errorf("want Duration, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
-	v.Set(time.Duration(5))
-	if v.Get() != 5 {
-		t.Errorf("want 5, got %v", v.Get())
-	}
-	v.Add(time.Duration(1))
-	if v.Get() != 6 {
-		t.Errorf("want 6, got %v", v.Get())
-	}
-	if v.String() != "6" {
-		t.Errorf("want 6, got %v", v.Get())
-	}
-
-	f := DurationFunc(func() time.Duration {
-		return time.Duration(1)
-	})
-	if f.String() != "1" {
-		t.Errorf("want 1, got %v", f.String())
 	}
 }
 

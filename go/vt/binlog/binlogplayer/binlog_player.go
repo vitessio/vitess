@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
@@ -33,6 +32,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/log"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -88,7 +88,7 @@ func (bps *Stats) GetLastPosition() mysql.Position {
 // NewStats creates a new Stats structure
 func NewStats() *Stats {
 	bps := &Stats{}
-	bps.Timings = stats.NewTimings("")
+	bps.Timings = stats.NewTimings("", "", "")
 	bps.Rates = stats.NewRates("", bps.Timings, 15, 60e9)
 	return bps
 }

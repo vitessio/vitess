@@ -112,6 +112,8 @@ func (stats *LogStats) FmtBindVariables(full bool) string {
 		for k, v := range stats.BindVariables {
 			if sqltypes.IsIntegral(v.Type) || sqltypes.IsFloat(v.Type) {
 				out[k] = v
+			} else if v.Type == querypb.Type_TUPLE {
+				out[k] = sqltypes.StringBindVariable(fmt.Sprintf("%v items", len(v.Values)))
 			} else {
 				out[k] = sqltypes.StringBindVariable(fmt.Sprintf("%v bytes", len(v.Value)))
 			}

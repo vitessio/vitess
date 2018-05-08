@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -287,6 +287,17 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	}
 	defer agent.unlock()
 
+	// Tell Orchestrator we're stopped on purpose the demotion.
+	// This is a best effort task, so run it in a goroutine.
+	go func() {
+		if agent.orc == nil {
+			return
+		}
+		if err := agent.orc.BeginMaintenance(agent.Tablet(), "vttablet has been told to DemoteMaster"); err != nil {
+			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
+		}
+	}()
+
 	// Set the server read-only. Note all active connections are not
 	// affected.
 	if err := agent.MysqlDaemon.SetReadOnly(true); err != nil {
@@ -397,6 +408,21 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err
+	}
+
+	// If this tablet used to be a master, end orchestrator maintenance after we are connected to the new master.
+	// This is a best effort operation, so it should happen in a goroutine
+	if agent.Tablet().Type == topodatapb.TabletType_MASTER {
+		defer func() {
+			go func() {
+				if agent.orc == nil {
+					return
+				}
+				if err := agent.orc.EndMaintenance(agent.Tablet()); err != nil {
+					log.Warningf("Orchestrator EndMaintenance failed: %v", err)
+				}
+			}()
+		}()
 	}
 
 	// See if we were replicating at all, and should be replicating

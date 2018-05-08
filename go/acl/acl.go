@@ -26,7 +26,7 @@ import (
 	"net/http"
 	"sync"
 
-	log "github.com/golang/glog"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // This is a list of predefined roles. Applications are free

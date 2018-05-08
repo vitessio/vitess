@@ -21,7 +21,7 @@ import (
 	"flag"
 	"log/syslog"
 
-	log "github.com/golang/glog"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )

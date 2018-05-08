@@ -37,13 +37,13 @@ func TestLimitExecute(t *testing.T) {
 		"b|2",
 		"c|3",
 	)
-	tp := &fakePrimitive{
+	fp := &fakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
 	l := &Limit{
 		Count: int64PlanValue(2),
-		Input: tp,
+		Input: fp,
 	}
 
 	// Test with limit smaller than input.
@@ -73,12 +73,12 @@ func TestLimitExecute(t *testing.T) {
 		"b|2",
 		"c|3",
 	)
-	tp = &fakePrimitive{
+	fp = &fakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 	l = &Limit{
 		Count: int64PlanValue(3),
-		Input: tp,
+		Input: fp,
 	}
 
 	result, err = l.Execute(nil, bindVars, false)
@@ -102,12 +102,12 @@ func TestLimitExecute(t *testing.T) {
 		"b|2",
 		"c|3",
 	)
-	tp = &fakePrimitive{
+	fp = &fakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 	l = &Limit{
 		Count: int64PlanValue(4),
-		Input: tp,
+		Input: fp,
 	}
 
 	result, err = l.Execute(nil, bindVars, false)
@@ -130,12 +130,12 @@ func TestLimitExecute(t *testing.T) {
 		"b|2",
 		"c|3",
 	)
-	tp = &fakePrimitive{
+	fp = &fakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 	l = &Limit{
 		Count: sqltypes.PlanValue{Key: "l"},
-		Input: tp,
+		Input: fp,
 	}
 
 	result, err = l.Execute(nil, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, false)
@@ -162,14 +162,14 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"c|5",
 		"c|6",
 	)
-	tp := &fakePrimitive{
+	fp := &fakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
 	l := &Limit{
 		Count:  int64PlanValue(2),
 		Offset: int64PlanValue(0),
-		Input:  tp,
+		Input:  fp,
 	}
 
 	// Test with offset 0
@@ -197,14 +197,14 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"c|5",
 		"c|6",
 	)
-	tp = &fakePrimitive{
+	fp = &fakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
 	l = &Limit{
 		Count:  int64PlanValue(2),
 		Offset: int64PlanValue(1),
-		Input:  tp,
+		Input:  fp,
 	}
 	wantResult = sqltypes.MakeTestResult(
 		fields,
@@ -229,14 +229,14 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"c|5",
 		"c|6",
 	)
-	tp = &fakePrimitive{
+	fp = &fakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
 	l = &Limit{
 		Count:  int64PlanValue(2),
 		Offset: int64PlanValue(4),
-		Input:  tp,
+		Input:  fp,
 	}
 	wantResult = sqltypes.MakeTestResult(
 		fields,
@@ -260,14 +260,14 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"c|5",
 		"c|6",
 	)
-	tp = &fakePrimitive{
+	fp = &fakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
 	l = &Limit{
 		Count:  int64PlanValue(4),
 		Offset: int64PlanValue(2),
-		Input:  tp,
+		Input:  fp,
 	}
 	wantResult = sqltypes.MakeTestResult(
 		fields,
@@ -294,14 +294,14 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"c|5",
 		"c|6",
 	)
-	tp = &fakePrimitive{
+	fp = &fakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
 	l = &Limit{
 		Count:  int64PlanValue(2),
 		Offset: int64PlanValue(5),
-		Input:  tp,
+		Input:  fp,
 	}
 	wantResult = sqltypes.MakeTestResult(
 		fields,
@@ -325,14 +325,14 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"c|5",
 		"c|6",
 	)
-	tp = &fakePrimitive{
+	fp = &fakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
 	l = &Limit{
 		Count:  int64PlanValue(2),
 		Offset: int64PlanValue(7),
-		Input:  tp,
+		Input:  fp,
 	}
 	wantResult = sqltypes.MakeTestResult(
 		fields,
@@ -356,14 +356,14 @@ func TestLimitOffsetExecute(t *testing.T) {
 		"z|2",
 	)
 
-	tp = &fakePrimitive{
+	fp = &fakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
 	l = &Limit{
 		Count:  sqltypes.PlanValue{Key: "l"},
 		Offset: sqltypes.PlanValue{Key: "o"},
-		Input:  tp,
+		Input:  fp,
 	}
 	result, err = l.Execute(nil, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(1), "o": sqltypes.Int64BindVariable(1)}, false)
 	if err != nil {
@@ -386,13 +386,13 @@ func TestLimitStreamExecute(t *testing.T) {
 		"b|2",
 		"c|3",
 	)
-	tp := &fakePrimitive{
+	fp := &fakePrimitive{
 		results: []*sqltypes.Result{inputResult},
 	}
 
 	l := &Limit{
 		Count: int64PlanValue(2),
-		Input: tp,
+		Input: fp,
 	}
 
 	// Test with limit smaller than input.
@@ -414,7 +414,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	}
 
 	// Test with bind vars.
-	tp.rewind()
+	fp.rewind()
 	l.Count = sqltypes.PlanValue{Key: "l"}
 	results = nil
 	err = l.StreamExecute(nil, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, false, func(qr *sqltypes.Result) error {
@@ -429,7 +429,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	}
 
 	// Test with limit equal to input
-	tp.rewind()
+	fp.rewind()
 	l.Count = int64PlanValue(3)
 	results = nil
 	err = l.StreamExecute(nil, bindVars, false, func(qr *sqltypes.Result) error {
@@ -451,7 +451,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	}
 
 	// Test with limit higher than input.
-	tp.rewind()
+	fp.rewind()
 	l.Count = int64PlanValue(4)
 	results = nil
 	err = l.StreamExecute(nil, bindVars, false, func(qr *sqltypes.Result) error {
@@ -474,9 +474,9 @@ func TestLimitGetFields(t *testing.T) {
 			"int64|varchar",
 		),
 	)
-	tp := &fakePrimitive{results: []*sqltypes.Result{result}}
+	fp := &fakePrimitive{results: []*sqltypes.Result{result}}
 
-	l := &Limit{Input: tp}
+	l := &Limit{Input: fp}
 
 	got, err := l.GetFields(nil, nil)
 	if err != nil {
@@ -489,22 +489,22 @@ func TestLimitGetFields(t *testing.T) {
 
 func TestLimitInputFail(t *testing.T) {
 	bindVars := make(map[string]*querypb.BindVariable)
-	tp := &fakePrimitive{sendErr: errors.New("input fail")}
+	fp := &fakePrimitive{sendErr: errors.New("input fail")}
 
-	l := &Limit{Count: int64PlanValue(1), Input: tp}
+	l := &Limit{Count: int64PlanValue(1), Input: fp}
 
 	want := "input fail"
 	if _, err := l.Execute(nil, bindVars, false); err == nil || err.Error() != want {
 		t.Errorf("l.Execute(): %v, want %s", err, want)
 	}
 
-	tp.rewind()
+	fp.rewind()
 	err := l.StreamExecute(nil, bindVars, false, func(_ *sqltypes.Result) error { return nil })
 	if err == nil || err.Error() != want {
 		t.Errorf("l.StreamExecute(): %v, want %s", err, want)
 	}
 
-	tp.rewind()
+	fp.rewind()
 	if _, err := l.GetFields(nil, nil); err == nil || err.Error() != want {
 		t.Errorf("l.GetFields(): %v, want %s", err, want)
 	}

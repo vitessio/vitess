@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
@@ -36,6 +35,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -234,24 +234,24 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
 	qeOnce.Do(func() {
-		stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
-		stats.Publish("WarnResultSize", stats.IntFunc(qe.warnResultSize.Get))
-		stats.Publish("MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
-		stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
-		stats.Publish("TableACLExemptCount", stats.IntFunc(qe.tableaclExemptCount.Get))
-		stats.Publish("QueryPoolWaiters", stats.IntFunc(qe.queryPoolWaiters.Get))
+		stats.NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Get)
+		stats.NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
+		stats.NewGaugeFunc("MaxDMLRows", "Query engine max DML rows", qe.maxDMLRows.Get)
+		stats.NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
+		stats.NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
+		stats.NewGaugeFunc("QueryPoolWaiters", "Query engine query pool waiters", qe.queryPoolWaiters.Get)
 
-		stats.Publish("QueryCacheLength", stats.IntFunc(qe.plans.Length))
-		stats.Publish("QueryCacheSize", stats.IntFunc(qe.plans.Size))
-		stats.Publish("QueryCacheCapacity", stats.IntFunc(qe.plans.Capacity))
-		stats.Publish("QueryCacheEvictions", stats.IntFunc(qe.plans.Evictions))
+		stats.NewGaugeFunc("QueryCacheLength", "Query engine query cache length", qe.plans.Length)
+		stats.NewGaugeFunc("QueryCacheSize", "Query engine query cache size", qe.plans.Size)
+		stats.NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.Capacity)
+		stats.NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
 		stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
 			return fmt.Sprintf("%v", qe.plans.Oldest())
 		}))
-		_ = stats.NewMultiCountersFunc("QueryCounts", []string{"Table", "Plan"}, qe.getQueryCount)
-		_ = stats.NewMultiCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, qe.getQueryTime)
-		_ = stats.NewMultiCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, qe.getQueryRowCount)
-		_ = stats.NewMultiCountersFunc("QueryErrorCounts", []string{"Table", "Plan"}, qe.getQueryErrorCount)
+		_ = stats.NewCountersFuncWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"}, qe.getQueryCount)
+		_ = stats.NewCountersFuncWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"}, qe.getQueryTime)
+		_ = stats.NewCountersFuncWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"}, qe.getQueryRowCount)
+		_ = stats.NewCountersFuncWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"}, qe.getQueryErrorCount)
 
 		http.Handle("/debug/hotrows", qe.txSerializer)
 

@@ -22,8 +22,8 @@ import (
 	"flag"
 	"fmt"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var protocol = flag.String("mysqlctl_client_protocol", "grpc", "the protocol to use to talk to the mysqlctl server")

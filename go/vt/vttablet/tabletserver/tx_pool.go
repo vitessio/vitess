@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -33,6 +32,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
@@ -56,7 +56,7 @@ const txLogInterval = time.Duration(1 * time.Minute)
 
 var (
 	txOnce  sync.Once
-	txStats = stats.NewTimings("Transactions")
+	txStats = stats.NewTimings("Transactions", "Transaction stats", "operation")
 
 	txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]string{
 		querypb.ExecuteOptions_REPEATABLE_READ:  "set transaction isolation level REPEATABLE READ",
@@ -119,8 +119,8 @@ func NewTxPool(
 	txOnce.Do(func() {
 		// Careful: conns also exports name+"xxx" vars,
 		// but we know it doesn't export Timeout.
-		stats.Publish(prefix+"TransactionPoolTimeout", stats.DurationFunc(axp.timeout.Get))
-		stats.Publish(prefix+"TransactionPoolWaiters", stats.IntFunc(axp.waiters.Get))
+		stats.NewGaugeDurationFunc(prefix+"TransactionPoolTimeout", "Transaction pool timeout", axp.timeout.Get)
+		stats.NewGaugeFunc(prefix+"TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
 	})
 	return axp
 }

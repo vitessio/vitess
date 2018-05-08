@@ -19,6 +19,7 @@ package io.vitess.jdbc;
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.net.URL;
 import java.sql.Array;
 import java.sql.Blob;
@@ -247,6 +248,11 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
     }
 
+    public void setBigInteger(int parameterIndex, BigInteger x) throws SQLException {
+        checkOpen();
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+    }
+
     public void setString(int parameterIndex, String x) throws SQLException {
         checkOpen();
         this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
@@ -322,6 +328,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             setTimestamp(parameterIndex, (Timestamp) x);
         } else if (x instanceof BigDecimal) {
             setBigDecimal(parameterIndex, (BigDecimal) x);
+        } else if (x instanceof BigInteger) {
+            setBigInteger(parameterIndex, (BigInteger) x);
         } else if (x instanceof byte[]) {
             setBytes(parameterIndex, (byte[]) x);
         } else if (getConnection().getTreatUtilDateAsTimestamp() && x instanceof java.util.Date) {
@@ -890,8 +898,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                     }
                     setBigDecimal(parameterIndex, scaledBigDecimal);
                 } else if (numberParam instanceof java.math.BigInteger) {
-                    setBigDecimal(parameterIndex,
-                        new java.math.BigDecimal((java.math.BigInteger) numberParam, scale));
+                    setBigInteger(parameterIndex, (BigInteger) numberParam);
                 } else {
                     setBigDecimal(parameterIndex,
                         new java.math.BigDecimal(numberParam.doubleValue()));

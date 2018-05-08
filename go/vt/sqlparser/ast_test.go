@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -219,6 +220,153 @@ func TestIsAggregate(t *testing.T) {
 	f = FuncExpr{Name: NewColIdent("foo")}
 	if f.IsAggregate() {
 		t.Error("IsAggregate: true, want false")
+	}
+}
+
+func TestReplaceExpr(t *testing.T) {
+	tcases := []struct {
+		in, out string
+	}{{
+		in:  "select * from t where (select a from b)",
+		out: ":a",
+	}, {
+		in:  "select * from t where (select a from b) and b",
+		out: ":a and b",
+	}, {
+		in:  "select * from t where a and (select a from b)",
+		out: "a and :a",
+	}, {
+		in:  "select * from t where (select a from b) or b",
+		out: ":a or b",
+	}, {
+		in:  "select * from t where a or (select a from b)",
+		out: "a or :a",
+	}, {
+		in:  "select * from t where not (select a from b)",
+		out: "not :a",
+	}, {
+		in:  "select * from t where ((select a from b))",
+		out: "(:a)",
+	}, {
+		in:  "select * from t where (select a from b) = 1",
+		out: ":a = 1",
+	}, {
+		in:  "select * from t where a = (select a from b)",
+		out: "a = :a",
+	}, {
+		in:  "select * from t where a like b escape (select a from b)",
+		out: "a like b escape :a",
+	}, {
+		in:  "select * from t where (select a from b) between a and b",
+		out: ":a between a and b",
+	}, {
+		in:  "select * from t where a between (select a from b) and b",
+		out: "a between :a and b",
+	}, {
+		in:  "select * from t where a between b and (select a from b)",
+		out: "a between b and :a",
+	}, {
+		in:  "select * from t where (select a from b) is null",
+		out: ":a is null",
+	}, {
+		// exists should not replace.
+		in:  "select * from t where exists (select a from b)",
+		out: "exists (select a from b)",
+	}, {
+		in:  "select * from t where a in ((select a from b), 1)",
+		out: "a in (:a, 1)",
+	}, {
+		in:  "select * from t where a in (0, (select a from b), 1)",
+		out: "a in (0, :a, 1)",
+	}, {
+		in:  "select * from t where (select a from b) + 1",
+		out: ":a + 1",
+	}, {
+		in:  "select * from t where 1+(select a from b)",
+		out: "1 + :a",
+	}, {
+		in:  "select * from t where -(select a from b)",
+		out: "-:a",
+	}, {
+		in:  "select * from t where interval (select a from b) aa",
+		out: "interval :a aa",
+	}, {
+		in:  "select * from t where (select a from b) collate utf8",
+		out: ":a collate utf8",
+	}, {
+		in:  "select * from t where func((select a from b), 1)",
+		out: "func(:a, 1)",
+	}, {
+		in:  "select * from t where func(1, (select a from b), 1)",
+		out: "func(1, :a, 1)",
+	}, {
+		in:  "select * from t where group_concat((select a from b), 1 order by a)",
+		out: "group_concat(:a, 1 order by a asc)",
+	}, {
+		in:  "select * from t where group_concat(1 order by (select a from b), a)",
+		out: "group_concat(1 order by :a asc, a asc)",
+	}, {
+		in:  "select * from t where group_concat(1 order by a, (select a from b))",
+		out: "group_concat(1 order by a asc, :a asc)",
+	}, {
+		in:  "select * from t where substr(a, (select a from b), b)",
+		out: "substr(a, :a, b)",
+	}, {
+		in:  "select * from t where substr(a, b, (select a from b))",
+		out: "substr(a, b, :a)",
+	}, {
+		in:  "select * from t where convert((select a from b), json)",
+		out: "convert(:a, json)",
+	}, {
+		in:  "select * from t where convert((select a from b) using utf8)",
+		out: "convert(:a using utf8)",
+	}, {
+		in:  "select * from t where match((select a from b), 1) against (a)",
+		out: "match(:a, 1) against (a)",
+	}, {
+		in:  "select * from t where match(1, (select a from b), 1) against (a)",
+		out: "match(1, :a, 1) against (a)",
+	}, {
+		in:  "select * from t where match(1, a, 1) against ((select a from b))",
+		out: "match(1, a, 1) against (:a)",
+	}, {
+		in:  "select * from t where case (select a from b) when a then b when b then c else d end",
+		out: "case :a when a then b when b then c else d end",
+	}, {
+		in:  "select * from t where case a when (select a from b) then b when b then c else d end",
+		out: "case a when :a then b when b then c else d end",
+	}, {
+		in:  "select * from t where case a when b then (select a from b) when b then c else d end",
+		out: "case a when b then :a when b then c else d end",
+	}, {
+		in:  "select * from t where case a when b then c when (select a from b) then c else d end",
+		out: "case a when b then c when :a then c else d end",
+	}, {
+		in:  "select * from t where case a when b then c when d then c else (select a from b) end",
+		out: "case a when b then c when d then c else :a end",
+	}}
+	to := NewValArg([]byte(":a"))
+	for _, tcase := range tcases {
+		tree, err := Parse(tcase.in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var from *Subquery
+		_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+			if sq, ok := node.(*Subquery); ok {
+				from = sq
+				return false, nil
+			}
+			return true, nil
+		}, tree)
+		if from == nil {
+			t.Fatalf("from is nil for %s", tcase.in)
+		}
+		expr := ReplaceExpr(tree.(*Select).Where.Expr, from, to)
+		got := String(expr)
+		if tcase.out != got {
+			t.Errorf("ReplaceExpr(%s): %s, want %s", tcase.in, got, tcase.out)
+		}
 	}
 }
 
@@ -438,6 +586,51 @@ func TestColumns_FindColumn(t *testing.T) {
 		val := cols.FindColumn(NewColIdent(tc.in))
 		if val != tc.out {
 			t.Errorf("FindColumn(%s): %d, want %d", tc.in, val, tc.out)
+		}
+	}
+}
+
+func TestSplitStatementToPieces(t *testing.T) {
+	testcases := []struct {
+		input  string
+		output string
+	}{{
+		input: "select * from table",
+	}, {
+		input:  "select * from table1; select * from table2;",
+		output: "select * from table1; select * from table2",
+	}, {
+		input:  "select * from /* comment ; */ table;",
+		output: "select * from /* comment ; */ table",
+	}, {
+		input:  "select * from table where semi = ';';",
+		output: "select * from table where semi = ';'",
+	}, {
+		input:  "select * from table1;--comment;\nselect * from table2;",
+		output: "select * from table1;--comment;\nselect * from table2",
+	}, {
+		input: "CREATE TABLE `total_data` (`id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id', " +
+			"`region` varchar(32) NOT NULL COMMENT 'region name, like zh; th; kepler'," +
+			"`data_size` bigint NOT NULL DEFAULT '0' COMMENT 'data size;'," +
+			"`createtime` datetime NOT NULL DEFAULT NOW() COMMENT 'create time;'," +
+			"`comment` varchar(100) NOT NULL DEFAULT '' COMMENT 'comment'," +
+			"PRIMARY KEY (`id`))",
+	}}
+
+	for _, tcase := range testcases {
+		if tcase.output == "" {
+			tcase.output = tcase.input
+		}
+
+		stmtPieces, err := SplitStatementToPieces(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+
+		out := strings.Join(stmtPieces, ";")
+		if out != tcase.output {
+			t.Errorf("out: %s, want %s", out, tcase.output)
 		}
 	}
 }

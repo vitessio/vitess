@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/hack"
@@ -32,6 +31,7 @@ import (
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -155,7 +155,7 @@ func (w *Writer) Close() {
 // and we also execute them with an isolated connection that turns off the binlog and
 // is closed at the end.
 func (w *Writer) initializeTables(cp *mysql.ConnParams) error {
-	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings(""))
+	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings("", "", ""))
 	if err != nil {
 		return fmt.Errorf("Failed to create connection for heartbeat: %v", err)
 	}

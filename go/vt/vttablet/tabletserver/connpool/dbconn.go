@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -30,6 +29,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -304,7 +304,7 @@ func (dbc *DBConn) Recycle() {
 // Kill will also not kill a query more than once.
 func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	tabletenv.KillStats.Add("Queries", 1)
-	log.Infof("Due to %s, elapsed time: %v, killing query %s", reason, elapsed, dbc.Current())
+	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.Current())
 	killConn, err := dbc.dbaPool.Get(context.TODO())
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
@@ -314,7 +314,7 @@ func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
 	_, err = killConn.ExecuteFetch(sql, 10000, false)
 	if err != nil {
-		log.Errorf("Could not kill query %s: %v", dbc.Current(), err)
+		log.Errorf("Could not kill query ID %v %s: %v", dbc.conn.ID(), dbc.Current(), err)
 		return err
 	}
 	return nil

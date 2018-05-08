@@ -17,15 +17,16 @@ limitations under the License.
 package messager
 
 import (
+	"sort"
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -129,6 +130,7 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 // LockDB obtains db locks for all messages that need to
 // be updated and returns the counterpart unlock function.
 func (me *Engine) LockDB(newMessages map[string][]*MessageRow, changedMessages map[string][]string) func() {
+	// Build the set of affected messages tables.
 	combined := make(map[string]struct{})
 	for name := range newMessages {
 		combined[name] = struct{}{}
@@ -136,6 +138,8 @@ func (me *Engine) LockDB(newMessages map[string][]*MessageRow, changedMessages m
 	for name := range changedMessages {
 		combined[name] = struct{}{}
 	}
+
+	// Build the list of manager objects (one per table).
 	var mms []*messageManager
 	// Don't do DBLock while holding lock on mu.
 	// It causes deadlocks.
@@ -148,6 +152,16 @@ func (me *Engine) LockDB(newMessages map[string][]*MessageRow, changedMessages m
 			}
 		}
 	}()
+	if len(mms) > 1 {
+		// Always use the same order in which manager objects are locked to avoid deadlocks.
+		// The previous order in "mms" is not guaranteed for multiple reasons:
+		// - We use a Go map above which does not guarantee an iteration order.
+		// - Transactions may not always use the same order when writing to multiple
+		//   messages tables.
+		sort.Slice(mms, func(i, j int) bool { return mms[i].name.String() < mms[j].name.String() })
+	}
+
+	// Lock each manager/messages table.
 	for _, mm := range mms {
 		mm.DBLock.Lock()
 	}

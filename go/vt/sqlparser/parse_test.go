@@ -118,6 +118,9 @@ var (
 	}, {
 		input: "select * from t1 join (select * from t2 union select * from t3) as t",
 	}, {
+		// Ensure this doesn't generate: ""select * from t1 join t2 on a = b join t3 on a = b".
+		input: "select * from t1 join t2 on a = b join t3",
+	}, {
 		input: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
 	}, {
 		input: "select * from t1 where exists (select a from t2 union select b from t3)",
@@ -549,7 +552,20 @@ var (
 	}, {
 		input: "select /* string in case statement */ if(max(case a when 'foo' then 1 else 0 end) = 1, 'foo', 'bar') as foobar from t",
 	}, {
-		input: "select /* dual */ 1 from dual",
+		input:  "/*!show databases*/",
+		output: "show databases",
+	}, {
+		input:  "select /*!40101 * from*/ t",
+		output: "select * from t",
+	}, {
+		input:  "select /*! * from*/ t",
+		output: "select * from t",
+	}, {
+		input:  "select /*!* from*/ t",
+		output: "select * from t",
+	}, {
+		input:  "select /*!401011 from*/ t",
+		output: "select 1 from t",
 	}, {
 		input: "select /* dual */ 1 from dual",
 	}, {
@@ -650,6 +666,9 @@ var (
 	}, {
 		input: "delete a, b from a, b where a.id = b.id and b.name = 'test'",
 	}, {
+		input:  "delete from a1, a2 using t1 as a1 inner join t2 as a2 where a1.id=a2.id",
+		output: "delete a1, a2 from t1 as a1 join t2 as a2 where a1.id = a2.id",
+	}, {
 		input: "set /* simple */ a = 3",
 	}, {
 		input: "set #simple\n b = 4",
@@ -657,29 +676,37 @@ var (
 		input: "set character_set_results = utf8",
 	}, {
 		input:  "set names utf8 collate foo",
-		output: "set ",
+		output: "set names 'utf8'",
 	}, {
 		input:  "set character set utf8",
-		output: "set ",
+		output: "set charset 'utf8'",
 	}, {
 		input:  "set character set 'utf8'",
-		output: "set ",
+		output: "set charset 'utf8'",
 	}, {
 		input:  "set character set \"utf8\"",
-		output: "set ",
+		output: "set charset 'utf8'",
 	}, {
 		input:  "set charset default",
-		output: "set ",
+		output: "set charset default",
 	}, {
 		input:  "set session wait_timeout = 3600",
 		output: "set session wait_timeout = 3600",
 	}, {
 		input: "set /* list */ a = 3, b = 4",
 	}, {
+		input: "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
+	}, {
 		input:  "alter ignore table a add foo",
 		output: "alter table a",
 	}, {
 		input:  "alter table a add foo",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add spatial key foo (column1)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add unique key foo (column1)",
 		output: "alter table a",
 	}, {
 		input:  "alter table `By` add foo",
@@ -716,16 +743,16 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "alter table a rename b",
-		output: "rename table a b",
+		output: "rename table a to b",
 	}, {
 		input:  "alter table `By` rename `bY`",
-		output: "rename table `By` `bY`",
+		output: "rename table `By` to `bY`",
 	}, {
 		input:  "alter table a rename to b",
-		output: "rename table a b",
+		output: "rename table a to b",
 	}, {
 		input:  "alter table a rename as b",
-		output: "rename table a b",
+		output: "rename table a to b",
 	}, {
 		input:  "alter table a rename index foo to bar",
 		output: "alter table a",
@@ -751,6 +778,88 @@ var (
 		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add column id int",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add fulltext index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add spatial index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add foreign key",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add primary key",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add constraint",
+		output: "alter table a",
+	}, {
+		input:  "alter table a add id",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop column id int",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop partition p2712",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop fulltext index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop spatial index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop foreign key",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop primary key",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop constraint",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop id",
+		output: "alter table a",
+	}, {
+		input: "alter table a add vindex hash (id)",
+	}, {
+		input:  "alter table a add vindex `hash` (`id`)",
+		output: "alter table a add vindex hash (id)",
+	}, {
+		input:  "alter table a add vindex hash (id) using `hash`",
+		output: "alter table a add vindex hash (id) using hash",
+	}, {
+		input: "alter table a add vindex `add` (`add`)",
+	}, {
+		input: "alter table a add vindex hash (id) using hash",
+	}, {
+		input:  "alter table a add vindex hash (id) using `hash`",
+		output: "alter table a add vindex hash (id) using hash",
+	}, {
+		input: "alter table user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+	}, {
+		input:  "alter table user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
+		output: "alter table user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+	}, {
+		input: "alter table a drop vindex hash",
+	}, {
+		input:  "alter table a drop vindex `hash`",
+		output: "alter table a drop vindex hash",
+	}, {
+		input:  "alter table a drop vindex hash",
+		output: "alter table a drop vindex hash",
+	}, {
+		input:  "alter table a drop vindex `add`",
+		output: "alter table a drop vindex `add`",
+	}, {
 		input: "create table a",
 	}, {
 		input:  "create table a (\n\t`a` int\n)",
@@ -766,6 +875,12 @@ var (
 	}, {
 		input:  "create table a (a int, b char, c garbage)",
 		output: "create table a",
+	}, {
+		input: "create vindex hash_vdx using hash",
+	}, {
+		input: "create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
+	}, {
+		input: "create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
 	}, {
 		input:  "create index a on b",
 		output: "alter table b",
@@ -1104,6 +1219,22 @@ var (
 		input: "commit",
 	}, {
 		input: "rollback",
+	}, {
+		input: "create database test_db",
+	}, {
+		input:  "create schema test_db",
+		output: "create database test_db",
+	}, {
+		input:  "create database if not exists test_db",
+		output: "create database test_db",
+	}, {
+		input: "drop database test_db",
+	}, {
+		input:  "drop schema test_db",
+		output: "drop database test_db",
+	}, {
+		input:  "drop database if exists test_db",
+		output: "drop database test_db",
 	}}
 )
 
@@ -1124,7 +1255,7 @@ func TestValid(t *testing.T) {
 		// This test just exercises the tree walking functionality.
 		// There's no way automated way to verify that a node calls
 		// all its children. But we can examine code coverage and
-		// ensure that all WalkSubtree functions were called.
+		// ensure that all walkSubtree functions were called.
 		Walk(func(node SQLNode) (bool, error) {
 			return true, nil
 		}, tree)
@@ -1153,10 +1284,9 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "alter table a",
 	}, {
 		input:  "alter table A rename to B",
-		output: "rename table A B",
+		output: "rename table A to B",
 	}, {
-		input:  "rename table A to B",
-		output: "rename table A B",
+		input: "rename table A to B",
 	}, {
 		input:  "drop table B",
 		output: "drop table B",
@@ -1419,6 +1549,45 @@ func TestConvert(t *testing.T) {
 	}
 }
 
+func TestSubStr(t *testing.T) {
+
+	validSQL := []struct {
+		input  string
+		output string
+	}{{
+		input: "select substr(a, 1) from t",
+	}, {
+		input: "select substr(a, 1, 6) from t",
+	}, {
+		input:  "select substring(a, 1) from t",
+		output: "select substr(a, 1) from t",
+	}, {
+		input:  "select substring(a, 1, 6) from t",
+		output: "select substr(a, 1, 6) from t",
+	}, {
+		input:  "select substr(a from 1 for 6) from t",
+		output: "select substr(a, 1, 6) from t",
+	}, {
+		input:  "select substring(a from 1 for 6) from t",
+		output: "select substr(a, 1, 6) from t",
+	}}
+
+	for _, tcase := range validSQL {
+		if tcase.output == "" {
+			tcase.output = tcase.input
+		}
+		tree, err := Parse(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+		out := String(tree)
+		if out != tcase.output {
+			t.Errorf("out: %s, want %s", out, tcase.output)
+		}
+	}
+}
+
 func TestCreateTable(t *testing.T) {
 	validSQL := []string{
 		// test all the data types and options
@@ -1472,7 +1641,30 @@ func TestCreateTable(t *testing.T) {
 			"	col_longtext longtext,\n" +
 			"	col_text text character set ascii collate ascii_bin,\n" +
 			"	col_json json,\n" +
-			"	col_enum enum('a', 'b', 'c', 'd')\n" +
+			"	col_enum enum('a', 'b', 'c', 'd'),\n" +
+			"	col_enum2 enum('a', 'b', 'c', 'd') character set ascii,\n" +
+			"	col_enum3 enum('a', 'b', 'c', 'd') collate ascii_bin,\n" +
+			"	col_enum4 enum('a', 'b', 'c', 'd') character set ascii collate ascii_bin,\n" +
+			"	col_set set('a', 'b', 'c', 'd'),\n" +
+			"	col_set2 set('a', 'b', 'c', 'd') character set ascii,\n" +
+			"	col_set3 set('a', 'b', 'c', 'd') collate ascii_bin,\n" +
+			"	col_set4 set('a', 'b', 'c', 'd') character set ascii collate ascii_bin,\n" +
+			"	col_geometry1 geometry,\n" +
+			"	col_geometry2 geometry not null,\n" +
+			"	col_point1 point,\n" +
+			"	col_point2 point not null,\n" +
+			"	col_linestring1 linestring,\n" +
+			"	col_linestring2 linestring not null,\n" +
+			"	col_polygon1 polygon,\n" +
+			"	col_polygon2 polygon not null,\n" +
+			"	col_geometrycollection1 geometrycollection,\n" +
+			"	col_geometrycollection2 geometrycollection not null,\n" +
+			"	col_multipoint1 multipoint,\n" +
+			"	col_multipoint2 multipoint not null,\n" +
+			"	col_multilinestring1 multilinestring,\n" +
+			"	col_multilinestring2 multilinestring not null,\n" +
+			"	col_multipolygon1 multipolygon,\n" +
+			"	col_multipolygon2 multipolygon not null\n" +
 			")",
 
 		// test defaults
@@ -1483,7 +1675,8 @@ func TestCreateTable(t *testing.T) {
 			"	s1 varchar default 'c',\n" +
 			"	s2 varchar default 'this is a string',\n" +
 			"	s3 varchar default null,\n" +
-			"	s4 timestamp default current_timestamp\n" +
+			"	s4 timestamp default current_timestamp,\n" +
+			"	s5 bit(1) default B'0'\n" +
 			")",
 
 		// test key field options
@@ -1502,8 +1695,10 @@ func TestCreateTable(t *testing.T) {
 			"	username varchar,\n" +
 			"	email varchar,\n" +
 			"	full_name varchar,\n" +
+			"	geom point not null,\n" +
 			"	status_nonkeyword varchar,\n" +
 			"	primary key (id),\n" +
+			"	spatial key geom (geom),\n" +
 			"	unique key by_username (username),\n" +
 			"	unique by_username2 (username),\n" +
 			"	unique index by_username3 (username),\n" +

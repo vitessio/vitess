@@ -280,5 +280,5 @@ func init() {
 // NewDefaultEnv is an user-configurable callback that returns a new Environment
 // instance with the default settings.
 // This callback is only used in cases where the user hasn't explicitly set
-// the Env variable when intializing a LocalCluster
+// the Env variable when initializing a LocalCluster
 var NewDefaultEnv = defaultEnvFactory

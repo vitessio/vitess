@@ -41,10 +41,10 @@ import (
 	// register the HTTP handlers for profiling
 	_ "net/http/pprof"
 
-	log "github.com/golang/glog"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 
 	// register the proper init and shutdown hooks for logging
 	_ "vitess.io/vitess/go/vt/logutil"
@@ -98,13 +98,13 @@ func Init() {
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, fdLimit); err != nil {
 		log.Errorf("max-open-fds failed: %v", err)
 	}
-	fdl := stats.NewInt("MaxFds")
+	fdl := stats.NewGauge("MaxFds", "File descriptor limit")
 	fdl.Set(int64(fdLimit.Cur))
 
 	onInitHooks.Fire()
 }
 
-func populateListeningURL() {
+func populateListeningURL(port int32) {
 	host, err := netutil.FullyQualifiedHostname()
 	if err != nil {
 		host, err = os.Hostname()
@@ -114,7 +114,7 @@ func populateListeningURL() {
 	}
 	ListeningURL = url.URL{
 		Scheme: "http",
-		Host:   netutil.JoinHostPort(host, int32(*Port)),
+		Host:   netutil.JoinHostPort(host, port),
 		Path:   "/",
 	}
 }

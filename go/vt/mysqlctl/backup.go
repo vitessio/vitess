@@ -30,7 +30,6 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/cgzip"
@@ -39,6 +38,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 )
@@ -402,7 +402,7 @@ func backupFiles(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger,
 	}
 
 	// open the MANIFEST
-	wc, err := bh.AddFile(ctx, backupManifest)
+	wc, err := bh.AddFile(ctx, backupManifest, 0)
 	if err != nil {
 		return fmt.Errorf("cannot add %v to backup: %v", backupManifest, err)
 	}
@@ -440,8 +440,13 @@ func backupFile(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, 
 	}
 	defer source.Close()
 
+	fi, err := source.Stat()
+	if err != nil {
+		return err
+	}
+
 	// Open the destination file for writing, and a buffer.
-	wc, err := bh.AddFile(ctx, name)
+	wc, err := bh.AddFile(ctx, name, fi.Size())
 	if err != nil {
 		return fmt.Errorf("cannot add file: %v", err)
 	}

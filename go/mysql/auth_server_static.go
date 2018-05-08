@@ -23,9 +23,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 
-	log "github.com/golang/glog"
-
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -89,6 +91,15 @@ func NewAuthServerStatic() *AuthServerStatic {
 // of error.
 func RegisterAuthServerStaticFromParams(file, str string) {
 	authServerStatic := NewAuthServerStatic()
+
+	authServerStatic.loadConfigFromParams(file, str)
+	authServerStatic.installSignalHandlers()
+
+	// And register the server.
+	RegisterAuthServerImpl("static", authServerStatic)
+}
+
+func (a *AuthServerStatic) loadConfigFromParams(file, str string) {
 	jsonConfig := []byte(str)
 	if file != "" {
 		data, err := ioutil.ReadFile(file)
@@ -98,13 +109,25 @@ func RegisterAuthServerStaticFromParams(file, str string) {
 		jsonConfig = data
 	}
 
-	// Parse JSON config.
-	if err := parseConfig(jsonConfig, &authServerStatic.Entries); err != nil {
+	a.Entries = make(map[string][]*AuthServerStaticEntry) // clear old entries
+	if err := parseConfig(jsonConfig, &a.Entries); err != nil {
 		log.Exitf("Error parsing auth server config: %v", err)
 	}
+}
 
-	// And register the server.
-	RegisterAuthServerImpl("static", authServerStatic)
+func (a *AuthServerStatic) installSignalHandlers() {
+	if *mysqlAuthServerStaticFile == "" {
+		return
+	}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGHUP)
+	go func() {
+		for {
+			<-sigChan
+			a.loadConfigFromParams(*mysqlAuthServerStaticFile, "")
+		}
+	}()
 }
 
 func parseConfig(jsonConfig []byte, config *map[string][]*AuthServerStaticEntry) error {

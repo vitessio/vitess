@@ -49,7 +49,11 @@ func (t noopVCursor) ExecuteAutocommit(method string, query string, bindvars map
 	panic("unimplemented")
 }
 
-func (t noopVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
+func (t noopVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, error) {
+	panic("unimplemented")
+}
+
+func (t noopVCursor) AutocommitApproval() bool {
 	panic("unimplemented")
 }
 
@@ -94,6 +98,10 @@ func (f *loggingVCursor) Execute(method string, query string, bindvars map[strin
 func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v %v", printResolvedShardQueries(rss, queries), isDML, canAutocommit))
 	return f.nextResult()
+}
+
+func (f *loggingVCursor) AutocommitApproval() bool {
+	return true
 }
 
 func (f *loggingVCursor) ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
@@ -177,7 +185,7 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
 	if !reflect.DeepEqual(f.log, want) {
-		t.Errorf("vc.log:\n%v\n-- want:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
+		t.Errorf("vc.log:\n%v\nwant:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
 	}
 }
 
@@ -210,7 +218,7 @@ func expectError(t *testing.T, msg string, err error, want string) {
 func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {
 	t.Helper()
 	if !reflect.DeepEqual(result, want) {
-		t.Errorf("s: %v, want %v", result, want)
+		t.Errorf("%s:\n%v\nwant:\n%v", msg, result, want)
 	}
 }
 

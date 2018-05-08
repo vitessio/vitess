@@ -17,7 +17,13 @@ limitations under the License.
 package engine
 
 import (
+	"fmt"
+	"reflect"
+	"strings"
+	"testing"
+
 	"vitess.io/vitess/go/sqltypes"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -30,34 +36,39 @@ type fakePrimitive struct {
 	curResult int
 	// sendErr is sent at the end of the stream if it's set.
 	sendErr error
+
+	log []string
 }
 
-func (tp *fakePrimitive) rewind() {
-	tp.curResult = 0
+func (f *fakePrimitive) rewind() {
+	f.curResult = 0
+	f.log = nil
 }
 
-func (tp *fakePrimitive) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	if tp.results == nil {
-		return nil, tp.sendErr
+func (f *fakePrimitive) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))
+	if f.results == nil {
+		return nil, f.sendErr
 	}
 
-	r := tp.results[tp.curResult]
-	tp.curResult++
+	r := f.results[f.curResult]
+	f.curResult++
 	if r == nil {
-		return nil, tp.sendErr
+		return nil, f.sendErr
 	}
 	return r, nil
 }
 
-func (tp *fakePrimitive) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	if tp.results == nil {
-		return tp.sendErr
+func (f *fakePrimitive) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	f.log = append(f.log, fmt.Sprintf("StreamExecute %v %v", printBindVars(bindVars), wantfields))
+	if f.results == nil {
+		return f.sendErr
 	}
 
-	r := tp.results[tp.curResult]
-	tp.curResult++
+	r := f.results[f.curResult]
+	f.curResult++
 	if r == nil {
-		return tp.sendErr
+		return f.sendErr
 	}
 	if err := callback(&sqltypes.Result{Fields: r.Fields}); err != nil {
 		return err
@@ -81,6 +92,30 @@ func (tp *fakePrimitive) StreamExecute(vcursor VCursor, bindVars map[string]*que
 	return nil
 }
 
-func (tp *fakePrimitive) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return tp.Execute(vcursor, bindVars, false /* wantfields */)
+func (f *fakePrimitive) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	f.log = append(f.log, fmt.Sprintf("GetFields %v", printBindVars(bindVars)))
+	return f.Execute(vcursor, bindVars, true /* wantfields */)
+}
+
+func (f *fakePrimitive) ExpectLog(t *testing.T, want []string) {
+	t.Helper()
+	if !reflect.DeepEqual(f.log, want) {
+		t.Errorf("vc.log got:\n%v\nwant:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func wrapStreamExecute(prim Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	var result *sqltypes.Result
+	err := prim.StreamExecute(vcursor, bindVars, wantfields, func(r *sqltypes.Result) error {
+		if result == nil {
+			result = r
+		} else {
+			result.Rows = append(result.Rows, r.Rows...)
+		}
+		return nil
+	})
+	if result != nil {
+		result.RowsAffected = uint64(len(result.Rows))
+	}
+	return result, err
 }

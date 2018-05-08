@@ -21,9 +21,8 @@ import (
 	"fmt"
 	"os"
 
-	log "github.com/golang/glog"
-
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/tlstest"
 )

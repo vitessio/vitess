@@ -20,8 +20,10 @@ import (
 	"encoding/json"
 	"strings"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
+
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // PlainController implements Controller interface.
@@ -36,7 +38,13 @@ func NewPlainController(sqlStr string, keyspace string) *PlainController {
 		sqls:     make([]string, 0, 32),
 		keyspace: keyspace,
 	}
-	for _, sql := range strings.Split(sqlStr, ";") {
+
+	sqls, err := sqlparser.SplitStatementToPieces(sqlStr)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	for _, sql := range sqls {
 		s := strings.TrimSpace(sql)
 		if s != "" {
 			controller.sqls = append(controller.sqls, s)

@@ -194,7 +194,7 @@ spec:
               fi
 
               # check for a master tablet from the GetShard call
-              master_alias=$(vtctlclient -server $VTCTLD_SVC GetShard {{ $keyspaceClean }}/{{ $shard.name }} | jq '.master_alias.uid')
+              master_alias=$(vtctlclient -server $VTCTLD_SVC GetShard {{ $keyspace.name }}/{{ $shard.name }} | jq '.master_alias.uid')
               if [ $master_alias != "null" ]; then
                   echo "'$master_alias' is already the master tablet, exiting without running InitShardMaster"
                   exit
@@ -222,7 +222,7 @@ spec:
             tablet_id=$( echo "$shardTablets" | awk 'substr( $5,1,{{ add (len $shardName) 10 }} ) == "{{ $shardName }}-replica-0" {print $1}')
             
             # initialize the shard master
-            until vtctlclient -server $VTCTLD_SVC InitShardMaster -force {{ $keyspaceClean }}/{{ $shard.name }} $tablet_id; do 
+            until vtctlclient -server $VTCTLD_SVC InitShardMaster -force {{ $keyspace.name }}/{{ $shard.name }} $tablet_id; do 
               if (( $SECONDS > $TIMEOUT_SECONDS )); then
                 echo "timed out waiting for InitShardMaster to succeed"
                 exit 1
