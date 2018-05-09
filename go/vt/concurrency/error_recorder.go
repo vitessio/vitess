@@ -114,8 +114,8 @@ func (aer *AllErrorRecorder) AggrError(aggr AllErrorAggregator) error {
 // Error returns an aggregate of all errors by concatenation.
 func (aer *AllErrorRecorder) Error() error {
 	return aer.AggrError(func(errors []error) error {
-		errs := make([]string, 0, len(aer.Errors))
-		for _, e := range aer.Errors {
+		errs := make([]string, 0, len(errors))
+		for _, e := range errors {
 			errs = append(errs, e.Error())
 		}
 		return fmt.Errorf("%v", strings.Join(errs, ";"))
