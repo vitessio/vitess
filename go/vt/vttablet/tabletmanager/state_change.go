@@ -316,11 +316,18 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	if broadcastHealth {
 		agent.broadcastHealth()
 	}
+
+	// Let's populate Metadata values.
+	if newTablet.Type != oldTablet.Type && (newTablet.Type == topodatapb.TabletType_REPLICA || newTablet.Type == topodatapb.TabletType_RDONLY) {
+		agent.populateMetadataValues(newTablet.Type)
+	}
+
 }
 
 // populateMetadataValues - populate metadata values
 func (agent *ActionAgent) populateMetadataValues(tabletType topodatapb.TabletType) {
 	localMetadata := agent.getLocalMetadataValues(tabletType)
+
 	if err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata); err != nil {
 		log.Errorf("PopulateMetadataTables failed: %v.", err)
 	}

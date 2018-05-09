@@ -410,11 +410,17 @@ func (fmd *FakeMysqlDaemon) GetAppConnection(ctx context.Context) (*dbconnpool.P
 
 // GetDbaConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error) {
+	if fmd.db == nil {
+		return nil, fmt.Errorf("db handler is nil")
+	}
 	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings("", "", ""))
 }
 
 // GetAllPrivsConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
+	if fmd.db == nil {
+		return nil, fmt.Errorf("db handler is nil")
+	}
 	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings("", "", ""))
 }
 
