@@ -474,7 +474,6 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 		CapabilityClientSecureConnection |
 		CapabilityClientMultiStatements |
 		CapabilityClientMultiResults |
-		CapabilityClientPsMultiResults |
 		CapabilityClientPluginAuth |
 		CapabilityClientPluginAuthLenencClientData |
 		CapabilityClientSSL |
@@ -525,7 +524,6 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		CapabilityClientSecureConnection |
 		CapabilityClientMultiStatements |
 		CapabilityClientMultiResults |
-		CapabilityClientPsMultiResults |
 		CapabilityClientPluginAuth |
 		CapabilityClientPluginAuthLenencClientData |
 		// If the server supported

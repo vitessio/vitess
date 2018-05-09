@@ -110,10 +110,6 @@ const (
 	// Can send multiple resultsets for COM_QUERY.
 	CapabilityClientMultiResults = 1 << 17
 
-	// CapabilityClientPsMultiResults is CLIENT_PS_MULTI_RESULTS
-	// Can send multiple resultsets for COM_STMT_EXECUTE.
-	CapabilityClientPsMultiResults = 1 << 18
-
 	// CapabilityClientPluginAuth is CLIENT_PLUGIN_AUTH.
 	// Client supports plugin authentication.
 	CapabilityClientPluginAuth = 1 << 19
