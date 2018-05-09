@@ -59,6 +59,18 @@ func (c *Conn) writeComInitDB(db string) error {
 	return nil
 }
 
+// writeComSetOption changes the connection's capability of executing multi statements.
+// Returns SQLError(CRServerGone) if it can't.
+func (c *Conn) writeComSetOption(operation uint16) error {
+	data := c.startEphemeralPacket(16 + 1)
+	data[0] = ComSetOption
+	writeUint16(data, 1, operation)
+	if err := c.writeEphemeralPacket(true); err != nil {
+		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
+	}
+	return nil
+}
+
 // readColumnDefinition reads the next Column Definition packet.
 // Returns a SQLError.
 func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
@@ -460,6 +472,11 @@ func (c *Conn) parseComQuery(data []byte) string {
 	return string(data[1:])
 }
 
+func (c *Conn) parseComSetOption(data []byte) (uint16, bool) {
+	val, _, ok := readUint16(data, 1)
+	return val, ok
+}
+
 func (c *Conn) parseComInitDB(data []byte) string {
 	return string(data[1:])
 }
@@ -584,12 +601,16 @@ func (c *Conn) writeRows(result *sqltypes.Result) error {
 }
 
 // writeEndResult concludes the sending of a Result.
-func (c *Conn) writeEndResult() error {
+// if more is set to true, then it means there are more results afterwords
+func (c *Conn) writeEndResult(more bool) error {
 	// Send either an EOF, or an OK packet.
-	// FIXME(alainjobart) if multi result is set, can send more after this.
 	// See doc.go.
+	flag := c.StatusFlags
+	if more {
+		flag |= ServerMoreResultsExists
+	}
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-		if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+		if err := c.writeEOFPacket(flag, 0); err != nil {
 			return err
 		}
 		if err := c.flush(); err != nil {
@@ -597,7 +618,7 @@ func (c *Conn) writeEndResult() error {
 		}
 	} else {
 		// This will flush too.
-		if err := c.writeOKPacketWithEOFHeader(0, 0, c.StatusFlags, 0); err != nil {
+		if err := c.writeOKPacketWithEOFHeader(0, 0, flag, 0); err != nil {
 			return err
 		}
 	}

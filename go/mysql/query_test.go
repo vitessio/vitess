@@ -51,6 +51,31 @@ func TestComInitDB(t *testing.T) {
 	}
 }
 
+func TestComSetOption(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	// Write ComSetOption packet, read it, compare.
+	if err := cConn.writeComSetOption(1); err != nil {
+		t.Fatalf("writeComSetOption failed: %v", err)
+	}
+	data, err := sConn.ReadPacket()
+	if err != nil || len(data) == 0 || data[0] != ComSetOption {
+		t.Fatalf("sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
+	}
+	operation, ok := sConn.parseComSetOption(data)
+	if !ok {
+		t.Fatalf("parseComSetOption failed unexpectedly")
+	}
+	if operation != 1 {
+		t.Errorf("parseComSetOption returned unexpected data: %v", operation)
+	}
+}
+
 func TestQueries(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
@@ -431,7 +456,7 @@ func writeResult(conn *Conn, result *sqltypes.Result) error {
 	if err := conn.writeRows(result); err != nil {
 		return err
 	}
-	return conn.writeEndResult()
+	return conn.writeEndResult(false)
 }
 
 func RowString(row []sqltypes.Value) string {
