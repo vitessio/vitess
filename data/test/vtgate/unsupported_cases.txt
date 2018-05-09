@@ -395,6 +395,10 @@
 "insert into user(id) values(1) on duplicate key update id = 3"
 "unsupported: DML cannot change vindex column"
 
+# sharded upsert can't change vindex using values function
+"insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(id)"
+"unsupported: DML cannot change vindex column"
+
 # sharded insert from select
 "insert into user(id) select 1 from dual"
 "unsupported: insert into select"
