@@ -68,7 +68,7 @@ func (be PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 		// Silently ignore these types since they don't make sense to
 		// export to Prometheus' data model.
 	default:
-		log.Fatalf("prometheus: not exporting unsupported metric type %T: %s", st, name)
+		log.Fatalf("prometheus: Metric type %T (seen for variable: %s) is not covered by type switch. Add it there and to all other plugins which register a NewVarHook.", st, name)
 	}
 }
 
