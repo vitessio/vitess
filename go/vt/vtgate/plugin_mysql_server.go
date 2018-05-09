@@ -42,6 +42,7 @@ var (
 	mysqlServerPort               = flag.Int("mysql_server_port", -1, "If set, also listen for MySQL binary protocol connections on this port.")
 	mysqlServerBindAddress        = flag.String("mysql_server_bind_address", "", "Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.")
 	mysqlServerSocketPath         = flag.String("mysql_server_socket_path", "", "This option specifies the Unix socket file to use when listening for local connections. By default it will be empty and it won't listen to a unix socket")
+	mysqlTCPVersion               = flag.String("mysql_tcp_version", "tcp", "Select tcp, tcp4, or tcp6 to control the socket type.")
 	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use.")
 	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
 	mysqlServerVersion            = flag.String("mysql_server_version", mysql.DefaultServerVersion, "MySQL server version to advertise.")
@@ -159,11 +160,18 @@ func initMySQLProtocol() {
 	}
 	authServer := mysql.GetAuthServer(*mysqlAuthServerImpl)
 
+	switch *mysqlTCPVersion {
+	case "tcp", "tcp4", "tcp6":
+		// Valid flag value.
+	default:
+		log.Exitf("-mysql_tcp_version must be one of [tcp, tcp4, tcp6]")
+	}
+
 	// Create a Listener.
 	var err error
 	vh := newVtgateHandler(rpcVTGate)
 	if *mysqlServerPort >= 0 {
-		mysqlListener, err = mysql.NewListener("tcp", net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
+		mysqlListener, err = mysql.NewListener(*mysqlTCPVersion, net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
