@@ -451,7 +451,6 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 		CapabilityClientSecureConnection |
 		CapabilityClientMultiStatements |
 		CapabilityClientMultiResults |
-		CapabilityClientPsMultiResults |
 		CapabilityClientPluginAuth |
 		CapabilityClientPluginAuthLenencClientData |
 		CapabilityClientDeprecateEOF
