@@ -34,7 +34,7 @@ func BenchmarkParallelShortQueries(b *testing.B) {
 
 	authServer := &AuthServerNone{}
 
-	l, err := NewListener("tcp", ":0", authServer, th)
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		b.Fatalf("NewListener failed: %v", err)
 	}
