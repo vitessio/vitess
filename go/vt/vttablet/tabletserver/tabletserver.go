@@ -972,7 +972,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot start a new transaction in the scope of an existing one")
 	}
 
-	if tsv.enableHotRowProtection && asTransaction && len(queries) == 1 {
+	if tsv.enableHotRowProtection && asTransaction {
 		// Serialize transactions which target the same hot row range.
 		// NOTE: We put this intentionally at this place *before* tsv.startRequest()
 		// gets called below. Otherwise, the startRequest()/endRequest() section from
