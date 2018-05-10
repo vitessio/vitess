@@ -24,6 +24,7 @@ import (
 	"net"
 	"time"
 
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
@@ -114,28 +115,34 @@ type Listener struct {
 
 	// Incrementing ID for connection id.
 	connectionID uint32
+
+	// Read timeout on a given connection
+	connReadTimeout time.Duration
+	// Write timeout on a given connection
+	connWriteTimeout time.Duration
 }
 
 // NewFromListener creares a new mysql listener from an existing net.Listener
-func NewFromListener(l net.Listener, authServer AuthServer, handler Handler) (*Listener, error) {
+func NewFromListener(l net.Listener, authServer AuthServer, handler Handler, connReadTimeout time.Duration, connWriteTimeout time.Duration) (*Listener, error) {
 	return &Listener{
-		authServer: authServer,
-		handler:    handler,
-		listener:   l,
-
-		ServerVersion: DefaultServerVersion,
-		connectionID:  1,
+		authServer:       authServer,
+		handler:          handler,
+		listener:         l,
+		ServerVersion:    DefaultServerVersion,
+		connectionID:     1,
+		connReadTimeout:  connReadTimeout,
+		connWriteTimeout: connWriteTimeout,
 	}, nil
 }
 
 // NewListener creates a new Listener.
-func NewListener(protocol, address string, authServer AuthServer, handler Handler) (*Listener, error) {
+func NewListener(protocol, address string, authServer AuthServer, handler Handler, connReadTimeout time.Duration, connWriteTimeout time.Duration) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewFromListener(listener, authServer, handler)
+	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout)
 }
 
 // Addr returns the listener address.
@@ -166,8 +173,10 @@ func (l *Listener) Accept() {
 
 // handle is called in a go routine for each client connection.
 // FIXME(alainjobart) handle per-connection logs in a way that makes sense.
-// FIXME(alainjobart) add an idle timeout for the connection.
 func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Time) {
+	if l.connReadTimeout != 0 || l.connWriteTimeout != 0 {
+		conn = netutil.NewConnWithTimeouts(conn, l.connReadTimeout, l.connWriteTimeout)
+	}
 	c := newConn(conn)
 	c.ConnectionID = connectionID
 
