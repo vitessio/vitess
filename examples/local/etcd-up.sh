@@ -39,12 +39,13 @@ echo "add /vitess/test"
 # And also add the CellInfo description for the 'test' cell.
 # If the node already exists, it's fine, means we used existing data.
 echo "add test CellInfo"
-
+set +e
 # shellcheck disable=SC2086
 "${VTROOT}"/bin/vtctl $TOPOLOGY_FLAGS AddCellInfo \
   -root /vitess/test \
   -server_address "${ETCD_SERVER}" \
-  test || /bin/true
+  test
+set -e
 
 echo "etcd start done..."
 
