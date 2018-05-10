@@ -77,11 +77,10 @@ func (mp *Proxy) Execute(ctx context.Context, session *ProxySession, sql string,
 		result, err = mp.executeOther(ctx, session, sql, bindVariables)
 	}
 
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return session, result, nil
+	// N.B. You must return session, even on error. Modeled after vtgate mysql plugin, the
+	// vtqueryserver plugin expects you to return a new or updated session and not drop it on the
+	// floor during an error.
+	return session, result, err
 }
 
 // Rollback rolls back the session
