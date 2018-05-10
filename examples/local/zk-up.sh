@@ -52,9 +52,12 @@ echo "Started zk servers."
 
 # Add the CellInfo description for the 'test' cell.
 # If the node already exists, it's fine, means we used existing data.
+set +e
+# shellcheck disable=SC2086
 $VTROOT/bin/vtctl $TOPOLOGY_FLAGS AddCellInfo \
   -root /vitess/test \
   -server_address $ZK_SERVER \
-  test || /bin/true
+  test
+set -e
 
 echo "Configured zk servers."
