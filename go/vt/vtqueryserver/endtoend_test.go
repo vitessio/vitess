@@ -343,21 +343,37 @@ func TestTransactionsInProcess(t *testing.T) {
 	testFetch(t, conn, "select * from test", 1)
 	testFetch(t, conn2, "select * from test", 1)
 
+	// Setting autocommit=1 (when it was previously 0) causes the existing transaction to commit
 	testDML(t, conn, "set autocommit=0", 0, 0)
-	testDML(t, conn, "begin", 1, 0)
-	testDML(t, conn, "insert into test (id, val) values(2, 'hello')", 1, 1)
+	// (2 queries -- begin b/c autocommit = 0; insert)
+	testDML(t, conn, "insert into test (id, val) values(2, 'hello')", 2, 1)
 	testFetch(t, conn, "select * from test", 2)
 	testFetch(t, conn2, "select * from test", 1)
 
-	// Setting autocommit=1 causes the existing transaction to commit
+	// (1 query -- commit b/c of autocommit change)
 	testDML(t, conn, "set autocommit=1", 1, 0)
 	testFetch(t, conn, "select * from test", 2)
 	testFetch(t, conn2, "select * from test", 2)
 
+	// Setting autocommit=1 doesn't cause the existing transaction to commit if it was already
+	// autocommit=1. Therefore rollback is effective.
+	testDML(t, conn, "set autocommit=1", 0, 0)
+	testDML(t, conn, "begin", 1, 0)
+	testDML(t, conn, "insert into test (id, val) values(3, 'hello')", 1, 1)
+	testFetch(t, conn, "select * from test", 3)
+	testFetch(t, conn2, "select * from test", 2)
+
+	testDML(t, conn, "set autocommit=1", 0, 0)
+	testDML(t, conn, "rollback", 1, 0)
+	testFetch(t, conn, "select * from test", 2)
+	testFetch(t, conn2, "select * from test", 2)
+
+	// Basic autocommit test
 	testDML(t, conn, "insert into test (id, val) values(3, 'hello')", 3, 1)
 	testFetch(t, conn, "select * from test", 3)
 	testFetch(t, conn2, "select * from test", 3)
 
+	// Cleanup
 	testDML(t, conn2, "begin", 1, 0)
 	testDML(t, conn2, "delete from test", 2, 3)
 	testDML(t, conn2, "commit", 1, 0)
