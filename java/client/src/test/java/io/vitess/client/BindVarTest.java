@@ -21,6 +21,7 @@ import static org.junit.Assert.assertEquals;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Collection;
 import org.junit.Test;
@@ -116,6 +117,9 @@ public class BindVarTest {
         {new BigDecimal("0.000000000123456789123456789"),
             BindVariable.newBuilder().setType(Query.Type.DECIMAL)
                 .setValue(ByteString.copyFromUtf8("0.000000000123456789123456789")).build()},
+        {new BigInteger("123456789123456789"),
+            BindVariable.newBuilder().setType(Query.Type.INT64)
+                .setValue(ByteString.copyFromUtf8("123456789123456789")).build()},
         // List of Int
         {Arrays.asList(1, 2, 3),
             BindVariable.newBuilder().setType(Query.Type.TUPLE)
