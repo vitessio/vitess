@@ -383,6 +383,40 @@ func TestTransactionsInProcess(t *testing.T) {
 
 }
 
+func TestErrorDoesntDropTransaction(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn2, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testDML(t, conn, "begin", 1, 0)
+	testDML(t, conn, "insert into test (id, val) values(1, 'hello')", 1, 1)
+	_, err = conn.ExecuteFetch("select this is garbage", 1, false)
+	if err == nil {
+		t.Log("Expected error for garbage sql request")
+		t.FailNow()
+	}
+	// First connection should still see its data.
+	testFetch(t, conn, "select * from test", 1)
+	// But second won't, since it's uncommitted.
+	testFetch(t, conn2, "select * from test", 0)
+
+	// Commit works still.
+	testDML(t, conn, "commit", 1, 0)
+	testFetch(t, conn, "select * from test", 1)
+	testFetch(t, conn2, "select * from test", 1)
+
+	// Cleanup
+	testDML(t, conn2, "begin", 1, 0)
+	testDML(t, conn2, "delete from test", 2, 1)
+	testDML(t, conn2, "commit", 1, 0)
+}
+
 func TestOther(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &proxyConnParams)
