@@ -2181,7 +2181,7 @@ function_call_keyword:
   {
     $$ = &CaseExpr{Expr: $2, Whens: $3, Else: $4}
   }
-| VALUES openb sql_id closeb
+| VALUES openb column_name closeb
   {
     $$ = &ValuesFuncExpr{Name: $3}
   }
