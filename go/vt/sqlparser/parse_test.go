@@ -614,6 +614,10 @@ var (
 	}, {
 		input: "insert /* bool in on duplicate */ into a values (1, 2) on duplicate key update b = false, c = d",
 	}, {
+		input: "insert /* bool in on duplicate */ into a values (1, 2, 3) on duplicate key update b = values(b), c = d",
+	}, {
+		input: "insert /* bool in on duplicate */ into a values (1, 2, 3) on duplicate key update b = values(a.b), c = d",
+	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
 	}, {
 		input: "update /* simple */ a set b = 3",
