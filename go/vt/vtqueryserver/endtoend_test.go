@@ -367,7 +367,7 @@ func TestTransactionsInProcess(t *testing.T) {
 
 }
 
-func TestLostTransaction(t *testing.T) {
+func TestErrorDoesntDropTransaction(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &proxyConnParams)
 	if err != nil {
@@ -397,7 +397,7 @@ func TestLostTransaction(t *testing.T) {
 
 	// Cleanup
 	testDML(t, conn2, "begin", 1, 0)
-	testDML(t, conn2, "delete from test", 2, 3)
+	testDML(t, conn2, "delete from test", 2, 1)
 	testDML(t, conn2, "commit", 1, 0)
 }
 
