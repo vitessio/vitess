@@ -143,7 +143,7 @@ func (mp *Proxy) doSet(ctx context.Context, session *ProxySession, sql string, b
 			case 0:
 				session.Autocommit = false
 			case 1:
-				if session.TransactionID != 0 {
+				if !session.Autocommit && session.TransactionID != 0 {
 					if err := mp.doCommit(ctx, session); err != nil {
 						return nil, err
 					}
