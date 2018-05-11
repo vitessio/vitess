@@ -298,13 +298,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 		}
 	}()
 
-	// Set the server read-only. Note all active connections are not
-	// affected.
-	if err := agent.MysqlDaemon.SetReadOnly(true); err != nil {
-		return "", err
-	}
-
-	// Now disallow queries, to make sure nobody is writing to the
+	// First, disallow queries, to make sure nobody is writing to the
 	// database.
 	tablet := agent.Tablet()
 	// We don't care if the QueryService state actually changed because we'll
@@ -312,6 +306,12 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	log.Infof("DemoteMaster disabling query service")
 	if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
 		return "", fmt.Errorf("SetServingType(serving=false) failed: %v", err)
+	}
+
+	// Now, set the server read-only. Note all active connections are not
+	// affected.
+	if err := agent.MysqlDaemon.SetReadOnly(true); err != nil {
+		return "", err
 	}
 
 	// If using semi-sync, we need to disable master-side.
