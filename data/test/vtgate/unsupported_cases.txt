@@ -295,6 +295,10 @@
 "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1"
 "unsupported: multi shard update with limit"
 
+# scatter update table with owned vindexes
+"update user set val = 1"
+"unsupported: multi shard update on a table with owned lookup vindexes"
+
 # delete with multi-table targets
 "delete music from music where id = 1"
 "unsupported: multi-table delete statement in sharded keyspace"
