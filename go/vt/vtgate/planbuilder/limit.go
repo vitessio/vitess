@@ -73,7 +73,7 @@ func (l *limit) ResultColumns() []*resultColumn {
 }
 
 // PushFilter satisfies the builder interface.
-func (l *limit) PushFilter(_ *planBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
+func (l *limit) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
 	panic("BUG: unreachable")
 }
 

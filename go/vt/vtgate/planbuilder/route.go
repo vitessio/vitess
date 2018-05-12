@@ -111,7 +111,7 @@ func (rb *route) ResultColumns() []*resultColumn {
 
 // PushFilter satisfies the builder interface.
 // The primitive will be updated if the new filter improves the plan.
-func (rb *route) PushFilter(pb *planBuilder, filter sqlparser.Expr, whereType string, _ builder) error {
+func (rb *route) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, _ builder) error {
 	sel := rb.Select.(*sqlparser.Select)
 	switch whereType {
 	case sqlparser.WhereStr:
@@ -129,7 +129,7 @@ func (rb *route) PushFilter(pb *planBuilder, filter sqlparser.Expr, whereType st
 // the route. This function should only be used when merging
 // routes, where the ON clause gets implicitly pushed into
 // the merged route.
-func (rb *route) UpdatePlan(pb *planBuilder, filter sqlparser.Expr) {
+func (rb *route) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 	opcode, vindex, values := rb.computePlan(pb, filter)
 	if opcode == engine.SelectScatter {
 		return
@@ -172,7 +172,7 @@ func (rb *route) updateRoute(opcode engine.RouteOpcode, vindex vindexes.Vindex, 
 }
 
 // computePlan computes the plan for the specified filter.
-func (rb *route) computePlan(pb *planBuilder, filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
@@ -188,7 +188,7 @@ func (rb *route) computePlan(pb *planBuilder, filter sqlparser.Expr) (opcode eng
 }
 
 // computeEqualPlan computes the plan for an equality constraint.
-func (rb *route) computeEqualPlan(pb *planBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	left := comparison.Left
 	right := comparison.Right
 	vindex = pb.st.Vindex(left, rb)
@@ -209,7 +209,7 @@ func (rb *route) computeEqualPlan(pb *planBuilder, comparison *sqlparser.Compari
 }
 
 // computeINPlan computes the plan for an IN constraint.
-func (rb *route) computeINPlan(pb *planBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+func (rb *route) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	vindex = pb.st.Vindex(comparison.Left, rb)
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil
@@ -590,7 +590,7 @@ func (rb *route) IsSingle() bool {
 // SubqueryCanMerge returns nil if the supplied route that represents
 // a subquery can be merged with the outer route. If not, it
 // returns an appropriate error.
-func (rb *route) SubqueryCanMerge(pb *planBuilder, inner *route) error {
+func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) error {
 	if rb.ERoute.Keyspace.Name != inner.ERoute.Keyspace.Name {
 		return errors.New("unsupported: subquery keyspace different from outer query")
 	}

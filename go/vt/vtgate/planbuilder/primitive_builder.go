@@ -16,19 +16,19 @@ limitations under the License.
 
 package planbuilder
 
-// planBuilder is the top level type for building plans.
+// primitiveBuilder is the top level type for building plans.
 // It contains the current builder tree, the symtab and
 // the jointab. It can create transient planBuilders due
 // to the recursive nature of SQL.
-type planBuilder struct {
+type primitiveBuilder struct {
 	vschema ContextVSchema
 	jt      *jointab
 	bldr    builder
 	st      *symtab
 }
 
-func newPlanBuilder(vschema ContextVSchema, jt *jointab) *planBuilder {
-	return &planBuilder{
+func newPrimitiveBuilder(vschema ContextVSchema, jt *jointab) *primitiveBuilder {
+	return &primitiveBuilder{
 		vschema: vschema,
 		jt:      jt,
 	}

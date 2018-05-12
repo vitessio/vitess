@@ -26,7 +26,7 @@ import (
 
 // buildSelectPlan is the new function to build a Select plan.
 func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive engine.Primitive, err error) {
-	pb := newPlanBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
+	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
 	if err := pb.processSelect(sel, nil); err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive e
 // The LIMIT clause is the last construct of a query. If it cannot be
 // pushed into a route, then a primitve is created on top of any
 // of the above trees to make it discard unwanted rows.
-func (pb *planBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
+func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
 	if err := pb.processTableExprs(sel.From); err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func (pb *planBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error
 // pushFilter identifies the target route for the specified bool expr,
 // pushes it down, and updates the route info if the new constraint improves
 // the primitive. This function can push to a WHERE or HAVING clause.
-func (pb *planBuilder) pushFilter(boolExpr sqlparser.Expr, whereType string) error {
+func (pb *primitiveBuilder) pushFilter(boolExpr sqlparser.Expr, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
@@ -150,7 +150,7 @@ func reorderBySubquery(filters []sqlparser.Expr) {
 
 // pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
-func (pb *planBuilder) pushSelectExprs(sel *sqlparser.Select, grouper groupByHandler) error {
+func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select, grouper groupByHandler) error {
 	resultColumns, err := pb.pushSelectRoutes(sel.SelectExprs)
 	if err != nil {
 		return err
@@ -161,7 +161,7 @@ func (pb *planBuilder) pushSelectExprs(sel *sqlparser.Select, grouper groupByHan
 
 // pusheSelectRoutes is a convenience function that pushes all the select
 // expressions and returns the list of resultColumns generated for it.
-func (pb *planBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) ([]*resultColumn, error) {
+func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) ([]*resultColumn, error) {
 	resultColumns := make([]*resultColumn, len(selectExprs))
 	for i, node := range selectExprs {
 		switch node := node.(type) {

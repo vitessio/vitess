@@ -34,7 +34,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 		Query:               generateQuery(upd),
 		ChangedVindexValues: make(map[string][]sqltypes.PlanValue),
 	}
-	pb := newPlanBuilder(vschema, newJointab(sqlparser.GetBindvars(upd)))
+	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(upd)))
 	if err := pb.processTableExprs(upd.TableExprs); err != nil {
 		return nil, err
 	}

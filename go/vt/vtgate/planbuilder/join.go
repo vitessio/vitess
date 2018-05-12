@@ -68,7 +68,7 @@ type join struct {
 // newJoin makes a new join using the two planBuilder. ajoin can be nil
 // if the join is on a ',' operator. lpb will contain the resulting join.
 // rpb will be discarded.
-func newJoin(lpb, rpb *planBuilder, ajoin *sqlparser.JoinTableExpr) error {
+func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 	// This function converts ON clauses to WHERE clauses. The WHERE clause
 	// scope can see all tables, whereas the ON clause can only see the
 	// participants of the JOIN. However, since the ON clause doesn't allow
@@ -148,7 +148,7 @@ func (jb *join) ResultColumns() []*resultColumn {
 }
 
 // PushFilter satisfies the builder interface.
-func (jb *join) PushFilter(pb *planBuilder, filter sqlparser.Expr, whereType string, origin builder) error {
+func (jb *join) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error {
 	if jb.isOnLeft(origin.Order()) {
 		return jb.Left.PushFilter(pb, filter, whereType, origin)
 	}
