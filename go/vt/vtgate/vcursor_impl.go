@@ -36,32 +36,32 @@ import (
 // vcursorImpl implements the VCursor functionality used by dependent
 // packages to call back into VTGate.
 type vcursorImpl struct {
-	ctx              context.Context
-	safeSession      *SafeSession
-	keyspace         string
-	tabletType       topodatapb.TabletType
-	trailingComments string
-	executor         *Executor
-	logStats         *LogStats
+	ctx            context.Context
+	safeSession    *SafeSession
+	keyspace       string
+	tabletType     topodatapb.TabletType
+	marginComments sqlparser.MarginComments
+	executor       *Executor
+	logStats       *LogStats
 	// hasPartialDML is set to true if any DML was successfully
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
 	hasPartialDML bool
 }
 
-// newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any trailingComments that came with
+// newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
-func newVCursorImpl(ctx context.Context, safeSession *SafeSession, keyspace string, tabletType topodatapb.TabletType, trailingComments string, executor *Executor, logStats *LogStats) *vcursorImpl {
+func newVCursorImpl(ctx context.Context, safeSession *SafeSession, keyspace string, tabletType topodatapb.TabletType, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats) *vcursorImpl {
 	return &vcursorImpl{
-		ctx:              ctx,
-		safeSession:      safeSession,
-		keyspace:         keyspace,
-		tabletType:       tabletType,
-		trailingComments: trailingComments,
-		executor:         executor,
-		logStats:         logStats,
+		ctx:            ctx,
+		safeSession:    safeSession,
+		keyspace:       keyspace,
+		tabletType:     tabletType,
+		marginComments: marginComments,
+		executor:       executor,
+		logStats:       logStats,
 	}
 }
 
@@ -119,7 +119,7 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 
 // Execute performs a V3 level execution of the query.
 func (vc *vcursorImpl) Execute(method string, query string, BindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	qr, err := vc.executor.Execute(vc.ctx, method, vc.safeSession, query+vc.trailingComments, BindVars)
+	qr, err := vc.executor.Execute(vc.ctx, method, vc.safeSession, vc.marginComments.Leading+query+vc.marginComments.Trailing, BindVars)
 	if err == nil {
 		vc.hasPartialDML = true
 	}
@@ -128,7 +128,7 @@ func (vc *vcursorImpl) Execute(method string, query string, BindVars map[string]
 
 // ExecuteAutocommit performs a V3 level execution of the query in a separate autocommit session.
 func (vc *vcursorImpl) ExecuteAutocommit(method string, query string, BindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	qr, err := vc.executor.Execute(vc.ctx, method, NewAutocommitSession(vc.safeSession.Session), query+vc.trailingComments, BindVars)
+	qr, err := vc.executor.Execute(vc.ctx, method, NewAutocommitSession(vc.safeSession.Session), vc.marginComments.Leading+query+vc.marginComments.Trailing, BindVars)
 	if err == nil {
 		vc.hasPartialDML = true
 	}
@@ -138,7 +138,7 @@ func (vc *vcursorImpl) ExecuteAutocommit(method string, query string, BindVars m
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
-	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.trailingComments), vc.tabletType, vc.safeSession, false, autocommit)
+	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.tabletType, vc.safeSession, false, autocommit)
 	if err == nil {
 		vc.hasPartialDML = true
 	}
@@ -155,7 +155,7 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 	rss := []*srvtopo.ResolvedShard{rs}
 	bqs := []*querypb.BoundQuery{
 		{
-			Sql:           query + vc.trailingComments,
+			Sql:           vc.marginComments.Leading + query + vc.marginComments.Trailing,
 			BindVariables: bindVars,
 		},
 	}
@@ -167,21 +167,21 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(rss)))
-	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, rss, bindVars, vc.tabletType, vc.safeSession.Options, callback)
+	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.tabletType, vc.safeSession.Options, callback)
 }
 
 func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	return vc.executor.resolver.resolver.ResolveDestinations(vc.ctx, keyspace, vc.tabletType, ids, destinations)
 }
 
-func commentedShardQueries(shardQueries []*querypb.BoundQuery, trailingComments string) []*querypb.BoundQuery {
-	if trailingComments == "" {
+func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sqlparser.MarginComments) []*querypb.BoundQuery {
+	if marginComments.Leading == "" && marginComments.Trailing == "" {
 		return shardQueries
 	}
 	newQueries := make([]*querypb.BoundQuery, len(shardQueries))
 	for i, v := range shardQueries {
 		newQueries[i] = &querypb.BoundQuery{
-			Sql:           v.Sql + trailingComments,
+			Sql:           marginComments.Leading + v.Sql + marginComments.Trailing,
 			BindVariables: v.BindVariables,
 		}
 	}
