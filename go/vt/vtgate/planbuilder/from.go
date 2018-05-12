@@ -30,7 +30,7 @@ import (
 
 // processTableExprs analyzes the FROM clause. It produces a builder
 // with all the routes identified.
-func (pb *planBuilder) processTableExprs(tableExprs sqlparser.TableExprs) error {
+func (pb *primitiveBuilder) processTableExprs(tableExprs sqlparser.TableExprs) error {
 	if len(tableExprs) == 1 {
 		return pb.processTableExpr(tableExprs[0])
 	}
@@ -38,7 +38,7 @@ func (pb *planBuilder) processTableExprs(tableExprs sqlparser.TableExprs) error 
 	if err := pb.processTableExpr(tableExprs[0]); err != nil {
 		return err
 	}
-	rpb := newPlanBuilder(pb.vschema, pb.jt)
+	rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
 	if err := rpb.processTableExprs(tableExprs[1:]); err != nil {
 		return err
 	}
@@ -46,7 +46,7 @@ func (pb *planBuilder) processTableExprs(tableExprs sqlparser.TableExprs) error 
 }
 
 // processTableExpr produces a builder subtree for the given TableExpr.
-func (pb *planBuilder) processTableExpr(tableExpr sqlparser.TableExpr) error {
+func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr) error {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		return pb.processAliasedTable(tableExpr)
@@ -73,12 +73,12 @@ func (pb *planBuilder) processTableExpr(tableExpr sqlparser.TableExpr) error {
 // versatile than a subquery. If a subquery becomes a route, then any result
 // columns that represent underlying vindex columns are also exposed as
 // vindex columns.
-func (pb *planBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTableExpr) error {
+func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTableExpr) error {
 	switch expr := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
 		return pb.buildTablePrimitive(tableExpr, expr)
 	case *sqlparser.Subquery:
-		spb := newPlanBuilder(pb.vschema, pb.jt)
+		spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 		switch stmt := expr.Select.(type) {
 		case *sqlparser.Select:
 			if err := spb.processSelect(stmt, nil); err != nil {
@@ -136,7 +136,7 @@ func (pb *planBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTableExpr
 }
 
 // buildTablePrimitive builds a primitive based on the table name.
-func (pb *planBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTableExpr, tableName sqlparser.TableName) error {
+func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTableExpr, tableName sqlparser.TableName) error {
 	alias := tableName
 	if !tableExpr.As.IsEmpty() {
 		alias = sqlparser.TableName{Name: tableExpr.As}
@@ -202,7 +202,7 @@ func (pb *planBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTableExpr
 // processJoin produces a builder subtree for the given Join.
 // If the left and right nodes can be part of the same route,
 // then it's a route. Otherwise, it's a join.
-func (pb *planBuilder) processJoin(ajoin *sqlparser.JoinTableExpr) error {
+func (pb *primitiveBuilder) processJoin(ajoin *sqlparser.JoinTableExpr) error {
 	switch ajoin.Join {
 	case sqlparser.JoinStr, sqlparser.StraightJoinStr, sqlparser.LeftJoinStr:
 	case sqlparser.RightJoinStr:
@@ -213,7 +213,7 @@ func (pb *planBuilder) processJoin(ajoin *sqlparser.JoinTableExpr) error {
 	if err := pb.processTableExpr(ajoin.LeftExpr); err != nil {
 		return err
 	}
-	rpb := newPlanBuilder(pb.vschema, pb.jt)
+	rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
 	if err := rpb.processTableExpr(ajoin.RightExpr); err != nil {
 		return err
 	}
@@ -234,7 +234,7 @@ func convertToLeftJoin(ajoin *sqlparser.JoinTableExpr) {
 	ajoin.Join = sqlparser.LeftJoinStr
 }
 
-func (pb *planBuilder) join(rpb *planBuilder, ajoin *sqlparser.JoinTableExpr) error {
+func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 	if ajoin != nil && ajoin.Condition.Using != nil {
 		return errors.New("unsupported: join with USING(column_list) clause")
 	}
@@ -291,7 +291,7 @@ nomerge:
 // see if the primitive can be improved. The operation can fail if
 // the expression contains a non-pushable subquery. ajoin can be nil
 // if the join is on a ',' operator.
-func (pb *planBuilder) mergeRoutes(rpb *planBuilder, ajoin *sqlparser.JoinTableExpr) error {
+func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 	lRoute := pb.bldr.(*route)
 	rRoute := rpb.bldr.(*route)
 	sel := lRoute.Select.(*sqlparser.Select)
@@ -330,7 +330,7 @@ func (pb *planBuilder) mergeRoutes(rpb *planBuilder, ajoin *sqlparser.JoinTableE
 // isSameRoute returns true if the join constraint makes the routes
 // mergeable by unique vindex. The constraint has to be an equality
 // like a.id = b.id where both columns have the same unique vindex.
-func (pb *planBuilder) isSameRoute(rpb *planBuilder, filter sqlparser.Expr) bool {
+func (pb *primitiveBuilder) isSameRoute(rpb *primitiveBuilder, filter sqlparser.Expr) bool {
 	lRoute := pb.bldr.(*route)
 	rRoute := rpb.bldr.(*route)
 

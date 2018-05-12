@@ -99,7 +99,7 @@ func (vf *vindexFunc) ResultColumns() []*resultColumn {
 
 // PushFilter satisfies the builder interface.
 // Only some where clauses are allowed.
-func (vf *vindexFunc) PushFilter(pb *planBuilder, filter sqlparser.Expr, whereType string, _ builder) error {
+func (vf *vindexFunc) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, _ builder) error {
 	if vf.eVindexFunc.Opcode != engine.VindexNone {
 		return errors.New("unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)")
 	}

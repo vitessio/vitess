@@ -79,7 +79,7 @@ func skipParenthesis(node sqlparser.Expr) sqlparser.Expr {
 //
 // If an expression has no references to the current query, then the left-most
 // origin is chosen as the default.
-func (pb *planBuilder) findOrigin(expr sqlparser.Expr) (origin builder, err error) {
+func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (origin builder, err error) {
 	highestOrigin := pb.bldr.First()
 	var subroutes []*route
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -93,7 +93,7 @@ func (pb *planBuilder) findOrigin(expr sqlparser.Expr) (origin builder, err erro
 				highestOrigin = newOrigin
 			}
 		case *sqlparser.Subquery:
-			spb := newPlanBuilder(pb.vschema, pb.jt)
+			spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 			switch stmt := node.Select.(type) {
 			case *sqlparser.Select:
 				if err := spb.processSelect(stmt, pb.st); err != nil {
@@ -158,7 +158,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func (pb *planBuilder) validateSubquerySamePlan(nodes ...sqlparser.SQLNode) bool {
+func (pb *primitiveBuilder) validateSubquerySamePlan(nodes ...sqlparser.SQLNode) bool {
 	var keyspace string
 	if rb, ok := pb.bldr.(*route); ok {
 		keyspace = rb.ERoute.Keyspace.Name
@@ -176,7 +176,7 @@ func (pb *planBuilder) validateSubquerySamePlan(nodes ...sqlparser.SQLNode) bool
 				if !inSubQuery {
 					return true, nil
 				}
-				spb := newPlanBuilder(pb.vschema, pb.jt)
+				spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 				if err := spb.processSelect(nodeType, pb.st); err != nil {
 					samePlan = false
 					return false, err
@@ -194,7 +194,7 @@ func (pb *planBuilder) validateSubquerySamePlan(nodes ...sqlparser.SQLNode) bool
 				if !inSubQuery {
 					return true, nil
 				}
-				spb := newPlanBuilder(pb.vschema, pb.jt)
+				spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 				if err := spb.processUnion(nodeType, pb.st); err != nil {
 					samePlan = false
 					return false, err

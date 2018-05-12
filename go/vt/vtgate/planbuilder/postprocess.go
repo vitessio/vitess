@@ -39,7 +39,7 @@ type groupByHandler interface {
 
 // pushGroupBy processes the group by clause. It resolves all symbols,
 // and ensures that there are no subqueries.
-func (pb *planBuilder) pushGroupBy(sel *sqlparser.Select, grouper groupByHandler) error {
+func (pb *primitiveBuilder) pushGroupBy(sel *sqlparser.Select, grouper groupByHandler) error {
 	if sel.Distinct != "" {
 		// We can be here only if the builder could handle a group by.
 		if err := grouper.MakeDistinct(); err != nil {
@@ -62,7 +62,7 @@ func (pb *planBuilder) pushGroupBy(sel *sqlparser.Select, grouper groupByHandler
 // In the case of a join, it's only possible to push down if the
 // order by references columns of the left-most route. Otherwise, the
 // function returns an unsupported error.
-func (pb *planBuilder) pushOrderBy(orderBy sqlparser.OrderBy) error {
+func (pb *primitiveBuilder) pushOrderBy(orderBy sqlparser.OrderBy) error {
 	if oa, ok := pb.bldr.(*orderedAggregate); ok {
 		return oa.PushOrderBy(pb, orderBy)
 	}
@@ -130,7 +130,7 @@ func (pb *planBuilder) pushOrderBy(orderBy sqlparser.OrderBy) error {
 	return nil
 }
 
-func (pb *planBuilder) pushLimit(limit *sqlparser.Limit) error {
+func (pb *primitiveBuilder) pushLimit(limit *sqlparser.Limit) error {
 	if limit == nil {
 		return nil
 	}

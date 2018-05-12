@@ -33,7 +33,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 	edel := &engine.Delete{
 		Query: generateQuery(del),
 	}
-	pb := newPlanBuilder(vschema, newJointab(sqlparser.GetBindvars(del)))
+	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(del)))
 	if err := pb.processTableExprs(del.TableExprs); err != nil {
 		return nil, err
 	}

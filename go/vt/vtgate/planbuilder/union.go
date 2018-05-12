@@ -26,7 +26,7 @@ import (
 
 func buildUnionPlan(union *sqlparser.Union, vschema ContextVSchema) (primitive engine.Primitive, err error) {
 	// For unions, create a pb with anonymous scope.
-	pb := newPlanBuilder(vschema, newJointab(sqlparser.GetBindvars(union)))
+	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(union)))
 	if err := pb.processUnion(union, nil); err != nil {
 		return nil, err
 	}
@@ -36,12 +36,12 @@ func buildUnionPlan(union *sqlparser.Union, vschema ContextVSchema) (primitive e
 	return pb.bldr.Primitive(), nil
 }
 
-func (pb *planBuilder) processUnion(union *sqlparser.Union, outer *symtab) error {
-	lpb := newPlanBuilder(pb.vschema, pb.jt)
+func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) error {
+	lpb := newPrimitiveBuilder(pb.vschema, pb.jt)
 	if err := lpb.processPart(union.Left, outer); err != nil {
 		return err
 	}
-	rpb := newPlanBuilder(pb.vschema, pb.jt)
+	rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
 	if err := rpb.processPart(union.Right, outer); err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func (pb *planBuilder) processUnion(union *sqlparser.Union, outer *symtab) error
 	return pb.pushLimit(union.Limit)
 }
 
-func (pb *planBuilder) processPart(part sqlparser.SelectStatement, outer *symtab) error {
+func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, outer *symtab) error {
 	switch part := part.(type) {
 	case *sqlparser.Union:
 		return pb.processUnion(part, outer)

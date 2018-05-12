@@ -29,7 +29,7 @@ import (
 
 // buildInsertPlan builds the route for an INSERT statement.
 func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (*engine.Insert, error) {
-	pb := newPlanBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
+	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
 	aliased := &sqlparser.AliasedTableExpr{Expr: ins.Table}
 	if err := pb.processAliasedTable(aliased); err != nil {
 		return nil, err

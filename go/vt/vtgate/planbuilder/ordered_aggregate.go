@@ -64,7 +64,7 @@ type orderedAggregate struct {
 // that a primitive is needed to handle the aggregation, it builds an orderedAggregate
 // primitive and returns it. It returns a groupByHandler if there is aggregation it
 // can handle.
-func (pb *planBuilder) checkAggregates(sel *sqlparser.Select) (groupByHandler, error) {
+func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) (groupByHandler, error) {
 	rb, isRoute := pb.bldr.(*route)
 	if isRoute && rb.IsSingle() {
 		return rb, nil
@@ -175,7 +175,7 @@ func nodeHasAggregates(node sqlparser.SQLNode) bool {
 // we don't search the ResultColumns because they're not created yet. Also,
 // error conditions are treated as no match for simplicity; They will be
 // subsequently caught downstream.
-func (pb *planBuilder) groupByHasUniqueVindex(sel *sqlparser.Select, rb *route) bool {
+func (pb *primitiveBuilder) groupByHasUniqueVindex(sel *sqlparser.Select, rb *route) bool {
 	for _, expr := range sel.GroupBy {
 		var matchedExpr sqlparser.Expr
 		switch node := expr.(type) {
@@ -258,7 +258,7 @@ func (oa *orderedAggregate) ResultColumns() []*resultColumn {
 }
 
 // PushFilter satisfies the builder interface.
-func (oa *orderedAggregate) PushFilter(_ *planBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
+func (oa *orderedAggregate) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
 	return errors.New("unsupported: filtering on results of aggregates")
 }
 
@@ -364,7 +364,7 @@ func (oa *orderedAggregate) SetGroupBy(groupBy sqlparser.GroupBy) error {
 // 'select a, b, count(*) from t group by a, b order by b'
 // The following construct is not allowed:
 // 'select a, count(*) from t group by a order by count(*)'
-func (oa *orderedAggregate) PushOrderBy(pb *planBuilder, orderBy sqlparser.OrderBy) error {
+func (oa *orderedAggregate) PushOrderBy(pb *primitiveBuilder, orderBy sqlparser.OrderBy) error {
 	// Treat order by null as nil order by.
 	if len(orderBy) == 1 {
 		if _, ok := orderBy[0].Expr.(*sqlparser.NullVal); ok {
