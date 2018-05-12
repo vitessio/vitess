@@ -29,7 +29,6 @@ var _ builder = (*join)(nil)
 // It's used to build a normal join or a left join
 // operation.
 type join struct {
-	symtab        *symtab
 	order         int
 	resultColumns []*resultColumn
 
@@ -66,58 +65,58 @@ type join struct {
 	ejoin *engine.Join
 }
 
-// newJoin makes a new joinBuilder using the two nodes. ajoin can be nil
-// if the join is on a ',' operator.
-func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
+// newJoin makes a new join using the two planBuilder. ajoin can be nil
+// if the join is on a ',' operator. lpb will contain the resulting join.
+// rpb will be discarded.
+func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 	// This function converts ON clauses to WHERE clauses. The WHERE clause
 	// scope can see all tables, whereas the ON clause can only see the
 	// participants of the JOIN. However, since the ON clause doesn't allow
 	// external references, and the FROM clause doesn't allow duplicates,
 	// it's safe to perform this conversion and still expect the same behavior.
 
-	if err := lhs.Symtab().Merge(rhs.Symtab()); err != nil {
-		return nil, err
-	}
 	opcode := engine.NormalJoin
-	if ajoin != nil && ajoin.Join == sqlparser.LeftJoinStr {
-		opcode = engine.LeftJoin
+	if ajoin != nil {
+		switch {
+		case ajoin.Join == sqlparser.LeftJoinStr:
+			opcode = engine.LeftJoin
+
+			// For left joins, we have to push the ON clause into the RHS.
+			// We do this before creating the join primitive.
+			// However, variables of LHS need to be visible. To allow this,
+			// we mark the LHS symtab as outer scope to the RHS, just like
+			// a subquery. This make the RHS treat the LHS symbols as external.
+			// This will prevent constructs from escaping out of the rpb scope.
+			rpb.st.Outer = lpb.st
+			if err := rpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr); err != nil {
+				return err
+			}
+		case ajoin.Condition.Using != nil:
+			return errors.New("unsupported: join with USING(column_list) clause")
+		}
 	}
-	jb := &join{
-		order:     rhs.Order() + 1,
-		leftOrder: lhs.Order(),
-		Left:      lhs,
-		Right:     rhs,
-		symtab:    lhs.Symtab(),
+	// Merge the symbol tables. In the case of a left join, we have to
+	// ideally create new symbols that originate from the join primitive.
+	// However, this is not worth it for now, because the Push functions
+	// verify that only valid constructs are passed through in case of left join.
+	if err := lpb.st.Merge(rpb.st); err != nil {
+		return err
+	}
+	lpb.bldr = &join{
+		Left:  lpb.bldr,
+		Right: rpb.bldr,
 		ejoin: &engine.Join{
 			Opcode: opcode,
-			Left:   lhs.Primitive(),
-			Right:  rhs.Primitive(),
+			Left:   lpb.bldr.Primitive(),
+			Right:  rpb.bldr.Primitive(),
 			Vars:   make(map[string]int),
 		},
 	}
-	jb.Reorder(0)
-	if ajoin == nil {
-		return jb, nil
+	lpb.bldr.Reorder(0)
+	if ajoin == nil || opcode == engine.LeftJoin {
+		return nil
 	}
-	if ajoin.Condition.Using != nil {
-		return nil, errors.New("unsupported: join with USING(column_list) clause")
-	}
-
-	if opcode == engine.LeftJoin {
-		if err := pushFilter(ajoin.Condition.On, rhs, sqlparser.WhereStr); err != nil {
-			return nil, err
-		}
-		return jb, nil
-	}
-	if err := pushFilter(ajoin.Condition.On, jb, sqlparser.WhereStr); err != nil {
-		return nil, err
-	}
-	return jb, nil
-}
-
-// Symtab satisfies the builder interface.
-func (jb *join) Symtab() *symtab {
-	return jb.symtab.Resolve()
+	return lpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr)
 }
 
 // Order satisfies the builder interface.
@@ -138,9 +137,9 @@ func (jb *join) Primitive() engine.Primitive {
 	return jb.ejoin
 }
 
-// Leftmost satisfies the builder interface.
-func (jb *join) Leftmost() builder {
-	return jb.Left.Leftmost()
+// First satisfies the builder interface.
+func (jb *join) First() builder {
+	return jb.Left.First()
 }
 
 // ResultColumns satisfies the builder interface.
@@ -149,14 +148,14 @@ func (jb *join) ResultColumns() []*resultColumn {
 }
 
 // PushFilter satisfies the builder interface.
-func (jb *join) PushFilter(filter sqlparser.Expr, whereType string, origin builder) error {
+func (jb *join) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error {
 	if jb.isOnLeft(origin.Order()) {
-		return jb.Left.PushFilter(filter, whereType, origin)
+		return jb.Left.PushFilter(pb, filter, whereType, origin)
 	}
 	if jb.ejoin.Opcode == engine.LeftJoin {
 		return errors.New("unsupported: cross-shard left join and where clause")
 	}
-	return jb.Right.PushFilter(filter, whereType, origin)
+	return jb.Right.PushFilter(pb, filter, whereType, origin)
 }
 
 // PushSelect satisfies the builder interface.

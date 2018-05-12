@@ -34,11 +34,11 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 		Query:               generateQuery(upd),
 		ChangedVindexValues: make(map[string][]sqltypes.PlanValue),
 	}
-	bldr, err := processTableExprs(upd.TableExprs, vschema)
-	if err != nil {
+	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(upd)))
+	if err := pb.processTableExprs(upd.TableExprs); err != nil {
 		return nil, err
 	}
-	rb, ok := bldr.(*route)
+	rb, ok := pb.bldr.(*route)
 	if !ok {
 		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 	}
@@ -48,7 +48,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	eupd.Keyspace = rb.ERoute.Keyspace
 	if !eupd.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
-		if !validateSubquerySamePlan(rb.ERoute.Keyspace.Name, rb, vschema, upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
+		if !pb.validateSubquerySamePlan(upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
 			return nil, errors.New("unsupported: sharded subqueries in DML")
 		}
 		eupd.Opcode = engine.UpdateUnsharded
@@ -58,18 +58,19 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	if hasSubquery(upd) {
 		return nil, errors.New("unsupported: subqueries in sharded DML")
 	}
-	if len(rb.Symtab().tables) != 1 {
+	if len(pb.st.tables) != 1 {
 		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 	}
 
 	var vindexTable *vindexes.Table
-	for _, tval := range rb.Symtab().tables {
+	for _, tval := range pb.st.tables {
 		vindexTable = tval.vindexTable
 	}
 	eupd.Table = vindexTable
 	if eupd.Table == nil {
 		return nil, errors.New("internal error: table.vindexTable is mysteriously nil")
 	}
+	var err error
 	eupd.Vindex, eupd.Values, err = getDMLRouting(upd.Where, eupd.Table)
 	if err != nil {
 		return nil, err
