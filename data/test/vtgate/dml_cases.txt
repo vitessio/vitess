@@ -1349,25 +1349,6 @@
   }
 }
 
-# update with no index match
-"update user_extra set val = 1 where user_id = 1"
-{
-  "Original": "update user_extra set val = 1 where user_id = 1",
-  "Instructions": {
-    "Opcode": "UpdateEqual",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "update user_extra set val = 1 where user_id = 1",
-    "Vindex": "user_index",
-    "Values": [
-      1
-    ],
-    "Table": "user_extra"
-  }
-}
-
 # update by lookup with IN clause
 "update user_extra set val = 1 where id in (1, 2)"
 {
