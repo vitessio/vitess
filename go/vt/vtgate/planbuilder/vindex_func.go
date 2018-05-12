@@ -31,8 +31,7 @@ var _ builder = (*vindexFunc)(nil)
 
 // vindexFunc is used to build a VindexFunc primitive.
 type vindexFunc struct {
-	order  int
-	symtab *symtab
+	order int
 
 	// resultColumns represent the columns returned by this route.
 	resultColumns []*resultColumn
@@ -41,10 +40,9 @@ type vindexFunc struct {
 	eVindexFunc *engine.VindexFunc
 }
 
-func newVindexFunc(alias sqlparser.TableName, vindex vindexes.Vindex, vschema ContextVSchema) *vindexFunc {
+func newVindexFunc(alias sqlparser.TableName, vindex vindexes.Vindex) (*vindexFunc, *symtab) {
 	vf := &vindexFunc{
-		symtab: newSymtab(vschema),
-		order:  1,
+		order: 1,
 		eVindexFunc: &engine.VindexFunc{
 			Vindex: vindex,
 		},
@@ -68,14 +66,10 @@ func newVindexFunc(alias sqlparser.TableName, vindex vindexes.Vindex, vschema Co
 		},
 	}
 
+	st := newSymtab()
 	// AddTable will not fail because symtab is empty.
-	_ = vf.symtab.AddTable(t)
-	return vf
-}
-
-// Symtab satisfies the builder interface.
-func (vf *vindexFunc) Symtab() *symtab {
-	return vf.symtab.Resolve()
+	_ = st.AddTable(t)
+	return vf, st
 }
 
 // Order satisfies the builder interface.
@@ -93,8 +87,8 @@ func (vf *vindexFunc) Primitive() engine.Primitive {
 	return vf.eVindexFunc
 }
 
-// Leftmost satisfies the builder interface.
-func (vf *vindexFunc) Leftmost() builder {
+// First satisfies the builder interface.
+func (vf *vindexFunc) First() builder {
 	return vf
 }
 
@@ -105,7 +99,7 @@ func (vf *vindexFunc) ResultColumns() []*resultColumn {
 
 // PushFilter satisfies the builder interface.
 // Only some where clauses are allowed.
-func (vf *vindexFunc) PushFilter(filter sqlparser.Expr, whereType string, _ builder) error {
+func (vf *vindexFunc) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, _ builder) error {
 	if vf.eVindexFunc.Opcode != engine.VindexNone {
 		return errors.New("unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)")
 	}
@@ -151,7 +145,7 @@ func (vf *vindexFunc) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *re
 	if !ok {
 		return nil, 0, errors.New("unsupported: expression on results of a vindex function")
 	}
-	rc = vf.symtab.NewResultColumn(expr, vf)
+	rc = newResultColumn(expr, vf)
 	vf.resultColumns = append(vf.resultColumns, rc)
 	vf.eVindexFunc.Fields = append(vf.eVindexFunc.Fields, &querypb.Field{
 		Name: rc.alias.String(),

@@ -26,22 +26,19 @@ import (
 
 // buildSelectPlan is the new function to build a Select plan.
 func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive engine.Primitive, err error) {
-	bindvars := sqlparser.GetBindvars(sel)
-	builder, err := processSelect(sel, vschema, nil)
-	if err != nil {
+	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
+	if err := pb.processSelect(sel, nil); err != nil {
 		return nil, err
 	}
-	jt := newJointab(bindvars)
-	err = builder.Wireup(builder, jt)
-	if err != nil {
+	if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
 		return nil, err
 	}
-	if rb, ok := builder.(*route); ok {
+	if rb, ok := pb.bldr.(*route); ok {
 		if rb.ERoute.TargetDestination != nil {
 			return nil, errors.New("unsupported: SELECT with a target destination")
 		}
 	}
-	return builder.Primitive(), nil
+	return pb.bldr.Primitive(), nil
 }
 
 // processSelect builds a primitive tree for the given query or subquery.
@@ -79,58 +76,52 @@ func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive e
 // The LIMIT clause is the last construct of a query. If it cannot be
 // pushed into a route, then a primitve is created on top of any
 // of the above trees to make it discard unwanted rows.
-func processSelect(sel *sqlparser.Select, vschema ContextVSchema, outer builder) (builder, error) {
-	bldr, err := processTableExprs(sel.From, vschema)
-	if err != nil {
-		return nil, err
+func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
+	if err := pb.processTableExprs(sel.From); err != nil {
+		return err
 	}
-	if outer != nil {
-		bldr.Symtab().Outer = outer.Symtab()
-	}
+	// Set the outer symtab after processing of FROM clause.
+	// This is because correlation is not allowed there.
+	pb.st.Outer = outer
 	if sel.Where != nil {
-		err = pushFilter(sel.Where.Expr, bldr, sqlparser.WhereStr)
-		if err != nil {
-			return nil, err
+		if err := pb.pushFilter(sel.Where.Expr, sqlparser.WhereStr); err != nil {
+			return err
 		}
 	}
-	bldr, err = checkAggregates(sel, bldr)
+	grouper, err := pb.checkAggregates(sel)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	bldr, err = pushSelectExprs(sel, bldr)
-	if err != nil {
-		return nil, err
+	if err := pb.pushSelectExprs(sel, grouper); err != nil {
+		return err
 	}
 	if sel.Having != nil {
-		err = pushFilter(sel.Having.Expr, bldr, sqlparser.HavingStr)
-		if err != nil {
-			return nil, err
+		if err := pb.pushFilter(sel.Having.Expr, sqlparser.HavingStr); err != nil {
+			return err
 		}
 	}
-	err = pushOrderBy(sel.OrderBy, bldr)
-	if err != nil {
-		return nil, err
+	if err := pb.pushOrderBy(sel.OrderBy); err != nil {
+		return err
 	}
-	bldr, err = pushLimit(sel.Limit, bldr)
-	if err != nil {
-		return nil, err
+	if err := pb.pushLimit(sel.Limit); err != nil {
+		return err
 	}
-	bldr.PushMisc(sel)
-	return bldr, nil
+	pb.bldr.PushMisc(sel)
+	return nil
 }
 
 // pushFilter identifies the target route for the specified bool expr,
 // pushes it down, and updates the route info if the new constraint improves
 // the primitive. This function can push to a WHERE or HAVING clause.
-func pushFilter(boolExpr sqlparser.Expr, bldr builder, whereType string) error {
+func (pb *primitiveBuilder) pushFilter(boolExpr sqlparser.Expr, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
-		origin, err := findOrigin(filter, bldr)
+		origin, err := pb.findOrigin(filter)
 		if err != nil {
 			return err
 		}
-		if err := bldr.PushFilter(filter, whereType, origin); err != nil {
+		if err := pb.bldr.PushFilter(pb, filter, whereType, origin); err != nil {
 			return err
 		}
 	}
@@ -159,37 +150,33 @@ func reorderBySubquery(filters []sqlparser.Expr) {
 
 // pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
-func pushSelectExprs(sel *sqlparser.Select, bldr builder) (builder, error) {
-	resultColumns, err := pushSelectRoutes(sel.SelectExprs, bldr)
+func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select, grouper groupByHandler) error {
+	resultColumns, err := pb.pushSelectRoutes(sel.SelectExprs)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	bldr.Symtab().ResultColumns = resultColumns
-
-	if err := pushGroupBy(sel, bldr); err != nil {
-		return nil, err
-	}
-	return bldr, nil
+	pb.st.SetResultColumns(resultColumns)
+	return pb.pushGroupBy(sel, grouper)
 }
 
 // pusheSelectRoutes is a convenience function that pushes all the select
 // expressions and returns the list of resultColumns generated for it.
-func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resultColumn, error) {
+func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) ([]*resultColumn, error) {
 	resultColumns := make([]*resultColumn, len(selectExprs))
 	for i, node := range selectExprs {
 		switch node := node.(type) {
 		case *sqlparser.AliasedExpr:
-			origin, err := findOrigin(node.Expr, bldr)
+			origin, err := pb.findOrigin(node.Expr)
 			if err != nil {
 				return nil, err
 			}
-			resultColumns[i], _, err = bldr.PushSelect(node, origin)
+			resultColumns[i], _, err = pb.bldr.PushSelect(node, origin)
 			if err != nil {
 				return nil, err
 			}
 		case *sqlparser.StarExpr:
 			// We'll allow select * for simple routes.
-			rb, ok := bldr.(*route)
+			rb, ok := pb.bldr.(*route)
 			if !ok {
 				return nil, errors.New("unsupported: '*' expression in cross-shard query")
 			}
@@ -203,7 +190,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 			}
 			resultColumns[i] = rb.PushAnonymous(node)
 		case sqlparser.Nextval:
-			rb, ok := bldr.(*route)
+			rb, ok := pb.bldr.(*route)
 			if !ok {
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
 				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")

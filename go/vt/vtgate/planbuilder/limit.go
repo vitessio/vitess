@@ -29,7 +29,6 @@ import (
 // operation. Since a limit is the final operation
 // of a SELECT, most pushes are not applicable.
 type limit struct {
-	symtab        *symtab
 	order         int
 	resultColumns []*resultColumn
 	input         builder
@@ -39,17 +38,11 @@ type limit struct {
 // newLimit builds a new limit.
 func newLimit(bldr builder) *limit {
 	return &limit{
-		symtab:        bldr.Symtab(),
 		order:         bldr.Order() + 1,
 		resultColumns: bldr.ResultColumns(),
 		input:         bldr,
 		elimit:        &engine.Limit{},
 	}
-}
-
-// Symtab satisfies the builder interface.
-func (l *limit) Symtab() *symtab {
-	return l.symtab.Resolve()
 }
 
 // Order satisfies the builder interface.
@@ -69,9 +62,9 @@ func (l *limit) Primitive() engine.Primitive {
 	return l.elimit
 }
 
-// Leftmost satisfies the builder interface.
-func (l *limit) Leftmost() builder {
-	return l.input.Leftmost()
+// First satisfies the builder interface.
+func (l *limit) First() builder {
+	return l.input.First()
 }
 
 // ResultColumns satisfies the builder interface.
@@ -80,7 +73,7 @@ func (l *limit) ResultColumns() []*resultColumn {
 }
 
 // PushFilter satisfies the builder interface.
-func (l *limit) PushFilter(_ sqlparser.Expr, whereType string, _ builder) error {
+func (l *limit) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
 	panic("BUG: unreachable")
 }
 
