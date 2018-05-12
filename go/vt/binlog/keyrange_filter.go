@@ -118,14 +118,14 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdata
 
 func getValidRangeQuery(sql string, keyspaceIDs [][]byte, keyrange *topodatapb.KeyRange) (query string, err error) {
 	statement, err := sqlparser.Parse(sql)
-	_, trailingComments := sqlparser.SplitTrailingComments(sql)
+	_, marginComments := sqlparser.SplitMarginComments(sql)
 	if err != nil {
 		return "", err
 	}
 
 	switch statement := statement.(type) {
 	case *sqlparser.Insert:
-		query, err := generateSingleInsertQuery(statement, keyspaceIDs, trailingComments, keyrange)
+		query, err := generateSingleInsertQuery(statement, keyspaceIDs, marginComments, keyrange)
 		if err != nil {
 			return "", err
 		}
@@ -135,7 +135,7 @@ func getValidRangeQuery(sql string, keyspaceIDs [][]byte, keyrange *topodatapb.K
 	}
 }
 
-func generateSingleInsertQuery(ins *sqlparser.Insert, keyspaceIDs [][]byte, trailingComments string, keyrange *topodatapb.KeyRange) (query string, err error) {
+func generateSingleInsertQuery(ins *sqlparser.Insert, keyspaceIDs [][]byte, marginComments sqlparser.MarginComments, keyrange *topodatapb.KeyRange) (query string, err error) {
 	switch rows := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
 		return "", errors.New("unsupported: insert into select")
@@ -145,6 +145,7 @@ func generateSingleInsertQuery(ins *sqlparser.Insert, keyspaceIDs [][]byte, trai
 			return "", fmt.Errorf("length of values tuples %v doesn't match with length of keyspaceids %v", len(values), len(keyspaceIDs))
 		}
 		queryBuf := sqlparser.NewTrackedBuffer(nil)
+		queryBuf.WriteString(marginComments.Leading)
 		for rowNum, val := range rows {
 			if key.KeyRangeContains(keyrange, keyspaceIDs[rowNum]) {
 				values = append(values, val)
@@ -155,7 +156,7 @@ func generateSingleInsertQuery(ins *sqlparser.Insert, keyspaceIDs [][]byte, trai
 		}
 		ins.Rows = values
 		ins.Format(queryBuf)
-		queryBuf.WriteString(trailingComments)
+		queryBuf.WriteString(marginComments.Trailing)
 		return queryBuf.String(), nil
 
 	default:

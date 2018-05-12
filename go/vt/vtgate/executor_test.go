@@ -29,6 +29,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
@@ -1585,12 +1586,12 @@ func TestVSchemaStats(t *testing.T) {
 
 func TestGetPlanUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, "", r, nil)
-	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, "", r, nil)
+	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, makeComments(""), r, nil)
+	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, makeComments(""), r, nil)
 
 	logStats1 := NewLogStats(nil, "Test", "", nil)
 	query1 := "select * from music_user_map where id = 1"
-	plan1, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false, logStats1)
+	plan1, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1600,7 +1601,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	}
 
 	logStats2 := NewLogStats(nil, "Test", "", nil)
-	plan2, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false, logStats2)
+	plan2, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1617,7 +1618,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
 	logStats3 := NewLogStats(nil, "Test", "", nil)
-	plan3, err := r.getPlan(unshardedvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false, logStats3)
+	plan3, err := r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats3)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1628,7 +1629,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats3.SQL)
 	}
 	logStats4 := NewLogStats(nil, "Test", "", nil)
-	plan4, err := r.getPlan(unshardedvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false, logStats4)
+	plan4, err := r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats4)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1649,10 +1650,10 @@ func TestGetPlanUnnormalized(t *testing.T) {
 
 func TestGetPlanCacheUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, "", r, nil)
+	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, makeComments(""), r, nil)
 	query1 := "select * from music_user_map where id = 1"
 	logStats1 := NewLogStats(nil, "Test", "", nil)
-	_, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
+	_, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1664,7 +1665,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
 	logStats2 := NewLogStats(nil, "Test", "", nil)
-	_, err = r.getPlan(emptyvc, query1, " /* comment 2 */", map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
+	_, err = r.getPlan(emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1680,10 +1681,10 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 func TestGetPlanCacheNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, "", r, nil)
+	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, makeComments(""), r, nil)
 	query1 := "select * from music_user_map where id = 1"
 	logStats1 := NewLogStats(nil, "Test", "", nil)
-	_, err := r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
+	_, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1695,7 +1696,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
 	logStats2 := NewLogStats(nil, "Test", "", nil)
-	_, err = r.getPlan(emptyvc, query1, " /* comment */", map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
+	_, err = r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1710,19 +1711,19 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, "", r, nil)
-	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, "", r, nil)
+	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, makeComments(""), r, nil)
+	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, makeComments(""), r, nil)
 
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
 	normalized := "select * from music_user_map where id = :vtg1"
 	logStats1 := NewLogStats(nil, "Test", "", nil)
-	plan1, err := r.getPlan(emptyvc, query1, " /* comment 1 */", map[string]*querypb.BindVariable{}, false, logStats1)
+	plan1, err := r.getPlan(emptyvc, query1, makeComments(" /* comment 1 */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	if err != nil {
 		t.Error(err)
 	}
 	logStats2 := NewLogStats(nil, "Test", "", nil)
-	plan2, err := r.getPlan(emptyvc, query1, " /* comment 2 */", map[string]*querypb.BindVariable{}, false, logStats2)
+	plan2, err := r.getPlan(emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false, logStats2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1746,7 +1747,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 
 	logStats3 := NewLogStats(nil, "Test", "", nil)
-	plan3, err := r.getPlan(emptyvc, query2, " /* comment 3 */", map[string]*querypb.BindVariable{}, false, logStats3)
+	plan3, err := r.getPlan(emptyvc, query2, makeComments(" /* comment 3 */"), map[string]*querypb.BindVariable{}, false, logStats3)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1759,7 +1760,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 
 	logStats4 := NewLogStats(nil, "Test", "", nil)
-	plan4, err := r.getPlan(emptyvc, normalized, " /* comment 4 */", map[string]*querypb.BindVariable{}, false, logStats4)
+	plan4, err := r.getPlan(emptyvc, normalized, makeComments(" /* comment 4 */"), map[string]*querypb.BindVariable{}, false, logStats4)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1772,7 +1773,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 
 	logStats5 := NewLogStats(nil, "Test", "", nil)
-	plan3, err = r.getPlan(unshardedvc, query1, " /* comment 5 */", map[string]*querypb.BindVariable{}, false, logStats5)
+	plan3, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment 5 */"), map[string]*querypb.BindVariable{}, false, logStats5)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1785,7 +1786,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 
 	logStats6 := NewLogStats(nil, "Test", "", nil)
-	plan4, err = r.getPlan(unshardedvc, query1, " /* comment 6 */", map[string]*querypb.BindVariable{}, false, logStats6)
+	plan4, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment 6 */"), map[string]*querypb.BindVariable{}, false, logStats6)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1802,13 +1803,13 @@ func TestGetPlanNormalized(t *testing.T) {
 
 	// Errors
 	logStats7 := NewLogStats(nil, "Test", "", nil)
-	_, err = r.getPlan(emptyvc, "syntax", "", map[string]*querypb.BindVariable{}, false, logStats7)
+	_, err = r.getPlan(emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, false, logStats7)
 	wantErr := "syntax error at position 7 near 'syntax'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
 	}
 	logStats8 := NewLogStats(nil, "Test", "", nil)
-	_, err = r.getPlan(emptyvc, "create table a(id int)", "", map[string]*querypb.BindVariable{}, false, logStats8)
+	_, err = r.getPlan(emptyvc, "create table a(id int)", makeComments(""), map[string]*querypb.BindVariable{}, false, logStats8)
 	wantErr = "unsupported construct: ddl"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
@@ -1939,4 +1940,8 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 			topodatapb.TabletType_REPLICA,
 		)
 	}
+}
+
+func makeComments(text string) sqlparser.MarginComments {
+	return sqlparser.MarginComments{Trailing: text}
 }

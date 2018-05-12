@@ -81,7 +81,7 @@ func Preview(sql string) int {
 	// in the grammar and we are relying on Preview to parse them.
 	// For instance, we don't want: "BEGIN JUNK" to be parsed
 	// as StmtBegin.
-	trimmedNoComments, _ := SplitTrailingComments(trimmed)
+	trimmedNoComments, _ := SplitMarginComments(trimmed)
 	switch strings.ToLower(trimmedNoComments) {
 	case "begin", "start transaction":
 		return StmtBegin
