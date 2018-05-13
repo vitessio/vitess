@@ -59,6 +59,10 @@ type Update struct {
 
 	// OwnedVindexQuery is used for updating changes in lookup vindexes.
 	OwnedVindexQuery string
+
+	// Option to override the standard behavior and allow a multi-shard update
+	// to use single round trip autocommit.
+	MultiShardAutocommit bool
 }
 
 // MarshalJSON serializes the Update into a JSON representation.
@@ -72,23 +76,25 @@ func (upd *Update) MarshalJSON() ([]byte, error) {
 		vindexName = upd.Vindex.String()
 	}
 	marshalUpdate := struct {
-		Opcode              UpdateOpcode
-		Keyspace            *vindexes.Keyspace              `json:",omitempty"`
-		Query               string                          `json:",omitempty"`
-		Vindex              string                          `json:",omitempty"`
-		Values              []sqltypes.PlanValue            `json:",omitempty"`
-		ChangedVindexValues map[string][]sqltypes.PlanValue `json:",omitempty"`
-		Table               string                          `json:",omitempty"`
-		OwnedVindexQuery    string                          `json:",omitempty"`
+		Opcode               UpdateOpcode
+		Keyspace             *vindexes.Keyspace              `json:",omitempty"`
+		Query                string                          `json:",omitempty"`
+		Vindex               string                          `json:",omitempty"`
+		Values               []sqltypes.PlanValue            `json:",omitempty"`
+		ChangedVindexValues  map[string][]sqltypes.PlanValue `json:",omitempty"`
+		Table                string                          `json:",omitempty"`
+		OwnedVindexQuery     string                          `json:",omitempty"`
+		MultiShardAutocommit bool                            `json:",omitempty"`
 	}{
-		Opcode:              upd.Opcode,
-		Keyspace:            upd.Keyspace,
-		Query:               upd.Query,
-		Vindex:              vindexName,
-		Values:              upd.Values,
-		ChangedVindexValues: upd.ChangedVindexValues,
-		Table:               tname,
-		OwnedVindexQuery:    upd.OwnedVindexQuery,
+		Opcode:               upd.Opcode,
+		Keyspace:             upd.Keyspace,
+		Query:                upd.Query,
+		Vindex:               vindexName,
+		Values:               upd.Values,
+		ChangedVindexValues:  upd.ChangedVindexValues,
+		Table:                tname,
+		OwnedVindexQuery:     upd.OwnedVindexQuery,
+		MultiShardAutocommit: upd.MultiShardAutocommit,
 	}
 	return jsonutil.MarshalNoEscape(marshalUpdate)
 }
@@ -228,7 +234,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, query string, bindVars m
 func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{dest})
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execDeleteScatter")
+		return nil, vterrors.Wrap(err, "execUpdateByDestination")
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))
@@ -239,6 +245,6 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 			BindVariables: bindVars,
 		}
 	}
-	autocommit := (len(rss) == 1) && vcursor.AutocommitApproval()
+	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
 	return vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
 }
