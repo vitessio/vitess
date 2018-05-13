@@ -62,6 +62,11 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 	}
 
+	directives := sqlparser.ExtractCommentDirectives(upd.Comments)
+	if directives.IsSet(DirectiveMultiShardAutocommit) {
+		eupd.MultiShardAutocommit = true
+	}
+
 	var vindexTable *vindexes.Table
 	for _, tval := range pb.st.tables {
 		vindexTable = tval.vindexTable
