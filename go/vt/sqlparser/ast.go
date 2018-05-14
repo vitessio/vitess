@@ -3350,8 +3350,13 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 }
 
 func formatID(buf *TrackedBuffer, original, lowered string) {
+	isDbSystemVariable := false
+	if len(original) > 1 && original[:2] == "@@" {
+		isDbSystemVariable = true
+	}
+
 	for i, c := range original {
-		if !isLetter(uint16(c)) {
+		if !isLetter(uint16(c)) && (!isDbSystemVariable || !isCarat(uint16(c))) {
 			if i == 0 || !isDigit(uint16(c)) {
 				goto mustEscape
 			}

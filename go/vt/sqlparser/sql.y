@@ -2663,7 +2663,11 @@ set_list:
   }
 
 set_expression:
-  reserved_sql_id '=' expression
+  reserved_sql_id '=' ON
+  {
+    $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("on"))}
+  }
+| reserved_sql_id '=' expression
   {
     $$ = &SetExpr{Name: $1, Expr: $3}
   }
