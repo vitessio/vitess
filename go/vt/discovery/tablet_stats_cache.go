@@ -489,6 +489,14 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+	if target.TabletType == topodatapb.TabletType_MASTER {
+		if len(e.aggregates) == 0 {
+			return nil, topo.ErrNoNode
+		}
+		for _, agg := range e.aggregates {
+			return agg, nil
+		}
+	}
 	agg, ok := e.aggregates[target.Cell]
 	if !ok {
 		return nil, topo.ErrNoNode
