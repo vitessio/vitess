@@ -179,7 +179,7 @@ func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
 		case StrVal:
 			v, err = sqltypes.NewValue(sqltypes.VarBinary, node.Val)
 		case IntVal:
-			v, err = sqltypes.NewValue(sqltypes.Int64, node.Val)
+			v, err = sqltypes.NewIntegral(string(node.Val)) //ALEX: what do these cases look like now?
 		case FloatVal:
 			v, err = sqltypes.NewValue(sqltypes.Float64, node.Val)
 		default:

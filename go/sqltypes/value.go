@@ -140,6 +140,20 @@ func NewIntegral(val string) (n Value, err error) {
 	return MakeTrusted(Uint64, strconv.AppendUint(nil, unsigned, 10)), nil
 }
 
+// NewNumber builds a numeric type from a string representation.
+// The type will be Int64 or @@@ALEX: todo what are Int64, Uint64, and what's the corresponding one for float?@@@ Uint64. Int64 will be preferred where possible.
+func NewNumber(val string) (n Value, err error) {
+	signed, err := strconv.ParseInt(val, 0, 64)
+	if err == nil {
+		return MakeTrusted(Int64, strconv.AppendInt(nil, signed, 10)), nil
+	}
+	unsigned, err := strconv.ParseUint(val, 0, 64)
+	if err != nil {
+		return Value{}, err
+	}
+	return MakeTrusted(Uint64, strconv.AppendUint(nil, unsigned, 10)), nil
+}
+
 // InterfaceToValue builds a value from a go type.
 // Supported types are nil, int64, uint64, float64,
 // string and []byte.
