@@ -30,7 +30,7 @@ import (
 // Client side methods.
 //
 
-// writeComQuery writes a query for the server to execute.
+// WriteComQuery writes a query for the server to execute.
 // Client -> Server.
 // Returns SQLError(CRServerGone) if it can't.
 func (c *Conn) WriteComQuery(query string) error {
@@ -348,17 +348,15 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 		if err != nil {
 			return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
-		switch data[0] {
-		case EOFPacket:
+		if isEOFPacket(data) {
 			// This is what we expect.
 			// Warnings and status flags are ignored.
 			c.recycleReadPacket()
-			break
-		case ErrPacket:
-			// Error packet.
+			// goto: read row loop
+		} else if isErrorPacket(data) {
 			defer c.recycleReadPacket()
 			return nil, ParseErrorPacket(data)
-		default:
+		} else {
 			defer c.recycleReadPacket()
 			return nil, fmt.Errorf("unexpected packet after fields: %v", data)
 		}
@@ -371,21 +369,14 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 			return nil, err
 		}
 
-		switch data[0] {
-		case EOFPacket:
-			// This packet may be one of two kinds:
-			// - an EOF packet,
-			// - an OK packet with an EOF header if
-			// CapabilityClientDeprecateEOF is set.
-			// We do not parse it anyway, so it doesn't matter.
-
+		if isEOFPacket(data) {
 			// Strip the partial Fields before returning.
 			if !wantfields {
 				result.Fields = nil
 			}
 			result.RowsAffected = uint64(len(result.Rows))
 			return result, nil
-		case ErrPacket:
+		} else if isErrorPacket(data) {
 			// Error packet.
 			return nil, ParseErrorPacket(data)
 		}
@@ -414,17 +405,10 @@ func (c *Conn) drainResults() error {
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
-		switch data[0] {
-		case EOFPacket:
-			// This packet may be one of two kinds:
-			// - an EOF packet,
-			// - an OK packet with an EOF header if
-			// CapabilityClientDeprecateEOF is set.
-			// We do not parse it anyway, so it doesn't matter.
+		if isEOFPacket(data) {
 			c.recycleReadPacket()
 			return nil
-		case ErrPacket:
-			// Error packet.
+		} else if isErrorPacket(data) {
 			defer c.recycleReadPacket()
 			return ParseErrorPacket(data)
 		}

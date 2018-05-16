@@ -78,15 +78,13 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
 		defer c.recycleReadPacket()
-		switch data[0] {
-		case EOFPacket:
+		if isEOFPacket(data) {
 			// This is what we expect.
 			// Warnings and status flags are ignored.
-			break
-		case ErrPacket:
-			// Error packet.
+			// goto: end
+		} else if isErrorPacket(data) {
 			return ParseErrorPacket(data)
-		default:
+		} else {
 			return NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "unexpected packet after fields: %v", data)
 		}
 	}
@@ -125,18 +123,11 @@ func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 		return nil, err
 	}
 
-	switch data[0] {
-	case EOFPacket:
-		// This packet may be one of two kinds:
-		// - an EOF packet,
-		// - an OK packet with an EOF header if
-		// CapabilityClientDeprecateEOF is set.
-		// We do not parse it anyway, so it doesn't matter.
-
+	if isEOFPacket(data) {
 		// Warnings and status flags are ignored.
 		c.fields = nil
 		return nil, nil
-	case ErrPacket:
+	} else if isErrorPacket(data) {
 		// Error packet.
 		return nil, ParseErrorPacket(data)
 	}
