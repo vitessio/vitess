@@ -154,7 +154,7 @@ func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLMan
 		InitFile:  path.Join(os.Getenv("VTTOP"), "config/init_db.sql"),
 		Directory: env.TmpPath,
 		Port:      env.PortForProtocol("mysql", ""),
-		MyCnf:     append(mycnf, env.DefaultMyCnf...),
+		MyCnf:     append(env.DefaultMyCnf, mycnf...),
 		Env:       env.EnvVars(),
 	}, nil
 }
