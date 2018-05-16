@@ -22,6 +22,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/grpc-ecosystem/go-grpc-prometheus"
+
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/vttls"
 
@@ -59,6 +61,12 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 			log.Fatalf("There was an error initializing client grpc.DialOption: %v", err)
 		}
 	}
+
+	if *grpccommon.EnableGRPCPrometheus {
+		newopts = append(newopts, grpc.WithUnaryInterceptor(grpc_prometheus.UnaryClientInterceptor))
+		newopts = append(newopts, grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor))
+	}
+
 	return grpc.Dial(target, newopts...)
 }
 
