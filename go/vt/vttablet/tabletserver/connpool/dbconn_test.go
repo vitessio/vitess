@@ -175,6 +175,22 @@ func TestDBConnDeadline(t *testing.T) {
 	compareTimingCounts(t, "ConnectError", 0, startCounts, tabletenv.MySQLStats.Counts())
 	compareTimingCounts(t, "Exec", 1, startCounts, tabletenv.MySQLStats.Counts())
 
+	startCounts = tabletenv.MySQLStats.Counts()
+
+	// Test with just the background context (with no deadline)
+	result, err = dbConn.Exec(context.Background(), sql, 1, false)
+	if err != nil {
+		t.Fatalf("should not get an error, err: %v", err)
+	}
+	expectedResult.Fields = nil
+	if !reflect.DeepEqual(expectedResult, result) {
+		t.Errorf("Exec: %v, want %v", expectedResult, result)
+	}
+
+	compareTimingCounts(t, "Connect", 0, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "ConnectError", 0, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "Exec", 1, startCounts, tabletenv.MySQLStats.Counts())
+
 }
 
 func TestDBConnKill(t *testing.T) {
