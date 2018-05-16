@@ -19,13 +19,22 @@ limitations under the License.
 package grpcclient
 
 import (
+	"flag"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/vttls"
 
 	"vitess.io/vitess/go/vt/log"
+)
+
+var (
+	networkTimeout        = flag.Duration("grpc_network_timeout", 0, "keepalive time and timeout for any network operation in gRPC.")
+	initialConnWindowSize = flag.Int("grpc_initial_window_size", 0, "grpc initial connection window size")
+	initialWindowSize     = flag.Int("grpc_initial_window_size", 0, "grpc initial window size")
 )
 
 // FailFast is a self-documenting type for the grpc.FailFast.
@@ -51,6 +60,25 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 			grpc.FailFast(bool(failFast)),
 		),
 	}
+	if *networkTimeout != 0 {
+		kp := keepalive.ClientParameters{
+			// Every *networkTimeout a ping will be send to the server to test the connection.
+			Time: *networkTimeout,
+			// After this timeout gRPC will close connection and fail all inflight gRPC requests.
+			Timeout:             *networkTimeout,
+			PermitWithoutStream: true,
+		}
+		newopts = append(newopts, grpc.WithKeepaliveParams(kp))
+	}
+
+	if *initialConnWindowSize != 0 {
+		newopts = append(newopts, grpc.WithInitialConnWindowSize(int32(*initialConnWindowSize)))
+	}
+
+	if *initialWindowSize != 0 {
+		newopts = append(newopts, grpc.WithInitialWindowSize(int32(*initialWindowSize)))
+	}
+
 	newopts = append(newopts, opts...)
 	var err error
 	for _, grpcDialOptionInitializer := range grpcDialOptions {
