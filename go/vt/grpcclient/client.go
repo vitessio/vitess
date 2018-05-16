@@ -33,7 +33,7 @@ import (
 
 var (
 	networkTimeout        = flag.Duration("grpc_network_timeout", 0, "keepalive time and timeout for any network operation in gRPC.")
-	initialConnWindowSize = flag.Int("grpc_initial_window_size", 0, "grpc initial connection window size")
+	initialConnWindowSize = flag.Int("grpc_initial_conn_window_size", 0, "grpc initial connection window size")
 	initialWindowSize     = flag.Int("grpc_initial_window_size", 0, "grpc initial window size")
 )
 
