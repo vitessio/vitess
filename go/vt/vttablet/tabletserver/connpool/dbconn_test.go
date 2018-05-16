@@ -31,11 +31,23 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
+
+func compareTimingCounts(t *testing.T, op string, delta int64, before, after map[string]int64) {
+	t.Helper()
+	countBefore := before[op]
+	countAfter := after[op]
+	if countAfter-countBefore != delta {
+		t.Errorf("Expected %s to increase by %d, got %d (%d => %d)", op, delta, countAfter-countBefore, countBefore, countAfter)
+	}
+}
 
 func TestDBConnExec(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
+	startCounts := tabletenv.MySQLStats.Counts()
+
 	sql := "select * from test_table limit 1000"
 	expectedResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -66,7 +78,13 @@ func TestDBConnExec(t *testing.T) {
 	if !reflect.DeepEqual(expectedResult, result) {
 		t.Errorf("Exec: %v, want %v", expectedResult, result)
 	}
-	// Exec fail
+
+	compareTimingCounts(t, "Connect", 1, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "Exec", 1, startCounts, tabletenv.MySQLStats.Counts())
+
+	startCounts = tabletenv.MySQLStats.Counts()
+
+	// Exec fail due to client side error
 	db.AddRejectedQuery(sql, &mysql.SQLError{
 		Num:     2012,
 		Message: "connection fail",
@@ -77,6 +95,26 @@ func TestDBConnExec(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Exec: %v, want %s", err, want)
 	}
+
+	// The client side error triggers a retry in exec.
+	compareTimingCounts(t, "Connect", 1, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "Exec", 2, startCounts, tabletenv.MySQLStats.Counts())
+
+	startCounts = tabletenv.MySQLStats.Counts()
+
+	// Set the connection fail flag and and try again.
+	// This time the initial query fails as does the reconnect attempt.
+	db.EnableConnFail()
+	_, err = dbConn.Exec(ctx, sql, 1, false)
+	want = "packet read failed"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Exec: %v, want %s", err, want)
+	}
+	db.DisableConnFail()
+
+	compareTimingCounts(t, "Connect", 1, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "ConnectError", 1, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "Exec", 1, startCounts, tabletenv.MySQLStats.Counts())
 }
 
 func TestDBConnKill(t *testing.T) {
