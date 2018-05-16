@@ -117,6 +117,66 @@ func TestDBConnExec(t *testing.T) {
 	compareTimingCounts(t, "Exec", 1, startCounts, tabletenv.MySQLStats.Counts())
 }
 
+func TestDBConnDeadline(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	startCounts := tabletenv.MySQLStats.Counts()
+	sql := "select * from test_table limit 1000"
+	expectedResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarChar("123")},
+		},
+	}
+	db.AddQuery(sql, expectedResult)
+
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+
+	db.SetConnDelay(100 * time.Millisecond)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(50*time.Millisecond))
+	defer cancel()
+
+	dbConn, err := NewDBConn(connPool, db.ConnParams())
+	defer dbConn.Close()
+	if err != nil {
+		t.Fatalf("should not get an error, err: %v", err)
+	}
+
+	_, err = dbConn.Exec(ctx, sql, 1, false)
+	want := "context deadline exceeded before execution started"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Exec: %v, want %s", err, want)
+	}
+
+	compareTimingCounts(t, "Connect", 1, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "ConnectError", 0, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "Exec", 0, startCounts, tabletenv.MySQLStats.Counts())
+
+	startCounts = tabletenv.MySQLStats.Counts()
+
+	ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	defer cancel()
+
+	result, err := dbConn.Exec(ctx, sql, 1, false)
+	if err != nil {
+		t.Fatalf("should not get an error, err: %v", err)
+	}
+	expectedResult.Fields = nil
+	if !reflect.DeepEqual(expectedResult, result) {
+		t.Errorf("Exec: %v, want %v", expectedResult, result)
+	}
+
+	compareTimingCounts(t, "Connect", 0, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "ConnectError", 0, startCounts, tabletenv.MySQLStats.Counts())
+	compareTimingCounts(t, "Exec", 1, startCounts, tabletenv.MySQLStats.Counts())
+
+}
+
 func TestDBConnKill(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
