@@ -135,8 +135,10 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// bad int
 		in:      "select * from t where v1 = 12345678901234567890",
-		outstmt: "select * from t where v1 = 12345678901234567890",
-		outbv:   map[string]*querypb.BindVariable{},
+		outstmt: "select * from t where v1 = :bv1",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Uint64BindVariable(12345678901234567890),
+		},
 	}, {
 		// comparison with no vals
 		in:      "select * from t where v1 = v2",
@@ -179,10 +181,10 @@ func TestNormalize(t *testing.T) {
 		Normalize(stmt, bv, prefix)
 		outstmt := String(stmt)
 		if outstmt != tc.outstmt {
-			t.Errorf("Query:\n%s:\n%s, want\n%s", tc.in, outstmt, tc.outstmt)
+			t.Errorf("\nQuery: %s\nGot: %s\nWant:%s", tc.in, outstmt, tc.outstmt)
 		}
 		if !reflect.DeepEqual(tc.outbv, bv) {
-			t.Errorf("Query:\n%s:\n%v, want\n%v", tc.in, bv, tc.outbv)
+			t.Errorf("\nQuery: %s\nGot: %v\nWant:%v", tc.in, bv, tc.outbv)
 		}
 	}
 }
