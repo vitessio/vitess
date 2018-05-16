@@ -27,6 +27,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/grpc-ecosystem/go-grpc-prometheus"
+
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/keepalive"
 	"vitess.io/vitess/go/vt/grpccommon"
@@ -145,10 +147,18 @@ func createGRPCServer() {
 		opts = append(opts, grpc.UnaryInterceptor(unaryInterceptor))
 	}
 
+	if *grpccommon.EnableGRPCPrometheus {
+		opts = append(opts, grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor))
+		opts = append(opts, grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor))
+	}
+
 	GRPCServer = grpc.NewServer(opts...)
 }
 
 func serveGRPC() {
+	if *grpccommon.EnableGRPCPrometheus {
+		grpc_prometheus.Register(GRPCServer)
+	}
 	// skip if not registered
 	if GRPCPort == nil || *GRPCPort == 0 {
 		return
