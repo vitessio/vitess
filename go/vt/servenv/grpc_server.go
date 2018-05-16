@@ -158,6 +158,7 @@ func createGRPCServer() {
 func serveGRPC() {
 	if *grpccommon.EnableGRPCPrometheus {
 		grpc_prometheus.Register(GRPCServer)
+		grpc_prometheus.EnableHandlingTimeHistogram()
 	}
 	// skip if not registered
 	if GRPCPort == nil || *GRPCPort == 0 {
