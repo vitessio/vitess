@@ -19,9 +19,11 @@ package vtqueryserver
 import (
 	"flag"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"syscall"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -37,6 +39,7 @@ import (
 )
 
 var (
+	infinity                      = time.Duration(math.MaxInt64)
 	mysqlServerPort               = flag.Int("mysqlproxy_server_port", -1, "If set, also listen for MySQL binary protocol connections on this port.")
 	mysqlServerBindAddress        = flag.String("mysqlproxy_server_bind_address", "", "Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.")
 	mysqlServerSocketPath         = flag.String("mysqlproxy_server_socket_path", "", "This option specifies the Unix socket file to use when listening for local connections. By default it will be empty and it won't listen to a unix socket")
@@ -49,8 +52,9 @@ var (
 
 	mysqlSlowConnectWarnThreshold = flag.Duration("mysqlproxy_slow_connect_warn_threshold", 0, "Warn if it takes more than the given threshold for a mysql connection to establish")
 
-	mysqlConnReadTimeout  = flag.Duration("mysql_server_read_timeout", 0, "connection read timeout")
-	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
+	mysqlConnReadTimeout  = flag.Duration("mysql_server_read_timeout", infinity, "connection read timeout")
+	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", infinity, "connection write timeout")
+	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", infinity, "mysql query timeout")
 )
 
 // proxyHandler implements the Listener interface.
@@ -71,7 +75,8 @@ func (mh *proxyHandler) NewConnection(c *mysql.Conn) {
 
 func (mh *proxyHandler) ConnectionClosed(c *mysql.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+	defer cancel()
 	session, _ := c.ClientData.(*mysqlproxy.ProxySession)
 	if session != nil && session.TransactionID != 0 {
 		_ = mh.mp.Rollback(ctx, session)
@@ -79,8 +84,8 @@ func (mh *proxyHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
 func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
-	// FIXME(alainjobart): Add some kind of timeout to the context.
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+	defer cancel()
 
 	// Fill in the ImmediateCallerID with the UserData returned by
 	// the AuthServer plugin for that user. If nothing was
