@@ -399,7 +399,51 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			}
 
 			timings.Record(queryTimingKey, queryStart)
+		case ComFieldList:
+			c.recycleReadPacket()
+			table, wild := c.parseFieldList(data)
+			showColumnsQuery := fmt.Sprintf("show columns from %s", table)
+			if wild != "" {
+				showColumnsQuery = fmt.Sprintf("%s like '%s'", showColumnsQuery, wild)
+			}
+			var showColumnsResult *sqltypes.Result
+			err := l.handler.ComQuery(c, showColumnsQuery, func(qr *sqltypes.Result) error {
+				showColumnsResult = qr
+				return nil
+			})
+			if err != nil {
+				if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
+					log.Errorf("Error writing error packet to client: %v", err)
+					return
+				}
+			}
+			selectColumnsQuery := fmt.Sprintf("select * from %s limit 1", table)
+			var selectResult *sqltypes.Result
+			err = l.handler.ComQuery(c, selectColumnsQuery, func(qr *sqltypes.Result) error {
+				selectResult = qr
+				return nil
+			})
+			if err != nil {
+				if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
+					log.Errorf("Error writing error packet to client: %v", err)
+					return
+				}
+			}
 
+			wilds := make([]string, 0)
+			for _, row := range showColumnsResult.Rows {
+				if row[0].ToString() != "" {
+					wilds = append(wilds, row[0].ToString())
+				}
+			}
+
+			if err := c.writeFieldsList(selectResult, wilds); err != nil {
+				if werr := c.writeErrorPacketFromError(err); werr != nil {
+					// If we can't even write the error, we're done.
+					log.Errorf("Error writing query error to %s: %v", c, werr)
+					return
+				}
+			}
 		case ComPing:
 			// No payload to that one, just return OKPacket.
 			c.recycleReadPacket()

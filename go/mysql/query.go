@@ -21,6 +21,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 
+	"bytes"
+	"strings"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -472,6 +474,14 @@ func (c *Conn) parseComQuery(data []byte) string {
 	return string(data[1:])
 }
 
+func (c *Conn) parseFieldList(data []byte) (string, string) {
+	data = data[1:]
+	index := bytes.IndexByte(data, 0x00)
+	table := string(data[0:index])
+	wildcard := string(data[index+1:])
+	return table, wildcard
+}
+
 func (c *Conn) parseComSetOption(data []byte) (uint16, bool) {
 	val, _, ok := readUint16(data, 1)
 	return val, ok
@@ -584,6 +594,38 @@ func (c *Conn) writeFields(result *sqltypes.Result) error {
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// With CapabilityClientDeprecateEOF, we do not send this EOF.
 		if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeFieldsList writes the fields of a Result. It should be called only
+// if there are valid columns in the result.
+func (c *Conn) writeFieldsList(result *sqltypes.Result, wilds []string) error {
+	// Now send each Field.
+	for _, field := range result.Fields {
+		for _, wild := range wilds {
+			if field.Name == wild {
+				field.Database = strings.TrimPrefix(field.Database, "vt_")
+				if err := c.writeColumnDefinition(field); err != nil {
+					return err
+				}
+				break
+			}
+		}
+	}
+
+	// Now send an EOF packet.
+	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+		// With CapabilityClientDeprecateEOF, we do not send this EOF.
+		if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+			return err
+		}
+		c.flush()
+	} else {
+		// Send Ok packet with EOF header, inner c.flush()
+		if err := c.writeOKPacketWithEOFHeader(0, 0, c.StatusFlags, 0); err != nil {
 			return err
 		}
 	}
