@@ -300,9 +300,12 @@ public class Proto {
         this.type = Query.Type.VARBINARY;
         this.value = ByteString.copyFrom((byte[]) value);
       } else if (value instanceof Integer || value instanceof Long || value instanceof Short
-          || value instanceof Byte || value instanceof BigInteger) {
+          || value instanceof Byte ) {
         // Int32, Int64, Short, Byte
         this.type = Query.Type.INT64;
+        this.value = ByteString.copyFromUtf8(value.toString());
+      } else if (value instanceof BigInteger) {
+        this.type = Query.Type.UINT64;
         this.value = ByteString.copyFromUtf8(value.toString());
       } else if (value instanceof UnsignedLong) {
         // Uint64
