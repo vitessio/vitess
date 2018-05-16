@@ -148,12 +148,12 @@ func testFetch(t *testing.T, conn *mysql.Conn, sql string, expectedRows int) *sq
 func testDML(t *testing.T, conn *mysql.Conn, sql string, expectedNumQueries int64, expectedRowsAffected uint64) {
 	t.Helper()
 
-	numQueries := tabletenv.MySQLStats.Count()
+	numQueries := tabletenv.MySQLStats.Counts()["Exec"]
 	result, err := conn.ExecuteFetch(sql, 1000, false)
 	if err != nil {
 		t.Errorf("error: %v", err)
 	}
-	numQueries = tabletenv.MySQLStats.Count() - numQueries
+	numQueries = tabletenv.MySQLStats.Counts()["Exec"] - numQueries
 
 	if numQueries != expectedNumQueries {
 		t.Errorf("expected %d mysql queries but got %d", expectedNumQueries, numQueries)
