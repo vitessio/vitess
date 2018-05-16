@@ -104,7 +104,7 @@ class TestMySQL(unittest.TestCase):
       fd.write("""{
       "table_groups": [
           {
-             "table_names_or_prefixes": ["vt_insert_test"],
+             "table_names_or_prefixes": ["vt_insert_test", "dual"],
              "readers": ["vtgate client 1"],
              "writers": ["vtgate client 1"],
              "admins": ["vtgate client 1"]
@@ -143,6 +143,7 @@ class TestMySQL(unittest.TestCase):
     # start vtgate
     utils.VtGate(mysql_server=True).start(
         extra_args=['-mysql_auth_server_impl', 'static',
+                    '-mysql_server_query_timeout', '1s',
                     '-mysql_auth_server_static_file', mysql_auth_server_static])
     # We use gethostbyname('localhost') so we don't presume
     # of the IP format (travis is only IP v4, really).
@@ -187,6 +188,18 @@ class TestMySQL(unittest.TestCase):
       s = str(e)
       self.assertIn('trying to send message larger than max', s)
 
+    conn.close()
+
+    # 'vtgate client' this query should timeout
+    conn = MySQLdb.Connect(**params)
+    try:
+      cursor = conn.cursor()
+      cursor.execute('SELECT SLEEP(5)', {})
+      self.fail('Execute went through')
+    except MySQLdb.OperationalError, e:
+      s = str(e)
+      # 1317 is DeadlineExceeded error code
+      self.assertIn('1317', s)
     conn.close()
 
     # 'vtgate client 2' is not authorized to access vt_insert_test
