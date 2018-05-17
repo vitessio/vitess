@@ -32,6 +32,9 @@ var (
 	MaxMessageSize = flag.Int("grpc_max_message_size", defaultMaxMessageSize, "Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'.")
 	// EnableTracing sets a flag to enable grpc client/server tracing.
 	EnableTracing = flag.Bool("grpc_enable_tracing", false, "Enable GRPC tracing")
+
+	// EnableGRPCPrometheus sets a flag to enable grpc client/server grpc monitoring.
+	EnableGRPCPrometheus = flag.Bool("grpc_prometheus", false, "Enable gRPC monitoring with Prometheus")
 )
 
 var enableTracing sync.Once
