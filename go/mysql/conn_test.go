@@ -18,6 +18,8 @@ package mysql
 
 import (
 	"bytes"
+	crypto_rand "crypto/rand"
+	"math/rand"
 	"net"
 	"reflect"
 	"sync"
@@ -214,7 +216,7 @@ func TestBasicPackets(t *testing.T) {
 		t.Fatalf("writeOKPacketWithEOFHeader failed: %v", err)
 	}
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != EOFPacket {
+	if err != nil || len(data) == 0 || !isEOFPacket(data) {
 		t.Fatalf("cConn.ReadPacket - OKPacket with EOF header failed: %v %v", data, err)
 	}
 	affectedRows, lastInsertID, statusFlags, warnings, err = parseOKPacket(data)
@@ -256,7 +258,25 @@ func TestBasicPackets(t *testing.T) {
 		t.Fatalf("flush failed: %v", err)
 	}
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != EOFPacket {
+	if err != nil || len(data) == 0 || !isEOFPacket(data) {
 		t.Fatalf("cConn.ReadPacket - EOFPacket failed: %v %v", data, err)
+	}
+}
+
+// Mostly a sanity check.
+func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		bytes := make([]byte, rand.Intn(16)+1)
+		_, err := crypto_rand.Read(bytes)
+		if err != nil {
+			t.Fatalf("error doing rand.Read")
+		}
+		bytes[0] = 0xfe
+
+		_, _, isInt := readLenEncInt(bytes, 0)
+		isEOF := isEOFPacket(bytes)
+		if (isInt && isEOF) || (!isInt && !isEOF) {
+			t.Fatalf("0xfe bytestring is EOF xor Int. Bytes %v", bytes)
+		}
 	}
 }

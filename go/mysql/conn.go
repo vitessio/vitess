@@ -765,6 +765,26 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 // Packet parsing methods, for generic packets.
 //
 
+// isEOFPacket determines whether or not a data packet is a "true" EOF. DO NOT blindly compare the
+// first byte of a packet to EOFPacket as you might do for other packet types, as 0xfe is overloaded
+// as a first byte.
+//
+// Per https://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html, a packet starting with 0xfe
+// but having length >= 9 (on top of 4 byte header) is not a true EOF but a LengthEncodedInteger
+// (typically preceding a LengthEncodedString). Thus, all EOF checks must validate the payload size
+// before exiting.
+//
+// More specifically, an EOF packet can have 3 different lengths (1, 5, 7) depending on the client
+// flags that are set. 7 comes from server versions of 5.7.5 or greater where ClientDeprecateEOF is
+// set (i.e. uses an OK packet starting with 0xfe instead of 0x00 to signal EOF). Regardless, 8 is
+// an upper bound otherwise it would be ambiguous w.r.t. LengthEncodedIntegers.
+//
+// More docs here:
+// https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_response_packets.html
+func isEOFPacket(data []byte) bool {
+	return data[0] == EOFPacket && len(data) < 9
+}
+
 func parseOKPacket(data []byte) (uint64, uint64, uint16, uint16, error) {
 	// We already read the type.
 	pos := 1
@@ -794,6 +814,12 @@ func parseOKPacket(data []byte) (uint64, uint64, uint16, uint16, error) {
 	}
 
 	return affectedRows, lastInsertID, statusFlags, warnings, nil
+}
+
+// isErrorPacket determines whether or not the packet is an error packet. Mostly here for
+// consistency with isEOFPacket
+func isErrorPacket(data []byte) bool {
+	return data[0] == ErrPacket
 }
 
 // ParseErrorPacket parses the error packet and returns a SQLError.
