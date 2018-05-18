@@ -115,7 +115,7 @@ func forceEOF(yylex interface{}) {
 %token LEX_ERROR
 %left <bytes> UNION
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYS
+%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE
@@ -1545,6 +1545,14 @@ other_statement:
     $$ = &OtherAdmin{}
   }
 | OPTIMIZE force_eof
+  {
+    $$ = &OtherAdmin{}
+  }
+| LOCK TABLES force_eof
+  {
+    $$ = &OtherAdmin{}
+  }
+| UNLOCK TABLES force_eof
   {
     $$ = &OtherAdmin{}
   }
@@ -3015,6 +3023,7 @@ reserved_keyword:
 | TRUE
 | UNION
 | UNIQUE
+| UNLOCK
 | UPDATE
 | USE
 | USING
