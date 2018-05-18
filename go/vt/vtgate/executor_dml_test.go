@@ -464,6 +464,25 @@ func TestDeleteEqual(t *testing.T) {
 	}
 }
 
+func TestUpdateScatter(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	_, err := executorExec(executor, "update user_extra set col = 2", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	// Queries get annotatted.
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "update user_extra set col = 2/* vtgate:: filtered_replication_unfriendly */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc2.Queries, wantQueries)
+	}
+}
+
 func TestDeleteScatter(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	_, err := executorExec(executor, "delete from user_extra", nil)

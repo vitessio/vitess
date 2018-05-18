@@ -1287,6 +1287,113 @@
   }
 }
 
+# update with no primary vindex on where clause (scatter update)
+"update user_extra set val = 1"
+{
+  "Original": "update user_extra set val = 1",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_extra set val = 1",
+    "Table": "user_extra"
+  }
+}
+
+# update with no primary vindex on where clause (scatter update)   - multi shard autocommit
+"update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */  user_extra set val = 1"
+{
+  "Original": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */  user_extra set val = 1",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user_extra set val = 1",
+    "Table": "user_extra",
+      "MultiShardAutocommit": true
+  }
+}
+
+# update with non-comparison expr
+"update user_extra set val = 1 where id between 1 and 2"
+{
+  "Original": "update user_extra set val = 1 where id between 1 and 2",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_extra set val = 1 where id between 1 and 2",
+    "Table": "user_extra"
+  }
+}
+
+# update with primary id through IN clause
+"update user_extra set val = 1 where user_id in (1, 2)"
+{
+  "Original": "update user_extra set val = 1 where user_id in (1, 2)",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_extra set val = 1 where user_id in (1, 2)",
+    "Table": "user_extra"
+  }
+}
+
+
+# update with non-unique key
+"update user_extra set val = 1 where name = 'foo'"
+{
+  "Original": "update user_extra set val = 1 where name = 'foo'",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_extra set val = 1 where name = 'foo'",
+    "Table": "user_extra"
+  }
+}
+
+# update by lookup with IN clause
+"update user_extra set val = 1 where id in (1, 2)"
+{
+  "Original": "update user_extra set val = 1 where id in (1, 2)",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_extra set val = 1 where id in (1, 2)",
+    "Table": "user_extra"
+  }
+}
+
+# update with where clause with parens
+"update user_extra set val = 1 where (name = 'foo' or id = 1)"
+{
+  "Original": "update user_extra set val = 1 where (name = 'foo' or id = 1)",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_extra set val = 1 where (name = 'foo' or id = 1)",
+    "Table": "user_extra"
+  }
+}
+
 # delete from with no where clause
 "delete from user_extra"
 {
