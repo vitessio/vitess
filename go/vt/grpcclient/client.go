@@ -19,8 +19,11 @@ limitations under the License.
 package grpcclient
 
 import (
+	"flag"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 
 	"github.com/grpc-ecosystem/go-grpc-prometheus"
 
@@ -28,6 +31,13 @@ import (
 	"vitess.io/vitess/go/vt/vttls"
 
 	"vitess.io/vitess/go/vt/log"
+)
+
+var (
+	keepaliveTime         = flag.Duration("grpc_keepalive_time", 0, "After a duration of this time if the client doesn't see any activity it pings the server to see if the transport is still alive.")
+	keepaliveTimeout      = flag.Duration("grpc_keepalive_timeout", 0, "After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
+	initialConnWindowSize = flag.Int("grpc_initial_conn_window_size", 0, "grpc initial connection window size")
+	initialWindowSize     = flag.Int("grpc_initial_window_size", 0, "grpc initial window size")
 )
 
 // FailFast is a self-documenting type for the grpc.FailFast.
@@ -53,6 +63,27 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 			grpc.FailFast(bool(failFast)),
 		),
 	}
+
+	if *keepaliveTime != 0 || *keepaliveTimeout != 0 {
+		kp := keepalive.ClientParameters{
+			// After a duration of this time if the client doesn't see any activity it pings the server to see if the transport is still alive.
+			Time: *keepaliveTime,
+			// After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that
+			// the connection is closed. (This will eagerly fail inflight grpc requests even if they don't have timeouts.)
+			Timeout:             *keepaliveTimeout,
+			PermitWithoutStream: true,
+		}
+		newopts = append(newopts, grpc.WithKeepaliveParams(kp))
+	}
+
+	if *initialConnWindowSize != 0 {
+		newopts = append(newopts, grpc.WithInitialConnWindowSize(int32(*initialConnWindowSize)))
+	}
+
+	if *initialWindowSize != 0 {
+		newopts = append(newopts, grpc.WithInitialWindowSize(int32(*initialWindowSize)))
+	}
+
 	newopts = append(newopts, opts...)
 	var err error
 	for _, grpcDialOptionInitializer := range grpcDialOptions {
