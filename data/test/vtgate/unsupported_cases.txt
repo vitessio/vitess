@@ -291,33 +291,13 @@
 "delete from unsharded where col = (select id from unsharded join user on unsharded.id = user.id)"
 "unsupported: sharded subqueries in DML"
 
-# update with no where clause
+# scatter update with limit clause
+"update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1"
+"unsupported: multi shard update with limit"
+
+# scatter update table with owned vindexes
 "update user set val = 1"
-"unsupported: multi-shard where clause in DML"
-
-# update with non-comparison expr
-"update user set val = 1 where id between 1 and 2"
-"unsupported: multi-shard where clause in DML"
-
-# update with primary id through IN clause
-"update user set val = 1 where id in (1, 2)"
-"unsupported: multi-shard where clause in DML"
-
-# update with non-unique key
-"update user set val = 1 where name = 'foo'"
-"unsupported: multi-shard where clause in DML"
-
-# update with no index match
-"update user set val = 1 where user_id = 1"
-"unsupported: multi-shard where clause in DML"
-
-# update by lookup with IN clause
-"update music set val = 1 where id in (1, 2)"
-"unsupported: multi-shard where clause in DML"
-
-# update with where clause with parens
-"update user set val = 1 where (name = 'foo' or id = 1)"
-"unsupported: multi-shard where clause in DML"
+"unsupported: multi shard update on a table with owned lookup vindexes"
 
 # delete with multi-table targets
 "delete music from music where id = 1"
@@ -327,7 +307,7 @@
 "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'"
 "unsupported: multi-table delete statement in sharded keyspace"
 
-# delete from table with no where clause and owned lookup vindex
+# scatter delete with owned lookup vindex
 "delete from user"
 "unsupported: multi shard delete on a table with owned lookup vindexes"
 
@@ -393,6 +373,10 @@
 
 # sharded upsert can't change vindex
 "insert into user(id) values(1) on duplicate key update id = 3"
+"unsupported: DML cannot change vindex column"
+
+# sharded upsert can't change vindex using values function
+"insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(id)"
 "unsupported: DML cannot change vindex column"
 
 # sharded insert from select
@@ -500,7 +484,3 @@
 
 "select func(keyspace_id) from user_index where id = :id"
 "unsupported: expression on results of a vindex function"
-
-# update with unsupported multi-shard where clause with parens
-"update user set val = 1 where (name = 'foo' or id = 1)"
-"unsupported: multi-shard where clause in DML"

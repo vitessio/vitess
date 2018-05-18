@@ -51,15 +51,15 @@ var legacyTableACL = flag.Bool("legacy-table-acl", false, "deprecated: this flag
 
 // QueryExecutor is used for executing a query request.
 type QueryExecutor struct {
-	query            string
-	trailingComments string
-	bindVars         map[string]*querypb.BindVariable
-	transactionID    int64
-	options          *querypb.ExecuteOptions
-	plan             *TabletPlan
-	ctx              context.Context
-	logStats         *tabletenv.LogStats
-	tsv              *TabletServer
+	query          string
+	marginComments sqlparser.MarginComments
+	bindVars       map[string]*querypb.BindVariable
+	transactionID  int64
+	options        *querypb.ExecuteOptions
+	plan           *TabletPlan
+	ctx            context.Context
+	logStats       *tabletenv.LogStats
+	tsv            *TabletServer
 }
 
 var sequenceFields = []*querypb.Field{
@@ -848,14 +848,19 @@ func (qre *QueryExecutor) streamFetch(conn *connpool.DBConn, parsedQuery *sqlpar
 
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, extras map[string]sqlparser.Encodable, buildStreamComment []byte) (string, string, error) {
 	bindVars["#maxLimit"] = sqltypes.Int64BindVariable(qre.getLimit(parsedQuery))
-	sql, err := parsedQuery.GenerateQuery(bindVars, extras)
+
+	var sql []byte
+	sql = append(sql, qre.marginComments.Leading...)
+
+	query, err := parsedQuery.GenerateQuery(bindVars, extras)
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
+	sql = append(sql, query...)
 	if buildStreamComment != nil {
 		sql = append(sql, buildStreamComment...)
 	}
-	fullSQL := append(sql, qre.trailingComments...)
+	fullSQL := append(sql, qre.marginComments.Trailing...)
 	return hack.String(fullSQL), hack.String(sql), nil
 }
 

@@ -70,6 +70,8 @@ type DB struct {
 	name string
 	// isConnFail trigger a panic in the connection handler.
 	isConnFail bool
+	// connDelay causes a sleep in the connection handler
+	connDelay time.Duration
 	// shouldClose, if true, tells ComQuery() to close the connection when
 	// processing the next query. This will trigger a MySQL client error with
 	// errno 2013 ("server lost").
@@ -162,7 +164,7 @@ func New(t *testing.T) *DB {
 	authServer := &mysql.AuthServerNone{}
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -286,6 +288,10 @@ func (db *DB) NewConnection(c *mysql.Conn) {
 
 	if db.isConnFail {
 		panic(fmt.Errorf("simulating a connection failure"))
+	}
+
+	if db.connDelay != 0 {
+		time.Sleep(db.connDelay)
 	}
 
 	if conn, ok := db.connections[c.ConnectionID]; ok {
@@ -515,6 +521,13 @@ func (db *DB) DisableConnFail() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.isConnFail = false
+}
+
+// SetConnDelay delays connections to this fake DB for the given duration
+func (db *DB) SetConnDelay(d time.Duration) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.connDelay = d
 }
 
 // EnableShouldClose closes the connection when processing the next query.

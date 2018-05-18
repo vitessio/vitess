@@ -293,7 +293,7 @@ func TestUpdateNormalize(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "update user set a = :vtg1 where id = :vtg2 /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
+		Sql: "/* leading */ update user set a = :vtg1 where id = :vtg2 /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1": sqltypes.TestBindVariable(int64(2)),
 			"vtg2": sqltypes.TestBindVariable(int64(1)),
@@ -314,7 +314,7 @@ func TestUpdateNormalize(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "update user set a = :vtg1 where id = :vtg2 /* trailing *//* vtgate:: filtered_replication_unfriendly */",
+		Sql: "/* leading */ update user set a = :vtg1 where id = :vtg2 /* trailing *//* vtgate:: filtered_replication_unfriendly */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1": sqltypes.TestBindVariable(int64(2)),
 			"vtg2": sqltypes.TestBindVariable(int64(1)),
@@ -461,6 +461,25 @@ func TestDeleteEqual(t *testing.T) {
 
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+}
+
+func TestUpdateScatter(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	_, err := executorExec(executor, "update user_extra set col = 2", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	// Queries get annotatted.
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "update user_extra set col = 2/* vtgate:: filtered_replication_unfriendly */",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc2.Queries, wantQueries)
 	}
 }
 

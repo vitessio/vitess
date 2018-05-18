@@ -100,6 +100,8 @@ func forceEOF(yylex interface{}) {
   columnDefinition *ColumnDefinition
   indexDefinition *IndexDefinition
   indexInfo     *IndexInfo
+  indexOption   *IndexOption
+  indexOptions  []*IndexOption
   indexColumn   *IndexColumn
   indexColumns  []*IndexColumn
   partDefs      []*PartitionDefinition
@@ -150,7 +152,7 @@ func forceEOF(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN
+%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN KEY_BLOCK_SIZE
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
@@ -272,11 +274,14 @@ func forceEOF(yylex interface{}) {
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
 %type <str> index_or_key
+%type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
+%type <indexOption> index_option
+%type <indexOptions> index_option_list
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
@@ -974,9 +979,48 @@ column_comment_opt:
   }
 
 index_definition:
-  index_info '(' index_column_list ')' using_opt
+  index_info '(' index_column_list ')' index_option_list
   {
-    $$ = &IndexDefinition{Info: $1, Columns: $3, Using: $5}
+    $$ = &IndexDefinition{Info: $1, Columns: $3, Options: $5}
+  }
+| index_info '(' index_column_list ')'
+  {
+    $$ = &IndexDefinition{Info: $1, Columns: $3}
+  }
+
+index_option_list:
+  index_option
+  {
+    $$ = []*IndexOption{$1}
+  }
+| index_option_list index_option
+  {
+    $$ = append($$, $2)
+  }
+
+index_option:
+  USING ID
+  {
+    $$ = &IndexOption{Name: string($1), Using: string($2)}
+  }
+| KEY_BLOCK_SIZE equal_opt INTEGRAL
+  {
+    // should not be string
+    $$ = &IndexOption{Name: string($1), Value: NewIntVal($3)}
+  }
+| COMMENT_KEYWORD STRING
+  {
+    $$ = &IndexOption{Name: string($1), Value: NewStrVal($2)}
+  }
+
+equal_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| '='
+  {
+    $$ = string($1)
   }
 
 index_info:
@@ -2137,7 +2181,7 @@ function_call_keyword:
   {
     $$ = &CaseExpr{Expr: $2, Whens: $3, Else: $4}
   }
-| VALUES openb sql_id closeb
+| VALUES openb column_name closeb
   {
     $$ = &ValuesFuncExpr{Name: $3}
   }
@@ -2888,6 +2932,7 @@ non_reserved_keyword:
 | INT
 | INTEGER
 | JSON
+| KEY_BLOCK_SIZE
 | KEYS
 | LANGUAGE
 | LAST_INSERT_ID

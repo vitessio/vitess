@@ -614,6 +614,10 @@ var (
 	}, {
 		input: "insert /* bool in on duplicate */ into a values (1, 2) on duplicate key update b = false, c = d",
 	}, {
+		input: "insert /* bool in on duplicate */ into a values (1, 2, 3) on duplicate key update b = values(b), c = d",
+	}, {
+		input: "insert /* bool in on duplicate */ into a values (1, 2, 3) on duplicate key update b = values(a.b), c = d",
+	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
 	}, {
 		input: "update /* simple */ a set b = 3",
@@ -1713,12 +1717,22 @@ func TestCreateTable(t *testing.T) {
 			"	email varchar,\n" +
 			"	full_name varchar,\n" +
 			"	status_nonkeyword varchar,\n" +
-			"	primary key (id) USING BTREE,\n" +
-			"	unique key by_username (username) USING HASH,\n" +
-			"	unique by_username2 (username) USING OTHER,\n" +
-			"	unique index by_username3 (username) USING XYZ,\n" +
-			"	index by_status (status_nonkeyword) USING PDQ,\n" +
-			"	key by_full_name (full_name) USING OTHER\n" +
+			"	primary key (id) using BTREE,\n" +
+			"	unique key by_username (username) using HASH,\n" +
+			"	unique by_username2 (username) using OTHER,\n" +
+			"	unique index by_username3 (username) using XYZ,\n" +
+			"	index by_status (status_nonkeyword) using PDQ,\n" +
+			"	key by_full_name (full_name) using OTHER\n" +
+			")",
+		// test other index options
+		"create table t (\n" +
+			"	id int auto_increment,\n" +
+			"	username varchar,\n" +
+			"	email varchar,\n" +
+			"	primary key (id) comment 'hi',\n" +
+			"	unique key by_username (username) key_block_size 8,\n" +
+			"	unique index by_username4 (username) comment 'hi' using BTREE,\n" +
+			"	unique index by_username4 (username) using BTREE key_block_size 4 comment 'hi'\n" +
 			")",
 
 		// multi-column indexes
@@ -1789,6 +1803,38 @@ func TestCreateTable(t *testing.T) {
 	tree, err = ParseStrictDDL(sql)
 	if tree != nil || err == nil {
 		t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+	}
+
+	testCases := []struct {
+		input  string
+		output string
+	}{{
+		// test key_block_size
+		input: "create table t (\n" +
+			"	id int auto_increment,\n" +
+			"	username varchar,\n" +
+			"	unique key by_username (username) key_block_size 8,\n" +
+			"	unique key by_username2 (username) key_block_size=8,\n" +
+			"	unique by_username3 (username) key_block_size = 4\n" +
+			")",
+		output: "create table t (\n" +
+			"	id int auto_increment,\n" +
+			"	username varchar,\n" +
+			"	unique key by_username (username) key_block_size 8,\n" +
+			"	unique key by_username2 (username) key_block_size 8,\n" +
+			"	unique by_username3 (username) key_block_size 4\n" +
+			")",
+	},
+	}
+	for _, tcase := range testCases {
+		tree, err := ParseStrictDDL(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+		if got, want := String(tree.(*DDL)), tcase.output; got != want {
+			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
+		}
 	}
 }
 

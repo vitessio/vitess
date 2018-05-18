@@ -245,14 +245,14 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		execStart := time.Now()
 		sql = sqlannotation.AnnotateIfDML(sql, nil)
 		if e.normalize {
-			query, comments := sqlparser.SplitTrailingComments(sql)
+			query, comments := sqlparser.SplitMarginComments(sql)
 			stmt, err := sqlparser.Parse(query)
 			if err != nil {
 				return nil, err
 			}
 			sqlparser.Normalize(stmt, bindVars, "vtg")
 			normalized := sqlparser.String(stmt)
-			sql = normalized + comments
+			sql = comments.Leading + normalized + comments.Trailing
 		}
 		logStats.PlanTime = execStart.Sub(logStats.StartTime)
 		logStats.SQL = sql
@@ -263,7 +263,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	}
 
 	// V3 mode.
-	query, comments := sqlparser.SplitTrailingComments(sql)
+	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor := newVCursorImpl(ctx, safeSession, destKeyspace, destTabletType, comments, e, logStats)
 	plan, err := e.getPlan(
 		vcursor,
@@ -934,7 +934,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
-	query, comments := sqlparser.SplitTrailingComments(sql)
+	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor := newVCursorImpl(ctx, safeSession, target.Keyspace, target.TabletType, comments, e, logStats)
 
 	// check if this is a stream statement for messaging
@@ -1070,7 +1070,7 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 			NewSafeSession(&vtgatepb.Session{}),
 			table.Keyspace.Name,
 			topodatapb.TabletType_MASTER,
-			"",
+			sqlparser.MarginComments{},
 			e,
 			nil,
 		)
@@ -1151,9 +1151,9 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments string, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool, logStats *LogStats) (*engine.Plan, error) {
+func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool, logStats *LogStats) (*engine.Plan, error) {
 	if logStats != nil {
-		logStats.SQL = sql + comments
+		logStats.SQL = comments.Leading + sql + comments.Trailing
 		logStats.BindVariables = bindVars
 	}
 
@@ -1187,7 +1187,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments string, bi
 	normalized := sqlparser.String(stmt)
 
 	if logStats != nil {
-		logStats.SQL = normalized + comments
+		logStats.SQL = comments.Leading + normalized + comments.Trailing
 		logStats.BindVariables = bindVars
 	}
 

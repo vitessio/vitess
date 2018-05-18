@@ -48,6 +48,10 @@ var (
 	mysqlSslCa   = flag.String("mysqlproxy_server_ssl_ca", "", "Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.")
 
 	mysqlSlowConnectWarnThreshold = flag.Duration("mysqlproxy_slow_connect_warn_threshold", 0, "Warn if it takes more than the given threshold for a mysql connection to establish")
+
+	mysqlConnReadTimeout  = flag.Duration("mysql_server_read_timeout", 0, "connection read timeout")
+	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
+	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", 0, "mysql query timeout")
 )
 
 // proxyHandler implements the Listener interface.
@@ -68,7 +72,14 @@ func (mh *proxyHandler) NewConnection(c *mysql.Conn) {
 
 func (mh *proxyHandler) ConnectionClosed(c *mysql.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
-	ctx := context.Background()
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if *mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
 	session, _ := c.ClientData.(*mysqlproxy.ProxySession)
 	if session != nil && session.TransactionID != 0 {
 		_ = mh.mp.Rollback(ctx, session)
@@ -76,9 +87,14 @@ func (mh *proxyHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
 func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
-	// FIXME(alainjobart): Add some kind of timeout to the context.
-	ctx := context.Background()
-
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if *mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
 	// Fill in the ImmediateCallerID with the UserData returned by
 	// the AuthServer plugin for that user. If nothing was
 	// returned, use the User. This lets the plugin map a MySQL
@@ -145,7 +161,7 @@ func initMySQLProtocol() {
 	var err error
 	mh := newProxyHandler(mysqlProxy)
 	if *mysqlServerPort >= 0 {
-		mysqlListener, err = mysql.NewListener("tcp", net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, mh)
+		mysqlListener, err = mysql.NewListener("tcp", net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, mh, *mysqlConnReadTimeout, *mysqlConnWriteTimeout)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
@@ -186,7 +202,7 @@ func initMySQLProtocol() {
 // newMysqlUnixSocket creates a new unix socket mysql listener. If a socket file already exists, attempts
 // to clean it up.
 func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mysql.Handler) (*mysql.Listener, error) {
-	listener, err := mysql.NewListener("unix", address, authServer, handler)
+	listener, err := mysql.NewListener("unix", address, authServer, handler, *mysqlConnReadTimeout, *mysqlConnWriteTimeout)
 	switch err := err.(type) {
 	case nil:
 		return listener, nil
@@ -207,7 +223,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			log.Errorf("Couldn't remove existent socket file: %s", address)
 			return nil, err
 		}
-		listener, listenerErr := mysql.NewListener("unix", address, authServer, handler)
+		listener, listenerErr := mysql.NewListener("unix", address, authServer, handler, *mysqlConnReadTimeout, *mysqlConnWriteTimeout)
 		return listener, listenerErr
 	default:
 		return nil, err

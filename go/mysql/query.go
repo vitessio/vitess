@@ -30,7 +30,7 @@ import (
 // Client side methods.
 //
 
-// writeComQuery writes a query for the server to execute.
+// WriteComQuery writes a query for the server to execute.
 // Client -> Server.
 // Returns SQLError(CRServerGone) if it can't.
 func (c *Conn) WriteComQuery(query string) error {
@@ -53,6 +53,18 @@ func (c *Conn) writeComInitDB(db string) error {
 	data := c.startEphemeralPacket(len(db) + 1)
 	data[0] = ComInitDB
 	copy(data[1:], db)
+	if err := c.writeEphemeralPacket(true); err != nil {
+		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
+	}
+	return nil
+}
+
+// writeComSetOption changes the connection's capability of executing multi statements.
+// Returns SQLError(CRServerGone) if it can't.
+func (c *Conn) writeComSetOption(operation uint16) error {
+	data := c.startEphemeralPacket(16 + 1)
+	data[0] = ComSetOption
+	writeUint16(data, 1, operation)
 	if err := c.writeEphemeralPacket(true); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
@@ -336,17 +348,15 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 		if err != nil {
 			return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
-		switch data[0] {
-		case EOFPacket:
+		if isEOFPacket(data) {
 			// This is what we expect.
 			// Warnings and status flags are ignored.
 			c.recycleReadPacket()
-			break
-		case ErrPacket:
-			// Error packet.
+			// goto: read row loop
+		} else if isErrorPacket(data) {
 			defer c.recycleReadPacket()
 			return nil, ParseErrorPacket(data)
-		default:
+		} else {
 			defer c.recycleReadPacket()
 			return nil, fmt.Errorf("unexpected packet after fields: %v", data)
 		}
@@ -359,21 +369,14 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 			return nil, err
 		}
 
-		switch data[0] {
-		case EOFPacket:
-			// This packet may be one of two kinds:
-			// - an EOF packet,
-			// - an OK packet with an EOF header if
-			// CapabilityClientDeprecateEOF is set.
-			// We do not parse it anyway, so it doesn't matter.
-
+		if isEOFPacket(data) {
 			// Strip the partial Fields before returning.
 			if !wantfields {
 				result.Fields = nil
 			}
 			result.RowsAffected = uint64(len(result.Rows))
 			return result, nil
-		case ErrPacket:
+		} else if isErrorPacket(data) {
 			// Error packet.
 			return nil, ParseErrorPacket(data)
 		}
@@ -402,17 +405,10 @@ func (c *Conn) drainResults() error {
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
-		switch data[0] {
-		case EOFPacket:
-			// This packet may be one of two kinds:
-			// - an EOF packet,
-			// - an OK packet with an EOF header if
-			// CapabilityClientDeprecateEOF is set.
-			// We do not parse it anyway, so it doesn't matter.
+		if isEOFPacket(data) {
 			c.recycleReadPacket()
 			return nil
-		case ErrPacket:
-			// Error packet.
+		} else if isErrorPacket(data) {
 			defer c.recycleReadPacket()
 			return ParseErrorPacket(data)
 		}
@@ -458,6 +454,11 @@ func (c *Conn) readComQueryResponse() (uint64, uint64, int, error) {
 
 func (c *Conn) parseComQuery(data []byte) string {
 	return string(data[1:])
+}
+
+func (c *Conn) parseComSetOption(data []byte) (uint16, bool) {
+	val, _, ok := readUint16(data, 1)
+	return val, ok
 }
 
 func (c *Conn) parseComInitDB(data []byte) string {
@@ -584,12 +585,16 @@ func (c *Conn) writeRows(result *sqltypes.Result) error {
 }
 
 // writeEndResult concludes the sending of a Result.
-func (c *Conn) writeEndResult() error {
+// if more is set to true, then it means there are more results afterwords
+func (c *Conn) writeEndResult(more bool) error {
 	// Send either an EOF, or an OK packet.
-	// FIXME(alainjobart) if multi result is set, can send more after this.
 	// See doc.go.
+	flag := c.StatusFlags
+	if more {
+		flag |= ServerMoreResultsExists
+	}
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-		if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+		if err := c.writeEOFPacket(flag, 0); err != nil {
 			return err
 		}
 		if err := c.flush(); err != nil {
@@ -597,7 +602,7 @@ func (c *Conn) writeEndResult() error {
 		}
 	} else {
 		// This will flush too.
-		if err := c.writeOKPacketWithEOFHeader(0, 0, c.StatusFlags, 0); err != nil {
+		if err := c.writeOKPacketWithEOFHeader(0, 0, flag, 0); err != nil {
 			return err
 		}
 	}

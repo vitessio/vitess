@@ -37,8 +37,7 @@ var errIntermixingUnsupported = errors.New("unsupported: intermixing of informat
 // are moved into this node, which will be used to build
 // the final SQL for this route.
 type route struct {
-	symtab *symtab
-	order  int
+	order int
 
 	// Redirect may point to another route if this route
 	// was merged with it. The Resolve function chases
@@ -65,7 +64,7 @@ type route struct {
 	ERoute *engine.Route
 }
 
-func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, condition sqlparser.Expr, vschema ContextVSchema) *route {
+func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, condition sqlparser.Expr) (*route, *symtab) {
 	rb := &route{
 		Select:        stmt,
 		order:         1,
@@ -73,8 +72,7 @@ func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, condition sq
 		weightStrings: make(map[*resultColumn]int),
 		ERoute:        eroute,
 	}
-	rb.symtab = newSymtabWithRoute(vschema, rb)
-	return rb
+	return rb, newSymtabWithRoute(rb)
 }
 
 // Resolve resolves redirects, and returns the last
@@ -84,11 +82,6 @@ func (rb *route) Resolve() *route {
 		rb = rb.Redirect
 	}
 	return rb
-}
-
-// Symtab satisfies the builder interface.
-func (rb *route) Symtab() *symtab {
-	return rb.symtab.Resolve()
 }
 
 // Order satisfies the builder interface.
@@ -106,8 +99,8 @@ func (rb *route) Primitive() engine.Primitive {
 	return rb.ERoute
 }
 
-// Leftmost satisfies the builder interface.
-func (rb *route) Leftmost() builder {
+// First satisfies the builder interface.
+func (rb *route) First() builder {
 	return rb
 }
 
@@ -116,132 +109,9 @@ func (rb *route) ResultColumns() []*resultColumn {
 	return rb.resultColumns
 }
 
-// Join joins with the RHS. This could produce a merged route
-// or a new join node.
-func (rb *route) Join(rRoute *route, ajoin *sqlparser.JoinTableExpr) (builder, error) {
-	if rb.ERoute.Opcode == engine.SelectNext {
-		return nil, errors.New("unsupported: sequence join with another table")
-	}
-	if rRoute.ERoute.Opcode == engine.SelectNext {
-		return nil, errors.New("unsupported: sequence join with another table")
-	}
-	if ajoin != nil && ajoin.Condition.Using != nil {
-		return nil, errors.New("unsupported: join with USING(column_list) clause")
-	}
-	if rb.ERoute.Keyspace.Name != rRoute.ERoute.Keyspace.Name {
-		return newJoin(rb, rRoute, ajoin)
-	}
-	switch rb.ERoute.Opcode {
-	case engine.SelectUnsharded:
-		if rRoute.ERoute.Opcode == engine.SelectUnsharded {
-			return rb.merge(rRoute, ajoin)
-		}
-		return nil, errIntermixingUnsupported
-	case engine.SelectDBA:
-		if rRoute.ERoute.Opcode == engine.SelectDBA {
-			return rb.merge(rRoute, ajoin)
-		}
-		return nil, errIntermixingUnsupported
-	}
-
-	// Both route are sharded routes. For ',' joins (ajoin==nil), don't
-	// analyze mergeability.
-	if ajoin == nil {
-		return newJoin(rb, rRoute, nil)
-	}
-
-	// Both route are sharded routes. Analyze join condition for merging.
-	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
-		if rb.isSameRoute(rRoute, filter) {
-			return rb.merge(rRoute, ajoin)
-		}
-	}
-
-	// Both l & r routes point to the same shard.
-	if rb.ERoute.Opcode == engine.SelectEqualUnique && rRoute.ERoute.Opcode == engine.SelectEqualUnique {
-		if valEqual(rb.condition, rRoute.condition) {
-			return rb.merge(rRoute, ajoin)
-		}
-	}
-
-	return newJoin(rb, rRoute, ajoin)
-}
-
-// merge merges the two routes. The ON clause is also analyzed to
-// see if the primitive can be improved. The operation can fail if
-// the expression contains a non-pushable subquery. ajoin can be nil
-// if the join is on a ',' operator.
-func (rb *route) merge(rhs *route, ajoin *sqlparser.JoinTableExpr) (builder, error) {
-	sel := rb.Select.(*sqlparser.Select)
-	if ajoin == nil {
-		rhsSel := rhs.Select.(*sqlparser.Select)
-		sel.From = append(sel.From, rhsSel.From...)
-	} else {
-		sel.From = sqlparser.TableExprs{ajoin}
-		if ajoin.Join == sqlparser.LeftJoinStr {
-			rhs.Symtab().ClearVindexes()
-		}
-	}
-	// Redirect before merging the symtabs. Merge will use Redirect
-	// to check if rhs route matches lhs.
-	rhs.Redirect = rb
-	err := rb.Symtab().Merge(rhs.Symtab())
-	if err != nil {
-		return nil, err
-	}
-	if ajoin == nil {
-		return rb, nil
-	}
-	if ajoin.Condition.Using != nil {
-		return nil, errors.New("unsupported: join with USING(column_list) clause")
-	}
-	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
-		// If VTGate evolves, this section should be rewritten
-		// to use processExpr.
-		_, err = findOrigin(filter, rb)
-		if err != nil {
-			return nil, err
-		}
-		rb.UpdatePlan(filter)
-	}
-	return rb, nil
-}
-
-// isSameRoute returns true if the join constraint makes the routes
-// mergeable by unique vindex. The constraint has to be an equality
-// like a.id = b.id where both columns have the same unique vindex.
-func (rb *route) isSameRoute(rhs *route, filter sqlparser.Expr) bool {
-	filter = skipParenthesis(filter)
-	comparison, ok := filter.(*sqlparser.ComparisonExpr)
-	if !ok {
-		return false
-	}
-	if comparison.Operator != sqlparser.EqualStr {
-		return false
-	}
-	left := comparison.Left
-	right := comparison.Right
-	lVindex := rb.Symtab().Vindex(left, rb)
-	if lVindex == nil {
-		left, right = right, left
-		lVindex = rb.Symtab().Vindex(left, rb)
-	}
-	if lVindex == nil || !lVindex.IsUnique() {
-		return false
-	}
-	rVindex := rhs.Symtab().Vindex(right, rhs)
-	if rVindex == nil {
-		return false
-	}
-	if rVindex != lVindex {
-		return false
-	}
-	return true
-}
-
 // PushFilter satisfies the builder interface.
 // The primitive will be updated if the new filter improves the plan.
-func (rb *route) PushFilter(filter sqlparser.Expr, whereType string, _ builder) error {
+func (rb *route) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, _ builder) error {
 	sel := rb.Select.(*sqlparser.Select)
 	switch whereType {
 	case sqlparser.WhereStr:
@@ -249,7 +119,7 @@ func (rb *route) PushFilter(filter sqlparser.Expr, whereType string, _ builder) 
 	case sqlparser.HavingStr:
 		sel.AddHaving(filter)
 	}
-	rb.UpdatePlan(filter)
+	rb.UpdatePlan(pb, filter)
 	return nil
 }
 
@@ -259,8 +129,8 @@ func (rb *route) PushFilter(filter sqlparser.Expr, whereType string, _ builder) 
 // the route. This function should only be used when merging
 // routes, where the ON clause gets implicitly pushed into
 // the merged route.
-func (rb *route) UpdatePlan(filter sqlparser.Expr) {
-	opcode, vindex, values := rb.computePlan(filter)
+func (rb *route) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
+	opcode, vindex, values := rb.computePlan(pb, filter)
 	if opcode == engine.SelectScatter {
 		return
 	}
@@ -302,29 +172,29 @@ func (rb *route) updateRoute(opcode engine.RouteOpcode, vindex vindexes.Vindex, 
 }
 
 // computePlan computes the plan for the specified filter.
-func (rb *route) computePlan(filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
 		case sqlparser.EqualStr:
-			return rb.computeEqualPlan(node)
+			return rb.computeEqualPlan(pb, node)
 		case sqlparser.InStr:
-			return rb.computeINPlan(node)
+			return rb.computeINPlan(pb, node)
 		}
 	case *sqlparser.ParenExpr:
-		return rb.computePlan(node.Expr)
+		return rb.computePlan(pb, node.Expr)
 	}
 	return engine.SelectScatter, nil, nil
 }
 
 // computeEqualPlan computes the plan for an equality constraint.
-func (rb *route) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
 	left := comparison.Left
 	right := comparison.Right
-	vindex = rb.Symtab().Vindex(left, rb)
+	vindex = pb.st.Vindex(left, rb)
 	if vindex == nil {
 		left, right = right, left
-		vindex = rb.Symtab().Vindex(left, rb)
+		vindex = pb.st.Vindex(left, rb)
 		if vindex == nil {
 			return engine.SelectScatter, nil, nil
 		}
@@ -339,8 +209,8 @@ func (rb *route) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (opcode 
 }
 
 // computeINPlan computes the plan for an IN constraint.
-func (rb *route) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
-	vindex = rb.Symtab().Vindex(comparison.Left, rb)
+func (rb *route) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+	vindex = pb.st.Vindex(comparison.Left, rb)
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil
 	}
@@ -372,7 +242,7 @@ func (rb *route) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *resultC
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, expr)
 
-	rc = rb.Symtab().NewResultColumn(expr, rb)
+	rc = newResultColumn(expr, rb)
 	rb.resultColumns = append(rb.resultColumns, rc)
 
 	return rc, len(rb.resultColumns) - 1, nil
@@ -720,7 +590,7 @@ func (rb *route) IsSingle() bool {
 // SubqueryCanMerge returns nil if the supplied route that represents
 // a subquery can be merged with the outer route. If not, it
 // returns an appropriate error.
-func (rb *route) SubqueryCanMerge(inner *route) error {
+func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) error {
 	if rb.ERoute.Keyspace.Name != inner.ERoute.Keyspace.Name {
 		return errors.New("unsupported: subquery keyspace different from outer query")
 	}
@@ -745,7 +615,7 @@ func (rb *route) SubqueryCanMerge(inner *route) error {
 		// query: the subquery can merge with the outer query.
 		switch vals := inner.condition.(type) {
 		case *sqlparser.ColName:
-			if rb.Symtab().Vindex(vals, rb) == inner.ERoute.Vindex {
+			if pb.st.Vindex(vals, rb) == inner.ERoute.Vindex {
 				return nil
 			}
 		}

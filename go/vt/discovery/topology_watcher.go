@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/stats"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -30,6 +31,21 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+const (
+	topologyWatcherOpListTablets   = "ListTablets"
+	topologyWatcherOpGetTablet     = "GetTablet"
+	topologyWatcherOpAddTablet     = "AddTablet"
+	topologyWatcherOpRemoveTablet  = "RemoveTablet"
+	topologyWatcherOpReplaceTablet = "ReplaceTablet"
+)
+
+var (
+	topologyWatcherOperations = stats.NewCountersWithSingleLabel("TopologyWatcherOperations", "Topology watcher operation counts",
+		"Operation", topologyWatcherOpListTablets, topologyWatcherOpGetTablet, topologyWatcherOpAddTablet, topologyWatcherOpRemoveTablet, topologyWatcherOpReplaceTablet)
+	topologyWatcherErrors = stats.NewCountersWithSingleLabel("TopologyWatcherErrors", "Topology watcher error counts",
+		"Operation", topologyWatcherOpListTablets, topologyWatcherOpGetTablet)
 )
 
 // TabletRecorder is the part of the HealthCheck interface that can
@@ -148,7 +164,9 @@ func (tw *TopologyWatcher) loadTablets() {
 	var wg sync.WaitGroup
 	newTablets := make(map[string]*tabletInfo)
 	tabletAlias, err := tw.getTablets(tw)
+	topologyWatcherOperations.Add(topologyWatcherOpListTablets, 1)
 	if err != nil {
+		topologyWatcherErrors.Add(topologyWatcherOpListTablets, 1)
 		select {
 		case <-tw.ctx.Done():
 			return
@@ -163,8 +181,10 @@ func (tw *TopologyWatcher) loadTablets() {
 			defer wg.Done()
 			tw.sem <- 1 // Wait for active queue to drain.
 			tablet, err := tw.topoServer.GetTablet(tw.ctx, alias)
+			topologyWatcherOperations.Add(topologyWatcherOpGetTablet, 1)
 			<-tw.sem // Done; enable next request to run
 			if err != nil {
+				topologyWatcherErrors.Add(topologyWatcherOpGetTablet, 1)
 				select {
 				case <-tw.ctx.Done():
 					return
@@ -188,13 +208,17 @@ func (tw *TopologyWatcher) loadTablets() {
 	for key, tep := range newTablets {
 		if val, ok := tw.tablets[key]; !ok {
 			tw.tr.AddTablet(tep.tablet, tep.alias)
+			topologyWatcherOperations.Add(topologyWatcherOpAddTablet, 1)
+
 		} else if val.alias != tep.alias {
 			tw.tr.ReplaceTablet(val.tablet, tep.tablet, tep.alias)
+			topologyWatcherOperations.Add(topologyWatcherOpReplaceTablet, 1)
 		}
 	}
 	for key, tep := range tw.tablets {
 		if _, ok := newTablets[key]; !ok {
 			tw.tr.RemoveTablet(tep.tablet)
+			topologyWatcherOperations.Add(topologyWatcherOpRemoveTablet, 1)
 		}
 	}
 	tw.tablets = newTablets

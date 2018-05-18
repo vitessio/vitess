@@ -29,14 +29,24 @@ import (
 
 // buildInsertPlan builds the route for an INSERT statement.
 func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (*engine.Insert, error) {
-	table, _, _, destTarget, err := vschema.FindTable(ins.Table)
-	if err != nil {
+	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
+	aliased := &sqlparser.AliasedTableExpr{Expr: ins.Table}
+	if err := pb.processAliasedTable(aliased); err != nil {
 		return nil, err
 	}
-	if destTarget != nil {
+	// route is guaranteed because of simple table expr.
+	rb := pb.bldr.(*route)
+	if rb.ERoute.TargetDestination != nil {
 		return nil, errors.New("unsupported: INSERT with a target destination")
 	}
+	var table *vindexes.Table
+	for _, tval := range pb.st.tables {
+		table = tval.vindexTable
+	}
 	if !table.Keyspace.Sharded {
+		if !pb.validateSubquerySamePlan(ins) {
+			return nil, errors.New("unsupported: sharded subquery in insert values")
+		}
 		return buildInsertUnshardedPlan(ins, table, vschema)
 	}
 	if ins.Action == sqlparser.ReplaceStr {
@@ -50,9 +60,6 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 		Opcode:   engine.InsertUnsharded,
 		Table:    table,
 		Keyspace: table.Keyspace,
-	}
-	if !validateSubquerySamePlan(eins.Keyspace.Name, nil, vschema, ins) {
-		return nil, errors.New("unsupported: sharded subquery in insert values")
 	}
 	var rows sqlparser.Values
 	switch insertValues := ins.Rows.(type) {
@@ -235,7 +242,14 @@ func isVindexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.
 		for _, vcol := range colVindexes {
 			for _, col := range vcol.Columns {
 				if col.Equal(assignment.Name.Name) {
-					return true
+					valueExpr, isValuesFuncExpr := assignment.Expr.(*sqlparser.ValuesFuncExpr)
+					if !isValuesFuncExpr {
+						return true
+					}
+					// update on duplicate key is changing the vindex column, not supported.
+					if !valueExpr.Name.Name.Equal(assignment.Name.Name) {
+						return true
+					}
 				}
 			}
 		}

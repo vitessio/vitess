@@ -432,7 +432,13 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table)
 	var formatErr error
 	plan.UpsertQuery = GenerateUpdateOuterQuery(upd, tableAlias, func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		if node, ok := node.(*sqlparser.ValuesFuncExpr); ok {
-			colnum := ins.Columns.FindColumn(node.Name)
+			if !node.Name.Qualifier.IsEmpty() && node.Name.Qualifier != ins.Table {
+				formatErr = vterrors.Errorf(vtrpcpb.Code_NOT_FOUND,
+					"could not find qualified column %v in table %v",
+					sqlparser.String(node.Name), sqlparser.String(ins.Table))
+				return
+			}
+			colnum := ins.Columns.FindColumn(node.Name.Name)
 			if colnum == -1 {
 				formatErr = vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "could not find column %v", node.Name)
 				return
@@ -588,7 +594,10 @@ func analyzeOnDupExpressions(ins *sqlparser.Insert, pkIndex *schema.Index) (pkVa
 			pkValues = make([]sqltypes.PlanValue, len(pkIndex.Columns))
 		}
 		if vf, ok := expr.Expr.(*sqlparser.ValuesFuncExpr); ok {
-			insertCol := ins.Columns.FindColumn(vf.Name)
+			if !vf.Name.Qualifier.IsEmpty() && vf.Name.Qualifier != ins.Table {
+				return nil, false
+			}
+			insertCol := ins.Columns.FindColumn(vf.Name.Name)
 			if insertCol == -1 {
 				return nil, false
 			}
