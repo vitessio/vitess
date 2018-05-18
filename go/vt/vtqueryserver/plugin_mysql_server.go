@@ -51,6 +51,7 @@ var (
 
 	mysqlConnReadTimeout  = flag.Duration("mysql_server_read_timeout", 0, "connection read timeout")
 	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
+	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", 0, "mysql query timeout")
 )
 
 // proxyHandler implements the Listener interface.
@@ -71,7 +72,14 @@ func (mh *proxyHandler) NewConnection(c *mysql.Conn) {
 
 func (mh *proxyHandler) ConnectionClosed(c *mysql.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
-	ctx := context.Background()
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if *mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
 	session, _ := c.ClientData.(*mysqlproxy.ProxySession)
 	if session != nil && session.TransactionID != 0 {
 		_ = mh.mp.Rollback(ctx, session)
@@ -79,9 +87,14 @@ func (mh *proxyHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
 func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
-	// FIXME(alainjobart): Add some kind of timeout to the context.
-	ctx := context.Background()
-
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if *mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
 	// Fill in the ImmediateCallerID with the UserData returned by
 	// the AuthServer plugin for that user. If nothing was
 	// returned, use the User. This lets the plugin map a MySQL
