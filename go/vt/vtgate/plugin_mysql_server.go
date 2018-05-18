@@ -55,6 +55,7 @@ var (
 
 	mysqlConnReadTimeout  = flag.Duration("mysql_server_read_timeout", 0, "connection read timeout")
 	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
+	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", 0, "mysql query timeout")
 
 	busyConnections int32
 )
@@ -77,7 +78,14 @@ func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 
 func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
-	ctx := context.Background()
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if *mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session != nil {
 		if session.InTransaction {
@@ -88,8 +96,14 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
-	// FIXME(alainjobart): Add some kind of timeout to the context.
-	ctx := context.Background()
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if *mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
 
 	// Fill in the ImmediateCallerID with the UserData returned by
 	// the AuthServer plugin for that user. If nothing was
