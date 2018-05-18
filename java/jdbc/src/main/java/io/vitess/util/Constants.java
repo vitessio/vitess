@@ -39,8 +39,8 @@ public class Constants {
     public static final String LITERAL_V = "v";
     public static final String LITERAL_SINGLE_QUOTE = "'";
     public static final String SQL_S = "s";
-    public static final int DRIVER_MAJOR_VERSION = 1;
-    public static final int DRIVER_MINOR_VERSION = 0;
+    public static final int DRIVER_MAJOR_VERSION = 2;
+    public static final int DRIVER_MINOR_VERSION = 2;
     public static final int MAX_BUFFER_SIZE = 65535;
     //Default Timeout in miliseconds
     public static final int DEFAULT_TIMEOUT = 30000;
