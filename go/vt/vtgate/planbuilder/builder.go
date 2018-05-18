@@ -117,6 +117,8 @@ const (
 	// DirectiveMultiShardAutocommit is the query comment directive to allow
 	// single round trip autocommit with a multi-shard statement.
 	DirectiveMultiShardAutocommit = "MULTI_SHARD_AUTOCOMMIT"
+	// DirectiveSkipQueryPlanCache skips query plan cache when set.
+	DirectiveSkipQueryPlanCache = "SKIP_QUERY_PLAN_CACHE"
 )
 
 // Build builds a plan for a query based on the specified vschema.
