@@ -305,7 +305,7 @@ public class Proto {
         this.type = Query.Type.INT64;
         this.value = ByteString.copyFromUtf8(value.toString());
       } else if (value instanceof BigInteger) {
-        this.type = Query.Type.UINT64;
+        this.type = Query.Type.VARCHAR;
         this.value = ByteString.copyFromUtf8(value.toString());
       } else if (value instanceof UnsignedLong) {
         // Uint64
