@@ -160,11 +160,11 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		if rowCount, ok := tableWithCount[tableName]; ok {
 			if rowCount > 100000 && ddl.Action == sqlparser.AlterStr {
 				return true, fmt.Errorf(
-					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %v alters a table with more than 100 thousand rows", ddl)
+					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %s alters a table with more than 100 thousand rows", sqlparser.String(ddl))
 			}
 			if rowCount > 2000000 {
 				return true, fmt.Errorf(
-					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %v changes a table with more than 2 million rows", ddl)
+					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %s changes a table with more than 2 million rows", sqlparser.String(ddl))
 			}
 		}
 	}

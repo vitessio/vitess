@@ -79,13 +79,13 @@ func skipParenthesis(node sqlparser.Expr) sqlparser.Expr {
 //
 // If an expression has no references to the current query, then the left-most
 // origin is chosen as the default.
-func findOrigin(expr sqlparser.Expr, bldr builder) (origin builder, err error) {
-	highestOrigin := bldr.Leftmost()
+func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (origin builder, err error) {
+	highestOrigin := pb.bldr.First()
 	var subroutes []*route
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			newOrigin, isLocal, err := bldr.Symtab().Find(node)
+			newOrigin, isLocal, err := pb.st.Find(node)
 			if err != nil {
 				return false, err
 			}
@@ -93,25 +93,26 @@ func findOrigin(expr sqlparser.Expr, bldr builder) (origin builder, err error) {
 				highestOrigin = newOrigin
 			}
 		case *sqlparser.Subquery:
-			var subplan builder
+			spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 			switch stmt := node.Select.(type) {
 			case *sqlparser.Select:
-				subplan, err = processSelect(stmt, bldr.Symtab().VSchema, bldr)
+				if err := spb.processSelect(stmt, pb.st); err != nil {
+					return false, err
+				}
 			case *sqlparser.Union:
-				subplan, err = processUnion(stmt, bldr.Symtab().VSchema, bldr)
+				if err := spb.processUnion(stmt, pb.st); err != nil {
+					return false, err
+				}
 			default:
 				panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", node))
 			}
-			if err != nil {
-				return false, err
-			}
-			subroute, isRoute := subplan.(*route)
+			subroute, isRoute := spb.bldr.(*route)
 			if !isRoute {
 				return false, errors.New("unsupported: cross-shard query in subqueries")
 			}
-			for _, extern := range subroute.Symtab().Externs {
+			for _, extern := range spb.st.Externs {
 				// No error expected. These are resolved externs.
-				newOrigin, isLocal, _ := bldr.Symtab().Find(extern)
+				newOrigin, isLocal, _ := pb.st.Find(extern)
 				if isLocal && newOrigin.Order() > highestOrigin.Order() {
 					highestOrigin = newOrigin
 				}
@@ -123,7 +124,7 @@ func findOrigin(expr sqlparser.Expr, bldr builder) (origin builder, err error) {
 			if !node.Name.EqualString("last_insert_id") {
 				return true, nil
 			}
-			if rb, isRoute := bldr.(*route); !isRoute || rb.ERoute.Keyspace.Sharded {
+			if rb, isRoute := pb.bldr.(*route); !isRoute || rb.ERoute.Keyspace.Sharded {
 				return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
 			}
 		}
@@ -137,7 +138,7 @@ func findOrigin(expr sqlparser.Expr, bldr builder) (origin builder, err error) {
 		return nil, errors.New("unsupported: subquery cannot be merged with cross-shard subquery")
 	}
 	for _, subroute := range subroutes {
-		if err := highestRoute.SubqueryCanMerge(subroute); err != nil {
+		if err := highestRoute.SubqueryCanMerge(pb, subroute); err != nil {
 			return nil, err
 		}
 		subroute.Redirect = highestRoute
@@ -157,7 +158,11 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func validateSubquerySamePlan(keyspace string, bldr builder, vschema ContextVSchema, nodes ...sqlparser.SQLNode) bool {
+func (pb *primitiveBuilder) validateSubquerySamePlan(nodes ...sqlparser.SQLNode) bool {
+	var keyspace string
+	if rb, ok := pb.bldr.(*route); ok {
+		keyspace = rb.ERoute.Keyspace.Name
+	}
 	samePlan := true
 
 	for _, node := range nodes {
@@ -171,12 +176,12 @@ func validateSubquerySamePlan(keyspace string, bldr builder, vschema ContextVSch
 				if !inSubQuery {
 					return true, nil
 				}
-				bldr, err := processSelect(nodeType, vschema, bldr)
-				if err != nil {
+				spb := newPrimitiveBuilder(pb.vschema, pb.jt)
+				if err := spb.processSelect(nodeType, pb.st); err != nil {
 					samePlan = false
 					return false, err
 				}
-				innerRoute, ok := bldr.(*route)
+				innerRoute, ok := spb.bldr.(*route)
 				if !ok {
 					samePlan = false
 					return false, errors.New("dummy")
@@ -189,12 +194,12 @@ func validateSubquerySamePlan(keyspace string, bldr builder, vschema ContextVSch
 				if !inSubQuery {
 					return true, nil
 				}
-				bldr, err := processUnion(nodeType, vschema, nil)
-				if err != nil {
+				spb := newPrimitiveBuilder(pb.vschema, pb.jt)
+				if err := spb.processUnion(nodeType, pb.st); err != nil {
 					samePlan = false
 					return false, err
 				}
-				innerRoute, ok := bldr.(*route)
+				innerRoute, ok := spb.bldr.(*route)
 				if !ok {
 					samePlan = false
 					return false, errors.New("dummy")

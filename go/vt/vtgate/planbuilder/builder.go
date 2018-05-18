@@ -31,10 +31,6 @@ import (
 // builder defines the interface that a primitive must
 // satisfy.
 type builder interface {
-	// Symtab returns the associated symtab.
-	// Please copy code from an existing primitive to define this function.
-	Symtab() *symtab
-
 	// Order is the execution order of the primitve. If there are subprimitves,
 	// the order is one above the order of the subprimitives.
 	// This is because the primitive executes its subprimitives first and
@@ -55,12 +51,13 @@ type builder interface {
 	// Primitve returns the underlying primitive.
 	Primitive() engine.Primitive
 
-	// Leftmost returns the leftmost builder.
-	Leftmost() builder
+	// First returns the first builder of the tree,
+	// which is usually the left most.
+	First() builder
 
 	// PushFilter pushes a WHERE or HAVING clause expression
 	// to the specified origin.
-	PushFilter(filter sqlparser.Expr, whereType string, origin builder) error
+	PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error
 
 	// PushSelect pushes the select expression to the specified
 	// originator. If successful, the originator must create

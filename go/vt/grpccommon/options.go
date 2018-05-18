@@ -25,14 +25,16 @@ import (
 )
 
 var (
-	defaultMaxMessageSize = 4 * 1024 * 1024
+	defaultMaxMessageSize = 16 * 1024 * 1024
 	// MaxMessageSize is the maximum message size which the gRPC server will
 	// accept. Larger messages will be rejected.
-	// Note: We're using 4 MiB as default value because that's the default in the
-	// gRPC 1.0.0 Go server.
+	// Note: We're using 16 MiB as default value because that's the default in MySQL
 	MaxMessageSize = flag.Int("grpc_max_message_size", defaultMaxMessageSize, "Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'.")
 	// EnableTracing sets a flag to enable grpc client/server tracing.
 	EnableTracing = flag.Bool("grpc_enable_tracing", false, "Enable GRPC tracing")
+
+	// EnableGRPCPrometheus sets a flag to enable grpc client/server grpc monitoring.
+	EnableGRPCPrometheus = flag.Bool("grpc_prometheus", false, "Enable gRPC monitoring with Prometheus")
 )
 
 var enableTracing sync.Once

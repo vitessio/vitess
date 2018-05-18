@@ -1105,7 +1105,7 @@ func (ct *ColumnType) walkSubtree(visit Visit) error {
 type IndexDefinition struct {
 	Info    *IndexInfo
 	Columns []*IndexColumn
-	Using   ColIdent
+	Options []*IndexOption
 }
 
 // Format formats the node.
@@ -1122,8 +1122,14 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 		}
 	}
 	buf.Myprintf(")")
-	if !idx.Using.IsEmpty() {
-		buf.Myprintf(" USING %v", idx.Using)
+
+	for _, opt := range idx.Options {
+		buf.Myprintf(" %s", opt.Name)
+		if opt.Using != "" {
+			buf.Myprintf(" %s", opt.Using)
+		} else {
+			buf.Myprintf(" %v", opt.Value)
+		}
 	}
 }
 
@@ -1174,6 +1180,13 @@ type IndexColumn struct {
 type LengthScaleOption struct {
 	Length *SQLVal
 	Scale  *SQLVal
+}
+
+// IndexOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING
+type IndexOption struct {
+	Name  string
+	Value *SQLVal
+	Using string
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
@@ -2688,12 +2701,12 @@ func (node *GroupConcatExpr) replace(from, to Expr) bool {
 
 // ValuesFuncExpr represents a function call.
 type ValuesFuncExpr struct {
-	Name ColIdent
+	Name *ColName
 }
 
 // Format formats the node.
 func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("values(%s)", node.Name.String())
+	buf.Myprintf("values(%v)", node.Name)
 }
 
 func (node *ValuesFuncExpr) walkSubtree(visit Visit) error {

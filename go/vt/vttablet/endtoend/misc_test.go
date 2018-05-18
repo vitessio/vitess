@@ -33,8 +33,10 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -173,7 +175,7 @@ func TestNocacheListArgs(t *testing.T) {
 			"list": sqltypes.TestBindVariable([]interface{}{}),
 		},
 	)
-	want := "empty list supplied for list, CallerID: dev"
+	want := "empty list supplied for list (CallerID: dev)"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want %s", err, want)
 		return
@@ -564,20 +566,59 @@ func TestDBAStatements(t *testing.T) {
 	}
 }
 
+var testLogs []string
+
+func recordInfof(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	testLogs = append(testLogs, msg)
+	log.Infof(msg)
+}
+
+func recordErrorf(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	testLogs = append(testLogs, msg)
+	log.Errorf(msg)
+}
+
+func setupTestLogger() {
+	testLogs = make([]string, 0)
+	tabletenv.Infof = recordInfof
+	tabletenv.Errorf = recordErrorf
+}
+
+func clearTestLogger() {
+	tabletenv.Infof = log.Infof
+	tabletenv.Errorf = log.Errorf
+}
+
+func getTestLog(i int) string {
+	if i < len(testLogs) {
+		return testLogs[i]
+	}
+	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(testLogs))
+}
+
 func TestLogTruncation(t *testing.T) {
 	client := framework.NewClient()
+	setupTestLogger()
+	defer clearTestLogger()
 
 	// Test that a long error string is not truncated by default
 	_, err := client.Execute(
 		"insert into vitess_test values(123, :data, null, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	want := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess_test(intval, floatval, charval, binval) values (123, 'THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED', null, null) /* _stream vitess_test (intval ) (123 ); */, CallerID: dev"
+	wantLog := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) (CallerID: dev): Sql: \"insert into vitess_test values(123, :data, null, null)\", BindVars: {#maxLimit: \"type:INT64 value:\\\"10001\\\" \"data: \"type:VARCHAR value:\\\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\\\" \"}"
+	wantErr := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) (CallerID: dev): Sql: \"insert into vitess_test values(123, :data, null, null)\", BindVars: {#maxLimit: \"type:INT64 value:\\\"10001\\\" \"data: \"type:VARCHAR value:\\\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\\\" \"}"
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
-	if err.Error() != want {
-		t.Errorf("log was unexpectedly truncated... got %s, wanted %s", err, want)
+	if getTestLog(0) != wantLog {
+		t.Errorf("log was unexpectedly truncated: got '%s', want '%s'", getTestLog(0), wantLog)
+	}
+
+	if err.Error() != wantErr {
+		t.Errorf("error was unexpectedly truncated: got '%s', want '%s'", err.Error(), wantErr)
 	}
 
 	// Test that the data too long error is truncated once the option is set
@@ -586,12 +627,16 @@ func TestLogTruncation(t *testing.T) {
 		"insert into vitess_test values(123, :data, null, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */, CallerID: dev"
+	wantLog = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) (CallerID: dev): Sql: \"insert into vitess [TRUNCATED]\", BindVars: {#maxLim [TRUNCATED]"
+	wantErr = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) (CallerID: dev): Sql: \"insert into vitess_test values(123, :data, null, null)\", BindVars: {#maxLimit: \"type:INT64 value:\\\"10001\\\" \"data: \"type:VARCHAR value:\\\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\\\" \"}"
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
-	if err.Error() != want {
-		t.Errorf("log was not truncated properly... got %s, wanted %s", err, want)
+	if getTestLog(1) != wantLog {
+		t.Errorf("log was not truncated properly: got '%s', want '%s'", getTestLog(1), wantLog)
+	}
+	if err.Error() != wantErr {
+		t.Errorf("error was unexpectedly truncated: got '%s', want '%s'", err.Error(), wantErr)
 	}
 
 	// Test that trailing comments are preserved data too long error is truncated once the option is set
@@ -600,12 +645,16 @@ func TestLogTruncation(t *testing.T) {
 		"insert into vitess_test values(123, :data, null, null) /* KEEP ME */",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */ /* KEEP ME */, CallerID: dev"
+	wantLog = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) (CallerID: dev): Sql: \"insert into vitess [TRUNCATED] /* KEEP ME */\", BindVars: {#maxLim [TRUNCATED]"
+	wantErr = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) (CallerID: dev): Sql: \"insert into vitess_test values(123, :data, null, null) /* KEEP ME */\", BindVars: {#maxLimit: \"type:INT64 value:\\\"10001\\\" \"data: \"type:VARCHAR value:\\\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\\\" \"}"
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
-	if err.Error() != want {
-		t.Errorf("log was not truncated properly... got %s, wanted %s", err, want)
+	if getTestLog(2) != wantLog {
+		t.Errorf("log was not truncated properly: got '%s', want '%s'", getTestLog(2), wantLog)
+	}
+	if err.Error() != wantErr {
+		t.Errorf("error was unexpectedly truncated: got '%s', want '%s'", err.Error(), wantErr)
 	}
 }
 

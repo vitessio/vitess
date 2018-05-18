@@ -77,11 +77,10 @@ func (mp *Proxy) Execute(ctx context.Context, session *ProxySession, sql string,
 		result, err = mp.executeOther(ctx, session, sql, bindVariables)
 	}
 
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return session, result, nil
+	// N.B. You must return session, even on error. Modeled after vtgate mysql plugin, the
+	// vtqueryserver plugin expects you to return a new or updated session and not drop it on the
+	// floor during an error.
+	return session, result, err
 }
 
 // Rollback rolls back the session
@@ -143,7 +142,7 @@ func (mp *Proxy) doSet(ctx context.Context, session *ProxySession, sql string, b
 			case 0:
 				session.Autocommit = false
 			case 1:
-				if session.TransactionID != 0 {
+				if !session.Autocommit && session.TransactionID != 0 {
 					if err := mp.doCommit(ctx, session); err != nil {
 						return nil, err
 					}
@@ -174,14 +173,14 @@ func (mp *Proxy) doSet(ctx context.Context, session *ProxySession, sql string, b
 // executeSelect runs the given select statement
 func (mp *Proxy) executeSelect(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if mp.normalize {
-		query, comments := sqlparser.SplitTrailingComments(sql)
+		query, comments := sqlparser.SplitMarginComments(sql)
 		stmt, err := sqlparser.Parse(query)
 		if err != nil {
 			return nil, err
 		}
 		sqlparser.Normalize(stmt, bindVariables, "vtp")
 		normalized := sqlparser.String(stmt)
-		sql = normalized + comments
+		sql = comments.Leading + normalized + comments.Trailing
 	}
 
 	return mp.qs.Execute(ctx, mp.target, sql, bindVariables, session.TransactionID, session.Options)
@@ -190,14 +189,14 @@ func (mp *Proxy) executeSelect(ctx context.Context, session *ProxySession, sql s
 // executeDML runs the given query handling autocommit semantics
 func (mp *Proxy) executeDML(ctx context.Context, session *ProxySession, sql string, bindVariables map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if mp.normalize {
-		query, comments := sqlparser.SplitTrailingComments(sql)
+		query, comments := sqlparser.SplitMarginComments(sql)
 		stmt, err := sqlparser.Parse(query)
 		if err != nil {
 			return nil, err
 		}
 		sqlparser.Normalize(stmt, bindVariables, "vtp")
 		normalized := sqlparser.String(stmt)
-		sql = normalized + comments
+		sql = comments.Leading + normalized + comments.Trailing
 	}
 
 	if session.TransactionID != 0 {

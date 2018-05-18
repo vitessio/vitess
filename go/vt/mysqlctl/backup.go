@@ -748,6 +748,21 @@ func Restore(
 		return mysql.Position{}, err
 	}
 
+	if !deleteBeforeRestore {
+		logger.Infof("Restore: checking no existing data is present")
+		ok, err := checkNoDB(ctx, mysqld, dbName)
+		if err != nil {
+			return mysql.Position{}, err
+		}
+		if !ok {
+			logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
+			if err = populateMetadataTables(mysqld, localMetadata); err == nil {
+				err = ErrExistingDB
+			}
+			return mysql.Position{}, err
+		}
+	}
+
 	// find the right backup handle: most recent one, with a MANIFEST
 	logger.Infof("Restore: looking for a suitable backup to restore")
 	bs, err := backupstorage.GetBackupStorage()
@@ -796,21 +811,6 @@ func Restore(
 		// This implies there is data we ought to have, so it's not safe to start
 		// up empty.
 		return mysql.Position{}, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
-	}
-
-	if !deleteBeforeRestore {
-		logger.Infof("Restore: checking no existing data is present")
-		ok, err := checkNoDB(ctx, mysqld, dbName)
-		if err != nil {
-			return mysql.Position{}, err
-		}
-		if !ok {
-			logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
-			if err = populateMetadataTables(mysqld, localMetadata); err == nil {
-				err = ErrExistingDB
-			}
-			return mysql.Position{}, err
-		}
 	}
 
 	// Starting from here we won't be able to recover if we get stopped by a cancelled

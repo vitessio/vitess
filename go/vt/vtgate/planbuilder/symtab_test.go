@@ -118,7 +118,7 @@ func TestSymtabAddVindexTable(t *testing.T) {
 	}}
 
 	for _, tcase := range tcases {
-		st := newSymtab(nil)
+		st := newSymtab()
 		err := st.AddVindexTable(tname, tcase.in, rb)
 		if err != nil {
 			t.Error(err)

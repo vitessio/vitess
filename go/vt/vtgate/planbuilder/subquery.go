@@ -36,18 +36,16 @@ var _ builder = (*subquery)(nil)
 // a subquery.
 type subquery struct {
 	order         int
-	symtab        *symtab
 	resultColumns []*resultColumn
 	input         builder
 	esubquery     *engine.Subquery
 }
 
 // newSubquery builds a new subquery.
-func newSubquery(alias sqlparser.TableIdent, bldr builder, vschema ContextVSchema) *subquery {
+func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab) {
 	sq := &subquery{
 		order:     bldr.Order() + 1,
 		input:     bldr,
-		symtab:    newSymtab(vschema),
 		esubquery: &engine.Subquery{},
 	}
 
@@ -68,14 +66,10 @@ func newSubquery(alias sqlparser.TableIdent, bldr builder, vschema ContextVSchem
 
 	// Populate the table with those columns and add it to symtab.
 	t.columns = cols
+	st := newSymtab()
 	// AddTable will not fail because symtab is empty.
-	_ = sq.symtab.AddTable(t)
-	return sq
-}
-
-// Symtab satisfies the builder interface.
-func (sq *subquery) Symtab() *symtab {
-	return sq.symtab.Resolve()
+	_ = st.AddTable(t)
+	return sq, st
 }
 
 // Order satisfies the builder interface.
@@ -95,8 +89,8 @@ func (sq *subquery) Primitive() engine.Primitive {
 	return sq.esubquery
 }
 
-// Leftmost satisfies the builder interface.
-func (sq *subquery) Leftmost() builder {
+// First satisfies the builder interface.
+func (sq *subquery) First() builder {
 	return sq
 }
 
@@ -106,7 +100,7 @@ func (sq *subquery) ResultColumns() []*resultColumn {
 }
 
 // PushFilter satisfies the builder interface.
-func (sq *subquery) PushFilter(_ sqlparser.Expr, whereType string, _ builder) error {
+func (sq *subquery) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
 	return errors.New("unsupported: filtering on results of cross-shard subquery")
 }
 
@@ -122,7 +116,7 @@ func (sq *subquery) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *resu
 	sq.esubquery.Cols = append(sq.esubquery.Cols, inner)
 
 	// Build a new column reference to represent the result column.
-	rc = sq.Symtab().NewResultColumn(expr, sq)
+	rc = newResultColumn(expr, sq)
 	sq.resultColumns = append(sq.resultColumns, rc)
 
 	return rc, len(sq.resultColumns) - 1, nil

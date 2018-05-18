@@ -22,6 +22,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.SQLInvalidAuthorizationSpecException;
@@ -299,7 +300,7 @@ public class Proto {
         this.type = Query.Type.VARBINARY;
         this.value = ByteString.copyFrom((byte[]) value);
       } else if (value instanceof Integer || value instanceof Long || value instanceof Short
-          || value instanceof Byte) {
+          || value instanceof Byte || value instanceof BigInteger) {
         // Int32, Int64, Short, Byte
         this.type = Query.Type.INT64;
         this.value = ByteString.copyFromUtf8(value.toString());

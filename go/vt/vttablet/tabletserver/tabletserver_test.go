@@ -2615,13 +2615,14 @@ func TestTerseErrorsBindVars(t *testing.T) {
 		sqlErr,
 		nil,
 	)
-	want := "(errno 10) (sqlstate HY000) during query: select * from test_table where a = :a"
+	want := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {}"
 	if err == nil || err.Error() != want {
-		t.Errorf("%v, want '%s'", err, want)
+		t.Errorf("error got '%v', want '%s'", err, want)
 	}
-	wantLog := "sensitive message (errno 10) (sqlstate HY000) during query: select * from test_table where a = 1: Sql: \"select * from test_table where a = :a\", BindVars: {a: \"type:INT64 value:\\\"1\\\" \"}"
+
+	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {a: \"type:INT64 value:\\\"1\\\" \"}"
 	if wantLog != getTestLog(0) {
-		t.Errorf("error log '%s', want '%s'", getTestLog(0), wantLog)
+		t.Errorf("log got '%s', want '%s'", getTestLog(0), wantLog)
 	}
 }
 
@@ -2664,14 +2665,14 @@ func TestTruncateErrors(t *testing.T) {
 		sqlErr,
 		nil,
 	)
-	wantErr := "(errno 10) (sqlstate HY000) during query: select * from test_table where xyz = :vt [TRUNCATED]"
+	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {}"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("%v, want '%s'", err, wantErr)
+		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
-	wantLog := "sensitive message (errno 10) (sqlstate H [TRUNCATED]"
+	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vt [TRUNCATED]\", BindVars: {vtg1: \"type:VARCHAR value:\\\"t [TRUNCATED]"
 	if wantLog != getTestLog(0) {
-		t.Errorf("error log '%s', want '%s'", getTestLog(0), wantLog)
+		t.Errorf("log got '%s', want '%s'", getTestLog(0), wantLog)
 	}
 
 	*sqlparser.TruncateErrLen = 140
@@ -2683,16 +2684,15 @@ func TestTruncateErrors(t *testing.T) {
 		nil,
 	)
 
-	wantErr = "(errno 10) (sqlstate HY000) during query: select * from test_table where xyz = :vtg1 order by abc desc"
+	wantErr = "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {}"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("%v, want '%s'", err, wantErr)
+		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
-	wantLog = "sensitive message (errno 10) (sqlstate HY000) during query: select * from test_table where xyz = 'this is kinda long eh': Sql: \" [TRUNCATED]"
+	wantLog = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\" \"}"
 	if wantLog != getTestLog(1) {
-		t.Errorf("error log '%s', want '%s'", getTestLog(1), wantLog)
+		t.Errorf("log got '%s', want '%s'", getTestLog(1), wantLog)
 	}
-
 	*sqlparser.TruncateErrLen = 0
 }
 
@@ -2709,7 +2709,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 		mysql.NewSQLError(1227, "42000", "failover in progress"),
 		nil,
 	)
-	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; got != want {
+	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; !strings.HasPrefix(got, want) {
 		t.Fatalf("'failover in progress' text must never be stripped: got = %v, want = %v", got, want)
 	}
 

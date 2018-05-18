@@ -18,6 +18,7 @@ package endtoend
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 	"testing"
 
@@ -132,6 +133,41 @@ func TestQueries(t *testing.T) {
 	}
 	if result.RowsAffected != 0 {
 		t.Errorf("insert into returned RowsAffected %v, was expecting 0", result.RowsAffected)
+	}
+}
+
+func TestLargeQueries(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	randString := func(n int) string {
+		b := make([]byte, n)
+		for i := range b {
+			b[i] = letterBytes[rand.Intn(len(letterBytes))]
+		}
+		return string(b)
+	}
+
+	for i := 0; i < 2; i++ {
+		for j := -2; j < 2; j++ {
+			expectedString := randString((i+1)*mysql.MaxPacketSize + j)
+
+			result, err := conn.ExecuteFetch(fmt.Sprintf("select \"%s\"", expectedString), -1, true)
+			if err != nil {
+				t.Fatalf("ExecuteFetch failed: %v", err)
+			}
+			if len(result.Rows) != 1 || len(result.Rows[0]) != 1 || result.Rows[0][0].IsNull() {
+				t.Fatalf("ExecuteFetch on large query returned poorly-formed result. " +
+					"Expected single row single column string.")
+			}
+			if result.Rows[0][0].ToString() != expectedString {
+				t.Fatalf("Result row was incorrect. Suppressing large string")
+			}
+		}
 	}
 }
 

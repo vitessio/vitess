@@ -33,31 +33,31 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 	edel := &engine.Delete{
 		Query: generateQuery(del),
 	}
-	bldr, err := processTableExprs(del.TableExprs, vschema)
-	if err != nil {
+	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(del)))
+	if err := pb.processTableExprs(del.TableExprs); err != nil {
 		return nil, err
 	}
-	rb, ok := bldr.(*route)
+	rb, ok := pb.bldr.(*route)
 	if !ok {
 		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
 	}
 	edel.Keyspace = rb.ERoute.Keyspace
 	if !edel.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
-		if !validateSubquerySamePlan(rb.ERoute.Keyspace.Name, rb, vschema, del.Targets, del.Where, del.OrderBy, del.Limit) {
+		if !pb.validateSubquerySamePlan(del.Targets, del.Where, del.OrderBy, del.Limit) {
 			return nil, errors.New("unsupported: sharded subqueries in DML")
 		}
 		edel.Opcode = engine.DeleteUnsharded
 		return edel, nil
 	}
-	if del.Targets != nil || len(rb.Symtab().tables) != 1 {
+	if del.Targets != nil || len(pb.st.tables) != 1 {
 		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
 	}
 	if hasSubquery(del) {
 		return nil, errors.New("unsupported: subqueries in sharded DML")
 	}
 	var tableName sqlparser.TableName
-	for t := range rb.Symtab().tables {
+	for t := range pb.st.tables {
 		tableName = t
 	}
 	table, _, destTabletType, destTarget, err := vschema.FindTable(tableName)

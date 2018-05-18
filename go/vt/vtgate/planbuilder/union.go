@@ -25,84 +25,70 @@ import (
 )
 
 func buildUnionPlan(union *sqlparser.Union, vschema ContextVSchema) (primitive engine.Primitive, err error) {
-	bindvars := sqlparser.GetBindvars(union)
-	bldr, err := processUnion(union, vschema, nil)
-	if err != nil {
+	// For unions, create a pb with anonymous scope.
+	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(union)))
+	if err := pb.processUnion(union, nil); err != nil {
 		return nil, err
 	}
-	jt := newJointab(bindvars)
-	err = bldr.Wireup(bldr, jt)
-	if err != nil {
+	if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
 		return nil, err
 	}
-	return bldr.Primitive(), nil
+	return pb.bldr.Primitive(), nil
 }
 
-func processUnion(union *sqlparser.Union, vschema ContextVSchema, outer builder) (builder, error) {
-	lbldr, err := processPart(union.Left, vschema, outer)
-	if err != nil {
-		return nil, err
+func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) error {
+	lpb := newPrimitiveBuilder(pb.vschema, pb.jt)
+	if err := lpb.processPart(union.Left, outer); err != nil {
+		return err
 	}
-	rbldr, err := processPart(union.Right, vschema, outer)
-	if err != nil {
-		return nil, err
+	rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
+	if err := rpb.processPart(union.Right, outer); err != nil {
+		return err
 	}
-	bldr, err := unionRouteMerge(union, lbldr, rbldr, vschema)
-	if err != nil {
-		return nil, err
-	}
-	if outer != nil {
-		bldr.Symtab().Outer = outer.Symtab()
-	}
-	err = pushOrderBy(union.OrderBy, bldr)
-	if err != nil {
-		return nil, err
-	}
-	bldr, err = pushLimit(union.Limit, bldr)
-	if err != nil {
-		return nil, err
-	}
-	return bldr, nil
-}
 
-func processPart(part sqlparser.SelectStatement, vschema ContextVSchema, outer builder) (builder, error) {
 	var err error
-	var bldr builder
+	pb.bldr, pb.st, err = unionRouteMerge(union, lpb.bldr, rpb.bldr)
+	if err != nil {
+		return err
+	}
+	pb.st.Outer = outer
+
+	if err := pb.pushOrderBy(union.OrderBy); err != nil {
+		return err
+	}
+	return pb.pushLimit(union.Limit)
+}
+
+func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, outer *symtab) error {
 	switch part := part.(type) {
 	case *sqlparser.Union:
-		bldr, err = processUnion(part, vschema, outer)
+		return pb.processUnion(part, outer)
 	case *sqlparser.Select:
-		bldr, err = processSelect(part, vschema, outer)
+		return pb.processSelect(part, outer)
 	case *sqlparser.ParenSelect:
-		bldr, err = processPart(part.Select, vschema, outer)
-	default:
-		panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", part))
+		return pb.processPart(part.Select, outer)
 	}
-	if err != nil {
-		return nil, err
-	}
-	return bldr, nil
+	panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", part))
 }
 
-func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema ContextVSchema) (builder, error) {
+func unionRouteMerge(union *sqlparser.Union, left, right builder) (builder, *symtab, error) {
 	lroute, ok := left.(*route)
 	if !ok {
-		return nil, errors.New("unsupported construct: SELECT of UNION is non-trivial")
+		return nil, nil, errors.New("unsupported construct: SELECT of UNION is non-trivial")
 	}
 	rroute, ok := right.(*route)
 	if !ok {
-		return nil, errors.New("unsupported construct: SELECT of UNION is non-trivial")
+		return nil, nil, errors.New("unsupported construct: SELECT of UNION is non-trivial")
 	}
 	if err := lroute.UnionCanMerge(rroute); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	rb := newRoute(
+	rb, st := newRoute(
 		&sqlparser.Union{Type: union.Type, Left: union.Left, Right: union.Right, Lock: union.Lock},
 		lroute.ERoute,
 		lroute.condition,
-		vschema,
 	)
 	lroute.Redirect = rb
 	rroute.Redirect = rb
-	return rb, nil
+	return rb, st, nil
 }

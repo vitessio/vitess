@@ -464,6 +464,73 @@
   }
 }
 
+# sharded upsert with sharding key set to vindex column
+"insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)"
+{
+  "Original": "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)",
+  "Instructions": {
+    "Opcode": "InsertShardedIgnore",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into music(user_id, id) values (:_user_id0, :_id0) on duplicate key update user_id = values(user_id)",
+    "Values": [
+      [
+        [
+          1
+        ]
+      ],
+      [
+        [
+          2
+        ]
+      ]
+    ],
+    "Table": "music",
+    "Prefix": "insert into music(user_id, id) values ",
+    "Mid": [
+      "(:_user_id0, :_id0)"
+    ],
+    "Suffix": " on duplicate key update user_id = values(user_id)"
+  }
+}
+
+# sharded bulk upsert with sharding key set to vindex column 
+"insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)"
+{
+  "Original": "insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)",
+  "Instructions": {
+    "Opcode": "InsertShardedIgnore",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into music(user_id, id) values (:_user_id0, :_id0), (:_user_id1, :_id1) on duplicate key update user_id = values(user_id)",
+    "Values": [
+      [
+        [
+          1,
+          3
+        ]
+      ],
+      [
+        [
+          2,
+          4
+        ]
+      ]
+    ],
+    "Table": "music",
+    "Prefix": "insert into music(user_id, id) values ",
+    "Mid": [
+      "(:_user_id0, :_id0)",
+      "(:_user_id1, :_id1)"
+    ],
+    "Suffix": " on duplicate key update user_id = values(user_id)"
+  }
+}
+
 # insert unsharded with select
 "insert into unsharded select id from unsharded_auto"
 {
@@ -1217,6 +1284,113 @@
     },
     "Table": "multicolvin",
     "OwnedVindexQuery": "select column_a, column_b, column_c from multicolvin where kid = 1 for update"
+  }
+}
+
+# update with no primary vindex on where clause (scatter update)
+"update user_extra set val = 1"
+{
+  "Original": "update user_extra set val = 1",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_extra set val = 1",
+    "Table": "user_extra"
+  }
+}
+
+# update with no primary vindex on where clause (scatter update)   - multi shard autocommit
+"update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */  user_extra set val = 1"
+{
+  "Original": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */  user_extra set val = 1",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user_extra set val = 1",
+    "Table": "user_extra",
+      "MultiShardAutocommit": true
+  }
+}
+
+# update with non-comparison expr
+"update user_extra set val = 1 where id between 1 and 2"
+{
+  "Original": "update user_extra set val = 1 where id between 1 and 2",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_extra set val = 1 where id between 1 and 2",
+    "Table": "user_extra"
+  }
+}
+
+# update with primary id through IN clause
+"update user_extra set val = 1 where user_id in (1, 2)"
+{
+  "Original": "update user_extra set val = 1 where user_id in (1, 2)",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_extra set val = 1 where user_id in (1, 2)",
+    "Table": "user_extra"
+  }
+}
+
+
+# update with non-unique key
+"update user_extra set val = 1 where name = 'foo'"
+{
+  "Original": "update user_extra set val = 1 where name = 'foo'",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_extra set val = 1 where name = 'foo'",
+    "Table": "user_extra"
+  }
+}
+
+# update by lookup with IN clause
+"update user_extra set val = 1 where id in (1, 2)"
+{
+  "Original": "update user_extra set val = 1 where id in (1, 2)",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_extra set val = 1 where id in (1, 2)",
+    "Table": "user_extra"
+  }
+}
+
+# update with where clause with parens
+"update user_extra set val = 1 where (name = 'foo' or id = 1)"
+{
+  "Original": "update user_extra set val = 1 where (name = 'foo' or id = 1)",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_extra set val = 1 where (name = 'foo' or id = 1)",
+    "Table": "user_extra"
   }
 }
 

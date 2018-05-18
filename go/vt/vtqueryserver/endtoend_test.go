@@ -148,12 +148,12 @@ func testFetch(t *testing.T, conn *mysql.Conn, sql string, expectedRows int) *sq
 func testDML(t *testing.T, conn *mysql.Conn, sql string, expectedNumQueries int64, expectedRowsAffected uint64) {
 	t.Helper()
 
-	numQueries := tabletenv.MySQLStats.Count()
+	numQueries := tabletenv.MySQLStats.Counts()["Exec"]
 	result, err := conn.ExecuteFetch(sql, 1000, false)
 	if err != nil {
 		t.Errorf("error: %v", err)
 	}
-	numQueries = tabletenv.MySQLStats.Count() - numQueries
+	numQueries = tabletenv.MySQLStats.Counts()["Exec"] - numQueries
 
 	if numQueries != expectedNumQueries {
 		t.Errorf("expected %d mysql queries but got %d", expectedNumQueries, numQueries)
@@ -343,21 +343,37 @@ func TestTransactionsInProcess(t *testing.T) {
 	testFetch(t, conn, "select * from test", 1)
 	testFetch(t, conn2, "select * from test", 1)
 
+	// Setting autocommit=1 (when it was previously 0) causes the existing transaction to commit
 	testDML(t, conn, "set autocommit=0", 0, 0)
-	testDML(t, conn, "begin", 1, 0)
-	testDML(t, conn, "insert into test (id, val) values(2, 'hello')", 1, 1)
+	// (2 queries -- begin b/c autocommit = 0; insert)
+	testDML(t, conn, "insert into test (id, val) values(2, 'hello')", 2, 1)
 	testFetch(t, conn, "select * from test", 2)
 	testFetch(t, conn2, "select * from test", 1)
 
-	// Setting autocommit=1 causes the existing transaction to commit
+	// (1 query -- commit b/c of autocommit change)
 	testDML(t, conn, "set autocommit=1", 1, 0)
 	testFetch(t, conn, "select * from test", 2)
 	testFetch(t, conn2, "select * from test", 2)
 
+	// Setting autocommit=1 doesn't cause the existing transaction to commit if it was already
+	// autocommit=1. Therefore rollback is effective.
+	testDML(t, conn, "set autocommit=1", 0, 0)
+	testDML(t, conn, "begin", 1, 0)
+	testDML(t, conn, "insert into test (id, val) values(3, 'hello')", 1, 1)
+	testFetch(t, conn, "select * from test", 3)
+	testFetch(t, conn2, "select * from test", 2)
+
+	testDML(t, conn, "set autocommit=1", 0, 0)
+	testDML(t, conn, "rollback", 1, 0)
+	testFetch(t, conn, "select * from test", 2)
+	testFetch(t, conn2, "select * from test", 2)
+
+	// Basic autocommit test
 	testDML(t, conn, "insert into test (id, val) values(3, 'hello')", 3, 1)
 	testFetch(t, conn, "select * from test", 3)
 	testFetch(t, conn2, "select * from test", 3)
 
+	// Cleanup
 	testDML(t, conn2, "begin", 1, 0)
 	testDML(t, conn2, "delete from test", 2, 3)
 	testDML(t, conn2, "commit", 1, 0)
@@ -365,6 +381,40 @@ func TestTransactionsInProcess(t *testing.T) {
 	testFetch(t, conn, "select * from test", 0)
 	testFetch(t, conn2, "select * from test", 0)
 
+}
+
+func TestErrorDoesntDropTransaction(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn2, err := mysql.Connect(ctx, &proxyConnParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testDML(t, conn, "begin", 1, 0)
+	testDML(t, conn, "insert into test (id, val) values(1, 'hello')", 1, 1)
+	_, err = conn.ExecuteFetch("select this is garbage", 1, false)
+	if err == nil {
+		t.Log("Expected error for garbage sql request")
+		t.FailNow()
+	}
+	// First connection should still see its data.
+	testFetch(t, conn, "select * from test", 1)
+	// But second won't, since it's uncommitted.
+	testFetch(t, conn2, "select * from test", 0)
+
+	// Commit works still.
+	testDML(t, conn, "commit", 1, 0)
+	testFetch(t, conn, "select * from test", 1)
+	testFetch(t, conn2, "select * from test", 1)
+
+	// Cleanup
+	testDML(t, conn2, "begin", 1, 0)
+	testDML(t, conn2, "delete from test", 2, 1)
+	testDML(t, conn2, "commit", 1, 0)
 }
 
 func TestOther(t *testing.T) {
@@ -387,10 +437,13 @@ func TestQueryDeadline(t *testing.T) {
 
 	// First run a query that is killed by the slow query killer after 2s
 	_, err = conn.ExecuteFetch("select sleep(5) from dual", 1000, false)
-	wantErr := "EOF (errno 2013) (sqlstate HY000) during query"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("want error %v, got %v", wantErr, err)
+	wantErr := "EOF (errno 2013) (sqlstate HY000) (CallerID: userData1): Sql: \"select sleep(:vtp1) from dual\", " +
+		"BindVars: {#maxLimit: \"type:INT64 value:\\\"10001\\\" \"vtp1: \"type:INT64 value:\\\"5\\\" \"} " +
+		"(errno 2013) (sqlstate HY000) during query: select sleep(5) from dual"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("error want '%v', got '%v'", wantErr, err)
 	}
+
 	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {
 		t.Fatalf("Unexpected error type: %T, want %T", err, &mysql.SQLError{})

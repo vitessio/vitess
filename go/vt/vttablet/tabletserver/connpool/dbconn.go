@@ -132,6 +132,14 @@ func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, want
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
+	// Check if the context is already past its deadline before
+	// trying to execute the query.
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("%v before execution started", ctx.Err())
+	default:
+	}
+
 	done, wg := dbc.setDeadline(ctx)
 	if done != nil {
 		defer func() {

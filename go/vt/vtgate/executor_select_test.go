@@ -98,7 +98,7 @@ func TestUnshardedComments(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from music_user_map where id = 1 /* trailing */",
+		Sql:           "/* leading */ select id from music_user_map where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -110,7 +110,7 @@ func TestUnshardedComments(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select id from music_user_map where id = 1 /* trailing */",
+		Sql:           "/* leading */ select id from music_user_map where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql:           "update music_user_map set id = 1 /* trailing */",
@@ -415,7 +415,7 @@ func TestSelectComments(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from user where id = 1 /* trailing */",
+		Sql:           "/* leading */ select id from user where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -436,7 +436,7 @@ func TestSelectNormalize(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "select id from user where id = :vtg1 /* trailing */",
+		Sql: "/* leading */ select id from user where id = :vtg1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1": sqltypes.TestBindVariable(int64(1)),
 		},
@@ -456,7 +456,7 @@ func TestSelectNormalize(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where id = :vtg1 /* trailing */",
+		Sql: "/* leading */ select id from user where id = :vtg1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1": sqltypes.TestBindVariable(int64(1)),
 		},

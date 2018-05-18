@@ -103,7 +103,8 @@ func TestApplySchema_AllowLongUnavailability(t *testing.T) {
 	// First ApplySchema fails because the table is very big and -allow_long_unavailability is missing.
 	if err := vp.Run([]string{"ApplySchema", "-sql", addColumn, "ks"}); err == nil {
 		t.Fatal("ApplySchema should have failed but did not.")
-	} else if !strings.Contains(err.Error(), "big schema change detected") {
+	} else if !strings.Contains(err.Error(), "big schema change detected") ||
+		!strings.Contains(strings.ToLower(err.Error()), "alter table table1") {
 		t.Fatalf("ApplySchema failed with wrong error. got: %v", err)
 	}
 
