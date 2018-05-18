@@ -86,6 +86,55 @@ func TestUpdateEqual(t *testing.T) {
 	expectError(t, "Execute", err, "execUpdateEqual: missing bind var aa")
 }
 
+func TestUpdateScatter(t *testing.T) {
+	vindex, _ := vindexes.NewHash("", nil)
+	upd := &Update{
+		Opcode: UpdateScatter,
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		Query:  "dummy_update",
+		Vindex: vindex,
+		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+	}
+
+	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
+	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.-20: dummy_update {} ks.20-: dummy_update {} true false`,
+	})
+
+	// works with multishard autocommit
+	upd = &Update{
+		Opcode: UpdateScatter,
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		Query:                "dummy_update",
+		Vindex:               vindex,
+		Values:               []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+		MultiShardAutocommit: true,
+	}
+
+	vc = &loggingVCursor{shards: []string{"-20", "20-"}}
+	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.-20: dummy_update {} ks.20-: dummy_update {} true true`,
+	})
+}
+
 func TestUpdateEqualNoRoute(t *testing.T) {
 	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
 		"table": "lkp",

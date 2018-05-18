@@ -59,6 +59,10 @@ type Update struct {
 
 	// OwnedVindexQuery is used for updating changes in lookup vindexes.
 	OwnedVindexQuery string
+
+	// Option to override the standard behavior and allow a multi-shard update
+	// to use single round trip autocommit.
+	MultiShardAutocommit bool
 }
 
 // MarshalJSON serializes the Update into a JSON representation.
@@ -72,23 +76,25 @@ func (upd *Update) MarshalJSON() ([]byte, error) {
 		vindexName = upd.Vindex.String()
 	}
 	marshalUpdate := struct {
-		Opcode              UpdateOpcode
-		Keyspace            *vindexes.Keyspace              `json:",omitempty"`
-		Query               string                          `json:",omitempty"`
-		Vindex              string                          `json:",omitempty"`
-		Values              []sqltypes.PlanValue            `json:",omitempty"`
-		ChangedVindexValues map[string][]sqltypes.PlanValue `json:",omitempty"`
-		Table               string                          `json:",omitempty"`
-		OwnedVindexQuery    string                          `json:",omitempty"`
+		Opcode               UpdateOpcode
+		Keyspace             *vindexes.Keyspace              `json:",omitempty"`
+		Query                string                          `json:",omitempty"`
+		Vindex               string                          `json:",omitempty"`
+		Values               []sqltypes.PlanValue            `json:",omitempty"`
+		ChangedVindexValues  map[string][]sqltypes.PlanValue `json:",omitempty"`
+		Table                string                          `json:",omitempty"`
+		OwnedVindexQuery     string                          `json:",omitempty"`
+		MultiShardAutocommit bool                            `json:",omitempty"`
 	}{
-		Opcode:              upd.Opcode,
-		Keyspace:            upd.Keyspace,
-		Query:               upd.Query,
-		Vindex:              vindexName,
-		Values:              upd.Values,
-		ChangedVindexValues: upd.ChangedVindexValues,
-		Table:               tname,
-		OwnedVindexQuery:    upd.OwnedVindexQuery,
+		Opcode:               upd.Opcode,
+		Keyspace:             upd.Keyspace,
+		Query:                upd.Query,
+		Vindex:               vindexName,
+		Values:               upd.Values,
+		ChangedVindexValues:  upd.ChangedVindexValues,
+		Table:                tname,
+		OwnedVindexQuery:     upd.OwnedVindexQuery,
+		MultiShardAutocommit: upd.MultiShardAutocommit,
 	}
 	return jsonutil.MarshalNoEscape(marshalUpdate)
 }
@@ -106,11 +112,15 @@ const (
 	// to a single shard: Requires: A Vindex, and
 	// a single Value.
 	UpdateEqual
+	// UpdateScatter is for routing a scattered
+	// update statement.
+	UpdateScatter
 )
 
 var updName = map[UpdateOpcode]string{
 	UpdateUnsharded: "UpdateUnsharded",
 	UpdateEqual:     "UpdateEqual",
+	UpdateScatter:   "UpdateScatter",
 }
 
 // MarshalJSON serializes the UpdateOpcode as a JSON string.
@@ -126,6 +136,8 @@ func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 		return upd.execUpdateUnsharded(vcursor, bindVars)
 	case UpdateEqual:
 		return upd.execUpdateEqual(vcursor, bindVars)
+	case UpdateScatter:
+		return upd.execUpdateByDestination(vcursor, bindVars, key.DestinationAllShards{})
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", upd)
@@ -217,4 +229,22 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, query string, bindVars m
 		}
 	}
 	return nil
+}
+
+func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{dest})
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execUpdateByDestination")
+	}
+
+	queries := make([]*querypb.BoundQuery, len(rss))
+	sql := sqlannotation.AnnotateIfDML(upd.Query, nil)
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVars,
+		}
+	}
+	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
+	return vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
 }

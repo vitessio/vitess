@@ -62,6 +62,11 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 	}
 
+	directives := sqlparser.ExtractCommentDirectives(upd.Comments)
+	if directives.IsSet(DirectiveMultiShardAutocommit) {
+		eupd.MultiShardAutocommit = true
+	}
+
 	var vindexTable *vindexes.Table
 	for _, tval := range pb.st.tables {
 		vindexTable = tval.vindexTable
@@ -73,9 +78,19 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	var err error
 	eupd.Vindex, eupd.Values, err = getDMLRouting(upd.Where, eupd.Table)
 	if err != nil {
-		return nil, err
+		eupd.Opcode = engine.UpdateScatter
+	} else {
+		eupd.Opcode = engine.UpdateEqual
 	}
-	eupd.Opcode = engine.UpdateEqual
+
+	if eupd.Opcode == engine.UpdateScatter {
+		if len(eupd.Table.Owned) != 0 {
+			return eupd, errors.New("unsupported: multi shard update on a table with owned lookup vindexes")
+		}
+		if upd.Limit != nil {
+			return eupd, errors.New("unsupported: multi shard update with limit")
+		}
+	}
 
 	if eupd.ChangedVindexValues, err = buildChangedVindexesValues(eupd, upd, eupd.Table.ColumnVindexes); err != nil {
 		return nil, err
