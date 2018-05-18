@@ -118,7 +118,7 @@ public class BindVarTest {
             BindVariable.newBuilder().setType(Query.Type.DECIMAL)
                 .setValue(ByteString.copyFromUtf8("0.000000000123456789123456789")).build()},
         {new BigInteger("123456789123456789"),
-            BindVariable.newBuilder().setType(Query.Type.UINT64)
+            BindVariable.newBuilder().setType(Query.Type.VARCHAR)
                 .setValue(ByteString.copyFromUtf8("123456789123456789")).build()},
         // List of Int
         {Arrays.asList(1, 2, 3),
