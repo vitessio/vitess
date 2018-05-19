@@ -42,6 +42,12 @@ type flavor interface {
 	// masterGTIDSet returns the current GTIDSet of a server.
 	masterGTIDSet(c *Conn) (GTIDSet, error)
 
+	// startSlave returns the command to start the slave.
+	startSlaveCommand() string
+
+	// stopSlave returns the command to stop the slave.
+	stopSlaveCommand() string
+
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
 	sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error
@@ -135,6 +141,16 @@ func (c *Conn) MasterPosition() (Position, error) {
 	return Position{
 		GTIDSet: gtidSet,
 	}, nil
+}
+
+// StartSlaveCommand returns the command to start the slave.
+func (c *Conn) StartSlaveCommand() string {
+	return c.flavor.startSlaveCommand()
+}
+
+// StopSlaveCommand returns the command to stop the slave.
+func (c *Conn) StopSlaveCommand() string {
+	return c.flavor.stopSlaveCommand()
 }
 
 // SendBinlogDumpCommand sends the flavor-specific version of

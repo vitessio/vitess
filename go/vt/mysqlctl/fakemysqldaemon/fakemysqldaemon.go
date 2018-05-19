@@ -245,6 +245,20 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 	return nil
 }
 
+// StartSlave is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) StartSlave(hookExtraEnv map[string]string) error {
+	return fmd.ExecuteSuperQueryList(context.Background(), []string{
+		"START SLAVE",
+	})
+}
+
+// StopSlave is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) StopSlave(hookExtraEnv map[string]string) error {
+	return fmd.ExecuteSuperQueryList(context.Background(), []string{
+		"STOP SLAVE",
+	})
+}
+
 // SetSlavePosition is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetSlavePosition(ctx context.Context, pos mysql.Position) error {
 	if !reflect.DeepEqual(fmd.SetSlavePositionPos, pos) {
@@ -263,11 +277,11 @@ func (fmd *FakeMysqlDaemon) SetMaster(ctx context.Context, masterHost string, ma
 	}
 	cmds := []string{}
 	if slaveStopBefore {
-		cmds = append(cmds, mysqlctl.SQLStopSlave)
+		cmds = append(cmds, "STOP SLAVE")
 	}
 	cmds = append(cmds, "FAKE SET MASTER")
 	if slaveStartAfter {
-		cmds = append(cmds, mysqlctl.SQLStartSlave)
+		cmds = append(cmds, "START SLAVE")
 	}
 	return fmd.ExecuteSuperQueryList(ctx, cmds)
 }
@@ -320,9 +334,9 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList
 
 		// intercept some queries to update our status
 		switch query {
-		case mysqlctl.SQLStartSlave:
+		case "START SLAVE":
 			fmd.Replicating = true
-		case mysqlctl.SQLStopSlave:
+		case "STOP SLAVE":
 			fmd.Replicating = false
 		}
 	}

@@ -299,7 +299,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 			return false, fmt.Errorf("can't get master position: %v", err)
 		}
 	} else {
-		if err = StopSlave(mysqld, hookExtraEnv); err != nil {
+		if err = mysqld.StopSlave(hookExtraEnv); err != nil {
 			return false, fmt.Errorf("can't stop slave: %v", err)
 		}
 		var slaveStatus mysql.SlaveStatus
@@ -345,7 +345,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	}
 	if slaveStartRequired {
 		logger.Infof("restarting mysql replication")
-		if err := StartSlave(mysqld, hookExtraEnv); err != nil {
+		if err := mysqld.StartSlave(hookExtraEnv); err != nil {
 			return usable, fmt.Errorf("cannot restart slave: %v", err)
 		}
 

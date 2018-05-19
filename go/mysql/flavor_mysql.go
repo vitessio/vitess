@@ -38,6 +38,14 @@ func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
 	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
 
+func (mysqlFlavor) startSlaveCommand() string {
+	return "START SLAVE"
+}
+
+func (mysqlFlavor) stopSlaveCommand() string {
+	return "STOP SLAVE"
+}
+
 // sendBinlogDumpCommand is part of the Flavor interface.
 func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error {
 	gtidSet, ok := startPos.GTIDSet.(Mysql56GTIDSet)

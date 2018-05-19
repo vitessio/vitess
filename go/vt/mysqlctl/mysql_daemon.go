@@ -46,6 +46,8 @@ type MysqlDaemon interface {
 	GetMysqlPort() (int32, error)
 
 	// replication related methods
+	StartSlave(hookExtraEnv map[string]string) error
+	StopSlave(hookExtraEnv map[string]string) error
 	SlaveStatus() (mysql.SlaveStatus, error)
 	SetSemiSyncEnabled(master, slave bool) error
 	SemiSyncEnabled() (master, slave bool)
