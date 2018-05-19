@@ -117,4 +117,12 @@ public class StringUtilsTest {
     Assert.assertEquals(Lists.newArrayList("one", "/*!50110 one", " two */two", "three", "four"), StringUtils.split("one,/*!50110 one, two */two,three,four", ",", "`", "`"));
     Assert.assertEquals(Lists.newArrayList("one", "/*!5011 one", " two */two", "three", "four"), StringUtils.split("one,/*!5011 one, two */two,three,four", ",", "`", "`"));
   }
+
+  @Test
+  public void firstAlphaCharUcTest() {
+    Assert.assertEquals('S', StringUtils.firstAlphaCharUc("(select * from foo) union (select * from bar)", 0));
+    Assert.assertEquals('R', StringUtils.firstAlphaCharUc("replace into table1 values()", 0));
+    Assert.assertEquals('S', StringUtils.firstAlphaCharUc("SET replication_speed='ludicrous'", 0));
+    Assert.assertEquals('S', StringUtils.firstAlphaCharUc("/* leading comment */ select * from table2 ", 22));
+  }
 }
