@@ -36,14 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-const (
-	// SQLStartSlave is the SQl command issued to start MySQL replication
-	SQLStartSlave = "START SLAVE"
-
-	// SQLStopSlave is the SQl command issued to stop MySQL replication
-	SQLStopSlave = "STOP SLAVE"
-)
-
 // WaitForSlaveStart waits until the deadline for replication to start.
 // This validates the current master is correct and can be connected to.
 func WaitForSlaveStart(mysqld MysqlDaemon, slaveStartDeadline int) error {
@@ -73,9 +65,16 @@ func WaitForSlaveStart(mysqld MysqlDaemon, slaveStartDeadline int) error {
 	return nil
 }
 
-// StartSlave starts a slave on the provided MysqldDaemon
-func StartSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
-	if err := md.ExecuteSuperQueryList(context.TODO(), []string{SQLStartSlave}); err != nil {
+// StartSlave starts a slave.
+func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
+	ctx := context.TODO()
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StartSlaveCommand()}); err != nil {
 		return err
 	}
 
@@ -84,15 +83,21 @@ func StartSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
 	return h.ExecuteOptional()
 }
 
-// StopSlave stops a slave on the provided MysqldDaemon
-func StopSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
+// StopSlave stops a slave.
+func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
 	h.ExtraEnv = hookExtraEnv
 	if err := h.ExecuteOptional(); err != nil {
 		return err
 	}
+	ctx := context.TODO()
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
 
-	return md.ExecuteSuperQueryList(context.TODO(), []string{SQLStopSlave})
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSlaveCommand()})
 }
 
 // GetMysqlPort returns mysql port
@@ -223,12 +228,12 @@ func (mysqld *Mysqld) SetMaster(ctx context.Context, masterHost string, masterPo
 
 	cmds := []string{}
 	if slaveStopBefore {
-		cmds = append(cmds, SQLStopSlave)
+		cmds = append(cmds, conn.StopSlaveCommand())
 	}
 	smc := conn.SetMasterCommand(&params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
 	cmds = append(cmds, smc)
 	if slaveStartAfter {
-		cmds = append(cmds, SQLStartSlave)
+		cmds = append(cmds, conn.StartSlaveCommand())
 	}
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
