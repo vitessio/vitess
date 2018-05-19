@@ -70,6 +70,7 @@ func TestPreview(t *testing.T) {
 		{"unknown", StmtUnknown},
 
 		{"/* leading comment */ select ...", StmtSelect},
+		{"/* leading comment */ (select ...", StmtSelect},
 		{"/* leading comment */ /* leading comment 2 */ select ...", StmtSelect},
 		{"/*! MySQL-specific comment */", StmtComment},
 		{"/*!50708 MySQL-version comment */", StmtComment},
