@@ -192,7 +192,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     For other platforms, you'll need to choose the `file` backup storage plugin,
     and mount a read-write network volume into the `vttablet` and `vtctld` pods.
     For example, you can mount any storage service accessible through NFS into a
-    [Kubernetes volume](http://kubernetes.io/v1.1/docs/user-guide/volumes.html#nfs).
+    [Kubernetes volume](https://kubernetes.io/docs/concepts/storage/volumes#nfs).
     Then provide the mount path to the configure script here.
 
     Direct support for other cloud blob stores like Amazon S3 can be added by
