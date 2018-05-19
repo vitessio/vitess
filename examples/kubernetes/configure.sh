@@ -55,7 +55,7 @@ file)
   echo
   echo "NOTE: You must add your NFS mount to the vtctld-controller-template"
   echo "      and vttablet-pod-template as described in the Kubernetes docs:"
-  echo "      http://kubernetes.io/v1.0/docs/user-guide/volumes.html#nfs"
+  echo "      https://kubernetes.io/docs/concepts/storage/volumes#nfs"
   echo
 
   backup_flags=$(echo -backup_storage_implementation file \
