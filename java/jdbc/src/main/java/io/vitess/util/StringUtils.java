@@ -428,6 +428,24 @@ public class StringUtils {
         return statementStartPos;
     }
 
+    public static char firstAlphaCharUc(String searchIn, int startAt) {
+        if (searchIn == null) {
+            return 0;
+        }
+
+        int length = searchIn.length();
+
+        for (int i = startAt; i < length; i++) {
+            char c = searchIn.charAt(i);
+
+            if (Character.isLetter(c)) {
+                return Character.toUpperCase(c);
+            }
+        }
+
+        return 0;
+    }
+
     public static String toString(byte[] value, int offset, int length, String encoding) throws UnsupportedEncodingException {
         Charset cs = findCharset(encoding);
         return cs.decode(ByteBuffer.wrap(value, offset, length)).toString();
