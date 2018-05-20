@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"fmt"
+	"io"
 	"time"
 
 	"golang.org/x/net/context"
@@ -126,9 +127,19 @@ func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (
 	return fmt.Sprintf("SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('%s', %v)", pos, timeoutSeconds), nil
 }
 
-// makeBinlogEvent is part of the Flavor interface.
-func (mysqlFlavor) makeBinlogEvent(buf []byte) BinlogEvent {
-	return NewMysql56BinlogEvent(buf)
+// readBinlogEvent is part of the Flavor interface.
+func (mysqlFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
+	result, err := c.ReadPacket()
+	if err != nil {
+		return nil, err
+	}
+	switch result[0] {
+	case EOFPacket:
+		return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", io.EOF)
+	case ErrPacket:
+		return nil, ParseErrorPacket(result)
+	}
+	return NewMysql56BinlogEvent(result[1:]), nil
 }
 
 // enableBinlogPlaybackCommand is part of the Flavor interface.
