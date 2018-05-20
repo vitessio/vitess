@@ -463,6 +463,12 @@ func TestCellLengthAndData(t *testing.T) {
 		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
 			[]byte("-1234567890.1234")),
 	}, {
+		typ:      TypeNewDecimal,
+		metadata: 14<<8 | 4,
+		data:     []byte{0x81, 0x0D, 0xFB, 0x38, 0xD2, 0x00, 0x01},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("1234567890.0001")),
+	}, {
 		typ:      TypeBlob,
 		metadata: 1,
 		data:     []byte{0x3, 'a', 'b', 'c'},
