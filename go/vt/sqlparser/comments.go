@@ -261,6 +261,7 @@ func (d CommentDirectives) IsSet(key string) bool {
 	return false
 }
 
+// SkipQueryPlanCacheDirective returns true if skip query plan cache directive is set to true in query.
 func SkipQueryPlanCacheDirective(stmt Statement) (skipQuerPlanCacheDirective bool) {
 	switch stmt := stmt.(type) {
 	case *Select:
