@@ -139,7 +139,7 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 		t.Fatalf("UpdateTabletFields failed: %v", err)
 	}
 	tw.loadTablets()
-	counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "AddTablet": 1, "RemoveTablet": 1})
+	counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 1})
 
 	allTablets = fhc.GetAllTablets()
 	key = TabletToMapKey(tablet)
