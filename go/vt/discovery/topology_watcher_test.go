@@ -22,9 +22,31 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
+
+func checkOpCounts(t *testing.T, tw *TopologyWatcher, prevCounts, deltas map[string]int64) map[string]int64 {
+	t.Helper()
+	newCounts := topologyWatcherOperations.Counts()
+	for key, prevVal := range prevCounts {
+		delta, ok := deltas[key]
+		if !ok {
+			delta = 0
+		}
+		newVal, ok := newCounts[key]
+		if !ok {
+			newVal = 0
+		}
+
+		if newVal != prevVal+delta {
+			t.Errorf("expected %v to increase by %v, got %v -> %v", key, delta, prevVal, newVal)
+		}
+	}
+	return newCounts
+}
 
 func TestCellTabletsWatcher(t *testing.T) {
 	checkWatcher(t, true)
@@ -37,6 +59,9 @@ func TestShardReplicationWatcher(t *testing.T) {
 func checkWatcher(t *testing.T, cellTablets bool) {
 	ts := memorytopo.NewServer("aa")
 	fhc := NewFakeHealthCheck()
+	logger := logutil.NewMemoryLogger()
+	topologyWatcherOperations.ZeroAll()
+	counts := topologyWatcherOperations.Counts()
 	var tw *TopologyWatcher
 	if cellTablets {
 		tw = NewCellTabletsWatcher(ts, fhc, "aa", 10*time.Minute, 5)
@@ -50,6 +75,7 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 	if err := tw.WaitForInitialTopology(); err != nil {
 		t.Fatalf("initial WaitForInitialTopology failed")
 	}
+	counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1})
 
 	// Add a tablet to the topology.
 	tablet := &topodatapb.Tablet{
@@ -68,12 +94,39 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 		t.Fatalf("CreateTablet failed: %v", err)
 	}
 	tw.loadTablets()
+	counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "AddTablet": 1})
 
 	// Check the tablet is returned by GetAllTablets().
 	allTablets := fhc.GetAllTablets()
 	key := TabletToMapKey(tablet)
 	if _, ok := allTablets[key]; !ok || len(allTablets) != 1 || !proto.Equal(allTablets[key], tablet) {
 		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, tablet)
+	}
+
+	// Add a second tablet to the topology.
+	tablet2 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "aa",
+			Uid:  2,
+		},
+		Hostname: "host2",
+		PortMap: map[string]int32{
+			"vt": 789,
+		},
+		Keyspace: "keyspace",
+		Shard:    "shard",
+	}
+	if err := ts.CreateTablet(context.Background(), tablet2); err != nil {
+		t.Fatalf("CreateTablet failed: %v", err)
+	}
+	tw.loadTablets()
+	counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "AddTablet": 1})
+
+	// Check the tablet is returned by GetAllTablets().
+	allTablets = fhc.GetAllTablets()
+	key = TabletToMapKey(tablet2)
+	if _, ok := allTablets[key]; !ok || len(allTablets) != 2 || !proto.Equal(allTablets[key], tablet2) {
+		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, tablet2)
 	}
 
 	// same tablet, different port, should update (previous
@@ -86,9 +139,11 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 		t.Fatalf("UpdateTabletFields failed: %v", err)
 	}
 	tw.loadTablets()
+	counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "AddTablet": 1, "RemoveTablet": 1})
+
 	allTablets = fhc.GetAllTablets()
 	key = TabletToMapKey(tablet)
-	if _, ok := allTablets[key]; !ok || len(allTablets) != 1 || !proto.Equal(allTablets[key], tablet) {
+	if _, ok := allTablets[key]; !ok || len(allTablets) != 2 || !proto.Equal(allTablets[key], tablet) {
 		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, tablet)
 	}
 
@@ -101,12 +156,57 @@ func checkWatcher(t *testing.T, cellTablets bool) {
 	if err := ts.CreateTablet(context.Background(), tablet); err != nil {
 		t.Fatalf("CreateTablet failed: %v", err)
 	}
+	if err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard"); err != nil {
+		t.Fatalf("FixShardReplication failed: %v", err)
+	}
 	tw.loadTablets()
+
+	counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 1})
 
 	allTablets = fhc.GetAllTablets()
 	key = TabletToMapKey(tablet)
-	if _, ok := allTablets[key]; !ok || len(allTablets) != 1 || !proto.Equal(allTablets[key], tablet) {
+	if _, ok := allTablets[key]; !ok || len(allTablets) != 2 || !proto.Equal(allTablets[key], tablet) {
 		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, tablet)
+	}
+
+	// Remove and check that it is detected as being gone.
+	if err := ts.DeleteTablet(context.Background(), tablet.Alias); err != nil {
+		t.Fatalf("DeleteTablet failed: %v", err)
+	}
+	if err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard"); err != nil {
+		t.Fatalf("FixShardReplication failed: %v", err)
+	}
+	tw.loadTablets()
+	counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "RemoveTablet": 1})
+
+	allTablets = fhc.GetAllTablets()
+	key = TabletToMapKey(tablet)
+	if _, ok := allTablets[key]; ok || len(allTablets) != 1 {
+		t.Errorf("fhc.GetAllTablets() = %+v; don't want %v", allTablets, key)
+	}
+	key = TabletToMapKey(tablet2)
+	if _, ok := allTablets[key]; !ok || len(allTablets) != 1 || !proto.Equal(allTablets[key], tablet2) {
+		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, tablet2)
+	}
+
+	// Remove the other and check that it is detected as being gone.
+	if err := ts.DeleteTablet(context.Background(), tablet2.Alias); err != nil {
+		t.Fatalf("DeleteTablet failed: %v", err)
+	}
+	if err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard"); err != nil {
+		t.Fatalf("FixShardReplication failed: %v", err)
+	}
+	tw.loadTablets()
+	checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
+
+	allTablets = fhc.GetAllTablets()
+	key = TabletToMapKey(tablet)
+	if _, ok := allTablets[key]; ok || len(allTablets) != 0 {
+		t.Errorf("fhc.GetAllTablets() = %+v; don't want %v", allTablets, key)
+	}
+	key = TabletToMapKey(tablet2)
+	if _, ok := allTablets[key]; ok || len(allTablets) != 0 {
+		t.Errorf("fhc.GetAllTablets() = %+v; don't want %v", allTablets, key)
 	}
 
 	tw.Stop()
