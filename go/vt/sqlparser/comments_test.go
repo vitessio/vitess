@@ -80,6 +80,11 @@ func TestSplitComments(t *testing.T) {
 		outLeadingComments:  "/* before */ ",
 		outTrailingComments: " /* bar */",
 	}, {
+		input:               "/* before1 */ /* before2 */ foo /* after1 */ /* after2 */",
+		outSQL:              "foo",
+		outLeadingComments:  "/* before1 */ /* before2 */ ",
+		outTrailingComments: " /* after1 */ /* after2 */",
+	}, {
 		input:               "/** before */ foo /** bar */",
 		outSQL:              "foo",
 		outLeadingComments:  "/** before */ ",
@@ -110,11 +115,8 @@ func TestSplitComments(t *testing.T) {
 		outLeadingComments:  "",
 		outTrailingComments: "",
 	}, {
-		input: " foo ",
-		// NOTE(dweitzman): Preserving leading whitespace because the WhereClause entries for 'update'
-		// in exec_cases.txt have leading whitespace and if we trim it here that will change. It may be
-		// safe to change, but changing query plans is not an intended effect of this diff.
-		outSQL:              " foo",
+		input:               " foo ",
+		outSQL:              "foo",
 		outLeadingComments:  "",
 		outTrailingComments: "",
 	}}
