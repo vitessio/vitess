@@ -115,7 +115,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 	}
 
 	directives := sqlparser.ExtractCommentDirectives(ins.Comments)
-	if directives.IsSet(DirectiveMultiShardAutocommit) {
+	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
 		eins.MultiShardAutocommit = true
 	}
 
