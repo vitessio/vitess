@@ -513,10 +513,6 @@ This URL has an MRU list of consolidations. This is a way of identifying if mult
 
 This URL displays the currently active query blacklist rules.
 
-#### /debug/health
-
-This URL prints out a simple "ok" or “not ok” string that can be used to check if the server is healthy.
-
 ### Alerting
 
 Alerting is built on top of the variables you monitor. Before setting up alerts, you should get some baseline stats and variance, and then you can build meaningful alerting rules. You can use the following list as a guideline to build your own:
