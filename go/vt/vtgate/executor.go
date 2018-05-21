@@ -1177,7 +1177,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		if err != nil {
 			return nil, err
 		}
-		if !skipQueryPlanCache && !skipQueryPlanCacheDirective(stmt) {
+		if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(stmt) {
 			e.plans.Set(key, plan)
 		}
 		return plan, nil
@@ -1203,7 +1203,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if err != nil {
 		return nil, err
 	}
-	if !skipQueryPlanCache && !skipQueryPlanCacheDirective(stmt) {
+	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(stmt) {
 		e.plans.Set(normkey, plan)
 	}
 	return plan, nil
@@ -1215,34 +1215,6 @@ func skipQueryPlanCache(safeSession *SafeSession) bool {
 		return false
 	}
 	return safeSession.Options.SkipQueryPlanCache
-}
-
-func skipQueryPlanCacheDirective(stmt sqlparser.Statement) (skipQuerPlanCacheDirective bool) {
-	switch stmt := stmt.(type) {
-	case *sqlparser.Select:
-		directives := sqlparser.ExtractCommentDirectives(stmt.Comments)
-		if directives.IsSet(planbuilder.DirectiveSkipQueryPlanCache) {
-			skipQuerPlanCacheDirective = true
-		}
-	case *sqlparser.Insert:
-		directives := sqlparser.ExtractCommentDirectives(stmt.Comments)
-		if directives.IsSet(planbuilder.DirectiveSkipQueryPlanCache) {
-			skipQuerPlanCacheDirective = true
-		}
-	case *sqlparser.Update:
-		directives := sqlparser.ExtractCommentDirectives(stmt.Comments)
-		if directives.IsSet(planbuilder.DirectiveSkipQueryPlanCache) {
-			skipQuerPlanCacheDirective = true
-		}
-	case *sqlparser.Delete:
-		directives := sqlparser.ExtractCommentDirectives(stmt.Comments)
-		if directives.IsSet(planbuilder.DirectiveSkipQueryPlanCache) {
-			skipQuerPlanCacheDirective = true
-		}
-	default:
-		skipQuerPlanCacheDirective = false
-	}
-	return skipQuerPlanCacheDirective
 }
 
 // ServeHTTP shows the current plans in the query cache.

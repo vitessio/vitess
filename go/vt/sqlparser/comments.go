@@ -22,6 +22,14 @@ import (
 	"unicode"
 )
 
+const (
+	// DirectiveMultiShardAutocommit is the query comment directive to allow
+	// single round trip autocommit with a multi-shard statement.
+	DirectiveMultiShardAutocommit = "MULTI_SHARD_AUTOCOMMIT"
+	// DirectiveSkipQueryPlanCache skips query plan cache when set.
+	DirectiveSkipQueryPlanCache = "SKIP_QUERY_PLAN_CACHE"
+)
+
 func isNonSpace(r rune) bool {
 	return !unicode.IsSpace(r)
 }
@@ -251,4 +259,32 @@ func (d CommentDirectives) IsSet(key string) bool {
 		return intVal == 1
 	}
 	return false
+}
+
+func SkipQueryPlanCacheDirective(stmt Statement) (skipQuerPlanCacheDirective bool) {
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		if directives.IsSet(DirectiveSkipQueryPlanCache) {
+			skipQuerPlanCacheDirective = true
+		}
+	case *Insert:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		if directives.IsSet(DirectiveSkipQueryPlanCache) {
+			skipQuerPlanCacheDirective = true
+		}
+	case *Update:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		if directives.IsSet(DirectiveSkipQueryPlanCache) {
+			skipQuerPlanCacheDirective = true
+		}
+	case *Delete:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		if directives.IsSet(DirectiveSkipQueryPlanCache) {
+			skipQuerPlanCacheDirective = true
+		}
+	default:
+		skipQuerPlanCacheDirective = false
+	}
+	return skipQuerPlanCacheDirective
 }
