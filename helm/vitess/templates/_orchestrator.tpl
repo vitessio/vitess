@@ -23,11 +23,9 @@ spec:
   type: ClusterIP
 
 ---
-
 ###################################
 # Headless Orchestrator Service
 ###################################
-
 apiVersion: v1
 kind: Service
 metadata:
@@ -43,9 +41,6 @@ spec:
     - name: web
       port: 80
       targetPort: 3000
-    - name: raft
-      port: 10008
-      targetPort: 10008
   selector:
     component: orchestrator
     app: vitess
@@ -109,7 +104,7 @@ spec:
             timeoutSeconds: 10
           readinessProbe:
             httpGet:
-              path: "/api/leader-check"
+              path: "/api/raft-health"
               port: 3000
             timeoutSeconds: 10
 
