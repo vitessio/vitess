@@ -574,7 +574,7 @@ func TestTemplate(t *testing.T) {
 
 func TestDebugURLFormatting(t *testing.T) {
 	flag.Set("tablet_url_template", "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp")
-	LoadHealthCheckTabletURLTemplate()
+	ParseTabletURLTemplateFromFlag()
 
 	tablet := topo.NewTablet(0, "cell", "host.dc.domain")
 	ts := []*TabletStats{
