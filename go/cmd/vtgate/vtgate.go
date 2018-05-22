@@ -86,6 +86,7 @@ func main() {
 	vtg := vtgate.Init(context.Background(), healthCheck, resilientServer, *cell, *retryCount, tabletTypes)
 
 	servenv.OnRun(func() {
+		discovery.LoadHealthCheckTabletURLTemplate()
 		addStatusParts(vtg)
 	})
 	servenv.RunDefault()
