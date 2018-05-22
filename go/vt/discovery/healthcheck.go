@@ -120,11 +120,12 @@ const (
 )
 
 func init() {
-	LoadHealthCheckTabletURLTemplate()
+	// Flags are not parsed at this point and the default value of the flag (just the hostname) will be used.
+	ParseTabletURLTemplateFromFlag()
 }
 
-// LoadHealthCheckTabletURLTemplate loads or reloads the URL template.
-func LoadHealthCheckTabletURLTemplate() {
+// ParseTabletURLTemplateFromFlag loads or reloads the URL template.
+func ParseTabletURLTemplateFromFlag() {
 	tabletURLTemplate = template.New("")
 	_, err := tabletURLTemplate.Parse(*tabletURLTemplateString)
 	if err != nil {

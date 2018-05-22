@@ -86,7 +86,8 @@ func main() {
 	vtg := vtgate.Init(context.Background(), healthCheck, resilientServer, *cell, *retryCount, tabletTypes)
 
 	servenv.OnRun(func() {
-		discovery.LoadHealthCheckTabletURLTemplate()
+		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.
+		discovery.ParseTabletURLTemplateFromFlag()
 		addStatusParts(vtg)
 	})
 	servenv.RunDefault()
