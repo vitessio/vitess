@@ -65,7 +65,7 @@ spec:
 
           env:
             - name: DISABLE_UPDATES
-              value: "true"
+              value: "false"
 
             - name: DISABLE_TELEMETRY
               value: {{ $pmm.server.env.disableTelemetry | quote }}

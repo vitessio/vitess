@@ -8,9 +8,9 @@ COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificat
 RUN apt-get update && \
     apt-get upgrade -qq && \
     apt-get install wget -qq --no-install-recommends && \
-    wget https://www.percona.com/redir/downloads/pmm-client/1.6.1/binary/debian/stretch/x86_64/pmm-client_1.6.1-1.stretch_amd64.deb && \
-    dpkg -i pmm-client_1.6.1-1.stretch_amd64.deb && \
-    rm pmm-client_1.6.1-1.stretch_amd64.deb && \
+    wget https://www.percona.com/redir/downloads/pmm-client/1.10.0/binary/debian/stretch/x86_64/pmm-client_1.10.0-1.stretch_amd64.deb && \
+    dpkg -i pmm-client_1.10.0-1.stretch_amd64.deb && \
+    rm pmm-client_1.10.0-1.stretch_amd64.deb && \
     apt-get purge wget -qq && \
     apt-get autoremove -qq && \
     apt-get clean && \
