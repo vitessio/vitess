@@ -262,30 +262,30 @@ func (d CommentDirectives) IsSet(key string) bool {
 }
 
 // SkipQueryPlanCacheDirective returns true if skip query plan cache directive is set to true in query.
-func SkipQueryPlanCacheDirective(stmt Statement) (skipQuerPlanCacheDirective bool) {
+func SkipQueryPlanCacheDirective(stmt Statement) bool {
 	switch stmt := stmt.(type) {
 	case *Select:
 		directives := ExtractCommentDirectives(stmt.Comments)
 		if directives.IsSet(DirectiveSkipQueryPlanCache) {
-			skipQuerPlanCacheDirective = true
+			return true
 		}
 	case *Insert:
 		directives := ExtractCommentDirectives(stmt.Comments)
 		if directives.IsSet(DirectiveSkipQueryPlanCache) {
-			skipQuerPlanCacheDirective = true
+			return true
 		}
 	case *Update:
 		directives := ExtractCommentDirectives(stmt.Comments)
 		if directives.IsSet(DirectiveSkipQueryPlanCache) {
-			skipQuerPlanCacheDirective = true
+			return true
 		}
 	case *Delete:
 		directives := ExtractCommentDirectives(stmt.Comments)
 		if directives.IsSet(DirectiveSkipQueryPlanCache) {
-			skipQuerPlanCacheDirective = true
+			return true
 		}
 	default:
-		skipQuerPlanCacheDirective = false
+		return false
 	}
-	return skipQuerPlanCacheDirective
+	return false
 }
