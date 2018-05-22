@@ -59,7 +59,7 @@ func Preview(sql string) int {
 	if end := strings.IndexFunc(trimmed, unicode.IsSpace); end != -1 {
 		firstWord = trimmed[:end]
 	}
-
+	firstWord = strings.TrimLeftFunc(firstWord, func(r rune) bool { return !unicode.IsLetter(r) })
 	// Comparison is done in order of priority.
 	loweredFirstWord := strings.ToLower(firstWord)
 	switch loweredFirstWord {
