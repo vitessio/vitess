@@ -57,7 +57,7 @@ Vitess relies on adding comments to DMLs, which are later parsed on the other en
 
 In order to achieve this, Vitess also rewrites all your DMLs to be primary-key based. In a way, this also makes statement based replication almost as efficient as row-based replication (RBR). So, there should be no major loss of performance if you switched to SBR in Vitess.
 
-RBR will eventually be supported by Vitess.
+In Vitess 2.2 preliminary support for Row Based Replication (RBR) was added. See [this document]({% link user-guide/row-based-replication.md %}) for more information.
 
 ### Data types
 
