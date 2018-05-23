@@ -80,7 +80,12 @@ func TestPlan(t *testing.T) {
 		if strings.Contains(tcase.options, "PassthroughDMLs") {
 			PassthroughDMLs = true
 		}
-		plan, err := Build(tcase.input, testSchema)
+		var plan *Plan
+		var err error
+		statement, err := sqlparser.Parse(tcase.input)
+		if err == nil {
+			plan, err = Build(statement, testSchema)
+		}
 		PassthroughDMLs = false
 
 		var out string
@@ -125,7 +130,11 @@ func TestCustom(t *testing.T) {
 		for _, file := range files {
 			t.Logf("Testing file %s", file)
 			for tcase := range iterateExecFile(file) {
-				plan, err := Build(tcase.input, schem)
+				statement, err := sqlparser.Parse(tcase.input)
+				if err != nil {
+					t.Fatalf("Got error: %v, parsing sql: %v", err.Error(), tcase.input)
+				}
+				plan, err := Build(statement, schem)
 				var out string
 				if err != nil {
 					out = err.Error()
