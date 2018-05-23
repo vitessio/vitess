@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -26,12 +27,15 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+var _ engine.VCursor = (*vcursorImpl)(nil)
 
 // vcursorImpl implements the VCursor functionality used by dependent
 // packages to call back into VTGate.
@@ -68,6 +72,13 @@ func newVCursorImpl(ctx context.Context, safeSession *SafeSession, keyspace stri
 // Context returns the current Context.
 func (vc *vcursorImpl) Context() context.Context {
 	return vc.ctx
+}
+
+// SetContextTimeout updates context and sets a timeout.
+func (vc *vcursorImpl) SetContextTimeout(timeoutMilli int) context.CancelFunc {
+	ctx, cancel := context.WithTimeout(vc.ctx, (time.Duration(timeoutMilli) * time.Millisecond))
+	vc.ctx = ctx
+	return cancel
 }
 
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
