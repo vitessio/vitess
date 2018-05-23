@@ -346,3 +346,30 @@ func TestExtractCommentDirectives(t *testing.T) {
 		t.Errorf("d.IsSet(six) should be false")
 	}
 }
+
+func TestSkipQueryPlanCacheDirective(t *testing.T) {
+	stmt, _ := Parse("insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)")
+	if !SkipQueryPlanCacheDirective(stmt) {
+		t.Errorf("d.SkipQueryPlanCacheDirective(stmt) should be true")
+	}
+
+	stmt, _ = Parse("insert into user(id) values (1), (2)")
+	if SkipQueryPlanCacheDirective(stmt) {
+		t.Errorf("d.SkipQueryPlanCacheDirective(stmt) should be false")
+	}
+
+	stmt, _ = Parse("update /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ users set name=1")
+	if !SkipQueryPlanCacheDirective(stmt) {
+		t.Errorf("d.SkipQueryPlanCacheDirective(stmt) should be true")
+	}
+
+	stmt, _ = Parse("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from users")
+	if !SkipQueryPlanCacheDirective(stmt) {
+		t.Errorf("d.SkipQueryPlanCacheDirective(stmt) should be true")
+	}
+
+	stmt, _ = Parse("delete /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ from users")
+	if !SkipQueryPlanCacheDirective(stmt) {
+		t.Errorf("d.SkipQueryPlanCacheDirective(stmt) should be true")
+	}
+}

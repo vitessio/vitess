@@ -1168,21 +1168,22 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if result, ok := e.plans.Get(key); ok {
 		return result.(*engine.Plan), nil
 	}
-	if !e.normalize {
-		plan, err := planbuilder.Build(sql, vcursor)
-		if err != nil {
-			return nil, err
-		}
-		if !skipQueryPlanCache {
-			e.plans.Set(key, plan)
-		}
-		return plan, nil
-	}
-	// Normalize and retry.
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
+	if !e.normalize {
+		plan, err := planbuilder.BuildFromStmt(sql, stmt, vcursor)
+		if err != nil {
+			return nil, err
+		}
+		if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(stmt) {
+			e.plans.Set(key, plan)
+		}
+		return plan, nil
+	}
+
+	// Normalize and retry.
 	sqlparser.Normalize(stmt, bindVars, "vtg")
 	normalized := sqlparser.String(stmt)
 
@@ -1202,7 +1203,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if err != nil {
 		return nil, err
 	}
-	if !skipQueryPlanCache {
+	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(stmt) {
 		e.plans.Set(normkey, plan)
 	}
 	return plan, nil

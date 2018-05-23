@@ -63,7 +63,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	}
 
 	directives := sqlparser.ExtractCommentDirectives(upd.Comments)
-	if directives.IsSet(DirectiveMultiShardAutocommit) {
+	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
 		eupd.MultiShardAutocommit = true
 	}
 

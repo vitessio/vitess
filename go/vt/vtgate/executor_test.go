@@ -1676,6 +1676,29 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
+
+	// Skip cache using directive
+	r, _, _, _ = createExecutorEnv()
+	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, makeComments(""), r, nil)
+
+	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
+	logStats1 = NewLogStats(nil, "Test", "", nil)
+	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(r.plans.Keys()) != 0 {
+		t.Errorf("Plan keys should be 0, got: %v", len(r.plans.Keys()))
+	}
+
+	query1 = "insert into user(id) values (1), (2)"
+	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(r.plans.Keys()) != 1 {
+		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
+	}
 }
 
 func TestGetPlanCacheNormalized(t *testing.T) {
@@ -1705,6 +1728,30 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	}
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
+	}
+
+	// Skip cache using directive
+	r, _, _, _ = createExecutorEnv()
+	r.normalize = true
+	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, makeComments(""), r, nil)
+
+	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
+	logStats1 = NewLogStats(nil, "Test", "", nil)
+	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(r.plans.Keys()) != 0 {
+		t.Errorf("Plan keys should be 0, got: %v", len(r.plans.Keys()))
+	}
+
+	query1 = "insert into user(id) values (1), (2)"
+	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(r.plans.Keys()) != 1 {
+		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
 	}
 }
 
