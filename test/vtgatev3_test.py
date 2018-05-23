@@ -663,6 +663,14 @@ class TestVTGateFunctions(unittest.TestCase):
         ([(1, 'test 1')], 1L, 0,
          [('Id', self.int_type), ('Name', self.string_type)]))
 
+    # test directive timeout
+    try:
+      cursor.execute('SELECT /*vt+ QUERY_TIMEOUT_MS=1 */ SLEEP(5)', {})
+      self.fail('Execute went through')
+    except dbexceptions.DatabaseError as e:
+      s = str(e)
+      self.assertIn('DeadlineExceeded', s)
+
     # Test insert with no auto-inc
     vtgate_conn.begin()
     result = self.execute_on_master(

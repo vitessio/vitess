@@ -67,6 +67,9 @@ type Route struct {
 	// in the final result. Rest of the columns are truncated
 	// from the result received. If 0, no truncation happens.
 	TruncateColumnCount int
+
+	// QueryTimeout
+	QueryTimeout int
 }
 
 // OrderbyParams specifies the parameters for ordering.
@@ -92,6 +95,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		Values              []sqltypes.PlanValue `json:",omitempty"`
 		OrderBy             []OrderbyParams      `json:",omitempty"`
 		TruncateColumnCount int                  `json:",omitempty"`
+		QueryTimeout        int                  `json:",omitempty"`
 	}{
 		Opcode:              route.Opcode,
 		Keyspace:            route.Keyspace,
@@ -101,6 +105,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		Values:              route.Values,
 		OrderBy:             route.OrderBy,
 		TruncateColumnCount: route.TruncateColumnCount,
+		QueryTimeout:        route.QueryTimeout,
 	}
 	return jsonutil.MarshalNoEscape(marshalRoute)
 }
@@ -154,6 +159,9 @@ func (code RouteOpcode) MarshalJSON() ([]byte, error) {
 
 // Execute performs a non-streaming exec.
 func (route *Route) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	if route.QueryTimeout != 0 {
+		vcursor.SetContextTimeout(route.QueryTimeout)
+	}
 	qr, err := route.execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -210,6 +218,9 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	var rss []*srvtopo.ResolvedShard
 	var bvs []map[string]*querypb.BindVariable
 	var err error
+	if route.QueryTimeout != 0 {
+		vcursor.SetContextTimeout(route.QueryTimeout)
+	}
 	switch route.Opcode {
 	case SelectUnsharded, SelectScatter:
 		rss, bvs, err = route.paramsAllShards(vcursor, bindVars)
