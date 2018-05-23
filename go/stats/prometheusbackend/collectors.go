@@ -243,7 +243,7 @@ func (c *timingsCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstHistogram(
 			c.desc,
 			uint64(his.Count()),
-			float64(his.Total()),
+			float64(his.Total())/1000000000,
 			makeCumulativeBuckets(c.cutoffs, his.Buckets()),
 			cat)
 	}
@@ -297,7 +297,7 @@ func (c *multiTimingsCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstHistogram(
 			c.desc,
 			uint64(his.Count()),
-			float64(his.Total()),
+			float64(his.Total())/1000000000,
 			makeCumulativeBuckets(c.cutoffs, his.Buckets()),
 			labelValues...)
 	}
