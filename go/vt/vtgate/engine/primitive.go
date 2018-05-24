@@ -43,7 +43,7 @@ type VCursor interface {
 	// Context returns the context of the current request.
 	Context() context.Context
 
-	// SetContextTimeout updates context and sets a timeout.
+	// SetContextTimeout updates the context and sets a timeout.
 	SetContextTimeout(timeoutMilli int) context.CancelFunc
 
 	// V3 functions.
