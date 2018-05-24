@@ -222,7 +222,9 @@ func TestPrometheusTimings(t *testing.T) {
 	name := "blah_timings"
 	cats := []string{"cat1", "cat2"}
 	timing := stats.NewTimings(name, "help", "category", cats...)
-	timing.Add("cat1", time.Duration(1000000000))
+	timing.Add("cat1", time.Duration(30*time.Millisecond))
+	timing.Add("cat1", time.Duration(200*time.Millisecond))
+	timing.Add("cat1", time.Duration(1*time.Second))
 
 	response := testMetricsHandler(t)
 	var s []string
@@ -231,15 +233,15 @@ func TestPrometheusTimings(t *testing.T) {
 	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.001\"} %d", namespace, name, cats[0], 0))
 	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.005\"} %d", namespace, name, cats[0], 0))
 	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.01\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.05\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.1\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.5\"} %d", namespace, name, cats[0], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"1\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"5\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"10\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"+Inf\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_sum{category=\"%s\"} %d", namespace, name, cats[0], 1))
-	s = append(s, fmt.Sprintf("%s_%s_count{category=\"%s\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.05\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.1\"} %d", namespace, name, cats[0], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"0.5\"} %d", namespace, name, cats[0], 2))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"1\"} %d", namespace, name, cats[0], 3))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"5\"} %d", namespace, name, cats[0], 3))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"10\"} %d", namespace, name, cats[0], 3))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{category=\"%s\",le=\"+Inf\"} %d", namespace, name, cats[0], 3))
+	s = append(s, fmt.Sprintf("%s_%s_sum{category=\"%s\"} %s", namespace, name, cats[0], "1.23"))
+	s = append(s, fmt.Sprintf("%s_%s_count{category=\"%s\"} %d", namespace, name, cats[0], 3))
 
 	for _, line := range s {
 		if !strings.Contains(response.Body.String(), line) {
@@ -253,7 +255,9 @@ func TestPrometheusMultiTimings(t *testing.T) {
 	cats := []string{"cat1", "cat2"}
 	catLabels := []string{"foo", "bar"}
 	timing := stats.NewMultiTimings(name, "help", cats)
-	timing.Add(catLabels, time.Duration(1000000000))
+	timing.Add(catLabels, time.Duration(30*time.Millisecond))
+	timing.Add(catLabels, time.Duration(200*time.Millisecond))
+	timing.Add(catLabels, time.Duration(1*time.Second))
 
 	response := testMetricsHandler(t)
 	var s []string
@@ -262,15 +266,15 @@ func TestPrometheusMultiTimings(t *testing.T) {
 	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.001\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 0))
 	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.005\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 0))
 	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.01\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.05\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.1\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.5\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 0))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"1\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"5\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"10\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
-	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"+Inf\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
-	s = append(s, fmt.Sprintf("%s_%s_sum{%s=\"%s\",%s=\"%s\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
-	s = append(s, fmt.Sprintf("%s_%s_count{%s=\"%s\",%s=\"%s\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.05\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.1\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 1))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"0.5\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 2))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"1\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 3))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"5\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 3))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"10\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 3))
+	s = append(s, fmt.Sprintf("%s_%s_bucket{%s=\"%s\",%s=\"%s\",le=\"+Inf\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 3))
+	s = append(s, fmt.Sprintf("%s_%s_sum{%s=\"%s\",%s=\"%s\"} %s", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], "1.23"))
+	s = append(s, fmt.Sprintf("%s_%s_count{%s=\"%s\",%s=\"%s\"} %d", namespace, name, cats[0], catLabels[0], cats[1], catLabels[1], 3))
 
 	for _, line := range s {
 		if !strings.Contains(response.Body.String(), line) {
