@@ -43,8 +43,7 @@ func (t noopVCursor) Context() context.Context {
 }
 
 func (t noopVCursor) SetContextTimeout(timeoutMilli int) context.CancelFunc {
-	_, cancel := context.WithTimeout(t.Context(), (time.Duration(timeoutMilli) * time.Millisecond))
-	return cancel
+	return func() {}
 }
 
 func (t noopVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
@@ -96,8 +95,7 @@ func (f *loggingVCursor) Context() context.Context {
 	return context.Background()
 }
 func (f *loggingVCursor) SetContextTimeout(timeoutMilli int) context.CancelFunc {
-	_, cancel := context.WithTimeout(f.Context(), (time.Duration(timeoutMilli) * time.Millisecond))
-	return cancel
+	return func() {}
 }
 
 func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
