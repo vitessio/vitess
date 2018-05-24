@@ -250,10 +250,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 		// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
 		// but exported with TabletStateName as a label for Prometheus, which doesn't support exporting strings as stat values.
 		stats.NewGaugesFuncWithMultiLabels("TabletServerState", "Tablet server state labeled by state name", []string{"name"}, func() map[string]int64 {
-			tsv.mu.Lock()
-			state := tsv.state
-			tsv.mu.Unlock()
-			return map[string]int64{stateName[state]: 1}
+			return map[string]int64{tsv.GetState: 1}
 		})
 		stats.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
 		stats.NewGaugeDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
