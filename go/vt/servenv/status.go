@@ -22,6 +22,7 @@ import (
 	"html"
 	"html/template"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -184,7 +185,9 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := statusTmpl.ExecuteTemplate(w, "status", data); err != nil {
-		log.Errorf("servenv: couldn't execute template: %v", err)
+		if _, ok := err.(net.Error); !ok {
+			log.Errorf("servenv: couldn't execute template: %v", err)
+		}
 	}
 }
 
