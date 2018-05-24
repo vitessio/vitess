@@ -247,8 +247,8 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 		})
 		stats.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
 
-		// This is the same information as the above two stats, but exported with TabletStateName as a label for Prometheus
-		// which doesn't support exporting strings as stat values.
+		// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
+		// but exported with TabletStateName as a label for Prometheus, which doesn't support exporting strings as stat values.
 		stats.NewGaugesFuncWithMultiLabels("TabletServerState", "Tablet server state labeled by state name", []string{"name"}, func() map[string]int64 {
 			tsv.mu.Lock()
 			state := tsv.state
