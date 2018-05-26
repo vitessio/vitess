@@ -528,8 +528,8 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 		// between the goroutine that sets it and the check for its value
 		// later.
 		timedout := sync2.NewAtomicBool(false)
+		serving := hcc.tabletStats.Serving
 		go func() {
-			serving := hcc.tabletStats.Serving
 			for {
 				select {
 				case serving = <-servingStatus:
