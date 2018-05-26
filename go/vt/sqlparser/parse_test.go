@@ -679,6 +679,14 @@ var (
 	}, {
 		input: "set character_set_results = utf8",
 	}, {
+		input: "set @@session.autocommit = true",
+	}, {
+		input: "set @@session.`autocommit` = true",
+	}, {
+		input: "set @@session.'autocommit' = true",
+	}, {
+		input: "set @@session.\"autocommit\" = true",
+	}, {
 		input:  "set names utf8 collate foo",
 		output: "set names 'utf8'",
 	}, {

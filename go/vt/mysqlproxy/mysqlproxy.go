@@ -132,7 +132,7 @@ func (mp *Proxy) doSet(ctx context.Context, session *ProxySession, sql string, b
 	}
 
 	for k, v := range vals {
-		switch k {
+		switch k.Key {
 		case "autocommit":
 			val, ok := v.(int64)
 			if !ok {
