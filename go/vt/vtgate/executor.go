@@ -526,17 +526,32 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 	}
 
-	if scope == "global" {
+	if scope == sqlparser.GlobalStr {
 		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
 	}
 
 	for k, v := range vals {
-		switch k {
+		if k.Scope == sqlparser.GlobalStr {
+			return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
+		}
+		switch k.Key {
 		case "autocommit":
-			val, ok := v.(int64)
-			if !ok {
+			var val int64
+			switch v := v.(type) {
+			case int64:
+				val = v
+			case string:
+				if v == "on" {
+					val = 1
+				} else if v == "off" {
+					val = 0
+				} else {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for autocommit: %s", v)
+				}
+			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for autocommit: %T", v)
 			}
+
 			switch val {
 			case 0:
 				safeSession.Autocommit = false
