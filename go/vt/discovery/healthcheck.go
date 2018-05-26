@@ -53,6 +53,7 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -295,9 +296,37 @@ type HealthCheck interface {
 	Close() error
 }
 
-// healthCheckConn contains details about a tablet.
-// It is used internally by HealthCheckImpl to keep all the info
-// about a tablet.
+// HealthCheckImpl performs health checking and notifies downstream components about any changes.
+// It contains a map of tabletHealth objects, each of which stores the health information for
+// a tablet. A checkConn goroutine is spawned for each tabletHealh, which is responsible for
+// keeping that tabletHealth up-to-date. This is done through callbacks to updateHealth.
+// If checkConn terminates for any reason, it updates tabletHealth.Up as false. If a tabletHealth
+// gets removed from the map, its cancelFunc gets called, which ensures that the associated
+// checkConn goroutine eventually terminates.
+type HealthCheckImpl struct {
+	// Immutable fields set at construction time.
+	listener           HealthCheckStatsListener
+	sendDownEvents     bool
+	retryDelay         time.Duration
+	healthCheckTimeout time.Duration
+	// wg keeps track of all launched Go routines.
+	wg sync.WaitGroup
+
+	// mu protects all the following fields.
+	mu sync.Mutex
+
+	// addrToHealth maps from address to tabletHealth.
+	addrToHealth map[string]*tabletHealth
+
+	// Wait group that's used to wait until all initial StatsUpdate() calls are made after the AddTablet() calls.
+	initialUpdatesWG sync.WaitGroup
+}
+
+// healthCheckConn is a structure that lives within the scope of
+// the checkConn goroutine to maintain its internal state. Therefore,
+// it does not require synchronization. Changes that are relevant to
+// healthcheck are transmitted through calls to HealthCheckImpl.updateHealth.
+// TODO(sougou): move this and associated functions to a separate file.
 type healthCheckConn struct {
 	// set at construction time
 	ctx context.Context
@@ -312,33 +341,16 @@ type healthCheckConn struct {
 	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
 }
 
-// tabletHealth maintains the health status of a tablet fed by the health check connection.
+// tabletHealth maintains the health status of a tablet. A map of this
+// structure is maintained in HealthCheckImpl.
 type tabletHealth struct {
-	cancelFunc  context.CancelFunc
-	conn        queryservice.QueryService
-	tabletStats TabletStats
-}
-
-// HealthCheckImpl performs health checking and notifies downstream components about any changes.
-type HealthCheckImpl struct {
-	// Immutable fields set at construction time.
-	listener           HealthCheckStatsListener
-	sendDownEvents     bool
-	retryDelay         time.Duration
-	healthCheckTimeout time.Duration
-	// wg keeps track of all launched Go routines.
-	wg sync.WaitGroup
-
-	// mu protects all the following fields.
-	// When locking both mutex from HealthCheck and healthCheckConn,
-	// HealthCheck.mu goes first.
-	mu sync.Mutex
-
-	// addrToHealth maps from address to tabletHealth.
-	addrToHealth map[string]*tabletHealth
-
-	// Wait group that's used to wait until all initial StatsUpdate() calls are made after the AddTablet() calls.
-	initialUpdatesWG sync.WaitGroup
+	// cancelFunc must be called before discarding tabletHealth.
+	// This will ensure that the associated checkConn goroutine will terminate.
+	cancelFunc context.CancelFunc
+	// conn is the connection associated with the tablet.
+	conn queryservice.QueryService
+	// latestTabletStats stores the latest health stats of the tablet.
+	latestTabletStats TabletStats
 }
 
 // NewDefaultHealthCheck creates a new HealthCheck object with a default configuration.
@@ -404,10 +416,10 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	for _, th := range hc.addrToHealth {
-		if !th.tabletStats.Up || !th.tabletStats.Serving || th.tabletStats.LastError != nil {
+		if !th.latestTabletStats.Up || !th.latestTabletStats.Serving || th.latestTabletStats.LastError != nil {
 			continue
 		}
-		key := fmt.Sprintf("%s.%s.%s", th.tabletStats.Target.Keyspace, th.tabletStats.Target.Shard, topoproto.TabletTypeLString(th.tabletStats.Target.TabletType))
+		key := fmt.Sprintf("%s.%s.%s", th.latestTabletStats.Target.Keyspace, th.latestTabletStats.Target.Shard, topoproto.TabletTypeLString(th.latestTabletStats.Target.TabletType))
 		res[key]++
 	}
 	return res
@@ -452,8 +464,8 @@ func (hc *HealthCheckImpl) updateHealth(ts *TabletStats, conn queryservice.Query
 		hc.mu.Unlock()
 		return
 	}
-	oldts := th.tabletStats
-	th.tabletStats = *ts
+	oldts := th.latestTabletStats
+	th.latestTabletStats = *ts
 	th.conn = conn
 	hc.mu.Unlock()
 
@@ -480,17 +492,17 @@ func (hc *HealthCheckImpl) updateHealth(ts *TabletStats, conn queryservice.Query
 // notification about the tablet to downstream. To be called only on exit from
 // checkConn().
 func (hc *HealthCheckImpl) finalizeConn(hcc *healthCheckConn) {
-	if hcc.conn != nil {
-		// Don't use hcc.ctx because it's already closed.
-		hcc.conn.Close(context.Background())
-		hcc.conn = nil
-	}
 	hcc.tabletStats.Up = false
 	hcc.setServingState(false, "finalizeConn closing connection")
 	// Note: checkConn() exits only when hcc.ctx.Done() is closed. Thus it's
 	// safe to simply get Err() value here and assign to LastError.
 	hcc.tabletStats.LastError = hcc.ctx.Err()
-	hc.updateHealth(hcc.tabletStats.Copy(), hcc.conn)
+	hc.updateHealth(hcc.tabletStats.Copy(), nil)
+	if hcc.conn != nil {
+		// Don't use hcc.ctx because it's already closed.
+		hcc.conn.Close(context.Background())
+		hcc.conn = nil
+	}
 }
 
 // checkConn performs health checking on the given tablet.
@@ -511,10 +523,13 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 		// a status update. The stream is also terminated so it can be retried.
 		// servingStatus feeds into the serving var, which keeps track of the serving
 		// status transmitted by the tablet.
-		servingStatus := make(chan bool, 5)
-		serving := hcc.tabletStats.Serving
-		timedout := false
+		servingStatus := make(chan bool, 1)
+		// timedout is accessed atomically because there could be a race
+		// between the goroutine that sets it and the check for its value
+		// later.
+		timedout := sync2.NewAtomicBool(false)
 		go func() {
+			serving := hcc.tabletStats.Serving
 			for {
 				select {
 				case serving = <-servingStatus:
@@ -524,7 +539,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 					if !serving {
 						continue
 					}
-					timedout = true
+					timedout.Set(true)
 					streamCancel()
 					return
 				case <-streamCtx.Done():
@@ -540,7 +555,11 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 		hcc.stream(streamCtx, hc, func(shr *querypb.StreamHealthResponse) error {
 			// We received a message. Reset the back-off.
 			retryDelay = hc.retryDelay
-			servingStatus <- shr.Serving
+			// Don't block on send to avoid deadlocks.
+			select {
+			case servingStatus <- shr.Serving:
+			default:
+			}
 			return hcc.processResponse(hc, shr)
 		})
 
@@ -550,7 +569,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 		// If there was a timeout send an error. We do this after stream has returned.
 		// This will ensure that this update prevails over any previous message that
 		// stream could have sent.
-		if timedout {
+		if timedout.Get() {
 			hcc.tabletStats.LastError = fmt.Errorf("healthcheck timed out (latest %v)", hcc.lastResponseTimestamp)
 			hcc.setServingState(false, hcc.tabletStats.LastError.Error())
 			hc.updateHealth(hcc.tabletStats.Copy(), hcc.conn)
@@ -675,7 +694,7 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 		log.Warningf("deleting unknown tablet: %+v", tablet)
 		return
 	}
-	th.tabletStats.Up = false
+	th.latestTabletStats.Up = false
 	th.cancelFunc()
 	delete(hc.addrToHealth, key)
 }
@@ -721,8 +740,8 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 		return
 	}
 	hc.addrToHealth[key] = &tabletHealth{
-		cancelFunc:  cancelFunc,
-		tabletStats: hcc.tabletStats,
+		cancelFunc:        cancelFunc,
+		latestTabletStats: hcc.tabletStats,
 	}
 	hc.initialUpdatesWG.Add(1)
 	hc.mu.Unlock()
@@ -863,17 +882,17 @@ func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	for _, th := range hc.addrToHealth {
-		key := fmt.Sprintf("%v.%v.%v.%v", th.tabletStats.Tablet.Alias.Cell, th.tabletStats.Target.Keyspace, th.tabletStats.Target.Shard, th.tabletStats.Target.TabletType.String())
+		key := fmt.Sprintf("%v.%v.%v.%v", th.latestTabletStats.Tablet.Alias.Cell, th.latestTabletStats.Target.Keyspace, th.latestTabletStats.Target.Shard, th.latestTabletStats.Target.TabletType.String())
 		var tcs *TabletsCacheStatus
 		var ok bool
 		if tcs, ok = tcsMap[key]; !ok {
 			tcs = &TabletsCacheStatus{
-				Cell:   th.tabletStats.Tablet.Alias.Cell,
-				Target: th.tabletStats.Target,
+				Cell:   th.latestTabletStats.Tablet.Alias.Cell,
+				Target: th.latestTabletStats.Target,
 			}
 			tcsMap[key] = tcs
 		}
-		stats := th.tabletStats
+		stats := th.latestTabletStats
 		tcs.TabletsStats = append(tcs.TabletsStats, &stats)
 	}
 	return tcsMap
