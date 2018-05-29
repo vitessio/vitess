@@ -822,6 +822,14 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil
+	case sqlparser.KeywordString(sqlparser.VITESS_TARGET):
+		var rows [][]sqltypes.Value
+		rows = append(rows, buildVarCharRow(safeSession.TargetString))
+		return &sqltypes.Result{
+			Fields:       buildVarCharFields("Target"),
+			Rows:         rows,
+			RowsAffected: uint64(len(rows)),
+		}, nil
 	case sqlparser.KeywordString(sqlparser.VSCHEMA_TABLES):
 		if destKeyspace == "" {
 			return nil, errNoKeyspace
