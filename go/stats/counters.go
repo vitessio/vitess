@@ -88,11 +88,20 @@ func (c *counters) Add(name string, value int64) {
 	atomic.AddInt64(a, value)
 }
 
-// ResetAll resets all counter values.
+// ResetAll resets all counter values and clears all keys.
 func (c *counters) ResetAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.counts = make(map[string]*int64)
+}
+
+// ZeroAll resets all counter values to zero
+func (c *counters) ZeroAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, a := range c.counts {
+		atomic.StoreInt64(a, int64(0))
+	}
 }
 
 // Reset resets a specific counter value to 0.
