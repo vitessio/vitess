@@ -284,9 +284,11 @@ func (tw *TopologyWatcher) loadTablets() {
 	sort.Strings(tabletAliasStrs)
 	var buf bytes.Buffer
 	for _, alias := range tabletAliasStrs {
-		tabletInfo := tw.tablets[alias]
-		buf.WriteString(alias)
-		buf.WriteString(tabletInfo.key)
+		tabletInfo, ok := tw.tablets[alias]
+		if ok {
+			buf.WriteString(alias)
+			buf.WriteString(tabletInfo.key)
+		}
 	}
 	tw.topoChecksum = crc32.ChecksumIEEE(buf.Bytes())
 	tw.lastRefresh = time.Now()
