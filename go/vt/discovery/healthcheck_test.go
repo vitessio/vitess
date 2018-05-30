@@ -81,7 +81,7 @@ func TestHealthCheck(t *testing.T) {
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
-	testChecksum(t, 3191378572, hc.stateChecksum())
+	testChecksum(t, 401258919, hc.stateChecksum())
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
@@ -128,7 +128,7 @@ func TestHealthCheck(t *testing.T) {
 	if !reflect.DeepEqual(tcsl, tcslWant) {
 		t.Errorf("hc.CacheStatus() =\n%+v; want\n%+v", tcsl[0], tcslWant[0])
 	}
-	testChecksum(t, 1400791816, hc.stateChecksum())
+	testChecksum(t, 1562785705, hc.stateChecksum())
 
 	// TabletType changed, should get both old and new event
 	shr = &querypb.StreamHealthResponse{
@@ -169,7 +169,7 @@ func TestHealthCheck(t *testing.T) {
 	if err := checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 0); err != nil {
 		t.Errorf("%v", err)
 	}
-	testChecksum(t, 3253721871, hc.stateChecksum())
+	testChecksum(t, 1906892404, hc.stateChecksum())
 
 	// Serving & RealtimeStats changed
 	shr = &querypb.StreamHealthResponse{
@@ -193,7 +193,7 @@ func TestHealthCheck(t *testing.T) {
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
-	testChecksum(t, 4287434095, hc.stateChecksum())
+	testChecksum(t, 1200695592, hc.stateChecksum())
 
 	// HealthError
 	shr = &querypb.StreamHealthResponse{
@@ -218,7 +218,7 @@ func TestHealthCheck(t *testing.T) {
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
-	testChecksum(t, 4287434095, hc.stateChecksum()) // unchanged
+	testChecksum(t, 1200695592, hc.stateChecksum()) // unchanged
 
 	// remove tablet
 	hc.deleteConn(tablet)
