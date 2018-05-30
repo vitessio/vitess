@@ -28,6 +28,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -121,7 +122,33 @@ func createDiscoveryGateway(hc discovery.HealthCheck, serv srvtopo.Server, cell 
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
 	dg.QueryService = queryservice.Wrap(nil, dg.withRetry)
+
+	stats.NewGaugeDurationFunc("TopologyWatcherMaxRefreshLag", "maximum time since the topology watcher refreshed a cell", dg.TopologyWatcherMaxRefreshLag)
+	stats.NewGaugeFunc("TopologyWatcherChecksum", "crc32 checksum of the topology watcher state", dg.TopoWatcherChecksum)
+
 	return dg
+}
+
+// TopologyWatcherMaxRefreshLag returns the maximum lag since the watched
+// cells were refreshed from the topo server
+func (dg *discoveryGateway) TopologyWatcherMaxRefreshLag() time.Duration {
+	var lag time.Duration
+	for _, tw := range dg.tabletsWatchers {
+		cellLag := tw.RefreshLag()
+		if cellLag > lag {
+			lag = cellLag
+		}
+	}
+	return lag
+}
+
+// TopoWatcherChecksum returns a checksum of the topology watcher state
+func (dg *discoveryGateway) TopoWatcherChecksum() int64 {
+	var checksum int64
+	for _, tw := range dg.tabletsWatchers {
+		checksum = checksum ^ int64(tw.TopoChecksum())
+	}
+	return checksum
 }
 
 // StatsUpdate forwards HealthCheck updates to TabletStatsCache and MasterBuffer.
