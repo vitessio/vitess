@@ -122,16 +122,28 @@ func createDiscoveryGateway(hc discovery.HealthCheck, serv srvtopo.Server, cell 
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
 	dg.QueryService = queryservice.Wrap(nil, dg.withRetry)
-
-	stats.NewGaugeDurationFunc("TopologyWatcherMaxRefreshLag", "maximum time since the topology watcher refreshed a cell", dg.TopologyWatcherMaxRefreshLag)
-	stats.NewGaugeFunc("TopologyWatcherChecksum", "crc32 checksum of the topology watcher state", dg.TopoWatcherChecksum)
-
 	return dg
 }
 
-// TopologyWatcherMaxRefreshLag returns the maximum lag since the watched
+// RegisterStats registers the stats to export the lag since the last refresh
+// and the checksum of the topology
+func (dg *discoveryGateway) RegisterStats() {
+	stats.NewGaugeDurationFunc(
+		"TopologyWatcherMaxRefreshLag",
+		"maximum time since the topology watcher refreshed a cell",
+		dg.topologyWatcherMaxRefreshLag,
+	)
+
+	stats.NewGaugeFunc(
+		"TopologyWatcherChecksum",
+		"crc32 checksum of the topology watcher state",
+		dg.topologyWatcherChecksum,
+	)
+}
+
+// topologyWatcherMaxRefreshLag returns the maximum lag since the watched
 // cells were refreshed from the topo server
-func (dg *discoveryGateway) TopologyWatcherMaxRefreshLag() time.Duration {
+func (dg *discoveryGateway) topologyWatcherMaxRefreshLag() time.Duration {
 	var lag time.Duration
 	for _, tw := range dg.tabletsWatchers {
 		cellLag := tw.RefreshLag()
@@ -142,8 +154,8 @@ func (dg *discoveryGateway) TopologyWatcherMaxRefreshLag() time.Duration {
 	return lag
 }
 
-// TopoWatcherChecksum returns a checksum of the topology watcher state
-func (dg *discoveryGateway) TopoWatcherChecksum() int64 {
+// topologyWatcherChecksum returns a checksum of the topology watcher state
+func (dg *discoveryGateway) topologyWatcherChecksum() int64 {
 	var checksum int64
 	for _, tw := range dg.tabletsWatchers {
 		checksum = checksum ^ int64(tw.TopoChecksum())
