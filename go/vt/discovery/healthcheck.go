@@ -435,20 +435,20 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 
 // stateChecksum returns a crc32 checksum of the healthcheck state
 func (hc *HealthCheckImpl) stateChecksum() int64 {
-	status := hc.cacheStatusMap()
-	keys := make([]string, 0, len(status))
-	for key := range status {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
+	// CacheStatus is sorted so this should be stable across vtgates
+	cacheStatus := hc.CacheStatus()
 	var buf bytes.Buffer
-	for _, key := range keys {
-		// key contains Cell/Keyspace/Shard/TabletType
-		val := status[key]
-		buf.WriteString(key)
-		for _, ts := range val.TabletsStats {
-			buf.WriteString(fmt.Sprintf("%v%v%v", ts.Up, ts.Serving, ts.TabletExternallyReparentedTimestamp))
+	for _, st := range cacheStatus {
+		fmt.Fprintf(&buf,
+			"%v%v%v%v\n",
+			st.Cell,
+			st.Target.Keyspace,
+			st.Target.Shard,
+			st.Target.TabletType.String(),
+		)
+		sort.Sort(st.TabletsStats)
+		for _, ts := range st.TabletsStats {
+			fmt.Fprintf(&buf, "%v%v%v\n", ts.Up, ts.Serving, ts.TabletExternallyReparentedTimestamp)
 		}
 	}
 
