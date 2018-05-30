@@ -41,6 +41,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"hash/crc32"
 	"html/template"
 	"net/http"
 	"sort"
@@ -258,7 +259,7 @@ type HealthCheck interface {
 	// RemoveTablet removes the tablet, and stops its StreamHealth RPC.
 	TabletRecorder
 
-	// RegisterStats registers the connection counts stats.
+	// RegisterStats registers the connection counts and checksum stats.
 	// It can only be called on one Healthcheck object per process.
 	RegisterStats()
 	// SetListener sets the listener for healthcheck
@@ -392,6 +393,11 @@ func (hc *HealthCheckImpl) RegisterStats() {
 		"the number of healthcheck connections registered",
 		[]string{"Keyspace", "ShardName", "TabletType"},
 		hc.servingConnStats)
+
+	stats.NewGaugeFunc(
+		"HealthcheckChecksum",
+		"crc32 checksum of the current healthcheck state",
+		hc.stateChecksum)
 }
 
 // ServeHTTP is part of the http.Handler interface. It renders the current state of the discovery gateway tablet cache into json.
@@ -425,6 +431,28 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 		res[key]++
 	}
 	return res
+}
+
+// stateChecksum returns a crc32 checksum of the healthcheck state
+func (hc *HealthCheckImpl) stateChecksum() int64 {
+	status := hc.cacheStatusMap()
+	keys := make([]string, 0, len(status))
+	for key := range status {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	var buf bytes.Buffer
+	for _, key := range keys {
+		// key contains Cell/Keyspace/Shard/TabletType
+		val := status[key]
+		buf.WriteString(key)
+		for _, ts := range val.TabletsStats {
+			buf.WriteString(fmt.Sprintf("%v%v%v", ts.Up, ts.Serving, ts.TabletExternallyReparentedTimestamp))
+		}
+	}
+
+	return int64(crc32.ChecksumIEEE(buf.Bytes()))
 }
 
 // finalizeConn closes the health checking connection and sends the final
