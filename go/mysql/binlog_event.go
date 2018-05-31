@@ -119,6 +119,9 @@ type BinlogEvent interface {
 	// checksum stripped off, if any. If there is no checksum, it returns
 	// the same event and a nil checksum.
 	StripChecksum(BinlogFormat) (ev BinlogEvent, checksum []byte, err error)
+
+	// IsPseudo is for custom implemetations of GTID.
+	IsPseudo() bool
 }
 
 // BinlogFormat contains relevant data from the FORMAT_DESCRIPTION_EVENT.
