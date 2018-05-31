@@ -75,8 +75,8 @@ func (vc *vcursorImpl) Context() context.Context {
 }
 
 // SetContextTimeout updates context and sets a timeout.
-func (vc *vcursorImpl) SetContextTimeout(timeoutMilli int) context.CancelFunc {
-	ctx, cancel := context.WithTimeout(vc.ctx, (time.Duration(timeoutMilli) * time.Millisecond))
+func (vc *vcursorImpl) SetContextTimeout(timeout time.Duration) context.CancelFunc {
+	ctx, cancel := context.WithTimeout(vc.ctx, timeout)
 	vc.ctx = ctx
 	return cancel
 }

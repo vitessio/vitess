@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -160,7 +161,7 @@ func (code RouteOpcode) MarshalJSON() ([]byte, error) {
 // Execute performs a non-streaming exec.
 func (route *Route) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if route.QueryTimeout != 0 {
-		cancel := vcursor.SetContextTimeout(route.QueryTimeout)
+		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
 		defer cancel()
 	}
 	qr, err := route.execute(vcursor, bindVars, wantfields)
@@ -220,7 +221,7 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	var bvs []map[string]*querypb.BindVariable
 	var err error
 	if route.QueryTimeout != 0 {
-		cancel := vcursor.SetContextTimeout(route.QueryTimeout)
+		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
 		defer cancel()
 	}
 	switch route.Opcode {
