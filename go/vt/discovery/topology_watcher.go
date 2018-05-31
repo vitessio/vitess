@@ -17,7 +17,10 @@ limitations under the License.
 package discovery
 
 import (
+	"bytes"
 	"fmt"
+	"hash/crc32"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -119,8 +122,13 @@ type TopologyWatcher struct {
 	wg sync.WaitGroup
 
 	// mu protects all variables below
-	mu      sync.Mutex
+	mu sync.Mutex
+	// tablets contains a map of alias -> tabletInfo for all known tablets
 	tablets map[string]*tabletInfo
+	// topoChecksum stores a crc32 of the tablets map and is exported as a metric
+	topoChecksum uint32
+	// lastRefresh records the timestamp of the last topo refresh
+	lastRefresh time.Time
 	// firstLoadDone is true when first load of the topology data is done.
 	firstLoadDone bool
 	// firstLoadChan is closed when the initial loading of topology data is done.
@@ -181,10 +189,16 @@ func (tw *TopologyWatcher) loadTablets() {
 		return
 	}
 
+	// Accumulate a list of all known alias strings to use later
+	// when sorting
+	tabletAliasStrs := make([]string, 0, len(tabletAliases))
+
 	tw.mu.Lock()
 	for _, tAlias := range tabletAliases {
+		aliasStr := topoproto.TabletAliasString(tAlias)
+		tabletAliasStrs = append(tabletAliasStrs, aliasStr)
+
 		if !tw.refreshKnownTablets {
-			aliasStr := topoproto.TabletAliasString(tAlias)
 			if val, ok := tw.tablets[aliasStr]; ok {
 				newTablets[aliasStr] = val
 				continue
@@ -264,6 +278,21 @@ func (tw *TopologyWatcher) loadTablets() {
 		tw.firstLoadDone = true
 		close(tw.firstLoadChan)
 	}
+
+	// iterate through the tablets in a stable order and compute a
+	// checksum of the tablet map
+	sort.Strings(tabletAliasStrs)
+	var buf bytes.Buffer
+	for _, alias := range tabletAliasStrs {
+		tabletInfo, ok := tw.tablets[alias]
+		if ok {
+			buf.WriteString(alias)
+			buf.WriteString(tabletInfo.key)
+		}
+	}
+	tw.topoChecksum = crc32.ChecksumIEEE(buf.Bytes())
+	tw.lastRefresh = time.Now()
+
 	tw.mu.Unlock()
 }
 
@@ -284,6 +313,22 @@ func (tw *TopologyWatcher) Stop() {
 	tw.cancelFunc()
 	// wait for watch goroutine to finish.
 	tw.wg.Wait()
+}
+
+// RefreshLag returns the time since the last refresh
+func (tw *TopologyWatcher) RefreshLag() time.Duration {
+	tw.mu.Lock()
+	defer tw.mu.Unlock()
+
+	return time.Since(tw.lastRefresh)
+}
+
+// TopoChecksum returns the checksum of the current state of the topo
+func (tw *TopologyWatcher) TopoChecksum() uint32 {
+	tw.mu.Lock()
+	defer tw.mu.Unlock()
+
+	return tw.topoChecksum
 }
 
 // FilterByShard is a TabletRecorder filter that filters tablets by

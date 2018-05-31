@@ -48,6 +48,14 @@ func checkOpCounts(t *testing.T, tw *TopologyWatcher, prevCounts, deltas map[str
 	return newCounts
 }
 
+func checkChecksum(t *testing.T, tw *TopologyWatcher, want uint32) {
+	t.Helper()
+	got := tw.TopoChecksum()
+	if want != got {
+		t.Errorf("want checksum %v got %v", want, got)
+	}
+}
+
 func TestCellTabletsWatcher(t *testing.T) {
 	checkWatcher(t, true, true)
 }
@@ -80,6 +88,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 		t.Fatalf("initial WaitForInitialTopology failed")
 	}
 	counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1})
+	checkChecksum(t, tw, 0)
 
 	// Add a tablet to the topology.
 	tablet := &topodatapb.Tablet{
@@ -99,6 +108,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	}
 	tw.loadTablets()
 	counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "AddTablet": 1})
+	checkChecksum(t, tw, 1261153186)
 
 	// Check the tablet is returned by GetAllTablets().
 	allTablets := fhc.GetAllTablets()
@@ -132,6 +142,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	} else {
 		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "AddTablet": 1})
 	}
+	checkChecksum(t, tw, 832404892)
 
 	// Check the new tablet is returned by GetAllTablets().
 	allTablets = fhc.GetAllTablets()
@@ -141,13 +152,14 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	}
 
 	// Load the tablets again to show that when refreshKnownTablets is disabled,
-	// only the list is read from the topo
+	// only the list is read from the topo and the checksum doesn't change
 	tw.loadTablets()
 	if refreshKnownTablets {
 		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2})
 	} else {
 		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1})
 	}
+	checkChecksum(t, tw, 832404892)
 
 	// same tablet, different port, should update (previous
 	// one should go away, new one be added)
@@ -177,6 +189,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 		if _, ok := allTablets[origKey]; ok {
 			t.Errorf("fhc.GetAllTablets() = %+v; don't want %v", allTablets, origKey)
 		}
+		checkChecksum(t, tw, 698548794)
 	} else {
 		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1})
 
@@ -186,6 +199,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 		if _, ok := allTablets[key]; ok {
 			t.Errorf("fhc.GetAllTablets() = %+v; don't want %v", allTablets, key)
 		}
+		checkChecksum(t, tw, 832404892)
 	}
 
 	// Remove the second tablet and re-add with a new uid. This should
@@ -210,8 +224,10 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 
 	if refreshKnownTablets {
 		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 1})
+		checkChecksum(t, tw, 4097170367)
 	} else {
 		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "ReplaceTablet": 1})
+		checkChecksum(t, tw, 3960185881)
 	}
 	key = TabletToMapKey(tablet2)
 	if _, ok := allTablets[key]; !ok || len(allTablets) != 2 || !proto.Equal(allTablets[key], tablet2) {
@@ -231,6 +247,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	} else {
 		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "RemoveTablet": 1})
 	}
+	checkChecksum(t, tw, 1725545897)
 
 	allTablets = fhc.GetAllTablets()
 	key = TabletToMapKey(tablet)
@@ -251,6 +268,7 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	}
 	tw.loadTablets()
 	checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
+	checkChecksum(t, tw, 0)
 
 	allTablets = fhc.GetAllTablets()
 	key = TabletToMapKey(tablet)
