@@ -44,7 +44,7 @@ type VCursor interface {
 	Context() context.Context
 
 	// SetContextTimeout updates the context and sets a timeout.
-	SetContextTimeout(timeoutMilli int) context.CancelFunc
+	SetContextTimeout(timeout time.Duration) context.CancelFunc
 
 	// V3 functions.
 	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)

@@ -42,7 +42,7 @@ func (t noopVCursor) Context() context.Context {
 	return context.Background()
 }
 
-func (t noopVCursor) SetContextTimeout(timeoutMilli int) context.CancelFunc {
+func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	return func() {}
 }
 
@@ -94,7 +94,7 @@ type loggingVCursor struct {
 func (f *loggingVCursor) Context() context.Context {
 	return context.Background()
 }
-func (f *loggingVCursor) SetContextTimeout(timeoutMilli int) context.CancelFunc {
+func (f *loggingVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	return func() {}
 }
 
