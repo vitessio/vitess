@@ -665,11 +665,19 @@ class TestVTGateFunctions(unittest.TestCase):
 
     # test directive timeout
     try:
-      cursor.execute('SELECT /*vt+ QUERY_TIMEOUT_MS=1 */ SLEEP(5)', {})
+      cursor.execute('SELECT /*vt+ QUERY_TIMEOUT_MS=10 */ SLEEP(1)', {})
       self.fail('Execute went through')
     except dbexceptions.DatabaseError as e:
       s = str(e)
       self.assertIn('DeadlineExceeded', s)
+
+    # test directive timeout longer than the query time
+    cursor.execute('SELECT /*vt+ QUERY_TIMEOUT_MS=2000 */ SLEEP(1)', {})
+    self.assertEqual(
+        (cursor.fetchall(), cursor.rowcount, cursor.lastrowid,
+         cursor.description),
+        ([(0,)], 1L, 0,
+         [(u'SLEEP(1)', self.int_type)]))
 
     # Test insert with no auto-inc
     vtgate_conn.begin()
@@ -1082,7 +1090,7 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, ((1L, 'name0'), (2L, 'name1'), (3L, 'name2'), (5L, 'name4')))
     result = shard_1_master.mquery('vt_user', 'select id, name from vt_user2')
     self.assertEqual(result, ((4L, 'name3'),))
- 
+
     # Works when limit is set
     result = self.execute_on_master(
       vtgate_conn,
