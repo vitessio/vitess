@@ -740,6 +740,11 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	defer func() { logStats.ExecuteTime = time.Since(execStart) }()
 
 	switch show.Type {
+	case sqlparser.KeywordString(sqlparser.TABLES):
+		if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
+			show.ShowTablesOpt.DbName = "vt_" + destKeyspace
+		}
+		sql = sqlparser.String(show)
 	case sqlparser.KeywordString(sqlparser.DATABASES), sqlparser.KeywordString(sqlparser.VITESS_KEYSPACES):
 		keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
 		if err != nil {

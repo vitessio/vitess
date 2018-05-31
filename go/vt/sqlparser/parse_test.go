@@ -1073,7 +1073,7 @@ var (
 		output: "show processlist",
 	}, {
 		input:  "show full processlist",
-		output: "show full",
+		output: "show processlist",
 	}, {
 		input:  "show profile cpu for query 1",
 		output: "show profile",
@@ -1102,11 +1102,32 @@ var (
 		input:  "show table status",
 		output: "show table",
 	}, {
-		input:  "show tables",
-		output: "show tables",
+		input: "show tables",
 	}, {
-		input:  "show full tables",
-		output: "show full",
+		input: "show tables like '%keyspace%'",
+	}, {
+		input: "show tables where 1 = 0",
+	}, {
+		input: "show tables from a",
+	}, {
+		input: "show tables from a where 1 = 0",
+	}, {
+		input: "show tables from a like '%keyspace%'",
+	}, {
+		input: "show full tables",
+	}, {
+		input: "show full tables from a",
+	}, {
+		input:  "show full tables in a",
+		output: "show full tables from a",
+	}, {
+		input: "show full tables from a like '%keyspace%'",
+	}, {
+		input: "show full tables from a where 1 = 0",
+	}, {
+		input: "show full tables like '%keyspace%'",
+	}, {
+		input: "show full tables where 1 = 0",
 	}, {
 		input:  "show triggers",
 		output: "show triggers",

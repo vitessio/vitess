@@ -109,6 +109,7 @@ func forceEOF(yylex interface{}) {
   partSpec      *PartitionSpec
   vindexParam   VindexParam
   vindexParams  []VindexParam
+  showFilter    *ShowFilter
 }
 
 %token LEX_ERROR
@@ -174,7 +175,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES
+%token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES EXTENDED FULL PROCESSLIST
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -251,6 +252,8 @@ func forceEOF(yylex interface{}) {
 %type <setExpr> set_expression transaction_char isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
+%type <str> extended_opt full_opt from_database_opt tables_or_processlist
+%type <showFilter> like_or_where_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
@@ -1368,9 +1371,15 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW TABLES ddl_force_eof
+| SHOW extended_opt full_opt tables_or_processlist from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    // this is ugly, but I couldn't find a better way for now
+    if $4 == "processlist" {
+      $$ = &Show{Type: $4}
+    } else {
+      showTablesOpt := &ShowTablesOpt{Extended: $2, Full:$3, DbName:$5, Filter:$6}
+      $$ = &Show{Type: $4, ShowTablesOpt: showTablesOpt}
+    }
   }
 | SHOW show_session_or_global VARIABLES ddl_force_eof
   {
@@ -1409,6 +1418,64 @@ show_statement:
 | SHOW ID ddl_force_eof
   {
     $$ = &Show{Type: string($2)}
+  }
+
+tables_or_processlist:
+  TABLES
+  {
+    $$ = string($1)
+  }
+| PROCESSLIST
+  {
+    $$ = string($1)
+  }
+
+extended_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| EXTENDED
+  {
+    $$ = "extended "
+  }
+
+full_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| FULL
+  {
+    $$ = "full "
+  }
+
+from_database_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| FROM table_id
+  {
+    $$ = $2.v
+  }
+| IN table_id
+  {
+    $$ = $2.v
+  }
+
+like_or_where_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| LIKE STRING
+  {
+    $$ = &ShowFilter{Like:string($2)}
+  }
+| WHERE expression
+  {
+    $$ = &ShowFilter{Filter:$2}
   }
 
 show_session_or_global:
