@@ -43,6 +43,22 @@
   }
 }
 
+# select with timeout directive sets QueryTimeout in the route
+"select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user"
+{
+  "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user",
+    "FieldQuery": "select * from user where 1 != 1",
+    "QueryTimeout": 1000
+  }
+}
+
 # qualified '*' expression for simple route
 "select user.* from user"
 {

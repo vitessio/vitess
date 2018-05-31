@@ -28,6 +28,8 @@ const (
 	DirectiveMultiShardAutocommit = "MULTI_SHARD_AUTOCOMMIT"
 	// DirectiveSkipQueryPlanCache skips query plan cache when set.
 	DirectiveSkipQueryPlanCache = "SKIP_QUERY_PLAN_CACHE"
+	// DirectiveQueryTimeout sets a query timeout in vtgate. Only supported for SELECTS.
+	DirectiveQueryTimeout = "QUERY_TIMEOUT_MS"
 )
 
 func isNonSpace(r rune) bool {
@@ -219,15 +221,15 @@ func ExtractCommentDirectives(comments Comments) CommentDirectives {
 			strVal := directive[sep+1:]
 			directive = directive[:sep]
 
-			boolVal, err := strconv.ParseBool(strVal)
-			if err == nil {
-				vals[directive] = boolVal
-				continue
-			}
-
 			intVal, err := strconv.Atoi(strVal)
 			if err == nil {
 				vals[directive] = intVal
+				continue
+			}
+
+			boolVal, err := strconv.ParseBool(strVal)
+			if err == nil {
+				vals[directive] = boolVal
 				continue
 			}
 
@@ -238,7 +240,7 @@ func ExtractCommentDirectives(comments Comments) CommentDirectives {
 }
 
 // IsSet checks the directive map for the named directive and returns
-// true iff the directive is set and has a true/false or 0/1 value
+// true if the directive is set and has a true/false or 0/1 value
 func (d CommentDirectives) IsSet(key string) bool {
 	if d == nil {
 		return false
