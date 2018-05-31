@@ -709,6 +709,46 @@ var (
 	}, {
 		input: "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
 	}, {
+		input:  "set session transaction isolation level repeatable read",
+		output: "set session tx_isolation = 'repeatable read'",
+	}, {
+		input:  "set global transaction isolation level repeatable read",
+		output: "set global tx_isolation = 'repeatable read'",
+	}, {
+		input:  "set transaction isolation level repeatable read",
+		output: "set tx_isolation = 'repeatable read'",
+	}, {
+		input:  "set transaction isolation level read committed",
+		output: "set tx_isolation = 'read committed'",
+	}, {
+		input:  "set transaction isolation level read uncommitted",
+		output: "set tx_isolation = 'read uncommitted'",
+	}, {
+		input:  "set transaction isolation level serializable",
+		output: "set tx_isolation = 'serializable'",
+	}, {
+		input:  "set transaction read write",
+		output: "set tx_read_only = 0",
+	}, {
+		input:  "set transaction read only",
+		output: "set tx_read_only = 1",
+	}, {
+		input: "set tx_read_only = 1",
+	}, {
+		input: "set tx_read_only = 0",
+	}, {
+		input: "set tx_isolation = 'repeatable read'",
+	}, {
+		input: "set tx_isolation = 'read committed'",
+	}, {
+		input: "set tx_isolation = 'read uncommitted'",
+	}, {
+		input: "set tx_isolation = 'serializable'",
+	}, {
+		input: "set sql_safe_updates = 0",
+	}, {
+		input: "set sql_safe_updates = 1",
+	}, {
 		input:  "alter ignore table a add foo",
 		output: "alter table a",
 	}, {

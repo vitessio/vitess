@@ -177,7 +177,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES
 
 // SET tokens
-%token <bytes> NAMES CHARSET GLOBAL SESSION
+%token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
@@ -245,10 +245,10 @@ func forceEOF(yylex interface{}) {
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
-%type <setExprs> set_list
+%type <setExprs> set_list transaction_chars
 %type <bytes> charset_or_character_set
 %type <updateExpr> update_expression
-%type <setExpr> set_expression
+%type <setExpr> set_expression transaction_char isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <byt> exists_opt
@@ -460,11 +460,61 @@ set_statement:
   SET comment_opt set_list
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
-   }
+  }
 | SET comment_opt set_session_or_global set_list
   {
     $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $4}
-   }
+  }
+| SET comment_opt set_session_or_global TRANSACTION transaction_chars
+  {
+    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $5}
+  }
+| SET comment_opt TRANSACTION transaction_chars
+  {
+    $$ = &Set{Comments: Comments($2), Exprs: $4}
+  }
+
+transaction_chars:
+  transaction_char
+  {
+    $$ = SetExprs{$1}
+  }
+| transaction_chars ',' transaction_char
+  {
+    $$ = append($$, $3)
+  }
+
+transaction_char:
+  ISOLATION LEVEL isolation_level
+  {
+    $$ = $3
+  }
+| READ WRITE
+  {
+    $$ = &SetExpr{Name: NewColIdent("tx_read_only"), Expr: NewIntVal([]byte("0"))}
+  }
+| READ ONLY
+  {
+    $$ = &SetExpr{Name: NewColIdent("tx_read_only"), Expr: NewIntVal([]byte("1"))}
+  }
+
+isolation_level:
+  REPEATABLE READ
+  {
+    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("repeatable read"))}
+  }
+| READ COMMITTED
+  {
+    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("read committed"))}
+  }
+| READ UNCOMMITTED
+  {
+    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("read uncommitted"))}
+  }
+| SERIALIZABLE
+  {
+    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("serializable"))}
+  }
 
 set_session_or_global:
   SESSION
@@ -2920,6 +2970,7 @@ non_reserved_keyword:
 | CHARSET
 | COMMENT_KEYWORD
 | COMMIT
+| COMMITTED
 | DATE
 | DATETIME
 | DECIMAL
@@ -2935,12 +2986,14 @@ non_reserved_keyword:
 | GLOBAL
 | INT
 | INTEGER
+| ISOLATION
 | JSON
 | KEY_BLOCK_SIZE
 | KEYS
 | LANGUAGE
 | LAST_INSERT_ID
 | LESS
+| LEVEL
 | LINESTRING
 | LONGBLOB
 | LONGTEXT
@@ -2955,6 +3008,7 @@ non_reserved_keyword:
 | NCHAR
 | NUMERIC
 | OFFSET
+| ONLY
 | OPTIMIZE
 | PARTITION
 | POINT
@@ -2962,11 +3016,14 @@ non_reserved_keyword:
 | PRIMARY
 | PROCEDURE
 | QUERY
+| READ
 | REAL
 | REORGANIZE
 | REPAIR
+| REPEATABLE
 | ROLLBACK
 | SESSION
+| SERIALIZABLE
 | SHARE
 | SIGNED
 | SMALLINT
@@ -2983,6 +3040,7 @@ non_reserved_keyword:
 | TRANSACTION
 | TRIGGER
 | TRUNCATE
+| UNCOMMITTED
 | UNSIGNED
 | UNUSED
 | VARBINARY
@@ -2996,6 +3054,7 @@ non_reserved_keyword:
 | VITESS_TABLETS
 | VSCHEMA_TABLES
 | WITH
+| WRITE
 | YEAR
 | ZEROFILL
 
