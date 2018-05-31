@@ -395,6 +395,15 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set sql_auto_is_null = 1",
 		err: "sql_auto_is_null is not currently supported",
+	}, {
+		in:  "set tx_read_only = 2",
+		err: "unexpected value for tx_read_only: 2",
+	}, {
+		in:  "set tx_isolation = 'invalid'",
+		err: "unexpected value for tx_isolation: invalid",
+	}, {
+		in:  "set sql_safe_updates = 2",
+		err: "unexpected value for sql_safe_updates: 2",
 	}}
 	for _, tcase := range testcases {
 		session := NewSafeSession(&vtgatepb.Session{Autocommit: true})

@@ -536,20 +536,9 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 		}
 		switch k.Key {
 		case "autocommit":
-			var val int64
-			switch v := v.(type) {
-			case int64:
-				val = v
-			case string:
-				if v == "on" {
-					val = 1
-				} else if v == "off" {
-					val = 0
-				} else {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for autocommit: %s", v)
-				}
-			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for autocommit: %T", v)
+			val, err := validateSetOnOff(v, k.Key)
+			if err != nil {
+				return nil, err
 			}
 
 			switch val {
@@ -597,6 +586,18 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for skip_query_plan_cache: %d", val)
 			}
+		case "sql_safe_updates":
+			val, err := validateSetOnOff(v, k.Key)
+			if err != nil {
+				return nil, err
+			}
+
+			switch val {
+			case 0, 1:
+				// no op
+			default:
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for sql_safe_updates: %d", val)
+			}
 		case "transaction_mode":
 			val, ok := v.(string)
 			if !ok {
@@ -607,6 +608,28 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", val)
 			}
 			safeSession.TransactionMode = vtgatepb.TransactionMode(out)
+		case "tx_isolation":
+			val, ok := v.(string)
+			if !ok {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for tx_isolation: %T", v)
+			}
+			switch val {
+			case "repeatable read", "read committed", "read uncommitted", "serializable":
+				// no op
+			default:
+				return nil, fmt.Errorf("unexpected value for tx_isolation: %v", val)
+			}
+		case "tx_read_only":
+			val, err := validateSetOnOff(v, k.Key)
+			if err != nil {
+				return nil, err
+			}
+			switch val {
+			case 0, 1:
+				// no op
+			default:
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for tx_read_only: %d", val)
+			}
 		case "workload":
 			val, ok := v.(string)
 			if !ok {
@@ -682,6 +705,25 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 		}
 	}
 	return &sqltypes.Result{}, nil
+}
+
+func validateSetOnOff(v interface{}, typ string) (int64, error) {
+	var val int64
+	switch v := v.(type) {
+	case int64:
+		val = v
+	case string:
+		if v == "on" {
+			val = 1
+		} else if v == "off" {
+			val = 0
+		} else {
+			return -1, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for %s: %s", typ, v)
+		}
+	default:
+		return -1, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for %s: %T", typ, v)
+	}
+	return val, nil
 }
 
 func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
