@@ -446,6 +446,38 @@ func TestExtractSetValues(t *testing.T) {
 		sql:   "SET GLOBAL wait_timeout = 3600",
 		out:   map[SetKey]interface{}{{Key: "wait_timeout", Scope: "session"}: int64(3600)},
 		scope: "global",
+	}, {
+		sql:   "set session transaction isolation level repeatable read",
+		out:   map[SetKey]interface{}{{Key: "tx_isolation", Scope: "session"}: "repeatable read"},
+		scope: "session",
+	}, {
+		sql:   "set session transaction isolation level read committed",
+		out:   map[SetKey]interface{}{{Key: "tx_isolation", Scope: "session"}: "read committed"},
+		scope: "session",
+	}, {
+		sql:   "set session transaction isolation level read uncommitted",
+		out:   map[SetKey]interface{}{{Key: "tx_isolation", Scope: "session"}: "read uncommitted"},
+		scope: "session",
+	}, {
+		sql:   "set session transaction isolation level serializable",
+		out:   map[SetKey]interface{}{{Key: "tx_isolation", Scope: "session"}: "serializable"},
+		scope: "session",
+	}, {
+		sql:   "set session tx_read_only = 0",
+		out:   map[SetKey]interface{}{{Key: "tx_read_only", Scope: "session"}: int64(0)},
+		scope: "session",
+	}, {
+		sql:   "set session tx_read_only = 1",
+		out:   map[SetKey]interface{}{{Key: "tx_read_only", Scope: "session"}: int64(1)},
+		scope: "session",
+	}, {
+		sql:   "set session sql_safe_updates = 0",
+		out:   map[SetKey]interface{}{{Key: "sql_safe_updates", Scope: "session"}: int64(0)},
+		scope: "session",
+	}, {
+		sql:   "set session sql_safe_updates = 1",
+		out:   map[SetKey]interface{}{{Key: "sql_safe_updates", Scope: "session"}: int64(1)},
+		scope: "session",
 	}}
 	for _, tcase := range testcases {
 		out, _, err := ExtractSetValues(tcase.sql)
