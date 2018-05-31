@@ -124,13 +124,11 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 		return nil, err
 	}
 
-	// Read the first packet to see if it's an error response to our dump command.
-	buf, err := sc.Conn.ReadPacket()
-	if err != nil {
-		log.Errorf("couldn't start binlog dump: %v", err)
-		return nil, err
-	}
+	return sc.streamEvents(ctx), nil
+}
 
+// streamEvents returns a channel on which events are streamed.
+func (sc *SlaveConnection) streamEvents(ctx context.Context) chan mysql.BinlogEvent {
 	// FIXME(alainjobart) I think we can use a buffered channel for better performance.
 	eventChan := make(chan mysql.BinlogEvent)
 
@@ -142,25 +140,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 			sc.wg.Done()
 		}()
 		for {
-			// Handle EOF and error case.
-			switch buf[0] {
-			case mysql.EOFPacket:
-				log.Infof("received EOF packet in binlog dump: %#v", buf)
-				return
-			case mysql.ErrPacket:
-				err := mysql.ParseErrorPacket(buf)
-				log.Infof("received error packet in binlog dump: %v", err)
-				return
-			}
-
-			select {
-			// Skip the first byte because it's only used for signaling EOF / error.
-			case eventChan <- sc.Conn.MakeBinlogEvent(buf[1:]):
-			case <-ctx.Done():
-				return
-			}
-
-			buf, err = sc.Conn.ReadPacket()
+			event, err := sc.Conn.ReadBinlogEvent()
 			if err != nil {
 				if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.CRServerLost {
 					// CRServerLost = Lost connection to MySQL server during query
@@ -172,10 +152,15 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 				log.Errorf("read error while streaming binlog events: %v", err)
 				return
 			}
+
+			select {
+			case eventChan <- event:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
-
-	return eventChan, nil
+	return eventChan
 }
 
 // StartBinlogDumpFromBinlogBeforeTimestamp requests a replication
@@ -209,132 +194,77 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.Context, timestamp int64) (<-chan mysql.BinlogEvent, error) {
 	ctx, sc.cancel = context.WithCancel(ctx)
 
+	filename, err := sc.findFileBeforeTimestamp(ctx, timestamp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Start dumping the logs. The position is '4' to skip the
+	// Binlog File Header. See this page for more info:
+	// https://dev.mysql.com/doc/internals/en/binlog-file.html
+	if err := sc.Conn.WriteComBinlogDump(sc.slaveID, filename, 4, 0); err != nil {
+		return nil, fmt.Errorf("failed to send the ComBinlogDump command: %v", err)
+	}
+	return sc.streamEvents(ctx), nil
+}
+
+func (sc *SlaveConnection) findFileBeforeTimestamp(ctx context.Context, timestamp int64) (filename string, err error) {
 	// List the binlogs.
 	binlogs, err := sc.Conn.ExecuteFetch("SHOW BINARY LOGS", 1000, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to SHOW BINARY LOGS: %v", err)
+		return "", fmt.Errorf("failed to SHOW BINARY LOGS: %v", err)
 	}
 
 	// Start with the most recent binlog file until we find the right event.
-	var binlogIndex int
-	var event mysql.BinlogEvent
-	for binlogIndex = len(binlogs.Rows) - 1; binlogIndex >= 0; binlogIndex-- {
+	for binlogIndex := len(binlogs.Rows) - 1; binlogIndex >= 0; binlogIndex-- {
 		// Exit the loop early if context is canceled.
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return "", ctx.Err()
 		default:
 		}
 
-		// Start dumping the logs. The position is '4' to skip the
-		// Binlog File Header. See this page for more info:
-		// https://dev.mysql.com/doc/internals/en/binlog-file.html
-		binlog := binlogs.Rows[binlogIndex][0].ToString()
-		if err := sc.Conn.WriteComBinlogDump(sc.slaveID, binlog, 4, 0); err != nil {
-			return nil, fmt.Errorf("failed to send the ComBinlogDump command: %v", err)
-		}
-
-		// Get the first event to get its timestamp. We skip
-		// events that don't have timestamps (although it seems
-		// most do anyway).
-		for {
-			buf, err := sc.Conn.ReadPacket()
-			if err != nil {
-				return nil, fmt.Errorf("couldn't start binlog dump of binlog %v: %v", binlog, err)
-			}
-
-			// Handle EOF and error case.
-			switch buf[0] {
-			case mysql.EOFPacket:
-				return nil, fmt.Errorf("received EOF packet for first packet of binlog %v", binlog)
-			case mysql.ErrPacket:
-				err := mysql.ParseErrorPacket(buf)
-				return nil, fmt.Errorf("received error packet for first packet of binlog %v", err)
-			}
-
-			// Parse the full event.
-			event = sc.Conn.MakeBinlogEvent(buf[1:])
-			if !event.IsValid() {
-				return nil, fmt.Errorf("first event from binlog %v is not valid", binlog)
-			}
-			if event.Timestamp() > 0 {
-				// We found the first event with a
-				// valid timestamp.
-				break
-			}
-		}
-		if int64(event.Timestamp()) < timestamp {
-			// The first event in this binlog has a smaller
-			// timestamp than what we need, we found a good
-			// starting point.
-			break
-		}
-
-		// The timestamp is higher, we need to try the older files.
-		// Close and re-open our connection.
-		sc.Conn.Close()
-		conn, err := connectForReplication(sc.cp)
+		filename := binlogs.Rows[binlogIndex][0].ToString()
+		blTimestamp, err := sc.getBinlogTimeStamp(filename)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
-		sc.Conn = conn
-	}
-	if binlogIndex == -1 {
-		// We haven't found a suitable binlog
-		log.Errorf("couldn't find an old enough binlog to match timestamp >= %v (looked at %v files)", timestamp, len(binlogs.Rows))
-		return nil, ErrBinlogUnavailable
+		if blTimestamp < timestamp {
+			// The binlog timestamp is older: we've found a good starting point.
+			return filename, nil
+		}
 	}
 
-	// Now just loop sending and reading events.
-	// FIXME(alainjobart) I think we can use a buffered channel for better performance.
-	eventChan := make(chan mysql.BinlogEvent)
+	log.Errorf("couldn't find an old enough binlog to match timestamp >= %v (looked at %v files)", timestamp, len(binlogs.Rows))
+	return "", ErrBinlogUnavailable
+}
 
-	// Start reading events.
-	sc.wg.Add(1)
-	go func() {
-		defer func() {
-			close(eventChan)
-			sc.wg.Done()
-		}()
+func (sc *SlaveConnection) getBinlogTimeStamp(filename string) (blTimestamp int64, err error) {
+	conn, err := connectForReplication(sc.cp)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
 
-		for {
-			select {
-			case eventChan <- event:
-			case <-ctx.Done():
-				return
-			}
+	if err := conn.WriteComBinlogDump(sc.slaveID, filename, 4, 0); err != nil {
+		return 0, fmt.Errorf("failed to send the ComBinlogDump command: %v", err)
+	}
 
-			buf, err := sc.Conn.ReadPacket()
-			if err != nil {
-				if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.CRServerLost {
-					// CRServerLost = Lost connection to MySQL server during query
-					// This is not necessarily an error. It could just be that we closed
-					// the connection from outside.
-					log.Infof("connection closed during binlog stream (possibly intentional): %v", err)
-					return
-				}
-				log.Errorf("read error while streaming binlog events: %v", err)
-				return
-			}
-
-			// Handle EOF and error case.
-			switch buf[0] {
-			case mysql.EOFPacket:
-				// The master is telling us to stop.
-				log.Infof("received EOF packet in binlog dump: %#v", buf)
-				return
-			case mysql.ErrPacket:
-				err := mysql.ParseErrorPacket(buf)
-				log.Infof("received error packet in binlog dump: %v", err)
-			}
-
-			// Skip the first byte because it's only used
-			// for signaling EOF / error.
-			event = sc.Conn.MakeBinlogEvent(buf[1:])
+	// Get the first event to get its timestamp. We skip
+	// events that don't have timestamps (although it seems
+	// most do anyway).
+	for {
+		event, err := conn.ReadBinlogEvent()
+		if err != nil {
+			return 0, fmt.Errorf("error reading binlog event %v: %v", filename, err)
 		}
-	}()
-
-	return eventChan, nil
+		if !event.IsValid() {
+			return 0, fmt.Errorf("first event from binlog %v is not valid", filename)
+		}
+		if ts := event.Timestamp(); ts > 0 {
+			return int64(ts), nil
+		}
+	}
 }
 
 // Close closes the slave connection, which also signals an ongoing dump
