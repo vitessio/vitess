@@ -33,10 +33,10 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/throttler"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/throttler"
 )
 
 var (
@@ -182,9 +182,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	}
 
 	now := time.Now().Unix()
-
-	blp.position = position
-	updateRecovery := updateBlpCheckpoint(blp.uid, blp.position, now, tx.EventToken.Timestamp)
+	updateRecovery := updateBlpCheckpoint(blp.uid, position, now, tx.EventToken.Timestamp)
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
@@ -193,6 +191,9 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	if qr.RowsAffected != 1 {
 		return fmt.Errorf("Cannot update blp_recovery table, affected %v rows", qr.RowsAffected)
 	}
+
+	// Update position after successful write.
+	blp.position = position
 	blp.blplStats.SetLastPosition(blp.position)
 	if tx.EventToken.Timestamp != 0 {
 		blp.blplStats.SecondsBehindMaster.Set(now - tx.EventToken.Timestamp)
@@ -244,9 +245,6 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 	if err = blp.dbClient.Begin(); err != nil {
 		return false, fmt.Errorf("failed query BEGIN, err: %s", err)
 	}
-	if err = blp.writeRecoveryPosition(tx); err != nil {
-		return false, err
-	}
 	for i, stmt := range tx.Statements {
 		// Make sure the statement is replayed in the proper charset.
 		if dbClient, ok := blp.dbClient.(*DBClient); ok {
@@ -282,6 +280,13 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 			}
 			return false, nil
 		}
+		_ = blp.dbClient.Rollback()
+		return false, err
+	}
+	// Update recovery position after successful replay.
+	// This also updates the blp's internal position.
+	if err = blp.writeRecoveryPosition(tx); err != nil {
+		_ = blp.dbClient.Rollback()
 		return false, err
 	}
 	if err = blp.dbClient.Commit(); err != nil {
@@ -440,6 +445,10 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		for {
 			ok, err = blp.processTransaction(response)
 			if err != nil {
+				log.Infof("transaction failed: %v", err)
+				for _, stmt := range response.Statements {
+					log.Infof("statement: %q", stmt.Sql)
+				}
 				return fmt.Errorf("Error in processing binlog event %v", err)
 			}
 			if ok {
