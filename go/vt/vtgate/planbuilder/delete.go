@@ -67,7 +67,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 	edel.Table = table
 
 	directives := sqlparser.ExtractCommentDirectives(del.Comments)
-	if directives.IsSet(DirectiveMultiShardAutocommit) {
+	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
 		edel.MultiShardAutocommit = true
 	}
 

@@ -34,6 +34,8 @@ func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive e
 		return nil, err
 	}
 	if rb, ok := pb.bldr.(*route); ok {
+		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+		rb.ERoute.QueryTimeout = queryTimeout(directives)
 		if rb.ERoute.TargetDestination != nil {
 			return nil, errors.New("unsupported: SELECT with a target destination")
 		}
@@ -204,4 +206,22 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 		}
 	}
 	return resultColumns, nil
+}
+
+// queryTimeout returns DirectiveQueryTimeout value if set, otherwise returns 0.
+func queryTimeout(d sqlparser.CommentDirectives) int {
+	if d == nil {
+		return 0
+	}
+
+	val, ok := d[sqlparser.DirectiveQueryTimeout]
+	if !ok {
+		return 0
+	}
+
+	intVal, ok := val.(int)
+	if ok {
+		return intVal
+	}
+	return 0
 }

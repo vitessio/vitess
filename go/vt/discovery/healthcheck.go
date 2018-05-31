@@ -41,6 +41,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"hash/crc32"
 	"html/template"
 	"net/http"
 	"sort"
@@ -120,12 +121,12 @@ const (
 )
 
 func init() {
-	loadTabletURLTemplate()
+	// Flags are not parsed at this point and the default value of the flag (just the hostname) will be used.
+	ParseTabletURLTemplateFromFlag()
 }
 
-// loadTabletURLTemplate loads or reloads the URL template.
-// Should only be used independently for testing.
-func loadTabletURLTemplate() {
+// ParseTabletURLTemplateFromFlag loads or reloads the URL template.
+func ParseTabletURLTemplateFromFlag() {
 	tabletURLTemplate = template.New("")
 	_, err := tabletURLTemplate.Parse(*tabletURLTemplateString)
 	if err != nil {
@@ -258,7 +259,7 @@ type HealthCheck interface {
 	// RemoveTablet removes the tablet, and stops its StreamHealth RPC.
 	TabletRecorder
 
-	// RegisterStats registers the connection counts stats.
+	// RegisterStats registers the connection counts and checksum stats.
 	// It can only be called on one Healthcheck object per process.
 	RegisterStats()
 	// SetListener sets the listener for healthcheck
@@ -392,6 +393,11 @@ func (hc *HealthCheckImpl) RegisterStats() {
 		"the number of healthcheck connections registered",
 		[]string{"Keyspace", "ShardName", "TabletType"},
 		hc.servingConnStats)
+
+	stats.NewGaugeFunc(
+		"HealthcheckChecksum",
+		"crc32 checksum of the current healthcheck state",
+		hc.stateChecksum)
 }
 
 // ServeHTTP is part of the http.Handler interface. It renders the current state of the discovery gateway tablet cache into json.
@@ -425,6 +431,28 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 		res[key]++
 	}
 	return res
+}
+
+// stateChecksum returns a crc32 checksum of the healthcheck state
+func (hc *HealthCheckImpl) stateChecksum() int64 {
+	// CacheStatus is sorted so this should be stable across vtgates
+	cacheStatus := hc.CacheStatus()
+	var buf bytes.Buffer
+	for _, st := range cacheStatus {
+		fmt.Fprintf(&buf,
+			"%v%v%v%v\n",
+			st.Cell,
+			st.Target.Keyspace,
+			st.Target.Shard,
+			st.Target.TabletType.String(),
+		)
+		sort.Sort(st.TabletsStats)
+		for _, ts := range st.TabletsStats {
+			fmt.Fprintf(&buf, "%v%v%v\n", ts.Up, ts.Serving, ts.TabletExternallyReparentedTimestamp)
+		}
+	}
+
+	return int64(crc32.ChecksumIEEE(buf.Bytes()))
 }
 
 // finalizeConn closes the health checking connection and sends the final

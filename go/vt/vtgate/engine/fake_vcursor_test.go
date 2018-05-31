@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -39,6 +40,10 @@ type noopVCursor struct {
 
 func (t noopVCursor) Context() context.Context {
 	return context.Background()
+}
+
+func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
+	return func() {}
 }
 
 func (t noopVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
@@ -88,6 +93,9 @@ type loggingVCursor struct {
 
 func (f *loggingVCursor) Context() context.Context {
 	return context.Background()
+}
+func (f *loggingVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
+	return func() {}
 }
 
 func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {

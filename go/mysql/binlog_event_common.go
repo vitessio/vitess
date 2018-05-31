@@ -161,6 +161,11 @@ func (ev binlogEvent) IsDeleteRows() bool {
 		ev.Type() == eDeleteRowsEventV2
 }
 
+// IsPseudo is always false for a native binlogEvent.
+func (ev binlogEvent) IsPseudo() bool {
+	return false
+}
+
 // Format implements BinlogEvent.Format().
 //
 // Expected format (L = total length of event data):

@@ -43,6 +43,9 @@ type VCursor interface {
 	// Context returns the context of the current request.
 	Context() context.Context
 
+	// SetContextTimeout updates the context and sets a timeout.
+	SetContextTimeout(timeout time.Duration) context.CancelFunc
+
 	// V3 functions.
 	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
 	ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)

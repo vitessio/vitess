@@ -679,6 +679,14 @@ var (
 	}, {
 		input: "set character_set_results = utf8",
 	}, {
+		input: "set @@session.autocommit = true",
+	}, {
+		input: "set @@session.`autocommit` = true",
+	}, {
+		input: "set @@session.'autocommit' = true",
+	}, {
+		input: "set @@session.\"autocommit\" = true",
+	}, {
 		input:  "set names utf8 collate foo",
 		output: "set names 'utf8'",
 	}, {
@@ -700,6 +708,46 @@ var (
 		input: "set /* list */ a = 3, b = 4",
 	}, {
 		input: "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
+	}, {
+		input:  "set session transaction isolation level repeatable read",
+		output: "set session tx_isolation = 'repeatable read'",
+	}, {
+		input:  "set global transaction isolation level repeatable read",
+		output: "set global tx_isolation = 'repeatable read'",
+	}, {
+		input:  "set transaction isolation level repeatable read",
+		output: "set tx_isolation = 'repeatable read'",
+	}, {
+		input:  "set transaction isolation level read committed",
+		output: "set tx_isolation = 'read committed'",
+	}, {
+		input:  "set transaction isolation level read uncommitted",
+		output: "set tx_isolation = 'read uncommitted'",
+	}, {
+		input:  "set transaction isolation level serializable",
+		output: "set tx_isolation = 'serializable'",
+	}, {
+		input:  "set transaction read write",
+		output: "set tx_read_only = 0",
+	}, {
+		input:  "set transaction read only",
+		output: "set tx_read_only = 1",
+	}, {
+		input: "set tx_read_only = 1",
+	}, {
+		input: "set tx_read_only = 0",
+	}, {
+		input: "set tx_isolation = 'repeatable read'",
+	}, {
+		input: "set tx_isolation = 'read committed'",
+	}, {
+		input: "set tx_isolation = 'read uncommitted'",
+	}, {
+		input: "set tx_isolation = 'serializable'",
+	}, {
+		input: "set sql_safe_updates = 0",
+	}, {
+		input: "set sql_safe_updates = 1",
 	}, {
 		input:  "alter ignore table a add foo",
 		output: "alter table a",
@@ -1025,7 +1073,7 @@ var (
 		output: "show processlist",
 	}, {
 		input:  "show full processlist",
-		output: "show full",
+		output: "show processlist",
 	}, {
 		input:  "show profile cpu for query 1",
 		output: "show profile",
@@ -1054,11 +1102,32 @@ var (
 		input:  "show table status",
 		output: "show table",
 	}, {
-		input:  "show tables",
-		output: "show tables",
+		input: "show tables",
 	}, {
-		input:  "show full tables",
-		output: "show full",
+		input: "show tables like '%keyspace%'",
+	}, {
+		input: "show tables where 1 = 0",
+	}, {
+		input: "show tables from a",
+	}, {
+		input: "show tables from a where 1 = 0",
+	}, {
+		input: "show tables from a like '%keyspace%'",
+	}, {
+		input: "show full tables",
+	}, {
+		input: "show full tables from a",
+	}, {
+		input:  "show full tables in a",
+		output: "show full tables from a",
+	}, {
+		input: "show full tables from a like '%keyspace%'",
+	}, {
+		input: "show full tables from a where 1 = 0",
+	}, {
+		input: "show full tables like '%keyspace%'",
+	}, {
+		input: "show full tables where 1 = 0",
 	}, {
 		input:  "show triggers",
 		output: "show triggers",

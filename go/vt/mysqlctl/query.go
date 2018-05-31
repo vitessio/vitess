@@ -38,13 +38,16 @@ func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*db
 	}
 	// Run a test query to see if this connection is still good.
 	if _, err := conn.ExecuteFetch("SELECT 1", 1, false); err != nil {
-		// If we get "MySQL server has gone away (errno 2006)", try to reconnect.
-		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == 2006 {
+		// If we get a connection error, try to reconnect.
+		if sqlErr, ok := err.(*mysql.SQLError); ok && (sqlErr.Number() == 2006 || sqlErr.Number() == 2013) {
 			if err := conn.Reconnect(); err != nil {
 				conn.Recycle()
-				return conn, err
+				return nil, err
 			}
+			return conn, nil
 		}
+		conn.Recycle()
+		return nil, err
 	}
 	return conn, nil
 }

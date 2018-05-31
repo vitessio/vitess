@@ -22,6 +22,16 @@ import (
 	"unicode"
 )
 
+const (
+	// DirectiveMultiShardAutocommit is the query comment directive to allow
+	// single round trip autocommit with a multi-shard statement.
+	DirectiveMultiShardAutocommit = "MULTI_SHARD_AUTOCOMMIT"
+	// DirectiveSkipQueryPlanCache skips query plan cache when set.
+	DirectiveSkipQueryPlanCache = "SKIP_QUERY_PLAN_CACHE"
+	// DirectiveQueryTimeout sets a query timeout in vtgate. Only supported for SELECTS.
+	DirectiveQueryTimeout = "QUERY_TIMEOUT_MS"
+)
+
 func isNonSpace(r rune) bool {
 	return !unicode.IsSpace(r)
 }
@@ -111,7 +121,7 @@ func SplitMarginComments(sql string) (query string, comments MarginComments) {
 		Leading:  strings.TrimLeftFunc(sql[:leadingEnd], unicode.IsSpace),
 		Trailing: strings.TrimRightFunc(sql[trailingStart:], unicode.IsSpace),
 	}
-	return strings.TrimRightFunc(sql[leadingEnd:trailingStart], unicode.IsSpace), comments
+	return strings.TrimFunc(sql[leadingEnd:trailingStart], unicode.IsSpace), comments
 }
 
 // StripLeadingComments trims the SQL string and removes any leading comments
@@ -211,15 +221,15 @@ func ExtractCommentDirectives(comments Comments) CommentDirectives {
 			strVal := directive[sep+1:]
 			directive = directive[:sep]
 
-			boolVal, err := strconv.ParseBool(strVal)
-			if err == nil {
-				vals[directive] = boolVal
-				continue
-			}
-
 			intVal, err := strconv.Atoi(strVal)
 			if err == nil {
 				vals[directive] = intVal
+				continue
+			}
+
+			boolVal, err := strconv.ParseBool(strVal)
+			if err == nil {
+				vals[directive] = boolVal
 				continue
 			}
 
@@ -230,7 +240,7 @@ func ExtractCommentDirectives(comments Comments) CommentDirectives {
 }
 
 // IsSet checks the directive map for the named directive and returns
-// true iff the directive is set and has a true/false or 0/1 value
+// true if the directive is set and has a true/false or 0/1 value
 func (d CommentDirectives) IsSet(key string) bool {
 	if d == nil {
 		return false
@@ -249,6 +259,35 @@ func (d CommentDirectives) IsSet(key string) bool {
 	intVal, ok := val.(int)
 	if ok {
 		return intVal == 1
+	}
+	return false
+}
+
+// SkipQueryPlanCacheDirective returns true if skip query plan cache directive is set to true in query.
+func SkipQueryPlanCacheDirective(stmt Statement) bool {
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		if directives.IsSet(DirectiveSkipQueryPlanCache) {
+			return true
+		}
+	case *Insert:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		if directives.IsSet(DirectiveSkipQueryPlanCache) {
+			return true
+		}
+	case *Update:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		if directives.IsSet(DirectiveSkipQueryPlanCache) {
+			return true
+		}
+	case *Delete:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		if directives.IsSet(DirectiveSkipQueryPlanCache) {
+			return true
+		}
+	default:
+		return false
 	}
 	return false
 }

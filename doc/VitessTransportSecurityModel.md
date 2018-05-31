@@ -17,7 +17,7 @@ There are two main categories:
 * Internal RPCs: they are used to connect Vitess components.
 * Externally visible RPCs: they are use by the app to talk to Vitess.
 
-A few features in the Vitess ecosystem depend on authentication, like Called ID
+A few features in the Vitess ecosystem depend on authentication, like Caller ID
 and table ACLs. We'll explore the Caller ID feature first.
 
 The encryption and authentication scheme used depends on the transport
@@ -102,3 +102,9 @@ in the source tree. It first sets up all the certificates, and some table ACLs,
 then uses the python client to connect with SSL. It also exercises the
 grpc\_use\_effective\_callerid flag, by connecting without SSL.
 
+## MySQL Transport
+
+To get vtgate to support SSL/TLS use `-mysql_server_ssl_cert` and `-mysql_server_ssl_key`.
+
+To require client certificates set `-mysql_server_ssl_ca`. If there is no CA specified then
+TLS is optional.

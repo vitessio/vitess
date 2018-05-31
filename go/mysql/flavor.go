@@ -42,9 +42,18 @@ type flavor interface {
 	// masterGTIDSet returns the current GTIDSet of a server.
 	masterGTIDSet(c *Conn) (GTIDSet, error)
 
+	// startSlave returns the command to start the slave.
+	startSlaveCommand() string
+
+	// stopSlave returns the command to stop the slave.
+	stopSlaveCommand() string
+
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
 	sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error
+
+	// readBinlogEvent reads the next BinlogEvent from the connection.
+	readBinlogEvent(c *Conn) (BinlogEvent, error)
 
 	// resetReplicationCommands returns the commands to completely reset
 	// replication on the host.
@@ -67,11 +76,6 @@ type flavor interface {
 	// expires.  The command returns -1 if it times out. It
 	// returns NULL if GTIDs are not enabled.
 	waitUntilPositionCommand(ctx context.Context, pos Position) (string, error)
-
-	// makeBinlogEvent takes a raw packet from the MySQL binlog
-	// stream connection and returns a BinlogEvent through which
-	// the packet can be examined.
-	makeBinlogEvent(buf []byte) BinlogEvent
 
 	// enableBinlogPlaybackCommand and disableBinlogPlaybackCommand return an
 	// optional command to run to enable or disable binlog
@@ -137,11 +141,27 @@ func (c *Conn) MasterPosition() (Position, error) {
 	}, nil
 }
 
+// StartSlaveCommand returns the command to start the slave.
+func (c *Conn) StartSlaveCommand() string {
+	return c.flavor.startSlaveCommand()
+}
+
+// StopSlaveCommand returns the command to stop the slave.
+func (c *Conn) StopSlaveCommand() string {
+	return c.flavor.stopSlaveCommand()
+}
+
 // SendBinlogDumpCommand sends the flavor-specific version of
 // the COM_BINLOG_DUMP command to start dumping raw binlog
 // events over a slave connection, starting at a given GTID.
 func (c *Conn) SendBinlogDumpCommand(slaveID uint32, startPos Position) error {
 	return c.flavor.sendBinlogDumpCommand(c, slaveID, startPos)
+}
+
+// ReadBinlogEvent reads the next BinlogEvent. This must be used
+// in conjunction with SendBinlogDumpCommand.
+func (c *Conn) ReadBinlogEvent() (BinlogEvent, error) {
+	return c.flavor.readBinlogEvent(c)
 }
 
 // ResetReplicationCommands returns the commands to completely reset
@@ -236,13 +256,6 @@ func (c *Conn) ShowSlaveStatus() (SlaveStatus, error) {
 // returns NULL if GTIDs are not enabled.
 func (c *Conn) WaitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
 	return c.flavor.waitUntilPositionCommand(ctx, pos)
-}
-
-// MakeBinlogEvent takes a raw packet from the MySQL binlog
-// stream connection and returns a BinlogEvent through which
-// the packet can be examined.
-func (c *Conn) MakeBinlogEvent(buf []byte) BinlogEvent {
-	return c.flavor.makeBinlogEvent(buf)
 }
 
 // EnableBinlogPlaybackCommand returns a command to run to enable

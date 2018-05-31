@@ -785,6 +785,16 @@ func isEOFPacket(data []byte) bool {
 	return data[0] == EOFPacket && len(data) < 9
 }
 
+// parseEOFPacket returns true if there are more results to receive.
+func parseEOFPacket(data []byte) (bool, error) {
+	// The status flag is in position 4 & 5
+	statusFlags, _, ok := readUint16(data, 3)
+	if !ok {
+		return false, fmt.Errorf("invalid EOF packet statusFlags: %v", data)
+	}
+	return (statusFlags & ServerMoreResultsExists) != 0, nil
+}
+
 func parseOKPacket(data []byte) (uint64, uint64, uint16, uint16, error) {
 	// We already read the type.
 	pos := 1

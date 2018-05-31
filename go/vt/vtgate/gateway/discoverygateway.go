@@ -28,6 +28,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -46,6 +47,7 @@ var (
 	cellsToWatch        = flag.String("cells_to_watch", "", "comma-separated list of cells for watching tablets")
 	tabletFilters       flagutil.StringListValue
 	refreshInterval     = flag.Duration("tablet_refresh_interval", 1*time.Minute, "tablet refresh interval")
+	refreshKnownTablets = flag.Bool("tablet_refresh_known_tablets", true, "tablet refresh reloads the tablet address/port map from topo in case it changes")
 	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
 	allowedTabletTypes  []topodatapb.TabletType
 )
@@ -116,11 +118,49 @@ func createDiscoveryGateway(hc discovery.HealthCheck, serv srvtopo.Server, cell 
 			tr = fbs
 		}
 
-		ctw := discovery.NewCellTabletsWatcher(topoServer, tr, c, *refreshInterval, *topoReadConcurrency)
+		ctw := discovery.NewCellTabletsWatcher(topoServer, tr, c, *refreshInterval, *refreshKnownTablets, *topoReadConcurrency)
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
 	dg.QueryService = queryservice.Wrap(nil, dg.withRetry)
 	return dg
+}
+
+// RegisterStats registers the stats to export the lag since the last refresh
+// and the checksum of the topology
+func (dg *discoveryGateway) RegisterStats() {
+	stats.NewGaugeDurationFunc(
+		"TopologyWatcherMaxRefreshLag",
+		"maximum time since the topology watcher refreshed a cell",
+		dg.topologyWatcherMaxRefreshLag,
+	)
+
+	stats.NewGaugeFunc(
+		"TopologyWatcherChecksum",
+		"crc32 checksum of the topology watcher state",
+		dg.topologyWatcherChecksum,
+	)
+}
+
+// topologyWatcherMaxRefreshLag returns the maximum lag since the watched
+// cells were refreshed from the topo server
+func (dg *discoveryGateway) topologyWatcherMaxRefreshLag() time.Duration {
+	var lag time.Duration
+	for _, tw := range dg.tabletsWatchers {
+		cellLag := tw.RefreshLag()
+		if cellLag > lag {
+			lag = cellLag
+		}
+	}
+	return lag
+}
+
+// topologyWatcherChecksum returns a checksum of the topology watcher state
+func (dg *discoveryGateway) topologyWatcherChecksum() int64 {
+	var checksum int64
+	for _, tw := range dg.tabletsWatchers {
+		checksum = checksum ^ int64(tw.TopoChecksum())
+	}
+	return checksum
 }
 
 // StatsUpdate forwards HealthCheck updates to TabletStatsCache and MasterBuffer.
