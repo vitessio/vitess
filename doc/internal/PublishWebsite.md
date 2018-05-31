@@ -19,7 +19,7 @@ branch.
 *   Run:
 
     ```
-    ./vitess.io/publish-site.sh
+    ./vitess.io/preview-site.sh
     ```
 
 *   Site should be live at localhost:4000

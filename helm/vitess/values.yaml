@@ -163,7 +163,7 @@ vttablet:
 # Default values for pmm
 pmm:
   enabled: false
-  pmmTag: "1.6.1"
+  pmmTag: "1.10.0"
   client:
     resources:
       requests:
@@ -215,11 +215,11 @@ pmm:
       # It is recommended to set this limit to roughly 2/3 of the total memory that you are planning to allow for Prometheus.
       metricsMemory: "600000"
 
-# Orchestrator requires at least Kubernetes 1.9 to work
+# Orchestrator requires at least version >= 3.0.9 and Kubernetes 1.9 to work
 # Default values for orchestrator resources
 orchestrator:
   enabled: false
-  image: "vitess/orchestrator:3.0.6"
+  image: "vitess/orchestrator:3.0.11"
   replicas: 3
   resources:
     requests:

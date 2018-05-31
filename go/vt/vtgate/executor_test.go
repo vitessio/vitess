@@ -225,28 +225,79 @@ func TestExecutorSet(t *testing.T) {
 		out *vtgatepb.Session
 		err string
 	}{{
-		in:  "set autocommit=1",
+		in:  "set autocommit = 1",
 		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set @@autocommit = true",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set @@session.autocommit = true",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set @@session.`autocommit` = true",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set @@session.'autocommit' = true",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set @@session.\"autocommit\" = true",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = true",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = on",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = 'on'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = `on`",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = \"on\"",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = false",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set autocommit = off",
+		out: &vtgatepb.Session{},
 	}, {
 		in:  "set AUTOCOMMIT = 0",
 		out: &vtgatepb.Session{},
 	}, {
 		in:  "set AUTOCOMMIT = 'aa'",
-		err: "unexpected value type for autocommit: string",
+		err: "unexpected value for autocommit: aa",
 	}, {
 		in:  "set autocommit = 2",
 		err: "unexpected value for autocommit: 2",
 	}, {
-		in:  "set client_found_rows=1",
+		in:  "set client_found_rows = 1",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
 	}, {
-		in:  "set client_found_rows=0",
+		in:  "set client_found_rows = true",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
+	}, {
+		in:  "set client_found_rows = 0",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
-		in:  "set client_found_rows='aa'",
+		in:  "set client_found_rows = false",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
+	}, {
+		in:  "set @@global.client_found_rows = 1",
+		err: "unsupported in set: global",
+	}, {
+		in:  "set global client_found_rows = 1",
+		err: "unsupported in set: global",
+	}, {
+		in:  "set global @@session.client_found_rows = 1",
+		err: "unsupported in set: mixed using of variable scope",
+	}, {
+		in:  "set client_found_rows = 'aa'",
 		err: "unexpected value type for client_found_rows: string",
 	}, {
-		in:  "set client_found_rows=2",
+		in:  "set client_found_rows = 2",
 		err: "unexpected value for client_found_rows: 2",
 	}, {
 		in:  "set transaction_mode = 'unspecified'",
@@ -259,6 +310,9 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_MULTI},
 	}, {
 		in:  "set transaction_mode = 'twopc'",
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
+	}, {
+		in:  "set transaction_mode = twopc",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
 	}, {
 		in:  "set transaction_mode = 'aa'",
@@ -297,7 +351,7 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set sql_select_limit = 'asdfasfd'",
 		err: "unexpected string value for sql_select_limit: asdfasfd",
 	}, {
-		in:  "set autocommit=1+1",
+		in:  "set autocommit = 1+1",
 		err: "invalid syntax: 1 + 1",
 	}, {
 		in:  "set character_set_results=null",
@@ -306,8 +360,8 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set character_set_results='abcd'",
 		err: "disallowed value for character_set_results: abcd",
 	}, {
-		in:  "set foo=1",
-		err: "unsupported construct: set foo=1",
+		in:  "set foo = 1",
+		err: "unsupported construct: set foo = 1",
 	}, {
 		in:  "set names utf8",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -341,6 +395,15 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set sql_auto_is_null = 1",
 		err: "sql_auto_is_null is not currently supported",
+	}, {
+		in:  "set tx_read_only = 2",
+		err: "unexpected value for tx_read_only: 2",
+	}, {
+		in:  "set tx_isolation = 'invalid'",
+		err: "unexpected value for tx_isolation: invalid",
+	}, {
+		in:  "set sql_safe_updates = 2",
+		err: "unexpected value for sql_safe_updates: 2",
 	}}
 	for _, tcase := range testcases {
 		session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
@@ -1676,6 +1739,29 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
+
+	// Skip cache using directive
+	r, _, _, _ = createExecutorEnv()
+	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, makeComments(""), r, nil)
+
+	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
+	logStats1 = NewLogStats(nil, "Test", "", nil)
+	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(r.plans.Keys()) != 0 {
+		t.Errorf("Plan keys should be 0, got: %v", len(r.plans.Keys()))
+	}
+
+	query1 = "insert into user(id) values (1), (2)"
+	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(r.plans.Keys()) != 1 {
+		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
+	}
 }
 
 func TestGetPlanCacheNormalized(t *testing.T) {
@@ -1705,6 +1791,30 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	}
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
+	}
+
+	// Skip cache using directive
+	r, _, _, _ = createExecutorEnv()
+	r.normalize = true
+	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, makeComments(""), r, nil)
+
+	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
+	logStats1 = NewLogStats(nil, "Test", "", nil)
+	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(r.plans.Keys()) != 0 {
+		t.Errorf("Plan keys should be 0, got: %v", len(r.plans.Keys()))
+	}
+
+	query1 = "insert into user(id) values (1), (2)"
+	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(r.plans.Keys()) != 1 {
+		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
 	}
 }
 

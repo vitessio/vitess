@@ -46,6 +46,7 @@ data:
     "HostnameResolveMethod": "none",
     "HTTPAuthPassword": "",
     "HTTPAuthUser": "",
+    "HTTPAdvertise": "http://POD_NAME.orchestrator-headless.{{ $namespace }}:3000",
     "InstanceBulkOperationsWaitTimeoutSeconds": 10,
     "InstancePollSeconds": 5,
     "ListenAddress": ":3000",

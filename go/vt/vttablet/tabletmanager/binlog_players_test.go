@@ -370,9 +370,9 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 		sql[0] != "SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
 		sql[1] != "SELECT max_tps, max_replication_lag FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
 		sql[2] != "BEGIN" ||
-		!strings.HasPrefix(sql[3], "UPDATE _vt.blp_checkpoint SET pos='MariaDB/0-1-1235', time_updated=") ||
-		!strings.HasSuffix(sql[3], ", transaction_timestamp=72 WHERE source_shard_uid=1") ||
-		sql[4] != "INSERT INTO tablet VALUES(1)" ||
+		sql[3] != "INSERT INTO tablet VALUES(1)" ||
+		!strings.HasPrefix(sql[4], "UPDATE _vt.blp_checkpoint SET pos='MariaDB/0-1-1235', time_updated=") ||
+		!strings.HasSuffix(sql[4], ", transaction_timestamp=72 WHERE source_shard_uid=1") ||
 		sql[5] != "COMMIT" {
 		t.Errorf("Got wrong SQL: %#v", sql)
 	}
@@ -570,9 +570,9 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 			sql[2] != "SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
 			sql[3] != "SELECT max_tps, max_replication_lag FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
 			sql[4] != "BEGIN" ||
-			!strings.HasPrefix(sql[5], "UPDATE _vt.blp_checkpoint SET pos='MariaDB/0-1-1235', time_updated=") ||
-			!strings.HasSuffix(sql[5], ", transaction_timestamp=72 WHERE source_shard_uid=1") ||
-			sql[6] != "INSERT INTO tablet VALUES(1)" ||
+			sql[5] != "INSERT INTO tablet VALUES(1)" ||
+			!strings.HasPrefix(sql[6], "UPDATE _vt.blp_checkpoint SET pos='MariaDB/0-1-1235', time_updated=") ||
+			!strings.HasSuffix(sql[6], ", transaction_timestamp=72 WHERE source_shard_uid=1") ||
 			sql[7] != "COMMIT" {
 			t.Errorf("Got wrong SQL: %#v", sql)
 		}
@@ -756,9 +756,9 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 		sql[0] != "SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
 		sql[1] != "SELECT max_tps, max_replication_lag FROM _vt.blp_checkpoint WHERE source_shard_uid=1" ||
 		sql[2] != "BEGIN" ||
-		!strings.HasPrefix(sql[3], "UPDATE _vt.blp_checkpoint SET pos='MariaDB/0-1-1235', time_updated=") ||
-		!strings.HasSuffix(sql[3], ", transaction_timestamp=72 WHERE source_shard_uid=1") ||
-		sql[4] != "INSERT INTO tablet VALUES(1)" ||
+		sql[3] != "INSERT INTO tablet VALUES(1)" ||
+		!strings.HasPrefix(sql[4], "UPDATE _vt.blp_checkpoint SET pos='MariaDB/0-1-1235', time_updated=") ||
+		!strings.HasSuffix(sql[4], ", transaction_timestamp=72 WHERE source_shard_uid=1") ||
 		sql[5] != "COMMIT" {
 		t.Errorf("Got wrong SQL: %#v", sql)
 	}

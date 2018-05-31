@@ -221,6 +221,40 @@ func TestNoQueryPlanCache(t *testing.T) {
 	qe.ClearQueryPlanCache()
 }
 
+func TestNoQueryPlanCacheDirective(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+
+	firstQuery := "select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_01"
+	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_01 where 1 != 1", &sqltypes.Result{})
+	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_02 where 1 != 1", &sqltypes.Result{})
+
+	testUtils := newTestUtils()
+	dbcfgs := testUtils.newDBConfigs(db)
+	qe := newTestQueryEngine(10, 10*time.Second, true, dbcfgs)
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	ctx := context.Background()
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+	qe.SetQueryPlanCacheCap(1)
+	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstPlan == nil {
+		t.Fatalf("plan should not be nil")
+	}
+	if qe.plans.Size() != 0 {
+		t.Fatalf("query plan cache should be 0")
+	}
+	qe.ClearQueryPlanCache()
+}
+
 func TestStatsURL(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

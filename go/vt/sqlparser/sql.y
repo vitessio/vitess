@@ -109,6 +109,7 @@ func forceEOF(yylex interface{}) {
   partSpec      *PartitionSpec
   vindexParam   VindexParam
   vindexParams  []VindexParam
+  showFilter    *ShowFilter
 }
 
 %token LEX_ERROR
@@ -174,10 +175,10 @@ func forceEOF(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES
+%token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES EXTENDED FULL PROCESSLIST
 
 // SET tokens
-%token <bytes> NAMES CHARSET GLOBAL SESSION
+%token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
@@ -245,12 +246,14 @@ func forceEOF(yylex interface{}) {
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
-%type <setExprs> set_list
+%type <setExprs> set_list transaction_chars
 %type <bytes> charset_or_character_set
 %type <updateExpr> update_expression
-%type <setExpr> set_expression
+%type <setExpr> set_expression transaction_char isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
+%type <str> extended_opt full_opt from_database_opt tables_or_processlist
+%type <showFilter> like_or_where_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
@@ -460,11 +463,61 @@ set_statement:
   SET comment_opt set_list
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
-   }
+  }
 | SET comment_opt set_session_or_global set_list
   {
     $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $4}
-   }
+  }
+| SET comment_opt set_session_or_global TRANSACTION transaction_chars
+  {
+    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $5}
+  }
+| SET comment_opt TRANSACTION transaction_chars
+  {
+    $$ = &Set{Comments: Comments($2), Exprs: $4}
+  }
+
+transaction_chars:
+  transaction_char
+  {
+    $$ = SetExprs{$1}
+  }
+| transaction_chars ',' transaction_char
+  {
+    $$ = append($$, $3)
+  }
+
+transaction_char:
+  ISOLATION LEVEL isolation_level
+  {
+    $$ = $3
+  }
+| READ WRITE
+  {
+    $$ = &SetExpr{Name: NewColIdent("tx_read_only"), Expr: NewIntVal([]byte("0"))}
+  }
+| READ ONLY
+  {
+    $$ = &SetExpr{Name: NewColIdent("tx_read_only"), Expr: NewIntVal([]byte("1"))}
+  }
+
+isolation_level:
+  REPEATABLE READ
+  {
+    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("repeatable read"))}
+  }
+| READ COMMITTED
+  {
+    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("read committed"))}
+  }
+| READ UNCOMMITTED
+  {
+    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("read uncommitted"))}
+  }
+| SERIALIZABLE
+  {
+    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("serializable"))}
+  }
 
 set_session_or_global:
   SESSION
@@ -1318,9 +1371,15 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW TABLES ddl_force_eof
+| SHOW extended_opt full_opt tables_or_processlist from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    // this is ugly, but I couldn't find a better way for now
+    if $4 == "processlist" {
+      $$ = &Show{Type: $4}
+    } else {
+      showTablesOpt := &ShowTablesOpt{Extended: $2, Full:$3, DbName:$5, Filter:$6}
+      $$ = &Show{Type: $4, ShowTablesOpt: showTablesOpt}
+    }
   }
 | SHOW show_session_or_global VARIABLES ddl_force_eof
   {
@@ -1359,6 +1418,64 @@ show_statement:
 | SHOW ID ddl_force_eof
   {
     $$ = &Show{Type: string($2)}
+  }
+
+tables_or_processlist:
+  TABLES
+  {
+    $$ = string($1)
+  }
+| PROCESSLIST
+  {
+    $$ = string($1)
+  }
+
+extended_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| EXTENDED
+  {
+    $$ = "extended "
+  }
+
+full_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| FULL
+  {
+    $$ = "full "
+  }
+
+from_database_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| FROM table_id
+  {
+    $$ = $2.v
+  }
+| IN table_id
+  {
+    $$ = $2.v
+  }
+
+like_or_where_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| LIKE STRING
+  {
+    $$ = &ShowFilter{Like:string($2)}
+  }
+| WHERE expression
+  {
+    $$ = &ShowFilter{Filter:$2}
   }
 
 show_session_or_global:
@@ -2663,7 +2780,11 @@ set_list:
   }
 
 set_expression:
-  reserved_sql_id '=' expression
+  reserved_sql_id '=' ON
+  {
+    $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("on"))}
+  }
+| reserved_sql_id '=' expression
   {
     $$ = &SetExpr{Name: $1, Expr: $3}
   }
@@ -2916,6 +3037,7 @@ non_reserved_keyword:
 | CHARSET
 | COMMENT_KEYWORD
 | COMMIT
+| COMMITTED
 | DATE
 | DATETIME
 | DECIMAL
@@ -2931,12 +3053,14 @@ non_reserved_keyword:
 | GLOBAL
 | INT
 | INTEGER
+| ISOLATION
 | JSON
 | KEY_BLOCK_SIZE
 | KEYS
 | LANGUAGE
 | LAST_INSERT_ID
 | LESS
+| LEVEL
 | LINESTRING
 | LONGBLOB
 | LONGTEXT
@@ -2951,6 +3075,7 @@ non_reserved_keyword:
 | NCHAR
 | NUMERIC
 | OFFSET
+| ONLY
 | OPTIMIZE
 | PARTITION
 | POINT
@@ -2958,11 +3083,14 @@ non_reserved_keyword:
 | PRIMARY
 | PROCEDURE
 | QUERY
+| READ
 | REAL
 | REORGANIZE
 | REPAIR
+| REPEATABLE
 | ROLLBACK
 | SESSION
+| SERIALIZABLE
 | SHARE
 | SIGNED
 | SMALLINT
@@ -2979,6 +3107,7 @@ non_reserved_keyword:
 | TRANSACTION
 | TRIGGER
 | TRUNCATE
+| UNCOMMITTED
 | UNSIGNED
 | UNUSED
 | VARBINARY
@@ -2992,6 +3121,7 @@ non_reserved_keyword:
 | VITESS_TABLETS
 | VSCHEMA_TABLES
 | WITH
+| WRITE
 | YEAR
 | ZEROFILL
 

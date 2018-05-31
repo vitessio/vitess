@@ -264,12 +264,9 @@ func (plan *Plan) setTable(tableName sqlparser.TableIdent, tables map[string]*sc
 }
 
 // Build builds a plan based on the schema.
-func Build(sql string, tables map[string]*schema.Table) (*Plan, error) {
-	statement, err := sqlparser.Parse(sql)
-	if err != nil {
-		return nil, err
-	}
+func Build(statement sqlparser.Statement, tables map[string]*schema.Table) (*Plan, error) {
 	var plan *Plan
+	var err error
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		plan, err = &Plan{

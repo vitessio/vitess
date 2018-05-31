@@ -19,6 +19,7 @@ package mysql
 
 import (
 	"fmt"
+	"io"
 	"time"
 
 	"golang.org/x/net/context"
@@ -38,6 +39,14 @@ func (mariadbFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
 	}
 
 	return parseMariadbGTIDSet(qr.Rows[0][0].ToString())
+}
+
+func (mariadbFlavor) startSlaveCommand() string {
+	return "START SLAVE"
+}
+
+func (mariadbFlavor) stopSlaveCommand() string {
+	return "STOP SLAVE"
 }
 
 // sendBinlogDumpCommand is part of the Flavor interface.
@@ -148,7 +157,17 @@ func (mariadbFlavor) waitUntilPositionCommand(ctx context.Context, pos Position)
 	return fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s')", pos), nil
 }
 
-// makeBinlogEvent is part of the Flavor interface.
-func (mariadbFlavor) makeBinlogEvent(buf []byte) BinlogEvent {
-	return NewMariadbBinlogEvent(buf)
+// readBinlogEvent is part of the Flavor interface.
+func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
+	result, err := c.ReadPacket()
+	if err != nil {
+		return nil, err
+	}
+	switch result[0] {
+	case EOFPacket:
+		return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", io.EOF)
+	case ErrPacket:
+		return nil, ParseErrorPacket(result)
+	}
+	return NewMariadbBinlogEvent(result[1:]), nil
 }

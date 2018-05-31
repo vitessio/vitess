@@ -165,6 +165,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	var l2vtgate *L2VTGate
 	if !*disableLocalGateway {
 		gw = gateway.GetCreator()(hc, serv, cell, retryCount)
+		gw.RegisterStats()
 		if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
 			log.Fatalf("gateway.WaitForTablets failed: %v", err)
 		}

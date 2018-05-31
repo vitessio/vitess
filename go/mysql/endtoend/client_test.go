@@ -9,6 +9,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 // TestKill opens a connection, issues a command that
@@ -138,6 +139,60 @@ func TestClientFoundRows(t *testing.T) {
 	}
 	if qr.RowsAffected != 1 {
 		t.Errorf("Second update: RowsAffected: %d, want 1", qr.RowsAffected)
+	}
+}
+
+func TestMultiResult(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	expectNoError(t, err)
+	defer conn.Close()
+
+	qr, more, err := conn.ExecuteFetchMulti("select 1 from dual; set autocommit=1; select 1 from dual", 10, true)
+	expectNoError(t, err)
+	expectFlag(t, "ExecuteMultiFetch(multi result)", more, true)
+	expectRows(t, "ExecuteMultiFetch(multi result)", qr, 1)
+
+	qr, more, err = conn.ReadQueryResult(10, true)
+	expectNoError(t, err)
+	expectFlag(t, "ReadQueryResult(1)", more, true)
+	expectRows(t, "ReadQueryResult(1)", qr, 0)
+
+	qr, more, err = conn.ReadQueryResult(10, true)
+	expectNoError(t, err)
+	expectFlag(t, "ReadQueryResult(2)", more, false)
+	expectRows(t, "ReadQueryResult(2)", qr, 1)
+
+	qr, more, err = conn.ExecuteFetchMulti("select 1 from dual", 10, true)
+	expectNoError(t, err)
+	expectFlag(t, "ExecuteMultiFetch(single result)", more, false)
+	expectRows(t, "ExecuteMultiFetch(single result)", qr, 1)
+
+	qr, more, err = conn.ExecuteFetchMulti("set autocommit=1", 10, true)
+	expectNoError(t, err)
+	expectFlag(t, "ExecuteMultiFetch(no result)", more, false)
+	expectRows(t, "ExecuteMultiFetch(no result)", qr, 0)
+}
+
+func expectNoError(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func expectRows(t *testing.T, msg string, result *sqltypes.Result, want int) {
+	t.Helper()
+	if int(result.RowsAffected) != want {
+		t.Errorf("%s: %d, want %d", msg, result.RowsAffected, want)
+	}
+}
+
+func expectFlag(t *testing.T, msg string, flag, want bool) {
+	t.Helper()
+	if flag != want {
+		// We cannot continue the test if flag is incorrect.
+		t.Fatalf("%s: %v, want: %v", msg, flag, want)
 	}
 }
 

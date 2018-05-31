@@ -38,7 +38,6 @@ public class Constants {
     public static final Topodata.TabletType DEFAULT_TABLET_TYPE = Topodata.TabletType.MASTER;
     public static final String LITERAL_V = "v";
     public static final String LITERAL_SINGLE_QUOTE = "'";
-    public static final String SQL_S = "s";
     public static final int DRIVER_MAJOR_VERSION = 2;
     public static final int DRIVER_MINOR_VERSION = 2;
     public static final int MAX_BUFFER_SIZE = 65535;

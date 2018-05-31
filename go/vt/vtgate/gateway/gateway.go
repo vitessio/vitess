@@ -64,6 +64,9 @@ type Gateway interface {
 	// - any other error: log.Fatalf out.
 	WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error
 
+	// RegisterStats registers exported stats for the gateway
+	RegisterStats()
+
 	// CacheStatus returns a list of TabletCacheStatus per shard / tablet type.
 	CacheStatus() TabletCacheStatusList
 }

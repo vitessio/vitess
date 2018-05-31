@@ -707,7 +707,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		// now the full fractional digits
 		for i := 0; i < frac0; i++ {
 			val = binary.BigEndian.Uint32(d[pos : pos+4])
-			fmt.Fprintf(txt, "%9d", val)
+			fmt.Fprintf(txt, "%09d", val)
 			pos += 4
 		}
 
@@ -723,16 +723,16 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			if frac0x == 1 {
 				fmt.Fprintf(txt, "%1d", val)
 			} else {
-				fmt.Fprintf(txt, "%2d", val)
+				fmt.Fprintf(txt, "%02d", val)
 			}
 		case 2:
 			// two bytes, 3 or 4 digits
 			val = uint32(d[pos])<<8 +
 				uint32(d[pos+1])
 			if frac0x == 3 {
-				fmt.Fprintf(txt, "%3d", val)
+				fmt.Fprintf(txt, "%03d", val)
 			} else {
-				fmt.Fprintf(txt, "%4d", val)
+				fmt.Fprintf(txt, "%04d", val)
 			}
 		case 3:
 			// 3 bytes, 5 or 6 digits
@@ -740,9 +740,9 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 				uint32(d[pos+1])<<8 +
 				uint32(d[pos+2])
 			if frac0x == 5 {
-				fmt.Fprintf(txt, "%5d", val)
+				fmt.Fprintf(txt, "%05d", val)
 			} else {
-				fmt.Fprintf(txt, "%6d", val)
+				fmt.Fprintf(txt, "%06d", val)
 			}
 		case 4:
 			// 4 bytes, 7 or 8 digits (9 digits would be a full)
@@ -751,9 +751,9 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 				uint32(d[pos+2])<<8 +
 				uint32(d[pos+3])
 			if frac0x == 7 {
-				fmt.Fprintf(txt, "%7d", val)
+				fmt.Fprintf(txt, "%07d", val)
 			} else {
-				fmt.Fprintf(txt, "%8d", val)
+				fmt.Fprintf(txt, "%08d", val)
 			}
 		}
 
