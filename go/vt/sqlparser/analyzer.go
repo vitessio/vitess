@@ -315,7 +315,7 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 		case *SQLVal:
 			switch expr.Type {
 			case StrVal:
-				result[setKey] = string(expr.Val)
+				result[setKey] = strings.ToLower(string(expr.Val))
 			case IntVal:
 				num, err := strconv.ParseInt(string(expr.Val), 0, 64)
 				if err != nil {
