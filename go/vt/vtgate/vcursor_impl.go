@@ -128,6 +128,11 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	return ks.Keyspace, nil
 }
 
+// TargetString returns the current TargetString of the session.
+func (vc *vcursorImpl) TargetString() string {
+	return vc.safeSession.TargetString
+}
+
 // Execute performs a V3 level execution of the query.
 func (vc *vcursorImpl) Execute(method string, query string, BindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
 	qr, err := vc.executor.Execute(vc.ctx, method, vc.safeSession, vc.marginComments.Leading+query+vc.marginComments.Trailing, BindVars)

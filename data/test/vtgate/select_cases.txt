@@ -143,6 +143,22 @@
   }
 }
 
+# database calls should be substituted
+"select database() from dual"
+{
+  "Original": "select database() from dual",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select 'targetString' from dual",
+    "FieldQuery": "select 'targetString' from dual where 1 != 1"
+  }
+}
+
+
 # nextval for simple route
 "select next value from user"
 "NEXT used on a sharded table"
