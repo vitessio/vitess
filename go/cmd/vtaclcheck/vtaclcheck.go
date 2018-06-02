@@ -107,9 +107,5 @@ func parseAndRun() error {
 		return err
 	}
 
-	if err := vtaclcheck.Run(); err != nil {
-		return err
-	}
-
-	return nil
+	return vtaclcheck.Run()
 }
