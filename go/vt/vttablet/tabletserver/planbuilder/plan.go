@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -36,6 +37,11 @@ var (
 
 	// PassthroughDMLs will return PlanPassDML for all update or delete statements
 	PassthroughDMLs = false
+
+	// Although GET_LOCK() can be unsafe with server-side connection pooling, some people migrating
+	// to vitess are comfortable with that risk. It's safer to use row locks, which have the same
+	// behavior in vitess as direct mysql.
+	allowNamedLocks = flag.Bool("allow_named_locks", false, "Allows GET_LOCK(), which is unsafe with connection pooling")
 )
 
 //_______________________________________________
@@ -366,10 +372,14 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 // a call to GET_LOCK(), which is unsafe with server-side connection pooling.
 // For more background, see https://github.com/vitessio/vitess/issues/3631.
 func checkForPoolingUnsafeConstructs(expr sqlparser.SQLNode) error {
+	if *allowNamedLocks {
+		return nil
+	}
+
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		if f, ok := node.(*sqlparser.FuncExpr); ok {
 			if f.Name.Lowered() == "get_lock" {
-				return false, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "get_lock() not allowed")
+				return false, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "get_lock() not allowed without --allow_named_locks")
 			}
 		}
 
