@@ -340,12 +340,12 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			if err != nil {
 				return pos, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 			}
-			newpos := mysql.AppendGTID(pos, gtid)
+			oldpos := pos
+			pos = mysql.AppendGTID(pos, gtid)
 			// If the event is received outside of a transaction, it must
 			// be sent. Otherwise, it will get lost and the targets will go out
 			// of sync.
-			if autocommit && !pos.Equal(newpos) {
-				pos = newpos
+			if autocommit && !pos.Equal(oldpos) {
 				if err = commit(ev.Timestamp()); err != nil {
 					return pos, err
 				}
