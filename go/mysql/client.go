@@ -255,7 +255,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	}
 
 	// Password encryption.
-	scrambledPassword := scramblePassword(salt, []byte(params.Pass))
+	scrambledPassword := ScramblePassword(salt, []byte(params.Pass))
 
 	// Build and send our handshake response 41.
 	// Note this one will never have SSL flag on.
