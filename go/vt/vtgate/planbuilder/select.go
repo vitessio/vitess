@@ -119,11 +119,11 @@ func (pb *primitiveBuilder) pushFilter(boolExpr sqlparser.Expr, whereType string
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
-		origin, err := pb.findOrigin(filter)
+		origin, expr, err := pb.findOrigin(filter)
 		if err != nil {
 			return err
 		}
-		if err := pb.bldr.PushFilter(pb, filter, whereType, origin); err != nil {
+		if err := pb.bldr.PushFilter(pb, expr, whereType, origin); err != nil {
 			return err
 		}
 	}
@@ -168,10 +168,11 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 	for i, node := range selectExprs {
 		switch node := node.(type) {
 		case *sqlparser.AliasedExpr:
-			origin, err := pb.findOrigin(node.Expr)
+			origin, expr, err := pb.findOrigin(node.Expr)
 			if err != nil {
 				return nil, err
 			}
+			node.Expr = expr
 			resultColumns[i], _, err = pb.bldr.PushSelect(node, origin)
 			if err != nil {
 				return nil, err
