@@ -37,12 +37,12 @@ var (
 
 // convertError converts a context error into a topo error. All errors
 // are either application-level errors, or context errors.
-func convertError(err error) error {
+func convertError(err error, nodePath string) error {
 	switch err {
 	case context.Canceled:
-		return topo.ErrInterrupted
+		return topo.NewError(topo.Interrupted, nodePath)
 	case context.DeadlineExceeded:
-		return topo.ErrTimeout
+		return topo.NewError(topo.Timeout, nodePath)
 	}
 	return err
 }

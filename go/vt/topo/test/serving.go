@@ -63,7 +63,7 @@ func checkSrvKeyspace(t *testing.T, ts *topo.Server) {
 	if err := ts.UpdateSrvKeyspace(ctx, LocalCellName, "test_keyspace", srvKeyspace); err != nil {
 		t.Errorf("UpdateSrvKeyspace(1): %v", err)
 	}
-	if _, err := ts.GetSrvKeyspace(ctx, LocalCellName, "test_keyspace666"); err != topo.ErrNoNode {
+	if _, err := ts.GetSrvKeyspace(ctx, LocalCellName, "test_keyspace666"); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("GetSrvKeyspace(invalid): %v", err)
 	}
 	if k, err := ts.GetSrvKeyspace(ctx, LocalCellName, "test_keyspace"); err != nil || !proto.Equal(srvKeyspace, k) {
@@ -85,7 +85,7 @@ func checkSrvKeyspace(t *testing.T, ts *topo.Server) {
 	if err := ts.DeleteSrvKeyspace(ctx, LocalCellName, "unknown_keyspace_so_far"); err != nil {
 		t.Fatalf("DeleteSrvKeyspace: %v", err)
 	}
-	if _, err := ts.GetSrvKeyspace(ctx, LocalCellName, "unknown_keyspace_so_far"); err != topo.ErrNoNode {
+	if _, err := ts.GetSrvKeyspace(ctx, LocalCellName, "unknown_keyspace_so_far"); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("GetSrvKeyspace(deleted) got %v, want ErrNoNode", err)
 	}
 }
@@ -95,7 +95,7 @@ func checkSrvVSchema(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
 
 	// check GetSrvVSchema returns topo.ErrNoNode if no SrvVSchema
-	if _, err := ts.GetSrvVSchema(ctx, LocalCellName); err != topo.ErrNoNode {
+	if _, err := ts.GetSrvVSchema(ctx, LocalCellName); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("GetSrvVSchema(not set): %v", err)
 	}
 

@@ -46,7 +46,7 @@ func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo
 	if len(keys) == 0 {
 		// No key starts with this prefix, means the directory
 		// doesn't exist.
-		return nil, topo.ErrNoNode
+		return nil, topo.NewError(topo.NoNode, nodePath)
 	}
 
 	prefixLen := len(nodePath)

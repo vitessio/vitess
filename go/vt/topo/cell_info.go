@@ -45,10 +45,10 @@ func pathForCellInfo(cell string) string {
 // sorted by name.
 func (ts *Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
 	entries, err := ts.globalCell.ListDir(ctx, CellsPath, false /*full*/)
-	switch err {
-	case ErrNoNode:
+	switch {
+	case IsErrType(err, NoNode):
 		return nil, nil
-	case nil:
+	case err == nil:
 		return DirEntriesToStringArray(entries), nil
 	default:
 		return nil, err
@@ -102,12 +102,12 @@ func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update 
 
 		// Read the file, unpack the contents.
 		contents, version, err := ts.globalCell.Get(ctx, filePath)
-		switch err {
-		case nil:
+		switch {
+		case err == nil:
 			if err := proto.Unmarshal(contents, ci); err != nil {
 				return err
 			}
-		case ErrNoNode:
+		case IsErrType(err, NoNode):
 			// Nothing to do.
 		default:
 			return err
@@ -115,7 +115,7 @@ func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update 
 
 		// Call update method.
 		if err = update(ci); err != nil {
-			if err == ErrNoUpdateNeeded {
+			if IsErrType(err, NoUpdateNeeded) {
 				return nil
 			}
 			return err
@@ -126,7 +126,7 @@ func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update 
 		if err != nil {
 			return err
 		}
-		if _, err = ts.globalCell.Update(ctx, filePath, contents, version); err != ErrBadVersion {
+		if _, err = ts.globalCell.Update(ctx, filePath, contents, version); !IsErrType(err, BadVersion) {
 			// This includes the 'err=nil' case.
 			return err
 		}

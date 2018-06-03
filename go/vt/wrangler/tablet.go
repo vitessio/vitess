@@ -54,7 +54,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 		si, err = wr.ts.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard)
 	} else {
 		si, err = wr.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
-		if err == topo.ErrNoNode {
+		if topo.IsErrType(err, topo.NoNode) {
 			return fmt.Errorf("missing parent shard, use -parent option to create it, or CreateKeyspace / CreateShard")
 		}
 	}
@@ -76,7 +76,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 	}
 
 	err = wr.ts.CreateTablet(ctx, tablet)
-	if err == topo.ErrNodeExists && allowUpdate {
+	if topo.IsErrType(err, topo.NodeExists) && allowUpdate {
 		// Try to update then
 		oldTablet, err := wr.ts.GetTablet(ctx, tablet.Alias)
 		if err != nil {
@@ -130,7 +130,7 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 		_, err = wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(si *topo.ShardInfo) error {
 			if !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
 				wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, topoproto.TabletAliasString(si.MasterAlias))
-				return topo.ErrNoUpdateNeeded
+				return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
 			}
 			si.MasterAlias = nil
 			return nil

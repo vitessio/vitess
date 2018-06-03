@@ -62,7 +62,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 		}
 
 		if !wasUpdated {
-			return topo.ErrNoUpdateNeeded
+			return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
 		}
 		return nil
 	})
@@ -128,7 +128,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 	// the topology anyway.
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
-		if err == topo.ErrNoNode {
+		if topo.IsErrType(err, topo.NoNode) {
 			wr.Logger().Infof("Shard %v/%v doesn't seem to exist, cleaning up any potential leftover", keyspace, shard)
 			return wr.ts.DeleteShard(ctx, keyspace, shard)
 		}
@@ -148,8 +148,8 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 		// Get the ShardReplication object for that cell. Try
 		// to find all tablets that may belong to our shard.
 		sri, err := wr.ts.GetShardReplication(ctx, cell, keyspace, shard)
-		switch err {
-		case topo.ErrNoNode:
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
 			// No ShardReplication object. It means the
 			// topo is inconsistent. Let's read all the
 			// tablets for that cell, and if we find any
@@ -159,7 +159,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 			if err != nil {
 				return fmt.Errorf("GetTabletsByCell(%v) failed: %v", cell, err)
 			}
-		case nil:
+		case err == nil:
 			// We found a ShardReplication object. We
 			// trust it to have all tablet records.
 			aliases = make([]*topodatapb.TabletAlias, len(sri.Nodes))
@@ -198,7 +198,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 				// We don't care about scrapping or updating the replication graph,
 				// because we're about to delete the entire replication graph.
 				wr.Logger().Infof("Deleting tablet %v", tabletAlias)
-				if err := wr.TopoServer().DeleteTablet(ctx, tabletInfo.Alias); err != nil && err != topo.ErrNoNode {
+				if err := wr.TopoServer().DeleteTablet(ctx, tabletInfo.Alias); err != nil && !topo.IsErrType(err, topo.NoNode) {
 					// We don't want to continue if a DeleteTablet fails for
 					// any good reason (other than missing tablet, in which
 					// case it's just a topology server inconsistency we can
@@ -217,7 +217,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 	// Try to remove the replication graph and serving graph in each cell,
 	// regardless of its existence.
 	for _, cell := range shardInfo.Cells {
-		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil && err != topo.ErrNoNode {
+		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil && !topo.IsErrType(err, topo.NoNode) {
 			wr.Logger().Warningf("Cannot delete ShardReplication in cell %v for %v/%v: %v", cell, keyspace, shard, err)
 		}
 	}
@@ -252,15 +252,15 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 
 	// get the ShardReplication object in the cell
 	sri, err := wr.ts.GetShardReplication(ctx, cell, keyspace, shard)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		if recursive {
 			wr.Logger().Infof("Deleting all tablets in shard %v/%v", keyspace, shard)
 			for _, node := range sri.Nodes {
 				// We don't care about scrapping or updating the replication graph,
 				// because we're about to delete the entire replication graph.
 				wr.Logger().Infof("Deleting tablet %v", topoproto.TabletAliasString(node.TabletAlias))
-				if err := wr.TopoServer().DeleteTablet(ctx, node.TabletAlias); err != nil && err != topo.ErrNoNode {
+				if err := wr.TopoServer().DeleteTablet(ctx, node.TabletAlias); err != nil && !topo.IsErrType(err, topo.NoNode) {
 					return fmt.Errorf("can't delete tablet %v: %v", topoproto.TabletAliasString(node.TabletAlias), err)
 				}
 			}
@@ -269,12 +269,12 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 		}
 
 		// ShardReplication object is now useless, remove it
-		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil && err != topo.ErrNoNode {
+		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil && !topo.IsErrType(err, topo.NoNode) {
 			return fmt.Errorf("error deleting ShardReplication object in cell %v: %v", cell, err)
 		}
 
 		// we keep going
-	case topo.ErrNoNode:
+	case topo.IsErrType(err, topo.NoNode):
 		// no ShardReplication object, we keep going
 	default:
 		// we can't get the object, assume topo server is down there,
@@ -290,7 +290,7 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 		// since no lock is taken, protect against corner cases.
 		if len(si.Cells) == 0 {
-			return topo.ErrNoUpdateNeeded
+			return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
 		}
 		var newCells []string
 		for _, c := range si.Cells {

@@ -267,7 +267,7 @@ func TestAPI(t *testing.T) {
 		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ]\n}\n\n"
 		}`},
 		{"POST", "vtctl/", `["GetKeyspace","does_not_exist"]`, `{
-		   "Error": "node doesn't exist",
+			"Error": "node doesn't exist: keyspaces/does_not_exist/Keyspace",
 		   "Output": ""
 		}`},
 		{"POST", "vtctl/", `["Panic"]`, `uncaught panic: this command panics on purpose`},

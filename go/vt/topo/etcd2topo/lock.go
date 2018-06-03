@@ -56,7 +56,7 @@ func (s *Server) newUniqueEphemeralKV(ctx context.Context, cli *clientv3.Client,
 			// node behind for *leaseTTL time.
 			cli.Delete(context.Background(), newKey)
 		}
-		return "", 0, convertError(err)
+		return "", 0, convertError(err, newKey)
 	}
 	if !txnresp.Succeeded {
 		// The key already exists, that should not happen.
@@ -74,7 +74,7 @@ func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePa
 	opts := append(clientv3.WithLastRev(), clientv3.WithMaxModRev(revision-1))
 	lastKey, err := cli.Get(ctx, nodePath+"/", opts...)
 	if err != nil {
-		return false, convertError(err)
+		return false, convertError(err, nodePath)
 	}
 	if len(lastKey.Kvs) == 0 {
 		// No older key, we're done waiting.
@@ -93,7 +93,7 @@ func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePa
 
 	select {
 	case <-ctx.Done():
-		return false, convertError(ctx.Err())
+		return false, convertError(ctx.Err(), nodePath)
 	case wresp := <-wc:
 		for _, ev := range wresp.Events {
 			if ev.Type == mvccpb.DELETE {
@@ -123,7 +123,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		// easiest way to do this is to return convertError(err).
 		// It may lose some of the context, if this is an issue,
 		// maybe logging the error would work here.
-		return nil, convertError(err)
+		return nil, convertError(err, dirPath)
 	}
 
 	return s.lock(ctx, dirPath, contents)
@@ -136,11 +136,11 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string) (topo.Lock
 	// Get a lease, set its KeepAlive.
 	lease, err := s.cli.Grant(ctx, int64(*leaseTTL))
 	if err != nil {
-		return nil, convertError(err)
+		return nil, convertError(err, nodePath)
 	}
 	leaseKA, err := s.cli.KeepAlive(ctx, lease.ID)
 	if err != nil {
-		return nil, convertError(err)
+		return nil, convertError(err, nodePath)
 	}
 	go func() {
 		// Drain the lease keepAlive channel, we're not
@@ -181,7 +181,7 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string) (topo.Lock
 func (ld *etcdLockDescriptor) Check(ctx context.Context) error {
 	_, err := ld.s.cli.KeepAliveOnce(ctx, ld.leaseID)
 	if err != nil {
-		return convertError(err)
+		return convertError(err, "lease")
 	}
 	return nil
 }
@@ -190,7 +190,7 @@ func (ld *etcdLockDescriptor) Check(ctx context.Context) error {
 func (ld *etcdLockDescriptor) Unlock(ctx context.Context) error {
 	_, err := ld.s.cli.Revoke(ctx, ld.leaseID)
 	if err != nil {
-		return convertError(err)
+		return convertError(err, "lease")
 	}
 	return nil
 }
