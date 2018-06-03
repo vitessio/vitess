@@ -98,7 +98,12 @@ func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, repl
 			defer wg.Done()
 			concurrency.Acquire()
 			defer concurrency.Release()
-			if err := wr.tmc.ReloadSchema(ctx, tablet, replicationPos); err != nil {
+			pos := replicationPos
+			// Master is always up-to-date. So, don't wait for position.
+			if tablet.Type == topodatapb.TabletType_MASTER {
+				pos = ""
+			}
+			if err := wr.tmc.ReloadSchema(ctx, tablet, pos); err != nil {
 				wr.logger.Warningf(
 					"Failed to reload schema on slave tablet %v in %v/%v (use vtctl ReloadSchema to try again): %v",
 					topoproto.TabletAliasString(tablet.Alias), keyspace, shard, err)
