@@ -120,7 +120,7 @@ func (cleaner *Cleaner) RemoveActionByName(name, target string) error {
 			return nil
 		}
 	}
-	return topo.ErrNoNode
+	return topo.NewError(topo.NoNode, name+":"+target)
 }
 
 //

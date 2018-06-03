@@ -111,7 +111,7 @@ func (c *TeeConn) Create(ctx context.Context, filePath string, contents []byte) 
 	// This is critical enough that we want to fail. However, we support
 	// an unconditional update if the file already exists.
 	_, err = c.secondary.Create(ctx, filePath, contents)
-	if err == topo.ErrNodeExists {
+	if topo.IsErrType(err, topo.NodeExists) {
 		_, err = c.secondary.Update(ctx, filePath, contents, nil)
 	}
 	if err != nil {
@@ -149,7 +149,7 @@ func (c *TeeConn) Delete(ctx context.Context, filePath string, version topo.Vers
 	}
 
 	// Always do an unconditonal delete on secondary.
-	if err := c.secondary.Delete(ctx, filePath, nil); err != nil && err != topo.ErrNoNode {
+	if err := c.secondary.Delete(ctx, filePath, nil); err != nil && !topo.IsErrType(err, topo.NoNode) {
 		// Secondary didn't work, and the node wasn't gone already.
 		log.Warningf("secondary.Delete(%v) failed: %v", filePath, err)
 	}

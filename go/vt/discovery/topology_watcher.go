@@ -79,10 +79,10 @@ func NewCellTabletsWatcher(topoServer *topo.Server, tr TabletRecorder, cell stri
 func NewShardReplicationWatcher(topoServer *topo.Server, tr TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) *TopologyWatcher {
 	return NewTopologyWatcher(topoServer, tr, cell, refreshInterval, true /* refreshKnownTablets */, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error) {
 		sri, err := tw.topoServer.GetShardReplication(tw.ctx, tw.cell, keyspace, shard)
-		switch err {
-		case nil:
+		switch {
+		case err == nil:
 			// we handle this case after this switch block
-		case topo.ErrNoNode:
+		case topo.IsErrType(err, topo.NoNode):
 			// this is not an error
 			return nil, nil
 		default:

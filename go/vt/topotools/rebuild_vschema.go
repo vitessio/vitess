@@ -59,7 +59,7 @@ func RebuildVSchema(ctx context.Context, log logutil.Logger, ts *topo.Server, ce
 			defer wg.Done()
 
 			k, err := ts.GetVSchema(ctx, keyspace)
-			if err == topo.ErrNoNode {
+			if topo.IsErrType(err, topo.NoNode) {
 				err = nil
 				k = &vschemapb.Keyspace{}
 			}

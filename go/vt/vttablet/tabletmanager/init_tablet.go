@@ -97,8 +97,8 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		// master is in the process of taking over. In that case, it will let us
 		// know by forcibly updating the old master's tablet record.
 		oldTablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
-		switch err {
-		case topo.ErrNoNode:
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
 			// There's no existing tablet record, so we can assume
 			// no one has left us a message to step down.
 			tabletType = topodatapb.TabletType_MASTER
@@ -106,7 +106,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 			// assume that we are actually the MASTER and in case of a tiebreak,
 			// vtgate should prefer us.
 			agent.setExternallyReparentedTime(time.Now())
-		case nil:
+		case err == nil:
 			if oldTablet.Type == topodatapb.TabletType_MASTER {
 				// We're marked as master in the shard record,
 				// and our existing tablet record agrees.
@@ -125,7 +125,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 			si, err = agent.TopoServer.UpdateShardFields(ctx, *initKeyspace, shard, func(si *topo.ShardInfo) error {
 				if si.HasCell(agent.TabletAlias.Cell) {
 					// Someone else already did it.
-					return topo.ErrNoUpdateNeeded
+					return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
 				}
 				si.Cells = append(si.Cells, agent.TabletAlias.Cell)
 				return nil
@@ -171,10 +171,10 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	// Now try to create the record (it will also fix up the
 	// ShardReplication record if necessary).
 	err = agent.TopoServer.CreateTablet(ctx, tablet)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		// It worked, we're good.
-	case topo.ErrNodeExists:
+	case topo.IsErrType(err, topo.NodeExists):
 		// The node already exists, will just try to update
 		// it. So we read it first.
 		oldTablet, err := agent.TopoServer.GetTablet(ctx, tablet.Alias)

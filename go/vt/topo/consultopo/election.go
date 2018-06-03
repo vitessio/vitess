@@ -77,7 +77,7 @@ func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error
 	// If Stop was already called, mp.done is closed, so we are interrupted.
 	select {
 	case <-mp.done:
-		return nil, topo.ErrInterrupted
+		return nil, topo.NewError(topo.Interrupted, "mastership")
 	default:
 	}
 

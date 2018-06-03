@@ -39,12 +39,12 @@ func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo
 		clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend),
 		clientv3.WithKeysOnly())
 	if err != nil {
-		return nil, convertError(err)
+		return nil, convertError(err, dirPath)
 	}
 	if len(resp.Kvs) == 0 {
 		// No key starts with this prefix, means the directory
 		// doesn't exist.
-		return nil, topo.ErrNoNode
+		return nil, topo.NewError(topo.NoNode, nodePath)
 	}
 
 	prefixLen := len(nodePath)

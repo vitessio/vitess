@@ -36,7 +36,7 @@ func (zs *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]top
 
 	children, _, err := zs.conn.Children(ctx, zkPath)
 	if err != nil {
-		return nil, convertError(err)
+		return nil, convertError(err, zkPath)
 	}
 	sort.Strings(children)
 

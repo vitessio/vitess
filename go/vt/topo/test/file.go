@@ -61,7 +61,7 @@ func checkFileInCell(t *testing.T, conn topo.Conn, hasCells bool) {
 
 	// Get with no file -> ErrNoNode.
 	contents, version, err := conn.Get(ctx, "/myfile")
-	if err != topo.ErrNoNode {
+	if !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("Get(non-existent) didn't return ErrNoNode but: %v", err)
 	}
 
@@ -114,7 +114,7 @@ func checkFileInCell(t *testing.T, conn topo.Conn, hasCells bool) {
 	}
 
 	// Try to update again with wrong version, should fail.
-	if _, err = conn.Update(ctx, "/myfile", []byte{'b'}, version); err != topo.ErrBadVersion {
+	if _, err = conn.Update(ctx, "/myfile", []byte{'b'}, version); !topo.IsErrType(err, topo.BadVersion) {
 		t.Errorf("Update(bad version) didn't return ErrBadVersion but: %v", err)
 	}
 
@@ -148,7 +148,7 @@ func checkFileInCell(t *testing.T, conn topo.Conn, hasCells bool) {
 	}
 
 	// Try to delete with wrong version, should fail.
-	if err = conn.Delete(ctx, "/myfile", version); err != topo.ErrBadVersion {
+	if err = conn.Delete(ctx, "/myfile", version); !topo.IsErrType(err, topo.BadVersion) {
 		t.Errorf("Delete('/myfile', wrong version) returned bad error: %v", err)
 	}
 
@@ -162,7 +162,7 @@ func checkFileInCell(t *testing.T, conn topo.Conn, hasCells bool) {
 	checkListDir(ctx, t, conn, "/", expected)
 
 	// Try to delete again, should fail.
-	if err = conn.Delete(ctx, "/myfile", newVersion); err != topo.ErrNoNode {
+	if err = conn.Delete(ctx, "/myfile", newVersion); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("Delete(already gone) returned bad error: %v", err)
 	}
 

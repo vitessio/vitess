@@ -484,14 +484,14 @@ func (tc *TabletStatsCache) Unsubscribe(i int) error {
 func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.AggregateStats, error) {
 	e := tc.getEntry(target.Keyspace, target.Shard, target.TabletType)
 	if e == nil {
-		return nil, topo.ErrNoNode
+		return nil, topo.NewError(topo.NoNode, target.Keyspace+"/"+target.Shard+"@"+target.TabletType.String())
 	}
 
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if target.TabletType == topodatapb.TabletType_MASTER {
 		if len(e.aggregates) == 0 {
-			return nil, topo.ErrNoNode
+			return nil, topo.NewError(topo.NoNode, target.Keyspace+"/"+target.Shard+"@"+target.TabletType.String())
 		}
 		for _, agg := range e.aggregates {
 			return agg, nil
@@ -499,7 +499,7 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 	}
 	agg, ok := e.aggregates[target.Cell]
 	if !ok {
-		return nil, topo.ErrNoNode
+		return nil, topo.NewError(topo.NoNode, target.Keyspace+"/"+target.Shard+"@"+target.TabletType.String())
 	}
 	return agg, nil
 }
@@ -508,7 +508,7 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 func (tc *TabletStatsCache) GetMasterCell(keyspace, shard string) (cell string, err error) {
 	e := tc.getEntry(keyspace, shard, topodatapb.TabletType_MASTER)
 	if e == nil {
-		return "", topo.ErrNoNode
+		return "", topo.NewError(topo.NoNode, keyspace+"/"+shard+"@"+topodatapb.TabletType_MASTER.String())
 	}
 
 	e.mu.RLock()
@@ -516,7 +516,7 @@ func (tc *TabletStatsCache) GetMasterCell(keyspace, shard string) (cell string, 
 	for cell := range e.aggregates {
 		return cell, nil
 	}
-	return "", topo.ErrNoNode
+	return "", topo.NewError(topo.NoNode, keyspace+"/"+shard+"@"+topodatapb.TabletType_MASTER.String())
 }
 
 // Compile-time interface check.

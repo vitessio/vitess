@@ -35,7 +35,7 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 
 	n := c.factory.nodeByPath(c.cell, filePath)
 	if n == nil {
-		return &topo.WatchData{Err: topo.ErrNoNode}, nil, nil
+		return &topo.WatchData{Err: topo.NewError(topo.NoNode, filePath)}, nil, nil
 	}
 	if n.contents == nil {
 		// it's a directory
@@ -64,7 +64,7 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 
 		if w, ok := n.watches[watchIndex]; ok {
 			delete(n.watches, watchIndex)
-			w <- &topo.WatchData{Err: topo.ErrInterrupted}
+			w <- &topo.WatchData{Err: topo.NewError(topo.Interrupted, "watch")}
 			close(w)
 		}
 	}
