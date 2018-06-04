@@ -649,10 +649,11 @@ func (node *DBDDL) walkSubtree(visit Visit) error {
 }
 
 // DDL represents a CREATE, ALTER, DROP, RENAME or TRUNCATE statement.
-// Table is set for AlterStr, DropStr, RenameStr, TruncateStr
-// NewName is set for AlterStr, CreateStr, RenameStr.
-// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr
-// VindexCols is set for AddColVindexStr
+// Table is set for AlterStr, DropStr, TruncateStr.
+// NewName is set for AlterStr, CreateStr.
+// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr.
+// VindexCols is set for AddColVindexStr.
+// RenamePairs is set for RenameStr.
 type DDL struct {
 	Action        string
 	Table         TableName
@@ -662,6 +663,7 @@ type DDL struct {
 	PartitionSpec *PartitionSpec
 	VindexSpec    *VindexSpec
 	VindexCols    []ColIdent
+	RenamePairs   []*RenamePair
 }
 
 // DDL strings.
@@ -695,7 +697,12 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		}
 		buf.Myprintf("%s table%s %v", node.Action, exists, node.Table)
 	case RenameStr:
-		buf.Myprintf("%s table %v to %v", node.Action, node.Table, node.NewName)
+		buf.Myprintf("%s table ", node.Action)
+		var prefix string
+		for _, pair := range node.RenamePairs {
+			buf.Myprintf("%s%v", prefix, pair)
+			prefix = ", "
+		}
 	case AlterStr:
 		if node.PartitionSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.PartitionSpec)
@@ -732,6 +739,28 @@ func (node *DDL) walkSubtree(visit Visit) error {
 		visit,
 		node.Table,
 		node.NewName,
+	)
+}
+
+// RenamePair holds a table_name TO table_name
+type RenamePair struct {
+	From TableName
+	To   TableName
+}
+
+// Format formats the node.
+func (node *RenamePair) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v to %v", node.From, node.To)
+}
+
+func (node *RenamePair) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.From,
+		node.To,
 	)
 }
 
