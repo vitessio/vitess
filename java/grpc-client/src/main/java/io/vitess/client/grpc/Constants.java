@@ -21,7 +21,7 @@ package io.vitess.client.grpc;
  */
 public class Constants {
 
-    public static final String KEYSTORE_TYPE = "JKS";
+    public static final String DEFAULT_KEYSTORE_TYPE = "JKS";
 
     private Constants() {
 
