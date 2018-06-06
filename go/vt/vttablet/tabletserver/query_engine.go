@@ -162,6 +162,8 @@ type QueryEngine struct {
 
 	strictTransTables bool
 
+	disableConsolidator bool
+
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
 }
@@ -196,7 +198,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		time.Duration(config.IdleTimeout*1e9),
 		checker,
 	)
-
+	qe.disableConsolidator = config.DisableConsolidator
 	qe.consolidator = sync2.NewConsolidator()
 	qe.txSerializer = txserializer.New(config.EnableHotRowProtectionDryRun,
 		config.HotRowProtectionMaxQueueSize,

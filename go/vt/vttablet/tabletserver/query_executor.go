@@ -48,7 +48,6 @@ import (
 
 // TODO(sougou): remove after affected parties have transitioned to new behavior.
 var legacyTableACL = flag.Bool("legacy-table-acl", false, "deprecated: this flag can be used to revert to the older table ACL behavior, which checked access for at most one table")
-var disableConsolidator = flag.Bool("disable-consolidator", false, "passing this flag turns off the query consolidator")
 
 // QueryExecutor is used for executing a query request.
 type QueryExecutor struct {
@@ -789,7 +788,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 	if err != nil {
 		return nil, err
 	}
-	if !*disableConsolidator {
+	if !qre.tsv.qe.disableConsolidator {
 		q, original := qre.tsv.qe.consolidator.Create(string(sqlWithoutComments))
 		if original {
 			defer q.Broadcast()
