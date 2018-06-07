@@ -248,10 +248,7 @@ func analyzeBoolean(node sqlparser.Expr) (conditions []*sqlparser.ComparisonExpr
 		return analyzeBoolean(node.Expr)
 	case *sqlparser.ComparisonExpr:
 		switch {
-		case sqlparser.StringIn(
-			node.Operator,
-			sqlparser.EqualStr,
-			sqlparser.LikeStr):
+		case node.Operator == sqlparser.EqualStr:
 			if sqlparser.IsColName(node.Left) && sqlparser.IsValue(node.Right) {
 				return []*sqlparser.ComparisonExpr{node}
 			}
