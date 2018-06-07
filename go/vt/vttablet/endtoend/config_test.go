@@ -175,8 +175,8 @@ func TestDisableConsolidator(t *testing.T) {
 	if initial+1 != afterOne {
 		t.Errorf("expected one consolidation, but got: before consolidation count: %v; after consolidation count: %v", initial, afterOne)
 	}
-	framework.Server.SetConsolidatorDisabled(true)
-	defer framework.Server.SetConsolidatorDisabled(false)
+	framework.Server.SetConsolidatorEnabled(false)
+	defer framework.Server.SetConsolidatorEnabled(true)
 	var wg2 sync.WaitGroup
 	wg2.Add(2)
 	go func() {

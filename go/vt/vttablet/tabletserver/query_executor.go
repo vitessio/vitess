@@ -788,7 +788,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 	if err != nil {
 		return nil, err
 	}
-	if !qre.tsv.qe.disableConsolidator {
+	if qre.tsv.qe.enableConsolidator {
 		q, original := qre.tsv.qe.consolidator.Create(string(sqlWithoutComments))
 		if original {
 			defer q.Broadcast()
