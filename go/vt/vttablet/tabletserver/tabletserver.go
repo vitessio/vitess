@@ -2080,11 +2080,11 @@ func (tsv *TabletServer) GetTxPoolWaiterCap() int64 {
 	return tsv.te.txPool.waiterCap.Get()
 }
 
-// SetConsolidatorDisabled (true) will disable the query consolidator.
-// SetConsolidatorDisabled (false) will enable the query consolidator.
+// SetConsolidatorEnabled (true) will enable the query consolidator.
+// SetConsolidatorEnabled (false) will disable the query consolidator.
 // This function should only be used for testing.
-func (tsv *TabletServer) SetConsolidatorDisabled(disabled bool) {
-	tsv.qe.disableConsolidator = disabled
+func (tsv *TabletServer) SetConsolidatorEnabled(enabled bool) {
+	tsv.qe.enableConsolidator = enabled
 }
 
 // queryAsString returns a readable version of query+bind variables.
