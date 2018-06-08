@@ -17,6 +17,7 @@ limitations under the License.
 // This file contains useful data structures for RPCs in Vitess.
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/vtrpc";
 
 option java_package="io.vitess.proto";
 

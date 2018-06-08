@@ -17,6 +17,7 @@ limitations under the License.
 // Table ACL proto definitions.
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/tableacl";
 
 package tableacl;
 

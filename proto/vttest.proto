@@ -41,6 +41,7 @@ limitations under the License.
 //   'keyspaces { name: "test_keyspace" shards { name: "-80" } shards { name: "80-" } } keyspaces { name: "redirect" served_from: "test_keyspace" }'
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/vttest";
 
 package vttest;
 
