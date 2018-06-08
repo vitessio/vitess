@@ -79,7 +79,7 @@ func skipParenthesis(node sqlparser.Expr) sqlparser.Expr {
 //
 // If an expression has no references to the current query, then the left-most
 // origin is chosen as the default.
-func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (origin builder, err error) {
+func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (origin builder, pushExpr sqlparser.Expr, err error) {
 	highestOrigin := pb.bldr.First()
 	var subroutes []*route
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -120,30 +120,33 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (origin builder, err
 			subroutes = append(subroutes, subroute)
 			return false, nil
 		case *sqlparser.FuncExpr:
+			switch {
 			// If it's last_insert_id, ensure it's a single unsharded route.
-			if !node.Name.EqualString("last_insert_id") {
-				return true, nil
+			case node.Name.EqualString("last_insert_id"):
+				if rb, isRoute := pb.bldr.(*route); !isRoute || rb.ERoute.Keyspace.Sharded {
+					return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
+				}
+			case node.Name.EqualString("database"):
+				expr = sqlparser.ReplaceExpr(expr, node, sqlparser.NewStrVal([]byte(pb.vschema.TargetString())))
 			}
-			if rb, isRoute := pb.bldr.(*route); !isRoute || rb.ERoute.Keyspace.Sharded {
-				return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
-			}
+			return true, nil
 		}
 		return true, nil
 	}, expr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	highestRoute, isRoute := highestOrigin.(*route)
 	if !isRoute && len(subroutes) > 0 {
-		return nil, errors.New("unsupported: subquery cannot be merged with cross-shard subquery")
+		return nil, nil, errors.New("unsupported: subquery cannot be merged with cross-shard subquery")
 	}
 	for _, subroute := range subroutes {
 		if err := highestRoute.SubqueryCanMerge(pb, subroute); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		subroute.Redirect = highestRoute
 	}
-	return highestOrigin, nil
+	return highestOrigin, expr, nil
 }
 
 func hasSubquery(node sqlparser.SQLNode) bool {
