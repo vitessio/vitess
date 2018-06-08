@@ -21,9 +21,8 @@ import (
 	"encoding/hex"
 	"hash"
 	//	"hash/crc64"
+	"hash/crc32"
 	"os"
-
-	"vitess.io/vitess/go/cgzip"
 )
 
 // Use this to simulate failures in tests
@@ -62,13 +61,12 @@ func init() {
 //	return hex.EncodeToString(h.Sum(nil))
 //}
 
-// our hasher, implemented using cgzip crc32
 type hasher struct {
 	hash.Hash32
 }
 
 func newHasher() *hasher {
-	return &hasher{cgzip.NewCrc32()}
+	return &hasher{crc32.NewIEEE()}
 }
 
 func (h *hasher) HashString() string {
