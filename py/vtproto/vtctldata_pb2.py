@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtctldata.proto',
   package='vtctldata',
   syntax='proto3',
-  serialized_pb=_b('\n\x0fvtctldata.proto\x12\tvtctldata\x1a\rlogutil.proto\"B\n\x1a\x45xecuteVtctlCommandRequest\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\x12\x16\n\x0e\x61\x63tion_timeout\x18\x02 \x01(\x03\"<\n\x1b\x45xecuteVtctlCommandResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Eventb\x06proto3')
+  serialized_pb=_b('\n\x0fvtctldata.proto\x12\tvtctldata\x1a\rlogutil.proto\"B\n\x1a\x45xecuteVtctlCommandRequest\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\x12\x16\n\x0e\x61\x63tion_timeout\x18\x02 \x01(\x03\"<\n\x1b\x45xecuteVtctlCommandResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.EventB(Z&vitess.io/vitess/go/vt/proto/vtctldatab\x06proto3')
   ,
   dependencies=[logutil__pb2.DESCRIPTOR,])
 
@@ -115,4 +115,6 @@ ExecuteVtctlCommandResponse = _reflection.GeneratedProtocolMessageType('ExecuteV
 _sym_db.RegisterMessage(ExecuteVtctlCommandResponse)
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('Z&vitess.io/vitess/go/vt/proto/vtctldata'))
 # @@protoc_insertion_point(module_scope)

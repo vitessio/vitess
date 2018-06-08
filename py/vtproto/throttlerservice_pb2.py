@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='throttlerservice.proto',
   package='throttlerservice',
   syntax='proto3',
-  serialized_pb=_b('\n\x16throttlerservice.proto\x12\x10throttlerservice\x1a\x13throttlerdata.proto2\xf3\x03\n\tThrottler\x12M\n\x08MaxRates\x12\x1e.throttlerdata.MaxRatesRequest\x1a\x1f.throttlerdata.MaxRatesResponse\"\x00\x12S\n\nSetMaxRate\x12 .throttlerdata.SetMaxRateRequest\x1a!.throttlerdata.SetMaxRateResponse\"\x00\x12\x65\n\x10GetConfiguration\x12&.throttlerdata.GetConfigurationRequest\x1a\'.throttlerdata.GetConfigurationResponse\"\x00\x12n\n\x13UpdateConfiguration\x12).throttlerdata.UpdateConfigurationRequest\x1a*.throttlerdata.UpdateConfigurationResponse\"\x00\x12k\n\x12ResetConfiguration\x12(.throttlerdata.ResetConfigurationRequest\x1a).throttlerdata.ResetConfigurationResponse\"\x00\x62\x06proto3')
+  serialized_pb=_b('\n\x16throttlerservice.proto\x12\x10throttlerservice\x1a\x13throttlerdata.proto2\xf3\x03\n\tThrottler\x12M\n\x08MaxRates\x12\x1e.throttlerdata.MaxRatesRequest\x1a\x1f.throttlerdata.MaxRatesResponse\"\x00\x12S\n\nSetMaxRate\x12 .throttlerdata.SetMaxRateRequest\x1a!.throttlerdata.SetMaxRateResponse\"\x00\x12\x65\n\x10GetConfiguration\x12&.throttlerdata.GetConfigurationRequest\x1a\'.throttlerdata.GetConfigurationResponse\"\x00\x12n\n\x13UpdateConfiguration\x12).throttlerdata.UpdateConfigurationRequest\x1a*.throttlerdata.UpdateConfigurationResponse\"\x00\x12k\n\x12ResetConfiguration\x12(.throttlerdata.ResetConfigurationRequest\x1a).throttlerdata.ResetConfigurationResponse\"\x00\x42/Z-vitess.io/vitess/go/vt/proto/throttlerserviceb\x06proto3')
   ,
   dependencies=[throttlerdata__pb2.DESCRIPTOR,])
 
@@ -29,6 +29,8 @@ DESCRIPTOR = _descriptor.FileDescriptor(
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('Z-vitess.io/vitess/go/vt/proto/throttlerservice'))
 
 _THROTTLER = _descriptor.ServiceDescriptor(
   name='Throttler',

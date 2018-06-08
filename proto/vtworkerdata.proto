@@ -17,6 +17,7 @@ limitations under the License.
 // Data structures for the vtworker RPC interface.
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/vtworkerdata";
 
 package vtworkerdata;
 

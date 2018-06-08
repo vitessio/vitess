@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='tableacl.proto',
   package='tableacl',
   syntax='proto3',
-  serialized_pb=_b('\n\x0etableacl.proto\x12\x08tableacl\"q\n\x0eTableGroupSpec\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1f\n\x17table_names_or_prefixes\x18\x02 \x03(\t\x12\x0f\n\x07readers\x18\x03 \x03(\t\x12\x0f\n\x07writers\x18\x04 \x03(\t\x12\x0e\n\x06\x61\x64mins\x18\x05 \x03(\t\"8\n\x06\x43onfig\x12.\n\x0ctable_groups\x18\x01 \x03(\x0b\x32\x18.tableacl.TableGroupSpecb\x06proto3')
+  serialized_pb=_b('\n\x0etableacl.proto\x12\x08tableacl\"q\n\x0eTableGroupSpec\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1f\n\x17table_names_or_prefixes\x18\x02 \x03(\t\x12\x0f\n\x07readers\x18\x03 \x03(\t\x12\x0f\n\x07writers\x18\x04 \x03(\t\x12\x0e\n\x06\x61\x64mins\x18\x05 \x03(\t\"8\n\x06\x43onfig\x12.\n\x0ctable_groups\x18\x01 \x03(\x0b\x32\x18.tableacl.TableGroupSpecB\'Z%vitess.io/vitess/go/vt/proto/tableaclb\x06proto3')
 )
 
 
@@ -134,4 +134,6 @@ Config = _reflection.GeneratedProtocolMessageType('Config', (_message.Message,),
 _sym_db.RegisterMessage(Config)
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('Z%vitess.io/vitess/go/vt/proto/tableacl'))
 # @@protoc_insertion_point(module_scope)

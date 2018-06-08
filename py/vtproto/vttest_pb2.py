@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vttest.proto',
   package='vttest',
   syntax='proto3',
-  serialized_pb=_b('\n\x0cvttest.proto\x12\x06vttest\"/\n\x05Shard\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x18\n\x10\x64\x62_name_override\x18\x02 \x01(\t\"\xb5\x01\n\x08Keyspace\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1d\n\x06shards\x18\x02 \x03(\x0b\x32\r.vttest.Shard\x12\x1c\n\x14sharding_column_name\x18\x03 \x01(\t\x12\x1c\n\x14sharding_column_type\x18\x04 \x01(\t\x12\x13\n\x0bserved_from\x18\x05 \x01(\t\x12\x15\n\rreplica_count\x18\x06 \x01(\x05\x12\x14\n\x0crdonly_count\x18\x07 \x01(\x05\"D\n\x0eVTTestTopology\x12#\n\tkeyspaces\x18\x01 \x03(\x0b\x32\x10.vttest.Keyspace\x12\r\n\x05\x63\x65lls\x18\x02 \x03(\tb\x06proto3')
+  serialized_pb=_b('\n\x0cvttest.proto\x12\x06vttest\"/\n\x05Shard\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x18\n\x10\x64\x62_name_override\x18\x02 \x01(\t\"\xb5\x01\n\x08Keyspace\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x1d\n\x06shards\x18\x02 \x03(\x0b\x32\r.vttest.Shard\x12\x1c\n\x14sharding_column_name\x18\x03 \x01(\t\x12\x1c\n\x14sharding_column_type\x18\x04 \x01(\t\x12\x13\n\x0bserved_from\x18\x05 \x01(\t\x12\x15\n\rreplica_count\x18\x06 \x01(\x05\x12\x14\n\x0crdonly_count\x18\x07 \x01(\x05\"D\n\x0eVTTestTopology\x12#\n\tkeyspaces\x18\x01 \x03(\x0b\x32\x10.vttest.Keyspace\x12\r\n\x05\x63\x65lls\x18\x02 \x03(\tB%Z#vitess.io/vitess/go/vt/proto/vttestb\x06proto3')
 )
 
 
@@ -202,4 +202,6 @@ VTTestTopology = _reflection.GeneratedProtocolMessageType('VTTestTopology', (_me
 _sym_db.RegisterMessage(VTTestTopology)
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('Z#vitess.io/vitess/go/vt/proto/vttest'))
 # @@protoc_insertion_point(module_scope)
