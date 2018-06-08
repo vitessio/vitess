@@ -603,7 +603,10 @@ func TestExecutorShow(t *testing.T) {
 			t.Errorf("show databases:\n%+v, want\n%+v", qr, wantqr)
 		}
 	}
-
+	_, err := executor.Execute(context.Background(), "TestExecute", session, "show variables", nil)
+	if err != nil {
+		t.Error(err)
+	}
 	qr, err := executor.Execute(context.Background(), "TestExecute", session, "show vitess_shards", nil)
 	if err != nil {
 		t.Error(err)
