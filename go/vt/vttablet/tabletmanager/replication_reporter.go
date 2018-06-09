@@ -18,16 +18,10 @@ package tabletmanager
 
 import (
 	"flag"
-	"fmt"
 	"html/template"
 	"time"
 
-	"golang.org/x/net/context"
-
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/health"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
 var (
@@ -53,28 +47,6 @@ func (r *replicationReporter) Report(isSlaveType, shouldQueryServiceBeRunning bo
 	}
 
 	status, statusErr := r.agent.MysqlDaemon.SlaveStatus()
-	if statusErr == mysql.ErrNotSlave ||
-		(statusErr == nil && !status.SlaveSQLRunning && !status.SlaveIORunning) {
-		// MySQL is up, but slave is either not configured or not running.
-		// Both SQL and IO threads are stopped, so it's probably either
-		// stopped on purpose, or stopped because of a mysqld restart.
-		if !r.agent.slaveStopped() {
-			// As far as we've been told, it isn't stopped on purpose,
-			// so let's try to start it.
-			if *mysqlctl.DisableActiveReparents {
-				log.Infof("Slave is stopped. Running with --disable_active_reparents so will not try to reconnect to master...")
-			} else {
-				log.Infof("Slave is stopped. Trying to reconnect to master...")
-				ctx, cancel := context.WithTimeout(r.agent.batchCtx, 5*time.Second)
-				if err := repairReplication(ctx, r.agent); err != nil {
-					log.Infof("Failed to reconnect to master: %v", err)
-				}
-				cancel()
-				// Check status again.
-				status, statusErr = r.agent.MysqlDaemon.SlaveStatus()
-			}
-		}
-	}
 	if statusErr != nil {
 		// mysqld is not running or slave is not configured.
 		// We can't report healthy.
@@ -104,25 +76,6 @@ func (r *replicationReporter) Report(isSlaveType, shouldQueryServiceBeRunning bo
 // HTMLName is part of the health.Reporter interface
 func (r *replicationReporter) HTMLName() template.HTML {
 	return template.HTML("MySQLReplicationLag")
-}
-
-// repairReplication tries to connect this slave to whoever is
-// the current master of the shard, and start replicating.
-func repairReplication(ctx context.Context, agent *ActionAgent) error {
-	if *mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("can't repair replication with --disable_active_reparents")
-	}
-
-	ts := agent.TopoServer
-	tablet := agent.Tablet()
-	si, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
-	if err != nil {
-		return err
-	}
-	if !si.HasMaster() {
-		return fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
-	}
-	return agent.setMasterLocked(ctx, si.MasterAlias, 0, true)
 }
 
 func registerReplicationReporter(agent *ActionAgent) {

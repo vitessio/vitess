@@ -68,12 +68,7 @@ func (agent *ActionAgent) StopSlave(ctx context.Context) error {
 }
 
 func (agent *ActionAgent) stopSlaveLocked(ctx context.Context) error {
-
-	// Remember that we were told to stop, so we don't try to
-	// restart ourselves (in replication_reporter).
-	agent.setSlaveStopped(true)
-
-	// Also tell Orchestrator we're stopped on purpose for some Vitess task.
+	// Tell Orchestrator we're stopped on purpose for some Vitess task.
 	// Do this in the background, as it's best-effort.
 	go func() {
 		if agent.orc == nil {
@@ -123,8 +118,6 @@ func (agent *ActionAgent) StartSlave(ctx context.Context) error {
 	}
 	defer agent.unlock()
 
-	agent.setSlaveStopped(false)
-
 	// Tell Orchestrator we're no longer stopped on purpose.
 	// Do this in the background, as it's best-effort.
 	go func() {
@@ -154,8 +147,6 @@ func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
 		return err
 	}
 	defer agent.unlock()
-
-	agent.setSlaveStopped(true)
 	return agent.MysqlDaemon.ResetReplication(ctx)
 }
 
@@ -165,9 +156,6 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 		return "", err
 	}
 	defer agent.unlock()
-
-	// Initializing as master implies undoing any previous "do not replicate".
-	agent.setSlaveStopped(false)
 
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
@@ -240,8 +228,6 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 	if err != nil {
 		return err
 	}
-
-	agent.setSlaveStopped(false)
 
 	// If using semi-sync, we need to enable it before connecting to master.
 	// If we were a master type, we need to switch back to replica settings.
