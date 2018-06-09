@@ -1,5 +1,8 @@
 # Create global resources.
 ---
+{{ include "vtbackup-pvc" .Values.config.backup }}
+{{ include "vtbackup-pv" .Values.config.backup }}
+---
 # create a single vttablet service
 {{ include "vttablet-service" (tuple $.Values.pmm) }}
 ---
