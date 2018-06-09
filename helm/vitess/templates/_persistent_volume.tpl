@@ -38,6 +38,6 @@ spec:
   accessModes:
     - ReadWriteMany
 {{ printf "%s:" (.file_backup_storage_volume.persistent_volume_parameters.name) | indent 2 }}  
-{{ printf "%s" (.file_backup_storage_volume.persistent_volume_parameters.parameters) | indent 4 }}  
+{{ toYaml (.file_backup_storage_volume.persistent_volume_parameters.parameters) | indent 4 }}  
 {{ end }}
 {{- end -}}

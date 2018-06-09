@@ -229,7 +229,7 @@ export EXTRA_MY_CNF="$FLAVOR_MYCNF:/vtdataroot/tabletdata/report-host.cnf:/vt/co
 - name: vtbackup    
   {{ if ne .file_backup_storage_volume.name "persistentVolumeClaim" }}
 {{ printf "%s:" (.file_backup_storage_volume.name) | indent 2 }}
-{{ printf "%s" (.file_backup_storage_volume.parameters) | indent 4 }}
+{{ toYaml (.file_backup_storage_volume.parameters) | indent 4 }}
   {{ else }}
   persistentVolumeClaim: 
     claimName: {{ .file_backup_storage_volume.persitent_volume_claim_name | default "vtbackup-pvc" }}
