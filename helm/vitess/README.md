@@ -170,6 +170,74 @@ config:
     gcs_backup_storage_root: vtbackups
 ```
 
+### Enable backup/restore using File storage
+```
+topology:
+  cells:
+    ...
+
+config:
+  backup:
+    enabled: true
+    backup_storage_implementation: file
+
+    file_backup_storage_root: "vtbackups"
+
+    file_backup_storage_mount: "backups"
+
+    storage: 500Gi
+
+    file_backup_storage_volume:
+      name: "persistentVolumeClaim"
+```
+
+### Enable backup/restore using File storage with gcePersistentDisk (with out using pvc or pv)
+```
+topology:
+  cells:
+    ...
+
+config:
+  backup:
+    enabled: true
+    backup_storage_implementation: file
+
+    file_backup_storage_root: "vtbackups"
+
+    file_backup_storage_mount: "backups"
+
+    file_backup_storage_volume:
+      name: "gcePersistentDisk"
+      parameters:
+        pdName: my-data-disk
+        fsType: ext4
+```
+
+### Enable backup/restore using File storage with nfs persitent volume
+```
+topology:
+  cells:
+    ...
+
+config:
+  backup:
+    enabled: true
+    backup_storage_implementation: file
+
+    file_backup_storage_root: "vtbackups"
+
+    file_backup_storage_mount: "backups"
+
+    file_backup_storage_volume:
+      name: "persistentVolumeClaim"
+      persistent_volume_parameters:
+        name: nfs
+        parameters: 
+          server: 10.244.1.4
+          path: "/"
+```
+
+
 ### Custom requests/limits
 
 ```

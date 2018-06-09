@@ -137,6 +137,8 @@ export EXTRA_MY_CNF="$FLAVOR_MYCNF:/vtdataroot/tabletdata/report-host.cnf:/vt/co
 -s3_backup_storage_bucket=$VT_S3_BACKUP_STORAGE_BUCKET
 -s3_backup_storage_root=$VT_S3_BACKUP_STORAGE_ROOT
 -s3_backup_server_side_encryption=$VT_S3_BACKUP_SERVER_SIDE_ENCRYPTION
+    {{ else if eq .backup_storage_implementation "file" }}
+-file_backup_storage_root={{ template "vtbackup-path" .}}
     {{ end }}
 
   {{ end }}
@@ -223,6 +225,15 @@ export EXTRA_MY_CNF="$FLAVOR_MYCNF:/vtdataroot/tabletdata/report-host.cnf:/vt/co
     secretName: {{ .s3Secret }}
     {{ end }}
 
+  {{ else if eq .backup_storage_implementation "file" }}
+- name: vtbackup    
+  {{ if ne .file_backup_storage_volume.name "persistentVolumeClaim" }}
+{{ printf "%s:" (.file_backup_storage_volume.name) | indent 2 }}
+{{ toYaml (.file_backup_storage_volume.parameters) | indent 4 }}
+  {{ else }}
+  persistentVolumeClaim: 
+    claimName: {{ .file_backup_storage_volume.persitent_volume_claim_name | default "vtbackup-pvc" }}
+  {{ end }}
   {{ end }}
 
 {{ end }}
@@ -250,6 +261,9 @@ export EXTRA_MY_CNF="$FLAVOR_MYCNF:/vtdataroot/tabletdata/report-host.cnf:/vt/co
   mountPath: /etc/secrets/creds
     {{ end }}
 
+  {{ else if eq .backup_storage_implementation "file" }}
+- name: vtbackup
+  mountPath: "/{{.file_backup_storage_mount | default "backups"}}"
   {{ end }}
 
 {{ end }}
@@ -285,4 +299,15 @@ cat $AWS_SHARED_CREDENTIALS_FILE
 
 {{ end }}
 
+{{- end -}}
+
+###############################
+# backup path
+###############################
+{{- define "vtbackup-path" -}}
+{{ if .file_backup_storage_root }}
+{{- printf "/%s/%s" (.file_backup_storage_mount | default "backups") .file_backup_storage_root -}}
+{{ else }}
+{{- printf "/%s" (.file_backup_storage_mount | default "backups") -}}
+{{ end }}
 {{- end -}}

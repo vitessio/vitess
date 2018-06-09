@@ -104,7 +104,7 @@ spec:
 {{ include "init-vttablet" (tuple $vitessTag $cell $cellClean $namespace) | indent 8 }}
 
       containers:
-{{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
+{{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid $config) | indent 8 }}
 {{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $vitessTag $uid $namespace $config $orc $totalTabletCount) | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
 {{ include "cont-mysql-slowlog" . | indent 8 }}
@@ -441,6 +441,7 @@ spec:
 {{- $keyspace := index . 2 -}}
 {{- $shard := index . 3 -}}
 {{- $tablet := index . 4 -}}
+{{- $config := index . 7 -}}
 {{- $defaultVttablet := index . 5 -}}
 {{- $uid := index . 6 -}}
 
