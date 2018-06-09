@@ -1793,6 +1793,7 @@ func TestCreateTable(t *testing.T) {
 			"	index by_status (status_nonkeyword) using PDQ,\n" +
 			"	key by_full_name (full_name) using OTHER\n" +
 			")",
+
 		// test other index options
 		"create table t (\n" +
 			"	id int auto_increment,\n" +
@@ -1802,6 +1803,16 @@ func TestCreateTable(t *testing.T) {
 			"	unique key by_username (username) key_block_size 8,\n" +
 			"	unique index by_username4 (username) comment 'hi' using BTREE,\n" +
 			"	unique index by_username4 (username) using BTREE key_block_size 4 comment 'hi'\n" +
+			")",
+
+		// test index constraints
+		"create table t (\n" +
+			"	id int,\n" +
+			"	constraint pk primary key (id),\n" +
+			"	constraint key1 unique key by_username (username),\n" +
+			"	constraint key2 unique index by_username (username),\n" +
+			"	constraint unique key by_username (username),\n" +
+			"	constraint unique index by_username (username)\n" +
 			")",
 
 		// multi-column indexes
