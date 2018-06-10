@@ -195,7 +195,12 @@ class TestReparent(unittest.TestCase):
     # bring back the old master as a slave, check that it catches up
     tablet_62344.start_mysql().wait()
     tablet_62344.init_tablet('replica', 'test_keyspace', '0', start=True,
-                             wait_for_start=False)
+                             wait_for_start=True)
+    # Fix replication after mysqld restart.
+    utils.run_vtctl(['ReparentTablet',
+                     tablet_62344.tablet_alias], auto_log=True)
+    utils.run_vtctl(['StartSlave',
+                     tablet_62344.tablet_alias], auto_log=True)
     self._check_vt_insert_test(tablet_62344, 2)
 
     tablet.kill_tablets(
