@@ -85,6 +85,9 @@ config:
       # To Use an existing persistent volume with the backup persistent volume claim, we can pass the name of persistent volume.
       # If we provide persitent_volume_claim_name, the following things are not needed.
       # persitent_volume_name: "lok"
+
+      # persistent_volume_access_modes: 
+      #   - ReadWriteOnce
       
 
       # StorageClass to use with above PVC
