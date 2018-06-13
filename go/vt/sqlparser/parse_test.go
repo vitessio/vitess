@@ -1129,6 +1129,8 @@ var (
 	}, {
 		input: "show full tables where 1 = 0",
 	}, {
+		input: "show full columns from a like '%'",
+	}, {
 		input:  "show triggers",
 		output: "show triggers",
 	}, {
