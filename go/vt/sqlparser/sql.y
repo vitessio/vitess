@@ -142,7 +142,7 @@ func forceEOF(yylex interface{}) {
 %left <bytes> '^'
 %right <bytes> '~' UNARY
 %left <bytes> COLLATE
-%right <bytes> BINARY UNDERSCORE_BINARY
+%right <bytes> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4
 %right <bytes> INTERVAL
 %nonassoc <bytes> '.'
 
@@ -2179,6 +2179,10 @@ value_expression:
 | UNDERSCORE_BINARY value_expression %prec UNARY
   {
     $$ = &UnaryExpr{Operator: UBinaryStr, Expr: $2}
+  }
+| UNDERSCORE_UTF8MB4 value_expression %prec UNARY
+  {
+    $$ = &UnaryExpr{Operator: Utf8mb4Str, Expr: $2}
   }
 | '+'  value_expression %prec UNARY
   {
