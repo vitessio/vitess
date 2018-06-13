@@ -797,6 +797,9 @@ var (
 		input:  "alter table a rename b",
 		output: "rename table a to b",
 	}, {
+		input:  "rename table foo to fooOld, newFoo to foo",
+		output: "rename table foo to fooOld, newFoo to foo",
+	}, {
 		input:  "alter table `By` rename `bY`",
 		output: "rename table `By` to `bY`",
 	}, {

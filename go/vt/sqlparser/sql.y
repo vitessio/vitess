@@ -71,6 +71,8 @@ func forceEOF(yylex interface{}) {
   joinCondition JoinCondition
   tableName     TableName
   tableNames    TableNames
+  renamePairs   []*RenamePair
+  renamePair    *RenamePair
   indexHints    *IndexHints
   expr          Expr
   exprs         Exprs
@@ -213,6 +215,8 @@ func forceEOF(yylex interface{}) {
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list
+%type <renamePairs> rename_list
+%type <renamePair> rename_pair
 %type <str> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name
 %type <aliasedTableName> aliased_table_name
@@ -1206,7 +1210,7 @@ alter_statement:
 | ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
-    $$ = &DDL{Action: RenameStr, Table: $4, NewName: $7}
+    $$ = &DDL{Action: RenameStr, RenamePairs: []*RenamePair{&RenamePair{From: $4, To: $7}}}
   }
 | ALTER ignore_opt TABLE table_name RENAME index_opt force_eof
   {
@@ -1262,9 +1266,25 @@ partition_definition:
   }
 
 rename_statement:
-  RENAME TABLE table_name TO table_name
+  RENAME TABLE rename_list
   {
-    $$ = &DDL{Action: RenameStr, Table: $3, NewName: $5}
+    $$ = &DDL{Action: RenameStr, RenamePairs: $3}
+  }
+
+rename_list:
+  rename_pair
+  {
+    $$ = []*RenamePair{$1}
+  }
+| rename_list ',' rename_pair
+  {
+    $$ = append($$, $3)
+  }
+
+rename_pair:
+  table_name TO table_name
+  {
+    $$ = &RenamePair{From: $1, To: $3}
   }
 
 drop_statement:
