@@ -1147,21 +1147,43 @@ func (idx *IndexDefinition) walkSubtree(visit Visit) error {
 	return nil
 }
 
+type ConstraintInfo struct {
+	Name string
+}
+
+// Format formats the node.
+func (ci *ConstraintInfo) Format(buf *TrackedBuffer) {
+	if ci == nil {
+		return
+	}
+
+	if ci.Name == "" {
+		buf.Myprintf("constraint ")
+	} else {
+		buf.Myprintf("constraint %s ", ci.Name)
+	}
+}
+
+func (ci *ConstraintInfo) walkSubtree(visit Visit) error {
+	return nil
+}
+
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
 type IndexInfo struct {
-	Type    string
-	Name    ColIdent
-	Primary bool
-	Spatial bool
-	Unique  bool
+	Type       string
+	Name       ColIdent
+	Constraint *ConstraintInfo
+	Primary    bool
+	Spatial    bool
+	Unique     bool
 }
 
 // Format formats the node.
 func (ii *IndexInfo) Format(buf *TrackedBuffer) {
 	if ii.Primary {
-		buf.Myprintf("%s", ii.Type)
+		buf.Myprintf("%v%s", ii.Constraint, ii.Type)
 	} else {
-		buf.Myprintf("%s %v", ii.Type, ii.Name)
+		buf.Myprintf("%v%s %v", ii.Constraint, ii.Type, ii.Name)
 	}
 }
 

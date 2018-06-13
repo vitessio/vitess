@@ -99,6 +99,7 @@ func forceEOF(yylex interface{}) {
   LengthScaleOption LengthScaleOption
   columnDefinition *ColumnDefinition
   indexDefinition *IndexDefinition
+  constraintInfo  *ConstraintInfo
   indexInfo     *IndexInfo
   indexOption   *IndexOption
   indexOptions  []*IndexOption
@@ -280,6 +281,7 @@ func forceEOF(yylex interface{}) {
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
 %type <str> table_option_list table_option table_opt_value
+%type <constraintInfo> index_constraint_opt
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
@@ -1076,26 +1078,39 @@ equal_opt:
     $$ = string($1)
   }
 
+index_constraint_opt:
+  {
+    $$ = nil
+  }
+| CONSTRAINT
+  {
+    $$ = &ConstraintInfo{}
+  }
+| CONSTRAINT ID
+  {
+    $$ = &ConstraintInfo{Name: string($2)}
+  }
+
 index_info:
-  PRIMARY KEY
+  index_constraint_opt PRIMARY KEY
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
+    $$ = &IndexInfo{Constraint: $1, Type: string($2) + " " + string($3), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
-| SPATIAL index_or_key ID
+| index_constraint_opt UNIQUE ID
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent(string($3)), Spatial: true, Unique: false}
+    $$ = &IndexInfo{Constraint: $1, Type: string($2), Name: NewColIdent(string($3)), Unique: true}
   }
-| UNIQUE index_or_key ID
+| index_constraint_opt UNIQUE index_or_key ID
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent(string($3)), Unique: true}
-  }
-| UNIQUE ID
-  {
-    $$ = &IndexInfo{Type: string($1), Name: NewColIdent(string($2)), Unique: true}
+    $$ = &IndexInfo{Constraint: $1, Type: string($2) + " " + string($3), Name: NewColIdent(string($4)), Unique: true}
   }
 | index_or_key ID
   {
     $$ = &IndexInfo{Type: string($1), Name: NewColIdent(string($2)), Unique: false}
+  }
+| SPATIAL index_or_key ID
+  {
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent(string($3)), Spatial: true, Unique: false}
   }
 
 index_or_key:
