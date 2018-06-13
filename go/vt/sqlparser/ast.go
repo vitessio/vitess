@@ -2554,6 +2554,7 @@ const (
 	BangStr    = "!"
 	BinaryStr  = "binary "
 	UBinaryStr = "_binary "
+	Utf8mb4Str = "_utf8mb4 "
 )
 
 // Format formats the node.
