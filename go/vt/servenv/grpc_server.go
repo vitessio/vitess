@@ -125,6 +125,14 @@ func createGRPCServer() {
 	opts = append(opts, grpc.MaxRecvMsgSize(*grpccommon.MaxMessageSize))
 	opts = append(opts, grpc.MaxSendMsgSize(*grpccommon.MaxMessageSize))
 
+	if *grpccommon.InitialConnWindowSize != 0 {
+		opts = append(opts, grpc.InitialConnWindowSize(int32(*grpccommon.InitialConnWindowSize)))
+	}
+
+	if *grpccommon.InitialWindowSize != 0 {
+		opts = append(opts, grpc.InitialWindowSize(int32(*grpccommon.InitialWindowSize)))
+	}
+
 	if GRPCMaxConnectionAge != nil {
 		ka := keepalive.ServerParameters{
 			MaxConnectionAge: *GRPCMaxConnectionAge,
