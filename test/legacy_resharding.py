@@ -386,8 +386,6 @@ primary key (name)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias,
                      'rdonly'], auto_log=True)
 
-    # TODO(alainjobart): experiment with the dontStartBinlogPlayer option
-
     # check the startup values are in the right place
     self._check_startup_values()
 

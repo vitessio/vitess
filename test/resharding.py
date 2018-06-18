@@ -680,8 +680,6 @@ primary key (name)
     # Terminate worker daemon because it is no longer needed.
     utils.kill_sub_process(worker_proc, soft=True)
 
-    # TODO(alainjobart): experiment with the dontStartBinlogPlayer option
-
     # check the startup values are in the right place
     self._check_startup_values()
 

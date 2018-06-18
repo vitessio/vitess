@@ -113,3 +113,13 @@ message StreamTablesRequest {
 message StreamTablesResponse {
   BinlogTransaction binlog_transaction = 1;
 }
+
+// BinlogFilter specifies the filter parameters for Filtered Replication.
+// It currently supports a keyrange or a list of tables.
+message BinlogFilter {
+  // key_range is set if the request is for a keyrange
+  topodata.KeyRange key_range = 1;
+
+  // tables is set if the request is for a list of tables
+  repeated string tables = 2;
+}
