@@ -25,7 +25,6 @@ import (
 	"html/template"
 	"math/rand" // not crypto-safe is OK here
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -302,14 +301,9 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	defer vtClient.Close()
 
 	// Read the start position
-	startPosition, flags, err := binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
+	startPosition, err := binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 	if err != nil {
 		return fmt.Errorf("can't read startPosition: %v", err)
-	}
-
-	// if we shouldn't start, we just error out and try again later
-	if strings.Index(flags, binlogplayer.BlpFlagDontStart) != -1 {
-		return fmt.Errorf("not starting because flag '%v' is set", binlogplayer.BlpFlagDontStart)
 	}
 
 	sourceTabletTypes, err := topoproto.ParseTabletTypes(*sourceTabletTypeStr)
@@ -376,15 +370,15 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 }
 
 // BlpPosition returns the current position for a controller, as read from the database.
-func (bpc *BinlogPlayerController) BlpPosition(vtClient binlogplayer.VtClient) (*tabletmanagerdatapb.BlpPosition, string, error) {
-	pos, flags, err := binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
+func (bpc *BinlogPlayerController) BlpPosition(vtClient binlogplayer.VtClient) (*tabletmanagerdatapb.BlpPosition, error) {
+	pos, err := binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	return &tabletmanagerdatapb.BlpPosition{
 		Uid:      bpc.sourceShard.Uid,
 		Position: pos,
-	}, flags, nil
+	}, nil
 }
 
 // BinlogPlayerMap controls all the players.
@@ -617,7 +611,7 @@ func (blm *BinlogPlayerMap) BlpPositionList() ([]*tabletmanagerdatapb.BlpPositio
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
 	for _, bpc := range blm.players {
-		blp, _, err := bpc.BlpPosition(vtClient)
+		blp, err := bpc.BlpPosition(vtClient)
 		if err != nil {
 			return nil, fmt.Errorf("can't read current position for %v: %v", bpc, err)
 		}

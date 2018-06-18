@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package binlogplayer contains the code that plays a filtered replication
+// Package binlogplayer contains the code that plays a vreplication
 // stream on a client database. It usually runs inside the destination master
 // vttablet process.
 package binlogplayer
@@ -49,12 +49,6 @@ var (
 	BlplQuery = "Query"
 	// BlplTransaction is the key for the stats map.
 	BlplTransaction = "Transaction"
-
-	// flags for the blp_checkpoint table. The database entry is just
-	// a join(",") of these flags.
-
-	// BlpFlagDontStart means don't start a BinlogPlayer
-	BlpFlagDontStart = "DontStart"
 )
 
 // Stats is the internal stats of a player. It is a different
@@ -115,7 +109,7 @@ type BinlogPlayer struct {
 
 // NewBinlogPlayerKeyRange returns a new BinlogPlayer pointing at the server
 // replicating the provided keyrange, starting at the startPosition,
-// and updating _vt.blp_checkpoint with uid=startPosition.Uid.
+// and updating _vt.vreplication with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
 func NewBinlogPlayerKeyRange(dbClient VtClient, tablet *topodatapb.Tablet, keyRange *topodatapb.KeyRange, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
 	result := &BinlogPlayer{
@@ -141,7 +135,7 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, tablet *topodatapb.Tablet, keyRa
 
 // NewBinlogPlayerTables returns a new BinlogPlayer pointing at the server
 // replicating the provided tables, starting at the startPosition,
-// and updating _vt.blp_checkpoint with uid=startPosition.Uid.
+// and updating _vt.vreplication with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
 func NewBinlogPlayerTables(dbClient VtClient, tablet *topodatapb.Tablet, tables []string, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
 	result := &BinlogPlayer{
@@ -170,7 +164,7 @@ func NewBinlogPlayerTables(dbClient VtClient, tablet *topodatapb.Tablet, tables 
 // for the next transaction.
 // We will also try to get the timestamp for the transaction. Two cases:
 // - we have statements, and they start with a SET TIMESTAMP that we
-//   can parse: then we update transaction_timestamp in blp_checkpoint
+//   can parse: then we update transaction_timestamp in vreplication
 //   with it, and set SecondsBehindMaster to now() - transaction_timestamp
 // - otherwise (the statements are probably filtered out), we leave
 //   transaction_timestamp alone (keeping the old value), and we don't
@@ -182,7 +176,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	}
 
 	now := time.Now().Unix()
-	updateRecovery := updateBlpCheckpoint(blp.uid, position, now, tx.EventToken.Timestamp)
+	updateRecovery := updateVReplicationPos(blp.uid, position, now, tx.EventToken.Timestamp)
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
@@ -201,24 +195,24 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	return nil
 }
 
-// ReadStartPosition will return the current start position and the flags for
+// ReadStartPosition will return the current start position for
 // the provided binlog player.
-func ReadStartPosition(dbClient VtClient, uid uint32) (string, string, error) {
-	selectRecovery := QueryBlpCheckpoint(uid)
+func ReadStartPosition(dbClient VtClient, uid uint32) (string, error) {
+	selectRecovery := ReadVReplicationPos(uid)
 	qr, err := dbClient.ExecuteFetch(selectRecovery, 1)
 	if err != nil {
-		return "", "", fmt.Errorf("error %v in selecting from recovery table %v", err, selectRecovery)
+		return "", fmt.Errorf("error %v in selecting from recovery table %v", err, selectRecovery)
 	}
 	if qr.RowsAffected != 1 {
-		return "", "", fmt.Errorf("checkpoint information not available in db for %v", uid)
+		return "", fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
-	return qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString(), nil
+	return qr.Rows[0][0].ToString(), nil
 }
 
-// readThrottlerSettings will retrieve the throttler settings for filtered
-// replication from the checkpoint table.
+// readThrottlerSettings will retrieve the throttler settings for
+// vreplication from the checkpoint table.
 func (blp *BinlogPlayer) readThrottlerSettings() (int64, int64, error) {
-	selectThrottlerSettings := QueryBlpThrottlerSettings(blp.uid)
+	selectThrottlerSettings := ReadVReplicationThrottlerSettings(blp.uid)
 	qr, err := blp.dbClient.ExecuteFetch(selectThrottlerSettings, 1)
 	if err != nil {
 		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("error %v in selecting the throttler settings %v", err, selectThrottlerSettings)
@@ -466,59 +460,58 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	}
 }
 
-// CreateBlpCheckpoint returns the statements required to create
-// the _vt.blp_checkpoint table
-func CreateBlpCheckpoint() []string {
+// CreateVReplicationTable returns the statements required to create
+// the _vt.vreplication table
+func CreateVReplicationTable() []string {
 	return []string{
 		"CREATE DATABASE IF NOT EXISTS _vt",
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (
-  source_shard_uid INT(10) UNSIGNED NOT NULL,
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS _vt.vreplication (
+  id INT(10) UNSIGNED NOT NULL,
   pos VARBINARY(%v) DEFAULT NULL,
   max_tps BIGINT(20) NOT NULL,
   max_replication_lag BIGINT(20) NOT NULL,
   time_updated BIGINT(20) UNSIGNED NOT NULL,
   transaction_timestamp BIGINT(20) UNSIGNED NOT NULL,
-  flags VARBINARY(250) DEFAULT NULL,
-  PRIMARY KEY (source_shard_uid)
+  PRIMARY KEY (id)
 ) ENGINE=InnoDB`, mysql.MaximumPositionSize)}
 }
 
-// PopulateBlpCheckpoint returns a statement to populate the first value into
-// the _vt.blp_checkpoint table.
-func PopulateBlpCheckpoint(index uint32, position string, maxTPS int64, maxReplicationLag int64, timeUpdated int64, flags string) string {
-	return fmt.Sprintf("INSERT INTO _vt.blp_checkpoint "+
-		"(source_shard_uid, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, flags) "+
-		"VALUES (%v, '%v', %v, %v, %v, 0, '%v')",
-		index, position, maxTPS, maxReplicationLag, timeUpdated, flags)
+// CreateVReplication returns a statement to populate the first value into
+// the _vt.vreplication table.
+func CreateVReplication(index uint32, position string, maxTPS int64, maxReplicationLag int64, timeUpdated int64) string {
+	return fmt.Sprintf("INSERT INTO _vt.vreplication "+
+		"(id, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp) "+
+		"VALUES (%v, '%v', %v, %v, %v, 0)",
+		index, position, maxTPS, maxReplicationLag, timeUpdated)
 }
 
-// updateBlpCheckpoint returns a statement to update a value in the
-// _vt.blp_checkpoint table.
-func updateBlpCheckpoint(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64) string {
+// updateVReplicationPos returns a statement to update a value in the
+// _vt.vreplication table.
+func updateVReplicationPos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64) string {
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
-			"UPDATE _vt.blp_checkpoint "+
+			"UPDATE _vt.vreplication "+
 				"SET pos='%v', time_updated=%v, transaction_timestamp=%v "+
-				"WHERE source_shard_uid=%v",
+				"WHERE id=%v",
 			mysql.EncodePosition(pos), timeUpdated, txTimestamp, uid)
 	}
 
 	return fmt.Sprintf(
-		"UPDATE _vt.blp_checkpoint "+
+		"UPDATE _vt.vreplication "+
 			"SET pos='%v', time_updated=%v "+
-			"WHERE source_shard_uid=%v",
+			"WHERE id=%v",
 		mysql.EncodePosition(pos), timeUpdated, uid)
 }
 
-// QueryBlpCheckpoint returns a statement to query the gtid and flags for a
-// given shard from the _vt.blp_checkpoint table.
-func QueryBlpCheckpoint(index uint32) string {
-	return fmt.Sprintf("SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", index)
+// ReadVReplicationPos returns a statement to query the gtid for a
+// given shard from the _vt.vreplication table.
+func ReadVReplicationPos(index uint32) string {
+	return fmt.Sprintf("SELECT pos FROM _vt.vreplication WHERE id=%v", index)
 }
 
-// QueryBlpThrottlerSettings returns a statement to query the throttler settings
-// (used by filtered replication) for a given shard from the_vt.blp_checkpoint
+// ReadVReplicationThrottlerSettings returns a statement to query the throttler settings
+// (used by vreplication) for a given shard from the_vt.vreplication
 // table.
-func QueryBlpThrottlerSettings(index uint32) string {
-	return fmt.Sprintf("SELECT max_tps, max_replication_lag FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", index)
+func ReadVReplicationThrottlerSettings(index uint32) string {
+	return fmt.Sprintf("SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=%v", index)
 }

@@ -99,11 +99,10 @@ func TestMigrateServedFrom(t *testing.T) {
 	// destMaster will see the refresh, and has to respond to it.
 	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
 	destMaster.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": {
+		"SELECT pos FROM _vt.vreplication WHERE id=0": {
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.NewVarBinary(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition)),
-					sqltypes.NewVarBinary(""),
 				},
 			},
 		},

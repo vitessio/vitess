@@ -39,7 +39,7 @@ func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *tabl
 
 	waitCtx, cancel := context.WithTimeout(ctx, waitTime)
 	defer cancel()
-	return mysqlctl.WaitBlpPosition(waitCtx, agent.MysqlDaemon, binlogplayer.QueryBlpCheckpoint(blpPosition.Uid), blpPosition.Position)
+	return mysqlctl.WaitBlpPosition(waitCtx, agent.MysqlDaemon, binlogplayer.ReadVReplicationPos(blpPosition.Uid), blpPosition.Position)
 }
 
 // StopBlp stops the binlog players, and return their positions.

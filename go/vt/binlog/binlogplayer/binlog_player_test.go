@@ -23,52 +23,52 @@ import (
 	"vitess.io/vitess/go/vt/throttler"
 )
 
-func TestPopulateBlpCheckpoint(t *testing.T) {
-	want := "INSERT INTO _vt.blp_checkpoint " +
-		"(source_shard_uid, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, flags) " +
-		"VALUES (18372, 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'myflags')"
+func TestCreateVReplication(t *testing.T) {
+	want := "INSERT INTO _vt.vreplication " +
+		"(id, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp) " +
+		"VALUES (18372, 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0)"
 
-	got := PopulateBlpCheckpoint(18372, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "myflags")
+	got := CreateVReplication(18372, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823)
 	if got != want {
-		t.Errorf("PopulateBlpCheckpoint() = %#v, want %#v", got, want)
+		t.Errorf("CreateVReplication() = %#v, want %#v", got, want)
 	}
 }
 
-func TestUpdateBlpCheckpoint(t *testing.T) {
+func TestUpdateVReplicationPos(t *testing.T) {
 	gtid := mysql.MustParseGTID("MariaDB", "0-1-8283")
-	want := "UPDATE _vt.blp_checkpoint " +
+	want := "UPDATE _vt.vreplication " +
 		"SET pos='MariaDB/0-1-8283', time_updated=88822 " +
-		"WHERE source_shard_uid=78522"
+		"WHERE id=78522"
 
-	got := updateBlpCheckpoint(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0)
+	got := updateVReplicationPos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0)
 	if got != want {
-		t.Errorf("updateBlpCheckpoint() = %#v, want %#v", got, want)
+		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
 	}
 }
 
-func TestUpdateBlpCheckpointTimestamp(t *testing.T) {
+func TestUpdateVReplicationTimestamp(t *testing.T) {
 	gtid := mysql.MustParseGTID("MariaDB", "0-2-582")
-	want := "UPDATE _vt.blp_checkpoint " +
+	want := "UPDATE _vt.vreplication " +
 		"SET pos='MariaDB/0-2-582', time_updated=88822, transaction_timestamp=481828 " +
-		"WHERE source_shard_uid=78522"
+		"WHERE id=78522"
 
-	got := updateBlpCheckpoint(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828)
+	got := updateVReplicationPos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828)
 	if got != want {
-		t.Errorf("updateBlpCheckpoint() = %#v, want %#v", got, want)
+		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
 	}
 }
 
-func TestQueryBlpCheckpoint(t *testing.T) {
-	want := "SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=482821"
-	got := QueryBlpCheckpoint(482821)
+func TestReadVReplicationPos(t *testing.T) {
+	want := "SELECT pos FROM _vt.vreplication WHERE id=482821"
+	got := ReadVReplicationPos(482821)
 	if got != want {
-		t.Errorf("QueryBlpCheckpoint(482821) = %#v, want %#v", got, want)
+		t.Errorf("ReadVReplicationThrottlerSettings(482821) = %#v, want %#v", got, want)
 	}
 }
 
-func TestQueryBlpThrottlerSettings(t *testing.T) {
-	want := "SELECT max_tps, max_replication_lag FROM _vt.blp_checkpoint WHERE source_shard_uid=482821"
-	if got := QueryBlpThrottlerSettings(482821); got != want {
-		t.Errorf("QueryBlpCheckpoint(482821) = %#v, want %#v", got, want)
+func TestReadVReplicationThrottlerSettings(t *testing.T) {
+	want := "SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=482821"
+	if got := ReadVReplicationThrottlerSettings(482821); got != want {
+		t.Errorf("ReadVReplicationThrottlerSettings(482821) = %#v, want %#v", got, want)
 	}
 }

@@ -134,11 +134,10 @@ func TestMigrateServedTypes(t *testing.T) {
 	// dest1Master will see the refresh, and has to respond to it.
 	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
 	dest1Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": {
+		"SELECT pos FROM _vt.vreplication WHERE id=0": {
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.NewVarBinary(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition)),
-					sqltypes.NewVarBinary(""),
 				},
 			},
 		},
@@ -157,11 +156,10 @@ func TestMigrateServedTypes(t *testing.T) {
 	// dest2Master will see the refresh, and has to respond to it.
 	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
 	dest2Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": {
+		"SELECT pos FROM _vt.vreplication WHERE id=0": {
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.NewVarBinary(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition)),
-					sqltypes.NewVarBinary(""),
 				},
 			},
 		},
