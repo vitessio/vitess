@@ -35,6 +35,12 @@ var (
 
 	// EnableGRPCPrometheus sets a flag to enable grpc client/server grpc monitoring.
 	EnableGRPCPrometheus = flag.Bool("grpc_prometheus", false, "Enable gRPC monitoring with Prometheus")
+
+	// InitialConnWindowSize sets the initial connection window size
+	InitialConnWindowSize = flag.Int("grpc_initial_conn_window_size", 0, "grpc initial connection window size")
+
+	// InitialWindowSize sets the initial stream window size
+	InitialWindowSize = flag.Int("grpc_initial_window_size", 0, "grpc initial window size")
 )
 
 var enableTracing sync.Once
