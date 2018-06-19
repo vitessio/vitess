@@ -141,35 +141,6 @@ func testChecksums(t *testing.T, data []byte) {
 		t.Errorf("go and cgzip adler32 mismatch")
 	}
 
-	// now test partial checksuming also works with adler32
-	cutoff := len(data) / 3
-	toChecksum = bytes.NewBuffer(data[0:cutoff])
-	cgzipAdler32.Reset()
-	_, err = io.Copy(cgzipAdler32, toChecksum)
-	if err != nil {
-		t.Errorf("Copy failed: %v", err)
-	}
-	adler1 := cgzipAdler32.Sum32()
-	t.Log("   a1   :", adler1)
-	t.Log("   len1 :", cutoff)
-
-	toChecksum = bytes.NewBuffer(data[cutoff:])
-	cgzipAdler32.Reset()
-	_, err = io.Copy(cgzipAdler32, toChecksum)
-	if err != nil {
-		t.Errorf("Copy failed: %v", err)
-	}
-	adler2 := cgzipAdler32.Sum32()
-	t.Log("   a2   :", adler2)
-	t.Log("   len2 :", len(data)-cutoff)
-
-	adlerCombined := Adler32Combine(adler1, adler2, len(data)-cutoff)
-	t.Log("   comb :", adlerCombined)
-
-	if cgzipResult != adlerCombined {
-		t.Errorf("full and combined adler32 mismatch")
-	}
-
 	// crc32 with go library
 	goCrc32 := crc32.New(crc32.MakeTable(crc32.IEEE))
 	toChecksum = bytes.NewBuffer(data)
@@ -197,34 +168,6 @@ func testChecksums(t *testing.T, data []byte) {
 	// test both results are the same
 	if goResult != cgzipResult {
 		t.Errorf("go and cgzip crc32 mismatch")
-	}
-
-	// now test partial checksuming also works with crc32
-	toChecksum = bytes.NewBuffer(data[0:cutoff])
-	cgzipCrc32.Reset()
-	_, err = io.Copy(cgzipCrc32, toChecksum)
-	if err != nil {
-		t.Errorf("Copy failed: %v", err)
-	}
-	crc1 := cgzipCrc32.Sum32()
-	t.Log("   crc1 :", crc1)
-	t.Log("   len1 :", cutoff)
-
-	toChecksum = bytes.NewBuffer(data[cutoff:])
-	cgzipCrc32.Reset()
-	_, err = io.Copy(cgzipCrc32, toChecksum)
-	if err != nil {
-		t.Errorf("Copy failed: %v", err)
-	}
-	crc2 := cgzipCrc32.Sum32()
-	t.Log("   crc2 :", crc2)
-	t.Log("   len2 :", len(data)-cutoff)
-
-	crcCombined := Crc32Combine(crc1, crc2, len(data)-cutoff)
-	t.Log("   comb :", crcCombined)
-
-	if cgzipResult != crcCombined {
-		t.Errorf("full and combined crc32 mismatch")
 	}
 }
 

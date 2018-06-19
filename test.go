@@ -700,6 +700,7 @@ func reshardTests(config *Config, numShards int) error {
 		if err != nil {
 			return err
 		}
+		defer resp.Body.Close()
 		if data, err = ioutil.ReadAll(resp.Body); err != nil {
 			return err
 		}
