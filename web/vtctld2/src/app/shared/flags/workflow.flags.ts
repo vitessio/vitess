@@ -30,16 +30,39 @@ export class NewWorkflowFlags {
     this.flags['horizontal_resharding_vtworkers'] = new HorizontalReshardingVtworkerFlag(6, 'horizontal_resharding_vtworkers');
     this.flags['horizontal_resharding_vtworkers'].positional = true;
     this.flags['horizontal_resharding_vtworkers'].namedPositional = 'vtworkers';
-    this.flags['horizontal_resharding_enable_approvals'] = new HorizontalReshardingEnableApprovalsFlag(7, 'horizontal_resharding_enable_approvals');
+    this.flags['horizontal_resharding_split_cmd'] = new SplitCloneCommand(7, 'horizontal_resharding_split_cmd');
+    this.flags['horizontal_resharding_split_cmd'].positional = true;
+    this.flags['horizontal_resharding_split_cmd'].namedPositional = 'split_cmd';
+    this.flags['horizontal_resharding_min_healthy_rdonly_tablets'] = new HorizontalReshardingMinHealthyRdonlyTablets(8, 'horizontal_resharding_min_healthy_rdonly_tablets');
+    this.flags['horizontal_resharding_min_healthy_rdonly_tablets'].positional = true;
+    this.flags['horizontal_resharding_min_healthy_rdonly_tablets'].namedPositional = 'min_healthy_rdonly_tablets';
+    this.flags['horizontal_resharding_enable_approvals'] = new HorizontalReshardingEnableApprovalsFlag(9, 'horizontal_resharding_enable_approvals');
     this.flags['horizontal_resharding_enable_approvals'].positional = true;
     this.flags['horizontal_resharding_enable_approvals'].namedPositional = 'enable_approvals';
-
   }
+}
+
+export class SplitCloneCommand extends DropDownFlag {
+    constructor(position: number, id: string) {
+        super(position, id, 'Split Clone Command', 'Specifies the type of workflow to create.', '');
+        let options = [];
+        options.push({
+            label: 'SplitClone',
+            value: 'SplitClone'
+        });
+        options.push({
+            label: 'LegacySplitClone',
+            value: 'LegacySplitClone'
+        });
+        this.setOptions(options);
+        this.value = options[0].value;
+        this.setDisplayOn('factory_name', 'horizontal_resharding');
+    }
 }
 
 export class FactoryNameFlag extends DropDownFlag {
   constructor(position: number, id: string, workflows) {
-    super(position, id, 'Factory Name', 'Specifies the type of workflow to create.', '');
+      super(position, id, 'Factory Name', 'Specifies the type of split command to use', '');
     let options = [];
     if (workflows.horizontal_resharding) {
       options.push({
@@ -107,6 +130,13 @@ export class HorizontalReshardingKeyspaceFlag extends InputFlag {
 export class HorizontalReshardingVtworkerFlag extends InputFlag {
   constructor(position: number, id: string, value= '') {
     super(position, id, 'vtworker Addresses', 'Comma-separated list of vtworker addresses.', value);
+    this.setDisplayOn('factory_name', 'horizontal_resharding');
+  }
+}
+
+export class HorizontalReshardingMinHealthyRdonlyTablets extends InputFlag {
+  constructor(position: number, id: string, value= '') {
+    super(position, id, 'min healthy rdonly tablets', 'Minimum number of rdonly healthy tablets required', value);
     this.setDisplayOn('factory_name', 'horizontal_resharding');
   }
 }
