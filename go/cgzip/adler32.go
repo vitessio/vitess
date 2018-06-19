@@ -1,3 +1,5 @@
+// +build cgo
+
 /*
 Copyright 2017 Google Inc.
 
@@ -74,14 +76,4 @@ func (a *adler32Hash) BlockSize() int {
 // hash.Hash32 interface
 func (a *adler32Hash) Sum32() uint32 {
 	return uint32(a.adler)
-}
-
-// Adler32Combine method for partial checksums. From the zlib.h header:
-//
-// Combine two Adler-32 checksums into one.  For two sequences of bytes, seq1
-// and seq2 with lengths len1 and len2, Adler-32 checksums were calculated for
-// each, adler1 and adler2.  adler32_combine() returns the Adler-32 checksum of
-// seq1 and seq2 concatenated, requiring only adler1, adler2, and len2.
-func Adler32Combine(adler1, adler2 uint32, len2 int) uint32 {
-	return uint32(C.adler32_combine(C.uLong(adler1), C.uLong(adler2), C.z_off_t(len2)))
 }
