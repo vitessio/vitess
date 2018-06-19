@@ -1,3 +1,5 @@
+// +build cgo
+
 /*
 Copyright 2017 Google Inc.
 
@@ -74,14 +76,4 @@ func (a *crc32Hash) BlockSize() int {
 // hash.Hash32 interface
 func (a *crc32Hash) Sum32() uint32 {
 	return uint32(a.crc)
-}
-
-// Crc32Combine helper method for partial checksums. From the zlib.h header:
-//
-// Combine two CRC-32 checksums into one.  For two sequences of bytes, seq1
-// and seq2 with lengths len1 and len2, CRC-32 checksums were calculated for
-// each, crc1 and crc2.  crc32_combine() returns the CRC-32 checksum of
-// seq1 and seq2 concatenated, requiring only crc1, crc2, and len2.
-func Crc32Combine(crc1, crc2 uint32, len2 int) uint32 {
-	return uint32(C.crc32_combine(C.uLong(crc1), C.uLong(crc2), C.z_off_t(len2)))
 }

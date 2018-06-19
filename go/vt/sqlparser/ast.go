@@ -1288,19 +1288,19 @@ type Show struct {
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
-	if node.Type == "tables" && node.ShowTablesOpt != nil {
+	if (node.Type == "tables" || node.Type == "columns") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
 		if opt.DbName != "" {
 			if opt.Filter != nil {
-				buf.Myprintf("show %s%stables from %s %v", opt.Extended, opt.Full, opt.DbName, opt.Filter)
+				buf.Myprintf("show %s%s%s from %s %v", opt.Extended, opt.Full, node.Type, opt.DbName, opt.Filter)
 			} else {
-				buf.Myprintf("show %s%stables from %s", opt.Extended, opt.Full, opt.DbName)
+				buf.Myprintf("show %s%s%s from %s", opt.Extended, opt.Full, node.Type, opt.DbName)
 			}
 		} else {
 			if opt.Filter != nil {
-				buf.Myprintf("show %s%stables %v", opt.Extended, opt.Full, opt.Filter)
+				buf.Myprintf("show %s%s%s %v", opt.Extended, opt.Full, node.Type, opt.Filter)
 			} else {
-				buf.Myprintf("show %s%stables", opt.Extended, opt.Full)
+				buf.Myprintf("show %s%s%s", opt.Extended, opt.Full, node.Type)
 			}
 		}
 		return
@@ -2554,6 +2554,7 @@ const (
 	BangStr    = "!"
 	BinaryStr  = "binary "
 	UBinaryStr = "_binary "
+	Utf8mb4Str = "_utf8mb4 "
 )
 
 // Format formats the node.
