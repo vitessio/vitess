@@ -84,7 +84,7 @@ func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflo
 		return err
 	}
 	if *keyspace == "" || *vtworkersStr == "" || *minHealthyRdonlyTablets == "" || *splitCmd == "" {
-		return fmt.Errorf("Keyspace name, min healthey rdonly tablets and vtworkers information must be provided for horizontal resharding")
+		return fmt.Errorf("Keyspace name, min healthy rdonly tablets and vtworkers information must be provided for horizontal resharding")
 	}
 
 	vtworkers := strings.Split(*vtworkersStr, ",")

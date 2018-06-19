@@ -44,7 +44,7 @@ export class NewWorkflowFlags {
 
 export class SplitCloneCommand extends DropDownFlag {
     constructor(position: number, id: string) {
-        super(position, id, 'Split Clone Command', 'Specifies the type of workflow to create.', '');
+        super(position, id, 'Split Clone Command', 'Specifies the split command to use.', '');
         let options = [];
         options.push({
             label: 'SplitClone',
@@ -62,7 +62,7 @@ export class SplitCloneCommand extends DropDownFlag {
 
 export class FactoryNameFlag extends DropDownFlag {
   constructor(position: number, id: string, workflows) {
-      super(position, id, 'Factory Name', 'Specifies the type of split command to use', '');
+    super(position, id, 'Factory Name', 'Specifies the type of workflow to create.', '');
     let options = [];
     if (workflows.horizontal_resharding) {
       options.push({
