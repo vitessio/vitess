@@ -90,7 +90,7 @@ func TestReverseBitsVerify(t *testing.T) {
 	_, err = reverseBits.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
 	wantErr := "reverseBits.Verify: could not parse value: 'aa'"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)
+		t.Errorf("reverseBits.Verify err: %v, want %s", err, wantErr)
 	}
 }
 
