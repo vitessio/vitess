@@ -22,8 +22,8 @@ config:
   
     enabled: false
 
-    # choose a backup service - valid values are gcs/s3
-    # TODO: add file and ceph support
+    # choose a backup service - valid values are gcs/s3/file
+    # TODO: add ceph support
     # backup_storage_implementation: gcs
 
     #########
@@ -61,6 +61,49 @@ config:
     # kubectl create secret generic s3-credentials --from-file=s3-creds
     # can be omitted if running on a node with default permissions
     # s3Secret: vitess-s3-creds
+
+    #########
+    # file settings
+    #########
+
+    # root directory for the file backup storage
+    # file_backup_storage_root: "vtbackups"
+
+    # mount path for the file backup storage
+    # file_backup_storage_mount: "backups"    
+
+    # Dynamic storage allocation settings
+    # file_backup_storage_volume:
+      # name can be any one of them listed here https://kubernetes.io/docs/concepts/storage/volumes/#types-of-volumes
+      # if we use persistentVolumeClaim, we can leave the parameters untouched or else we need to pass spec as parameters
+      # name: "persistentVolumeClaim"          
+      # parameters: ""
+
+      # If we want to use a pv-claim which is already defined outside of this chart, we can pass the name of pvc. So it wont create one more PVC
+      # persitent_volume_claim_name: "lok"
+      
+      # To Use an existing persistent volume with the backup persistent volume claim, we can pass the name of persistent volume.
+      # If we provide persitent_volume_claim_name, the following things are not needed.
+      # persitent_volume_name: "lok"
+
+      # persistent_volume_access_modes: 
+      #   - ReadWriteOnce
+      
+
+      # StorageClass to use with above PVC
+      # storage_class_name: ""
+      
+      # If this chart is creating PVC, following parameter can be used to define storage capacity.
+      # storage: "1Gi"
+      
+      # If we want to create a persitent_volume, we need to supply type of persistent volume and required parameters for that from here https://kubernetes.io/docs/concepts/storage/persistent-volumes/#types-of-persistent-volumes
+      # persistent_volume_parameters: 
+      
+      # type of persistent volume         
+      #   name: nfs
+      
+      # parameters required for persistent volume creation
+      #   parameters:           
 
 topology:
   globalCell:
