@@ -1129,6 +1129,8 @@ var (
 	}, {
 		input: "show full tables where 1 = 0",
 	}, {
+		input: "show full columns from a like '%'",
+	}, {
 		input:  "show triggers",
 		output: "show triggers",
 	}, {
@@ -1251,6 +1253,11 @@ var (
 	}, {
 		input:  "select 1 from t where foo = _binary'bar'",
 		output: "select 1 from t where foo = _binary 'bar'",
+	}, {
+		input: "select 1 from t where foo = _utf8mb4 'bar'",
+	}, {
+		input:  "select 1 from t where foo = _utf8mb4'bar'",
+		output: "select 1 from t where foo = _utf8mb4 'bar'",
 	}, {
 		input: "select match(a) against ('foo') from t",
 	}, {
