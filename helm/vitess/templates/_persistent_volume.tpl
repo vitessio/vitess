@@ -12,8 +12,8 @@ metadata:
   name: vtbackup-pvc
 spec:
   accessModes:
-  {{ if .persistent_volume_access_modes }}
-    {{ toYaml (.persistent_volume_access_modes)}}
+  {{ if .file_backup_storage_volume.persistent_volume_access_modes }}
+    {{ toYaml (.file_backup_storage_volume.persistent_volume_access_modes)}}
   {{ else }}
     - ReadWriteOnce
   {{ end }}
@@ -46,8 +46,8 @@ spec:
   capacity:
     storage: {{ .file_backup_storage_volume.storage | default "1Mi" }}  
   accessModes:
-  {{ if .persistent_volume_access_modes }}
-    {{ toYaml (.persistent_volume_access_modes)}}
+  {{ if .file_backup_storage_volume.persistent_volume_access_modes }}
+    {{ toYaml (.file_backup_storage_volume.persistent_volume_access_modes)}}
   {{ else }}
     - ReadWriteOnce
   {{ end }}
