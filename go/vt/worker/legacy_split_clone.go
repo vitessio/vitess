@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/worker/events"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -599,10 +600,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 		return firstError
 	}
 
-	// then create and populate the vreplication table
-	queries := make([]string, 0, 4)
-	queries = append(queries, binlogplayer.CreateVReplicationTable()...)
-
+	sourcePositions := make([]string, len(scw.sourceShards))
 	// get the current position from the sources
 	for shardIndex := range scw.sourceShards {
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
@@ -611,20 +609,29 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-
-		queries = append(queries, binlogplayer.CreateVReplication(uint32(shardIndex), status.Position, scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix()))
+		sourcePositions[shardIndex] = status.Position
 	}
 
 	for _, si := range scw.destinationShards {
 		destinationWaitGroup.Add(1)
-		go func(keyspace, shard string) {
+		go func(keyspace, shard string, kr *topodatapb.KeyRange) {
 			defer destinationWaitGroup.Done()
 			scw.wr.Logger().Infof("Making and populating vreplication table")
 			keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
+
+			queries := binlogplayer.CreateVReplicationTable()
+			for shardIndex, src := range scw.sourceShards {
+				bls := &binlogdatapb.BinlogSource{
+					Keyspace: src.Keyspace(),
+					Shard:    src.ShardName(),
+					KeyRange: kr,
+				}
+				queries = append(queries, binlogplayer.CreateVReplication(uint32(shardIndex), "LegacySplitClone", bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix()))
+			}
 			if err := runSQLCommands(ctx, scw.wr, scw.tsc, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
 				processError("vreplication queries failed: %v", err)
 			}
-		}(si.Keyspace(), si.ShardName())
+		}(si.Keyspace(), si.ShardName(), si.KeyRange)
 	}
 	destinationWaitGroup.Wait()
 	if firstError != nil {

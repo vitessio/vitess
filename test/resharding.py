@@ -687,6 +687,20 @@ primary key (name)
     utils.run_vtctl(['ValidateSchemaKeyspace', '--exclude_tables=unrelated',
                      'test_keyspace'], auto_log=True)
 
+    # Verify vreplication table entries
+    result = shard_2_master.mquery('_vt', 'select * from vreplication')
+    self.assertEqual(len(result), 1)
+    self.assertEqual(result[0][1], 'SplitClone')
+    self.assertEqual(result[0][2],
+      'keyspace:"test_keyspace" shard:"80-" '
+      'key_range:<start:"200" end:"300" > ')
+
+    result = shard_3_master.mquery('_vt', 'select * from vreplication')
+    self.assertEqual(len(result), 1)
+    self.assertEqual(result[0][1], 'SplitClone')
+    self.assertEqual(result[0][2],
+      'keyspace:"test_keyspace" shard:"80-" key_range:<start:"300" > ')
+
     # check the binlog players are running and exporting vars
     self.check_destination_master(shard_2_master, ['test_keyspace/80-'])
     self.check_destination_master(shard_3_master, ['test_keyspace/80-'])
