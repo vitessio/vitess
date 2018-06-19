@@ -21,16 +21,44 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/throttler"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestCreateVReplication(t *testing.T) {
+func TestCreateVReplicationKeyRange(t *testing.T) {
 	want := "INSERT INTO _vt.vreplication " +
-		"(id, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp) " +
-		"VALUES (18372, 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0)"
+		"(id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) " +
+		`VALUES (18372, 'Resharding', 'keyspace:"ks" shard:"0" key_range:<end:"\200" > ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Stopped')`
 
-	got := CreateVReplication(18372, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823)
+	bls := binlogdatapb.BinlogSource{
+		Keyspace: "ks",
+		Shard:    "0",
+		KeyRange: &topodatapb.KeyRange{
+			End: []byte{0x80},
+		},
+	}
+
+	got := CreateVReplication(18372, "Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823)
 	if got != want {
-		t.Errorf("CreateVReplication() = %#v, want %#v", got, want)
+		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
+	}
+}
+
+func TestCreateVReplicationTables(t *testing.T) {
+	want := "INSERT INTO _vt.vreplication " +
+		"(id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) " +
+		`VALUES (18372, 'Resharding', 'keyspace:"ks" shard:"0" tables:"a" tables:"b" ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Stopped')`
+
+	bls := binlogdatapb.BinlogSource{
+		Keyspace: "ks",
+		Shard:    "0",
+		Tables:   []string{"a", "b"},
+	}
+
+	got := CreateVReplication(18372, "Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823)
+	if got != want {
+		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
 	}
 }
 

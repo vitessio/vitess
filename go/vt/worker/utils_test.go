@@ -62,13 +62,17 @@ func expectBlpCheckpointCreationQueries(f *fakesqldb.DB) {
 	f.AddExpectedQuery("CREATE DATABASE IF NOT EXISTS _vt", nil)
 	f.AddExpectedQuery("CREATE TABLE IF NOT EXISTS _vt.vreplication (\n"+
 		"  id INT(10) UNSIGNED NOT NULL,\n"+
-		"  pos VARBINARY(64000) DEFAULT NULL,\n"+
+		"  workflow VARBINARY(1024) NOT NULL,\n"+
+		"  source VARBINARY(10000) NOT NULL,\n"+
+		"  pos VARBINARY(40000) DEFAULT NULL,\n"+
 		"  max_tps BIGINT(20) NOT NULL,\n"+
 		"  max_replication_lag BIGINT(20) NOT NULL,\n"+
 		"  time_updated BIGINT(20) UNSIGNED NOT NULL,\n"+
 		"  transaction_timestamp BIGINT(20) UNSIGNED NOT NULL,\n"+
+		"  state VARBINARY(128) NOT NULL,\n"+
+		"  message VARBINARY(1024) DEFAULT NULL,\n"+
 		"  PRIMARY KEY (id)\n) ENGINE=InnoDB", nil)
-	f.AddExpectedQuery("INSERT INTO _vt.vreplication (id, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp) VALUES (0, 'MariaDB/12-34-5678', *", nil)
+	f.AddExpectedQuery("INSERT INTO _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) VALUES (0, *", nil)
 }
 
 // sourceRdonlyFakeDB fakes out the MIN, MAX query on the primary key.

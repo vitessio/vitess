@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/worker/events"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -1063,6 +1064,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		queries = append(queries, binlogplayer.CreateVReplicationTable()...)
 
 		// get the current position from the sources
+		sourcePositions := make([]string, len(scw.sourceShards))
 		for shardIndex := range scw.sourceShards {
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex])
@@ -1070,22 +1072,35 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			if err != nil {
 				return err
 			}
-
-			// TODO(mberlin): Fill in scw.maxReplicationLag once the adapative
-			//                throttler is enabled by default.
-			queries = append(queries, binlogplayer.CreateVReplication(uint32(shardIndex), status.Position, scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix()))
+			sourcePositions[shardIndex] = status.Position
 		}
 
 		for _, si := range scw.destinationShards {
 			destinationWaitGroup.Add(1)
-			go func(keyspace, shard string) {
+			go func(keyspace, shard string, kr *topodatapb.KeyRange) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Making and populating vreplication table")
 				keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
+
+				queries := binlogplayer.CreateVReplicationTable()
+				for shardIndex, src := range scw.sourceShards {
+					bls := &binlogdatapb.BinlogSource{
+						Keyspace: src.Keyspace(),
+						Shard:    src.ShardName(),
+					}
+					if scw.tables == nil {
+						bls.KeyRange = kr
+					} else {
+						bls.Tables = scw.tables
+					}
+					// TODO(mberlin): Fill in scw.maxReplicationLag once the adapative
+					//                throttler is enabled by default.
+					queries = append(queries, binlogplayer.CreateVReplication(uint32(shardIndex), "SplitClone", bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix()))
+				}
 				if err := runSQLCommands(ctx, scw.wr, scw.tsc, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
 					processError("vreplication queries failed: %v", err)
 				}
-			}(si.Keyspace(), si.ShardName())
+			}(si.Keyspace(), si.ShardName(), si.KeyRange)
 		}
 		destinationWaitGroup.Wait()
 		if firstError != nil {

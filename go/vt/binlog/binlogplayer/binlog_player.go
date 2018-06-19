@@ -49,6 +49,13 @@ var (
 	BlplQuery = "Query"
 	// BlplTransaction is the key for the stats map.
 	BlplTransaction = "Transaction"
+
+	// VRRunning is for the Running state.
+	VRRunning = "Running"
+	// VRStopped is for the Stopped state.
+	VRStopped = "Stopped"
+	// VRError is for the Error state.
+	VRError = "Error"
 )
 
 // Stats is the internal stats of a player. It is a different
@@ -465,24 +472,28 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 func CreateVReplicationTable() []string {
 	return []string{
 		"CREATE DATABASE IF NOT EXISTS _vt",
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS _vt.vreplication (
+		`CREATE TABLE IF NOT EXISTS _vt.vreplication (
   id INT(10) UNSIGNED NOT NULL,
-  pos VARBINARY(%v) DEFAULT NULL,
+  workflow VARBINARY(1024) NOT NULL,
+  source VARBINARY(10000) NOT NULL,
+  pos VARBINARY(40000) DEFAULT NULL,
   max_tps BIGINT(20) NOT NULL,
   max_replication_lag BIGINT(20) NOT NULL,
   time_updated BIGINT(20) UNSIGNED NOT NULL,
   transaction_timestamp BIGINT(20) UNSIGNED NOT NULL,
+  state VARBINARY(128) NOT NULL,
+  message VARBINARY(1024) DEFAULT NULL,
   PRIMARY KEY (id)
-) ENGINE=InnoDB`, mysql.MaximumPositionSize)}
+) ENGINE=InnoDB`}
 }
 
 // CreateVReplication returns a statement to populate the first value into
 // the _vt.vreplication table.
-func CreateVReplication(index uint32, position string, maxTPS int64, maxReplicationLag int64, timeUpdated int64) string {
+func CreateVReplication(index uint32, workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64) string {
 	return fmt.Sprintf("INSERT INTO _vt.vreplication "+
-		"(id, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp) "+
-		"VALUES (%v, '%v', %v, %v, %v, 0)",
-		index, position, maxTPS, maxReplicationLag, timeUpdated)
+		"(id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) "+
+		"VALUES (%v, '%v', '%s', '%v', %v, %v, %v, 0, '%v')",
+		index, workflow, source.String(), position, maxTPS, maxReplicationLag, timeUpdated, VRStopped)
 }
 
 // updateVReplicationPos returns a statement to update a value in the
