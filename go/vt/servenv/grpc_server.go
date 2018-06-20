@@ -75,6 +75,14 @@ var (
 	// connections are forcibly closed.
 	GRPCMaxConnectionAgeGrace = flag.Duration("grpc_max_connection_age_grace", time.Duration(math.MaxInt64), "Additional grace period after grpc_max_connection_age, after which connections are forcibly closed.")
 
+	// GRPCInitialConnWindowSize ServerOption that sets window size for a connection.
+	// The lower bound for window size is 64K and any value smaller than that will be ignored.
+	GRPCInitialConnWindowSize = flag.Int("grpc_server_initial_conn_window_size", 0, "grpc server initial connection window size")
+
+	// GRPCInitialWindowSize ServerOption that sets window size for stream.
+	// The lower bound for window size is 64K and any value smaller than that will be ignored.
+	GRPCInitialWindowSize = flag.Int("grpc_server_initial_window_size", 0, "grpc server initial window size")
+
 	authPlugin Authenticator
 )
 
@@ -124,6 +132,16 @@ func createGRPCServer() {
 	log.Infof("Setting grpc max message size to %d", *grpccommon.MaxMessageSize)
 	opts = append(opts, grpc.MaxRecvMsgSize(*grpccommon.MaxMessageSize))
 	opts = append(opts, grpc.MaxSendMsgSize(*grpccommon.MaxMessageSize))
+
+	if *GRPCInitialConnWindowSize != 0 {
+		log.Infof("Setting grpc server initial conn window size to %d", int32(*GRPCInitialConnWindowSize))
+		opts = append(opts, grpc.InitialConnWindowSize(int32(*GRPCInitialConnWindowSize)))
+	}
+
+	if *GRPCInitialWindowSize != 0 {
+		log.Infof("Setting grpc server initial window size to %d", int32(*GRPCInitialWindowSize))
+		opts = append(opts, grpc.InitialWindowSize(int32(*GRPCInitialWindowSize)))
+	}
 
 	if GRPCMaxConnectionAge != nil {
 		ka := keepalive.ServerParameters{
