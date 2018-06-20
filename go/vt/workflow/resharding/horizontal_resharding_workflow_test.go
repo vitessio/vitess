@@ -66,7 +66,7 @@ func TestHorizontalResharding(t *testing.T) {
 	// Run the manager in the background.
 	wg, _, cancel := startManager(m)
 	// Create the workflow.
-	uuid, err := m.Create(ctx, horizontalReshardingFactoryName, []string{"-keyspace=" + testKeyspace, "-vtworkers=" + testVtworkers, "-enable_approvals=false", "-min_healthy_rdonly_tablets", "1", "-split_cmd", "SplitClone"})
+	uuid, err := m.Create(ctx, horizontalReshardingFactoryName, []string{"-keyspace=" + testKeyspace, "-vtworkers=" + testVtworkers, "-enable_approvals=false"})
 	if err != nil {
 		t.Fatalf("cannot create resharding workflow: %v", err)
 	}

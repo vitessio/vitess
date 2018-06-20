@@ -78,7 +78,7 @@ func (hw *HorizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *wo
 		return err
 	}
 
-	args := []string{splitCmd, "--min_healthy_rdonly_tablets", minHealthyRdonlyTablets, sourceKeyspaceShard}
+	args := []string{splitCmd, "--min_healthy_rdonly_tablets=" + minHealthyRdonlyTablets, sourceKeyspaceShard}
 	_, err := automation.ExecuteVtworker(hw.ctx, worker, args)
 	return err
 }
