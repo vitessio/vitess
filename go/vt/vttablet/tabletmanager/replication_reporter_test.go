@@ -29,10 +29,9 @@ func TestBasicMySQLReplicationLag(t *testing.T) {
 	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	mysqld.Replicating = true
 	mysqld.SecondsBehindMaster = 10
-	slaveStopped := true
 
 	rep := &replicationReporter{
-		agent: &ActionAgent{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
+		agent: &ActionAgent{MysqlDaemon: mysqld},
 		now:   time.Now,
 	}
 	dur, err := rep.Report(true, true)
@@ -44,10 +43,9 @@ func TestBasicMySQLReplicationLag(t *testing.T) {
 func TestNoKnownMySQLReplicationLag(t *testing.T) {
 	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	mysqld.Replicating = false
-	slaveStopped := true
 
 	rep := &replicationReporter{
-		agent: &ActionAgent{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
+		agent: &ActionAgent{MysqlDaemon: mysqld},
 		now:   time.Now,
 	}
 	dur, err := rep.Report(true, true)
@@ -60,11 +58,10 @@ func TestExtrapolatedMySQLReplicationLag(t *testing.T) {
 	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	mysqld.Replicating = true
 	mysqld.SecondsBehindMaster = 10
-	slaveStopped := true
 
 	now := time.Now()
 	rep := &replicationReporter{
-		agent: &ActionAgent{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
+		agent: &ActionAgent{MysqlDaemon: mysqld},
 		now:   func() time.Time { return now },
 	}
 
@@ -88,11 +85,10 @@ func TestNoExtrapolatedMySQLReplicationLag(t *testing.T) {
 	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	mysqld.Replicating = true
 	mysqld.SecondsBehindMaster = 10
-	slaveStopped := true
 
 	now := time.Now()
 	rep := &replicationReporter{
-		agent: &ActionAgent{MysqlDaemon: mysqld, _slaveStopped: &slaveStopped},
+		agent: &ActionAgent{MysqlDaemon: mysqld},
 		now:   func() time.Time { return now },
 	}
 

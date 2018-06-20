@@ -350,54 +350,10 @@ class TestTabletManager(unittest.TestCase):
     self.assertEqual(ti['type'], topodata_pb2.MASTER,
                      'unexpected master type: %s' % ti['type'])
 
-    # stop replication at the mysql level.
-    tablet_62044.mquery('', 'stop slave')
-    # vttablet replication_reporter should restart it.
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
-    # insert something on the master and wait for it on the slave.
-    tablet_62344.mquery('vt_test_keyspace', [
-        'create table repl_test_table (id int)',
-        'insert into repl_test_table values (123)'], write=True)
-    timeout = 10.0
-    while True:
-      try:
-        result = tablet_62044.mquery('vt_test_keyspace',
-                                     'select * from repl_test_table')
-        if result:
-          self.assertEqual(result[0][0], 123L)
-          break
-      except MySQLdb.ProgrammingError:
-        # Maybe the create table hasn't gone trough yet, we wait more
-        logging.exception('got this exception waiting for data, ignoring it')
-      timeout = utils.wait_step(
-          'slave replication repaired by replication_reporter', timeout)
-
-    # stop replication, make sure we don't go unhealthy.
-    # (we have a baseline as well, so the time should be good).
-    utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias])
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
-    self.check_healthz(tablet_62044, True)
-
     # make sure status web page is healthy
     self.assertRegexpMatches(tablet_62044.get_status(), healthy_expr)
 
-    # make sure the health stream is updated
-    health = utils.run_vtctl_json(['VtTabletStreamHealth',
-                                   '-count', '1',
-                                   tablet_62044.tablet_alias])
-    self.assertTrue(('seconds_behind_master' not in health['realtime_stats']) or
-                    (health['realtime_stats']['seconds_behind_master'] < 30),
-                    'got unexpected health: %s' % str(health))
-    self.assertIn('serving', health)
-
-    # then restart replication, make sure we stay healthy
-    utils.run_vtctl(['StartSlave', tablet_62044.tablet_alias])
-    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
-
-    # make sure status web page is healthy
-    self.assertRegexpMatches(tablet_62044.get_status(), healthy_expr)
-
-    # now test VtTabletStreamHealth returns the right thing
+    # test VtTabletStreamHealth returns the right thing
     stdout, _ = utils.run_vtctl(['VtTabletStreamHealth',
                                  '-count', '2',
                                  tablet_62044.tablet_alias],
