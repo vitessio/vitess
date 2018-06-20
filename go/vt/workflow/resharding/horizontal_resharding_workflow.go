@@ -76,7 +76,7 @@ func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflo
 	subFlags := flag.NewFlagSet(horizontalReshardingFactoryName, flag.ContinueOnError)
 	keyspace := subFlags.String("keyspace", "", "Name of keyspace to perform horizontal resharding")
 	vtworkersStr := subFlags.String("vtworkers", "", "A comma-separated list of vtworker addresses")
-	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "", "Minimum number of rdonly healthy tablets required")
+	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "", "Minimum number of healthy RDONLY tablets required")
 	splitCmd := subFlags.String("split_cmd", "", "Split command to use to perform horizontal resharding (either SplitClone or LegacySplitClone)")
 	enableApprovals := subFlags.Bool("enable_approvals", true, "If true, executions of tasks require user's approvals on the UI.")
 
@@ -84,7 +84,7 @@ func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflo
 		return err
 	}
 	if *keyspace == "" || *vtworkersStr == "" || *minHealthyRdonlyTablets == "" || *splitCmd == "" {
-		return fmt.Errorf("Keyspace name, min healthy rdonly tablets and vtworkers information must be provided for horizontal resharding")
+		return fmt.Errorf("Keyspace name, min healthy rdonly tablets, split command, and vtworkers information must be provided for horizontal resharding")
 	}
 
 	vtworkers := strings.Split(*vtworkersStr, ",")
