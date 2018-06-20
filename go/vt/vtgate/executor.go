@@ -740,7 +740,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	defer func() { logStats.ExecuteTime = time.Since(execStart) }()
 
 	switch show.Type {
-	case sqlparser.KeywordString(sqlparser.VARIABLES):
+	case sqlparser.KeywordString(sqlparser.COLLATION), sqlparser.KeywordString(sqlparser.VARIABLES):
 		if destKeyspace == "" {
 			keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
 			if err != nil {
