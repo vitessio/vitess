@@ -138,6 +138,7 @@ func repairReplication(ctx context.Context, agent *ActionAgent) error {
 		// lock any other actions on this tablet by Orchestrator.
 		if err := agent.orc.BeginMaintenance(agent.Tablet(), "vttablet has been told to StopSlave"); err != nil {
 			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
+			return fmt.Errorf("Orchestrator BeginMaintenance failed :%v, skipping repairReplication", err)
 		}
 	}
 
