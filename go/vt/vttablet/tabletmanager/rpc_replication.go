@@ -404,7 +404,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	return agent.setMasterLocked(ctx, parentAlias, timeCreatedNS, forceStartSlave)
 }
 
-func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) (err error) {
+func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err
