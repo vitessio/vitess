@@ -270,7 +270,7 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	// We can use the GlobalReadOnlyCell for this call.
 	ci, err := ts.GetCellInfo(ctx, cell, false /*strongRead*/)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GetCellInfo failed for cell %v: %s", cell, err)
 	}
 
 	// Connect to the cell topo server, while holding the lock.
