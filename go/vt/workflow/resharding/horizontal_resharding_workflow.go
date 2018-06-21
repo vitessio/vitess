@@ -76,19 +76,21 @@ func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflo
 	subFlags := flag.NewFlagSet(horizontalReshardingFactoryName, flag.ContinueOnError)
 	keyspace := subFlags.String("keyspace", "", "Name of keyspace to perform horizontal resharding")
 	vtworkersStr := subFlags.String("vtworkers", "", "A comma-separated list of vtworker addresses")
+	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "1", "Minimum number of healthy RDONLY tablets required")
+	splitCmd := subFlags.String("split_cmd", "SplitClone", "Split command to use to perform horizontal resharding (either SplitClone or LegacySplitClone)")
 	enableApprovals := subFlags.Bool("enable_approvals", true, "If true, executions of tasks require user's approvals on the UI.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if *keyspace == "" || *vtworkersStr == "" {
-		return fmt.Errorf("Keyspace name, vtworkers information must be provided for horizontal resharding")
+	if *keyspace == "" || *vtworkersStr == "" || *minHealthyRdonlyTablets == "" || *splitCmd == "" {
+		return fmt.Errorf("Keyspace name, min healthy rdonly tablets, split command, and vtworkers information must be provided for horizontal resharding")
 	}
 
 	vtworkers := strings.Split(*vtworkersStr, ",")
 	w.Name = fmt.Sprintf("Horizontal resharding on keyspace %s", *keyspace)
 
-	checkpoint, err := initCheckpoint(m.TopoServer(), *keyspace, vtworkers)
+	checkpoint, err := initCheckpoint(m.TopoServer(), *keyspace, vtworkers, *minHealthyRdonlyTablets, *splitCmd)
 	if err != nil {
 		return err
 	}
@@ -209,12 +211,12 @@ func createUINodes(rootNode *workflow.Node, phaseName PhaseType, shards []string
 }
 
 // initCheckpoint initialize the checkpoint for the horizontal workflow.
-func initCheckpoint(ts *topo.Server, keyspace string, vtworkers []string) (*workflowpb.WorkflowCheckpoint, error) {
+func initCheckpoint(ts *topo.Server, keyspace string, vtworkers []string, minHealthyRdonlyTablets string, splitCmd string) (*workflowpb.WorkflowCheckpoint, error) {
 	sourceShards, destinationShards, err := findSourceAndDestinationShards(ts, keyspace)
 	if err != nil {
 		return nil, err
 	}
-	return initCheckpointFromShards(keyspace, vtworkers, sourceShards, destinationShards)
+	return initCheckpointFromShards(keyspace, vtworkers, sourceShards, destinationShards, minHealthyRdonlyTablets, splitCmd)
 }
 
 func findSourceAndDestinationShards(ts *topo.Server, keyspace string) ([]string, []string, error) {
@@ -244,7 +246,7 @@ func findSourceAndDestinationShards(ts *topo.Server, keyspace string) ([]string,
 	return sourceShards, destinationShards, nil
 }
 
-func initCheckpointFromShards(keyspace string, vtworkers, sourceShards, destinationShards []string) (*workflowpb.WorkflowCheckpoint, error) {
+func initCheckpointFromShards(keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets string, splitCmd string) (*workflowpb.WorkflowCheckpoint, error) {
 	if len(vtworkers) != len(sourceShards) {
 		return nil, fmt.Errorf("there are %v vtworkers, %v source shards: the number should be same", len(vtworkers), len(sourceShards))
 	}
@@ -259,9 +261,11 @@ func initCheckpointFromShards(keyspace string, vtworkers, sourceShards, destinat
 	})
 	initTasks(tasks, phaseClone, sourceShards, func(i int, shard string) map[string]string {
 		return map[string]string{
-			"keyspace":     keyspace,
-			"source_shard": shard,
-			"vtworker":     vtworkers[i],
+			"keyspace":                   keyspace,
+			"source_shard":               shard,
+			"min_healthy_rdonly_tablets": minHealthyRdonlyTablets,
+			"split_cmd":                  splitCmd,
+			"vtworker":                   vtworkers[i],
 		}
 	})
 	initTasks(tasks, phaseWaitForFilteredReplication, destinationShards, func(i int, shard string) map[string]string {
