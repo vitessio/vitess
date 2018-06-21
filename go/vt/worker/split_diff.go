@@ -57,8 +57,7 @@ type SplitDiffWorker struct {
 	shardInfo    *topo.ShardInfo
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAlias      *topodatapb.TabletAlias
-	destinationAlias *topodatapb.TabletAlias
+	sourceAlias *topodatapb.TabletAlias
 
 	// populated during WorkerStateDiff
 	sourceSchemaDefinition      *tabletmanagerdatapb.SchemaDefinition
@@ -168,6 +167,14 @@ func (sdw *SplitDiffWorker) run(ctx context.Context) error {
 		return err
 	}
 
+	// fifth phase: resume filtered replication in master
+	if err := sdw.resumeFilteredReplication(ctx); err != nil {
+		return fmt.Errorf("resumeFilteredReplication() failed: %v", err)
+	}
+	if err := checkDone(ctx); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -216,10 +223,7 @@ func (sdw *SplitDiffWorker) init(ctx context.Context) error {
 // - mark them all as 'worker' pointing back to us
 func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	sdw.SetState(WorkerStateFindTargets)
-
-	// find an appropriate tablet in destination shard
 	var err error
-	sdw.destinationAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */, sdw.cell, sdw.keyspace, sdw.shard, sdw.minHealthyRdonlyTablets)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
 	}
@@ -247,15 +251,6 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 //    change the existing ChangeSlaveType cleanup action to 'spare' type)
 // 3 - ask the master of the destination shard to resume filtered replication
 //   up to the new list of positions, and return its binlog position.
-// 4 - wait until the destination tablet is equal or passed that master
-//   binlog position, and stop its replication.
-//   (add a cleanup task to restart binlog replication on it, and change
-//    the existing ChangeSlaveType cleanup action to 'spare' type)
-// 5 - restart filtered replication on the destination master.
-//   (remove the cleanup task that does the same)
-// At this point, the source and the destination tablet are stopped at the same
-// point.
-
 func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	sdw.SetState(WorkerStateSyncReplication)
 
@@ -316,30 +311,26 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	//     replication up to the new list of positions
 	sdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.MasterAlias, stopPositionList)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	masterPos, err := sdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo.Tablet, stopPositionList, *remoteActionsTimeout)
+	_, err = sdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo.Tablet, stopPositionList, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil for %v until %v failed: %v", sdw.shardInfo.MasterAlias, stopPositionList, err)
 	}
 
-	// 4 - wait until the destination tablet is equal or passed
-	//     that master binlog position, and stop its replication.
-	sdw.wr.Logger().Infof("Waiting for destination tablet %v to catch up to %v", sdw.destinationAlias, masterPos)
-	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	destinationTablet, err := sdw.wr.TopoServer().GetTablet(shortCtx, sdw.destinationAlias)
-	cancel()
-	if err != nil {
-		return err
-	}
-	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	_, err = sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, destinationTablet.Tablet, masterPos, *remoteActionsTimeout)
-	cancel()
-	if err != nil {
-		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos, err)
-	}
-	wrangler.RecordStartSlaveAction(sdw.cleaner, destinationTablet.Tablet)
+	return nil
+}
 
-	// 5 - restart filtered replication on destination master
+func (sdw *SplitDiffWorker) resumeFilteredReplication(ctx context.Context) error {
+	sdw.SetState(WorkerStateResumeFilteredReplication)
+
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	masterInfo, err := sdw.wr.TopoServer().GetTablet(shortCtx, sdw.shardInfo.MasterAlias)
+	cancel()
+	if err != nil {
+		return fmt.Errorf("resumeFilteredReplication: cannot get Tablet record for master %v: %v", sdw.shardInfo.MasterAlias, err)
+	}
+
+	// restart filtered replication on destination master
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = sdw.wr.TabletManagerClient().StartBlp(shortCtx, masterInfo.Tablet)
@@ -370,10 +361,10 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(
-			shortCtx, sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
+			shortCtx, sdw.shardInfo.MasterAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
-		sdw.wr.Logger().Infof("Got schema from destination %v", sdw.destinationAlias)
+		sdw.wr.Logger().Infof("Got schema from destination %v", sdw.shardInfo.MasterAlias)
 		wg.Done()
 	}()
 	wg.Add(1)
@@ -477,9 +468,9 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			// or a filtered scan.
 			var destinationQueryResultReader *QueryResultReader
 			if key.KeyRangeEqual(overlap, sdw.shardInfo.KeyRange) {
-				destinationQueryResultReader, err = TableScan(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition)
+				destinationQueryResultReader, err = TableScan(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.shardInfo.MasterAlias, tableDefinition)
 			} else {
-				destinationQueryResultReader, err = TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, overlap, keyspaceSchema, sdw.keyspaceInfo.ShardingColumnName, sdw.keyspaceInfo.ShardingColumnType)
+				destinationQueryResultReader, err = TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.shardInfo.MasterAlias, tableDefinition, overlap, keyspaceSchema, sdw.keyspaceInfo.ShardingColumnName, sdw.keyspaceInfo.ShardingColumnType)
 			}
 			if err != nil {
 				newErr := fmt.Errorf("TableScan(ByKeyRange?)(destination) failed: %v", err)
