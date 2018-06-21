@@ -218,11 +218,6 @@ func testSplitDiff(t *testing.T, v3 bool) {
 
 	leftMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
 		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
-	leftRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
-		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
-	leftRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 12,
-		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
-
 	// add the topo and schema data we'll need
 	if err := ts.CreateShard(ctx, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
@@ -237,12 +232,12 @@ func testSplitDiff(t *testing.T, v3 bool) {
 
 	excludedTable := "excludedTable1"
 
-	for _, rdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2, leftRdonly1, leftRdonly2} {
+	for _, tablet := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2, leftMaster} {
 		// The destination only has half the data.
 		// For v2, we do filtering at the SQl level.
 		// For v3, we do it in the client.
 		// So in any case, we need real data.
-		rdonly.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
+		tablet.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 				{
@@ -272,10 +267,10 @@ func testSplitDiff(t *testing.T, v3 bool) {
 		})
 	}
 
-	for _, destRdonly := range []*testlib.FakeTablet{leftRdonly1, leftRdonly2} {
-		qs := fakes.NewStreamHealthQueryService(destRdonly.Target())
+	for _, dest := range []*testlib.FakeTablet{leftMaster} {
+		qs := fakes.NewStreamHealthQueryService(dest.Target())
 		qs.AddDefaultHealthResponse()
-		grpcqueryservice.Register(destRdonly.RPCServer, &destinationTabletServer{
+		grpcqueryservice.Register(dest.RPCServer, &destinationTabletServer{
 			t: t,
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
@@ -283,7 +278,7 @@ func testSplitDiff(t *testing.T, v3 bool) {
 	}
 
 	// Start action loop after having registered all RPC services.
-	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly1, leftRdonly2} {
+	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster} {
 		ft.StartActionLoop(t, wi.wr)
 		defer ft.StopActionLoop(t)
 	}

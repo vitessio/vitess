@@ -41,6 +41,9 @@ const (
 	// WorkerStateSyncReplication is set when the worker ensures that source and
 	// destination tablets are at the same GTID during the diff.
 	WorkerStateSyncReplication StatusWorkerState = "synchronizing replication"
+	// WorkerStateResumeFilteredReplication is set after a diff operation.
+	// Filtered replication is resumed in the destination master.
+	WorkerStateResumeFilteredReplication StatusWorkerState = "resuming filtered replication in destination master"
 
 	// WorkerStateCloneOnline is set when the worker copies the data in the online phase.
 	WorkerStateCloneOnline StatusWorkerState = "cloning the data (online)"
