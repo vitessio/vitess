@@ -33,11 +33,54 @@ import (
 	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
 )
 
+/*
+
+  Vtbench is a simple load testing client to compare workloads in
+  Vitess across the various client/server protocols.
+
+  There are a number of command line options to control the behavior,
+  but as a basic example, the three supported client protocols are:
+
+  Mysql protocol to vtgate:
+  vtbench \
+        -protocol mysql \
+        -host vtgate-host.my.domain \
+        -port 15306 \
+        -user db_username \
+        -db-credentials-file ./vtbench_db_creds.json \
+        -db @replica \
+        -sql "select * from loadtest_table where id=123456789" \
+        -threads 10 \
+        -count 10
+
+  GRPC to vtgate:
+  vtbench \
+        -protocol grpc-vtgate \
+        -host vtgate-host.my.domain \
+        -port 15999 \
+        -db @replica  \
+        $VTTABLET_GRPC_ARGS \
+        -sql "select * from loadtest_table where id=123456789" \
+        -threads 10 \
+        -count 10
+
+  GRPC to vttablet:
+  vtbench \
+        -protocol grpc-vttablet \
+        -host tablet-loadtest-00-80.my.domain \
+        -port 15999 \
+        -db loadtest/00-80@replica  \
+        -sql "select * from loadtest_table where id=123456789" \
+        -threads 10 \
+        -count 10
+
+*/
+
 var (
 	// connection flags
 	host     = flag.String("host", "", "vtgate host(s) in the form 'host1,host2,...'")
 	port     = flag.Int("port", 0, "vtgate port")
-	protocol = flag.String("protocol", "mysql", "client protocol, either mysql (default) or grpc")
+	protocol = flag.String("protocol", "mysql", "client protocol, either mysql (default), grpc-vtgate, or grpc-vttablet")
 	user     = flag.String("user", "", "username to connect using mysql (password comes from the db-credentials-file)")
 	db       = flag.String("db", "", "db name to use when connecting / running the queries (e.g. @replica, keyspace, keyspace/shard etc)")
 
@@ -130,5 +173,4 @@ func main() {
 		}
 		last = bucket
 	}
-
 }

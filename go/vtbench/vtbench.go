@@ -112,17 +112,18 @@ func NewBench(threads, count int, cp ConnParams, query string) *Bench {
 
 // Run executes the test
 func (b *Bench) Run(ctx context.Context) error {
-	err := b.createThreads(ctx)
+	err := b.createConns(ctx)
 	if err != nil {
 		return err
 	}
 
-	b.startThreads(ctx)
+	b.createThreads(ctx)
+	b.runTest(ctx)
 	return nil
 }
 
-func (b *Bench) createThreads(ctx context.Context) error {
-	log.V(10).Infof("creating %d client threads...", b.Threads)
+func (b *Bench) createConns(ctx context.Context) error {
+	log.V(10).Infof("creating %d client connections...", b.Threads)
 	start := time.Now()
 	reportInterval := 2 * time.Second
 	report := start.Add(reportInterval)
@@ -180,7 +181,7 @@ func (b *Bench) getQuery(i int) (string, map[string]*querypb.BindVariable) {
 	return query, bindVars
 }
 
-func (b *Bench) startThreads(ctx context.Context) error {
+func (b *Bench) createThreads(ctx context.Context) {
 	// Create a barrier so all the threads start at the same time
 	b.lock.Lock()
 
@@ -194,7 +195,9 @@ func (b *Bench) startThreads(ctx context.Context) error {
 	b.wg.Wait()
 
 	b.wg.Add(b.Threads)
+}
 
+func (b *Bench) runTest(ctx context.Context) error {
 	start := time.Now()
 	fmt.Printf("Starting test threads\n")
 	b.lock.Unlock()
@@ -232,21 +235,3 @@ func (bt *benchThread) clientLoop(ctx context.Context) {
 
 	b.wg.Done()
 }
-
-/*
-
-func run() {
-	for i := 0; i < *threads; ++i {
-		go run()
-	}
-
-
-func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
-
-func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
-	result, _, err = c.ExecuteFetchMulti(query, maxrows, wantfields)
-	return result, err
-}
-
-}
-*/
