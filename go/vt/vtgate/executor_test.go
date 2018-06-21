@@ -607,6 +607,10 @@ func TestExecutorShow(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show collation", nil)
+	if err != nil {
+		t.Error(err)
+	}
 	qr, err := executor.Execute(context.Background(), "TestExecute", session, "show vitess_shards", nil)
 	if err != nil {
 		t.Error(err)
