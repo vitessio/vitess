@@ -133,6 +133,7 @@ lookup_unique | Lookup Unique | Lookup table unique values | If unowned | Yes | 
 numeric | Functional Unique | Identity | Yes | Yes | 0
 numeric_static_map | Functional Unique | A JSON file that maps input values to keyspace IDs | Yes | No | 1
 unicode_loose_md5 | Functional Unique | Case-insensitive (UCA level 1) md5 hash | Yes | No | 1
+reverse_bits | Functional Unique | Bit Reversal | Yes | Yes | 1
 
 Custom vindexes can also be plugged in as needed.
 
