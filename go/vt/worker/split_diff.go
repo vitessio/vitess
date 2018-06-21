@@ -330,7 +330,7 @@ func (sdw *SplitDiffWorker) resumeFilteredReplication(ctx context.Context) error
 		return fmt.Errorf("resumeFilteredReplication: cannot get Tablet record for master %v: %v", sdw.shardInfo.MasterAlias, err)
 	}
 
-	// 1 - restart filtered replication on destination master
+	// restart filtered replication on destination master
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = sdw.wr.TabletManagerClient().StartBlp(shortCtx, masterInfo.Tablet)
