@@ -60,7 +60,7 @@ func NewError(code ErrorCode, node string) error {
 	case NoUpdateNeeded:
 		message = fmt.Sprintf("no update needed: %s", node)
 	default:
-		message = fmt.Sprintf("unknonw code: %s", node)
+		message = fmt.Sprintf("unknown code: %s", node)
 	}
 	return Error{
 		code:    code,
