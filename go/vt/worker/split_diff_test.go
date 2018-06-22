@@ -168,7 +168,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 
 // TODO(aaijazi): Create a test in which source and destination data does not match
 
-func testSplitDiff(t *testing.T, v3 bool) {
+func testSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.TabletType) {
 	*useV3ReshardingMode = v3
 	ts := memorytopo.NewServer("cell1", "cell2")
 	ctx := context.Background()
@@ -219,9 +219,9 @@ func testSplitDiff(t *testing.T, v3 bool) {
 	leftMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
 		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
-		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		destinationTabletType, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 12,
-		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		destinationTabletType, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
 	// add the topo and schema data we'll need
 	if err := ts.CreateShard(ctx, "ks", "80-"); err != nil {
@@ -288,10 +288,12 @@ func testSplitDiff(t *testing.T, v3 bool) {
 		defer ft.StopActionLoop(t)
 	}
 
+	tabletTypeName, _ := topodatapb.TabletType_name[int32(destinationTabletType)]
 	// Run the vtworker command.
 	args := []string{
 		"SplitDiff",
 		"-exclude_tables", excludedTable,
+		"-dest_tablet_type", tabletTypeName,
 		"ks/-40",
 	}
 	// We need to use FakeTabletManagerClient because we don't
@@ -304,9 +306,13 @@ func testSplitDiff(t *testing.T, v3 bool) {
 }
 
 func TestSplitDiffv2(t *testing.T) {
-	testSplitDiff(t, false)
+	testSplitDiff(t, false, topodatapb.TabletType_RDONLY)
 }
 
 func TestSplitDiffv3(t *testing.T) {
-	testSplitDiff(t, true)
+	testSplitDiff(t, true, topodatapb.TabletType_RDONLY)
+}
+
+func TestSplitDiffWithReplica(t *testing.T) {
+	testSplitDiff(t, true, topodatapb.TabletType_REPLICA)
 }

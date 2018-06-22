@@ -219,6 +219,7 @@ func interactiveSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangl
 	}
 
 	// start the diff job
+	// TODO: @rafael - Add option to set destination tablet type in UI form.
 	wrk := NewSplitDiffWorker(wr, wi.cell, keyspace, shard, uint32(sourceUID), excludeTableArray, int(minHealthyRdonlyTablets), int(parallelDiffsCount), topodatapb.TabletType_RDONLY)
 	return wrk, nil, nil, nil
 }

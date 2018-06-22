@@ -49,7 +49,7 @@ type SplitDiffWorker struct {
 	sourceUID               uint32
 	excludeTables           []string
 	minHealthyRdonlyTablets int
-	destTabletType          topodatapb.TabletType
+	destinationTabletType   topodatapb.TabletType
 	parallelDiffsCount      int
 	cleaner                 *wrangler.Cleaner
 
@@ -77,7 +77,7 @@ func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, sou
 		sourceUID:               sourceUID,
 		excludeTables:           excludeTables,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
-		destTabletType:          tabletType,
+		destinationTabletType:   tabletType,
 		parallelDiffsCount:      parallelDiffsCount,
 		cleaner:                 &wrangler.Cleaner{},
 	}
@@ -230,7 +230,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 		sdw.keyspace,
 		sdw.shard,
 		1, /* minHealthyTablets */
-		sdw.destTabletType,
+		sdw.destinationTabletType,
 	)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
