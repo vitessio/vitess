@@ -323,6 +323,17 @@ func (s *server) RunBlpUntil(ctx context.Context, request *tabletmanagerdatapb.R
 	return response, err
 }
 
+func (s *server) VReplicationCreate(ctx context.Context, request *tabletmanagerdatapb.VReplicationCreateRequest) (response *tabletmanagerdatapb.VReplicationCreateResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "VReplicationCreate", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.VReplicationCreateResponse{}
+	id, err := s.agent.VReplicationCreate(ctx, request.Workflow, request.Source, request.Position, request.MaxTps, request.MaxReplicationLag)
+	if err == nil {
+		response.Id = id
+	}
+	return response, nil
+}
+
 //
 // Reparenting related functions
 //

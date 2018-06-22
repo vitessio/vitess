@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -221,6 +222,11 @@ func (client *FakeTabletManagerClient) StartBlp(ctx context.Context, tablet *top
 // RunBlpUntil is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *topodatapb.Tablet, positions []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error) {
 	return "", nil
+}
+
+// VReplicationCreate is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) VReplicationCreate(ctx context.Context, tablet *topodatapb.Tablet, workflow string, source *binlogdatapb.BinlogSource, position string, maxTps int64, maxReplicationLag int64) (int64, error) {
+	return 0, nil
 }
 
 //
