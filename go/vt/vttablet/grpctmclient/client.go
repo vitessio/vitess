@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -578,6 +579,26 @@ func (client *Client) RunBlpUntil(ctx context.Context, tablet *topodatapb.Tablet
 		return "", err
 	}
 	return response.Position, nil
+}
+
+// VReplicationCreate is part of the tmclient.TabletManagerClient interface.
+func (client *Client) VReplicationCreate(ctx context.Context, tablet *topodatapb.Tablet, workflow string, source *binlogdatapb.BinlogSource, position string, maxTps int64, maxReplicationLag int64) (int64, error) {
+	cc, c, err := client.dial(tablet)
+	if err != nil {
+		return 0, err
+	}
+	defer cc.Close()
+	response, err := c.VReplicationCreate(ctx, &tabletmanagerdatapb.VReplicationCreateRequest{
+		Workflow:          workflow,
+		Source:            source,
+		Position:          position,
+		MaxTps:            maxTps,
+		MaxReplicationLag: maxReplicationLag,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return response.Id, nil
 }
 
 //

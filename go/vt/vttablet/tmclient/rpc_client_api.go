@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -146,6 +147,9 @@ type TabletManagerClient interface {
 	// RunBlpUntil asks the tablet to restart its binlog players until
 	// it reaches the given positions, if not there yet.
 	RunBlpUntil(ctx context.Context, tablet *topodatapb.Tablet, positions []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error)
+
+	// VReplicationCreate creates a VReplication stream.
+	VReplicationCreate(ctx context.Context, tablet *topodatapb.Tablet, workflow string, source *binlogdatapb.BinlogSource, position string, maxTps int64, maxReplicationLag int64) (int64, error)
 
 	//
 	// Reparenting related functions
