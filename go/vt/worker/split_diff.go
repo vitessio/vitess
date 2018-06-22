@@ -49,6 +49,7 @@ type SplitDiffWorker struct {
 	sourceUID               uint32
 	excludeTables           []string
 	minHealthyRdonlyTablets int
+	destTabletType          topodatapb.TabletType
 	parallelDiffsCount      int
 	cleaner                 *wrangler.Cleaner
 
@@ -66,7 +67,7 @@ type SplitDiffWorker struct {
 }
 
 // NewSplitDiffWorker returns a new SplitDiffWorker object.
-func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, sourceUID uint32, excludeTables []string, minHealthyRdonlyTablets, parallelDiffsCount int) Worker {
+func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, sourceUID uint32, excludeTables []string, minHealthyRdonlyTablets, parallelDiffsCount int, tabletType topodatapb.TabletType) Worker {
 	return &SplitDiffWorker{
 		StatusWorker:            NewStatusWorker(),
 		wr:                      wr,
@@ -76,6 +77,7 @@ func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, sou
 		sourceUID:               sourceUID,
 		excludeTables:           excludeTables,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
+		destTabletType:          tabletType,
 		parallelDiffsCount:      parallelDiffsCount,
 		cleaner:                 &wrangler.Cleaner{},
 	}
@@ -219,7 +221,17 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate tablet in destination shard
 	var err error
-	sdw.destinationAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */, sdw.cell, sdw.keyspace, sdw.shard, sdw.minHealthyRdonlyTablets, topodatapb.TabletType_REPLICA)
+	sdw.destinationAlias, err = FindWorkerTablet(
+		ctx,
+		sdw.wr,
+		sdw.cleaner,
+		nil, /* tsc */
+		sdw.cell,
+		sdw.keyspace,
+		sdw.shard,
+		1, /* minHealthyTablets */
+		sdw.destTabletType,
+	)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
 	}
