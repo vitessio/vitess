@@ -76,7 +76,7 @@ func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflo
 	subFlags := flag.NewFlagSet(horizontalReshardingFactoryName, flag.ContinueOnError)
 	keyspace := subFlags.String("keyspace", "", "Name of keyspace to perform horizontal resharding")
 	vtworkersStr := subFlags.String("vtworkers", "", "A comma-separated list of vtworker addresses")
-	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "1", "Minimum number of healthy RDONLY tablets required")
+	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "1", "Minimum number of healthy RDONLY tablets required in source shards")
 	splitCmd := subFlags.String("split_cmd", "SplitClone", "Split command to use to perform horizontal resharding (either SplitClone or LegacySplitClone)")
 	splitDiffDestTabletType := subFlags.String("split_diff_dest_tablet_type", "RDONLY", "Specifies tablet type to use in destination shards while performing SplitDiff operation")
 	enableApprovals := subFlags.Bool("enable_approvals", true, "If true, executions of tasks require user's approvals on the UI.")

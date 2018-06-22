@@ -157,7 +157,7 @@ export class HorizontalReshardingVtworkerFlag extends InputFlag {
 
 export class HorizontalReshardingMinHealthyRdonlyTablets extends InputFlag {
   constructor(position: number, id: string, value= '') {
-    super(position, id, 'min healthy rdonly tablets', 'Minimum number of healthy RDONLY tablets required', value);
+    super(position, id, 'min healthy rdonly tablets', 'Minimum number of healthy RDONLY tablets required in source shards', value);
     this.setDisplayOn('factory_name', 'horizontal_resharding');
   }
 }
