@@ -23,7 +23,6 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"vitess.io/vitess/go/jsonutil"
@@ -60,6 +59,10 @@ type Options struct {
 
 	// ExecutionMode must be set to one of the modes above
 	ExecutionMode string
+
+	// StrictDDL is used in unit tests only to verify that the schema
+	// is parsed properly.
+	StrictDDL bool
 }
 
 // TabletQuery defines a query that was sent to a given tablet and how it was
@@ -139,7 +142,7 @@ func Init(vSchemaStr, sqlSchema string, opts *Options) error {
 		return fmt.Errorf("invalid replication mode \"%s\"", opts.ReplicationMode)
 	}
 
-	parsedDDLs, err := parseSchema(sqlSchema)
+	parsedDDLs, err := parseSchema(sqlSchema, opts)
 	if err != nil {
 		return fmt.Errorf("parseSchema: %v", err)
 	}
@@ -157,7 +160,7 @@ func Init(vSchemaStr, sqlSchema string, opts *Options) error {
 	return nil
 }
 
-func parseSchema(sqlSchema string) ([]*sqlparser.DDL, error) {
+func parseSchema(sqlSchema string, opts *Options) ([]*sqlparser.DDL, error) {
 	parsedDDLs := make([]*sqlparser.DDL, 0, 16)
 	for {
 		sql, rem, err := sqlparser.SplitStatement(sqlSchema)
@@ -168,17 +171,23 @@ func parseSchema(sqlSchema string) ([]*sqlparser.DDL, error) {
 		if sql == "" {
 			break
 		}
-		s := sqlparser.StripLeadingComments(sql)
-		s, _ = sqlparser.SplitMarginComments(sql)
-		s = strings.TrimSpace(s)
-		if s == "" {
+		sql = sqlparser.StripComments(sql)
+		if sql == "" {
 			continue
 		}
 
-		stmt, err := sqlparser.Parse(sql)
-		if err != nil {
-			log.Errorf("ERROR: failed to parse sql: %s, got error: %v", sql, err)
-			continue
+		var stmt sqlparser.Statement
+		if opts.StrictDDL {
+			stmt, err = sqlparser.ParseStrictDDL(sql)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			stmt, err = sqlparser.Parse(sql)
+			if err != nil {
+				log.Errorf("ERROR: failed to parse sql: %s, got error: %v", sql, err)
+				continue
+			}
 		}
 		ddl, ok := stmt.(*sqlparser.DDL)
 		if !ok {
