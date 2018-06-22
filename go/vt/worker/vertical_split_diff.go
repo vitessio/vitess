@@ -52,8 +52,9 @@ type VerticalSplitDiffWorker struct {
 	shardInfo    *topo.ShardInfo
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAlias      *topodatapb.TabletAlias
-	destinationAlias *topodatapb.TabletAlias
+	sourceAlias           *topodatapb.TabletAlias
+	destinationAlias      *topodatapb.TabletAlias
+	destinationTabletType topodatapb.TabletType
 
 	// populated during WorkerStateDiff
 	sourceSchemaDefinition      *tabletmanagerdatapb.SchemaDefinition
@@ -61,7 +62,7 @@ type VerticalSplitDiffWorker struct {
 }
 
 // NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
-func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, minHealthyRdonlyTablets, parallelDiffsCount int) Worker {
+func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, minHealthyRdonlyTablets, parallelDiffsCount int, destintationTabletType topodatapb.TabletType) Worker {
 	return &VerticalSplitDiffWorker{
 		StatusWorker: NewStatusWorker(),
 		wr:           wr,
@@ -69,6 +70,7 @@ func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard str
 		keyspace:     keyspace,
 		shard:        shard,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
+		destinationTabletType:   destintationTabletType,
 		parallelDiffsCount:      parallelDiffsCount,
 		cleaner:                 &wrangler.Cleaner{},
 	}
@@ -206,7 +208,7 @@ func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate tablet in destination shard
 	var err error
-	vsdw.destinationAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, nil /* tsc */, vsdw.cell, vsdw.keyspace, vsdw.shard, vsdw.minHealthyRdonlyTablets, topodatapb.TabletType_REPLICA)
+	vsdw.destinationAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, nil /* tsc */, vsdw.cell, vsdw.keyspace, vsdw.shard, 1, vsdw.destinationTabletType)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", vsdw.cell, vsdw.keyspace, vsdw.shard, err)
 	}

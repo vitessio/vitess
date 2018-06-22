@@ -28,6 +28,8 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const verticalSplitDiffHTML = `
@@ -73,6 +75,7 @@ var verticalSplitDiffTemplate2 = mustParseTemplate("verticalSplitDiff2", vertica
 func commandVerticalSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyRdonlyTablets, "minimum number of healthy RDONLY tablets before taking out one")
 	parallelDiffsCount := subFlags.Int("parallel_diffs_count", defaultParallelDiffsCount, "number of tables to diff in parallel")
+	destTabletTypeStr := subFlags.String("dest_tablet_type", defaultDestTabletType, "destination tablet type (RDONLY or REPLICA) that will be used to compare the shards")
 	if err := subFlags.Parse(args); err != nil {
 		return nil, err
 	}
@@ -84,7 +87,13 @@ func commandVerticalSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *fla
 	if err != nil {
 		return nil, err
 	}
-	return NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, *minHealthyRdonlyTablets, *parallelDiffsCount), nil
+
+	destTabletType, ok := topodatapb.TabletType_value[*destTabletTypeStr]
+	if !ok {
+		return nil, fmt.Errorf("command VerticalSplitDiff invalid dest_tablet_type: %v", destTabletType)
+	}
+
+	return NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, *minHealthyRdonlyTablets, *parallelDiffsCount, topodatapb.TabletType(destTabletType)), nil
 }
 
 // shardsWithTablesSources returns all the shards that have SourceShards set
@@ -190,7 +199,8 @@ func interactiveVerticalSplitDiff(ctx context.Context, wi *Instance, wr *wrangle
 	}
 
 	// start the diff job
-	wrk := NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, int(minHealthyRdonlyTablets), int(parallelDiffsCount))
+	// TODO: @rafael - Add option to set destination tablet type in UI form.
+	wrk := NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, int(minHealthyRdonlyTablets), int(parallelDiffsCount), topodatapb.TabletType_RDONLY)
 	return wrk, nil, nil, nil
 }
 
