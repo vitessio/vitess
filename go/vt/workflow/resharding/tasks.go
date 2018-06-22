@@ -92,12 +92,13 @@ func (hw *HorizontalReshardingWorkflow) runWaitForFilteredReplication(ctx contex
 func (hw *HorizontalReshardingWorkflow) runSplitDiff(ctx context.Context, t *workflowpb.Task) error {
 	keyspace := t.Attributes["keyspace"]
 	destShard := t.Attributes["destination_shard"]
+	destinationTabletType := t.Attributes["dest_tablet_type"]
 	worker := t.Attributes["vtworker"]
 
 	if _, err := automation.ExecuteVtworker(hw.ctx, worker, []string{"Reset"}); err != nil {
 		return err
 	}
-	args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", topoproto.KeyspaceShardString(keyspace, destShard)}
+	args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=" + destinationTabletType, topoproto.KeyspaceShardString(keyspace, destShard)}
 	_, err := automation.ExecuteVtworker(ctx, worker, args)
 	return err
 }
