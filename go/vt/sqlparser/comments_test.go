@@ -212,6 +212,85 @@ a`,
 	}
 }
 
+func TestRemoveComments(t *testing.T) {
+	var testCases = []struct {
+		input, outSQL string
+	}{{
+		input:  "/",
+		outSQL: "/",
+	}, {
+		input:  "*/",
+		outSQL: "*/",
+	}, {
+		input:  "/*/",
+		outSQL: "/*/",
+	}, {
+		input:  "/*a",
+		outSQL: "/*a",
+	}, {
+		input:  "/*a*",
+		outSQL: "/*a*",
+	}, {
+		input:  "/*a**",
+		outSQL: "/*a**",
+	}, {
+		input:  "/*b**a*/",
+		outSQL: "",
+	}, {
+		input:  "/*a*/",
+		outSQL: "",
+	}, {
+		input:  "/**/",
+		outSQL: "",
+	}, {
+		input:  "/*!*/",
+		outSQL: "",
+	}, {
+		input:  "/*!a*/",
+		outSQL: "",
+	}, {
+		input:  "/*b*/ /*a*/",
+		outSQL: "",
+	}, {
+		input: `/*b*/ --foo
+bar`,
+		outSQL: "bar",
+	}, {
+		input:  "foo /* bar */",
+		outSQL: "foo",
+	}, {
+		input:  "foo /* bar */ baz",
+		outSQL: "foo  baz",
+	}, {
+		input:  "/* foo */ bar",
+		outSQL: "bar",
+	}, {
+		input:  "-- /* foo */ bar",
+		outSQL: "",
+	}, {
+		input:  "foo -- bar */",
+		outSQL: "foo -- bar */",
+	}, {
+		input: `/*
+foo */ bar`,
+		outSQL: "bar",
+	}, {
+		input: `-- foo bar
+a`,
+		outSQL: "a",
+	}, {
+		input:  `-- foo bar`,
+		outSQL: "",
+	}}
+	for _, testCase := range testCases {
+		gotSQL := StripComments(testCase.input)
+
+		if gotSQL != testCase.outSQL {
+			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
+		}
+	}
+}
+
 func TestExtractMysqlComment(t *testing.T) {
 	var testCases = []struct {
 		input, outSQL, outVersion string
