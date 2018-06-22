@@ -200,15 +200,25 @@ func (vsdw *VerticalSplitDiffWorker) init(ctx context.Context) error {
 }
 
 // findTargets phase:
+// - find one destinationTabletType in destination shard
 // - find one rdonly per source shard
-// - find one rdonly in destination shard
 // - mark them all as 'worker' pointing back to us
 func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 	vsdw.SetState(WorkerStateFindTargets)
 
 	// find an appropriate tablet in destination shard
 	var err error
-	vsdw.destinationAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, nil /* tsc */, vsdw.cell, vsdw.keyspace, vsdw.shard, 1, vsdw.destinationTabletType)
+	vsdw.destinationAlias, err = FindWorkerTablet(
+		ctx,
+		vsdw.wr,
+		vsdw.cleaner,
+		nil, /* tsc */
+		vsdw.cell,
+		vsdw.keyspace,
+		vsdw.shard,
+		1, /* minHealthyTablets */
+		vsdw.destinationTabletType,
+	)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", vsdw.cell, vsdw.keyspace, vsdw.shard, err)
 	}
