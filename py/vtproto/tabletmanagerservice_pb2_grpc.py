@@ -162,10 +162,10 @@ class TabletManagerStub(object):
         request_serializer=tabletmanagerdata__pb2.RunBlpUntilRequest.SerializeToString,
         response_deserializer=tabletmanagerdata__pb2.RunBlpUntilResponse.FromString,
         )
-    self.VReplicationCreate = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/VReplicationCreate',
-        request_serializer=tabletmanagerdata__pb2.VReplicationCreateRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.VReplicationCreateResponse.FromString,
+    self.VReplicationExec = channel.unary_unary(
+        '/tabletmanagerservice.TabletManager/VReplicationExec',
+        request_serializer=tabletmanagerdata__pb2.VReplicationExecRequest.SerializeToString,
+        response_deserializer=tabletmanagerdata__pb2.VReplicationExecResponse.FromString,
         )
     self.ResetReplication = channel.unary_unary(
         '/tabletmanagerservice.TabletManager/ResetReplication',
@@ -476,9 +476,8 @@ class TabletManagerServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
-  def VReplicationCreate(self, request, context):
-    """VReplication methods
-
+  def VReplicationExec(self, request, context):
+    """VReplication API
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
     context.set_details('Method not implemented!')
@@ -733,10 +732,10 @@ def add_TabletManagerServicer_to_server(servicer, server):
           request_deserializer=tabletmanagerdata__pb2.RunBlpUntilRequest.FromString,
           response_serializer=tabletmanagerdata__pb2.RunBlpUntilResponse.SerializeToString,
       ),
-      'VReplicationCreate': grpc.unary_unary_rpc_method_handler(
-          servicer.VReplicationCreate,
-          request_deserializer=tabletmanagerdata__pb2.VReplicationCreateRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.VReplicationCreateResponse.SerializeToString,
+      'VReplicationExec': grpc.unary_unary_rpc_method_handler(
+          servicer.VReplicationExec,
+          request_deserializer=tabletmanagerdata__pb2.VReplicationExecRequest.FromString,
+          response_serializer=tabletmanagerdata__pb2.VReplicationExecResponse.SerializeToString,
       ),
       'ResetReplication': grpc.unary_unary_rpc_method_handler(
           servicer.ResetReplication,

@@ -13,7 +13,6 @@ from google.protobuf import descriptor_pb2
 _sym_db = _symbol_database.Default()
 
 
-import binlogdata_pb2 as binlogdata__pb2
 import query_pb2 as query__pb2
 import topodata_pb2 as topodata__pb2
 import replicationdata_pb2 as replicationdata__pb2
@@ -25,12 +24,16 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='tabletmanagerdata',
   syntax='proto3',
 <<<<<<< HEAD
+<<<<<<< HEAD
   serialized_pb=_b('\n\x17tabletmanagerdata.proto\x12\x11tabletmanagerdata\x1a\x0bquery.proto\x1a\x0etopodata.proto\x1a\x15replicationdata.proto\x1a\rlogutil.proto\"\x93\x01\n\x0fTableDefinition\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0e\n\x06schema\x18\x02 \x01(\t\x12\x0f\n\x07\x63olumns\x18\x03 \x03(\t\x12\x1b\n\x13primary_key_columns\x18\x04 \x03(\t\x12\x0c\n\x04type\x18\x05 \x01(\t\x12\x13\n\x0b\x64\x61ta_length\x18\x06 \x01(\x04\x12\x11\n\trow_count\x18\x07 \x01(\x04\"{\n\x10SchemaDefinition\x12\x17\n\x0f\x64\x61tabase_schema\x18\x01 \x01(\t\x12=\n\x11table_definitions\x18\x02 \x03(\x0b\x32\".tabletmanagerdata.TableDefinition\x12\x0f\n\x07version\x18\x03 \x01(\t\"\x8b\x01\n\x12SchemaChangeResult\x12:\n\rbefore_schema\x18\x01 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\x12\x39\n\x0c\x61\x66ter_schema\x18\x02 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"\xc1\x01\n\x0eUserPermission\x12\x0c\n\x04host\x18\x01 \x01(\t\x12\x0c\n\x04user\x18\x02 \x01(\t\x12\x19\n\x11password_checksum\x18\x03 \x01(\x04\x12\x45\n\nprivileges\x18\x04 \x03(\x0b\x32\x31.tabletmanagerdata.UserPermission.PrivilegesEntry\x1a\x31\n\x0fPrivilegesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xae\x01\n\x0c\x44\x62Permission\x12\x0c\n\x04host\x18\x01 \x01(\t\x12\n\n\x02\x64\x62\x18\x02 \x01(\t\x12\x0c\n\x04user\x18\x03 \x01(\t\x12\x43\n\nprivileges\x18\x04 \x03(\x0b\x32/.tabletmanagerdata.DbPermission.PrivilegesEntry\x1a\x31\n\x0fPrivilegesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x83\x01\n\x0bPermissions\x12;\n\x10user_permissions\x18\x01 \x03(\x0b\x32!.tabletmanagerdata.UserPermission\x12\x37\n\x0e\x64\x62_permissions\x18\x02 \x03(\x0b\x32\x1f.tabletmanagerdata.DbPermission\",\n\x0b\x42lpPosition\x12\x0b\n\x03uid\x18\x01 \x01(\r\x12\x10\n\x08position\x18\x02 \x01(\t\"\x1e\n\x0bPingRequest\x12\x0f\n\x07payload\x18\x01 \x01(\t\"\x1f\n\x0cPingResponse\x12\x0f\n\x07payload\x18\x01 \x01(\t\" \n\x0cSleepRequest\x12\x10\n\x08\x64uration\x18\x01 \x01(\x03\"\x0f\n\rSleepResponse\"\xaf\x01\n\x12\x45xecuteHookRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x12\n\nparameters\x18\x02 \x03(\t\x12\x46\n\textra_env\x18\x03 \x03(\x0b\x32\x33.tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry\x1a/\n\rExtraEnvEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"J\n\x13\x45xecuteHookResponse\x12\x13\n\x0b\x65xit_status\x18\x01 \x01(\x03\x12\x0e\n\x06stdout\x18\x02 \x01(\t\x12\x0e\n\x06stderr\x18\x03 \x01(\t\"Q\n\x10GetSchemaRequest\x12\x0e\n\x06tables\x18\x01 \x03(\t\x12\x15\n\rinclude_views\x18\x02 \x01(\x08\x12\x16\n\x0e\x65xclude_tables\x18\x03 \x03(\t\"S\n\x11GetSchemaResponse\x12>\n\x11schema_definition\x18\x01 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"\x17\n\x15GetPermissionsRequest\"M\n\x16GetPermissionsResponse\x12\x33\n\x0bpermissions\x18\x01 \x01(\x0b\x32\x1e.tabletmanagerdata.Permissions\"\x14\n\x12SetReadOnlyRequest\"\x15\n\x13SetReadOnlyResponse\"\x15\n\x13SetReadWriteRequest\"\x16\n\x14SetReadWriteResponse\">\n\x11\x43hangeTypeRequest\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\"\x14\n\x12\x43hangeTypeResponse\"\x15\n\x13RefreshStateRequest\"\x16\n\x14RefreshStateResponse\"\x17\n\x15RunHealthCheckRequest\"\x18\n\x16RunHealthCheckResponse\"+\n\x18IgnoreHealthErrorRequest\x12\x0f\n\x07pattern\x18\x01 \x01(\t\"\x1b\n\x19IgnoreHealthErrorResponse\",\n\x13ReloadSchemaRequest\x12\x15\n\rwait_position\x18\x01 \x01(\t\"\x16\n\x14ReloadSchemaResponse\")\n\x16PreflightSchemaRequest\x12\x0f\n\x07\x63hanges\x18\x01 \x03(\t\"X\n\x17PreflightSchemaResponse\x12=\n\x0e\x63hange_results\x18\x01 \x03(\x0b\x32%.tabletmanagerdata.SchemaChangeResult\"\xc2\x01\n\x12\x41pplySchemaRequest\x12\x0b\n\x03sql\x18\x01 \x01(\t\x12\r\n\x05\x66orce\x18\x02 \x01(\x08\x12\x19\n\x11\x61llow_replication\x18\x03 \x01(\x08\x12:\n\rbefore_schema\x18\x04 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\x12\x39\n\x0c\x61\x66ter_schema\x18\x05 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"\x8c\x01\n\x13\x41pplySchemaResponse\x12:\n\rbefore_schema\x18\x01 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\x12\x39\n\x0c\x61\x66ter_schema\x18\x02 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"|\n\x18\x45xecuteFetchAsDbaRequest\x12\r\n\x05query\x18\x01 \x01(\x0c\x12\x0f\n\x07\x64\x62_name\x18\x02 \x01(\t\x12\x10\n\x08max_rows\x18\x03 \x01(\x04\x12\x17\n\x0f\x64isable_binlogs\x18\x04 \x01(\x08\x12\x15\n\rreload_schema\x18\x05 \x01(\x08\"?\n\x19\x45xecuteFetchAsDbaResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\"h\n\x1d\x45xecuteFetchAsAllPrivsRequest\x12\r\n\x05query\x18\x01 \x01(\x0c\x12\x0f\n\x07\x64\x62_name\x18\x02 \x01(\t\x12\x10\n\x08max_rows\x18\x03 \x01(\x04\x12\x15\n\rreload_schema\x18\x04 \x01(\x08\"D\n\x1e\x45xecuteFetchAsAllPrivsResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\";\n\x18\x45xecuteFetchAsAppRequest\x12\r\n\x05query\x18\x01 \x01(\x0c\x12\x10\n\x08max_rows\x18\x02 \x01(\x04\"?\n\x19\x45xecuteFetchAsAppResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\"\x14\n\x12SlaveStatusRequest\">\n\x13SlaveStatusResponse\x12\'\n\x06status\x18\x01 \x01(\x0b\x32\x17.replicationdata.Status\"\x17\n\x15MasterPositionRequest\"*\n\x16MasterPositionResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x12\n\x10StopSlaveRequest\"\x13\n\x11StopSlaveResponse\"A\n\x17StopSlaveMinimumRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12\x14\n\x0cwait_timeout\x18\x02 \x01(\x03\",\n\x18StopSlaveMinimumResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x13\n\x11StartSlaveRequest\"\x14\n\x12StartSlaveResponse\"8\n!TabletExternallyReparentedRequest\x12\x13\n\x0b\x65xternal_id\x18\x01 \x01(\t\"$\n\"TabletExternallyReparentedResponse\" \n\x1eTabletExternallyElectedRequest\"!\n\x1fTabletExternallyElectedResponse\"\x12\n\x10GetSlavesRequest\"\"\n\x11GetSlavesResponse\x12\r\n\x05\x61\x64\x64rs\x18\x01 \x03(\t\"d\n\x16WaitBlpPositionRequest\x12\x34\n\x0c\x62lp_position\x18\x01 \x01(\x0b\x32\x1e.tabletmanagerdata.BlpPosition\x12\x14\n\x0cwait_timeout\x18\x02 \x01(\x03\"\x19\n\x17WaitBlpPositionResponse\"\x10\n\x0eStopBlpRequest\"H\n\x0fStopBlpResponse\x12\x35\n\rblp_positions\x18\x01 \x03(\x0b\x32\x1e.tabletmanagerdata.BlpPosition\"\x11\n\x0fStartBlpRequest\"\x12\n\x10StartBlpResponse\"a\n\x12RunBlpUntilRequest\x12\x35\n\rblp_positions\x18\x01 \x03(\x0b\x32\x1e.tabletmanagerdata.BlpPosition\x12\x14\n\x0cwait_timeout\x18\x02 \x01(\x03\"\'\n\x13RunBlpUntilResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x19\n\x17ResetReplicationRequest\"\x1a\n\x18ResetReplicationResponse\"\x13\n\x11InitMasterRequest\"&\n\x12InitMasterResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x99\x01\n\x1ePopulateReparentJournalRequest\x12\x17\n\x0ftime_created_ns\x18\x01 \x01(\x03\x12\x13\n\x0b\x61\x63tion_name\x18\x02 \x01(\t\x12+\n\x0cmaster_alias\x18\x03 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x1c\n\x14replication_position\x18\x04 \x01(\t\"!\n\x1fPopulateReparentJournalResponse\"p\n\x10InitSlaveRequest\x12%\n\x06parent\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x1c\n\x14replication_position\x18\x02 \x01(\t\x12\x17\n\x0ftime_created_ns\x18\x03 \x01(\x03\"\x13\n\x11InitSlaveResponse\"\x15\n\x13\x44\x65moteMasterRequest\"(\n\x14\x44\x65moteMasterResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"3\n\x1fPromoteSlaveWhenCaughtUpRequest\x12\x10\n\x08position\x18\x01 \x01(\t\"4\n PromoteSlaveWhenCaughtUpResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x19\n\x17SlaveWasPromotedRequest\"\x1a\n\x18SlaveWasPromotedResponse\"m\n\x10SetMasterRequest\x12%\n\x06parent\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x17\n\x0ftime_created_ns\x18\x02 \x01(\x03\x12\x19\n\x11\x66orce_start_slave\x18\x03 \x01(\x08\"\x13\n\x11SetMasterResponse\"A\n\x18SlaveWasRestartedRequest\x12%\n\x06parent\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\"\x1b\n\x19SlaveWasRestartedResponse\"$\n\"StopReplicationAndGetStatusRequest\"N\n#StopReplicationAndGetStatusResponse\x12\'\n\x06status\x18\x01 \x01(\x0b\x32\x17.replicationdata.Status\"\x15\n\x13PromoteSlaveRequest\"(\n\x14PromoteSlaveResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"$\n\rBackupRequest\x12\x13\n\x0b\x63oncurrency\x18\x01 \x01(\x03\"/\n\x0e\x42\x61\x63kupResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Event\"\x1a\n\x18RestoreFromBackupRequest\":\n\x19RestoreFromBackupResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.EventB0Z.vitess.io/vitess/go/vt/proto/tabletmanagerdatab\x06proto3')
 =======
   serialized_pb=_b('\n\x17tabletmanagerdata.proto\x12\x11tabletmanagerdata\x1a\x10\x62inlogdata.proto\x1a\x0bquery.proto\x1a\x0etopodata.proto\x1a\x15replicationdata.proto\x1a\rlogutil.proto\"\x93\x01\n\x0fTableDefinition\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0e\n\x06schema\x18\x02 \x01(\t\x12\x0f\n\x07\x63olumns\x18\x03 \x03(\t\x12\x1b\n\x13primary_key_columns\x18\x04 \x03(\t\x12\x0c\n\x04type\x18\x05 \x01(\t\x12\x13\n\x0b\x64\x61ta_length\x18\x06 \x01(\x04\x12\x11\n\trow_count\x18\x07 \x01(\x04\"{\n\x10SchemaDefinition\x12\x17\n\x0f\x64\x61tabase_schema\x18\x01 \x01(\t\x12=\n\x11table_definitions\x18\x02 \x03(\x0b\x32\".tabletmanagerdata.TableDefinition\x12\x0f\n\x07version\x18\x03 \x01(\t\"\x8b\x01\n\x12SchemaChangeResult\x12:\n\rbefore_schema\x18\x01 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\x12\x39\n\x0c\x61\x66ter_schema\x18\x02 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"\xc1\x01\n\x0eUserPermission\x12\x0c\n\x04host\x18\x01 \x01(\t\x12\x0c\n\x04user\x18\x02 \x01(\t\x12\x19\n\x11password_checksum\x18\x03 \x01(\x04\x12\x45\n\nprivileges\x18\x04 \x03(\x0b\x32\x31.tabletmanagerdata.UserPermission.PrivilegesEntry\x1a\x31\n\x0fPrivilegesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xae\x01\n\x0c\x44\x62Permission\x12\x0c\n\x04host\x18\x01 \x01(\t\x12\n\n\x02\x64\x62\x18\x02 \x01(\t\x12\x0c\n\x04user\x18\x03 \x01(\t\x12\x43\n\nprivileges\x18\x04 \x03(\x0b\x32/.tabletmanagerdata.DbPermission.PrivilegesEntry\x1a\x31\n\x0fPrivilegesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x83\x01\n\x0bPermissions\x12;\n\x10user_permissions\x18\x01 \x03(\x0b\x32!.tabletmanagerdata.UserPermission\x12\x37\n\x0e\x64\x62_permissions\x18\x02 \x03(\x0b\x32\x1f.tabletmanagerdata.DbPermission\",\n\x0b\x42lpPosition\x12\x0b\n\x03uid\x18\x01 \x01(\r\x12\x10\n\x08position\x18\x02 \x01(\t\"\x1e\n\x0bPingRequest\x12\x0f\n\x07payload\x18\x01 \x01(\t\"\x1f\n\x0cPingResponse\x12\x0f\n\x07payload\x18\x01 \x01(\t\" \n\x0cSleepRequest\x12\x10\n\x08\x64uration\x18\x01 \x01(\x03\"\x0f\n\rSleepResponse\"\xaf\x01\n\x12\x45xecuteHookRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x12\n\nparameters\x18\x02 \x03(\t\x12\x46\n\textra_env\x18\x03 \x03(\x0b\x32\x33.tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry\x1a/\n\rExtraEnvEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"J\n\x13\x45xecuteHookResponse\x12\x13\n\x0b\x65xit_status\x18\x01 \x01(\x03\x12\x0e\n\x06stdout\x18\x02 \x01(\t\x12\x0e\n\x06stderr\x18\x03 \x01(\t\"Q\n\x10GetSchemaRequest\x12\x0e\n\x06tables\x18\x01 \x03(\t\x12\x15\n\rinclude_views\x18\x02 \x01(\x08\x12\x16\n\x0e\x65xclude_tables\x18\x03 \x03(\t\"S\n\x11GetSchemaResponse\x12>\n\x11schema_definition\x18\x01 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"\x17\n\x15GetPermissionsRequest\"M\n\x16GetPermissionsResponse\x12\x33\n\x0bpermissions\x18\x01 \x01(\x0b\x32\x1e.tabletmanagerdata.Permissions\"\x14\n\x12SetReadOnlyRequest\"\x15\n\x13SetReadOnlyResponse\"\x15\n\x13SetReadWriteRequest\"\x16\n\x14SetReadWriteResponse\">\n\x11\x43hangeTypeRequest\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\"\x14\n\x12\x43hangeTypeResponse\"\x15\n\x13RefreshStateRequest\"\x16\n\x14RefreshStateResponse\"\x17\n\x15RunHealthCheckRequest\"\x18\n\x16RunHealthCheckResponse\"+\n\x18IgnoreHealthErrorRequest\x12\x0f\n\x07pattern\x18\x01 \x01(\t\"\x1b\n\x19IgnoreHealthErrorResponse\",\n\x13ReloadSchemaRequest\x12\x15\n\rwait_position\x18\x01 \x01(\t\"\x16\n\x14ReloadSchemaResponse\")\n\x16PreflightSchemaRequest\x12\x0f\n\x07\x63hanges\x18\x01 \x03(\t\"X\n\x17PreflightSchemaResponse\x12=\n\x0e\x63hange_results\x18\x01 \x03(\x0b\x32%.tabletmanagerdata.SchemaChangeResult\"\xc2\x01\n\x12\x41pplySchemaRequest\x12\x0b\n\x03sql\x18\x01 \x01(\t\x12\r\n\x05\x66orce\x18\x02 \x01(\x08\x12\x19\n\x11\x61llow_replication\x18\x03 \x01(\x08\x12:\n\rbefore_schema\x18\x04 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\x12\x39\n\x0c\x61\x66ter_schema\x18\x05 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"\x8c\x01\n\x13\x41pplySchemaResponse\x12:\n\rbefore_schema\x18\x01 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\x12\x39\n\x0c\x61\x66ter_schema\x18\x02 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"|\n\x18\x45xecuteFetchAsDbaRequest\x12\r\n\x05query\x18\x01 \x01(\x0c\x12\x0f\n\x07\x64\x62_name\x18\x02 \x01(\t\x12\x10\n\x08max_rows\x18\x03 \x01(\x04\x12\x17\n\x0f\x64isable_binlogs\x18\x04 \x01(\x08\x12\x15\n\rreload_schema\x18\x05 \x01(\x08\"?\n\x19\x45xecuteFetchAsDbaResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\"h\n\x1d\x45xecuteFetchAsAllPrivsRequest\x12\r\n\x05query\x18\x01 \x01(\x0c\x12\x0f\n\x07\x64\x62_name\x18\x02 \x01(\t\x12\x10\n\x08max_rows\x18\x03 \x01(\x04\x12\x15\n\rreload_schema\x18\x04 \x01(\x08\"D\n\x1e\x45xecuteFetchAsAllPrivsResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\";\n\x18\x45xecuteFetchAsAppRequest\x12\r\n\x05query\x18\x01 \x01(\x0c\x12\x10\n\x08max_rows\x18\x02 \x01(\x04\"?\n\x19\x45xecuteFetchAsAppResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\"\x14\n\x12SlaveStatusRequest\">\n\x13SlaveStatusResponse\x12\'\n\x06status\x18\x01 \x01(\x0b\x32\x17.replicationdata.Status\"\x17\n\x15MasterPositionRequest\"*\n\x16MasterPositionResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x12\n\x10StopSlaveRequest\"\x13\n\x11StopSlaveResponse\"A\n\x17StopSlaveMinimumRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12\x14\n\x0cwait_timeout\x18\x02 \x01(\x03\",\n\x18StopSlaveMinimumResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x13\n\x11StartSlaveRequest\"\x14\n\x12StartSlaveResponse\"8\n!TabletExternallyReparentedRequest\x12\x13\n\x0b\x65xternal_id\x18\x01 \x01(\t\"$\n\"TabletExternallyReparentedResponse\" \n\x1eTabletExternallyElectedRequest\"!\n\x1fTabletExternallyElectedResponse\"\x12\n\x10GetSlavesRequest\"\"\n\x11GetSlavesResponse\x12\r\n\x05\x61\x64\x64rs\x18\x01 \x03(\t\"d\n\x16WaitBlpPositionRequest\x12\x34\n\x0c\x62lp_position\x18\x01 \x01(\x0b\x32\x1e.tabletmanagerdata.BlpPosition\x12\x14\n\x0cwait_timeout\x18\x02 \x01(\x03\"\x19\n\x17WaitBlpPositionResponse\"\x10\n\x0eStopBlpRequest\"H\n\x0fStopBlpResponse\x12\x35\n\rblp_positions\x18\x01 \x03(\x0b\x32\x1e.tabletmanagerdata.BlpPosition\"\x11\n\x0fStartBlpRequest\"\x12\n\x10StartBlpResponse\"a\n\x12RunBlpUntilRequest\x12\x35\n\rblp_positions\x18\x01 \x03(\x0b\x32\x1e.tabletmanagerdata.BlpPosition\x12\x14\n\x0cwait_timeout\x18\x02 \x01(\x03\"\'\n\x13RunBlpUntilResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x19\n\x17ResetReplicationRequest\"\x1a\n\x18ResetReplicationResponse\"\x97\x01\n\x19VReplicationCreateRequest\x12\x10\n\x08workflow\x18\x01 \x01(\t\x12(\n\x06source\x18\x02 \x01(\x0b\x32\x18.binlogdata.BinlogSource\x12\x10\n\x08position\x18\x03 \x01(\t\x12\x0f\n\x07max_tps\x18\x04 \x01(\x03\x12\x1b\n\x13max_replication_lag\x18\x05 \x01(\x03\"(\n\x1aVReplicationCreateResponse\x12\n\n\x02id\x18\x01 \x01(\x03\"\x13\n\x11InitMasterRequest\"&\n\x12InitMasterResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x99\x01\n\x1ePopulateReparentJournalRequest\x12\x17\n\x0ftime_created_ns\x18\x01 \x01(\x03\x12\x13\n\x0b\x61\x63tion_name\x18\x02 \x01(\t\x12+\n\x0cmaster_alias\x18\x03 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x1c\n\x14replication_position\x18\x04 \x01(\t\"!\n\x1fPopulateReparentJournalResponse\"p\n\x10InitSlaveRequest\x12%\n\x06parent\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x1c\n\x14replication_position\x18\x02 \x01(\t\x12\x17\n\x0ftime_created_ns\x18\x03 \x01(\x03\"\x13\n\x11InitSlaveResponse\"\x15\n\x13\x44\x65moteMasterRequest\"(\n\x14\x44\x65moteMasterResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"3\n\x1fPromoteSlaveWhenCaughtUpRequest\x12\x10\n\x08position\x18\x01 \x01(\t\"4\n PromoteSlaveWhenCaughtUpResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x19\n\x17SlaveWasPromotedRequest\"\x1a\n\x18SlaveWasPromotedResponse\"m\n\x10SetMasterRequest\x12%\n\x06parent\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x17\n\x0ftime_created_ns\x18\x02 \x01(\x03\x12\x19\n\x11\x66orce_start_slave\x18\x03 \x01(\x08\"\x13\n\x11SetMasterResponse\"A\n\x18SlaveWasRestartedRequest\x12%\n\x06parent\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\"\x1b\n\x19SlaveWasRestartedResponse\"$\n\"StopReplicationAndGetStatusRequest\"N\n#StopReplicationAndGetStatusResponse\x12\'\n\x06status\x18\x01 \x01(\x0b\x32\x17.replicationdata.Status\"\x15\n\x13PromoteSlaveRequest\"(\n\x14PromoteSlaveResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"$\n\rBackupRequest\x12\x13\n\x0b\x63oncurrency\x18\x01 \x01(\x03\"/\n\x0e\x42\x61\x63kupResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Event\"\x1a\n\x18RestoreFromBackupRequest\":\n\x19RestoreFromBackupResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Eventb\x06proto3')
 >>>>>>> 84dee5f... vreplication: TabletManager.VReplicationCreate
+=======
+  serialized_pb=_b('\n\x17tabletmanagerdata.proto\x12\x11tabletmanagerdata\x1a\x0bquery.proto\x1a\x0etopodata.proto\x1a\x15replicationdata.proto\x1a\rlogutil.proto\"\x93\x01\n\x0fTableDefinition\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0e\n\x06schema\x18\x02 \x01(\t\x12\x0f\n\x07\x63olumns\x18\x03 \x03(\t\x12\x1b\n\x13primary_key_columns\x18\x04 \x03(\t\x12\x0c\n\x04type\x18\x05 \x01(\t\x12\x13\n\x0b\x64\x61ta_length\x18\x06 \x01(\x04\x12\x11\n\trow_count\x18\x07 \x01(\x04\"{\n\x10SchemaDefinition\x12\x17\n\x0f\x64\x61tabase_schema\x18\x01 \x01(\t\x12=\n\x11table_definitions\x18\x02 \x03(\x0b\x32\".tabletmanagerdata.TableDefinition\x12\x0f\n\x07version\x18\x03 \x01(\t\"\x8b\x01\n\x12SchemaChangeResult\x12:\n\rbefore_schema\x18\x01 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\x12\x39\n\x0c\x61\x66ter_schema\x18\x02 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"\xc1\x01\n\x0eUserPermission\x12\x0c\n\x04host\x18\x01 \x01(\t\x12\x0c\n\x04user\x18\x02 \x01(\t\x12\x19\n\x11password_checksum\x18\x03 \x01(\x04\x12\x45\n\nprivileges\x18\x04 \x03(\x0b\x32\x31.tabletmanagerdata.UserPermission.PrivilegesEntry\x1a\x31\n\x0fPrivilegesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xae\x01\n\x0c\x44\x62Permission\x12\x0c\n\x04host\x18\x01 \x01(\t\x12\n\n\x02\x64\x62\x18\x02 \x01(\t\x12\x0c\n\x04user\x18\x03 \x01(\t\x12\x43\n\nprivileges\x18\x04 \x03(\x0b\x32/.tabletmanagerdata.DbPermission.PrivilegesEntry\x1a\x31\n\x0fPrivilegesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x83\x01\n\x0bPermissions\x12;\n\x10user_permissions\x18\x01 \x03(\x0b\x32!.tabletmanagerdata.UserPermission\x12\x37\n\x0e\x64\x62_permissions\x18\x02 \x03(\x0b\x32\x1f.tabletmanagerdata.DbPermission\",\n\x0b\x42lpPosition\x12\x0b\n\x03uid\x18\x01 \x01(\r\x12\x10\n\x08position\x18\x02 \x01(\t\"\x1e\n\x0bPingRequest\x12\x0f\n\x07payload\x18\x01 \x01(\t\"\x1f\n\x0cPingResponse\x12\x0f\n\x07payload\x18\x01 \x01(\t\" \n\x0cSleepRequest\x12\x10\n\x08\x64uration\x18\x01 \x01(\x03\"\x0f\n\rSleepResponse\"\xaf\x01\n\x12\x45xecuteHookRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x12\n\nparameters\x18\x02 \x03(\t\x12\x46\n\textra_env\x18\x03 \x03(\x0b\x32\x33.tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry\x1a/\n\rExtraEnvEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"J\n\x13\x45xecuteHookResponse\x12\x13\n\x0b\x65xit_status\x18\x01 \x01(\x03\x12\x0e\n\x06stdout\x18\x02 \x01(\t\x12\x0e\n\x06stderr\x18\x03 \x01(\t\"Q\n\x10GetSchemaRequest\x12\x0e\n\x06tables\x18\x01 \x03(\t\x12\x15\n\rinclude_views\x18\x02 \x01(\x08\x12\x16\n\x0e\x65xclude_tables\x18\x03 \x03(\t\"S\n\x11GetSchemaResponse\x12>\n\x11schema_definition\x18\x01 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"\x17\n\x15GetPermissionsRequest\"M\n\x16GetPermissionsResponse\x12\x33\n\x0bpermissions\x18\x01 \x01(\x0b\x32\x1e.tabletmanagerdata.Permissions\"\x14\n\x12SetReadOnlyRequest\"\x15\n\x13SetReadOnlyResponse\"\x15\n\x13SetReadWriteRequest\"\x16\n\x14SetReadWriteResponse\">\n\x11\x43hangeTypeRequest\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\"\x14\n\x12\x43hangeTypeResponse\"\x15\n\x13RefreshStateRequest\"\x16\n\x14RefreshStateResponse\"\x17\n\x15RunHealthCheckRequest\"\x18\n\x16RunHealthCheckResponse\"+\n\x18IgnoreHealthErrorRequest\x12\x0f\n\x07pattern\x18\x01 \x01(\t\"\x1b\n\x19IgnoreHealthErrorResponse\",\n\x13ReloadSchemaRequest\x12\x15\n\rwait_position\x18\x01 \x01(\t\"\x16\n\x14ReloadSchemaResponse\")\n\x16PreflightSchemaRequest\x12\x0f\n\x07\x63hanges\x18\x01 \x03(\t\"X\n\x17PreflightSchemaResponse\x12=\n\x0e\x63hange_results\x18\x01 \x03(\x0b\x32%.tabletmanagerdata.SchemaChangeResult\"\xc2\x01\n\x12\x41pplySchemaRequest\x12\x0b\n\x03sql\x18\x01 \x01(\t\x12\r\n\x05\x66orce\x18\x02 \x01(\x08\x12\x19\n\x11\x61llow_replication\x18\x03 \x01(\x08\x12:\n\rbefore_schema\x18\x04 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\x12\x39\n\x0c\x61\x66ter_schema\x18\x05 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"\x8c\x01\n\x13\x41pplySchemaResponse\x12:\n\rbefore_schema\x18\x01 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\x12\x39\n\x0c\x61\x66ter_schema\x18\x02 \x01(\x0b\x32#.tabletmanagerdata.SchemaDefinition\"|\n\x18\x45xecuteFetchAsDbaRequest\x12\r\n\x05query\x18\x01 \x01(\x0c\x12\x0f\n\x07\x64\x62_name\x18\x02 \x01(\t\x12\x10\n\x08max_rows\x18\x03 \x01(\x04\x12\x17\n\x0f\x64isable_binlogs\x18\x04 \x01(\x08\x12\x15\n\rreload_schema\x18\x05 \x01(\x08\"?\n\x19\x45xecuteFetchAsDbaResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\"h\n\x1d\x45xecuteFetchAsAllPrivsRequest\x12\r\n\x05query\x18\x01 \x01(\x0c\x12\x0f\n\x07\x64\x62_name\x18\x02 \x01(\t\x12\x10\n\x08max_rows\x18\x03 \x01(\x04\x12\x15\n\rreload_schema\x18\x04 \x01(\x08\"D\n\x1e\x45xecuteFetchAsAllPrivsResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\";\n\x18\x45xecuteFetchAsAppRequest\x12\r\n\x05query\x18\x01 \x01(\x0c\x12\x10\n\x08max_rows\x18\x02 \x01(\x04\"?\n\x19\x45xecuteFetchAsAppResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\"\x14\n\x12SlaveStatusRequest\">\n\x13SlaveStatusResponse\x12\'\n\x06status\x18\x01 \x01(\x0b\x32\x17.replicationdata.Status\"\x17\n\x15MasterPositionRequest\"*\n\x16MasterPositionResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x12\n\x10StopSlaveRequest\"\x13\n\x11StopSlaveResponse\"A\n\x17StopSlaveMinimumRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12\x14\n\x0cwait_timeout\x18\x02 \x01(\x03\",\n\x18StopSlaveMinimumResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x13\n\x11StartSlaveRequest\"\x14\n\x12StartSlaveResponse\"8\n!TabletExternallyReparentedRequest\x12\x13\n\x0b\x65xternal_id\x18\x01 \x01(\t\"$\n\"TabletExternallyReparentedResponse\" \n\x1eTabletExternallyElectedRequest\"!\n\x1fTabletExternallyElectedResponse\"\x12\n\x10GetSlavesRequest\"\"\n\x11GetSlavesResponse\x12\r\n\x05\x61\x64\x64rs\x18\x01 \x03(\t\"d\n\x16WaitBlpPositionRequest\x12\x34\n\x0c\x62lp_position\x18\x01 \x01(\x0b\x32\x1e.tabletmanagerdata.BlpPosition\x12\x14\n\x0cwait_timeout\x18\x02 \x01(\x03\"\x19\n\x17WaitBlpPositionResponse\"\x10\n\x0eStopBlpRequest\"H\n\x0fStopBlpResponse\x12\x35\n\rblp_positions\x18\x01 \x03(\x0b\x32\x1e.tabletmanagerdata.BlpPosition\"\x11\n\x0fStartBlpRequest\"\x12\n\x10StartBlpResponse\"a\n\x12RunBlpUntilRequest\x12\x35\n\rblp_positions\x18\x01 \x03(\x0b\x32\x1e.tabletmanagerdata.BlpPosition\x12\x14\n\x0cwait_timeout\x18\x02 \x01(\x03\"\'\n\x13RunBlpUntilResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x19\n\x17ResetReplicationRequest\"\x1a\n\x18ResetReplicationResponse\"(\n\x17VReplicationExecRequest\x12\r\n\x05query\x18\x01 \x01(\t\">\n\x18VReplicationExecResponse\x12\"\n\x06result\x18\x01 \x01(\x0b\x32\x12.query.QueryResult\"\x13\n\x11InitMasterRequest\"&\n\x12InitMasterResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x99\x01\n\x1ePopulateReparentJournalRequest\x12\x17\n\x0ftime_created_ns\x18\x01 \x01(\x03\x12\x13\n\x0b\x61\x63tion_name\x18\x02 \x01(\t\x12+\n\x0cmaster_alias\x18\x03 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x1c\n\x14replication_position\x18\x04 \x01(\t\"!\n\x1fPopulateReparentJournalResponse\"p\n\x10InitSlaveRequest\x12%\n\x06parent\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x1c\n\x14replication_position\x18\x02 \x01(\t\x12\x17\n\x0ftime_created_ns\x18\x03 \x01(\x03\"\x13\n\x11InitSlaveResponse\"\x15\n\x13\x44\x65moteMasterRequest\"(\n\x14\x44\x65moteMasterResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"3\n\x1fPromoteSlaveWhenCaughtUpRequest\x12\x10\n\x08position\x18\x01 \x01(\t\"4\n PromoteSlaveWhenCaughtUpResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"\x19\n\x17SlaveWasPromotedRequest\"\x1a\n\x18SlaveWasPromotedResponse\"m\n\x10SetMasterRequest\x12%\n\x06parent\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x17\n\x0ftime_created_ns\x18\x02 \x01(\x03\x12\x19\n\x11\x66orce_start_slave\x18\x03 \x01(\x08\"\x13\n\x11SetMasterResponse\"A\n\x18SlaveWasRestartedRequest\x12%\n\x06parent\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\"\x1b\n\x19SlaveWasRestartedResponse\"$\n\"StopReplicationAndGetStatusRequest\"N\n#StopReplicationAndGetStatusResponse\x12\'\n\x06status\x18\x01 \x01(\x0b\x32\x17.replicationdata.Status\"\x15\n\x13PromoteSlaveRequest\"(\n\x14PromoteSlaveResponse\x12\x10\n\x08position\x18\x01 \x01(\t\"$\n\rBackupRequest\x12\x13\n\x0b\x63oncurrency\x18\x01 \x01(\x03\"/\n\x0e\x42\x61\x63kupResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Event\"\x1a\n\x18RestoreFromBackupRequest\":\n\x19RestoreFromBackupResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Eventb\x06proto3')
+>>>>>>> 2e14052... vreplication: try the Exec approach
   ,
-  dependencies=[binlogdata__pb2.DESCRIPTOR,query__pb2.DESCRIPTOR,topodata__pb2.DESCRIPTOR,replicationdata__pb2.DESCRIPTOR,logutil__pb2.DESCRIPTOR,])
+  dependencies=[query__pb2.DESCRIPTOR,topodata__pb2.DESCRIPTOR,replicationdata__pb2.DESCRIPTOR,logutil__pb2.DESCRIPTOR,])
 
 
 
@@ -103,8 +106,8 @@ _TABLEDEFINITION = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=132,
-  serialized_end=279,
+  serialized_start=114,
+  serialized_end=261,
 )
 
 
@@ -148,8 +151,8 @@ _SCHEMADEFINITION = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=281,
-  serialized_end=404,
+  serialized_start=263,
+  serialized_end=386,
 )
 
 
@@ -186,8 +189,8 @@ _SCHEMACHANGERESULT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=407,
-  serialized_end=546,
+  serialized_start=389,
+  serialized_end=528,
 )
 
 
@@ -224,8 +227,8 @@ _USERPERMISSION_PRIVILEGESENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=693,
-  serialized_end=742,
+  serialized_start=675,
+  serialized_end=724,
 )
 
 _USERPERMISSION = _descriptor.Descriptor(
@@ -275,8 +278,8 @@ _USERPERMISSION = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=549,
-  serialized_end=742,
+  serialized_start=531,
+  serialized_end=724,
 )
 
 
@@ -313,8 +316,8 @@ _DBPERMISSION_PRIVILEGESENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=693,
-  serialized_end=742,
+  serialized_start=675,
+  serialized_end=724,
 )
 
 _DBPERMISSION = _descriptor.Descriptor(
@@ -364,8 +367,8 @@ _DBPERMISSION = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=745,
-  serialized_end=919,
+  serialized_start=727,
+  serialized_end=901,
 )
 
 
@@ -402,8 +405,8 @@ _PERMISSIONS = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=922,
-  serialized_end=1053,
+  serialized_start=904,
+  serialized_end=1035,
 )
 
 
@@ -440,8 +443,8 @@ _BLPPOSITION = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1055,
-  serialized_end=1099,
+  serialized_start=1037,
+  serialized_end=1081,
 )
 
 
@@ -471,8 +474,8 @@ _PINGREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1101,
-  serialized_end=1131,
+  serialized_start=1083,
+  serialized_end=1113,
 )
 
 
@@ -502,8 +505,8 @@ _PINGRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1133,
-  serialized_end=1164,
+  serialized_start=1115,
+  serialized_end=1146,
 )
 
 
@@ -533,8 +536,8 @@ _SLEEPREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1166,
-  serialized_end=1198,
+  serialized_start=1148,
+  serialized_end=1180,
 )
 
 
@@ -557,8 +560,8 @@ _SLEEPRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1200,
-  serialized_end=1215,
+  serialized_start=1182,
+  serialized_end=1197,
 )
 
 
@@ -595,8 +598,8 @@ _EXECUTEHOOKREQUEST_EXTRAENVENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1346,
-  serialized_end=1393,
+  serialized_start=1328,
+  serialized_end=1375,
 )
 
 _EXECUTEHOOKREQUEST = _descriptor.Descriptor(
@@ -639,8 +642,8 @@ _EXECUTEHOOKREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1218,
-  serialized_end=1393,
+  serialized_start=1200,
+  serialized_end=1375,
 )
 
 
@@ -684,8 +687,8 @@ _EXECUTEHOOKRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1395,
-  serialized_end=1469,
+  serialized_start=1377,
+  serialized_end=1451,
 )
 
 
@@ -729,8 +732,8 @@ _GETSCHEMAREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1471,
-  serialized_end=1552,
+  serialized_start=1453,
+  serialized_end=1534,
 )
 
 
@@ -760,8 +763,8 @@ _GETSCHEMARESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1554,
-  serialized_end=1637,
+  serialized_start=1536,
+  serialized_end=1619,
 )
 
 
@@ -784,8 +787,8 @@ _GETPERMISSIONSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1639,
-  serialized_end=1662,
+  serialized_start=1621,
+  serialized_end=1644,
 )
 
 
@@ -815,8 +818,8 @@ _GETPERMISSIONSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1664,
-  serialized_end=1741,
+  serialized_start=1646,
+  serialized_end=1723,
 )
 
 
@@ -839,8 +842,8 @@ _SETREADONLYREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1743,
-  serialized_end=1763,
+  serialized_start=1725,
+  serialized_end=1745,
 )
 
 
@@ -863,8 +866,8 @@ _SETREADONLYRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1765,
-  serialized_end=1786,
+  serialized_start=1747,
+  serialized_end=1768,
 )
 
 
@@ -887,8 +890,8 @@ _SETREADWRITEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1788,
-  serialized_end=1809,
+  serialized_start=1770,
+  serialized_end=1791,
 )
 
 
@@ -911,8 +914,8 @@ _SETREADWRITERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1811,
-  serialized_end=1833,
+  serialized_start=1793,
+  serialized_end=1815,
 )
 
 
@@ -942,8 +945,8 @@ _CHANGETYPEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1835,
-  serialized_end=1897,
+  serialized_start=1817,
+  serialized_end=1879,
 )
 
 
@@ -966,8 +969,8 @@ _CHANGETYPERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1899,
-  serialized_end=1919,
+  serialized_start=1881,
+  serialized_end=1901,
 )
 
 
@@ -990,8 +993,8 @@ _REFRESHSTATEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1921,
-  serialized_end=1942,
+  serialized_start=1903,
+  serialized_end=1924,
 )
 
 
@@ -1014,8 +1017,8 @@ _REFRESHSTATERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1944,
-  serialized_end=1966,
+  serialized_start=1926,
+  serialized_end=1948,
 )
 
 
@@ -1038,8 +1041,8 @@ _RUNHEALTHCHECKREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1968,
-  serialized_end=1991,
+  serialized_start=1950,
+  serialized_end=1973,
 )
 
 
@@ -1062,8 +1065,8 @@ _RUNHEALTHCHECKRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1993,
-  serialized_end=2017,
+  serialized_start=1975,
+  serialized_end=1999,
 )
 
 
@@ -1093,8 +1096,8 @@ _IGNOREHEALTHERRORREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2019,
-  serialized_end=2062,
+  serialized_start=2001,
+  serialized_end=2044,
 )
 
 
@@ -1117,8 +1120,8 @@ _IGNOREHEALTHERRORRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2064,
-  serialized_end=2091,
+  serialized_start=2046,
+  serialized_end=2073,
 )
 
 
@@ -1148,8 +1151,8 @@ _RELOADSCHEMAREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2093,
-  serialized_end=2137,
+  serialized_start=2075,
+  serialized_end=2119,
 )
 
 
@@ -1172,8 +1175,8 @@ _RELOADSCHEMARESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2139,
-  serialized_end=2161,
+  serialized_start=2121,
+  serialized_end=2143,
 )
 
 
@@ -1203,8 +1206,8 @@ _PREFLIGHTSCHEMAREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2163,
-  serialized_end=2204,
+  serialized_start=2145,
+  serialized_end=2186,
 )
 
 
@@ -1234,8 +1237,8 @@ _PREFLIGHTSCHEMARESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2206,
-  serialized_end=2294,
+  serialized_start=2188,
+  serialized_end=2276,
 )
 
 
@@ -1293,8 +1296,8 @@ _APPLYSCHEMAREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2297,
-  serialized_end=2491,
+  serialized_start=2279,
+  serialized_end=2473,
 )
 
 
@@ -1331,8 +1334,8 @@ _APPLYSCHEMARESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2494,
-  serialized_end=2634,
+  serialized_start=2476,
+  serialized_end=2616,
 )
 
 
@@ -1390,8 +1393,8 @@ _EXECUTEFETCHASDBAREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2636,
-  serialized_end=2760,
+  serialized_start=2618,
+  serialized_end=2742,
 )
 
 
@@ -1421,8 +1424,8 @@ _EXECUTEFETCHASDBARESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2762,
-  serialized_end=2825,
+  serialized_start=2744,
+  serialized_end=2807,
 )
 
 
@@ -1473,8 +1476,8 @@ _EXECUTEFETCHASALLPRIVSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2827,
-  serialized_end=2931,
+  serialized_start=2809,
+  serialized_end=2913,
 )
 
 
@@ -1504,8 +1507,8 @@ _EXECUTEFETCHASALLPRIVSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2933,
-  serialized_end=3001,
+  serialized_start=2915,
+  serialized_end=2983,
 )
 
 
@@ -1542,8 +1545,8 @@ _EXECUTEFETCHASAPPREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3003,
-  serialized_end=3062,
+  serialized_start=2985,
+  serialized_end=3044,
 )
 
 
@@ -1573,8 +1576,8 @@ _EXECUTEFETCHASAPPRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3064,
-  serialized_end=3127,
+  serialized_start=3046,
+  serialized_end=3109,
 )
 
 
@@ -1597,8 +1600,8 @@ _SLAVESTATUSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3129,
-  serialized_end=3149,
+  serialized_start=3111,
+  serialized_end=3131,
 )
 
 
@@ -1628,8 +1631,8 @@ _SLAVESTATUSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3151,
-  serialized_end=3213,
+  serialized_start=3133,
+  serialized_end=3195,
 )
 
 
@@ -1652,8 +1655,8 @@ _MASTERPOSITIONREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3215,
-  serialized_end=3238,
+  serialized_start=3197,
+  serialized_end=3220,
 )
 
 
@@ -1683,8 +1686,8 @@ _MASTERPOSITIONRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3240,
-  serialized_end=3282,
+  serialized_start=3222,
+  serialized_end=3264,
 )
 
 
@@ -1707,8 +1710,8 @@ _STOPSLAVEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3284,
-  serialized_end=3302,
+  serialized_start=3266,
+  serialized_end=3284,
 )
 
 
@@ -1731,8 +1734,8 @@ _STOPSLAVERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3304,
-  serialized_end=3323,
+  serialized_start=3286,
+  serialized_end=3305,
 )
 
 
@@ -1769,8 +1772,8 @@ _STOPSLAVEMINIMUMREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3325,
-  serialized_end=3390,
+  serialized_start=3307,
+  serialized_end=3372,
 )
 
 
@@ -1800,8 +1803,8 @@ _STOPSLAVEMINIMUMRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3392,
-  serialized_end=3436,
+  serialized_start=3374,
+  serialized_end=3418,
 )
 
 
@@ -1824,8 +1827,8 @@ _STARTSLAVEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3438,
-  serialized_end=3457,
+  serialized_start=3420,
+  serialized_end=3439,
 )
 
 
@@ -1848,8 +1851,8 @@ _STARTSLAVERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3459,
-  serialized_end=3479,
+  serialized_start=3441,
+  serialized_end=3461,
 )
 
 
@@ -1879,8 +1882,8 @@ _TABLETEXTERNALLYREPARENTEDREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3481,
-  serialized_end=3537,
+  serialized_start=3463,
+  serialized_end=3519,
 )
 
 
@@ -1903,8 +1906,8 @@ _TABLETEXTERNALLYREPARENTEDRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3539,
-  serialized_end=3575,
+  serialized_start=3521,
+  serialized_end=3557,
 )
 
 
@@ -1927,8 +1930,8 @@ _TABLETEXTERNALLYELECTEDREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3577,
-  serialized_end=3609,
+  serialized_start=3559,
+  serialized_end=3591,
 )
 
 
@@ -1951,8 +1954,8 @@ _TABLETEXTERNALLYELECTEDRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3611,
-  serialized_end=3644,
+  serialized_start=3593,
+  serialized_end=3626,
 )
 
 
@@ -1975,8 +1978,8 @@ _GETSLAVESREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3646,
-  serialized_end=3664,
+  serialized_start=3628,
+  serialized_end=3646,
 )
 
 
@@ -2006,8 +2009,8 @@ _GETSLAVESRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3666,
-  serialized_end=3700,
+  serialized_start=3648,
+  serialized_end=3682,
 )
 
 
@@ -2044,8 +2047,8 @@ _WAITBLPPOSITIONREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3702,
-  serialized_end=3802,
+  serialized_start=3684,
+  serialized_end=3784,
 )
 
 
@@ -2068,8 +2071,8 @@ _WAITBLPPOSITIONRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3804,
-  serialized_end=3829,
+  serialized_start=3786,
+  serialized_end=3811,
 )
 
 
@@ -2092,8 +2095,8 @@ _STOPBLPREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3831,
-  serialized_end=3847,
+  serialized_start=3813,
+  serialized_end=3829,
 )
 
 
@@ -2123,8 +2126,8 @@ _STOPBLPRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3849,
-  serialized_end=3921,
+  serialized_start=3831,
+  serialized_end=3903,
 )
 
 
@@ -2147,8 +2150,8 @@ _STARTBLPREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3923,
-  serialized_end=3940,
+  serialized_start=3905,
+  serialized_end=3922,
 )
 
 
@@ -2171,8 +2174,8 @@ _STARTBLPRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3942,
-  serialized_end=3960,
+  serialized_start=3924,
+  serialized_end=3942,
 )
 
 
@@ -2209,8 +2212,8 @@ _RUNBLPUNTILREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3962,
-  serialized_end=4059,
+  serialized_start=3944,
+  serialized_end=4041,
 )
 
 
@@ -2240,8 +2243,8 @@ _RUNBLPUNTILRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4061,
-  serialized_end=4100,
+  serialized_start=4043,
+  serialized_end=4082,
 )
 
 
@@ -2264,8 +2267,8 @@ _RESETREPLICATIONREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4102,
-  serialized_end=4127,
+  serialized_start=4084,
+  serialized_end=4109,
 )
 
 
@@ -2288,53 +2291,25 @@ _RESETREPLICATIONRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4129,
-  serialized_end=4155,
+  serialized_start=4111,
+  serialized_end=4137,
 )
 
 
-_VREPLICATIONCREATEREQUEST = _descriptor.Descriptor(
-  name='VReplicationCreateRequest',
-  full_name='tabletmanagerdata.VReplicationCreateRequest',
+_VREPLICATIONEXECREQUEST = _descriptor.Descriptor(
+  name='VReplicationExecRequest',
+  full_name='tabletmanagerdata.VReplicationExecRequest',
   filename=None,
   file=DESCRIPTOR,
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='workflow', full_name='tabletmanagerdata.VReplicationCreateRequest.workflow', index=0,
+      name='query', full_name='tabletmanagerdata.VReplicationExecRequest.query', index=0,
       number=1, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='source', full_name='tabletmanagerdata.VReplicationCreateRequest.source', index=1,
-      number=2, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='position', full_name='tabletmanagerdata.VReplicationCreateRequest.position', index=2,
-      number=3, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='max_tps', full_name='tabletmanagerdata.VReplicationCreateRequest.max_tps', index=3,
-      number=4, type=3, cpp_type=2, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='max_replication_lag', full_name='tabletmanagerdata.VReplicationCreateRequest.max_replication_lag', index=4,
-      number=5, type=3, cpp_type=2, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -2347,22 +2322,22 @@ _VREPLICATIONCREATEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4158,
-  serialized_end=4309,
+  serialized_start=4139,
+  serialized_end=4179,
 )
 
 
-_VREPLICATIONCREATERESPONSE = _descriptor.Descriptor(
-  name='VReplicationCreateResponse',
-  full_name='tabletmanagerdata.VReplicationCreateResponse',
+_VREPLICATIONEXECRESPONSE = _descriptor.Descriptor(
+  name='VReplicationExecResponse',
+  full_name='tabletmanagerdata.VReplicationExecResponse',
   filename=None,
   file=DESCRIPTOR,
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='id', full_name='tabletmanagerdata.VReplicationCreateResponse.id', index=0,
-      number=1, type=3, cpp_type=2, label=1,
-      has_default_value=False, default_value=0,
+      name='result', full_name='tabletmanagerdata.VReplicationExecResponse.result', index=0,
+      number=1, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
@@ -2378,8 +2353,8 @@ _VREPLICATIONCREATERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4311,
-  serialized_end=4351,
+  serialized_start=4181,
+  serialized_end=4243,
 )
 
 
@@ -2402,8 +2377,8 @@ _INITMASTERREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4353,
-  serialized_end=4372,
+  serialized_start=4245,
+  serialized_end=4264,
 )
 
 
@@ -2433,8 +2408,8 @@ _INITMASTERRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4374,
-  serialized_end=4412,
+  serialized_start=4266,
+  serialized_end=4304,
 )
 
 
@@ -2485,8 +2460,8 @@ _POPULATEREPARENTJOURNALREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4415,
-  serialized_end=4568,
+  serialized_start=4307,
+  serialized_end=4460,
 )
 
 
@@ -2509,8 +2484,8 @@ _POPULATEREPARENTJOURNALRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4570,
-  serialized_end=4603,
+  serialized_start=4462,
+  serialized_end=4495,
 )
 
 
@@ -2554,8 +2529,8 @@ _INITSLAVEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4605,
-  serialized_end=4717,
+  serialized_start=4497,
+  serialized_end=4609,
 )
 
 
@@ -2578,8 +2553,8 @@ _INITSLAVERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4719,
-  serialized_end=4738,
+  serialized_start=4611,
+  serialized_end=4630,
 )
 
 
@@ -2602,8 +2577,8 @@ _DEMOTEMASTERREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4740,
-  serialized_end=4761,
+  serialized_start=4632,
+  serialized_end=4653,
 )
 
 
@@ -2633,8 +2608,8 @@ _DEMOTEMASTERRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4763,
-  serialized_end=4803,
+  serialized_start=4655,
+  serialized_end=4695,
 )
 
 
@@ -2664,8 +2639,8 @@ _PROMOTESLAVEWHENCAUGHTUPREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4805,
-  serialized_end=4856,
+  serialized_start=4697,
+  serialized_end=4748,
 )
 
 
@@ -2695,8 +2670,8 @@ _PROMOTESLAVEWHENCAUGHTUPRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4858,
-  serialized_end=4910,
+  serialized_start=4750,
+  serialized_end=4802,
 )
 
 
@@ -2719,8 +2694,8 @@ _SLAVEWASPROMOTEDREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4912,
-  serialized_end=4937,
+  serialized_start=4804,
+  serialized_end=4829,
 )
 
 
@@ -2743,8 +2718,8 @@ _SLAVEWASPROMOTEDRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4939,
-  serialized_end=4965,
+  serialized_start=4831,
+  serialized_end=4857,
 )
 
 
@@ -2788,8 +2763,8 @@ _SETMASTERREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4967,
-  serialized_end=5076,
+  serialized_start=4859,
+  serialized_end=4968,
 )
 
 
@@ -2812,8 +2787,8 @@ _SETMASTERRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5078,
-  serialized_end=5097,
+  serialized_start=4970,
+  serialized_end=4989,
 )
 
 
@@ -2843,8 +2818,8 @@ _SLAVEWASRESTARTEDREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5099,
-  serialized_end=5164,
+  serialized_start=4991,
+  serialized_end=5056,
 )
 
 
@@ -2867,8 +2842,8 @@ _SLAVEWASRESTARTEDRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5166,
-  serialized_end=5193,
+  serialized_start=5058,
+  serialized_end=5085,
 )
 
 
@@ -2891,8 +2866,8 @@ _STOPREPLICATIONANDGETSTATUSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5195,
-  serialized_end=5231,
+  serialized_start=5087,
+  serialized_end=5123,
 )
 
 
@@ -2922,8 +2897,8 @@ _STOPREPLICATIONANDGETSTATUSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5233,
-  serialized_end=5311,
+  serialized_start=5125,
+  serialized_end=5203,
 )
 
 
@@ -2946,8 +2921,8 @@ _PROMOTESLAVEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5313,
-  serialized_end=5334,
+  serialized_start=5205,
+  serialized_end=5226,
 )
 
 
@@ -2977,8 +2952,8 @@ _PROMOTESLAVERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5336,
-  serialized_end=5376,
+  serialized_start=5228,
+  serialized_end=5268,
 )
 
 
@@ -3008,8 +2983,8 @@ _BACKUPREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5378,
-  serialized_end=5414,
+  serialized_start=5270,
+  serialized_end=5306,
 )
 
 
@@ -3039,8 +3014,8 @@ _BACKUPRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5416,
-  serialized_end=5463,
+  serialized_start=5308,
+  serialized_end=5355,
 )
 
 
@@ -3063,8 +3038,8 @@ _RESTOREFROMBACKUPREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5465,
-  serialized_end=5491,
+  serialized_start=5357,
+  serialized_end=5383,
 )
 
 
@@ -3094,8 +3069,8 @@ _RESTOREFROMBACKUPRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5493,
-  serialized_end=5551,
+  serialized_start=5385,
+  serialized_end=5443,
 )
 
 _SCHEMADEFINITION.fields_by_name['table_definitions'].message_type = _TABLEDEFINITION
@@ -3124,7 +3099,7 @@ _SLAVESTATUSRESPONSE.fields_by_name['status'].message_type = replicationdata__pb
 _WAITBLPPOSITIONREQUEST.fields_by_name['blp_position'].message_type = _BLPPOSITION
 _STOPBLPRESPONSE.fields_by_name['blp_positions'].message_type = _BLPPOSITION
 _RUNBLPUNTILREQUEST.fields_by_name['blp_positions'].message_type = _BLPPOSITION
-_VREPLICATIONCREATEREQUEST.fields_by_name['source'].message_type = binlogdata__pb2._BINLOGSOURCE
+_VREPLICATIONEXECRESPONSE.fields_by_name['result'].message_type = query__pb2._QUERYRESULT
 _POPULATEREPARENTJOURNALREQUEST.fields_by_name['master_alias'].message_type = topodata__pb2._TABLETALIAS
 _INITSLAVEREQUEST.fields_by_name['parent'].message_type = topodata__pb2._TABLETALIAS
 _SETMASTERREQUEST.fields_by_name['parent'].message_type = topodata__pb2._TABLETALIAS
@@ -3199,8 +3174,8 @@ DESCRIPTOR.message_types_by_name['RunBlpUntilRequest'] = _RUNBLPUNTILREQUEST
 DESCRIPTOR.message_types_by_name['RunBlpUntilResponse'] = _RUNBLPUNTILRESPONSE
 DESCRIPTOR.message_types_by_name['ResetReplicationRequest'] = _RESETREPLICATIONREQUEST
 DESCRIPTOR.message_types_by_name['ResetReplicationResponse'] = _RESETREPLICATIONRESPONSE
-DESCRIPTOR.message_types_by_name['VReplicationCreateRequest'] = _VREPLICATIONCREATEREQUEST
-DESCRIPTOR.message_types_by_name['VReplicationCreateResponse'] = _VREPLICATIONCREATERESPONSE
+DESCRIPTOR.message_types_by_name['VReplicationExecRequest'] = _VREPLICATIONEXECREQUEST
+DESCRIPTOR.message_types_by_name['VReplicationExecResponse'] = _VREPLICATIONEXECRESPONSE
 DESCRIPTOR.message_types_by_name['InitMasterRequest'] = _INITMASTERREQUEST
 DESCRIPTOR.message_types_by_name['InitMasterResponse'] = _INITMASTERRESPONSE
 DESCRIPTOR.message_types_by_name['PopulateReparentJournalRequest'] = _POPULATEREPARENTJOURNALREQUEST
@@ -3720,19 +3695,19 @@ ResetReplicationResponse = _reflection.GeneratedProtocolMessageType('ResetReplic
   ))
 _sym_db.RegisterMessage(ResetReplicationResponse)
 
-VReplicationCreateRequest = _reflection.GeneratedProtocolMessageType('VReplicationCreateRequest', (_message.Message,), dict(
-  DESCRIPTOR = _VREPLICATIONCREATEREQUEST,
+VReplicationExecRequest = _reflection.GeneratedProtocolMessageType('VReplicationExecRequest', (_message.Message,), dict(
+  DESCRIPTOR = _VREPLICATIONEXECREQUEST,
   __module__ = 'tabletmanagerdata_pb2'
-  # @@protoc_insertion_point(class_scope:tabletmanagerdata.VReplicationCreateRequest)
+  # @@protoc_insertion_point(class_scope:tabletmanagerdata.VReplicationExecRequest)
   ))
-_sym_db.RegisterMessage(VReplicationCreateRequest)
+_sym_db.RegisterMessage(VReplicationExecRequest)
 
-VReplicationCreateResponse = _reflection.GeneratedProtocolMessageType('VReplicationCreateResponse', (_message.Message,), dict(
-  DESCRIPTOR = _VREPLICATIONCREATERESPONSE,
+VReplicationExecResponse = _reflection.GeneratedProtocolMessageType('VReplicationExecResponse', (_message.Message,), dict(
+  DESCRIPTOR = _VREPLICATIONEXECRESPONSE,
   __module__ = 'tabletmanagerdata_pb2'
-  # @@protoc_insertion_point(class_scope:tabletmanagerdata.VReplicationCreateResponse)
+  # @@protoc_insertion_point(class_scope:tabletmanagerdata.VReplicationExecResponse)
   ))
-_sym_db.RegisterMessage(VReplicationCreateResponse)
+_sym_db.RegisterMessage(VReplicationExecResponse)
 
 InitMasterRequest = _reflection.GeneratedProtocolMessageType('InitMasterRequest', (_message.Message,), dict(
   DESCRIPTOR = _INITMASTERREQUEST,

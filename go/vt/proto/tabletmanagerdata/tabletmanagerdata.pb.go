@@ -6,7 +6,6 @@ package tabletmanagerdata // import "vitess.io/vitess/go/vt/proto/tabletmanagerd
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import binlogdata "vitess.io/vitess/go/vt/proto/binlogdata"
 import logutil "vitess.io/vitess/go/vt/proto/logutil"
 import query "vitess.io/vitess/go/vt/proto/query"
 import replicationdata "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -47,7 +46,7 @@ func (m *TableDefinition) Reset()         { *m = TableDefinition{} }
 func (m *TableDefinition) String() string { return proto.CompactTextString(m) }
 func (*TableDefinition) ProtoMessage()    {}
 func (*TableDefinition) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{0}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{0}
 }
 func (m *TableDefinition) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TableDefinition.Unmarshal(m, b)
@@ -129,7 +128,7 @@ func (m *SchemaDefinition) Reset()         { *m = SchemaDefinition{} }
 func (m *SchemaDefinition) String() string { return proto.CompactTextString(m) }
 func (*SchemaDefinition) ProtoMessage()    {}
 func (*SchemaDefinition) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{1}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{1}
 }
 func (m *SchemaDefinition) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SchemaDefinition.Unmarshal(m, b)
@@ -184,7 +183,7 @@ func (m *SchemaChangeResult) Reset()         { *m = SchemaChangeResult{} }
 func (m *SchemaChangeResult) String() string { return proto.CompactTextString(m) }
 func (*SchemaChangeResult) ProtoMessage()    {}
 func (*SchemaChangeResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{2}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{2}
 }
 func (m *SchemaChangeResult) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SchemaChangeResult.Unmarshal(m, b)
@@ -235,7 +234,7 @@ func (m *UserPermission) Reset()         { *m = UserPermission{} }
 func (m *UserPermission) String() string { return proto.CompactTextString(m) }
 func (*UserPermission) ProtoMessage()    {}
 func (*UserPermission) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{3}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{3}
 }
 func (m *UserPermission) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UserPermission.Unmarshal(m, b)
@@ -299,7 +298,7 @@ func (m *DbPermission) Reset()         { *m = DbPermission{} }
 func (m *DbPermission) String() string { return proto.CompactTextString(m) }
 func (*DbPermission) ProtoMessage()    {}
 func (*DbPermission) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{4}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{4}
 }
 func (m *DbPermission) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DbPermission.Unmarshal(m, b)
@@ -361,7 +360,7 @@ func (m *Permissions) Reset()         { *m = Permissions{} }
 func (m *Permissions) String() string { return proto.CompactTextString(m) }
 func (*Permissions) ProtoMessage()    {}
 func (*Permissions) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{5}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{5}
 }
 func (m *Permissions) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Permissions.Unmarshal(m, b)
@@ -408,7 +407,7 @@ func (m *BlpPosition) Reset()         { *m = BlpPosition{} }
 func (m *BlpPosition) String() string { return proto.CompactTextString(m) }
 func (*BlpPosition) ProtoMessage()    {}
 func (*BlpPosition) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{6}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{6}
 }
 func (m *BlpPosition) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BlpPosition.Unmarshal(m, b)
@@ -453,7 +452,7 @@ func (m *PingRequest) Reset()         { *m = PingRequest{} }
 func (m *PingRequest) String() string { return proto.CompactTextString(m) }
 func (*PingRequest) ProtoMessage()    {}
 func (*PingRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{7}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{7}
 }
 func (m *PingRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PingRequest.Unmarshal(m, b)
@@ -491,7 +490,7 @@ func (m *PingResponse) Reset()         { *m = PingResponse{} }
 func (m *PingResponse) String() string { return proto.CompactTextString(m) }
 func (*PingResponse) ProtoMessage()    {}
 func (*PingResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{8}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{8}
 }
 func (m *PingResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PingResponse.Unmarshal(m, b)
@@ -530,7 +529,7 @@ func (m *SleepRequest) Reset()         { *m = SleepRequest{} }
 func (m *SleepRequest) String() string { return proto.CompactTextString(m) }
 func (*SleepRequest) ProtoMessage()    {}
 func (*SleepRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{9}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{9}
 }
 func (m *SleepRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SleepRequest.Unmarshal(m, b)
@@ -567,7 +566,7 @@ func (m *SleepResponse) Reset()         { *m = SleepResponse{} }
 func (m *SleepResponse) String() string { return proto.CompactTextString(m) }
 func (*SleepResponse) ProtoMessage()    {}
 func (*SleepResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{10}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{10}
 }
 func (m *SleepResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SleepResponse.Unmarshal(m, b)
@@ -600,7 +599,7 @@ func (m *ExecuteHookRequest) Reset()         { *m = ExecuteHookRequest{} }
 func (m *ExecuteHookRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteHookRequest) ProtoMessage()    {}
 func (*ExecuteHookRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{11}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{11}
 }
 func (m *ExecuteHookRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteHookRequest.Unmarshal(m, b)
@@ -654,7 +653,7 @@ func (m *ExecuteHookResponse) Reset()         { *m = ExecuteHookResponse{} }
 func (m *ExecuteHookResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteHookResponse) ProtoMessage()    {}
 func (*ExecuteHookResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{12}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{12}
 }
 func (m *ExecuteHookResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteHookResponse.Unmarshal(m, b)
@@ -708,7 +707,7 @@ func (m *GetSchemaRequest) Reset()         { *m = GetSchemaRequest{} }
 func (m *GetSchemaRequest) String() string { return proto.CompactTextString(m) }
 func (*GetSchemaRequest) ProtoMessage()    {}
 func (*GetSchemaRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{13}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{13}
 }
 func (m *GetSchemaRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetSchemaRequest.Unmarshal(m, b)
@@ -760,7 +759,7 @@ func (m *GetSchemaResponse) Reset()         { *m = GetSchemaResponse{} }
 func (m *GetSchemaResponse) String() string { return proto.CompactTextString(m) }
 func (*GetSchemaResponse) ProtoMessage()    {}
 func (*GetSchemaResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{14}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{14}
 }
 func (m *GetSchemaResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetSchemaResponse.Unmarshal(m, b)
@@ -797,7 +796,7 @@ func (m *GetPermissionsRequest) Reset()         { *m = GetPermissionsRequest{} }
 func (m *GetPermissionsRequest) String() string { return proto.CompactTextString(m) }
 func (*GetPermissionsRequest) ProtoMessage()    {}
 func (*GetPermissionsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{15}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{15}
 }
 func (m *GetPermissionsRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetPermissionsRequest.Unmarshal(m, b)
@@ -828,7 +827,7 @@ func (m *GetPermissionsResponse) Reset()         { *m = GetPermissionsResponse{}
 func (m *GetPermissionsResponse) String() string { return proto.CompactTextString(m) }
 func (*GetPermissionsResponse) ProtoMessage()    {}
 func (*GetPermissionsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{16}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{16}
 }
 func (m *GetPermissionsResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetPermissionsResponse.Unmarshal(m, b)
@@ -865,7 +864,7 @@ func (m *SetReadOnlyRequest) Reset()         { *m = SetReadOnlyRequest{} }
 func (m *SetReadOnlyRequest) String() string { return proto.CompactTextString(m) }
 func (*SetReadOnlyRequest) ProtoMessage()    {}
 func (*SetReadOnlyRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{17}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{17}
 }
 func (m *SetReadOnlyRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetReadOnlyRequest.Unmarshal(m, b)
@@ -895,7 +894,7 @@ func (m *SetReadOnlyResponse) Reset()         { *m = SetReadOnlyResponse{} }
 func (m *SetReadOnlyResponse) String() string { return proto.CompactTextString(m) }
 func (*SetReadOnlyResponse) ProtoMessage()    {}
 func (*SetReadOnlyResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{18}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{18}
 }
 func (m *SetReadOnlyResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetReadOnlyResponse.Unmarshal(m, b)
@@ -925,7 +924,7 @@ func (m *SetReadWriteRequest) Reset()         { *m = SetReadWriteRequest{} }
 func (m *SetReadWriteRequest) String() string { return proto.CompactTextString(m) }
 func (*SetReadWriteRequest) ProtoMessage()    {}
 func (*SetReadWriteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{19}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{19}
 }
 func (m *SetReadWriteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetReadWriteRequest.Unmarshal(m, b)
@@ -955,7 +954,7 @@ func (m *SetReadWriteResponse) Reset()         { *m = SetReadWriteResponse{} }
 func (m *SetReadWriteResponse) String() string { return proto.CompactTextString(m) }
 func (*SetReadWriteResponse) ProtoMessage()    {}
 func (*SetReadWriteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{20}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{20}
 }
 func (m *SetReadWriteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetReadWriteResponse.Unmarshal(m, b)
@@ -986,7 +985,7 @@ func (m *ChangeTypeRequest) Reset()         { *m = ChangeTypeRequest{} }
 func (m *ChangeTypeRequest) String() string { return proto.CompactTextString(m) }
 func (*ChangeTypeRequest) ProtoMessage()    {}
 func (*ChangeTypeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{21}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{21}
 }
 func (m *ChangeTypeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ChangeTypeRequest.Unmarshal(m, b)
@@ -1023,7 +1022,7 @@ func (m *ChangeTypeResponse) Reset()         { *m = ChangeTypeResponse{} }
 func (m *ChangeTypeResponse) String() string { return proto.CompactTextString(m) }
 func (*ChangeTypeResponse) ProtoMessage()    {}
 func (*ChangeTypeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{22}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{22}
 }
 func (m *ChangeTypeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ChangeTypeResponse.Unmarshal(m, b)
@@ -1053,7 +1052,7 @@ func (m *RefreshStateRequest) Reset()         { *m = RefreshStateRequest{} }
 func (m *RefreshStateRequest) String() string { return proto.CompactTextString(m) }
 func (*RefreshStateRequest) ProtoMessage()    {}
 func (*RefreshStateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{23}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{23}
 }
 func (m *RefreshStateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RefreshStateRequest.Unmarshal(m, b)
@@ -1083,7 +1082,7 @@ func (m *RefreshStateResponse) Reset()         { *m = RefreshStateResponse{} }
 func (m *RefreshStateResponse) String() string { return proto.CompactTextString(m) }
 func (*RefreshStateResponse) ProtoMessage()    {}
 func (*RefreshStateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{24}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{24}
 }
 func (m *RefreshStateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RefreshStateResponse.Unmarshal(m, b)
@@ -1113,7 +1112,7 @@ func (m *RunHealthCheckRequest) Reset()         { *m = RunHealthCheckRequest{} }
 func (m *RunHealthCheckRequest) String() string { return proto.CompactTextString(m) }
 func (*RunHealthCheckRequest) ProtoMessage()    {}
 func (*RunHealthCheckRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{25}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{25}
 }
 func (m *RunHealthCheckRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RunHealthCheckRequest.Unmarshal(m, b)
@@ -1143,7 +1142,7 @@ func (m *RunHealthCheckResponse) Reset()         { *m = RunHealthCheckResponse{}
 func (m *RunHealthCheckResponse) String() string { return proto.CompactTextString(m) }
 func (*RunHealthCheckResponse) ProtoMessage()    {}
 func (*RunHealthCheckResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{26}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{26}
 }
 func (m *RunHealthCheckResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RunHealthCheckResponse.Unmarshal(m, b)
@@ -1174,7 +1173,7 @@ func (m *IgnoreHealthErrorRequest) Reset()         { *m = IgnoreHealthErrorReque
 func (m *IgnoreHealthErrorRequest) String() string { return proto.CompactTextString(m) }
 func (*IgnoreHealthErrorRequest) ProtoMessage()    {}
 func (*IgnoreHealthErrorRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{27}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{27}
 }
 func (m *IgnoreHealthErrorRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_IgnoreHealthErrorRequest.Unmarshal(m, b)
@@ -1211,7 +1210,7 @@ func (m *IgnoreHealthErrorResponse) Reset()         { *m = IgnoreHealthErrorResp
 func (m *IgnoreHealthErrorResponse) String() string { return proto.CompactTextString(m) }
 func (*IgnoreHealthErrorResponse) ProtoMessage()    {}
 func (*IgnoreHealthErrorResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{28}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{28}
 }
 func (m *IgnoreHealthErrorResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_IgnoreHealthErrorResponse.Unmarshal(m, b)
@@ -1245,7 +1244,7 @@ func (m *ReloadSchemaRequest) Reset()         { *m = ReloadSchemaRequest{} }
 func (m *ReloadSchemaRequest) String() string { return proto.CompactTextString(m) }
 func (*ReloadSchemaRequest) ProtoMessage()    {}
 func (*ReloadSchemaRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{29}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{29}
 }
 func (m *ReloadSchemaRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ReloadSchemaRequest.Unmarshal(m, b)
@@ -1282,7 +1281,7 @@ func (m *ReloadSchemaResponse) Reset()         { *m = ReloadSchemaResponse{} }
 func (m *ReloadSchemaResponse) String() string { return proto.CompactTextString(m) }
 func (*ReloadSchemaResponse) ProtoMessage()    {}
 func (*ReloadSchemaResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{30}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{30}
 }
 func (m *ReloadSchemaResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ReloadSchemaResponse.Unmarshal(m, b)
@@ -1313,7 +1312,7 @@ func (m *PreflightSchemaRequest) Reset()         { *m = PreflightSchemaRequest{}
 func (m *PreflightSchemaRequest) String() string { return proto.CompactTextString(m) }
 func (*PreflightSchemaRequest) ProtoMessage()    {}
 func (*PreflightSchemaRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{31}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{31}
 }
 func (m *PreflightSchemaRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PreflightSchemaRequest.Unmarshal(m, b)
@@ -1353,7 +1352,7 @@ func (m *PreflightSchemaResponse) Reset()         { *m = PreflightSchemaResponse
 func (m *PreflightSchemaResponse) String() string { return proto.CompactTextString(m) }
 func (*PreflightSchemaResponse) ProtoMessage()    {}
 func (*PreflightSchemaResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{32}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{32}
 }
 func (m *PreflightSchemaResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PreflightSchemaResponse.Unmarshal(m, b)
@@ -1395,7 +1394,7 @@ func (m *ApplySchemaRequest) Reset()         { *m = ApplySchemaRequest{} }
 func (m *ApplySchemaRequest) String() string { return proto.CompactTextString(m) }
 func (*ApplySchemaRequest) ProtoMessage()    {}
 func (*ApplySchemaRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{33}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{33}
 }
 func (m *ApplySchemaRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ApplySchemaRequest.Unmarshal(m, b)
@@ -1462,7 +1461,7 @@ func (m *ApplySchemaResponse) Reset()         { *m = ApplySchemaResponse{} }
 func (m *ApplySchemaResponse) String() string { return proto.CompactTextString(m) }
 func (*ApplySchemaResponse) ProtoMessage()    {}
 func (*ApplySchemaResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{34}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{34}
 }
 func (m *ApplySchemaResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ApplySchemaResponse.Unmarshal(m, b)
@@ -1511,7 +1510,7 @@ func (m *ExecuteFetchAsDbaRequest) Reset()         { *m = ExecuteFetchAsDbaReque
 func (m *ExecuteFetchAsDbaRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsDbaRequest) ProtoMessage()    {}
 func (*ExecuteFetchAsDbaRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{35}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{35}
 }
 func (m *ExecuteFetchAsDbaRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteFetchAsDbaRequest.Unmarshal(m, b)
@@ -1577,7 +1576,7 @@ func (m *ExecuteFetchAsDbaResponse) Reset()         { *m = ExecuteFetchAsDbaResp
 func (m *ExecuteFetchAsDbaResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsDbaResponse) ProtoMessage()    {}
 func (*ExecuteFetchAsDbaResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{36}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{36}
 }
 func (m *ExecuteFetchAsDbaResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteFetchAsDbaResponse.Unmarshal(m, b)
@@ -1618,7 +1617,7 @@ func (m *ExecuteFetchAsAllPrivsRequest) Reset()         { *m = ExecuteFetchAsAll
 func (m *ExecuteFetchAsAllPrivsRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsAllPrivsRequest) ProtoMessage()    {}
 func (*ExecuteFetchAsAllPrivsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{37}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{37}
 }
 func (m *ExecuteFetchAsAllPrivsRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteFetchAsAllPrivsRequest.Unmarshal(m, b)
@@ -1677,7 +1676,7 @@ func (m *ExecuteFetchAsAllPrivsResponse) Reset()         { *m = ExecuteFetchAsAl
 func (m *ExecuteFetchAsAllPrivsResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsAllPrivsResponse) ProtoMessage()    {}
 func (*ExecuteFetchAsAllPrivsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{38}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{38}
 }
 func (m *ExecuteFetchAsAllPrivsResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteFetchAsAllPrivsResponse.Unmarshal(m, b)
@@ -1716,7 +1715,7 @@ func (m *ExecuteFetchAsAppRequest) Reset()         { *m = ExecuteFetchAsAppReque
 func (m *ExecuteFetchAsAppRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsAppRequest) ProtoMessage()    {}
 func (*ExecuteFetchAsAppRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{39}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{39}
 }
 func (m *ExecuteFetchAsAppRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteFetchAsAppRequest.Unmarshal(m, b)
@@ -1761,7 +1760,7 @@ func (m *ExecuteFetchAsAppResponse) Reset()         { *m = ExecuteFetchAsAppResp
 func (m *ExecuteFetchAsAppResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsAppResponse) ProtoMessage()    {}
 func (*ExecuteFetchAsAppResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{40}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{40}
 }
 func (m *ExecuteFetchAsAppResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteFetchAsAppResponse.Unmarshal(m, b)
@@ -1798,7 +1797,7 @@ func (m *SlaveStatusRequest) Reset()         { *m = SlaveStatusRequest{} }
 func (m *SlaveStatusRequest) String() string { return proto.CompactTextString(m) }
 func (*SlaveStatusRequest) ProtoMessage()    {}
 func (*SlaveStatusRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{41}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{41}
 }
 func (m *SlaveStatusRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SlaveStatusRequest.Unmarshal(m, b)
@@ -1829,7 +1828,7 @@ func (m *SlaveStatusResponse) Reset()         { *m = SlaveStatusResponse{} }
 func (m *SlaveStatusResponse) String() string { return proto.CompactTextString(m) }
 func (*SlaveStatusResponse) ProtoMessage()    {}
 func (*SlaveStatusResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{42}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{42}
 }
 func (m *SlaveStatusResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SlaveStatusResponse.Unmarshal(m, b)
@@ -1866,7 +1865,7 @@ func (m *MasterPositionRequest) Reset()         { *m = MasterPositionRequest{} }
 func (m *MasterPositionRequest) String() string { return proto.CompactTextString(m) }
 func (*MasterPositionRequest) ProtoMessage()    {}
 func (*MasterPositionRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{43}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{43}
 }
 func (m *MasterPositionRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_MasterPositionRequest.Unmarshal(m, b)
@@ -1897,7 +1896,7 @@ func (m *MasterPositionResponse) Reset()         { *m = MasterPositionResponse{}
 func (m *MasterPositionResponse) String() string { return proto.CompactTextString(m) }
 func (*MasterPositionResponse) ProtoMessage()    {}
 func (*MasterPositionResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{44}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{44}
 }
 func (m *MasterPositionResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_MasterPositionResponse.Unmarshal(m, b)
@@ -1934,7 +1933,7 @@ func (m *StopSlaveRequest) Reset()         { *m = StopSlaveRequest{} }
 func (m *StopSlaveRequest) String() string { return proto.CompactTextString(m) }
 func (*StopSlaveRequest) ProtoMessage()    {}
 func (*StopSlaveRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{45}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{45}
 }
 func (m *StopSlaveRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopSlaveRequest.Unmarshal(m, b)
@@ -1964,7 +1963,7 @@ func (m *StopSlaveResponse) Reset()         { *m = StopSlaveResponse{} }
 func (m *StopSlaveResponse) String() string { return proto.CompactTextString(m) }
 func (*StopSlaveResponse) ProtoMessage()    {}
 func (*StopSlaveResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{46}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{46}
 }
 func (m *StopSlaveResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopSlaveResponse.Unmarshal(m, b)
@@ -1996,7 +1995,7 @@ func (m *StopSlaveMinimumRequest) Reset()         { *m = StopSlaveMinimumRequest
 func (m *StopSlaveMinimumRequest) String() string { return proto.CompactTextString(m) }
 func (*StopSlaveMinimumRequest) ProtoMessage()    {}
 func (*StopSlaveMinimumRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{47}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{47}
 }
 func (m *StopSlaveMinimumRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopSlaveMinimumRequest.Unmarshal(m, b)
@@ -2041,7 +2040,7 @@ func (m *StopSlaveMinimumResponse) Reset()         { *m = StopSlaveMinimumRespon
 func (m *StopSlaveMinimumResponse) String() string { return proto.CompactTextString(m) }
 func (*StopSlaveMinimumResponse) ProtoMessage()    {}
 func (*StopSlaveMinimumResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{48}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{48}
 }
 func (m *StopSlaveMinimumResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopSlaveMinimumResponse.Unmarshal(m, b)
@@ -2078,7 +2077,7 @@ func (m *StartSlaveRequest) Reset()         { *m = StartSlaveRequest{} }
 func (m *StartSlaveRequest) String() string { return proto.CompactTextString(m) }
 func (*StartSlaveRequest) ProtoMessage()    {}
 func (*StartSlaveRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{49}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{49}
 }
 func (m *StartSlaveRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StartSlaveRequest.Unmarshal(m, b)
@@ -2108,7 +2107,7 @@ func (m *StartSlaveResponse) Reset()         { *m = StartSlaveResponse{} }
 func (m *StartSlaveResponse) String() string { return proto.CompactTextString(m) }
 func (*StartSlaveResponse) ProtoMessage()    {}
 func (*StartSlaveResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{50}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{50}
 }
 func (m *StartSlaveResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StartSlaveResponse.Unmarshal(m, b)
@@ -2142,7 +2141,7 @@ func (m *TabletExternallyReparentedRequest) Reset()         { *m = TabletExterna
 func (m *TabletExternallyReparentedRequest) String() string { return proto.CompactTextString(m) }
 func (*TabletExternallyReparentedRequest) ProtoMessage()    {}
 func (*TabletExternallyReparentedRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{51}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{51}
 }
 func (m *TabletExternallyReparentedRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TabletExternallyReparentedRequest.Unmarshal(m, b)
@@ -2179,7 +2178,7 @@ func (m *TabletExternallyReparentedResponse) Reset()         { *m = TabletExtern
 func (m *TabletExternallyReparentedResponse) String() string { return proto.CompactTextString(m) }
 func (*TabletExternallyReparentedResponse) ProtoMessage()    {}
 func (*TabletExternallyReparentedResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{52}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{52}
 }
 func (m *TabletExternallyReparentedResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TabletExternallyReparentedResponse.Unmarshal(m, b)
@@ -2209,7 +2208,7 @@ func (m *TabletExternallyElectedRequest) Reset()         { *m = TabletExternally
 func (m *TabletExternallyElectedRequest) String() string { return proto.CompactTextString(m) }
 func (*TabletExternallyElectedRequest) ProtoMessage()    {}
 func (*TabletExternallyElectedRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{53}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{53}
 }
 func (m *TabletExternallyElectedRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TabletExternallyElectedRequest.Unmarshal(m, b)
@@ -2239,7 +2238,7 @@ func (m *TabletExternallyElectedResponse) Reset()         { *m = TabletExternall
 func (m *TabletExternallyElectedResponse) String() string { return proto.CompactTextString(m) }
 func (*TabletExternallyElectedResponse) ProtoMessage()    {}
 func (*TabletExternallyElectedResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{54}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{54}
 }
 func (m *TabletExternallyElectedResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TabletExternallyElectedResponse.Unmarshal(m, b)
@@ -2269,7 +2268,7 @@ func (m *GetSlavesRequest) Reset()         { *m = GetSlavesRequest{} }
 func (m *GetSlavesRequest) String() string { return proto.CompactTextString(m) }
 func (*GetSlavesRequest) ProtoMessage()    {}
 func (*GetSlavesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{55}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{55}
 }
 func (m *GetSlavesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetSlavesRequest.Unmarshal(m, b)
@@ -2300,7 +2299,7 @@ func (m *GetSlavesResponse) Reset()         { *m = GetSlavesResponse{} }
 func (m *GetSlavesResponse) String() string { return proto.CompactTextString(m) }
 func (*GetSlavesResponse) ProtoMessage()    {}
 func (*GetSlavesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{56}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{56}
 }
 func (m *GetSlavesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetSlavesResponse.Unmarshal(m, b)
@@ -2339,7 +2338,7 @@ func (m *WaitBlpPositionRequest) Reset()         { *m = WaitBlpPositionRequest{}
 func (m *WaitBlpPositionRequest) String() string { return proto.CompactTextString(m) }
 func (*WaitBlpPositionRequest) ProtoMessage()    {}
 func (*WaitBlpPositionRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{57}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{57}
 }
 func (m *WaitBlpPositionRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WaitBlpPositionRequest.Unmarshal(m, b)
@@ -2383,7 +2382,7 @@ func (m *WaitBlpPositionResponse) Reset()         { *m = WaitBlpPositionResponse
 func (m *WaitBlpPositionResponse) String() string { return proto.CompactTextString(m) }
 func (*WaitBlpPositionResponse) ProtoMessage()    {}
 func (*WaitBlpPositionResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{58}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{58}
 }
 func (m *WaitBlpPositionResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WaitBlpPositionResponse.Unmarshal(m, b)
@@ -2413,7 +2412,7 @@ func (m *StopBlpRequest) Reset()         { *m = StopBlpRequest{} }
 func (m *StopBlpRequest) String() string { return proto.CompactTextString(m) }
 func (*StopBlpRequest) ProtoMessage()    {}
 func (*StopBlpRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{59}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{59}
 }
 func (m *StopBlpRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopBlpRequest.Unmarshal(m, b)
@@ -2444,7 +2443,7 @@ func (m *StopBlpResponse) Reset()         { *m = StopBlpResponse{} }
 func (m *StopBlpResponse) String() string { return proto.CompactTextString(m) }
 func (*StopBlpResponse) ProtoMessage()    {}
 func (*StopBlpResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{60}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{60}
 }
 func (m *StopBlpResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopBlpResponse.Unmarshal(m, b)
@@ -2481,7 +2480,7 @@ func (m *StartBlpRequest) Reset()         { *m = StartBlpRequest{} }
 func (m *StartBlpRequest) String() string { return proto.CompactTextString(m) }
 func (*StartBlpRequest) ProtoMessage()    {}
 func (*StartBlpRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{61}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{61}
 }
 func (m *StartBlpRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StartBlpRequest.Unmarshal(m, b)
@@ -2511,7 +2510,7 @@ func (m *StartBlpResponse) Reset()         { *m = StartBlpResponse{} }
 func (m *StartBlpResponse) String() string { return proto.CompactTextString(m) }
 func (*StartBlpResponse) ProtoMessage()    {}
 func (*StartBlpResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{62}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{62}
 }
 func (m *StartBlpResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StartBlpResponse.Unmarshal(m, b)
@@ -2543,7 +2542,7 @@ func (m *RunBlpUntilRequest) Reset()         { *m = RunBlpUntilRequest{} }
 func (m *RunBlpUntilRequest) String() string { return proto.CompactTextString(m) }
 func (*RunBlpUntilRequest) ProtoMessage()    {}
 func (*RunBlpUntilRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{63}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{63}
 }
 func (m *RunBlpUntilRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RunBlpUntilRequest.Unmarshal(m, b)
@@ -2588,7 +2587,7 @@ func (m *RunBlpUntilResponse) Reset()         { *m = RunBlpUntilResponse{} }
 func (m *RunBlpUntilResponse) String() string { return proto.CompactTextString(m) }
 func (*RunBlpUntilResponse) ProtoMessage()    {}
 func (*RunBlpUntilResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{64}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{64}
 }
 func (m *RunBlpUntilResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RunBlpUntilResponse.Unmarshal(m, b)
@@ -2625,7 +2624,7 @@ func (m *ResetReplicationRequest) Reset()         { *m = ResetReplicationRequest
 func (m *ResetReplicationRequest) String() string { return proto.CompactTextString(m) }
 func (*ResetReplicationRequest) ProtoMessage()    {}
 func (*ResetReplicationRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{65}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{65}
 }
 func (m *ResetReplicationRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ResetReplicationRequest.Unmarshal(m, b)
@@ -2655,7 +2654,7 @@ func (m *ResetReplicationResponse) Reset()         { *m = ResetReplicationRespon
 func (m *ResetReplicationResponse) String() string { return proto.CompactTextString(m) }
 func (*ResetReplicationResponse) ProtoMessage()    {}
 func (*ResetReplicationResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{66}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{66}
 }
 func (m *ResetReplicationResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ResetReplicationResponse.Unmarshal(m, b)
@@ -2675,112 +2674,80 @@ func (m *ResetReplicationResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ResetReplicationResponse proto.InternalMessageInfo
 
-type VReplicationCreateRequest struct {
-	Workflow             string                   `protobuf:"bytes,1,opt,name=workflow" json:"workflow,omitempty"`
-	Source               *binlogdata.BinlogSource `protobuf:"bytes,2,opt,name=source" json:"source,omitempty"`
-	Position             string                   `protobuf:"bytes,3,opt,name=position" json:"position,omitempty"`
-	MaxTps               int64                    `protobuf:"varint,4,opt,name=max_tps,json=maxTps" json:"max_tps,omitempty"`
-	MaxReplicationLag    int64                    `protobuf:"varint,5,opt,name=max_replication_lag,json=maxReplicationLag" json:"max_replication_lag,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
-	XXX_unrecognized     []byte                   `json:"-"`
-	XXX_sizecache        int32                    `json:"-"`
-}
-
-func (m *VReplicationCreateRequest) Reset()         { *m = VReplicationCreateRequest{} }
-func (m *VReplicationCreateRequest) String() string { return proto.CompactTextString(m) }
-func (*VReplicationCreateRequest) ProtoMessage()    {}
-func (*VReplicationCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{67}
-}
-func (m *VReplicationCreateRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_VReplicationCreateRequest.Unmarshal(m, b)
-}
-func (m *VReplicationCreateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_VReplicationCreateRequest.Marshal(b, m, deterministic)
-}
-func (dst *VReplicationCreateRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_VReplicationCreateRequest.Merge(dst, src)
-}
-func (m *VReplicationCreateRequest) XXX_Size() int {
-	return xxx_messageInfo_VReplicationCreateRequest.Size(m)
-}
-func (m *VReplicationCreateRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_VReplicationCreateRequest.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_VReplicationCreateRequest proto.InternalMessageInfo
-
-func (m *VReplicationCreateRequest) GetWorkflow() string {
-	if m != nil {
-		return m.Workflow
-	}
-	return ""
-}
-
-func (m *VReplicationCreateRequest) GetSource() *binlogdata.BinlogSource {
-	if m != nil {
-		return m.Source
-	}
-	return nil
-}
-
-func (m *VReplicationCreateRequest) GetPosition() string {
-	if m != nil {
-		return m.Position
-	}
-	return ""
-}
-
-func (m *VReplicationCreateRequest) GetMaxTps() int64 {
-	if m != nil {
-		return m.MaxTps
-	}
-	return 0
-}
-
-func (m *VReplicationCreateRequest) GetMaxReplicationLag() int64 {
-	if m != nil {
-		return m.MaxReplicationLag
-	}
-	return 0
-}
-
-type VReplicationCreateResponse struct {
-	Id                   int64    `protobuf:"varint,1,opt,name=id" json:"id,omitempty"`
+type VReplicationExecRequest struct {
+	Query                string   `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *VReplicationCreateResponse) Reset()         { *m = VReplicationCreateResponse{} }
-func (m *VReplicationCreateResponse) String() string { return proto.CompactTextString(m) }
-func (*VReplicationCreateResponse) ProtoMessage()    {}
-func (*VReplicationCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{68}
+func (m *VReplicationExecRequest) Reset()         { *m = VReplicationExecRequest{} }
+func (m *VReplicationExecRequest) String() string { return proto.CompactTextString(m) }
+func (*VReplicationExecRequest) ProtoMessage()    {}
+func (*VReplicationExecRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{67}
 }
-func (m *VReplicationCreateResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_VReplicationCreateResponse.Unmarshal(m, b)
+func (m *VReplicationExecRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_VReplicationExecRequest.Unmarshal(m, b)
 }
-func (m *VReplicationCreateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_VReplicationCreateResponse.Marshal(b, m, deterministic)
+func (m *VReplicationExecRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_VReplicationExecRequest.Marshal(b, m, deterministic)
 }
-func (dst *VReplicationCreateResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_VReplicationCreateResponse.Merge(dst, src)
+func (dst *VReplicationExecRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_VReplicationExecRequest.Merge(dst, src)
 }
-func (m *VReplicationCreateResponse) XXX_Size() int {
-	return xxx_messageInfo_VReplicationCreateResponse.Size(m)
+func (m *VReplicationExecRequest) XXX_Size() int {
+	return xxx_messageInfo_VReplicationExecRequest.Size(m)
 }
-func (m *VReplicationCreateResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_VReplicationCreateResponse.DiscardUnknown(m)
+func (m *VReplicationExecRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_VReplicationExecRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_VReplicationCreateResponse proto.InternalMessageInfo
+var xxx_messageInfo_VReplicationExecRequest proto.InternalMessageInfo
 
-func (m *VReplicationCreateResponse) GetId() int64 {
+func (m *VReplicationExecRequest) GetQuery() string {
 	if m != nil {
-		return m.Id
+		return m.Query
 	}
-	return 0
+	return ""
+}
+
+type VReplicationExecResponse struct {
+	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
+	XXX_unrecognized     []byte             `json:"-"`
+	XXX_sizecache        int32              `json:"-"`
+}
+
+func (m *VReplicationExecResponse) Reset()         { *m = VReplicationExecResponse{} }
+func (m *VReplicationExecResponse) String() string { return proto.CompactTextString(m) }
+func (*VReplicationExecResponse) ProtoMessage()    {}
+func (*VReplicationExecResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{68}
+}
+func (m *VReplicationExecResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_VReplicationExecResponse.Unmarshal(m, b)
+}
+func (m *VReplicationExecResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_VReplicationExecResponse.Marshal(b, m, deterministic)
+}
+func (dst *VReplicationExecResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_VReplicationExecResponse.Merge(dst, src)
+}
+func (m *VReplicationExecResponse) XXX_Size() int {
+	return xxx_messageInfo_VReplicationExecResponse.Size(m)
+}
+func (m *VReplicationExecResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_VReplicationExecResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_VReplicationExecResponse proto.InternalMessageInfo
+
+func (m *VReplicationExecResponse) GetResult() *query.QueryResult {
+	if m != nil {
+		return m.Result
+	}
+	return nil
 }
 
 type InitMasterRequest struct {
@@ -2793,7 +2760,7 @@ func (m *InitMasterRequest) Reset()         { *m = InitMasterRequest{} }
 func (m *InitMasterRequest) String() string { return proto.CompactTextString(m) }
 func (*InitMasterRequest) ProtoMessage()    {}
 func (*InitMasterRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{69}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{69}
 }
 func (m *InitMasterRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_InitMasterRequest.Unmarshal(m, b)
@@ -2824,7 +2791,7 @@ func (m *InitMasterResponse) Reset()         { *m = InitMasterResponse{} }
 func (m *InitMasterResponse) String() string { return proto.CompactTextString(m) }
 func (*InitMasterResponse) ProtoMessage()    {}
 func (*InitMasterResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{70}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{70}
 }
 func (m *InitMasterResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_InitMasterResponse.Unmarshal(m, b)
@@ -2865,7 +2832,7 @@ func (m *PopulateReparentJournalRequest) Reset()         { *m = PopulateReparent
 func (m *PopulateReparentJournalRequest) String() string { return proto.CompactTextString(m) }
 func (*PopulateReparentJournalRequest) ProtoMessage()    {}
 func (*PopulateReparentJournalRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{71}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{71}
 }
 func (m *PopulateReparentJournalRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PopulateReparentJournalRequest.Unmarshal(m, b)
@@ -2923,7 +2890,7 @@ func (m *PopulateReparentJournalResponse) Reset()         { *m = PopulateReparen
 func (m *PopulateReparentJournalResponse) String() string { return proto.CompactTextString(m) }
 func (*PopulateReparentJournalResponse) ProtoMessage()    {}
 func (*PopulateReparentJournalResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{72}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{72}
 }
 func (m *PopulateReparentJournalResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PopulateReparentJournalResponse.Unmarshal(m, b)
@@ -2956,7 +2923,7 @@ func (m *InitSlaveRequest) Reset()         { *m = InitSlaveRequest{} }
 func (m *InitSlaveRequest) String() string { return proto.CompactTextString(m) }
 func (*InitSlaveRequest) ProtoMessage()    {}
 func (*InitSlaveRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{73}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{73}
 }
 func (m *InitSlaveRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_InitSlaveRequest.Unmarshal(m, b)
@@ -3007,7 +2974,7 @@ func (m *InitSlaveResponse) Reset()         { *m = InitSlaveResponse{} }
 func (m *InitSlaveResponse) String() string { return proto.CompactTextString(m) }
 func (*InitSlaveResponse) ProtoMessage()    {}
 func (*InitSlaveResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{74}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{74}
 }
 func (m *InitSlaveResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_InitSlaveResponse.Unmarshal(m, b)
@@ -3037,7 +3004,7 @@ func (m *DemoteMasterRequest) Reset()         { *m = DemoteMasterRequest{} }
 func (m *DemoteMasterRequest) String() string { return proto.CompactTextString(m) }
 func (*DemoteMasterRequest) ProtoMessage()    {}
 func (*DemoteMasterRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{75}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{75}
 }
 func (m *DemoteMasterRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DemoteMasterRequest.Unmarshal(m, b)
@@ -3068,7 +3035,7 @@ func (m *DemoteMasterResponse) Reset()         { *m = DemoteMasterResponse{} }
 func (m *DemoteMasterResponse) String() string { return proto.CompactTextString(m) }
 func (*DemoteMasterResponse) ProtoMessage()    {}
 func (*DemoteMasterResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{76}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{76}
 }
 func (m *DemoteMasterResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DemoteMasterResponse.Unmarshal(m, b)
@@ -3106,7 +3073,7 @@ func (m *PromoteSlaveWhenCaughtUpRequest) Reset()         { *m = PromoteSlaveWhe
 func (m *PromoteSlaveWhenCaughtUpRequest) String() string { return proto.CompactTextString(m) }
 func (*PromoteSlaveWhenCaughtUpRequest) ProtoMessage()    {}
 func (*PromoteSlaveWhenCaughtUpRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{77}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{77}
 }
 func (m *PromoteSlaveWhenCaughtUpRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PromoteSlaveWhenCaughtUpRequest.Unmarshal(m, b)
@@ -3144,7 +3111,7 @@ func (m *PromoteSlaveWhenCaughtUpResponse) Reset()         { *m = PromoteSlaveWh
 func (m *PromoteSlaveWhenCaughtUpResponse) String() string { return proto.CompactTextString(m) }
 func (*PromoteSlaveWhenCaughtUpResponse) ProtoMessage()    {}
 func (*PromoteSlaveWhenCaughtUpResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{78}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{78}
 }
 func (m *PromoteSlaveWhenCaughtUpResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PromoteSlaveWhenCaughtUpResponse.Unmarshal(m, b)
@@ -3181,7 +3148,7 @@ func (m *SlaveWasPromotedRequest) Reset()         { *m = SlaveWasPromotedRequest
 func (m *SlaveWasPromotedRequest) String() string { return proto.CompactTextString(m) }
 func (*SlaveWasPromotedRequest) ProtoMessage()    {}
 func (*SlaveWasPromotedRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{79}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{79}
 }
 func (m *SlaveWasPromotedRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SlaveWasPromotedRequest.Unmarshal(m, b)
@@ -3211,7 +3178,7 @@ func (m *SlaveWasPromotedResponse) Reset()         { *m = SlaveWasPromotedRespon
 func (m *SlaveWasPromotedResponse) String() string { return proto.CompactTextString(m) }
 func (*SlaveWasPromotedResponse) ProtoMessage()    {}
 func (*SlaveWasPromotedResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{80}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{80}
 }
 func (m *SlaveWasPromotedResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SlaveWasPromotedResponse.Unmarshal(m, b)
@@ -3244,7 +3211,7 @@ func (m *SetMasterRequest) Reset()         { *m = SetMasterRequest{} }
 func (m *SetMasterRequest) String() string { return proto.CompactTextString(m) }
 func (*SetMasterRequest) ProtoMessage()    {}
 func (*SetMasterRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{81}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{81}
 }
 func (m *SetMasterRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetMasterRequest.Unmarshal(m, b)
@@ -3295,7 +3262,7 @@ func (m *SetMasterResponse) Reset()         { *m = SetMasterResponse{} }
 func (m *SetMasterResponse) String() string { return proto.CompactTextString(m) }
 func (*SetMasterResponse) ProtoMessage()    {}
 func (*SetMasterResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{82}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{82}
 }
 func (m *SetMasterResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetMasterResponse.Unmarshal(m, b)
@@ -3327,7 +3294,7 @@ func (m *SlaveWasRestartedRequest) Reset()         { *m = SlaveWasRestartedReque
 func (m *SlaveWasRestartedRequest) String() string { return proto.CompactTextString(m) }
 func (*SlaveWasRestartedRequest) ProtoMessage()    {}
 func (*SlaveWasRestartedRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{83}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{83}
 }
 func (m *SlaveWasRestartedRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SlaveWasRestartedRequest.Unmarshal(m, b)
@@ -3364,7 +3331,7 @@ func (m *SlaveWasRestartedResponse) Reset()         { *m = SlaveWasRestartedResp
 func (m *SlaveWasRestartedResponse) String() string { return proto.CompactTextString(m) }
 func (*SlaveWasRestartedResponse) ProtoMessage()    {}
 func (*SlaveWasRestartedResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{84}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{84}
 }
 func (m *SlaveWasRestartedResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SlaveWasRestartedResponse.Unmarshal(m, b)
@@ -3394,7 +3361,7 @@ func (m *StopReplicationAndGetStatusRequest) Reset()         { *m = StopReplicat
 func (m *StopReplicationAndGetStatusRequest) String() string { return proto.CompactTextString(m) }
 func (*StopReplicationAndGetStatusRequest) ProtoMessage()    {}
 func (*StopReplicationAndGetStatusRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{85}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{85}
 }
 func (m *StopReplicationAndGetStatusRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopReplicationAndGetStatusRequest.Unmarshal(m, b)
@@ -3425,7 +3392,7 @@ func (m *StopReplicationAndGetStatusResponse) Reset()         { *m = StopReplica
 func (m *StopReplicationAndGetStatusResponse) String() string { return proto.CompactTextString(m) }
 func (*StopReplicationAndGetStatusResponse) ProtoMessage()    {}
 func (*StopReplicationAndGetStatusResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{86}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{86}
 }
 func (m *StopReplicationAndGetStatusResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopReplicationAndGetStatusResponse.Unmarshal(m, b)
@@ -3462,7 +3429,7 @@ func (m *PromoteSlaveRequest) Reset()         { *m = PromoteSlaveRequest{} }
 func (m *PromoteSlaveRequest) String() string { return proto.CompactTextString(m) }
 func (*PromoteSlaveRequest) ProtoMessage()    {}
 func (*PromoteSlaveRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{87}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{87}
 }
 func (m *PromoteSlaveRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PromoteSlaveRequest.Unmarshal(m, b)
@@ -3493,7 +3460,7 @@ func (m *PromoteSlaveResponse) Reset()         { *m = PromoteSlaveResponse{} }
 func (m *PromoteSlaveResponse) String() string { return proto.CompactTextString(m) }
 func (*PromoteSlaveResponse) ProtoMessage()    {}
 func (*PromoteSlaveResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{88}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{88}
 }
 func (m *PromoteSlaveResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PromoteSlaveResponse.Unmarshal(m, b)
@@ -3531,7 +3498,7 @@ func (m *BackupRequest) Reset()         { *m = BackupRequest{} }
 func (m *BackupRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupRequest) ProtoMessage()    {}
 func (*BackupRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{89}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{89}
 }
 func (m *BackupRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BackupRequest.Unmarshal(m, b)
@@ -3569,7 +3536,7 @@ func (m *BackupResponse) Reset()         { *m = BackupResponse{} }
 func (m *BackupResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupResponse) ProtoMessage()    {}
 func (*BackupResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{90}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{90}
 }
 func (m *BackupResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BackupResponse.Unmarshal(m, b)
@@ -3606,7 +3573,7 @@ func (m *RestoreFromBackupRequest) Reset()         { *m = RestoreFromBackupReque
 func (m *RestoreFromBackupRequest) String() string { return proto.CompactTextString(m) }
 func (*RestoreFromBackupRequest) ProtoMessage()    {}
 func (*RestoreFromBackupRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{91}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{91}
 }
 func (m *RestoreFromBackupRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RestoreFromBackupRequest.Unmarshal(m, b)
@@ -3637,7 +3604,7 @@ func (m *RestoreFromBackupResponse) Reset()         { *m = RestoreFromBackupResp
 func (m *RestoreFromBackupResponse) String() string { return proto.CompactTextString(m) }
 func (*RestoreFromBackupResponse) ProtoMessage()    {}
 func (*RestoreFromBackupResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_68a2caffd6516658, []int{92}
+	return fileDescriptor_tabletmanagerdata_11cfae49156c9a5f, []int{92}
 }
 func (m *RestoreFromBackupResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RestoreFromBackupResponse.Unmarshal(m, b)
@@ -3735,8 +3702,8 @@ func init() {
 	proto.RegisterType((*RunBlpUntilResponse)(nil), "tabletmanagerdata.RunBlpUntilResponse")
 	proto.RegisterType((*ResetReplicationRequest)(nil), "tabletmanagerdata.ResetReplicationRequest")
 	proto.RegisterType((*ResetReplicationResponse)(nil), "tabletmanagerdata.ResetReplicationResponse")
-	proto.RegisterType((*VReplicationCreateRequest)(nil), "tabletmanagerdata.VReplicationCreateRequest")
-	proto.RegisterType((*VReplicationCreateResponse)(nil), "tabletmanagerdata.VReplicationCreateResponse")
+	proto.RegisterType((*VReplicationExecRequest)(nil), "tabletmanagerdata.VReplicationExecRequest")
+	proto.RegisterType((*VReplicationExecResponse)(nil), "tabletmanagerdata.VReplicationExecResponse")
 	proto.RegisterType((*InitMasterRequest)(nil), "tabletmanagerdata.InitMasterRequest")
 	proto.RegisterType((*InitMasterResponse)(nil), "tabletmanagerdata.InitMasterResponse")
 	proto.RegisterType((*PopulateReparentJournalRequest)(nil), "tabletmanagerdata.PopulateReparentJournalRequest")
@@ -3764,146 +3731,141 @@ func init() {
 }
 
 func init() {
-	proto.RegisterFile("tabletmanagerdata.proto", fileDescriptor_tabletmanagerdata_68a2caffd6516658)
+	proto.RegisterFile("tabletmanagerdata.proto", fileDescriptor_tabletmanagerdata_11cfae49156c9a5f)
 }
 
-var fileDescriptor_tabletmanagerdata_68a2caffd6516658 = []byte{
-	// 2183 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xcc, 0x39, 0x5b, 0x6f, 0x1b, 0xc7,
-	0xd5, 0x58, 0x51, 0x92, 0xa5, 0xb3, 0x24, 0x45, 0xad, 0x6e, 0x94, 0x82, 0xcf, 0x92, 0xd7, 0xce,
-	0x17, 0xd7, 0x6d, 0x29, 0x5b, 0x49, 0x83, 0x20, 0x41, 0x8a, 0x4a, 0xb2, 0x7c, 0x49, 0x9c, 0x58,
-	0x59, 0xf9, 0x52, 0xe4, 0x65, 0x31, 0xe4, 0x8e, 0xc8, 0x85, 0x96, 0x3b, 0xeb, 0x99, 0x59, 0x52,
-	0x04, 0x8a, 0xfe, 0x84, 0xbe, 0xf5, 0xad, 0x6f, 0x05, 0xda, 0xf7, 0xfe, 0x90, 0x3e, 0xa6, 0xe8,
-	0x2f, 0xe9, 0x43, 0x5f, 0x8a, 0xb9, 0x91, 0xb3, 0x24, 0x65, 0x53, 0x86, 0x0b, 0xf4, 0x45, 0xd8,
-	0x73, 0xbf, 0xcc, 0x99, 0x73, 0xce, 0x88, 0xb0, 0xc5, 0x51, 0x33, 0xc1, 0xbc, 0x8b, 0x52, 0xd4,
-	0xc6, 0x34, 0x42, 0x1c, 0x35, 0x32, 0x4a, 0x38, 0xf1, 0x56, 0x27, 0x08, 0x3b, 0xb5, 0x66, 0x9c,
-	0x26, 0xa4, 0x3d, 0x62, 0xda, 0x71, 0xdf, 0xe4, 0x98, 0x0e, 0x34, 0x50, 0xe5, 0x24, 0x23, 0x16,
-	0x71, 0x83, 0xe2, 0x2c, 0x89, 0x5b, 0x88, 0xc7, 0x24, 0xb5, 0xd0, 0x95, 0x84, 0xb4, 0x73, 0x1e,
-	0x27, 0x0a, 0xf4, 0xff, 0xe9, 0xc0, 0xca, 0x0b, 0x61, 0xea, 0x21, 0x3e, 0x8f, 0xd3, 0x58, 0x30,
-	0x7b, 0x1e, 0xcc, 0xa7, 0xa8, 0x8b, 0xeb, 0xce, 0x9e, 0x73, 0x77, 0x39, 0x90, 0xdf, 0xde, 0x26,
-	0x2c, 0xb2, 0x56, 0x07, 0x77, 0x51, 0x7d, 0x4e, 0x62, 0x35, 0xe4, 0xd5, 0xe1, 0x46, 0x8b, 0x24,
-	0x79, 0x37, 0x65, 0xf5, 0xd2, 0x5e, 0xe9, 0xee, 0x72, 0x60, 0x40, 0xaf, 0x01, 0x6b, 0x19, 0x8d,
-	0xbb, 0x88, 0x0e, 0xc2, 0x0b, 0x3c, 0x08, 0x0d, 0xd7, 0xbc, 0xe4, 0x5a, 0xd5, 0xa4, 0x6f, 0xf1,
-	0xe0, 0x58, 0xf3, 0x7b, 0x30, 0xcf, 0x07, 0x19, 0xae, 0x2f, 0x28, 0xab, 0xe2, 0xdb, 0xdb, 0x05,
-	0x57, 0xb8, 0x1e, 0x26, 0x38, 0x6d, 0xf3, 0x4e, 0x7d, 0x71, 0xcf, 0xb9, 0x3b, 0x1f, 0x80, 0x40,
-	0x3d, 0x93, 0x18, 0xef, 0x23, 0x58, 0xa6, 0xa4, 0x1f, 0xb6, 0x48, 0x9e, 0xf2, 0xfa, 0x0d, 0x49,
-	0x5e, 0xa2, 0xa4, 0x7f, 0x2c, 0x60, 0xff, 0x2f, 0x0e, 0xd4, 0xce, 0xa4, 0x9b, 0x56, 0x70, 0x9f,
-	0xc0, 0x8a, 0x90, 0x6f, 0x22, 0x86, 0x43, 0x1d, 0x91, 0x8a, 0xb3, 0x6a, 0xd0, 0x4a, 0xc4, 0x7b,
-	0x0e, 0xea, 0x0c, 0xc2, 0x68, 0x28, 0xcc, 0xea, 0x73, 0x7b, 0xa5, 0xbb, 0xee, 0x81, 0xdf, 0x98,
-	0x3c, 0xb6, 0xb1, 0x24, 0x06, 0x35, 0x5e, 0x44, 0x30, 0x91, 0xaa, 0x1e, 0xa6, 0x2c, 0x26, 0x69,
-	0xbd, 0x24, 0x2d, 0x1a, 0x50, 0x38, 0xea, 0x29, 0xab, 0xc7, 0x1d, 0x94, 0xb6, 0x71, 0x80, 0x59,
-	0x9e, 0x70, 0xef, 0x09, 0x54, 0x9a, 0xf8, 0x9c, 0xd0, 0x82, 0xa3, 0xee, 0xc1, 0xed, 0x29, 0xd6,
-	0xc7, 0xc3, 0x0c, 0xca, 0x4a, 0x52, 0xc7, 0xf2, 0x08, 0xca, 0xe8, 0x9c, 0x63, 0x1a, 0x5a, 0x67,
-	0x38, 0xa3, 0x22, 0x57, 0x0a, 0x2a, 0xb4, 0xff, 0x2f, 0x07, 0xaa, 0x2f, 0x19, 0xa6, 0xa7, 0x98,
-	0x76, 0x63, 0xc6, 0x74, 0xb1, 0x74, 0x08, 0xe3, 0xa6, 0x58, 0xc4, 0xb7, 0xc0, 0xe5, 0x0c, 0x53,
-	0x5d, 0x2a, 0xf2, 0xdb, 0xfb, 0x39, 0xac, 0x66, 0x88, 0xb1, 0x3e, 0xa1, 0x51, 0xd8, 0xea, 0xe0,
-	0xd6, 0x05, 0xcb, 0xbb, 0x32, 0x0f, 0xf3, 0x41, 0xcd, 0x10, 0x8e, 0x35, 0xde, 0xfb, 0x01, 0x20,
-	0xa3, 0x71, 0x2f, 0x4e, 0x70, 0x1b, 0xab, 0x92, 0x71, 0x0f, 0x1e, 0x4c, 0xf1, 0xb6, 0xe8, 0x4b,
-	0xe3, 0x74, 0x28, 0x73, 0x92, 0x72, 0x3a, 0x08, 0x2c, 0x25, 0x3b, 0x5f, 0xc3, 0xca, 0x18, 0xd9,
-	0xab, 0x41, 0xe9, 0x02, 0x0f, 0xb4, 0xe7, 0xe2, 0xd3, 0x5b, 0x87, 0x85, 0x1e, 0x4a, 0x72, 0xac,
-	0x3d, 0x57, 0xc0, 0x97, 0x73, 0x5f, 0x38, 0xfe, 0x4f, 0x0e, 0x94, 0x1f, 0x36, 0xdf, 0x11, 0x77,
-	0x15, 0xe6, 0xa2, 0xa6, 0x96, 0x9d, 0x8b, 0x9a, 0xc3, 0x3c, 0x94, 0xac, 0x3c, 0x3c, 0x9f, 0x12,
-	0xda, 0xfe, 0x94, 0xd0, 0x6c, 0x63, 0xff, 0xcd, 0xc0, 0xfe, 0xec, 0x80, 0x3b, 0xb2, 0xc4, 0xbc,
-	0x67, 0x50, 0x13, 0x7e, 0x86, 0xd9, 0x08, 0x57, 0x77, 0xa4, 0x97, 0xb7, 0xde, 0x79, 0x00, 0xc1,
-	0x4a, 0x5e, 0x80, 0x99, 0xf7, 0x08, 0xaa, 0x51, 0xb3, 0xa0, 0x4b, 0xdd, 0xa0, 0xdd, 0x77, 0x44,
-	0x1c, 0x54, 0x22, 0x0b, 0x62, 0xfe, 0x57, 0xe0, 0x1e, 0x25, 0xd9, 0x29, 0x61, 0xea, 0x12, 0xd7,
-	0xa0, 0x94, 0xc7, 0x91, 0x0c, 0xb0, 0x12, 0x88, 0x4f, 0x6f, 0x07, 0x96, 0x32, 0x4d, 0xd5, 0x31,
-	0x0e, 0x61, 0xff, 0x13, 0x70, 0x4f, 0xe3, 0xb4, 0x1d, 0xe0, 0x37, 0x39, 0x66, 0x5c, 0xdc, 0xc3,
-	0x0c, 0x0d, 0x12, 0x82, 0x22, 0x9d, 0x21, 0x03, 0xfa, 0x77, 0xa1, 0xac, 0x18, 0x59, 0x46, 0x52,
-	0x86, 0xdf, 0xc2, 0x79, 0x0f, 0xca, 0x67, 0x09, 0xc6, 0x99, 0xd1, 0xb9, 0x03, 0x4b, 0x51, 0x4e,
-	0x65, 0xaf, 0x95, 0xac, 0xa5, 0x60, 0x08, 0xfb, 0x2b, 0x50, 0xd1, 0xbc, 0x4a, 0xad, 0xff, 0x0f,
-	0x07, 0xbc, 0x93, 0x4b, 0xdc, 0xca, 0x39, 0x7e, 0x42, 0xc8, 0x85, 0xd1, 0x31, 0xad, 0xed, 0xde,
-	0x04, 0xc8, 0x10, 0x45, 0x5d, 0xcc, 0x31, 0x55, 0xb9, 0x5b, 0x0e, 0x2c, 0x8c, 0x77, 0x0a, 0xcb,
-	0xf8, 0x92, 0x53, 0x14, 0xe2, 0xb4, 0x27, 0x1b, 0xb0, 0x7b, 0xf0, 0xe9, 0x94, 0xd4, 0x4e, 0x5a,
-	0x6b, 0x9c, 0x08, 0xb1, 0x93, 0xb4, 0xa7, 0x0a, 0x6a, 0x09, 0x6b, 0x70, 0xe7, 0x2b, 0xa8, 0x14,
-	0x48, 0xd7, 0x2a, 0xa6, 0x73, 0x58, 0x2b, 0x98, 0xd2, 0x79, 0xdc, 0x05, 0x17, 0x5f, 0xc6, 0x3c,
-	0x64, 0x1c, 0xf1, 0x9c, 0xe9, 0x04, 0x81, 0x40, 0x9d, 0x49, 0x8c, 0x9c, 0x2e, 0x3c, 0x22, 0x39,
-	0x1f, 0x4e, 0x17, 0x09, 0x69, 0x3c, 0xa6, 0xe6, 0x0a, 0x69, 0xc8, 0xef, 0x41, 0xed, 0x31, 0xe6,
-	0xaa, 0x29, 0x99, 0xf4, 0x6d, 0xc2, 0xa2, 0x0c, 0x5c, 0x95, 0xeb, 0x72, 0xa0, 0x21, 0xef, 0x36,
-	0x54, 0xe2, 0xb4, 0x95, 0xe4, 0x11, 0x0e, 0x7b, 0x31, 0xee, 0x33, 0x69, 0x62, 0x29, 0x28, 0x6b,
-	0xe4, 0x2b, 0x81, 0xf3, 0x3e, 0x86, 0x2a, 0xbe, 0x54, 0x4c, 0x5a, 0x89, 0x9a, 0x66, 0x15, 0x8d,
-	0x95, 0xdd, 0x9d, 0xf9, 0x18, 0x56, 0x2d, 0xbb, 0x3a, 0xba, 0x53, 0x58, 0x55, 0x6d, 0xd5, 0x9a,
-	0x14, 0xd7, 0x69, 0xd5, 0x35, 0x36, 0x86, 0xf1, 0xb7, 0x60, 0xe3, 0x31, 0xe6, 0x56, 0xfd, 0xeb,
-	0x18, 0xfd, 0x1f, 0x61, 0x73, 0x9c, 0xa0, 0x9d, 0xf8, 0x0d, 0xb8, 0xc5, 0x1b, 0x2b, 0xcc, 0xdf,
-	0x9c, 0x62, 0xde, 0x16, 0xb6, 0x45, 0xfc, 0x75, 0xf0, 0xce, 0x30, 0x0f, 0x30, 0x8a, 0x9e, 0xa7,
-	0xc9, 0xc0, 0x58, 0xdc, 0x80, 0xb5, 0x02, 0x56, 0x97, 0xf0, 0x08, 0xfd, 0x9a, 0xc6, 0x1c, 0x1b,
-	0xee, 0x4d, 0x58, 0x2f, 0xa2, 0x35, 0xfb, 0x37, 0xb0, 0xaa, 0x26, 0xdb, 0x8b, 0x41, 0x66, 0x98,
-	0xbd, 0x5f, 0x81, 0xab, 0xdc, 0x0b, 0xe5, 0xdc, 0x17, 0x2e, 0x57, 0x0f, 0xd6, 0x1b, 0xc3, 0x35,
-	0x46, 0xe6, 0x9c, 0x4b, 0x09, 0xe0, 0xc3, 0x6f, 0xe1, 0xa7, 0xad, 0x6b, 0xe4, 0x50, 0x80, 0xcf,
-	0x29, 0x66, 0x1d, 0x51, 0x52, 0xb6, 0x43, 0x45, 0xb4, 0x66, 0xdf, 0x82, 0x8d, 0x20, 0x4f, 0x9f,
-	0x60, 0x94, 0xf0, 0x8e, 0x9c, 0x3a, 0x46, 0xa0, 0x0e, 0x9b, 0xe3, 0x04, 0x2d, 0xf2, 0x19, 0xd4,
-	0x9f, 0xb6, 0x53, 0x42, 0xb1, 0x22, 0x9e, 0x50, 0x4a, 0x68, 0xa1, 0xa5, 0x70, 0x8e, 0x69, 0x3a,
-	0x6a, 0x14, 0x12, 0xf4, 0x3f, 0x82, 0xed, 0x29, 0x52, 0x5a, 0xe5, 0x97, 0xc2, 0x69, 0xd1, 0x4f,
-	0x8a, 0x95, 0x7c, 0x1b, 0x2a, 0x7d, 0x14, 0xf3, 0x70, 0xd8, 0xd0, 0x94, 0xce, 0xb2, 0x40, 0x9a,
-	0x16, 0xa8, 0x22, 0xb3, 0x65, 0xb5, 0xce, 0x03, 0xd8, 0x3c, 0xa5, 0xf8, 0x3c, 0x89, 0xdb, 0x9d,
-	0xb1, 0x0b, 0x22, 0x56, 0x35, 0x99, 0x38, 0x73, 0x43, 0x0c, 0xe8, 0xb7, 0x61, 0x6b, 0x42, 0x46,
-	0xd7, 0xd5, 0x33, 0xa8, 0x2a, 0xae, 0x90, 0xca, 0xa5, 0xc4, 0x0c, 0x83, 0x8f, 0xaf, 0xac, 0x6c,
-	0x7b, 0x85, 0x09, 0x2a, 0x2d, 0x0b, 0x62, 0xfe, 0xbf, 0x1d, 0xf0, 0x0e, 0xb3, 0x2c, 0x19, 0x14,
-	0x3d, 0xab, 0x41, 0x89, 0xbd, 0x49, 0x4c, 0x8b, 0x61, 0x6f, 0x12, 0xd1, 0x62, 0xce, 0x09, 0x6d,
-	0x61, 0x7d, 0x59, 0x15, 0x20, 0x76, 0x08, 0x94, 0x24, 0xa4, 0x1f, 0x5a, 0xab, 0xad, 0xec, 0x0c,
-	0x4b, 0x41, 0x4d, 0x12, 0x82, 0x11, 0x7e, 0x72, 0x7b, 0x9a, 0xff, 0x50, 0xdb, 0xd3, 0xc2, 0x7b,
-	0x6e, 0x4f, 0x7f, 0x75, 0x60, 0xad, 0x10, 0xbd, 0xce, 0xf1, 0xff, 0xde, 0x9e, 0xf7, 0x37, 0x07,
-	0xea, 0xba, 0x91, 0x3f, 0xc2, 0xbc, 0xd5, 0x39, 0x64, 0x0f, 0x9b, 0xc3, 0xd3, 0x5a, 0x87, 0x05,
-	0xf9, 0xee, 0x90, 0x6e, 0x96, 0x03, 0x05, 0x78, 0x5b, 0x70, 0x23, 0x6a, 0x86, 0x72, 0x80, 0xe9,
-	0x1e, 0x1e, 0x35, 0xbf, 0x17, 0x23, 0x6c, 0x1b, 0x96, 0xba, 0xe8, 0x32, 0xa4, 0xa4, 0xcf, 0xf4,
-	0xbe, 0x77, 0xa3, 0x8b, 0x2e, 0x03, 0xd2, 0x67, 0x72, 0x17, 0x8f, 0x99, 0x5c, 0xb2, 0xd5, 0xdb,
-	0x86, 0xc9, 0x43, 0x5a, 0x0a, 0xaa, 0x1a, 0x7d, 0xa4, 0xb0, 0xe2, 0x46, 0x50, 0x59, 0xec, 0xf6,
-	0x11, 0x2c, 0x05, 0x65, 0x6a, 0xdd, 0x00, 0xff, 0x31, 0x6c, 0x4f, 0xf1, 0x59, 0xe7, 0xf8, 0x1e,
-	0x2c, 0xaa, 0x02, 0xd6, 0xc9, 0xf5, 0x1a, 0xea, 0xed, 0xf4, 0x83, 0xf8, 0xab, 0x8b, 0x55, 0x73,
-	0xf8, 0x7f, 0x70, 0xe0, 0xff, 0x8a, 0x9a, 0x0e, 0x93, 0x44, 0xec, 0x58, 0xec, 0xc3, 0xa7, 0x60,
-	0x22, 0xb2, 0xf9, 0x29, 0x91, 0x3d, 0x83, 0x9b, 0x57, 0xf9, 0xf3, 0x1e, 0xe1, 0x7d, 0x3b, 0x7e,
-	0xb6, 0x87, 0x59, 0xf6, 0xf6, 0xc0, 0x6c, 0xff, 0xe7, 0x0a, 0xfe, 0x4f, 0x26, 0x5d, 0x2a, 0x7b,
-	0x0f, 0xaf, 0xc4, 0xf8, 0x49, 0x50, 0x0f, 0xab, 0x8d, 0xc0, 0xb4, 0xe3, 0x47, 0xb0, 0x56, 0xc0,
-	0x6a, 0xc5, 0xfb, 0x62, 0x2f, 0x18, 0xee, 0x12, 0xee, 0xc1, 0x56, 0x63, 0xfc, 0xb1, 0xab, 0x05,
-	0x34, 0x9b, 0xe8, 0xf7, 0xdf, 0x21, 0xc6, 0x31, 0x35, 0xfd, 0xd3, 0x18, 0xf8, 0x0c, 0x36, 0xc7,
-	0x09, 0xda, 0x86, 0xbd, 0x51, 0x3a, 0x63, 0x1b, 0xa5, 0x07, 0xb5, 0x33, 0x4e, 0x32, 0xe9, 0x9a,
-	0xd1, 0xb4, 0x06, 0xab, 0x16, 0x4e, 0x77, 0xe3, 0xdf, 0xc2, 0xd6, 0x10, 0xf9, 0x5d, 0x9c, 0xc6,
-	0xdd, 0xbc, 0x6b, 0xad, 0x8c, 0x57, 0xe9, 0xf7, 0x6e, 0x81, 0x6c, 0xf6, 0x21, 0x8f, 0xbb, 0xd8,
-	0x6c, 0x45, 0xa5, 0xc0, 0x15, 0xb8, 0x17, 0x0a, 0xe5, 0x7f, 0x0e, 0xf5, 0x49, 0xcd, 0x33, 0xb8,
-	0x2e, 0xdd, 0x44, 0x94, 0x17, 0x7c, 0x17, 0xc9, 0xb7, 0x90, 0xda, 0xf9, 0x87, 0x70, 0x4b, 0xcd,
-	0xe0, 0x93, 0x4b, 0x31, 0xcb, 0x50, 0x22, 0x16, 0x80, 0x0c, 0x51, 0x9c, 0x72, 0x1c, 0x99, 0x30,
-	0xe4, 0x6e, 0xa7, 0xc8, 0x61, 0x6c, 0xf6, 0x64, 0x30, 0xa8, 0xa7, 0x91, 0x7f, 0x07, 0xfc, 0xb7,
-	0x69, 0xd1, 0xb6, 0xf6, 0xe0, 0xe6, 0x38, 0xd7, 0x49, 0x82, 0x5b, 0x23, 0x43, 0xfe, 0x2d, 0xd8,
-	0xbd, 0x92, 0x43, 0x2b, 0xf1, 0xd4, 0x5a, 0x28, 0x82, 0x18, 0x56, 0xd0, 0xcf, 0xd4, 0xca, 0xa6,
-	0x71, 0x3a, 0x41, 0xeb, 0xb0, 0x80, 0xa2, 0x88, 0x9a, 0x41, 0xa8, 0x00, 0xff, 0xf7, 0xb0, 0xf9,
-	0x1a, 0xc5, 0xdc, 0x7a, 0x68, 0x98, 0x20, 0x0f, 0xa1, 0xdc, 0x4c, 0xb2, 0xe2, 0x40, 0x9e, 0xbe,
-	0x5e, 0xd9, 0xc2, 0x6e, 0xd3, 0x7a, 0xb2, 0xcc, 0x70, 0xa4, 0xdb, 0xb0, 0x35, 0x61, 0x5f, 0x47,
-	0x56, 0x83, 0xaa, 0x38, 0xed, 0xa3, 0xc4, 0xdc, 0x54, 0xff, 0x15, 0xac, 0x0c, 0x31, 0x3a, 0xaa,
-	0x63, 0xa8, 0xd8, 0x5e, 0x9a, 0x51, 0xfd, 0x2e, 0x37, 0xcb, 0x96, 0x9b, 0xcc, 0x5f, 0x15, 0x7a,
-	0x11, 0xe5, 0x96, 0x29, 0x59, 0xed, 0x06, 0xa5, 0x1d, 0xfa, 0x1d, 0x78, 0x41, 0x9e, 0x1e, 0x25,
-	0xd9, 0xcb, 0x94, 0xc7, 0x89, 0xc9, 0xd3, 0x87, 0xf0, 0x60, 0x96, 0x4c, 0x3d, 0x80, 0xb5, 0x82,
-	0xf5, 0x19, 0xea, 0x7e, 0x1b, 0xb6, 0x02, 0xcc, 0xc4, 0x72, 0x3a, 0x6c, 0x14, 0x26, 0xbe, 0x1d,
-	0xa8, 0x4f, 0x92, 0x74, 0x9c, 0x7f, 0x77, 0x60, 0xfb, 0x95, 0x45, 0x38, 0xa6, 0x78, 0xb4, 0x5e,
-	0x0a, 0x83, 0x7d, 0x42, 0x2f, 0xce, 0x13, 0xd2, 0x37, 0x06, 0x0d, 0xec, 0xdd, 0x87, 0x45, 0x46,
-	0x72, 0xb3, 0xc3, 0xb8, 0x07, 0xf5, 0x86, 0xf5, 0xff, 0x3b, 0x35, 0xd8, 0xce, 0x24, 0x3d, 0xd0,
-	0x7c, 0x05, 0xf7, 0x4b, 0x63, 0x1d, 0x61, 0x0b, 0x44, 0xcb, 0x0d, 0x79, 0xa6, 0x46, 0x64, 0x29,
-	0x58, 0xec, 0xa2, 0xcb, 0x17, 0x99, 0xfc, 0x37, 0x9b, 0xec, 0xcd, 0x23, 0x17, 0xc3, 0x04, 0xb5,
-	0xe5, 0x80, 0x2c, 0x05, 0xab, 0xa2, 0x4d, 0x8f, 0x28, 0xcf, 0x50, 0xdb, 0xff, 0x05, 0xec, 0x4c,
-	0x8b, 0x47, 0x67, 0xb0, 0x0a, 0x73, 0xfa, 0x12, 0x97, 0x82, 0xb9, 0x38, 0x12, 0xdd, 0xe2, 0x69,
-	0x1a, 0x73, 0xd5, 0x22, 0x4d, 0xbe, 0xee, 0x83, 0x67, 0x23, 0x67, 0x48, 0xfe, 0x4f, 0x0e, 0xdc,
-	0x3c, 0x25, 0x59, 0x9e, 0x48, 0x5b, 0xea, 0xf2, 0x7f, 0x43, 0x72, 0x71, 0x8b, 0x4d, 0x2a, 0xff,
-	0x1f, 0x56, 0xc4, 0x81, 0x87, 0x2d, 0xe9, 0x50, 0x14, 0xa6, 0xe6, 0x9d, 0x58, 0x11, 0x68, 0xe5,
-	0x66, 0xf4, 0x3d, 0x13, 0xfd, 0x06, 0xb5, 0x64, 0x98, 0xd6, 0xa0, 0x05, 0x85, 0x92, 0xc3, 0xf6,
-	0x0b, 0x28, 0x77, 0xa5, 0x67, 0x21, 0x4a, 0x62, 0xa4, 0x06, 0xae, 0x7b, 0xb0, 0x31, 0xfe, 0xae,
-	0x38, 0x14, 0xc4, 0xc0, 0x55, 0xac, 0x12, 0xf0, 0x1e, 0xc0, 0xba, 0x9d, 0xc6, 0x61, 0x34, 0xf3,
-	0xd2, 0xc6, 0x9a, 0x45, 0x1b, 0x6e, 0xe1, 0xb7, 0x60, 0xf7, 0xca, 0xb8, 0x74, 0x05, 0xfd, 0xc9,
-	0x81, 0x9a, 0x48, 0x97, 0xdd, 0x70, 0xbd, 0x5f, 0xc2, 0xa2, 0xe2, 0xd6, 0xad, 0xe4, 0x0a, 0xf7,
-	0x34, 0xd3, 0x95, 0x9e, 0xcd, 0x5d, 0xe9, 0xd9, 0xb4, 0x7c, 0x96, 0xa6, 0xe4, 0xd3, 0x9c, 0x70,
-	0xb1, 0xf3, 0x6f, 0xc0, 0xda, 0x43, 0xdc, 0x25, 0x1c, 0x17, 0x0f, 0xfe, 0x00, 0xd6, 0x8b, 0xe8,
-	0x19, 0x8e, 0xfe, 0x6b, 0xd8, 0x3d, 0xa5, 0x44, 0x08, 0x49, 0x13, 0xaf, 0x3b, 0x38, 0x3d, 0x46,
-	0x79, 0xbb, 0xc3, 0x5f, 0x66, 0x33, 0x4c, 0x42, 0xff, 0xd7, 0xb0, 0x77, 0xb5, 0xf8, 0x6c, 0xd7,
-	0x5e, 0x09, 0x22, 0xa6, 0xf5, 0x44, 0xd6, 0xb5, 0x9f, 0x24, 0xe9, 0x04, 0xfc, 0xd1, 0x81, 0xda,
-	0x19, 0x2e, 0xd6, 0xfd, 0x75, 0x0f, 0x6d, 0xca, 0x09, 0xcc, 0x4d, 0xab, 0xe8, 0x7b, 0xb0, 0x2a,
-	0x9f, 0x37, 0x21, 0x13, 0x4d, 0x36, 0x64, 0xc2, 0x27, 0xfd, 0xaa, 0x59, 0x91, 0x84, 0xd1, 0x68,
-	0x96, 0xd3, 0x1b, 0x8f, 0xdd, 0x3c, 0xff, 0xe9, 0x28, 0x90, 0x00, 0x4b, 0x25, 0xa3, 0xf1, 0x7c,
-	0x3d, 0x9f, 0xc5, 0x73, 0x75, 0x8a, 0x2a, 0x6d, 0xe7, 0x0e, 0xf8, 0x62, 0xe4, 0x58, 0xdd, 0xe3,
-	0x30, 0x8d, 0xc4, 0x70, 0x2d, 0xac, 0x6c, 0xaf, 0xe0, 0xf6, 0x5b, 0xb9, 0xde, 0x77, 0x85, 0xdb,
-	0x80, 0x35, 0xbb, 0x12, 0xac, 0x9a, 0x2c, 0xa2, 0x67, 0x28, 0x8a, 0x07, 0x50, 0x39, 0x42, 0xad,
-	0x8b, 0x7c, 0x58, 0x81, 0x7b, 0xe0, 0xb6, 0x48, 0xda, 0xca, 0x29, 0xc5, 0x69, 0x6b, 0xa0, 0x1b,
-	0x8f, 0x8d, 0xf2, 0x3f, 0x87, 0xaa, 0x11, 0xd1, 0x06, 0xee, 0xc0, 0x02, 0xee, 0x8d, 0x12, 0x5b,
-	0x6d, 0x98, 0x1f, 0x56, 0x4e, 0x04, 0x36, 0x50, 0x44, 0x3d, 0x5b, 0x38, 0xa1, 0xf8, 0x11, 0x25,
-	0xdd, 0x82, 0x55, 0xff, 0x10, 0xb6, 0xa7, 0xd0, 0xae, 0xa3, 0xfe, 0xe8, 0xfe, 0x8f, 0x8d, 0x5e,
-	0xcc, 0x31, 0x63, 0x8d, 0x98, 0xec, 0xab, 0xaf, 0xfd, 0x36, 0xd9, 0xef, 0xf1, 0x7d, 0xf9, 0xf3,
-	0xce, 0xfe, 0xc4, 0xdc, 0x6d, 0x2e, 0x4a, 0xc2, 0xa7, 0xff, 0x09, 0x00, 0x00, 0xff, 0xff, 0x3a,
-	0x7b, 0x80, 0x64, 0x7a, 0x1a, 0x00, 0x00,
+var fileDescriptor_tabletmanagerdata_11cfae49156c9a5f = []byte{
+	// 2098 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xcc, 0x59, 0x5b, 0x6f, 0x1b, 0xc7,
+	0xf5, 0xc7, 0x8a, 0x92, 0x2c, 0x9d, 0x25, 0x29, 0x72, 0x29, 0x89, 0x94, 0x82, 0xbf, 0x25, 0xad,
+	0x9d, 0x7f, 0x54, 0x17, 0xa5, 0x62, 0x25, 0x0d, 0x82, 0x04, 0x29, 0xaa, 0xab, 0xed, 0xc4, 0x89,
+	0x95, 0x95, 0x2f, 0x45, 0x5e, 0x16, 0x43, 0xee, 0x88, 0x5c, 0x68, 0xb9, 0xbb, 0x9e, 0x99, 0xa5,
+	0x44, 0xa0, 0xe8, 0x47, 0xe8, 0x5b, 0xdf, 0xfa, 0x56, 0xa0, 0x7d, 0xef, 0x87, 0x49, 0xd1, 0x4f,
+	0xd2, 0x87, 0xbe, 0x14, 0x73, 0x23, 0x67, 0x49, 0xca, 0xa6, 0x04, 0x17, 0xe8, 0x8b, 0xc0, 0xf9,
+	0x9d, 0xfb, 0x99, 0x33, 0xe7, 0x9c, 0x85, 0xa0, 0xce, 0x50, 0x2b, 0xc2, 0xac, 0x87, 0x62, 0xd4,
+	0xc1, 0x24, 0x40, 0x0c, 0x35, 0x53, 0x92, 0xb0, 0xc4, 0xa9, 0x4e, 0x10, 0x36, 0xed, 0xb7, 0x19,
+	0x26, 0x03, 0x49, 0xdf, 0x2c, 0xb3, 0x24, 0x4d, 0x46, 0xfc, 0x9b, 0x6b, 0x04, 0xa7, 0x51, 0xd8,
+	0x46, 0x2c, 0x4c, 0x62, 0x03, 0x2e, 0x45, 0x49, 0x27, 0x63, 0x61, 0x24, 0x8f, 0xee, 0x3f, 0x2d,
+	0x58, 0x79, 0xc9, 0x15, 0x1f, 0xe3, 0x8b, 0x30, 0x0e, 0x39, 0xb3, 0xe3, 0xc0, 0x7c, 0x8c, 0x7a,
+	0xb8, 0x61, 0x6d, 0x5b, 0xbb, 0xcb, 0x9e, 0xf8, 0xed, 0xac, 0xc3, 0x22, 0x6d, 0x77, 0x71, 0x0f,
+	0x35, 0xe6, 0x04, 0xaa, 0x4e, 0x4e, 0x03, 0xee, 0xb5, 0x93, 0x28, 0xeb, 0xc5, 0xb4, 0x51, 0xd8,
+	0x2e, 0xec, 0x2e, 0x7b, 0xfa, 0xe8, 0x34, 0xa1, 0x96, 0x92, 0xb0, 0x87, 0xc8, 0xc0, 0xbf, 0xc4,
+	0x03, 0x5f, 0x73, 0xcd, 0x0b, 0xae, 0xaa, 0x22, 0x7d, 0x87, 0x07, 0x47, 0x8a, 0xdf, 0x81, 0x79,
+	0x36, 0x48, 0x71, 0x63, 0x41, 0x5a, 0xe5, 0xbf, 0x9d, 0x2d, 0xb0, 0xb9, 0xeb, 0x7e, 0x84, 0xe3,
+	0x0e, 0xeb, 0x36, 0x16, 0xb7, 0xad, 0xdd, 0x79, 0x0f, 0x38, 0xf4, 0x5c, 0x20, 0xce, 0x47, 0xb0,
+	0x4c, 0x92, 0x2b, 0xbf, 0x9d, 0x64, 0x31, 0x6b, 0xdc, 0x13, 0xe4, 0x25, 0x92, 0x5c, 0x1d, 0xf1,
+	0xb3, 0xfb, 0x57, 0x0b, 0x2a, 0xe7, 0xc2, 0x4d, 0x23, 0xb8, 0x4f, 0x60, 0x85, 0xcb, 0xb7, 0x10,
+	0xc5, 0xbe, 0x8a, 0x48, 0xc6, 0x59, 0xd6, 0xb0, 0x14, 0x71, 0x5e, 0x80, 0xcc, 0xb8, 0x1f, 0x0c,
+	0x85, 0x69, 0x63, 0x6e, 0xbb, 0xb0, 0x6b, 0xef, 0xbb, 0xcd, 0xc9, 0x4b, 0x1a, 0x4b, 0xa2, 0x57,
+	0x61, 0x79, 0x80, 0xf2, 0x54, 0xf5, 0x31, 0xa1, 0x61, 0x12, 0x37, 0x0a, 0xc2, 0xa2, 0x3e, 0x72,
+	0x47, 0x1d, 0x69, 0xf5, 0xa8, 0x8b, 0xe2, 0x0e, 0xf6, 0x30, 0xcd, 0x22, 0xe6, 0x3c, 0x85, 0x52,
+	0x0b, 0x5f, 0x24, 0x24, 0xe7, 0xa8, 0xbd, 0xff, 0x60, 0x8a, 0xf5, 0xf1, 0x30, 0xbd, 0xa2, 0x94,
+	0x54, 0xb1, 0x9c, 0x42, 0x11, 0x5d, 0x30, 0x4c, 0x7c, 0xe3, 0x0e, 0x67, 0x54, 0x64, 0x0b, 0x41,
+	0x09, 0xbb, 0xff, 0xb2, 0xa0, 0xfc, 0x8a, 0x62, 0x72, 0x86, 0x49, 0x2f, 0xa4, 0x54, 0x15, 0x4b,
+	0x37, 0xa1, 0x4c, 0x17, 0x0b, 0xff, 0xcd, 0xb1, 0x8c, 0x62, 0xa2, 0x4a, 0x45, 0xfc, 0x76, 0x7e,
+	0x09, 0xd5, 0x14, 0x51, 0x7a, 0x95, 0x90, 0xc0, 0x6f, 0x77, 0x71, 0xfb, 0x92, 0x66, 0x3d, 0x91,
+	0x87, 0x79, 0xaf, 0xa2, 0x09, 0x47, 0x0a, 0x77, 0x7e, 0x04, 0x48, 0x49, 0xd8, 0x0f, 0x23, 0xdc,
+	0xc1, 0xb2, 0x64, 0xec, 0xfd, 0xc7, 0x53, 0xbc, 0xcd, 0xfb, 0xd2, 0x3c, 0x1b, 0xca, 0x9c, 0xc4,
+	0x8c, 0x0c, 0x3c, 0x43, 0xc9, 0xe6, 0x37, 0xb0, 0x32, 0x46, 0x76, 0x2a, 0x50, 0xb8, 0xc4, 0x03,
+	0xe5, 0x39, 0xff, 0xe9, 0xac, 0xc2, 0x42, 0x1f, 0x45, 0x19, 0x56, 0x9e, 0xcb, 0xc3, 0x57, 0x73,
+	0x5f, 0x5a, 0xee, 0xcf, 0x16, 0x14, 0x8f, 0x5b, 0xef, 0x89, 0xbb, 0x0c, 0x73, 0x41, 0x4b, 0xc9,
+	0xce, 0x05, 0xad, 0x61, 0x1e, 0x0a, 0x46, 0x1e, 0x5e, 0x4c, 0x09, 0x6d, 0x6f, 0x4a, 0x68, 0xa6,
+	0xb1, 0xff, 0x66, 0x60, 0x7f, 0xb1, 0xc0, 0x1e, 0x59, 0xa2, 0xce, 0x73, 0xa8, 0x70, 0x3f, 0xfd,
+	0x74, 0x84, 0x35, 0x2c, 0xe1, 0xe5, 0xce, 0x7b, 0x2f, 0xc0, 0x5b, 0xc9, 0x72, 0x67, 0xea, 0x9c,
+	0x42, 0x39, 0x68, 0xe5, 0x74, 0xc9, 0x17, 0xb4, 0xf5, 0x9e, 0x88, 0xbd, 0x52, 0x60, 0x9c, 0xa8,
+	0xfb, 0x35, 0xd8, 0x87, 0x51, 0x7a, 0x96, 0x50, 0xf9, 0x88, 0x2b, 0x50, 0xc8, 0xc2, 0x40, 0x04,
+	0x58, 0xf2, 0xf8, 0x4f, 0x67, 0x13, 0x96, 0x52, 0x45, 0x55, 0x31, 0x0e, 0xcf, 0xee, 0x27, 0x60,
+	0x9f, 0x85, 0x71, 0xc7, 0xc3, 0x6f, 0x33, 0x4c, 0x19, 0x7f, 0x87, 0x29, 0x1a, 0x44, 0x09, 0x0a,
+	0x54, 0x86, 0xf4, 0xd1, 0xdd, 0x85, 0xa2, 0x64, 0xa4, 0x69, 0x12, 0x53, 0xfc, 0x0e, 0xce, 0x47,
+	0x50, 0x3c, 0x8f, 0x30, 0x4e, 0xb5, 0xce, 0x4d, 0x58, 0x0a, 0x32, 0x22, 0x7a, 0xad, 0x60, 0x2d,
+	0x78, 0xc3, 0xb3, 0xbb, 0x02, 0x25, 0xc5, 0x2b, 0xd5, 0xba, 0xff, 0xb0, 0xc0, 0x39, 0xb9, 0xc6,
+	0xed, 0x8c, 0xe1, 0xa7, 0x49, 0x72, 0xa9, 0x75, 0x4c, 0x6b, 0xbb, 0xf7, 0x01, 0x52, 0x44, 0x50,
+	0x0f, 0x33, 0x4c, 0x64, 0xee, 0x96, 0x3d, 0x03, 0x71, 0xce, 0x60, 0x19, 0x5f, 0x33, 0x82, 0x7c,
+	0x1c, 0xf7, 0x45, 0x03, 0xb6, 0xf7, 0x3f, 0x9b, 0x92, 0xda, 0x49, 0x6b, 0xcd, 0x13, 0x2e, 0x76,
+	0x12, 0xf7, 0x65, 0x41, 0x2d, 0x61, 0x75, 0xdc, 0xfc, 0x1a, 0x4a, 0x39, 0xd2, 0xad, 0x8a, 0xe9,
+	0x02, 0x6a, 0x39, 0x53, 0x2a, 0x8f, 0x5b, 0x60, 0xe3, 0xeb, 0x90, 0xf9, 0x94, 0x21, 0x96, 0x51,
+	0x95, 0x20, 0xe0, 0xd0, 0xb9, 0x40, 0xc4, 0x74, 0x61, 0x41, 0x92, 0xb1, 0xe1, 0x74, 0x11, 0x27,
+	0x85, 0x63, 0xa2, 0x9f, 0x90, 0x3a, 0xb9, 0x7d, 0xa8, 0x3c, 0xc1, 0x4c, 0x36, 0x25, 0x9d, 0xbe,
+	0x75, 0x58, 0x14, 0x81, 0xcb, 0x72, 0x5d, 0xf6, 0xd4, 0xc9, 0x79, 0x00, 0xa5, 0x30, 0x6e, 0x47,
+	0x59, 0x80, 0xfd, 0x7e, 0x88, 0xaf, 0xa8, 0x30, 0xb1, 0xe4, 0x15, 0x15, 0xf8, 0x9a, 0x63, 0xce,
+	0xc7, 0x50, 0xc6, 0xd7, 0x92, 0x49, 0x29, 0x91, 0xd3, 0xac, 0xa4, 0x50, 0xd1, 0xdd, 0xa9, 0x8b,
+	0xa1, 0x6a, 0xd8, 0x55, 0xd1, 0x9d, 0x41, 0x55, 0xb6, 0x55, 0x63, 0x52, 0xdc, 0xa6, 0x55, 0x57,
+	0xe8, 0x18, 0xe2, 0xd6, 0x61, 0xed, 0x09, 0x66, 0x46, 0xfd, 0xab, 0x18, 0xdd, 0x9f, 0x60, 0x7d,
+	0x9c, 0xa0, 0x9c, 0xf8, 0x2d, 0xd8, 0xf9, 0x17, 0xcb, 0xcd, 0xdf, 0x9f, 0x62, 0xde, 0x14, 0x36,
+	0x45, 0xdc, 0x55, 0x70, 0xce, 0x31, 0xf3, 0x30, 0x0a, 0x5e, 0xc4, 0xd1, 0x40, 0x5b, 0x5c, 0x83,
+	0x5a, 0x0e, 0x55, 0x25, 0x3c, 0x82, 0xdf, 0x90, 0x90, 0x61, 0xcd, 0xbd, 0x0e, 0xab, 0x79, 0x58,
+	0xb1, 0x7f, 0x0b, 0x55, 0x39, 0xd9, 0x5e, 0x0e, 0x52, 0xcd, 0xec, 0xfc, 0x1a, 0x6c, 0xe9, 0x9e,
+	0x2f, 0xe6, 0x3e, 0x77, 0xb9, 0xbc, 0xbf, 0xda, 0x1c, 0xae, 0x31, 0x22, 0xe7, 0x4c, 0x48, 0x00,
+	0x1b, 0xfe, 0xe6, 0x7e, 0x9a, 0xba, 0x46, 0x0e, 0x79, 0xf8, 0x82, 0x60, 0xda, 0xe5, 0x25, 0x65,
+	0x3a, 0x94, 0x87, 0x15, 0x7b, 0x1d, 0xd6, 0xbc, 0x2c, 0x7e, 0x8a, 0x51, 0xc4, 0xba, 0x62, 0xea,
+	0x68, 0x81, 0x06, 0xac, 0x8f, 0x13, 0x94, 0xc8, 0xe7, 0xd0, 0x78, 0xd6, 0x89, 0x13, 0x82, 0x25,
+	0xf1, 0x84, 0x90, 0x84, 0xe4, 0x5a, 0x0a, 0x63, 0x98, 0xc4, 0xa3, 0x46, 0x21, 0x8e, 0xee, 0x47,
+	0xb0, 0x31, 0x45, 0x4a, 0xa9, 0xfc, 0x8a, 0x3b, 0xcd, 0xfb, 0x49, 0xbe, 0x92, 0x1f, 0x40, 0xe9,
+	0x0a, 0x85, 0xcc, 0x1f, 0x36, 0x34, 0xa9, 0xb3, 0xc8, 0x41, 0xdd, 0x02, 0x65, 0x64, 0xa6, 0xac,
+	0xd2, 0xb9, 0x0f, 0xeb, 0x67, 0x04, 0x5f, 0x44, 0x61, 0xa7, 0x3b, 0xf6, 0x40, 0xf8, 0xaa, 0x26,
+	0x12, 0xa7, 0x5f, 0x88, 0x3e, 0xba, 0x1d, 0xa8, 0x4f, 0xc8, 0xa8, 0xba, 0x7a, 0x0e, 0x65, 0xc9,
+	0xe5, 0x13, 0xb1, 0x94, 0xe8, 0x61, 0xf0, 0xf1, 0x8d, 0x95, 0x6d, 0xae, 0x30, 0x5e, 0xa9, 0x6d,
+	0x9c, 0xa8, 0xfb, 0x6f, 0x0b, 0x9c, 0x83, 0x34, 0x8d, 0x06, 0x79, 0xcf, 0x2a, 0x50, 0xa0, 0x6f,
+	0x23, 0xdd, 0x62, 0xe8, 0xdb, 0x88, 0xb7, 0x98, 0x8b, 0x84, 0xb4, 0xb1, 0x7a, 0xac, 0xf2, 0xc0,
+	0x77, 0x08, 0x14, 0x45, 0xc9, 0x95, 0x6f, 0xac, 0xb6, 0xa2, 0x33, 0x2c, 0x79, 0x15, 0x41, 0xf0,
+	0x46, 0xf8, 0xe4, 0xf6, 0x34, 0xff, 0xa1, 0xb6, 0xa7, 0x85, 0x3b, 0x6e, 0x4f, 0x7f, 0xb3, 0xa0,
+	0x96, 0x8b, 0x5e, 0xe5, 0xf8, 0x7f, 0x6f, 0xcf, 0xfb, 0xbb, 0x05, 0x0d, 0xd5, 0xc8, 0x4f, 0x31,
+	0x6b, 0x77, 0x0f, 0xe8, 0x71, 0x6b, 0x78, 0x5b, 0xab, 0xb0, 0x20, 0xbe, 0x3b, 0x84, 0x9b, 0x45,
+	0x4f, 0x1e, 0x9c, 0x3a, 0xdc, 0x0b, 0x5a, 0xbe, 0x18, 0x60, 0xaa, 0x87, 0x07, 0xad, 0x1f, 0xf8,
+	0x08, 0xdb, 0x80, 0xa5, 0x1e, 0xba, 0xf6, 0x49, 0x72, 0x45, 0xd5, 0xbe, 0x77, 0xaf, 0x87, 0xae,
+	0xbd, 0xe4, 0x8a, 0x8a, 0x5d, 0x3c, 0xa4, 0x62, 0xc9, 0x6e, 0x85, 0x71, 0x94, 0x74, 0xa8, 0xb8,
+	0xa4, 0x25, 0xaf, 0xac, 0xe0, 0x43, 0x89, 0xf2, 0x17, 0x41, 0x44, 0xb1, 0x9b, 0x57, 0xb0, 0xe4,
+	0x15, 0x89, 0xf1, 0x02, 0xdc, 0x27, 0xb0, 0x31, 0xc5, 0x67, 0x95, 0xe3, 0x47, 0xb0, 0x28, 0x0b,
+	0x58, 0x25, 0xd7, 0x69, 0xca, 0x6f, 0xa7, 0x1f, 0xf9, 0x5f, 0x55, 0xac, 0x8a, 0xc3, 0xfd, 0xa3,
+	0x05, 0xff, 0x97, 0xd7, 0x74, 0x10, 0x45, 0x7c, 0xc7, 0xa2, 0x1f, 0x3e, 0x05, 0x13, 0x91, 0xcd,
+	0x4f, 0x89, 0xec, 0x39, 0xdc, 0xbf, 0xc9, 0x9f, 0x3b, 0x84, 0xf7, 0xdd, 0xf8, 0xdd, 0x1e, 0xa4,
+	0xe9, 0xbb, 0x03, 0x33, 0xfd, 0x9f, 0xcb, 0xf9, 0x3f, 0x99, 0x74, 0xa1, 0xec, 0x0e, 0x5e, 0xf1,
+	0xf1, 0x13, 0xa1, 0x3e, 0x96, 0x1b, 0x81, 0x6e, 0xc7, 0xa7, 0x50, 0xcb, 0xa1, 0x4a, 0xf1, 0x1e,
+	0xdf, 0x0b, 0x86, 0xbb, 0x84, 0xbd, 0x5f, 0x6f, 0x8e, 0x7f, 0xec, 0x2a, 0x01, 0xc5, 0xc6, 0xfb,
+	0xfd, 0xf7, 0x88, 0x32, 0x4c, 0x74, 0xff, 0xd4, 0x06, 0x3e, 0x87, 0xf5, 0x71, 0x82, 0xb2, 0x61,
+	0x6e, 0x94, 0xd6, 0xd8, 0x46, 0xe9, 0x40, 0xe5, 0x9c, 0x25, 0xa9, 0x70, 0x4d, 0x6b, 0xaa, 0x41,
+	0xd5, 0xc0, 0x54, 0x37, 0xfe, 0x1d, 0xd4, 0x87, 0xe0, 0xf7, 0x61, 0x1c, 0xf6, 0xb2, 0x9e, 0xb1,
+	0x32, 0xde, 0xa4, 0xdf, 0xd9, 0x01, 0xd1, 0xec, 0x7d, 0x16, 0xf6, 0xb0, 0xde, 0x8a, 0x0a, 0x9e,
+	0xcd, 0xb1, 0x97, 0x12, 0x72, 0xbf, 0x80, 0xc6, 0xa4, 0xe6, 0x19, 0x5c, 0x17, 0x6e, 0x22, 0xc2,
+	0x72, 0xbe, 0xf3, 0xe4, 0x1b, 0xa0, 0x72, 0xfe, 0x18, 0x76, 0xe4, 0x0c, 0x3e, 0xb9, 0xe6, 0xb3,
+	0x0c, 0x45, 0x7c, 0x01, 0x48, 0x11, 0xc1, 0x31, 0xc3, 0x81, 0x0e, 0x43, 0xec, 0x76, 0x92, 0xec,
+	0x87, 0x7a, 0x4f, 0x06, 0x0d, 0x3d, 0x0b, 0xdc, 0x87, 0xe0, 0xbe, 0x4b, 0x8b, 0xb2, 0xb5, 0x0d,
+	0xf7, 0xc7, 0xb9, 0x4e, 0x22, 0xdc, 0x1e, 0x19, 0x72, 0x77, 0x60, 0xeb, 0x46, 0x0e, 0xa5, 0xc4,
+	0x91, 0x6b, 0x21, 0x0f, 0x62, 0x58, 0x41, 0xbf, 0x90, 0x2b, 0x9b, 0xc2, 0x54, 0x82, 0x56, 0x61,
+	0x01, 0x05, 0x01, 0xd1, 0x83, 0x50, 0x1e, 0xdc, 0x3f, 0xc0, 0xfa, 0x1b, 0x14, 0x32, 0xe3, 0x43,
+	0x43, 0x07, 0x79, 0x00, 0xc5, 0x56, 0x94, 0xe6, 0x07, 0xf2, 0xf4, 0xf5, 0xca, 0x14, 0xb6, 0x5b,
+	0xc6, 0x27, 0xcb, 0x0c, 0x57, 0xba, 0x01, 0xf5, 0x09, 0xfb, 0x2a, 0xb2, 0x0a, 0x94, 0xf9, 0x6d,
+	0x1f, 0x46, 0xfa, 0xa5, 0xba, 0xaf, 0x61, 0x65, 0x88, 0xa8, 0xa8, 0x8e, 0xa0, 0x64, 0x7a, 0xa9,
+	0x47, 0xf5, 0xfb, 0xdc, 0x2c, 0x1a, 0x6e, 0x52, 0xb7, 0xca, 0xf5, 0x22, 0xc2, 0x0c, 0x53, 0xa2,
+	0xda, 0x35, 0xa4, 0x1c, 0xfa, 0x3d, 0x38, 0x5e, 0x16, 0x1f, 0x46, 0xe9, 0xab, 0x98, 0x85, 0x91,
+	0xce, 0xd3, 0x87, 0xf0, 0x60, 0x96, 0x4c, 0x3d, 0x86, 0x5a, 0xce, 0xfa, 0x0c, 0x75, 0xbf, 0x01,
+	0x75, 0x0f, 0x53, 0xbe, 0x9c, 0x0e, 0x1b, 0x85, 0x8e, 0x6f, 0x13, 0x1a, 0x93, 0x24, 0x15, 0xe7,
+	0x1e, 0xd4, 0x5f, 0x1b, 0x38, 0xef, 0x75, 0x53, 0x7b, 0xe5, 0xb2, 0xea, 0x95, 0xee, 0x29, 0x34,
+	0x26, 0x05, 0xee, 0xd0, 0x0f, 0x6b, 0x50, 0x7d, 0x16, 0x87, 0x4c, 0x36, 0x27, 0xed, 0xe9, 0xa7,
+	0xe0, 0x98, 0xe0, 0x0c, 0x61, 0xff, 0x6c, 0xc1, 0xfd, 0xb3, 0x24, 0xcd, 0x22, 0xb1, 0xfd, 0xca,
+	0x67, 0xf7, 0x6d, 0x92, 0xf1, 0xf7, 0xa3, 0xe3, 0xf8, 0x7f, 0x58, 0xe1, 0xa9, 0xf6, 0xdb, 0x04,
+	0x23, 0x86, 0x03, 0x3f, 0xd6, 0x5f, 0x68, 0x25, 0x0e, 0x1f, 0x49, 0xf4, 0x07, 0xca, 0x5f, 0x3a,
+	0x6a, 0x73, 0xa5, 0xe6, 0x88, 0x03, 0x09, 0x89, 0x31, 0xf7, 0x25, 0x14, 0x7b, 0xc2, 0x33, 0x1f,
+	0x45, 0x21, 0x92, 0xa3, 0xce, 0xde, 0x5f, 0x1b, 0xdf, 0xe8, 0x0f, 0x38, 0xd1, 0xb3, 0x25, 0xab,
+	0x38, 0x38, 0x8f, 0x61, 0xd5, 0x68, 0xe0, 0xa3, 0x77, 0x36, 0x2f, 0x6c, 0xd4, 0x0c, 0xda, 0x70,
+	0xff, 0xdd, 0x81, 0xad, 0x1b, 0xe3, 0x52, 0x77, 0xf7, 0x67, 0x0b, 0x2a, 0x3c, 0x5d, 0x66, 0xab,
+	0x73, 0x7e, 0x05, 0x8b, 0x92, 0x5b, 0xdd, 0xc1, 0x0d, 0xee, 0x29, 0xa6, 0x1b, 0x3d, 0x9b, 0xbb,
+	0xd1, 0xb3, 0x69, 0xf9, 0x2c, 0x4c, 0xc9, 0xa7, 0xbe, 0xe1, 0x7c, 0xcf, 0x5d, 0x83, 0xda, 0x31,
+	0xee, 0x25, 0x0c, 0xe7, 0x2f, 0x7e, 0x1f, 0x56, 0xf3, 0xf0, 0x0c, 0x57, 0xff, 0x0d, 0x6c, 0x9d,
+	0x91, 0x84, 0x0b, 0x09, 0x13, 0x6f, 0xba, 0x38, 0x3e, 0x42, 0x59, 0xa7, 0xcb, 0x5e, 0xa5, 0x33,
+	0xcc, 0x20, 0xf7, 0x37, 0xb0, 0x7d, 0xb3, 0xf8, 0x6c, 0x0f, 0x4e, 0x0a, 0x22, 0xaa, 0xf4, 0x04,
+	0xc6, 0x83, 0x9b, 0x24, 0xa9, 0x04, 0xfc, 0xc9, 0x82, 0xca, 0x39, 0xce, 0xd7, 0xfd, 0x6d, 0x2f,
+	0x6d, 0xca, 0x0d, 0xcc, 0x4d, 0xab, 0xe8, 0x47, 0x50, 0x15, 0x1f, 0x16, 0x3e, 0xe5, 0xed, 0xcd,
+	0xa7, 0xdc, 0x27, 0xf5, 0x3d, 0xb1, 0x22, 0x08, 0xa3, 0xa1, 0x28, 0xe6, 0x26, 0x1e, 0x7b, 0x79,
+	0xee, 0xb3, 0x51, 0x20, 0x1e, 0x16, 0x4a, 0x46, 0x83, 0xf1, 0x76, 0x3e, 0xf3, 0x0f, 0xc5, 0x29,
+	0xaa, 0x94, 0x9d, 0x87, 0xe0, 0xf2, 0x66, 0x6f, 0xf4, 0x95, 0x83, 0x38, 0xe0, 0x63, 0x2d, 0xb7,
+	0x2c, 0xbd, 0x86, 0x07, 0xef, 0xe4, 0xba, 0xeb, 0xf2, 0xb4, 0x06, 0x35, 0xb3, 0x12, 0x8c, 0x9a,
+	0xcc, 0xc3, 0x33, 0x14, 0xc5, 0x63, 0x28, 0x1d, 0xa2, 0xf6, 0x65, 0x36, 0xac, 0xc0, 0x6d, 0xb0,
+	0xdb, 0x49, 0xdc, 0xce, 0x08, 0xc1, 0x71, 0x7b, 0xa0, 0x1a, 0x8f, 0x09, 0xb9, 0x5f, 0x40, 0x59,
+	0x8b, 0x28, 0x03, 0x0f, 0x61, 0x01, 0xf7, 0x47, 0x89, 0x2d, 0x37, 0xf5, 0xbf, 0x34, 0x4e, 0x38,
+	0xea, 0x49, 0xa2, 0xea, 0xea, 0x2c, 0x21, 0xf8, 0x94, 0x24, 0xbd, 0x9c, 0x55, 0xf7, 0x00, 0x36,
+	0xa6, 0xd0, 0x6e, 0xa3, 0xfe, 0xf0, 0xd3, 0x9f, 0x9a, 0xfd, 0x90, 0x61, 0x4a, 0x9b, 0x61, 0xb2,
+	0x27, 0x7f, 0xed, 0x75, 0x92, 0xbd, 0x3e, 0xdb, 0x13, 0xff, 0x58, 0xd9, 0x9b, 0x98, 0x78, 0xad,
+	0x45, 0x41, 0xf8, 0xec, 0x3f, 0x01, 0x00, 0x00, 0xff, 0xff, 0x11, 0xfa, 0x4d, 0x47, 0xe2, 0x19,
+	0x00, 0x00,
 }

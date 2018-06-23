@@ -22,7 +22,6 @@ option go_package = "vitess.io/vitess/go/vt/proto/tabletmanagerdata";
 
 package tabletmanagerdata;
 
-import "binlogdata.proto";
 import "query.proto";
 import "topodata.proto";
 import "replicationdata.proto";
@@ -346,16 +345,12 @@ message ResetReplicationRequest {
 message ResetReplicationResponse {
 }
 
-message VReplicationCreateRequest {
-  string workflow = 1;
-  binlogdata.BinlogSource source = 2;
-  string position = 3;
-  int64 max_tps = 4;
-  int64 max_replication_lag = 5;
+message VReplicationExecRequest {
+  string query = 1;
 }
 
-message VReplicationCreateResponse {
-  int64 id = 1;
+message VReplicationExecResponse {
+  query.QueryResult result = 1;
 }
 
 message InitMasterRequest {

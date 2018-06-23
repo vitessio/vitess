@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -923,39 +922,24 @@ func agentRPCTestRunBlpUntilPanic(ctx context.Context, t *testing.T, client tmcl
 	expectHandleRPCPanic(t, "RunBlpUntil", true /*verbose*/, err)
 }
 
-var (
-	testWorkflow = "workflow"
-	testSource   = &binlogdatapb.BinlogSource{
-		Keyspace: "keyspace",
-		Shard:    "shard",
-		Tables:   []string{"a"},
-	}
-	testPosition          = "pos"
-	testMaxTps            = int64(1)
-	testMaxReplicationLag = int64(2)
-	testVRCreateResult    = int64(3)
-)
+var testVRQuery = "query"
 
-func (fra *fakeRPCAgent) VReplicationCreate(ctx context.Context, workflow string, source *binlogdatapb.BinlogSource, position string, maxTps int64, maxReplicationLag int64) (int64, error) {
+func (fra *fakeRPCAgent) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "VReplicationCreate workflow", workflow, testWorkflow)
-	compare(fra.t, "VReplicationCreate source", source, testSource)
-	compare(fra.t, "VReplicationCreate position", position, testPosition)
-	compare(fra.t, "VReplicationCreate maxtps", maxTps, testMaxTps)
-	compare(fra.t, "VReplicationCreate maxReplicationLag", maxReplicationLag, testMaxReplicationLag)
-	return testVRCreateResult, nil
+	compare(fra.t, "VReplicationExec query", query, testVRQuery)
+	return testExecuteFetchResult, nil
 }
 
-func agentRPCTestVreplicationCreate(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	rp, err := client.VReplicationCreate(ctx, tablet, testWorkflow, testSource, testPosition, testMaxTps, testMaxReplicationLag)
-	compareError(t, "VReplicationCreate", err, rp, testVRCreateResult)
+func agentRPCTestVReplicationExec(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	rp, err := client.VReplicationExec(ctx, tablet, testVRQuery)
+	compareError(t, "VReplicationExec", err, rp, testExecuteFetchResult)
 }
 
-func agentRPCTestVreplicationCreatePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.VReplicationCreate(ctx, tablet, testWorkflow, testSource, testPosition, testMaxTps, testMaxReplicationLag)
-	expectHandleRPCPanic(t, "VReplicationCreate", true /*verbose*/, err)
+func agentRPCTestVReplicationExecPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.VReplicationExec(ctx, tablet, testVRQuery)
+	expectHandleRPCPanic(t, "VReplicationExec", true /*verbose*/, err)
 }
 
 //
@@ -1318,7 +1302,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	agentRPCTestRunBlpUntil(ctx, t, client, tablet)
 
 	// VReplication methods
-	agentRPCTestVreplicationCreate(ctx, t, client, tablet)
+	agentRPCTestVReplicationExec(ctx, t, client, tablet)
 
 	// Reparenting related functions
 	agentRPCTestResetReplication(ctx, t, client, tablet)
@@ -1374,7 +1358,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	agentRPCTestRunBlpUntilPanic(ctx, t, client, tablet)
 
 	// VReplication methods
-	agentRPCTestVreplicationCreatePanic(ctx, t, client, tablet)
+	agentRPCTestVReplicationExecPanic(ctx, t, client, tablet)
 
 	// Reparenting related functions
 	agentRPCTestResetReplicationPanic(ctx, t, client, tablet)
