@@ -139,9 +139,8 @@ service TabletManager {
   // RunBlpUntil asks the tablet to restart its binlog players
   rpc RunBlpUntil(tabletmanagerdata.RunBlpUntilRequest) returns (tabletmanagerdata.RunBlpUntilResponse) {};
 
-  // VReplication methods
-
-  rpc VReplicationCreate(tabletmanagerdata.VReplicationCreateRequest) returns(tabletmanagerdata.VReplicationCreateResponse) {};
+  // VReplication API
+  rpc VReplicationExec(tabletmanagerdata.VReplicationExecRequest) returns(tabletmanagerdata.VReplicationExecResponse) {};
 
   //
   // Reparenting related functions

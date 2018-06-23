@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/hook"
@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -581,24 +580,18 @@ func (client *Client) RunBlpUntil(ctx context.Context, tablet *topodatapb.Tablet
 	return response.Position, nil
 }
 
-// VReplicationCreate is part of the tmclient.TabletManagerClient interface.
-func (client *Client) VReplicationCreate(ctx context.Context, tablet *topodatapb.Tablet, workflow string, source *binlogdatapb.BinlogSource, position string, maxTps int64, maxReplicationLag int64) (int64, error) {
+// VReplicationExec is part of the tmclient.TabletManagerClient interface.
+func (client *Client) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer cc.Close()
-	response, err := c.VReplicationCreate(ctx, &tabletmanagerdatapb.VReplicationCreateRequest{
-		Workflow:          workflow,
-		Source:            source,
-		Position:          position,
-		MaxTps:            maxTps,
-		MaxReplicationLag: maxReplicationLag,
-	})
+	response, err := c.VReplicationExec(ctx, &tabletmanagerdatapb.VReplicationExecRequest{Query: query})
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return response.Id, nil
+	return response.Result, nil
 }
 
 //

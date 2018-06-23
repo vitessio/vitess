@@ -18,11 +18,10 @@ package tabletmanager
 
 import (
 	"golang.org/x/net/context"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// VReplicationCreate creates a vreplication stream.
-func (agent *ActionAgent) VReplicationCreate(ctx context.Context, workflow string, source *binlogdatapb.BinlogSource, position string, maxTps int64, maxReplicationLag int64) (int64, error) {
+// VReplicationExec executes a vreplication command.
+func (agent *ActionAgent) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
 	panic("unimplemented")
 }
