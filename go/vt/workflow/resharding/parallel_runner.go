@@ -131,13 +131,18 @@ func (p *ParallelRunner) Run() error {
 		if p.enableApprovals && !isTaskRunning(task) {
 			p.waitForApproval(i)
 		}
-		wg.Add(1)
-		go func(t *workflowpb.Task) {
-			defer wg.Done()
-			p.setUIMessage(fmt.Sprintf("Launch task: %v.", t.Id))
-			defer func() { <-sem }()
-			p.executeTask(t)
-		}(task)
+		select {
+		case <-p.ctx.Done():
+			log.Info("Workflow is cancelled, will not run task: %v", task)
+		default:
+			wg.Add(1)
+			go func(t *workflowpb.Task) {
+				defer wg.Done()
+				p.setUIMessage(fmt.Sprintf("Launch task: %v.", t.Id))
+				defer func() { <-sem }()
+				p.executeTask(t)
+			}(task)
+		}
 	}
 	wg.Wait()
 
