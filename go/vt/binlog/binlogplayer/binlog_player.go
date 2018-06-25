@@ -67,8 +67,9 @@ type Stats struct {
 	Rates   *stats.Rates
 
 	// Last saved status
-	lastPosition        mysql.Position
-	lastPositionMutex   sync.RWMutex
+	lastPositionMutex sync.Mutex
+	lastPosition      mysql.Position
+
 	SecondsBehindMaster sync2.AtomicInt64
 }
 
@@ -81,8 +82,8 @@ func (bps *Stats) SetLastPosition(pos mysql.Position) {
 
 // GetLastPosition gets the last replication position.
 func (bps *Stats) GetLastPosition() mysql.Position {
-	bps.lastPositionMutex.RLock()
-	defer bps.lastPositionMutex.RUnlock()
+	bps.lastPositionMutex.Lock()
+	defer bps.lastPositionMutex.Unlock()
 	return bps.lastPosition
 }
 

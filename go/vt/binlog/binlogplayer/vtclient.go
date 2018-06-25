@@ -20,6 +20,7 @@ import "vitess.io/vitess/go/sqltypes"
 
 // VtClient is a high level interface to the database.
 type VtClient interface {
+	DBName() string
 	Connect() error
 	Begin() error
 	Commit() error
@@ -50,6 +51,11 @@ func NewVtClientMock() *VtClientMock {
 // It will be returned exactly once to a client when it's up.
 func (dc *VtClientMock) AddResult(result *sqltypes.Result) {
 	dc.results = append(dc.results, result)
+}
+
+// DBName is part of the VtClient interface
+func (dc *VtClientMock) DBName() string {
+	return "db"
 }
 
 // Connect is part of the VtClient interface

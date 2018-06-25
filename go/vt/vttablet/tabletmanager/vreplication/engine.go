@@ -24,21 +24,25 @@ import (
 
 // Engine is the engine for handling vreplication.
 type Engine struct {
-	mu     sync.Mutex
-	isOpen bool
+	mu          sync.Mutex
+	isOpen      bool
+	controllers map[int]*controller
 
-	mysqld *mysqlctl.MysqlDaemon
+	mysqld mysqlctl.MysqlDaemon
 }
 
 // NewEngine creates a new Engine.
-func NewEngine(mysqld *mysqlctl.MysqlDaemon) *Engine {
+func NewEngine(mysqld mysqlctl.MysqlDaemon) *Engine {
 	return &Engine{
-		mysqld: mysqld,
+		controllers: make(map[int]*controller),
+		mysqld:      mysqld,
 	}
 }
 
 // Open starts the Engine service.
 func (vre *Engine) Open() error {
+	vre.mu.Lock()
+	defer vre.mu.Unlock()
 	if vre.isOpen {
 		return nil
 	}
@@ -53,5 +57,16 @@ func (vre *Engine) Close() {
 	if !vre.isOpen {
 		return
 	}
+
+	// Doing as two loops will be faster because cancel is non-blocking.
+	for _, ct := range vre.controllers {
+		ct.cancel()
+	}
+	for _, ct := range vre.controllers {
+		ct.Stop()
+	}
+	vre.controllers = make(map[int]*controller)
+
+	vre.mysqld.DisableBinlogPlayback()
 	vre.isOpen = false
 }

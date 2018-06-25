@@ -46,6 +46,11 @@ func (dc *DBClient) handleError(err error) {
 	}
 }
 
+// DBName returns the db name
+func (dc *DBClient) DBName() string {
+	return dc.dbConfig.DbName
+}
+
 // Connect connects to a db server
 func (dc *DBClient) Connect() error {
 	params, err := dbconfigs.WithCredentials(dc.dbConfig)
