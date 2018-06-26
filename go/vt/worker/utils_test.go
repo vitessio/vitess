@@ -61,16 +61,19 @@ func runCommand(t *testing.T, wi *Instance, wr *wrangler.Wrangler, args []string
 func expectBlpCheckpointCreationQueries(f *fakesqldb.DB) {
 	f.AddExpectedQuery("CREATE DATABASE IF NOT EXISTS _vt", nil)
 	f.AddExpectedQuery("CREATE TABLE IF NOT EXISTS _vt.vreplication (\n"+
-		"  id INT(10) UNSIGNED NOT NULL,\n"+
-		"  workflow VARBINARY(1024) NOT NULL,\n"+
+		"  id INT,\n"+
+		"  workflow VARBINARY(1000),\n"+
 		"  source VARBINARY(10000) NOT NULL,\n"+
-		"  pos VARBINARY(40000) DEFAULT NULL,\n"+
+		"  pos VARBINARY(10000) NOT NULL,\n"+
+		"  stop_pos VARBINARY(10000) DEFAULT NULL,\n"+
 		"  max_tps BIGINT(20) NOT NULL,\n"+
 		"  max_replication_lag BIGINT(20) NOT NULL,\n"+
-		"  time_updated BIGINT(20) UNSIGNED NOT NULL,\n"+
-		"  transaction_timestamp BIGINT(20) UNSIGNED NOT NULL,\n"+
-		"  state VARBINARY(128) NOT NULL,\n"+
-		"  message VARBINARY(1024) DEFAULT NULL,\n"+
+		"  cell VARBINARY(1000) DEFAULT NULL,\n"+
+		"  tablet_types VARBINARY(100) DEFAULT NULL,\n"+
+		"  time_updated BIGINT(20) NOT NULL,\n"+
+		"  transaction_timestamp BIGINT(20) NOT NULL,\n"+
+		"  state VARBINARY(100) NOT NULL,\n"+
+		"  message VARBINARY(1000) DEFAULT NULL,\n"+
 		"  PRIMARY KEY (id)\n) ENGINE=InnoDB", nil)
 	f.AddExpectedQuery("INSERT INTO _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) VALUES (0, *", nil)
 }

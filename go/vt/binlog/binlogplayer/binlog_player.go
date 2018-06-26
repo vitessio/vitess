@@ -119,7 +119,7 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.vreplication with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, tablet *topodatapb.Tablet, keyRange *topodatapb.KeyRange, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
+func NewBinlogPlayerKeyRange(dbClient VtClient, tablet *topodatapb.Tablet, keyRange *topodatapb.KeyRange, uid uint32, startPosition, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
 	result := &BinlogPlayer{
 		tablet:    tablet,
 		dbClient:  dbClient,
@@ -474,16 +474,19 @@ func CreateVReplicationTable() []string {
 	return []string{
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		`CREATE TABLE IF NOT EXISTS _vt.vreplication (
-  id INT(10) UNSIGNED NOT NULL,
-  workflow VARBINARY(1024) NOT NULL,
+  id INT,
+  workflow VARBINARY(1000),
   source VARBINARY(10000) NOT NULL,
-  pos VARBINARY(40000) DEFAULT NULL,
+  pos VARBINARY(10000) NOT NULL,
+  stop_pos VARBINARY(10000) DEFAULT NULL,
   max_tps BIGINT(20) NOT NULL,
   max_replication_lag BIGINT(20) NOT NULL,
-  time_updated BIGINT(20) UNSIGNED NOT NULL,
-  transaction_timestamp BIGINT(20) UNSIGNED NOT NULL,
-  state VARBINARY(128) NOT NULL,
-  message VARBINARY(1024) DEFAULT NULL,
+  cell VARBINARY(1000) DEFAULT NULL,
+  tablet_types VARBINARY(100) DEFAULT NULL,
+  time_updated BIGINT(20) NOT NULL,
+  transaction_timestamp BIGINT(20) NOT NULL,
+  state VARBINARY(100) NOT NULL,
+  message VARBINARY(1000) DEFAULT NULL,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB`}
 }

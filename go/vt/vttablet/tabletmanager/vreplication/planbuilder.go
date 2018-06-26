@@ -26,7 +26,7 @@ import (
 type plan struct {
 	opcode int
 	query  string
-	id     int64
+	id     int
 }
 
 const (
@@ -159,7 +159,7 @@ func buildSelectPlan(sel *sqlparser.Select) (*plan, error) {
 	}, nil
 }
 
-func extractID(where *sqlparser.Where) (int64, error) {
+func extractID(where *sqlparser.Where) (int, error) {
 	if where == nil {
 		return 0, fmt.Errorf("invalid where clause:%v", sqlparser.String(where))
 	}
@@ -178,5 +178,5 @@ func extractID(where *sqlparser.Where) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("invalid where clause:%v", sqlparser.String(where))
 	}
-	return int64(id), nil
+	return id, nil
 }

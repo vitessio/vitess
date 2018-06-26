@@ -54,7 +54,12 @@ func newTabletPicker(ts *topo.Server, cell, keyspace, shard, tabletTypesStr stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse list of tablet types: %v", tabletTypesStr)
 	}
+
+	// These have to be initialized in the following sequence (watcher must be last).
 	healthCheck := discovery.NewHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
+	statsCache := discovery.NewTabletStatsCache(healthCheck, ts, cell)
+	watcher := discovery.NewShardReplicationWatcher(ts, healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
+
 	return &tabletPicker{
 		ts:          ts,
 		cell:        cell,
@@ -62,8 +67,8 @@ func newTabletPicker(ts *topo.Server, cell, keyspace, shard, tabletTypesStr stri
 		shard:       shard,
 		tabletTypes: tabletTypes,
 		healthCheck: healthCheck,
-		watcher:     discovery.NewShardReplicationWatcher(ts, healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency),
-		statsCache:  discovery.NewTabletStatsCache(healthCheck, ts, cell),
+		watcher:     watcher,
+		statsCache:  statsCache,
 	}, nil
 }
 
