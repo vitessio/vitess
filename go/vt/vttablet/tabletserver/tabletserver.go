@@ -2080,6 +2080,13 @@ func (tsv *TabletServer) GetTxPoolWaiterCap() int64 {
 	return tsv.te.txPool.waiterCap.Get()
 }
 
+// SetConsolidatorEnabled (true) will enable the query consolidator.
+// SetConsolidatorEnabled (false) will disable the query consolidator.
+// This function should only be used for testing.
+func (tsv *TabletServer) SetConsolidatorEnabled(enabled bool) {
+	tsv.qe.enableConsolidator = enabled
+}
+
 // queryAsString returns a readable version of query+bind variables.
 func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable) string {
 	buf := &bytes.Buffer{}

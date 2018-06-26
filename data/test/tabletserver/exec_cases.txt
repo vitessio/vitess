@@ -1457,6 +1457,23 @@ options:PassthroughDMLs
   "WhereClause": "where eid in (1, 2) and id = 1"
 }
 
+# 'like' expression in where
+"update d set foo='foo' where name like 'a%'"
+{
+  "PlanID": "DML_SUBQUERY",
+  "TableName": "d",
+  "Permissions": [
+    {
+      "TableName": "d",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "update d set foo = 'foo' where name like 'a%'",
+  "OuterQuery": "update d set foo = 'foo' where :#pk",
+  "Subquery": "select name from d where name like 'a%' limit :#maxLimit for update",
+  "WhereClause": "where name like 'a%'"
+}
+
 # double in clause
 "update a set name='foo' where eid in (1, 2) and id in (1, 2)"
 {
@@ -1671,6 +1688,23 @@ options:PassthroughDMLs
   "OuterQuery": "delete from a where :#pk order by id desc",
   "Subquery": "select eid, id from a where eid = 1 order by id desc limit :#maxLimit for update",
   "WhereClause": "where eid = 1"
+}
+
+# 'like' expression
+"delete from d where name like 'a%'"
+{
+  "PlanID": "DML_SUBQUERY",
+  "TableName": "d",
+  "Permissions": [
+    {
+      "TableName": "d",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "delete from d where name like 'a%'",
+  "OuterQuery": "delete from d where :#pk",
+  "Subquery": "select name from d where name like 'a%' limit :#maxLimit for update",
+  "WhereClause": "where name like 'a%'"
 }
 
 # bad pk value delete
@@ -2151,3 +2185,7 @@ options:PassthroughDMLs
 # syntax error
 "syntax error"
 "syntax error at position 7 near 'syntax'"
+
+# named locks are unsafe with server-side connection pooling
+"select get_lock('foo') from dual"
+"get_lock() not allowed"

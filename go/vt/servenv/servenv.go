@@ -55,9 +55,10 @@ var (
 	Port *int
 
 	// Flags to alter the behavior of the library.
-	lameduckPeriod = flag.Duration("lameduck-period", 50*time.Millisecond, "keep running at least this long after SIGTERM before stopping")
-	onTermTimeout  = flag.Duration("onterm_timeout", 10*time.Second, "wait no more than this for OnTermSync handlers before stopping")
-	memProfileRate = flag.Int("mem-profile-rate", 512*1024, "profile every n bytes allocated")
+	lameduckPeriod       = flag.Duration("lameduck-period", 50*time.Millisecond, "keep running at least this long after SIGTERM before stopping")
+	onTermTimeout        = flag.Duration("onterm_timeout", 10*time.Second, "wait no more than this for OnTermSync handlers before stopping")
+	memProfileRate       = flag.Int("mem-profile-rate", 512*1024, "profile every n bytes allocated")
+	mutexProfileFraction = flag.Int("mutex-profile-fraction", 0, "profile every n mutex contention events (see runtime.SetMutexProfileFraction)")
 
 	// mutex used to protect the Init function
 	mu sync.Mutex
@@ -88,6 +89,11 @@ func Init() {
 	}
 
 	runtime.MemProfileRate = *memProfileRate
+
+	if *mutexProfileFraction != 0 {
+		log.Infof("setting mutex profile fraction to %v", *mutexProfileFraction)
+		runtime.SetMutexProfileFraction(*mutexProfileFraction)
+	}
 
 	// We used to set this limit directly, but you pretty much have to
 	// use a root account to allow increasing a limit reliably. Dropping

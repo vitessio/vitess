@@ -16,6 +16,8 @@
 
 package io.vitess.jdbc;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.protobuf.ByteString;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.Reader;
@@ -45,11 +47,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
-
 import javax.sql.rowset.serial.SerialClob;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.protobuf.ByteString;
 
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.Row;
@@ -480,11 +478,8 @@ public class VitessResultSet implements ResultSet {
     public Date getDate(int columnIndex) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNullDateTime(columnIndex)) {
-            return null;
-        }
-
-        return this.row.getDate(columnIndex);
+        NullDateTime nullDateTime = getNullDateTime(columnIndex);
+        return getNullableDate(columnIndex, nullDateTime, null);
     }
 
     public Time getTime(int columnIndex) throws SQLException {
@@ -500,11 +495,8 @@ public class VitessResultSet implements ResultSet {
     public Timestamp getTimestamp(int columnIndex) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNullDateTime(columnIndex)) {
-            return null;
-        }
-
-        return this.row.getTimestamp(columnIndex);
+        NullDateTime nullDateTime = getNullDateTime(columnIndex);
+        return getNullableDateTime(columnIndex, nullDateTime, null);
     }
 
     public String getString(String columnLabel) throws SQLException {
@@ -737,11 +729,8 @@ public class VitessResultSet implements ResultSet {
     public Date getDate(int columnIndex, Calendar cal) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNullDateTime(columnIndex)) {
-            return null;
-        }
-
-        return this.row.getDate(columnIndex, cal);
+        NullDateTime nullDateTime = getNullDateTime(columnIndex);
+        return getNullableDate(columnIndex, nullDateTime, cal);
     }
 
     public Date getDate(String columnLabel, Calendar cal) throws SQLException {
@@ -767,11 +756,8 @@ public class VitessResultSet implements ResultSet {
     public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
         preAccessor(columnIndex);
 
-        if (isNullDateTime(columnIndex)) {
-            return null;
-        }
-
-        return this.row.getTimestamp(columnIndex, cal);
+        NullDateTime nullDateTime = getNullDateTime(columnIndex);
+        return getNullableDateTime(columnIndex, nullDateTime, cal);
     }
 
     public Timestamp getTimestamp(String columnLabel, Calendar cal) throws SQLException {
@@ -814,18 +800,67 @@ public class VitessResultSet implements ResultSet {
         lastIndexRead = columnIndex;
     }
 
-    private boolean isNullDateTime(int columnIndex) throws SQLException {
+    protected enum NullDateTime {
+        NO_CHANGE,
+        NULL,
+        ROUND,
+    }
+
+    private NullDateTime getNullDateTime(int columnIndex) throws SQLException {
         if (isNull(columnIndex)) {
-            return true;
+            return NullDateTime.NULL;
         }
 
-        Constants.ZeroDateTimeBehavior zeroDateTimeBehavior =
-            this.vitessStatement.getConnection().getZeroDateTimeBehavior();
-        if (zeroDateTimeBehavior == Constants.ZeroDateTimeBehavior.CONVERTTONULL
-            && hasZeroDateTimePrefix(columnIndex)) {
-            return true;
+        if (!hasZeroDateTimePrefix(columnIndex)) {
+            return NullDateTime.NO_CHANGE;
         }
-        return false;
+
+        switch (this.vitessStatement.getConnection().getZeroDateTimeBehavior()) {
+            case CONVERTTONULL:
+                return NullDateTime.NULL;
+            case EXCEPTION:
+                throw new SQLException(
+                    Constants.SQLExceptionMessages.ZERO_TIMESTAMP + ": " + columnIndex);
+            case ROUND:
+                return NullDateTime.ROUND;
+            case GARBLE:
+            default:
+                return NullDateTime.NO_CHANGE;
+        }
+    }
+
+    private Date getNullableDate(int columnIndex, NullDateTime nullDateTime, Calendar cal)
+        throws SQLException {
+        switch (nullDateTime) {
+            case NULL:
+                return null;
+            case ROUND:
+                return new Date(-1900, 0, 1);
+            case NO_CHANGE:
+            default:
+                if (cal == null) {
+                    return this.row.getDate(columnIndex);
+                } else {
+                    return this.row.getDate(columnIndex, cal);
+                }
+        }
+    }
+
+    private Timestamp getNullableDateTime(int columnIndex, NullDateTime nullDateTime, Calendar cal)
+        throws SQLException {
+        switch (nullDateTime) {
+            case NULL:
+                return null;
+            case ROUND:
+                return new Timestamp(-1900, 0, 1, 0, 0, 0, 0);
+            case NO_CHANGE:
+            default:
+                if (cal == null) {
+                    return this.row.getTimestamp(columnIndex);
+                } else {
+                    return this.row.getTimestamp(columnIndex, cal);
+                }
+        }
     }
 
     private boolean hasZeroDateTimePrefix(int columnIndex) throws SQLException {

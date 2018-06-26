@@ -254,17 +254,6 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
 }
 
-// StringIn is a convenience function that returns
-// true if str matches any of the values.
-func StringIn(str string, values ...string) bool {
-	for _, val := range values {
-		if str == val {
-			return true
-		}
-	}
-	return false
-}
-
 // SetKey is the extracted key from one SetExpr
 type SetKey struct {
 	Key   string

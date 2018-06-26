@@ -142,7 +142,7 @@ func forceEOF(yylex interface{}) {
 %left <bytes> '^'
 %right <bytes> '~' UNARY
 %left <bytes> COLLATE
-%right <bytes> BINARY UNDERSCORE_BINARY
+%right <bytes> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4
 %right <bytes> INTERVAL
 %nonassoc <bytes> '.'
 
@@ -175,7 +175,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES EXTENDED FULL PROCESSLIST
+%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES EXTENDED FULL PROCESSLIST COLUMNS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -252,7 +252,7 @@ func forceEOF(yylex interface{}) {
 %type <setExpr> set_expression transaction_char isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
-%type <str> extended_opt full_opt from_database_opt tables_or_processlist
+%type <str> extended_opt full_opt from_database_opt tables_or_processlist_or_columns
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
@@ -1371,7 +1371,7 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW extended_opt full_opt tables_or_processlist from_database_opt like_or_where_opt
+| SHOW extended_opt full_opt tables_or_processlist_or_columns from_database_opt like_or_where_opt
   {
     // this is ugly, but I couldn't find a better way for now
     if $4 == "processlist" {
@@ -1386,6 +1386,10 @@ show_statement:
     $$ = &Show{Scope: $2, Type: string($3)}
   }
 | SHOW VINDEXES
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW COLLATION
   {
     $$ = &Show{Type: string($2)}
   }
@@ -1420,12 +1424,16 @@ show_statement:
     $$ = &Show{Type: string($2)}
   }
 
-tables_or_processlist:
+tables_or_processlist_or_columns:
   TABLES
   {
     $$ = string($1)
   }
 | PROCESSLIST
+  {
+    $$ = string($1)
+  }
+| COLUMNS
   {
     $$ = string($1)
   }
@@ -2175,6 +2183,10 @@ value_expression:
 | UNDERSCORE_BINARY value_expression %prec UNARY
   {
     $$ = &UnaryExpr{Operator: UBinaryStr, Expr: $2}
+  }
+| UNDERSCORE_UTF8MB4 value_expression %prec UNARY
+  {
+    $$ = &UnaryExpr{Operator: Utf8mb4Str, Expr: $2}
   }
 | '+'  value_expression %prec UNARY
   {
@@ -3035,6 +3047,7 @@ non_reserved_keyword:
 | CHAR
 | CHARACTER
 | CHARSET
+| COLLATION
 | COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
