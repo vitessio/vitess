@@ -17,13 +17,14 @@ limitations under the License.
 package vreplication
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -78,7 +79,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 
 	// source, startPos, stopPos
-	if err := proto.Unmarshal([]byte(params["source"]), &ct.source); err != nil {
+	if err := proto.UnmarshalText(params["source"], &ct.source); err != nil {
 		return nil, err
 	}
 	ct.startPos = params["pos"]
@@ -133,7 +134,6 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 
 	select {
 	case <-ctx.Done():
-		// TODO(sougou): Save error in vreplication table.
 		return nil
 	default:
 	}
