@@ -337,6 +337,7 @@ options:PassthroughDMLs
 "insert into b.a (eid, id) values (1, :a)"
 {
   "PlanID": "PASS_DML",
+  "Reason": "TABLE",
   "TableName": "",
   "Permissions": [
     {
@@ -368,7 +369,7 @@ options:PassthroughDMLs
 "insert into a (eid, id) values (1, :a)"
 {
   "PlanID": "PASS_DML",
-  "TableName": "",
+  "TableName": "a",
   "Permissions": [
     {
       "TableName": "a",
@@ -560,7 +561,7 @@ options:PassthroughDMLs
 "insert into a (eid, id) values (1, 2) on duplicate key update name = func(a)"
 {
   "PlanID": "PASS_DML",
-  "TableName": "",
+  "TableName": "a",
   "Permissions": [
     {
       "TableName": "a",
@@ -1070,6 +1071,7 @@ options:PassthroughDMLs
 "replace into b (eid, id) values (1, 2), (3, 4)"
 {
   "PlanID": "PASS_DML",
+  "Reason": "REPLACE",
   "TableName": "",
   "Permissions": [
     {
@@ -1155,7 +1157,7 @@ options:PassthroughDMLs
 "update d set foo='foo' where name in ('a', 'b') limit 1"
 {
   "PlanID": "PASS_DML",
-  "TableName": "",
+  "TableName": "d",
   "Permissions": [
     {
       "TableName": "d",
@@ -1185,6 +1187,7 @@ options:PassthroughDMLs
 "update b.a set name='foo' where eid=1 and id=1"
 {
   "PlanID": "PASS_DML",
+  "Reason": "TABLE",
   "TableName": "",
   "Permissions": [
     {
@@ -1193,6 +1196,25 @@ options:PassthroughDMLs
     }
   ],
   "FullQuery": "update b.a set name = 'foo' where eid = 1 and id = 1"
+}
+
+# update unknown table
+"update bogus set name='foo' where id=1"
+"table bogus not found in schema"
+
+# update unknown table
+options:PassthroughDMLs
+"update bogus set name='foo' where id=1"
+{
+  "PlanID": "PASS_DML",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "bogus",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "update bogus set name = 'foo' where id = 1"
 }
 
 # multi-table update
@@ -1215,6 +1237,26 @@ options:PassthroughDMLs
 }
 
 # multi-table update
+"update a, b set a.name = 'foo' where a.id = b.id and b.var = 'test'"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "MULTI_TABLE",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    },
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "update a, b set a.name = 'foo' where a.id = b.id and b.var = 'test'"
+}
+
+# multi-table update
+options:PassthroughDMLs
 "update a join b on a.id = b.id set a.name = 'foo' where b.var = 'test'"
 {
   "PlanID": "PASS_DML",
@@ -1269,6 +1311,21 @@ options:PassthroughDMLs
   ],
   "FullQuery": "update b set eid = foo()",
   "WhereClause": ""
+}
+
+# complex pk change
+options:PassthroughDMLs
+"update b set eid=foo()"
+{
+  "PlanID": "PASS_DML",
+  "TableName": "b",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "update b set eid = foo()"
 }
 
 # update subquery
@@ -1565,7 +1622,7 @@ options:PassthroughDMLs
 "delete from d where name in ('a', 'b') limit 1"
 {
   "PlanID": "PASS_DML",
-  "TableName": "",
+  "TableName": "d",
   "Permissions": [
     {
       "TableName": "d",
@@ -1646,7 +1703,7 @@ options:PassthroughDMLs
 "delete from a where eid=1 and id=1"
 {
   "PlanID": "PASS_DML",
-  "TableName": "",
+  "TableName": "a",
   "Permissions": [
     {
       "TableName": "a",
