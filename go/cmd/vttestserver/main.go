@@ -205,12 +205,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Info("Local cluster started. Waiting for stdin input...")
+	log.Info("Local cluster started.")
 
-	_, err = fmt.Scanln()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Info("Shutting down cleanly")
+	select {}
 }
