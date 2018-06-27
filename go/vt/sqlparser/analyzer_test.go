@@ -339,27 +339,6 @@ func TestNewPlanValue(t *testing.T) {
 	}
 }
 
-func TestStringIn(t *testing.T) {
-	testcases := []struct {
-		in1 string
-		in2 []string
-		out bool
-	}{{
-		in1: "v1",
-		in2: []string{"v1", "v2"},
-		out: true,
-	}, {
-		in1: "v0",
-		in2: []string{"v1", "v2"},
-	}}
-	for _, tc := range testcases {
-		out := StringIn(tc.in1, tc.in2...)
-		if out != tc.out {
-			t.Errorf("StringIn(%v,%v): %#v, want %#v", tc.in1, tc.in2, out, tc.out)
-		}
-	}
-}
-
 func TestExtractSetValues(t *testing.T) {
 	testcases := []struct {
 		sql   string

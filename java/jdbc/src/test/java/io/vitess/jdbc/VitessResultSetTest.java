@@ -388,6 +388,36 @@ public class VitessResultSetTest extends BaseTest {
         Assert.assertNull(vitessResultSet.getTimestamp(28));
     }
 
+    @Test public void testgetZeroTimestampException() throws SQLException, UnsupportedEncodingException {
+        Cursor cursor = getCursorWithRows();
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor,
+                                                              new VitessStatement(new VitessConnection(
+                                                                                                       "jdbc:vitess://locahost:9000/vt_keyspace/keyspace?zeroDateTimeBehavior=exception", new Properties())));
+        vitessResultSet.next();
+        try {
+            vitessResultSet.getTimestamp(28);
+            Assert.fail("expected getTimestamp to throw an exception");
+        } catch (SQLException e) {}
+    }
+
+    @Test public void testgetZeroTimestampRound() throws SQLException, UnsupportedEncodingException {
+        Cursor cursor = getCursorWithRows();
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor,
+                                                              new VitessStatement(new VitessConnection(
+                                                                                                       "jdbc:vitess://locahost:9000/vt_keyspace/keyspace?zeroDateTimeBehavior=round", new Properties())));
+        vitessResultSet.next();
+        Assert.assertEquals("0001-01-01 00:00:00.0", vitessResultSet.getTimestamp(28).toString());
+    }
+
+    @Test public void testgetZeroDateRound() throws SQLException, UnsupportedEncodingException {
+        Cursor cursor = getCursorWithRows();
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor,
+                                                              new VitessStatement(new VitessConnection(
+                                                                                                       "jdbc:vitess://locahost:9000/vt_keyspace/keyspace?zeroDateTimeBehavior=round", new Properties())));
+        vitessResultSet.next();
+        Assert.assertEquals("0001-01-01", vitessResultSet.getDate(28).toString());
+    }
+
     @Test public void testgetStringbyColumnLabel() throws SQLException {
         Cursor cursor = getCursorWithRows();
         VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());

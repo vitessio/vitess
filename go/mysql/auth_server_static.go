@@ -200,7 +200,7 @@ func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse [
 				return &StaticUserData{entry.UserData}, nil
 			}
 		}
-		computedAuthResponse := scramblePassword(salt, []byte(entry.Password))
+		computedAuthResponse := ScramblePassword(salt, []byte(entry.Password))
 		// Validate the password.
 		if matchSourceHost(remoteAddr, entry.SourceHost) && bytes.Compare(authResponse, computedAuthResponse) == 0 {
 			return &StaticUserData{entry.UserData}, nil

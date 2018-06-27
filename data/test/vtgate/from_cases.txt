@@ -1100,6 +1100,22 @@
   }
 }
 
+# database call in ON clause.
+# The on clause is weird because the substitution must even for root expressions.
+"select u1.a from unsharded u1 join unsharded u2 on database()"
+{
+  "Original": "select u1.a from unsharded u1 join unsharded u2 on database()",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select u1.a from unsharded as u1 join unsharded as u2 on 'targetString'",
+    "FieldQuery": "select u1.a from unsharded as u1 join unsharded as u2 on 'targetString' where 1 != 1"
+  }
+}
+
 # verify ',' vs JOIN precedence
 "select u1.a from unsharded u1, unsharded u2 join unsharded u3 on u1.a = u2.a"
 "symbol u1.a not found"

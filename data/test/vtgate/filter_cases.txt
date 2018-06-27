@@ -747,6 +747,21 @@
   }
 }
 
+# database() call in where clause.
+"select id from user where database()"
+{
+  "Original": "select id from user where database()",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from user where 'targetString'",
+    "FieldQuery": "select id from user where 1 != 1"
+  }
+}
+
 # outer and inner subquery route reference the same "uu.id" name
 # but they refer to different things. The first reference is to the outermost query,
 # and the second reference is to the the innermost 'from' subquery.

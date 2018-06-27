@@ -1,0 +1,121 @@
+{
+  "table_groups": [
+    {
+      "name": "mysql",
+      "table_names_or_prefixes": [""],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_cached",
+      "table_names_or_prefixes": ["vitess_nocache", "vitess_cached%"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_renamed",
+      "table_names_or_prefixes": ["vitess_renamed%"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_part",
+      "table_names_or_prefixes": ["vitess_part%"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess",
+      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_bit_default", "vitess_big", "vitess_view", "vitess_json", "vitess_bool", "vitess_autoinc_seq"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_test",
+      "table_names_or_prefixes": ["vitess_test"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_seq",
+      "table_names_or_prefixes": ["vitess_seq"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_reset_seq",
+      "table_names_or_prefixes": ["vitess_reset_seq"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_message",
+      "table_names_or_prefixes": ["vitess_message"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_message3",
+      "table_names_or_prefixes": ["vitess_message3"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_message_auto",
+      "table_names_or_prefixes": ["vitess_message_auto"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_acl_unmatched",
+      "table_names_or_prefixes": ["vitess_acl_unmatched"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_acl_no_access",
+      "table_names_or_prefixes": ["vitess_acl_no_access"]
+    },
+    {
+      "name": "vitess_acl_read_only",
+      "table_names_or_prefixes": ["vitess_acl_read_only"],
+      "readers": ["dev"]
+    },
+    {
+      "name": "vitess_acl_read_write",
+      "table_names_or_prefixes": ["vitess_acl_read_write"],
+      "readers": ["dev"],
+      "writers": ["dev"]
+    },
+    {
+      "name": "vitess_acl_admin",
+      "table_names_or_prefixes": ["vitess_acl_admin"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_acl_all_user_read_only",
+      "table_names_or_prefixes": ["vitess_acl_all_user_read_only"],
+      "readers": ["dev"]
+    },
+    {
+      "name": "vitess_acl_appdebug",
+      "table_names_or_prefixes": ["vitess_test_debuguser"],
+      "readers": ["dev", "vt_appdebug"],
+      "writers": ["dev", "vt_appdebug"]
+    }
+  ]
+}

@@ -740,6 +740,17 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	defer func() { logStats.ExecuteTime = time.Since(execStart) }()
 
 	switch show.Type {
+	case sqlparser.KeywordString(sqlparser.COLLATION), sqlparser.KeywordString(sqlparser.VARIABLES):
+		if destKeyspace == "" {
+			keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if len(keyspaces) == 0 {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+			}
+			return e.handleOther(ctx, safeSession, sql, bindVars, dest, keyspaces[0], destTabletType, logStats)
+		}
 	case sqlparser.KeywordString(sqlparser.TABLES):
 		if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
 			show.ShowTablesOpt.DbName = "vt_" + destKeyspace

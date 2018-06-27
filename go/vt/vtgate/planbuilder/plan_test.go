@@ -210,6 +210,10 @@ func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	return vw.v.Keyspaces["main"].Keyspace, nil
 }
 
+func (vw *vschemaWrapper) TargetString() string {
+	return "targetString"
+}
+
 // For the purposes of this set of tests, just compare the actual plan
 // and ignore all the metrics.
 type testPlan struct {

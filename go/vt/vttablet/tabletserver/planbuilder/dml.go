@@ -32,10 +32,6 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 		FullQuery: GenerateFullQuery(upd),
 	}
 
-	if PassthroughDMLs {
-		return plan, nil
-	}
-
 	if len(upd.TableExprs) > 1 {
 		plan.Reason = ReasonMultiTable
 		return plan, nil
@@ -52,9 +48,16 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
-	table, err := plan.setTable(tableName, tables)
-	if err != nil {
-		return nil, err
+	table, tableErr := plan.setTable(tableName, tables)
+
+	// In passthrough dml mode, allow the operation even if the
+	// table is unknown in the schema.
+	if PassthroughDMLs {
+		return plan, nil
+	}
+
+	if tableErr != nil {
+		return nil, tableErr
 	}
 
 	// Store the WHERE clause as string for the hot row protection (txserializer).
@@ -99,10 +102,6 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 		FullQuery: GenerateFullQuery(del),
 	}
 
-	if PassthroughDMLs {
-		return plan, nil
-	}
-
 	if len(del.TableExprs) > 1 {
 		plan.Reason = ReasonMultiTable
 		return plan, nil
@@ -117,9 +116,16 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
-	table, err := plan.setTable(tableName, tables)
-	if err != nil {
-		return nil, err
+	table, tableErr := plan.setTable(tableName, tables)
+
+	// In passthrough dml mode, allow the operation even if the
+	// table is unknown in the schema.
+	if PassthroughDMLs {
+		return plan, nil
+	}
+
+	if tableErr != nil {
+		return nil, tableErr
 	}
 
 	// Store the WHERE clause as string for the hot row protection (txserializer).
@@ -248,10 +254,7 @@ func analyzeBoolean(node sqlparser.Expr) (conditions []*sqlparser.ComparisonExpr
 		return analyzeBoolean(node.Expr)
 	case *sqlparser.ComparisonExpr:
 		switch {
-		case sqlparser.StringIn(
-			node.Operator,
-			sqlparser.EqualStr,
-			sqlparser.LikeStr):
+		case node.Operator == sqlparser.EqualStr:
 			if sqlparser.IsColName(node.Left) && sqlparser.IsValue(node.Right) {
 				return []*sqlparser.ComparisonExpr{node}
 			}
@@ -300,9 +303,6 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 		PlanID:    PlanPassDML,
 		FullQuery: GenerateFullQuery(ins),
 	}
-	if PassthroughDMLs {
-		return plan, nil
-	}
 
 	if ins.Action == sqlparser.ReplaceStr {
 		plan.Reason = ReasonReplace
@@ -313,9 +313,16 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
-	table, err := plan.setTable(tableName, tables)
-	if err != nil {
-		return nil, err
+	table, tableErr := plan.setTable(tableName, tables)
+
+	// In passthrough dml mode, allow the operation even if the
+	// table is unknown in the schema.
+	if PassthroughDMLs {
+		return plan, nil
+	}
+
+	if tableErr != nil {
+		return nil, tableErr
 	}
 
 	if !table.HasPrimary() {

@@ -1,0 +1,14 @@
+{
+  "table_groups": [
+    {
+        "name": "group1",
+        "table_names_or_prefixes": ["table1"],
+        "readers": ["web_app"]
+    },
+    {
+        "name": "group2",
+        "table_names_or_prefixes": ["*"],
+        "admins": ["cron_app"]
+    }
+  ]
+}

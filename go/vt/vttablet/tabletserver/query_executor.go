@@ -788,27 +788,39 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 	if err != nil {
 		return nil, err
 	}
-	q, ok := qre.tsv.qe.consolidator.Create(string(sqlWithoutComments))
-	if ok {
-		defer q.Broadcast()
-		conn, err := qre.getConn()
+	if qre.tsv.qe.enableConsolidator {
+		q, original := qre.tsv.qe.consolidator.Create(string(sqlWithoutComments))
+		if original {
+			defer q.Broadcast()
+			conn, err := qre.getConn()
 
-		if err != nil {
-			q.Err = err
+			if err != nil {
+				q.Err = err
+			} else {
+				defer conn.Recycle()
+				q.Result, q.Err = qre.execSQL(conn, sql, false)
+			}
 		} else {
-			defer conn.Recycle()
-			q.Result, q.Err = qre.execSQL(conn, sql, false)
+			logStats.QuerySources |= tabletenv.QuerySourceConsolidator
+			startTime := time.Now()
+			q.Wait()
+			tabletenv.WaitStats.Record("Consolidations", startTime)
 		}
-	} else {
-		logStats.QuerySources |= tabletenv.QuerySourceConsolidator
-		startTime := time.Now()
-		q.Wait()
-		tabletenv.WaitStats.Record("Consolidations", startTime)
+		if q.Err != nil {
+			return nil, q.Err
+		}
+		return q.Result.(*sqltypes.Result), nil
 	}
-	if q.Err != nil {
-		return nil, q.Err
+	conn, err := qre.getConn()
+	if err != nil {
+		return nil, err
 	}
-	return q.Result.(*sqltypes.Result), nil
+	defer conn.Recycle()
+	res, err := qre.execSQL(conn, sql, false)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // txFetch fetches from a TxConnection.

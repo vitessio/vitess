@@ -157,6 +157,43 @@ func TestPoolSize(t *testing.T) {
 	}
 }
 
+func TestDisableConsolidator(t *testing.T) {
+	totalConsolidationsTag := "Waits/Histograms/Consolidations/inf"
+	initial := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		wg.Done()
+	}()
+	go func() {
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		wg.Done()
+	}()
+	wg.Wait()
+	afterOne := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
+	if initial+1 != afterOne {
+		t.Errorf("expected one consolidation, but got: before consolidation count: %v; after consolidation count: %v", initial, afterOne)
+	}
+	framework.Server.SetConsolidatorEnabled(false)
+	defer framework.Server.SetConsolidatorEnabled(true)
+	var wg2 sync.WaitGroup
+	wg2.Add(2)
+	go func() {
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		wg2.Done()
+	}()
+	go func() {
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		wg2.Done()
+	}()
+	wg2.Wait()
+	noNewConsolidations := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
+	if afterOne != noNewConsolidations {
+		t.Errorf("expected no new consolidations, but got: before consolidation count: %v; after consolidation count: %v", afterOne, noNewConsolidations)
+	}
+}
+
 func TestQueryPlanCache(t *testing.T) {
 	defer framework.Server.SetQueryPlanCacheCap(framework.Server.QueryPlanCacheCap())
 	framework.Server.SetQueryPlanCacheCap(1)
