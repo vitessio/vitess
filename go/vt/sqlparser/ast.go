@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"strings"
 
@@ -633,13 +632,13 @@ type DBDDL struct {
 func (node *DBDDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
-		buf.WriteString(fmt.Sprintf("%s database %s", node.Action, node.DBName))
+		buf.Myprintf("%s database %s", node.Action, node.DBName)
 	case DropStr:
 		exists := ""
 		if node.IfExists {
 			exists = " if exists"
 		}
-		buf.WriteString(fmt.Sprintf("%s database%s %v", node.Action, exists, node.DBName))
+		buf.Myprintf("%s database%s %s", node.Action, exists, node.DBName)
 	}
 }
 

@@ -21,7 +21,10 @@ This file handles the reparenting operations.
 */
 
 import (
+	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -322,6 +325,12 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 // PlannedReparentShard will make the provided tablet the master for the shard,
 // when both the current and new master are reachable and in good shape.
 func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias, avoidMasterAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) (err error) {
+	if wr.strictIdentical {
+		if err = wr.CheckReplicationPositions(ctx, keyspace, shard); err != nil {
+			return err
+		}
+	}
+
 	// lock the shard
 	lockAction := fmt.Sprintf(
 		"PlannedReparentShard(%v, avoid_master=%v)",
@@ -781,4 +790,133 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	}
 
 	return nil
+}
+
+// CheckReplicationPositions check all tablets binlog position in keyspace/shard is the same
+func (wr *Wrangler) CheckReplicationPositions(ctx context.Context, keyspace, shard string) (err error) {
+	wr.logger.Infof(
+		"check replication position in all tablets of keyspace/shard: %s/%s",
+		keyspace, shard)
+	for idx := 0; idx < 3; idx++ {
+		if err = wr.onceCheckReplicationPositions(ctx, keyspace, shard); err != nil {
+			wr.logger.Errorf(
+				"%dth try check replication position failed <-- %s", idx+1, err.Error())
+			time.Sleep(time.Second)
+			continue
+		}
+
+		break
+	}
+
+	return
+}
+
+func (wr *Wrangler) onceCheckReplicationPositions(ctx context.Context, keyspace, shard string) (err error) {
+	tablets, stats, err := wr.ShardReplicationStatuses(ctx, keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	tabletsWithStatus := SortReplicatingTablets(tablets, stats)
+	master, slaves := partitionTablets(tabletsWithStatus)
+	if master == nil || master.Status == nil {
+		err = fmt.Errorf("cannot query master status in keyspace/shard: %s/%s", keyspace, shard)
+		return
+	}
+
+	wr.logger.Infof("master: %s(%s) binlog position is %v",
+		master.Alias, master.MysqlHostname, master.Status.Position)
+	lines := make([]string, 0, 24)
+	for _, slave := range slaves {
+		status := slave.Status
+		ti := slave.TabletInfo
+		if status == nil {
+			lines = append(lines, fmt.Sprintf("cannot load tablet: %s(%s) status", ti.Alias, ti.MysqlHostname))
+
+		} else {
+			if status.Position != master.Position || status.SecondsBehindMaster > 0 {
+				lines = append(lines, fmt.Sprintf(
+					"slave: %s(%s) binlog position is %v %v",
+					ti.Alias, ti.MysqlHostname, status.Position, status.SecondsBehindMaster))
+			}
+		}
+	}
+
+	if len(lines) > 0 {
+		err = errors.New(strings.Join(lines, "; "))
+	}
+
+	return
+}
+
+func partitionTablets(tablets []*RTablet) (master *RTablet, slaves []*RTablet) {
+	slaves = make([]*RTablet, 0, len(tablets))
+	for _, tablet := range tablets {
+		if tablet.Type == topodatapb.TabletType_MASTER {
+			master = tablet
+		} else {
+			slaves = append(slaves, tablet)
+		}
+	}
+
+	return
+}
+
+// RTablet wrap tablet info and replication status
+type RTablet struct {
+	*topo.TabletInfo
+	*replicationdatapb.Status
+}
+
+// RTablets a list of RTablet can be used sorting
+type RTablets []*RTablet
+
+func (rts RTablets) Len() int { return len(rts) }
+
+func (rts RTablets) Swap(i, j int) { rts[i], rts[j] = rts[j], rts[i] }
+
+// Sort for tablet replication.
+// Tablet type first (with master first), then replication positions.
+func (rts RTablets) Less(i, j int) bool {
+	l, r := rts[i], rts[j]
+	// l or r ReplicationStatus would be nil if we failed to get
+	// the position (put them at the beginning of the list)
+	if l.Status == nil {
+		return r.Status != nil
+	}
+	if r.Status == nil {
+		return false
+	}
+	// the type proto has MASTER first, so sort by that. Will show
+	// the MASTER first, then each slave type sorted by
+	// replication position.
+	if l.Type < r.Type {
+		return true
+	}
+	if l.Type > r.Type {
+		return false
+	}
+	// then compare replication positions
+	lpos, err := mysql.DecodePosition(l.Position)
+	if err != nil {
+		return true
+	}
+	rpos, err := mysql.DecodePosition(r.Position)
+	if err != nil {
+		return false
+	}
+	return !lpos.AtLeast(rpos)
+}
+
+// SortReplicatingTablets combine tablets and its replication status, and sort all tablets order by tablet type
+func SortReplicatingTablets(tablets []*topo.TabletInfo, stats []*replicationdatapb.Status) []*RTablet {
+	rtablets := make([]*RTablet, len(tablets))
+	for i, status := range stats {
+		rtablets[i] = &RTablet{
+			TabletInfo: tablets[i],
+			Status:     status,
+		}
+	}
+	sort.Sort(RTablets(rtablets))
+	return rtablets
 }

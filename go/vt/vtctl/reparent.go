@@ -104,6 +104,7 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newMaster := subFlags.String("new_master", "", "alias of a tablet that should be the new master")
 	avoidMaster := subFlags.String("avoid_master", "", "alias of a tablet that should not be the master, i.e. reparent to any other tablet if this one is the master")
+	isStrictIdentical := subFlags.Bool("strict_identical", false, "check all instances in shard have the same replication position, i.e. reparent to any other tablet if this one is the master")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -135,6 +136,8 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 			return err
 		}
 	}
+
+	wr.SetStrictIdentical(*isStrictIdentical)
 	return wr.PlannedReparentShard(ctx, keyspace, shard, newMasterAlias, avoidMasterAlias, *waitSlaveTimeout)
 }
 
