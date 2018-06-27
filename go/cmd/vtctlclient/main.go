@@ -51,9 +51,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), *actionTimeout)
+	defer cancel()
+
 	err := vtctlclient.RunCommandAndWait(
-		context.Background(), *server, flag.Args(),
-		*actionTimeout,
+		ctx, *server, flag.Args(),
 		func(e *logutilpb.Event) {
 			logutil.LogEvent(logger, e)
 		})
