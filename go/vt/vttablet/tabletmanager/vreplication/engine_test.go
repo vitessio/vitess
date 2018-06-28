@@ -90,6 +90,8 @@ func TestEngineExec(t *testing.T) {
 
 	// Test Update
 
+	// update for Stop
+	dbClient.AddResult(testDMLResponse)
 	// update _vt.vreplication
 	dbClient.AddResult(testDMLResponse)
 	// select * from _vt.vreplication
@@ -107,7 +109,7 @@ func TestEngineExec(t *testing.T) {
 	// update _vt.vreplication
 	dbClient.AddResult(testDMLResponse)
 
-	qr, err = vre.Exec("update _vt.vreplication set pos='MariaDB/0-1-1084' where id = 1")
+	qr, err = vre.Exec("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +124,8 @@ func TestEngineExec(t *testing.T) {
 	}
 
 	expectCommit(t, dbClient, []string{
-		"update _vt.vreplication set pos = 'MariaDB/0-1-1084' where id = 1",
+		"UPDATE _vt.vreplication SET state='Stopped', message='context canceled' WHERE id=1",
+		"update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 1",
 		"select * from _vt.vreplication where id = 1",
 		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
@@ -133,6 +136,8 @@ func TestEngineExec(t *testing.T) {
 
 	// Test Delete
 
+	// update for Stop
+	dbClient.AddResult(testDMLResponse)
 	// delete _vt.vreplication
 	dbClient.AddResult(testDMLResponse)
 

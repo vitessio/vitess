@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -292,4 +293,58 @@ func TestControllerRetry(t *testing.T) {
 	<-badConnFailed
 	<-badConnFailed
 	ct.Stop()
+}
+
+func TestControllerStopPosition(t *testing.T) {
+	ts := createTopo()
+	fbc := newFakeBinlogClient()
+	wantTablet := addTablet(ts, 100, "0", topodatapb.TabletType_REPLICA, true, true)
+
+	params := map[string]string{
+		"id":       "1",
+		"state":    binlogplayer.VRRunning,
+		"source":   `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
+		"pos":      testPos,
+		"stop_pos": "MariaDB/0-1-1235",
+	}
+
+	dbClient := binlogplayer.NewVtClientMock()
+	// select tps
+	dbClient.AddResult(testTPSResponse)
+	// insert into t
+	dbClient.AddResult(testDMLResponse)
+	// update _vt.vreplication
+	dbClient.AddResult(testDMLResponse)
+	dbClient.CommitChannel = make(chan []string, 10)
+
+	dbClientFactory := func() binlogplayer.VtClient { return dbClient }
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, ts, testCell, "replica")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ct.Stop()
+
+	expectCommit(t, dbClient, []string{
+		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
+		"BEGIN",
+		"insert into t values(1)",
+		"UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=",
+		"COMMIT",
+	})
+
+	// Also confirm that replication stopped.
+	select {
+	case <-ct.done:
+	case <-time.After(1 * time.Second):
+		t.Errorf("context should be closed, but is not: %v", ct)
+	}
+
+	// And verify that the state was changed. This should be checked after the stop to prevent data race in dbClient.
+	want := []string{"UPDATE _vt.vreplication SET state='Stopped', message='Reached stopping position, done playing logs' WHERE id=1"}
+	if !reflect.DeepEqual(dbClient.Stdout, want) {
+		t.Errorf("dbClient.Stdout: %v, want %v", dbClient.Stdout, want)
+	}
+	expectFBCRequest(t, fbc, wantTablet, testPos, nil, &topodatapb.KeyRange{End: []byte{0x80}})
 }

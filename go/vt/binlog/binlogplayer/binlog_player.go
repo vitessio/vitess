@@ -22,6 +22,7 @@ package binlogplayer
 import (
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -311,21 +312,36 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 // ApplyBinlogEvents makes an RPC request to BinlogServer
 // and processes the events. It will return nil if the provided context
 // was canceled, or if we reached the stopping point.
-// It will return io.EOF if the server stops sending us updates.
-// It may return any other error it encounters.
+// Before returning, it will update vreplication in state to "Error" or "Stopped".
 func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
+	msg, err := blp.applyEvents(ctx)
+	state := VRStopped
+	if err != nil {
+		state = VRError
+		msg = err.Error()
+	}
+	// Get rid of single quotes before generating DML.
+	msg = strings.Replace(msg, "'", "", -1)
+	if err := setVReplicationState(blp.dbClient, blp.uid, state, msg); err != nil {
+		log.Errorf("Error writing stop state: %v", err)
+	}
+	return err
+}
+
+// applyEvents returns a recordable status message on termination or an error otherwise.
+func (blp *BinlogPlayer) applyEvents(ctx context.Context) (string, error) {
 	// Instantiate the throttler based on the configuration stored in the db.
 	maxTPS, maxReplicationLag, err := blp.readThrottlerSettings()
 	if err != nil {
 		log.Error(err)
-		return err
+		return "", err
 	}
 	t, err := throttler.NewThrottler(
 		fmt.Sprintf("BinlogPlayer/%d", blp.uid), "transactions", 1 /* threadCount */, maxTPS, maxReplicationLag)
 	if err != nil {
 		err := fmt.Errorf("failed to instantiate throttler: %v", err)
 		log.Error(err)
-		return err
+		return "", err
 	}
 	defer t.Close()
 
@@ -350,10 +366,11 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		// We need to stop at some point. Sanity check the point.
 		switch {
 		case blp.position.Equal(blp.stopPosition):
-			log.Infof("Not starting BinlogPlayer, we're already at the desired position %v", blp.stopPosition)
-			return nil
+			msg := fmt.Sprintf("Not starting BinlogPlayer, we're already at the desired position %v", blp.stopPosition)
+			log.Info(msg)
+			return msg, nil
 		case blp.position.AtLeast(blp.stopPosition):
-			return fmt.Errorf("starting point %v greater than stopping point %v", blp.position, blp.stopPosition)
+			return "", fmt.Errorf("starting point %v greater than stopping point %v", blp.position, blp.stopPosition)
 		default:
 			log.Infof("Will stop player when reaching %v", blp.stopPosition)
 		}
@@ -361,14 +378,14 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 
 	clientFactory, ok := clientFactories[*binlogPlayerProtocol]
 	if !ok {
-		return fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
+		return "", fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
 	}
 	blplClient := clientFactory()
 	err = blplClient.Dial(blp.tablet)
 	if err != nil {
 		err := fmt.Errorf("error dialing binlog server: %v", err)
 		log.Error(err)
-		return err
+		return "", err
 	}
 	defer blplClient.Close()
 
@@ -378,7 +395,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	if dbClient, ok := blp.dbClient.(*DBClient); ok {
 		blp.defaultCharset, err = mysql.GetCharset(dbClient.dbConn)
 		if err != nil {
-			return fmt.Errorf("can't get charset to request binlog stream: %v", err)
+			return "", fmt.Errorf("can't get charset to request binlog stream: %v", err)
 		}
 		log.Infof("original charset: %v", blp.defaultCharset)
 		blp.currentCharset = blp.defaultCharset
@@ -405,7 +422,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	if err != nil {
 		err := fmt.Errorf("error sending streaming query to binlog server: %v", err)
 		log.Error(err)
-		return err
+		return "", err
 	}
 
 	for {
@@ -426,7 +443,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		if err != nil {
 			switch err {
 			case context.Canceled:
-				return nil
+				return context.Canceled.Error(), nil
 			default:
 				// if the context is canceled, we
 				// return nil (some RPC
@@ -435,11 +452,14 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 				select {
 				case <-ctx.Done():
 					if ctx.Err() == context.Canceled {
-						return nil
+						if err := setVReplicationState(blp.dbClient, blp.uid, VRStopped, context.Canceled.Error()); err != nil {
+							log.Errorf("Error writing stop state: %v", err)
+						}
+						return ctx.Err().Error(), nil
 					}
 				default:
 				}
-				return fmt.Errorf("Error received from Stream %v", err)
+				return "", fmt.Errorf("Error received from Stream %v", err)
 			}
 		}
 
@@ -451,13 +471,13 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 				for _, stmt := range response.Statements {
 					log.Infof("statement: %q", stmt.Sql)
 				}
-				return fmt.Errorf("Error in processing binlog event %v", err)
+				return "", fmt.Errorf("Error in processing binlog event %v", err)
 			}
 			if ok {
 				if !blp.stopPosition.IsZero() {
 					if blp.position.AtLeast(blp.stopPosition) {
 						log.Infof("Reached stopping position, done playing logs")
-						return nil
+						return "Reached stopping position, done playing logs", nil
 					}
 				}
 				break
@@ -489,6 +509,15 @@ func CreateVReplicationTable() []string {
   message VARBINARY(1000) DEFAULT NULL,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB`}
+}
+
+// setVReplicationState updates the state in the _vt.vreplication table.
+func setVReplicationState(dbClient VtClient, uid uint32, state, message string) error {
+	query := fmt.Sprintf("UPDATE _vt.vreplication SET state='%v', message='%v' WHERE id=%v", state, message, uid)
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+		return fmt.Errorf("could not set state: %v: %v", query, err)
+	}
+	return nil
 }
 
 // CreateVReplication returns a statement to populate the first value into

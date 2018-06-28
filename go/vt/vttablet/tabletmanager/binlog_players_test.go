@@ -337,6 +337,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 
 	// Mock out the throttler settings result.
 	vtClientMock.AddResult(mockedThrottlerSettings)
+	vtClientMock.AddResult(&sqltypes.Result{RowsAffected: 1})
 
 	vtClientSyncChannel <- vtClientMock
 	if !mysqlDaemon.BinlogPlayerEnabled {
@@ -504,15 +505,17 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 			},
 		},
 	}
+	dmlResult := &sqltypes.Result{RowsAffected: 1}
 	vtClientMock := binlogplayer.NewVtClientMock()
-	vtClientMock.AddResult(startPos)
 
-	// Mock out the throttler settings result.
-	vtClientMock.AddResult(mockedThrottlerSettings)
-	// Mock two more results since the BinlogPlayer will be stopped and then
-	// restarted again with the RunUntil() call.
 	vtClientMock.AddResult(startPos)
 	vtClientMock.AddResult(mockedThrottlerSettings)
+	vtClientMock.AddResult(dmlResult)
+
+	// Mock for restart.
+	vtClientMock.AddResult(startPos)
+	vtClientMock.AddResult(mockedThrottlerSettings)
+	vtClientMock.AddResult(dmlResult)
 
 	vtClientSyncChannel <- vtClientMock
 	if !mysqlDaemon.BinlogPlayerEnabled {
@@ -563,19 +566,17 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 		}
 
 		// and make sure it results in a committed statement
-		sql := <-vtClientMock.CommitChannel
-		if len(sql) != 8 ||
-			sql[0] != "SELECT pos FROM _vt.vreplication WHERE id=1" ||
-			sql[1] != "SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1" ||
-			sql[2] != "SELECT pos FROM _vt.vreplication WHERE id=1" ||
-			sql[3] != "SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1" ||
-			sql[4] != "BEGIN" ||
-			sql[5] != "INSERT INTO tablet VALUES(1)" ||
-			!strings.HasPrefix(sql[6], "UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=") ||
-			!strings.HasSuffix(sql[6], ", transaction_timestamp=72 WHERE id=1") ||
-			sql[7] != "COMMIT" {
-			t.Errorf("Got wrong SQL: %#v", sql)
-		}
+		expectCommit(t, vtClientMock, []string{
+			"SELECT pos FROM _vt.vreplication WHERE id=1",
+			"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
+			"UPDATE _vt.vreplication SET state='Stopped', message='context canceled' WHERE id=1",
+			"SELECT pos FROM _vt.vreplication WHERE id=1",
+			"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
+			"BEGIN",
+			"INSERT INTO tablet VALUES(1)",
+			"UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=",
+			"COMMIT",
+		})
 		wg.Done()
 	}()
 
@@ -721,9 +722,8 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 			},
 		},
 	})
-
-	// Mock out the throttler settings result.
 	vtClientMock.AddResult(mockedThrottlerSettings)
+	vtClientMock.AddResult(&sqltypes.Result{RowsAffected: 1})
 
 	vtClientSyncChannel <- vtClientMock
 	if !mysqlDaemon.BinlogPlayerEnabled {
@@ -787,5 +787,16 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 		len(s.Controllers) != 1 ||
 		s.Controllers[0].State != "Stopped" {
 		t.Errorf("unexpected state: %v", s)
+	}
+}
+
+func expectCommit(t *testing.T, dbClient *binlogplayer.VtClientMock, want []string) {
+	t.Helper()
+	commit := <-dbClient.CommitChannel
+	for i, got := range commit {
+		if !strings.HasPrefix(got, want[i]) {
+			t.Errorf("vc.log:\n%v\nwant:\n%v", strings.Join(commit, "\n"), strings.Join(want, "\n"))
+			return
+		}
 	}
 }
