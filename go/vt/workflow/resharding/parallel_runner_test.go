@@ -101,6 +101,37 @@ func TestParallelRunnerApproval(t *testing.T) {
 	wg.Wait()
 }
 
+func TestParallelRunnerApprovalOnStoppedWorkflow(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell")
+
+	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, index, err := setupNotifications(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.NodeManager().CloseWatcher(index)
+
+	// Start the job
+	if err := m.Start(ctx, uuid); err != nil {
+		t.Fatalf("cannot start testworkflow: %v", err)
+	}
+
+	// Cancelling the ctx stops the workflow
+	cancel()
+	// Wait for the workflow to end.
+	m.Wait(context.Background(), uuid)
+
+	if err := verifyAllTasksState(ctx, ts, uuid, workflowpb.TaskState_TaskNotStarted); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+}
+
 func TestParallelRunnerApprovalFromFirstDone(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell")
@@ -733,18 +764,22 @@ func waitForFinished(notifications chan []byte, path, message string) error {
 	return fmt.Errorf("notifications channel is closed unexpectedly when waiting for expected nodes")
 }
 
-func verifyAllTasksDone(ctx context.Context, ts *topo.Server, uuid string) error {
+func verifyAllTasksState(ctx context.Context, ts *topo.Server, uuid string, taskState workflowpb.TaskState) error {
 	checkpoint, err := checkpoint(ctx, ts, uuid)
 	if err != nil {
 		return err
 	}
 
 	for _, task := range checkpoint.Tasks {
-		if task.State != workflowpb.TaskState_TaskDone || task.Error != "" {
+		if task.State != taskState || task.Error != "" {
 			return fmt.Errorf("task: %v should succeed: task status: %v, %v", task.Id, task.State, task.Attributes)
 		}
 	}
 	return nil
+}
+
+func verifyAllTasksDone(ctx context.Context, ts *topo.Server, uuid string) error {
+	return verifyAllTasksState(ctx, ts, uuid, workflowpb.TaskState_TaskDone)
 }
 
 func verifyTask(ctx context.Context, ts *topo.Server, uuid, taskID string, taskState workflowpb.TaskState, taskError string) error {
