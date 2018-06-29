@@ -171,7 +171,6 @@ var keywords = map[string]int{
 	"exit":                UNUSED,
 	"explain":             EXPLAIN,
 	"expansion":           EXPANSION,
-	"extended":            EXTENDED,
 	"false":               FALSE,
 	"fetch":               UNUSED,
 	"float":               FLOAT_TYPE,
