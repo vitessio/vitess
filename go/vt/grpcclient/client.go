@@ -25,7 +25,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
-	"github.com/grpc-ecosystem/go-grpc-prometheus"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/vttls"

@@ -27,10 +27,14 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
 
+var (
+	defaultTimeout = time.Hour
+)
+
 // RunCommandAndWait executes a single command on a given vtctld and blocks until the command did return or timed out.
 // Output from vtctld is streamed as logutilpb.Event messages which
 // have to be consumed by the caller who has to specify a "recv" function.
-func RunCommandAndWait(ctx context.Context, server string, args []string, actionTimeout time.Duration, recv func(*logutilpb.Event)) error {
+func RunCommandAndWait(ctx context.Context, server string, args []string, recv func(*logutilpb.Event)) error {
 	if recv == nil {
 		return errors.New("No function closure for Event stream specified")
 	}
@@ -41,10 +45,13 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, action
 	}
 	defer client.Close()
 
-	// run the command
-	ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
-	defer cancel()
-	stream, err := client.ExecuteVtctlCommand(ctx, args, actionTimeout)
+	// run the command ( get the timeout from the context )
+	timeout := defaultTimeout
+	deadline, ok := ctx.Deadline()
+	if ok {
+		timeout = time.Until(deadline)
+	}
+	stream, err := client.ExecuteVtctlCommand(ctx, args, timeout)
 	if err != nil {
 		return fmt.Errorf("Cannot execute remote command: %v", err)
 	}
