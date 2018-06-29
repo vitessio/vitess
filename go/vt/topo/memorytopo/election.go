@@ -33,7 +33,7 @@ func (c *Conn) NewMasterParticipation(name, id string) (topo.MasterParticipation
 	// Make sure the global path exists.
 	electionPath := path.Join(electionsPath, name)
 	if n := c.factory.getOrCreatePath(c.cell, electionPath); n == nil {
-		return nil, topo.ErrNoNode
+		return nil, topo.NewError(topo.NoNode, electionPath)
 	}
 
 	return &cMasterParticipation{
@@ -72,7 +72,7 @@ func (mp *cMasterParticipation) WaitForMastership() (context.Context, error) {
 	// If Stop was already called, mp.done is closed, so we are interrupted.
 	select {
 	case <-mp.done:
-		return nil, topo.ErrInterrupted
+		return nil, topo.NewError(topo.Interrupted, "mastership")
 	default:
 	}
 

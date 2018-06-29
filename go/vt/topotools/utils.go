@@ -37,7 +37,7 @@ func FindTabletByHostAndPort(tabletMap map[string]*topo.TabletInfo, addr, portNa
 			return ti.Alias, nil
 		}
 	}
-	return nil, topo.ErrNoNode
+	return nil, topo.NewError(topo.NoNode, addr+":"+portName)
 }
 
 // GetAllTablets returns a sorted list of tablets.
@@ -94,7 +94,7 @@ func GetAllTabletsAcrossCells(ctx context.Context, ts *topo.Server) ([]*topo.Tab
 		if errors[i] == nil {
 			allTablets = append(allTablets, results[i]...)
 		} else {
-			err = topo.ErrPartialResult
+			err = topo.NewError(topo.PartialResult, "")
 		}
 	}
 	return allTablets, err

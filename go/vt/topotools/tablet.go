@@ -90,7 +90,7 @@ func CheckOwnership(oldTablet, newTablet *topodatapb.Tablet) error {
 func DeleteTablet(ctx context.Context, ts *topo.Server, tablet *topodatapb.Tablet) error {
 	// try to remove replication data, no fatal if we fail
 	if err := topo.DeleteTabletReplicationData(ctx, ts, tablet); err != nil {
-		if err == topo.ErrNoNode {
+		if topo.IsErrType(err, topo.NoNode) {
 			log.V(6).Infof("no ShardReplication object for cell %v", tablet.Alias.Cell)
 			err = nil
 		}

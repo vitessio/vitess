@@ -439,7 +439,7 @@ func (server *ResilientServer) watchSrvKeyspace(callerCtx context.Context, entry
 		entry.lastErrorTime = time.Now()
 
 		// if the node disappears, delete the cached value
-		if current.Err == topo.ErrNoNode {
+		if topo.IsErrType(current.Err, topo.NoNode) {
 			entry.value = nil
 		}
 
@@ -483,7 +483,7 @@ func (server *ResilientServer) watchSrvKeyspace(callerCtx context.Context, entry
 			log.Errorf("%v", err)
 			server.counts.Add(errorCategory, 1)
 			entry.mutex.Lock()
-			if c.Err == topo.ErrNoNode {
+			if topo.IsErrType(c.Err, topo.NoNode) {
 				entry.value = nil
 			}
 			entry.watchState = watchStateIdle
@@ -529,7 +529,7 @@ func (server *ResilientServer) WatchSrvVSchema(ctx context.Context, cell string,
 			}
 			if current.Err != nil {
 				// Don't log if there is no VSchema to start with.
-				if current.Err != topo.ErrNoNode {
+				if !topo.IsErrType(current.Err, topo.NoNode) {
 					log.Warningf("Error watching vschema for cell %s (will wait 5s before retrying): %v", cell, current.Err)
 				}
 			} else {

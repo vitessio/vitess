@@ -25,12 +25,12 @@ import (
 )
 
 // convertError converts a context error into a topo error.
-func convertError(err error) error {
+func convertError(err error, nodePath string) error {
 	switch err {
 	case context.Canceled:
-		return topo.ErrInterrupted
+		return topo.NewError(topo.Interrupted, nodePath)
 	case context.DeadlineExceeded:
-		return topo.ErrTimeout
+		return topo.NewError(topo.Timeout, nodePath)
 	}
 	return err
 }
@@ -54,7 +54,7 @@ func (c *Conn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDes
 		n := c.factory.nodeByPath(c.cell, dirPath)
 		if n == nil {
 			c.factory.mu.Unlock()
-			return nil, topo.ErrNoNode
+			return nil, topo.NewError(topo.NoNode, dirPath)
 		}
 
 		if l := n.lock; l != nil {
@@ -66,7 +66,7 @@ func (c *Conn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDes
 				continue
 			case <-ctx.Done():
 				// Done waiting
-				return nil, convertError(ctx.Err())
+				return nil, convertError(ctx.Err(), dirPath)
 			}
 		}
 
@@ -98,7 +98,7 @@ func (c *Conn) unlock(ctx context.Context, dirPath string) error {
 
 	n := c.factory.nodeByPath(c.cell, dirPath)
 	if n == nil {
-		return topo.ErrNoNode
+		return topo.NewError(topo.NoNode, dirPath)
 	}
 	if n.lock == nil {
 		return fmt.Errorf("node %v is not locked", dirPath)

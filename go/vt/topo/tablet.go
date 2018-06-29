@@ -290,12 +290,12 @@ func (ts *Server) UpdateTabletFields(ctx context.Context, alias *topodatapb.Tabl
 			return nil, err
 		}
 		if err = update(ti.Tablet); err != nil {
-			if err == ErrNoUpdateNeeded {
+			if IsErrType(err, NoUpdateNeeded) {
 				return nil, nil
 			}
 			return nil, err
 		}
-		if err = ts.UpdateTablet(ctx, ti); err != ErrBadVersion {
+		if err = ts.UpdateTablet(ctx, ti); !IsErrType(err, BadVersion) {
 			return ti.Tablet, err
 		}
 	}
@@ -338,7 +338,7 @@ func (ts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) e
 		return err
 	}
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(tablet.Alias), TabletFile)
-	if _, err = conn.Create(ctx, tabletPath, data); err != nil && err != ErrNodeExists {
+	if _, err = conn.Create(ctx, tabletPath, data); err != nil && !IsErrType(err, NodeExists) {
 		return err
 	}
 
@@ -428,8 +428,8 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 			if err != nil {
 				log.Warningf("%v: %v", tabletAlias, err)
 				// There can be data races removing nodes - ignore them for now.
-				if err != ErrNoNode {
-					someError = ErrPartialResult
+				if !IsErrType(err, NoNode) {
+					someError = NewError(PartialResult, "")
 				}
 			} else {
 				tabletMap[topoproto.TabletAliasString(tabletAlias)] = tabletInfo
@@ -454,7 +454,7 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topodat
 	// List the directory, and parse the aliases
 	children, err := conn.ListDir(ctx, TabletsPath, false /*full*/)
 	if err != nil {
-		if err == ErrNoNode {
+		if IsErrType(err, NoNode) {
 			// directory doesn't exist, empty list, no error.
 			return nil, nil
 		}

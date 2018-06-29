@@ -47,7 +47,7 @@ func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (
 	}
 	if !ok {
 		// Transaction was rolled back, means the node exists.
-		return nil, topo.ErrNodeExists
+		return nil, topo.NewError(topo.NodeExists, nodePath)
 	}
 	return ConsulVersion(resp.Results[0].ModifyIndex), nil
 }
@@ -77,7 +77,7 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 	if !ok {
 		// Transaction was rolled back, means the node has a
 		// bad version.
-		return nil, topo.ErrBadVersion
+		return nil, topo.NewError(topo.BadVersion, nodePath)
 	}
 	return ConsulVersion(resp.Results[0].ModifyIndex), nil
 }
@@ -91,7 +91,7 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 		return nil, nil, err
 	}
 	if pair == nil {
-		return nil, nil, topo.ErrNoNode
+		return nil, nil, topo.NewError(topo.NoNode, nodePath)
 	}
 
 	return pair.Value, ConsulVersion(pair.ModifyIndex), nil
@@ -134,10 +134,10 @@ func (s *Server) Delete(ctx context.Context, filePath string, version topo.Versi
 		switch resp.Errors[0].OpIndex {
 		case 0:
 			// Get failed (operation 0), the node didn't exist.
-			return topo.ErrNoNode
+			return topo.NewError(topo.NoNode, nodePath)
 		case 1:
 			// DeleteCAS failed (operation 1), means bad version.
-			return topo.ErrBadVersion
+			return topo.NewError(topo.BadVersion, nodePath)
 		default:
 			// very unexpected.
 			return ErrBadResponse

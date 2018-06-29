@@ -49,7 +49,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	// Ask for a not-yet-created keyspace
 	_, err := rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
-	if err != topo.ErrNoNode {
+	if !topo.IsErrType(err, topo.NoNode) {
 		t.Fatalf("GetSrvKeyspace(not created) got unexpected error: %v", err)
 	}
 
@@ -106,7 +106,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	expiry = time.Now().Add(5 * time.Second)
 	for {
 		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
-		if err == topo.ErrNoNode {
+		if topo.IsErrType(err, topo.NoNode) {
 			break
 		}
 		if time.Now().After(expiry) {
@@ -377,10 +377,10 @@ func TestGetSrvKeyspaceCreated(t *testing.T) {
 	expiry := time.Now().Add(5 * time.Second)
 	for {
 		got, err := rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
-		switch err {
-		case topo.ErrNoNode:
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
 			// keep trying
-		case nil:
+		case err == nil:
 			// we got a value, see if it's good
 			if proto.Equal(want, got) {
 				return
@@ -419,7 +419,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 
 	// WatchSrvVSchema won't return until it gets the initial value,
 	// which is not there, so we should get watchErr=topo.ErrNoNode.
-	if _, err := get(); err != topo.ErrNoNode {
+	if _, err := get(); !topo.IsErrType(err, topo.NoNode) {
 		t.Fatalf("WatchSrvVSchema didn't return topo.ErrNoNode at first, but got: %v", err)
 	}
 
@@ -469,7 +469,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 	}
 	start = time.Now()
 	for {
-		if _, err := get(); err == topo.ErrNoNode {
+		if _, err := get(); topo.IsErrType(err, topo.NoNode) {
 			break
 		}
 		if time.Since(start) > 5*time.Second {

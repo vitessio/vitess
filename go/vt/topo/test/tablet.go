@@ -52,14 +52,14 @@ func checkTablet(t *testing.T, ts *topo.Server) {
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Fatalf("CreateTablet: %v", err)
 	}
-	if err := ts.CreateTablet(ctx, tablet); err != topo.ErrNodeExists {
+	if err := ts.CreateTablet(ctx, tablet); !topo.IsErrType(err, topo.NodeExists) {
 		t.Fatalf("CreateTablet(again): %v", err)
 	}
 
 	if _, err := ts.GetTablet(ctx, &topodatapb.TabletAlias{
 		Cell: LocalCellName,
 		Uid:  666,
-	}); err != topo.ErrNoNode {
+	}); !topo.IsErrType(err, topo.NoNode) {
 		t.Fatalf("GetTablet(666): %v", err)
 	}
 
@@ -71,7 +71,7 @@ func checkTablet(t *testing.T, ts *topo.Server) {
 		t.Errorf("put and got tablets are not identical:\n%#v\n%#v", tablet, t)
 	}
 
-	if _, err := ts.GetTabletsByCell(ctx, "666"); err != topo.ErrNoNode {
+	if _, err := ts.GetTabletsByCell(ctx, "666"); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("GetTabletsByCell(666): %v", err)
 	}
 
@@ -117,7 +117,7 @@ func checkTablet(t *testing.T, ts *topo.Server) {
 
 	// test UpdateTabletFields that returns ErrNoUpdateNeeded works
 	if _, err := ts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
-		return topo.ErrNoUpdateNeeded
+		return topo.NewError(topo.NoUpdateNeeded, tablet.Alias.String())
 	}); err != nil {
 		t.Errorf("UpdateTabletFields: %v", err)
 	}
@@ -132,11 +132,11 @@ func checkTablet(t *testing.T, ts *topo.Server) {
 	if err := ts.DeleteTablet(ctx, tablet.Alias); err != nil {
 		t.Errorf("DeleteTablet: %v", err)
 	}
-	if err := ts.DeleteTablet(ctx, tablet.Alias); err != topo.ErrNoNode {
+	if err := ts.DeleteTablet(ctx, tablet.Alias); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("DeleteTablet(again): %v", err)
 	}
 
-	if _, err := ts.GetTablet(ctx, tablet.Alias); err != topo.ErrNoNode {
+	if _, err := ts.GetTablet(ctx, tablet.Alias); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("GetTablet: expected error, tablet was deleted: %v", err)
 	}
 

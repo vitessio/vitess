@@ -205,14 +205,14 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		log.Infof("finalizeTabletExternallyReparented: updating global shard record if needed")
 		_, err = agent.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(currentSi *topo.ShardInfo) error {
 			if topoproto.TabletAliasEqual(currentSi.MasterAlias, tablet.Alias) {
-				return topo.ErrNoUpdateNeeded
+				return topo.NewError(topo.NoUpdateNeeded, tablet.Alias.String())
 			}
 			if !topoproto.TabletAliasEqual(currentSi.MasterAlias, oldMasterAlias) {
 				log.Warningf("old master alias (%v) not found in the global Shard record i.e. it has changed in the meantime."+
 					" We're not overwriting the value with the new master (%v) because the current value is probably newer."+
 					" (initial Shard record = %#v, current Shard record = %#v)",
 					oldMasterAlias, tablet.Alias, si, currentSi)
-				return topo.ErrNoUpdateNeeded
+				return topo.NewError(topo.NoUpdateNeeded, oldMasterAlias.String())
 			}
 			currentSi.MasterAlias = tablet.Alias
 			return nil

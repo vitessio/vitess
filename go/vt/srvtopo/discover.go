@@ -50,7 +50,7 @@ func FindAllTargets(ctx context.Context, ts Server, cell string, tabletTypes []t
 			// Get SrvKeyspace for cell/keyspace.
 			ks, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 			if err != nil {
-				if err == topo.ErrNoNode {
+				if topo.IsErrType(err, topo.NoNode) {
 					// Possibly a race condition, or leftover
 					// crud in the topology service. Just log it.
 					log.Warningf("GetSrvKeyspace(%v, %v) returned ErrNoNode, skipping that SrvKeyspace", cell, keyspace)

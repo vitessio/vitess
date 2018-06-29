@@ -57,12 +57,12 @@ func checkListDir(ctx context.Context, t *testing.T, conn topo.Conn, dirPath str
 
 	// Test with full=false.
 	entries, err := conn.ListDir(ctx, dirPath, false /*full*/)
-	switch err {
-	case topo.ErrNoNode:
+	switch {
+	case topo.IsErrType(err, topo.NoNode):
 		if len(se) != 0 {
 			t.Errorf("ListDir(%v, false) returned ErrNoNode but was expecting %v", dirPath, se)
 		}
-	case nil:
+	case err == nil:
 		if len(se) != 0 || len(entries) != 0 {
 			if !reflect.DeepEqual(entries, se) {
 				t.Errorf("ListDir(%v, false) returned %v but was expecting %v", dirPath, entries, se)
@@ -74,12 +74,12 @@ func checkListDir(ctx context.Context, t *testing.T, conn topo.Conn, dirPath str
 
 	// Test with full=true.
 	entries, err = conn.ListDir(ctx, dirPath, true /*full*/)
-	switch err {
-	case topo.ErrNoNode:
+	switch {
+	case topo.IsErrType(err, topo.NoNode):
 		if len(expected) != 0 {
 			t.Errorf("ListDir(%v, true) returned ErrNoNode but was expecting %v", dirPath, expected)
 		}
-	case nil:
+	case err == nil:
 		if len(expected) != 0 || len(entries) != 0 {
 			if !reflect.DeepEqual(entries, expected) {
 				t.Errorf("ListDir(%v, true) returned %v but was expecting %v", dirPath, entries, expected)

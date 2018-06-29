@@ -80,13 +80,13 @@ func TestDeleteShardCleanup(t *testing.T) {
 
 	// Make sure all tablets are gone.
 	for _, ft := range []*FakeTablet{master, slave, remoteSlave} {
-		if _, err := ts.GetTablet(ctx, ft.Tablet.Alias); err != topo.ErrNoNode {
+		if _, err := ts.GetTablet(ctx, ft.Tablet.Alias); !topo.IsErrType(err, topo.NoNode) {
 			t.Errorf("tablet %v is still in topo: %v", ft.Tablet.Alias, err)
 		}
 	}
 
 	// Make sure the shard is gone.
-	if _, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard); err != topo.ErrNoNode {
+	if _, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("shard %v/%v is still in topo: %v", master.Tablet.Keyspace, master.Tablet.Shard, err)
 	}
 }

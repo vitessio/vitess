@@ -40,7 +40,7 @@ func checkVSchema(t *testing.T, ts *topo.Server) {
 
 	got, err := ts.GetVSchema(ctx, "test_keyspace")
 	want := &vschemapb.Keyspace{}
-	if err != topo.ErrNoNode {
+	if !topo.IsErrType(err, topo.NoNode) {
 		t.Error(err)
 	}
 

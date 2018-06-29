@@ -37,15 +37,15 @@ func waitForInitialSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace str
 	start := time.Now()
 	for {
 		current, changes, cancel = ts.WatchSrvKeyspace(ctx, cell, keyspace)
-		switch current.Err {
-		case topo.ErrNoNode:
+		switch {
+		case topo.IsErrType(current.Err, topo.NoNode):
 			// hasn't appeared yet
 			if time.Now().Sub(start) > 10*time.Second {
 				t.Fatalf("time out waiting for file to appear")
 			}
 			time.Sleep(10 * time.Millisecond)
 			continue
-		case nil:
+		case current.Err == nil:
 			return
 		default:
 			t.Fatalf("watch failed: %v", current.Err)
@@ -61,7 +61,7 @@ func TestWatchSrvKeyspaceNoNode(t *testing.T) {
 
 	// No SrvKeyspace -> ErrNoNode
 	current, _, _ := ts.WatchSrvKeyspace(ctx, cell, keyspace)
-	if current.Err != topo.ErrNoNode {
+	if !topo.IsErrType(current.Err, topo.NoNode) {
 		t.Errorf("Got invalid result from WatchSrvKeyspace(not there): %v", current.Err)
 	}
 }
@@ -175,7 +175,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 		if !ok {
 			t.Fatalf("watch channel unexpectedly closed")
 		}
-		if wd.Err == topo.ErrNoNode {
+		if topo.IsErrType(wd.Err, topo.NoNode) {
 			break
 		}
 		if wd.Err != nil {
@@ -196,7 +196,7 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 
 	// No SrvKeyspace -> ErrNoNode
 	current, changes, cancel := ts.WatchSrvKeyspace(ctx, cell, keyspace)
-	if current.Err != topo.ErrNoNode {
+	if !topo.IsErrType(current.Err, topo.NoNode) {
 		t.Errorf("Got invalid result from WatchSrvKeyspace(not there): %v", current.Err)
 	}
 
@@ -221,7 +221,7 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 		if !ok {
 			t.Fatalf("watch channel unexpectedly closed")
 		}
-		if wd.Err == topo.ErrInterrupted {
+		if topo.IsErrType(wd.Err, topo.Interrupted) {
 			break
 		}
 		if wd.Err != nil {
