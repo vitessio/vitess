@@ -146,7 +146,12 @@ func (orc *orcClient) InActiveShardRecovery(tablet *topodatapb.Tablet) (bool, er
 		return false, err
 	}
 
+	if len(r) == 0 {
+		return false, fmt.Errorf("Orchestrator returned an empty audit-recovery response")
+	}
+
 	active, ok := r[0]["IsActive"].(bool)
+
 	if !ok {
 		return false, fmt.Errorf("Error parsing JSON response from Orchestrator")
 	}
