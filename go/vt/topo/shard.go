@@ -182,7 +182,7 @@ func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardI
 
 	value := &topodatapb.Shard{}
 	if err = proto.Unmarshal(data, value); err != nil {
-		return nil, fmt.Errorf("bad shard data: %v", err)
+		return nil, fmt.Errorf("GetShard(%v,%v): bad shard data: %v", keyspace, shard, err)
 	}
 	return &ShardInfo{
 		keyspace:  keyspace,

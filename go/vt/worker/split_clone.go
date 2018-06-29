@@ -535,21 +535,21 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	switch scw.cloneType {
 	case horizontalResharding:
 		if err := scw.initShardsForHorizontalResharding(ctx); err != nil {
-			return err
+			return fmt.Errorf("failed initShardsForHorizontalResharding: %s", err)
 		}
 	case verticalSplit:
 		if err := scw.initShardsForVerticalSplit(ctx); err != nil {
-			return err
+			return fmt.Errorf("failed initShardsForVerticalSplit: %s", err)
 		}
 	}
 
 	if err := scw.sanityCheckShardInfos(); err != nil {
-		return err
+		return fmt.Errorf("failed sanityCheckShardInfos: %s", err)
 	}
 
 	if scw.cloneType == horizontalResharding {
 		if err := scw.loadVSchema(ctx); err != nil {
-			return err
+			return fmt.Errorf("failed loadVSchema: %s", err)
 		}
 	}
 
@@ -622,8 +622,22 @@ func (scw *SplitCloneWorker) initShardsForVerticalSplit(ctx context.Context) err
 	}
 	sourceKeyspace := servedFrom
 
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	shardMap, err := scw.wr.TopoServer().FindAllShardsInKeyspace(shortCtx, sourceKeyspace)
+	cancel()
+	if err != nil {
+		return fmt.Errorf("cannot find source shard for source keyspace %s: %s", sourceKeyspace, err)
+	}
+	if len(shardMap) != 1 {
+		return fmt.Errorf("found the wrong number of source shards, there should be only one, %v", shardMap)
+	}
+	var sourceShard string
+	for s := range shardMap {
+		sourceShard = s
+	}
+
 	// Init the source and destination shard info.
-	sourceShardInfo, err := scw.wr.TopoServer().GetShard(ctx, sourceKeyspace, scw.shard)
+	sourceShardInfo, err := scw.wr.TopoServer().GetShard(ctx, sourceKeyspace, sourceShard)
 	if err != nil {
 		return err
 	}
