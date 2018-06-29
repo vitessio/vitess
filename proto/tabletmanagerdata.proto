@@ -353,6 +353,14 @@ message VReplicationExecResponse {
   query.QueryResult result = 1;
 }
 
+message VReplicationWaitForPosRequest {
+  int64 id = 1;
+  string position = 2;
+}
+
+message VReplicationWaitForPosResponse {
+}
+
 message InitMasterRequest {
 }
 

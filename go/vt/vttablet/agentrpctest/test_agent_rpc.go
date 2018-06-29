@@ -942,6 +942,30 @@ func agentRPCTestVReplicationExecPanic(ctx context.Context, t *testing.T, client
 	expectHandleRPCPanic(t, "VReplicationExec", true /*verbose*/, err)
 }
 
+var (
+	wfpid  = 3
+	wfppos = ""
+)
+
+func (fra *fakeRPCAgent) VReplicationWaitForPos(ctx context.Context, id int, pos string) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "VReplicationWaitForPos id", id, wfpid)
+	compare(fra.t, "VReplicationWaitForPos pos", pos, wfppos)
+	return nil
+}
+
+func agentRPCTestVReplicationWaitForPos(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.VReplicationWaitForPos(ctx, tablet, wfpid, wfppos)
+	compareError(t, "VReplicationWaitForPos", err, true, true)
+}
+
+func agentRPCTestVReplicationWaitForPosPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.VReplicationWaitForPos(ctx, tablet, wfpid, wfppos)
+	expectHandleRPCPanic(t, "VReplicationWaitForPos", true /*verbose*/, err)
+}
+
 //
 // Reparenting related functions
 //
@@ -1303,6 +1327,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 
 	// VReplication methods
 	agentRPCTestVReplicationExec(ctx, t, client, tablet)
+	agentRPCTestVReplicationWaitForPos(ctx, t, client, tablet)
 
 	// Reparenting related functions
 	agentRPCTestResetReplication(ctx, t, client, tablet)
@@ -1359,6 +1384,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 
 	// VReplication methods
 	agentRPCTestVReplicationExecPanic(ctx, t, client, tablet)
+	agentRPCTestVReplicationWaitForPosPanic(ctx, t, client, tablet)
 
 	// Reparenting related functions
 	agentRPCTestResetReplicationPanic(ctx, t, client, tablet)
