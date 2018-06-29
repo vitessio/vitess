@@ -142,7 +142,7 @@ func repairReplication(ctx context.Context, agent *ActionAgent) error {
 		}
 	}
 
-	return agent.setMasterLocked(ctx, si.MasterAlias, 0, true)
+	return agent.setMasterRepairReplication(ctx, si.MasterAlias, 0, true)
 }
 
 func registerReplicationReporter(agent *ActionAgent) {
