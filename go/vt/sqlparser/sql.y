@@ -175,7 +175,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES EXTENDED FULL PROCESSLIST COLUMNS
+%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES FULL PROCESSLIST COLUMNS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -252,7 +252,7 @@ func forceEOF(yylex interface{}) {
 %type <setExpr> set_expression transaction_char isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
-%type <str> extended_opt full_opt from_database_opt tables_or_processlist_or_columns
+%type <str> full_opt from_database_opt tables_or_processlist
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
@@ -1371,14 +1371,19 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW extended_opt full_opt tables_or_processlist_or_columns from_database_opt like_or_where_opt
+| SHOW full_opt COLUMNS FROM table_name from_database_opt like_or_where_opt
+  {
+    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$6, Filter:$7}
+    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
+  }
+| SHOW full_opt tables_or_processlist from_database_opt like_or_where_opt
   {
     // this is ugly, but I couldn't find a better way for now
-    if $4 == "processlist" {
-      $$ = &Show{Type: $4}
+    if $3 == "processlist" {
+      $$ = &Show{Type: $3}
     } else {
-      showTablesOpt := &ShowTablesOpt{Extended: $2, Full:$3, DbName:$5, Filter:$6}
-      $$ = &Show{Type: $4, ShowTablesOpt: showTablesOpt}
+    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$5}
+      $$ = &Show{Type: $3, ShowTablesOpt: showTablesOpt}
     }
   }
 | SHOW show_session_or_global VARIABLES ddl_force_eof
@@ -1424,7 +1429,7 @@ show_statement:
     $$ = &Show{Type: string($2)}
   }
 
-tables_or_processlist_or_columns:
+tables_or_processlist:
   TABLES
   {
     $$ = string($1)
@@ -1432,20 +1437,6 @@ tables_or_processlist_or_columns:
 | PROCESSLIST
   {
     $$ = string($1)
-  }
-| COLUMNS
-  {
-    $$ = string($1)
-  }
-
-extended_opt:
-  /* empty */
-  {
-    $$ = ""
-  }
-| EXTENDED
-  {
-    $$ = "extended "
   }
 
 full_opt:
@@ -3048,6 +3039,7 @@ non_reserved_keyword:
 | CHARACTER
 | CHARSET
 | COLLATION
+| COLUMNS
 | COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
