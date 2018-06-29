@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strconv"
 
@@ -41,6 +42,19 @@ type Rules struct {
 // New creates a new Rules.
 func New() *Rules {
 	return &Rules{}
+}
+
+// Equal returns true if other is equal to this object, otherwise false.
+func (qrs *Rules) Equal(other *Rules) bool {
+	if len(qrs.rules) != len(other.rules) {
+		return false
+	}
+	for i := 0; i < len(qrs.rules); i++ {
+		if !qrs.rules[i].Equal(other.rules[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // Copy performs a deep copy of Rules.
@@ -193,10 +207,34 @@ func (nr namedRegexp) MarshalJSON() ([]byte, error) {
 	return json.Marshal(nr.name)
 }
 
+// Equal returns true if other is equal to this namedRegexp, otherwise false.
+func (nr namedRegexp) Equal(other namedRegexp) bool {
+	if nr.Regexp == nil || other.Regexp == nil {
+		return nr.Regexp == nil && other.Regexp == nil && nr.name == other.name
+	}
+	return nr.name == other.name && nr.String() == other.String()
+}
+
 // NewQueryRule creates a new Rule.
 func NewQueryRule(description, name string, act Action) (qr *Rule) {
 	// We ignore act because there's only one action right now
 	return &Rule{Description: description, Name: name, act: act}
+}
+
+// Equal returns true if other is equal to this Rule, otherwise false.
+func (qr *Rule) Equal(other *Rule) bool {
+	if qr == nil || other == nil {
+		return qr == nil && other == nil
+	}
+	return (qr.Description == other.Description &&
+		qr.Name == other.Name &&
+		qr.requestIP.Equal(other.requestIP) &&
+		qr.user.Equal(other.user) &&
+		qr.query.Equal(other.query) &&
+		reflect.DeepEqual(qr.plans, other.plans) &&
+		reflect.DeepEqual(qr.tableNames, other.tableNames) &&
+		reflect.DeepEqual(qr.bindVarConds, other.bindVarConds) &&
+		qr.act == other.act)
 }
 
 // Copy performs a deep copy of a Rule.
