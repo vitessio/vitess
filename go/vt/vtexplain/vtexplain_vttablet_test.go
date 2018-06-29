@@ -40,7 +40,7 @@ create table t3 (
 );
 `
 
-	ddls, err := parseSchema(testSchema)
+	ddls, err := parseSchema(testSchema, &Options{StrictDDL: true})
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
 	}

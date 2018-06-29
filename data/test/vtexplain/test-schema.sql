@@ -49,3 +49,21 @@ create table table_not_in_vschema (
 	id bigint,
 	primary key (id)
 ) Engine=InnoDB;
+
+/*
+ * This is not used by the tests themselves, but is used to verify
+ * that the vtexplain schema parsing logic can properly skip past
+ * the mysql comments used by partitioned tables.
+ */
+create table test_partitioned (
+	id bigint,
+	date_create int,
+	primary key(id)
+) Engine=InnoDB
+/*!50100 PARTITION BY RANGE (date_create)
+(PARTITION p2018_06_14 VALUES LESS THAN (1528959600) ENGINE = InnoDB,
+ PARTITION p2018_06_15 VALUES LESS THAN (1529046000) ENGINE = InnoDB,
+ PARTITION p2018_06_16 VALUES LESS THAN (1529132400) ENGINE = InnoDB,
+ PARTITION p2018_06_17 VALUES LESS THAN (1529218800) ENGINE = InnoDB)
+*/
+;
