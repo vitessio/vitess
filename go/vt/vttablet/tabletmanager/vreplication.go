@@ -25,3 +25,8 @@ import (
 func (agent *ActionAgent) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
 	panic("unimplemented")
 }
+
+// VReplicationWaitForPos waits for the specified position.
+func (agent *ActionAgent) VReplicationWaitForPos(ctx context.Context, id int, pos string) error {
+	panic("unimplemented")
+}

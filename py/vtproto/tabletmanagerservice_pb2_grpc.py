@@ -167,6 +167,11 @@ class TabletManagerStub(object):
         request_serializer=tabletmanagerdata__pb2.VReplicationExecRequest.SerializeToString,
         response_deserializer=tabletmanagerdata__pb2.VReplicationExecResponse.FromString,
         )
+    self.VReplicationWaitForPos = channel.unary_unary(
+        '/tabletmanagerservice.TabletManager/VReplicationWaitForPos',
+        request_serializer=tabletmanagerdata__pb2.VReplicationWaitForPosRequest.SerializeToString,
+        response_deserializer=tabletmanagerdata__pb2.VReplicationWaitForPosResponse.FromString,
+        )
     self.ResetReplication = channel.unary_unary(
         '/tabletmanagerservice.TabletManager/ResetReplication',
         request_serializer=tabletmanagerdata__pb2.ResetReplicationRequest.SerializeToString,
@@ -483,6 +488,13 @@ class TabletManagerServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
+  def VReplicationWaitForPos(self, request, context):
+    # missing associated documentation comment in .proto file
+    pass
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def ResetReplication(self, request, context):
     """
     Reparenting related functions
@@ -736,6 +748,11 @@ def add_TabletManagerServicer_to_server(servicer, server):
           servicer.VReplicationExec,
           request_deserializer=tabletmanagerdata__pb2.VReplicationExecRequest.FromString,
           response_serializer=tabletmanagerdata__pb2.VReplicationExecResponse.SerializeToString,
+      ),
+      'VReplicationWaitForPos': grpc.unary_unary_rpc_method_handler(
+          servicer.VReplicationWaitForPos,
+          request_deserializer=tabletmanagerdata__pb2.VReplicationWaitForPosRequest.FromString,
+          response_serializer=tabletmanagerdata__pb2.VReplicationWaitForPosResponse.SerializeToString,
       ),
       'ResetReplication': grpc.unary_unary_rpc_method_handler(
           servicer.ResetReplication,

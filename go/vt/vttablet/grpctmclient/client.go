@@ -594,6 +594,19 @@ func (client *Client) VReplicationExec(ctx context.Context, tablet *topodatapb.T
 	return response.Result, nil
 }
 
+// VReplicationWaitForPos is part of the tmclient.TabletManagerClient interface.
+func (client *Client) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error {
+	cc, c, err := client.dial(tablet)
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	if _, err = c.VReplicationWaitForPos(ctx, &tabletmanagerdatapb.VReplicationWaitForPosRequest{Id: int64(id), Position: pos}); err != nil {
+		return err
+	}
+	return nil
+}
+
 //
 // Reparenting related functions
 //
