@@ -139,7 +139,7 @@ func (h *HybridGateway) route(ctx context.Context, target *querypb.Target, conn 
 		err, _ := inner(ctx, target, h.l2vtgates[0])
 		return NewShardError(err, target, nil, inTransaction)
 	}
-	return NewShardError(topo.ErrNoNode, target, nil, inTransaction)
+	return NewShardError(topo.NewError(topo.NoNode, ""), target, nil, inTransaction)
 }
 
 // GetAggregateStats is part of the srvtopo.TargetStats interface, included
@@ -148,7 +148,7 @@ func (h *HybridGateway) GetAggregateStats(target *querypb.Target) (*querypb.Aggr
 	// Start with the local Gateway part.
 	if h.gw != nil {
 		stats, qs, err := h.gw.GetAggregateStats(target)
-		if err != topo.ErrNoNode {
+		if !topo.IsErrType(err, topo.NoNode) {
 			// The local gateway either worked, or returned an
 			// error. But it knows about this target.
 			return stats, qs, err
@@ -159,7 +159,7 @@ func (h *HybridGateway) GetAggregateStats(target *querypb.Target) (*querypb.Aggr
 	// try the remote ones.
 	for _, l := range h.l2vtgates {
 		stats, err := l.GetAggregateStats(target)
-		if err != topo.ErrNoNode {
+		if !topo.IsErrType(err, topo.NoNode) {
 			// This remote gateway either worked, or returned an
 			// error. But it knows about this target.
 			return stats, l, err
@@ -167,7 +167,7 @@ func (h *HybridGateway) GetAggregateStats(target *querypb.Target) (*querypb.Aggr
 	}
 
 	// We couldn't find a way to resolve this.
-	return nil, nil, topo.ErrNoNode
+	return nil, nil, topo.NewError(topo.NoNode, target.String())
 }
 
 // GetMasterCell is part of the srvtopo.TargetStats interface, included
@@ -176,7 +176,7 @@ func (h *HybridGateway) GetMasterCell(keyspace, shard string) (cell string, qs q
 	// Start with the local Gateway part.
 	if h.gw != nil {
 		cell, qs, err := h.gw.GetMasterCell(keyspace, shard)
-		if err != topo.ErrNoNode {
+		if !topo.IsErrType(err, topo.NoNode) {
 			// The local gateway either worked, or returned an
 			// error. But it knows about this target.
 			return cell, qs, err
@@ -187,7 +187,7 @@ func (h *HybridGateway) GetMasterCell(keyspace, shard string) (cell string, qs q
 
 	for _, l := range h.l2vtgates {
 		cell, err := l.GetMasterCell(keyspace, shard)
-		if err != topo.ErrNoNode {
+		if !topo.IsErrType(err, topo.NoNode) {
 			// This remote gateway either worked, or returned an
 			// error. But it knows about this target.
 			return cell, l, err
@@ -195,7 +195,7 @@ func (h *HybridGateway) GetMasterCell(keyspace, shard string) (cell string, qs q
 	}
 
 	// We couldn't find a way to resolve this.
-	return "", nil, topo.ErrNoNode
+	return "", nil, topo.NewError(topo.NoNode, keyspace+"/"+shard)
 }
 
 var _ Gateway = (*HybridGateway)(nil)

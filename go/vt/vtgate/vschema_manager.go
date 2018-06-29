@@ -60,10 +60,10 @@ func (vm *VSchemaManager) watchSrvVSchema(ctx context.Context, cell string) {
 		// we don't know the real value. In this case, we want
 		// to use the previous value if it was set, or an
 		// empty vschema if it wasn't.
-		switch err {
-		case nil:
+		switch {
+		case err == nil:
 			// Good case, we can try to save that value.
-		case topo.ErrNoNode:
+		case topo.IsErrType(err, topo.NoNode):
 			// If the SrvVschema disappears, we need to clear our record.
 			// Otherwise, keep what we already had before.
 			v = nil

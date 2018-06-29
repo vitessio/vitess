@@ -1120,13 +1120,13 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	if *parent {
-		if err := wr.TopoServer().CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && err != topo.ErrNodeExists {
+		if err := wr.TopoServer().CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && !topo.IsErrType(err, topo.NodeExists) {
 			return err
 		}
 	}
 
 	err = wr.TopoServer().CreateShard(ctx, keyspace, shard)
-	if *force && err == topo.ErrNodeExists {
+	if *force && topo.IsErrType(err, topo.NodeExists) {
 		log.Infof("shard %v/%v already exists (ignoring error with -force)", keyspace, shard)
 		err = nil
 	}
@@ -1450,10 +1450,10 @@ func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 	for _, ks := range keyspaceShards {
 		err := wr.DeleteShard(ctx, ks.Keyspace, ks.Shard, *recursive, *evenIfServing)
-		switch err {
-		case nil:
+		switch {
+		case err == nil:
 			// keep going
-		case topo.ErrNoNode:
+		case topo.IsErrType(err, topo.NoNode):
 			log.Infof("Shard %v/%v doesn't exist, skipping it", ks.Keyspace, ks.Shard)
 		default:
 			return err
@@ -1497,7 +1497,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		}
 	}
 	err = wr.TopoServer().CreateKeyspace(ctx, keyspace, ki)
-	if *force && err == topo.ErrNodeExists {
+	if *force && topo.IsErrType(err, topo.NodeExists) {
 		wr.Logger().Infof("keyspace %v already exists (ignoring error with -force)", keyspace)
 		err = nil
 	}

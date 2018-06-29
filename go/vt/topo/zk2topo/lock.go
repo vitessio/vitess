@@ -44,7 +44,7 @@ func (zs *Server) Lock(ctx context.Context, dirPath, contents string) (topo.Lock
 	// Create the locks path, possibly creating the parent.
 	nodePath, err := CreateRecursive(ctx, zs.conn, locksDir, []byte(contents), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), 1)
 	if err != nil {
-		return nil, convertError(err)
+		return nil, convertError(err, locksDir)
 	}
 
 	err = obtainQueueLock(ctx, zs.conn, nodePath)
@@ -52,9 +52,9 @@ func (zs *Server) Lock(ctx context.Context, dirPath, contents string) (topo.Lock
 		var errToReturn error
 		switch err {
 		case context.DeadlineExceeded:
-			errToReturn = topo.ErrTimeout
+			errToReturn = topo.NewError(topo.Timeout, nodePath)
 		case context.Canceled:
-			errToReturn = topo.ErrInterrupted
+			errToReturn = topo.NewError(topo.Interrupted, nodePath)
 		default:
 			errToReturn = fmt.Errorf("failed to obtain action lock: %v %v", nodePath, err)
 		}

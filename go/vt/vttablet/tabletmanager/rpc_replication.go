@@ -461,7 +461,7 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 			typeChanged = true
 			return nil
 		}
-		return topo.ErrNoUpdateNeeded
+		return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
 	})
 	if err != nil {
 		return err
@@ -500,7 +500,7 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodat
 			typeChanged = true
 			return nil
 		}
-		return topo.ErrNoUpdateNeeded
+		return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
 	}); err != nil {
 		return err
 	}

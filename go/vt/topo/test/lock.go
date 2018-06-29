@@ -93,7 +93,7 @@ func checkLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 
 	// test we can't take the lock again
 	fastCtx, cancel := context.WithTimeout(ctx, timeUntilLockIsTaken)
-	if _, err := conn.Lock(fastCtx, keyspacePath, "again"); err != topo.ErrTimeout {
+	if _, err := conn.Lock(fastCtx, keyspacePath, "again"); !topo.IsErrType(err, topo.Timeout) {
 		t.Fatalf("Lock(again): %v", err)
 	}
 	cancel()
@@ -104,7 +104,7 @@ func checkLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 		time.Sleep(timeUntilLockIsTaken)
 		cancel()
 	}()
-	if _, err := conn.Lock(interruptCtx, keyspacePath, "interrupted"); err != topo.ErrInterrupted {
+	if _, err := conn.Lock(interruptCtx, keyspacePath, "interrupted"); !topo.IsErrType(err, topo.Interrupted) {
 		t.Fatalf("Lock(interrupted): %v", err)
 	}
 

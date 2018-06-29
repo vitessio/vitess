@@ -118,10 +118,10 @@ func runWorkflowManagerElection(ts *topo.Server) {
 		go func() {
 			for {
 				ctx, err := mp.WaitForMastership()
-				switch err {
-				case nil:
+				switch {
+				case err == nil:
 					vtctl.WorkflowManager.Run(ctx)
-				case topo.ErrInterrupted:
+				case topo.IsErrType(err, topo.Interrupted):
 					return
 				default:
 					log.Errorf("Got error while waiting for master, will retry in 5s: %v", err)

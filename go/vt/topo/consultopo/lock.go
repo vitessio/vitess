@@ -43,7 +43,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		// easiest way to do this is to return convertError(err).
 		// It may lose some of the context, if this is an issue,
 		// maybe logging the error would work here.
-		return nil, convertError(err)
+		return nil, convertError(err, dirPath)
 	}
 
 	lockPath := path.Join(s.root, dirPath, locksFilename)
@@ -66,7 +66,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		s.mu.Unlock()
 		select {
 		case <-ctx.Done():
-			return nil, convertError(ctx.Err())
+			return nil, convertError(ctx.Err(), dirPath)
 		case <-li.done:
 		}
 

@@ -39,7 +39,7 @@ func checkKeyspace(t *testing.T, ts *topo.Server) {
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Errorf("CreateKeyspace: %v", err)
 	}
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != topo.ErrNodeExists {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); !topo.IsErrType(err, topo.NodeExists) {
 		t.Errorf("CreateKeyspace(again) is not ErrNodeExists: %v", err)
 	}
 
@@ -47,7 +47,7 @@ func checkKeyspace(t *testing.T, ts *topo.Server) {
 	if err := ts.DeleteKeyspace(ctx, "test_keyspace"); err != nil {
 		t.Errorf("DeleteKeyspace: %v", err)
 	}
-	if err := ts.DeleteKeyspace(ctx, "test_keyspace"); err != topo.ErrNoNode {
+	if err := ts.DeleteKeyspace(ctx, "test_keyspace"); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("DeleteKeyspace(again): %v", err)
 	}
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {

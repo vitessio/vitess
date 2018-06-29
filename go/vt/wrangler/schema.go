@@ -71,12 +71,12 @@ func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias *topodatapb.Ta
 // that fail to reload within the context deadline.
 func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, replicationPos string, concurrency *sync2.Semaphore, includeMaster bool) {
 	tablets, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
-	switch err {
-	case topo.ErrPartialResult:
+	switch {
+	case topo.IsErrType(err, topo.PartialResult):
 		// We got a partial result. Do what we can, but warn
 		// that some may be missed.
 		wr.logger.Warningf("ReloadSchemaShard(%v/%v) got a partial tablet list. Some tablets may not have schema reloaded (use vtctl ReloadSchema to fix individual tablets)", keyspace, shard)
-	case nil:
+	case err == nil:
 		// Good case, keep going too.
 	default:
 		// This is best-effort, so just log it and move on.
@@ -98,7 +98,12 @@ func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, repl
 			defer wg.Done()
 			concurrency.Acquire()
 			defer concurrency.Release()
-			if err := wr.tmc.ReloadSchema(ctx, tablet, replicationPos); err != nil {
+			pos := replicationPos
+			// Master is always up-to-date. So, don't wait for position.
+			if tablet.Type == topodatapb.TabletType_MASTER {
+				pos = ""
+			}
+			if err := wr.tmc.ReloadSchema(ctx, tablet, pos); err != nil {
 				wr.logger.Warningf(
 					"Failed to reload schema on slave tablet %v in %v/%v (use vtctl ReloadSchema to try again): %v",
 					topoproto.TabletAliasString(tablet.Alias), keyspace, shard, err)

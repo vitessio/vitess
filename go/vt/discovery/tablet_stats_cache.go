@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 )
 
 // TabletStatsCache is a HealthCheckStatsListener that keeps both the
@@ -484,14 +485,14 @@ func (tc *TabletStatsCache) Unsubscribe(i int) error {
 func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.AggregateStats, error) {
 	e := tc.getEntry(target.Keyspace, target.Shard, target.TabletType)
 	if e == nil {
-		return nil, topo.ErrNoNode
+		return nil, topo.NewError(topo.NoNode, topotools.TargetIdent(target))
 	}
 
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if target.TabletType == topodatapb.TabletType_MASTER {
 		if len(e.aggregates) == 0 {
-			return nil, topo.ErrNoNode
+			return nil, topo.NewError(topo.NoNode, topotools.TargetIdent(target))
 		}
 		for _, agg := range e.aggregates {
 			return agg, nil
@@ -499,7 +500,7 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 	}
 	agg, ok := e.aggregates[target.Cell]
 	if !ok {
-		return nil, topo.ErrNoNode
+		return nil, topo.NewError(topo.NoNode, topotools.TargetIdent(target))
 	}
 	return agg, nil
 }
@@ -508,7 +509,11 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 func (tc *TabletStatsCache) GetMasterCell(keyspace, shard string) (cell string, err error) {
 	e := tc.getEntry(keyspace, shard, topodatapb.TabletType_MASTER)
 	if e == nil {
-		return "", topo.ErrNoNode
+		return "", topo.NewError(topo.NoNode, topotools.TargetIdent(&querypb.Target{
+			Keyspace:   keyspace,
+			Shard:      shard,
+			TabletType: topodatapb.TabletType_MASTER,
+		}))
 	}
 
 	e.mu.RLock()
@@ -516,7 +521,11 @@ func (tc *TabletStatsCache) GetMasterCell(keyspace, shard string) (cell string, 
 	for cell := range e.aggregates {
 		return cell, nil
 	}
-	return "", topo.ErrNoNode
+	return "", topo.NewError(topo.NoNode, topotools.TargetIdent(&querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: topodatapb.TabletType_MASTER,
+	}))
 }
 
 // Compile-time interface check.

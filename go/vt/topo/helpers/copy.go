@@ -51,7 +51,7 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) {
 			}
 
 			if err := toTS.CreateKeyspace(ctx, keyspace, ki.Keyspace); err != nil {
-				if err == topo.ErrNodeExists {
+				if topo.IsErrType(err, topo.NodeExists) {
 					log.Warningf("keyspace %v already exists", keyspace)
 				} else {
 					rec.RecordError(fmt.Errorf("CreateKeyspace(%v): %v", keyspace, err))
@@ -59,12 +59,12 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) {
 			}
 
 			vs, err := fromTS.GetVSchema(ctx, keyspace)
-			switch err {
-			case nil:
+			switch {
+			case err == nil:
 				if err := toTS.SaveVSchema(ctx, keyspace, vs); err != nil {
 					rec.RecordError(fmt.Errorf("SaveVSchema(%v): %v", keyspace, err))
 				}
-			case topo.ErrNoNode:
+			case topo.IsErrType(err, topo.NoNode):
 				// Nothing to do.
 			default:
 				rec.RecordError(fmt.Errorf("GetVSchema(%v): %v", keyspace, err))
@@ -109,7 +109,7 @@ func CopyShards(ctx context.Context, fromTS, toTS *topo.Server) {
 					}
 
 					if err := toTS.CreateShard(ctx, keyspace, shard); err != nil {
-						if err == topo.ErrNodeExists {
+						if topo.IsErrType(err, topo.NodeExists) {
 							log.Warningf("shard %v/%v already exists", keyspace, shard)
 						} else {
 							rec.RecordError(fmt.Errorf("CreateShard(%v, %v): %v", keyspace, shard, err))
@@ -164,7 +164,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS *topo.Server) {
 
 						// try to create the destination
 						err = toTS.CreateTablet(ctx, ti.Tablet)
-						if err == topo.ErrNodeExists {
+						if topo.IsErrType(err, topo.NodeExists) {
 							// update the destination tablet
 							log.Warningf("tablet %v already exists, updating it", tabletAlias)
 							_, err = toTS.UpdateTabletFields(ctx, tabletAlias, func(t *topodatapb.Tablet) error {

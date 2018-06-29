@@ -76,7 +76,7 @@ func (f *Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if _, ok := f.cells[cell]; !ok {
-		return nil, topo.ErrNoNode
+		return nil, topo.NewError(topo.NoNode, cell)
 	}
 	return &Conn{
 		factory: f,

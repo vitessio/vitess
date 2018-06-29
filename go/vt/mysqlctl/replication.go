@@ -170,7 +170,7 @@ func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Positio
 	}
 	result := qr.Rows[0][0]
 	if result.IsNull() {
-		return fmt.Errorf("WaitUntilPositionCommand(%v) failed: gtid_mode is OFF", query)
+		return fmt.Errorf("WaitUntilPositionCommand(%v) failed: replication is probably stopped", query)
 	}
 	if result.ToString() == "-1" {
 		return fmt.Errorf("timed out waiting for position %v", targetPos)

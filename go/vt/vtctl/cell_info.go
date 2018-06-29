@@ -102,7 +102,7 @@ func commandUpdateCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		if (*serverAddress == "" || ci.ServerAddress == *serverAddress) &&
 			(*root == "" || ci.Root == *root) &&
 			(*region == "" || ci.Region == *region) {
-			return topo.ErrNoUpdateNeeded
+			return topo.NewError(topo.NoUpdateNeeded, cell)
 		}
 		if *serverAddress != "" {
 			ci.ServerAddress = *serverAddress

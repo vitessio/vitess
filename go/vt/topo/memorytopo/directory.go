@@ -41,7 +41,7 @@ func (c *Conn) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.D
 	// Get the node to list.
 	n := c.factory.nodeByPath(c.cell, dirPath)
 	if n == nil {
-		return nil, topo.ErrNoNode
+		return nil, topo.NewError(topo.NoNode, dirPath)
 	}
 
 	// Check it's a directory.
