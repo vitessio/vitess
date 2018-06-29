@@ -21,9 +21,11 @@ import (
 	"flag"
 	"fmt"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -32,14 +34,23 @@ import (
 
 var tabletTypesStr = flag.String("vreplication_tablet_type", "REPLICA", "comma separated list of tablet types used as a source")
 
+// waitRetryTime can be changed to a smaller value for tests.
+var waitRetryTime = 1 * time.Second
+
 // Engine is the engine for handling vreplication.
 type Engine struct {
+	// mu synchronizes isOpen, controllers and wg.
 	mu          sync.Mutex
 	isOpen      bool
 	controllers map[int]*controller
+	// wg is used in-flight functions that can run for long periods.
+	wg sync.WaitGroup
 
-	ctx             context.Context
-	cancel          context.CancelFunc
+	// ctx is the root context for all controllers.
+	ctx context.Context
+	// cancel will cancel the root context, thereby all controllers.
+	cancel context.CancelFunc
+
 	ts              *topo.Server
 	cell            string
 	mysqld          mysqlctl.MysqlDaemon
@@ -78,10 +89,14 @@ func (vre *Engine) Close() {
 	}
 
 	vre.cancel()
+	// We still have to wait for all controllers to stop.
 	for _, ct := range vre.controllers {
 		ct.Stop()
 	}
 	vre.controllers = make(map[int]*controller)
+
+	// Wait for long-running functions to exit.
+	vre.wg.Wait()
 
 	vre.mysqld.DisableBinlogPlayback()
 	vre.isOpen = false
@@ -92,7 +107,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
 	if !vre.isOpen {
-		return nil, errors.New("VReplication engine is closed")
+		return nil, errors.New("vreplication engine is closed")
 	}
 
 	plan, err := getPlan(query)
@@ -153,6 +168,57 @@ func (vre *Engine) initController(dbClient binlogplayer.VtClient, id int) error 
 	}
 	vre.controllers[id] = ct
 	return nil
+}
+
+// WaitForPos waits for the replication to reach the specified position.
+func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
+	mPos, err := mysql.DecodePosition(pos)
+	if err != nil {
+		return err
+	}
+
+	vre.mu.Lock()
+	if !vre.isOpen {
+		vre.mu.Unlock()
+		return errors.New("vreplication engine is closed")
+	}
+	vre.wg.Add(1)
+	vre.mu.Unlock()
+	defer vre.wg.Done()
+
+	dbClient := vre.dbClientFactory()
+	if err := dbClient.Connect(); err != nil {
+		return err
+	}
+	defer dbClient.Close()
+
+	for {
+		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationPos(uint32(id)), 10)
+		switch {
+		case err != nil:
+			return err
+		case len(qr.Rows) == 0:
+			return fmt.Errorf("vreplication stream %d not found", id)
+		case len(qr.Rows) > 1 || len(qr.Rows[0]) != 1:
+			return fmt.Errorf("unexpected result: %v", qr)
+		}
+		current, err := mysql.DecodePosition(qr.Rows[0][0].ToString())
+		if err != nil {
+			return err
+		}
+
+		if current.AtLeast(mPos) {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-vre.ctx.Done():
+			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
+		case <-time.After(waitRetryTime):
+		}
+	}
 }
 
 func readRow(dbClient binlogplayer.VtClient, id int) (map[string]string, error) {

@@ -18,7 +18,9 @@ package vreplication
 
 import (
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
@@ -212,5 +214,109 @@ func TestEngineSelect(t *testing.T) {
 	gotQuery := dbClient.Stdout[len(dbClient.Stdout)-1]
 	if gotQuery != wantQuery {
 		t.Errorf("Query: %v, want %v", gotQuery, wantQuery)
+	}
+}
+
+func TestWaitForPos(t *testing.T) {
+	savedRetryTime := waitRetryTime
+	defer func() { waitRetryTime = savedRetryTime }()
+	waitRetryTime = 10 * time.Millisecond
+
+	dbClient := binlogplayer.NewVtClientMock()
+	dbClient.AddResult(&sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+	}}})
+	dbClient.AddResult(&sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/0-1-1084"),
+	}}})
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	dbClientFactory := func() binlogplayer.VtClient { return dbClient }
+	vre := NewEngine(createTopo(), testCell, mysqld, dbClientFactory)
+	if err := vre.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if err := vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084"); err != nil {
+		t.Fatal(err)
+	}
+	if duration := time.Since(start); duration < 10*time.Microsecond {
+		t.Errorf("duration: %v, want < 10ms", duration)
+	}
+	want := []string{
+		"SELECT pos FROM _vt.vreplication WHERE id=1",
+		"SELECT pos FROM _vt.vreplication WHERE id=1",
+	}
+	if !reflect.DeepEqual(dbClient.Stdout, want) {
+		t.Errorf("Queries:\n%v, want:\n%v", strings.Join(dbClient.Stdout, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestWaitForPosError(t *testing.T) {
+	dbClient := binlogplayer.NewVtClientMock()
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	dbClientFactory := func() binlogplayer.VtClient { return dbClient }
+	vre := NewEngine(createTopo(), testCell, mysqld, dbClientFactory)
+
+	err := vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
+	want := `vreplication engine is closed`
+	if err == nil || err.Error() != want {
+		t.Errorf("WaitForPos: %v, want %v", err, want)
+	}
+
+	if err := vre.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	err = vre.WaitForPos(context.Background(), 1, "BadFlavor/0-1-1084")
+	want = `parse error: unknown GTIDSet flavor "BadFlavor"`
+	if err == nil || err.Error() != want {
+		t.Errorf("WaitForPos: %v, want %v", err, want)
+	}
+
+	dbClient.AddResult(&sqltypes.Result{Rows: [][]sqltypes.Value{{}}})
+	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
+	want = "unexpected result: &{[] 0 0 [[]] <nil>}"
+	if err == nil || err.Error() != want {
+		t.Errorf("WaitForPos: %v, want %v", err, want)
+	}
+
+	dbClient.AddResult(&sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+	}, {
+		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+	}}})
+	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
+	want = `unexpected result: &{[] 0 0 [[VARBINARY("MariaDB/0-1-1083")] [VARBINARY("MariaDB/0-1-1083")]] <nil>}`
+	if err == nil || err.Error() != want {
+		t.Errorf("WaitForPos: %v, want %v", err, want)
+	}
+}
+
+func TestWaitForPosCancel(t *testing.T) {
+	dbClient := binlogplayer.NewVtClientMock()
+	dbClient.AddResult(&sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+	}}})
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	dbClientFactory := func() binlogplayer.VtClient { return dbClient }
+	vre := NewEngine(createTopo(), testCell, mysqld, dbClientFactory)
+	if err := vre.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := vre.WaitForPos(ctx, 1, "MariaDB/0-1-1084")
+	if err == nil || err != context.Canceled {
+		t.Errorf("WaitForPos: %v, want %v", err, context.Canceled)
+	}
+
+	go func() {
+		time.Sleep(5 * time.Millisecond)
+		vre.Close()
+	}()
+	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
+	want := "vreplication is closing: context canceled"
+	if err == nil || err.Error() != want {
+		t.Errorf("WaitForPos: %v, want %v", err, want)
 	}
 }
