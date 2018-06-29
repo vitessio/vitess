@@ -18,7 +18,6 @@ package topocustomrule
 
 import (
 	"context"
-	"reflect"
 	"testing"
 	"time"
 
@@ -55,7 +54,7 @@ func waitForValue(t *testing.T, qsc *tabletservermock.Controller, expected *rule
 	for {
 		val := qsc.GetQueryRules(topoCustomRuleSource)
 		if val != nil {
-			if reflect.DeepEqual(val, expected) {
+			if val.Equal(expected) {
 				return
 			}
 		}
