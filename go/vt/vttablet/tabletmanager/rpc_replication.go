@@ -404,7 +404,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	return agent.setMasterLocked(ctx, parentAlias, timeCreatedNS, forceStartSlave)
 }
 
-func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) (err error) {
 	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err
@@ -435,14 +435,15 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 		shouldbeReplicating = true
 	}
 
-	// Lock the shard before doing any replication repair work.
-	ctx, unlock, lockErr := agent.TopoServer.LockShard(ctx, parent.Tablet.GetKeyspace(), parent.Tablet.GetShard(), fmt.Sprintf("repairReplication to %v as parent)", topoproto.TabletAliasString(parentAlias)))
-	if lockErr != nil {
-		return lockErr
+	if topo.CheckShardLocked(ctx, parent.Tablet.GetKeyspace(), parent.Tablet.GetShard()); err != nil {
+		// Lock the shard before doing any replication repair work if the shard is not already locked.
+		_, unlock, lockErr := agent.TopoServer.LockShard(ctx, parent.Tablet.GetKeyspace(), parent.Tablet.GetShard(), fmt.Sprintf("repairReplication to %v as parent)", topoproto.TabletAliasString(parentAlias)))
+		if lockErr != nil {
+			return lockErr
+		}
+
+		defer unlock(&err)
 	}
-
-	defer unlock(&err)
-
 	// If using semi-sync, we need to enable it before connecting to master.
 	if *enableSemiSync {
 		tt := agent.Tablet().Type
