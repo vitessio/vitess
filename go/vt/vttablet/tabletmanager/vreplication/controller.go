@@ -72,7 +72,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	ct.id = uint32(id)
 
 	// Nothing to do if replication is stopped.
-	if params["state"] == binlogplayer.VRStopped {
+	if params["state"] == binlogplayer.BlpStopped {
 		ct.cancel = func() {}
 		close(ct.done)
 		return ct, nil

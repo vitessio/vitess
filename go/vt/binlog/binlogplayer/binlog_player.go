@@ -51,12 +51,12 @@ var (
 	// BlplTransaction is the key for the stats map.
 	BlplTransaction = "Transaction"
 
-	// VRRunning is for the Running state.
-	VRRunning = "Running"
-	// VRStopped is for the Stopped state.
-	VRStopped = "Stopped"
-	// VRError is for the Error state.
-	VRError = "Error"
+	// BlpRunning is for the Running state.
+	BlpRunning = "Running"
+	// BlpStopped is for the Stopped state.
+	BlpStopped = "Stopped"
+	// BlpError is for the Error state.
+	BlpError = "Error"
 )
 
 // Stats is the internal stats of a player. It is a different
@@ -88,7 +88,7 @@ func (bps *Stats) GetLastPosition() mysql.Position {
 	return bps.lastPosition
 }
 
-// NewStats creates a new Stats structure
+// NewStats creates a new Stats structure.
 func NewStats() *Stats {
 	bps := &Stats{}
 	bps.Timings = stats.NewTimings("", "", "")
@@ -96,7 +96,7 @@ func NewStats() *Stats {
 	return bps
 }
 
-// BinlogPlayer is handling reading a stream of updates from BinlogServer
+// BinlogPlayer is for reading a stream of updates from BinlogServer.
 type BinlogPlayer struct {
 	tablet   *topodatapb.Tablet
 	dbClient VtClient
@@ -169,9 +169,9 @@ func NewBinlogPlayerTables(dbClient VtClient, tablet *topodatapb.Tablet, tables 
 	return result, nil
 }
 
-// writeRecoveryPosition will write the current GTID as the recovery position
+// writeRecoveryPosition writes the current GTID as the recovery position
 // for the next transaction.
-// We will also try to get the timestamp for the transaction. Two cases:
+// It also tries to get the timestamp for the transaction. Two cases:
 // - we have statements, and they start with a SET TIMESTAMP that we
 //   can parse: then we update transaction_timestamp in vreplication
 //   with it, and set SecondsBehindMaster to now() - transaction_timestamp
@@ -204,7 +204,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	return nil
 }
 
-// ReadStartPosition will return the current start position for
+// ReadStartPosition returns the current start position for
 // the provided binlog player.
 func ReadStartPosition(dbClient VtClient, uid uint32) (string, error) {
 	selectRecovery := ReadVReplicationPos(uid)
@@ -218,7 +218,7 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (string, error) {
 	return qr.Rows[0][0].ToString(), nil
 }
 
-// readThrottlerSettings will retrieve the throttler settings for
+// readThrottlerSettings retrieves the throttler settings for
 // vreplication from the checkpoint table.
 func (blp *BinlogPlayer) readThrottlerSettings() (int64, int64, error) {
 	selectThrottlerSettings := ReadVReplicationThrottlerSettings(blp.uid)
@@ -310,14 +310,14 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 }
 
 // ApplyBinlogEvents makes an RPC request to BinlogServer
-// and processes the events. It will return nil if the provided context
+// and processes the events. It returns nil if the provided context
 // was canceled, or if we reached the stopping point.
-// Before returning, it will update vreplication in state to "Error" or "Stopped".
+// Before returning, it updates vreplication in state to "Error" or "Stopped".
 func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	msg, err := blp.applyEvents(ctx)
-	state := VRStopped
+	state := BlpStopped
 	if err != nil {
-		state = VRError
+		state = BlpError
 		msg = err.Error()
 	}
 	// Get rid of single quotes before generating DML.
@@ -452,7 +452,7 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) (string, error) {
 				select {
 				case <-ctx.Done():
 					if ctx.Err() == context.Canceled {
-						if err := setVReplicationState(blp.dbClient, blp.uid, VRStopped, context.Canceled.Error()); err != nil {
+						if err := setVReplicationState(blp.dbClient, blp.uid, BlpStopped, context.Canceled.Error()); err != nil {
 							log.Errorf("Error writing stop state: %v", err)
 						}
 						return ctx.Err().Error(), nil
@@ -526,7 +526,7 @@ func CreateVReplication(index uint32, workflow string, source *binlogdatapb.Binl
 	return fmt.Sprintf("INSERT INTO _vt.vreplication "+
 		"(id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) "+
 		"VALUES (%v, '%v', '%s', '%v', %v, %v, %v, 0, '%v')",
-		index, workflow, source.String(), position, maxTPS, maxReplicationLag, timeUpdated, VRStopped)
+		index, workflow, source.String(), position, maxTPS, maxReplicationLag, timeUpdated, BlpStopped)
 }
 
 // updateVReplicationPos returns a statement to update a value in the

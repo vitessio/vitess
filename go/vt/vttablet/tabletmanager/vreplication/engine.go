@@ -75,8 +75,34 @@ func (vre *Engine) Open(ctx context.Context) error {
 	if vre.isOpen {
 		return nil
 	}
+
 	vre.ctx, vre.cancel = context.WithCancel(ctx)
 	vre.isOpen = true
+	if err := vre.initAll(); err != nil {
+		defer vre.Close()
+		return err
+	}
+	return nil
+}
+
+func (vre *Engine) initAll() error {
+	dbClient := vre.dbClientFactory()
+	if err := dbClient.Connect(); err != nil {
+		return err
+	}
+	defer dbClient.Close()
+
+	rows, err := readAllRows(dbClient)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		ct, err := newController(vre.ctx, row, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr)
+		if err != nil {
+			return err
+		}
+		vre.controllers[int(ct.id)] = ct
+	}
 	return nil
 }
 
@@ -221,19 +247,35 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 	}
 }
 
+func readAllRows(dbClient binlogplayer.VtClient) ([]map[string]string, error) {
+	qr, err := dbClient.ExecuteFetch("select * from _vt.vreplication", 10000)
+	if err != nil {
+		return nil, err
+	}
+	maps := make([]map[string]string, len(qr.Rows))
+	for i := range qr.Rows {
+		mrow, err := rowToMap(qr, i)
+		if err != nil {
+			return nil, err
+		}
+		maps[i] = mrow
+	}
+	return maps, nil
+}
+
 func readRow(dbClient binlogplayer.VtClient, id int) (map[string]string, error) {
 	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from _vt.vreplication where id = %d", id), 10)
 	if err != nil {
 		return nil, err
 	}
-	return resultToMap(qr)
-}
-
-func resultToMap(qr *sqltypes.Result) (map[string]string, error) {
 	if len(qr.Rows) != 1 {
 		return nil, fmt.Errorf("unexpected number of rows: %v", qr)
 	}
-	row := qr.Rows[0]
+	return rowToMap(qr, 0)
+}
+
+func rowToMap(qr *sqltypes.Result, rownum int) (map[string]string, error) {
+	row := qr.Rows[rownum]
 	m := make(map[string]string, len(row))
 	for i, fld := range qr.Fields {
 		if row[i].IsNull() {

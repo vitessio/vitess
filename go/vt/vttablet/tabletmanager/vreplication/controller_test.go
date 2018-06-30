@@ -56,7 +56,7 @@ func TestControllerKeyRange(t *testing.T) {
 
 	params := map[string]string{
 		"id":     "1",
-		"state":  binlogplayer.VRRunning,
+		"state":  binlogplayer.BlpRunning,
 		"source": `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 		"pos":    testPos,
 	}
@@ -96,7 +96,7 @@ func TestControllerTables(t *testing.T) {
 
 	params := map[string]string{
 		"id":     "1",
-		"state":  binlogplayer.VRRunning,
+		"state":  binlogplayer.BlpRunning,
 		"source": `keyspace:"ks" shard:"0" tables:"table1" tables:"/funtables_/" `,
 		"pos":    testPos,
 	}
@@ -168,7 +168,7 @@ func TestControllerBadID(t *testing.T) {
 func TestControllerStopped(t *testing.T) {
 	params := map[string]string{
 		"id":    "1",
-		"state": binlogplayer.VRStopped,
+		"state": binlogplayer.BlpStopped,
 	}
 
 	ct, err := newController(context.Background(), params, nil, nil, nil, "", "")
@@ -191,7 +191,7 @@ func TestControllerOverrides(t *testing.T) {
 
 	params := map[string]string{
 		"id":           "1",
-		"state":        binlogplayer.VRRunning,
+		"state":        binlogplayer.BlpRunning,
 		"source":       `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 		"pos":          testPos,
 		"cell":         testCell,
@@ -232,7 +232,7 @@ func TestControllerCanceledContext(t *testing.T) {
 
 	params := map[string]string{
 		"id":     "1",
-		"state":  binlogplayer.VRRunning,
+		"state":  binlogplayer.BlpRunning,
 		"source": `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 		"pos":    testPos,
 	}
@@ -274,7 +274,7 @@ func TestControllerRetry(t *testing.T) {
 
 	params := map[string]string{
 		"id":           "1",
-		"state":        binlogplayer.VRRunning,
+		"state":        binlogplayer.BlpRunning,
 		"source":       `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 		"pos":          testPos,
 		"cell":         testCell,
@@ -302,7 +302,7 @@ func TestControllerStopPosition(t *testing.T) {
 
 	params := map[string]string{
 		"id":       "1",
-		"state":    binlogplayer.VRRunning,
+		"state":    binlogplayer.BlpRunning,
 		"source":   `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 		"pos":      testPos,
 		"stop_pos": "MariaDB/0-1-1235",
