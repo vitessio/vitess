@@ -72,6 +72,7 @@ type Stats struct {
 	lastPosition      mysql.Position
 
 	SecondsBehindMaster sync2.AtomicInt64
+	LastMessage         sync2.AtomicString
 }
 
 // SetLastPosition sets the last replication position.
@@ -81,8 +82,8 @@ func (bps *Stats) SetLastPosition(pos mysql.Position) {
 	bps.lastPosition = pos
 }
 
-// GetLastPosition gets the last replication position.
-func (bps *Stats) GetLastPosition() mysql.Position {
+// LastPosition gets the last replication position.
+func (bps *Stats) LastPosition() mysql.Position {
 	bps.lastPositionMutex.Lock()
 	defer bps.lastPositionMutex.Unlock()
 	return bps.lastPosition
@@ -314,12 +315,19 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 // was canceled, or if we reached the stopping point.
 // Before returning, it updates vreplication in state to "Error" or "Stopped".
 func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
+	if err := setVReplicationState(blp.dbClient, blp.uid, BlpRunning, ""); err != nil {
+		log.Errorf("Error writing Running state: %v", err)
+	}
+	blp.blplStats.LastMessage.Set("")
+
 	msg, err := blp.applyEvents(ctx)
+
 	state := BlpStopped
 	if err != nil {
 		state = BlpError
 		msg = err.Error()
 	}
+	blp.blplStats.LastMessage.Set(msg)
 	// Get rid of single quotes before generating DML.
 	msg = strings.Replace(msg, "'", "", -1)
 	if err := setVReplicationState(blp.dbClient, blp.uid, state, msg); err != nil {

@@ -62,6 +62,8 @@ func TestControllerKeyRange(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewVtClientMock()
+	// update state
+	dbClient.AddResult(testDMLResponse)
 	// select tps
 	dbClient.AddResult(testTPSResponse)
 	// insert into t
@@ -80,6 +82,7 @@ func TestControllerKeyRange(t *testing.T) {
 	defer ct.Stop()
 
 	expectCommit(t, dbClient, []string{
+		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
 		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",
@@ -102,6 +105,8 @@ func TestControllerTables(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewVtClientMock()
+	// update state
+	dbClient.AddResult(testDMLResponse)
 	// select tps
 	dbClient.AddResult(testTPSResponse)
 	// insert into t
@@ -145,6 +150,7 @@ func TestControllerTables(t *testing.T) {
 	defer ct.Stop()
 
 	expectCommit(t, dbClient, []string{
+		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
 		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",
@@ -199,6 +205,8 @@ func TestControllerOverrides(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewVtClientMock()
+	// update state
+	dbClient.AddResult(testDMLResponse)
 	// select tps
 	dbClient.AddResult(testTPSResponse)
 	// insert into t
@@ -217,6 +225,7 @@ func TestControllerOverrides(t *testing.T) {
 	defer ct.Stop()
 
 	expectCommit(t, dbClient, []string{
+		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
 		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",
@@ -309,6 +318,8 @@ func TestControllerStopPosition(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewVtClientMock()
+	// update state
+	dbClient.AddResult(testDMLResponse)
 	// select tps
 	dbClient.AddResult(testTPSResponse)
 	// insert into t
@@ -327,6 +338,7 @@ func TestControllerStopPosition(t *testing.T) {
 	defer ct.Stop()
 
 	expectCommit(t, dbClient, []string{
+		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
 		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",

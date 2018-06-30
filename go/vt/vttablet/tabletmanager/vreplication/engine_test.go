@@ -31,6 +31,8 @@ import (
 )
 
 func TestEngineOpen(t *testing.T) {
+	defer func() { globalStats = &vrStats{} }()
+
 	ts := createTopo()
 	_ = addTablet(ts, 100, "0", topodatapb.TabletType_REPLICA, true, true)
 	_ = newFakeBinlogClient()
@@ -50,6 +52,8 @@ func TestEngineOpen(t *testing.T) {
 		),
 		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > |MariaDB/0-1-1083`,
 	))
+	// update state
+	dbClient.AddResult(testDMLResponse)
 	// select tps
 	dbClient.AddResult(testTPSResponse)
 	// insert into t
@@ -61,6 +65,11 @@ func TestEngineOpen(t *testing.T) {
 	}
 	defer vre.Close()
 
+	// Verify stats
+	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
+		t.Errorf("stats are mismatched: %v, wnat %v", globalStats.controllers, vre.controllers)
+	}
+
 	ct := vre.controllers[1]
 	if ct == nil || ct.id != 1 {
 		t.Errorf("ct: %v, id should be 1", ct)
@@ -71,6 +80,7 @@ func TestEngineOpen(t *testing.T) {
 
 	expectCommit(t, dbClient, []string{
 		"select * from _vt.vreplication",
+		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
 		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",
@@ -80,6 +90,8 @@ func TestEngineOpen(t *testing.T) {
 }
 
 func TestEngineExec(t *testing.T) {
+	defer func() { globalStats = &vrStats{} }()
+
 	ts := createTopo()
 	_ = addTablet(ts, 100, "0", topodatapb.TabletType_REPLICA, true, true)
 	_ = newFakeBinlogClient()
@@ -108,6 +120,8 @@ func TestEngineExec(t *testing.T) {
 		),
 		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > |MariaDB/0-1-1083`,
 	))
+	// update state
+	dbClient.AddResult(testDMLResponse)
 	// select tps
 	dbClient.AddResult(testTPSResponse)
 	// insert into t
@@ -135,12 +149,18 @@ func TestEngineExec(t *testing.T) {
 		"select * from _vt.vreplication",
 		"insert into _vt.vreplication values (null)",
 		"select * from _vt.vreplication where id = 1",
+		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
 		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",
 		"UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=",
 		"COMMIT",
 	})
+
+	// Verify stats
+	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
+		t.Errorf("stats are mismatched: %v, wnat %v", globalStats.controllers, vre.controllers)
+	}
 
 	// Test Update
 
@@ -156,6 +176,8 @@ func TestEngineExec(t *testing.T) {
 		),
 		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > |MariaDB/0-1-1084`,
 	))
+	// update state
+	dbClient.AddResult(testDMLResponse)
 	// select tps
 	dbClient.AddResult(testTPSResponse)
 	// insert into t
@@ -181,12 +203,18 @@ func TestEngineExec(t *testing.T) {
 		"UPDATE _vt.vreplication SET state='Stopped', message='context canceled' WHERE id=1",
 		"update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 1",
 		"select * from _vt.vreplication where id = 1",
+		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
 		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",
 		"UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=",
 		"COMMIT",
 	})
+
+	// Verify stats
+	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
+		t.Errorf("stats are mismatched: %v, wnat %v", globalStats.controllers, vre.controllers)
+	}
 
 	// Test Delete
 
@@ -208,9 +236,16 @@ func TestEngineExec(t *testing.T) {
 	if ct != nil {
 		t.Errorf("ct: %v, want nil", ct)
 	}
+
+	// Verify stats
+	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
+		t.Errorf("stats are mismatched: %v, wnat %v", globalStats.controllers, vre.controllers)
+	}
 }
 
 func TestEngineBadInsert(t *testing.T) {
+	defer func() { globalStats = &vrStats{} }()
+
 	ts := createTopo()
 	_ = addTablet(ts, 100, "0", topodatapb.TabletType_REPLICA, true, true)
 	_ = newFakeBinlogClient()
@@ -233,6 +268,11 @@ func TestEngineBadInsert(t *testing.T) {
 	want := "insert failed to generate an id"
 	if err == nil || err.Error() != want {
 		t.Errorf("vre.Exec err: %v, want %v", err, want)
+	}
+
+	// Verify stats
+	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
+		t.Errorf("stats are mismatched: %v, wnat %v", globalStats.controllers, vre.controllers)
 	}
 }
 

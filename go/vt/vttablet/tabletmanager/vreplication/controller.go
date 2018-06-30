@@ -38,6 +38,8 @@ import (
 var retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed binlog connection")
 
 // controller is created by Engine. Members are initialized upfront.
+// There is no mutext within a controller becaust its members are
+// either read-only or self-synchronized.
 type controller struct {
 	dbClientFactory func() binlogplayer.VtClient
 	mysqld          mysqlctl.MysqlDaemon

@@ -741,7 +741,7 @@ func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 			Index:               i,
 			SourceShard:         bpc.sourceShard,
 			StopPosition:        bpc.stopPosition,
-			LastPosition:        bpc.binlogPlayerStats.GetLastPosition(),
+			LastPosition:        bpc.binlogPlayerStats.LastPosition(),
 			SecondsBehindMaster: bpc.binlogPlayerStats.SecondsBehindMaster.Get(),
 			Counts:              bpc.binlogPlayerStats.Timings.Counts(),
 			Rates:               bpc.binlogPlayerStats.Rates.Get(),
