@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -58,20 +59,26 @@ type Engine struct {
 }
 
 // NewEngine creates a new Engine.
+// A nil ts means that the Engine is disabled.
 func NewEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.VtClient) *Engine {
-	return &Engine{
+	vre := &Engine{
 		controllers:     make(map[int]*controller),
 		ts:              ts,
 		cell:            cell,
 		mysqld:          mysqld,
 		dbClientFactory: dbClientFactory,
 	}
+	return vre
 }
 
 // Open starts the Engine service.
 func (vre *Engine) Open(ctx context.Context) error {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
+	if vre.ts == nil {
+		log.Info("ts is nil: disabling vreplication engine")
+		return nil
+	}
 	if vre.isOpen {
 		return nil
 	}
@@ -82,6 +89,7 @@ func (vre *Engine) Open(ctx context.Context) error {
 		defer vre.Close()
 		return err
 	}
+	vre.updateStats()
 	return nil
 }
 
@@ -126,6 +134,8 @@ func (vre *Engine) Close() {
 
 	vre.mysqld.DisableBinlogPlayback()
 	vre.isOpen = false
+
+	vre.updateStats()
 }
 
 // Exec executes the query and the related actions.
@@ -135,6 +145,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	if !vre.isOpen {
 		return nil, errors.New("vreplication engine is closed")
 	}
+	defer vre.updateStats()
 
 	plan, err := getPlan(query)
 	if err != nil {
@@ -244,6 +255,18 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
 		case <-time.After(waitRetryTime):
 		}
+	}
+}
+
+// UpdateStats must be called with lock held.
+func (vre *Engine) updateStats() {
+	globalStats.mu.Lock()
+	defer globalStats.mu.Unlock()
+
+	globalStats.isOpen = vre.isOpen
+	globalStats.controllers = make(map[int]*controller, len(vre.controllers))
+	for id, ct := range vre.controllers {
+		globalStats.controllers[id] = ct
 	}
 }
 

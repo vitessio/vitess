@@ -44,6 +44,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+var testDmlResult = &sqltypes.Result{RowsAffected: 1}
+
 // The tests in this file test the BinlogPlayerMap object.
 //
 // The BinlogPlayerMap object is configured using the SourceShards of a Shard
@@ -336,6 +338,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	})
 
 	// Mock out the throttler settings result.
+	vtClientMock.AddResult(testDmlResult)
 	vtClientMock.AddResult(mockedThrottlerSettings)
 	vtClientMock.AddResult(&sqltypes.Result{RowsAffected: 1})
 
@@ -365,18 +368,15 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 		},
 	}
 
-	// and make sure it results in a committed statement
-	sql := <-vtClientMock.CommitChannel
-	if len(sql) != 6 ||
-		sql[0] != "SELECT pos FROM _vt.vreplication WHERE id=1" ||
-		sql[1] != "SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1" ||
-		sql[2] != "BEGIN" ||
-		sql[3] != "INSERT INTO tablet VALUES(1)" ||
-		!strings.HasPrefix(sql[4], "UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=") ||
-		!strings.HasSuffix(sql[4], ", transaction_timestamp=72 WHERE id=1") ||
-		sql[5] != "COMMIT" {
-		t.Errorf("Got wrong SQL: %#v", sql)
-	}
+	expectCommit(t, vtClientMock, []string{
+		"SELECT pos FROM _vt.vreplication WHERE id=1",
+		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
+		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
+		"BEGIN",
+		"INSERT INTO tablet VALUES(1)",
+		"UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=",
+		"COMMIT",
+	})
 
 	// ask for status, make sure we got what we expect
 	s := bpm.Status()
@@ -505,17 +505,18 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 			},
 		},
 	}
-	dmlResult := &sqltypes.Result{RowsAffected: 1}
 	vtClientMock := binlogplayer.NewVtClientMock()
 
 	vtClientMock.AddResult(startPos)
+	vtClientMock.AddResult(testDmlResult)
 	vtClientMock.AddResult(mockedThrottlerSettings)
-	vtClientMock.AddResult(dmlResult)
+	vtClientMock.AddResult(testDmlResult)
 
 	// Mock for restart.
 	vtClientMock.AddResult(startPos)
+	vtClientMock.AddResult(testDmlResult)
 	vtClientMock.AddResult(mockedThrottlerSettings)
-	vtClientMock.AddResult(dmlResult)
+	vtClientMock.AddResult(testDmlResult)
 
 	vtClientSyncChannel <- vtClientMock
 	if !mysqlDaemon.BinlogPlayerEnabled {
@@ -568,9 +569,11 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 		// and make sure it results in a committed statement
 		expectCommit(t, vtClientMock, []string{
 			"SELECT pos FROM _vt.vreplication WHERE id=1",
+			"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
 			"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 			"UPDATE _vt.vreplication SET state='Stopped', message='context canceled' WHERE id=1",
 			"SELECT pos FROM _vt.vreplication WHERE id=1",
+			"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
 			"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 			"BEGIN",
 			"INSERT INTO tablet VALUES(1)",
@@ -722,6 +725,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 			},
 		},
 	})
+	vtClientMock.AddResult(testDmlResult)
 	vtClientMock.AddResult(mockedThrottlerSettings)
 	vtClientMock.AddResult(&sqltypes.Result{RowsAffected: 1})
 
@@ -750,18 +754,15 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 		},
 	}
 
-	// and make sure it results in a committed statement
-	sql := <-vtClientMock.CommitChannel
-	if len(sql) != 6 ||
-		sql[0] != "SELECT pos FROM _vt.vreplication WHERE id=1" ||
-		sql[1] != "SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1" ||
-		sql[2] != "BEGIN" ||
-		sql[3] != "INSERT INTO tablet VALUES(1)" ||
-		!strings.HasPrefix(sql[4], "UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=") ||
-		!strings.HasSuffix(sql[4], ", transaction_timestamp=72 WHERE id=1") ||
-		sql[5] != "COMMIT" {
-		t.Errorf("Got wrong SQL: %#v", sql)
-	}
+	expectCommit(t, vtClientMock, []string{
+		"SELECT pos FROM _vt.vreplication WHERE id=1",
+		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
+		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
+		"BEGIN",
+		"INSERT INTO tablet VALUES(1)",
+		"UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=",
+		"COMMIT",
+	})
 
 	// ask for status, make sure we got what we expect
 	s := bpm.Status()
