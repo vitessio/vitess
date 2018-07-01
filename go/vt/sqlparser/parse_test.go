@@ -33,6 +33,9 @@ var (
 	}, {
 		input: "select 1 from t",
 	}, {
+		input:  "select * from information_schema.columns",
+		output: "select * from information_schema.`columns`",
+	}, {
 		input: "select .1 from t",
 	}, {
 		input: "select 1.2e1 from t",
