@@ -244,7 +244,7 @@ func NewActionAgent(
 	// Create the TabletType stats
 	agent.exportStats = true
 	agent.statsTabletType = stats.NewString("TabletType")
-	agent.statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of state change to the labeled topodata.TabletType", "type")
+	agent.statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
 
 	// Start the binlog player services, not playing at start.
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(ts, mysqld, func() binlogplayer.VtClient {
