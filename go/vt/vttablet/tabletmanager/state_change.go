@@ -300,7 +300,9 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 
 	// Update the stats to our current type.
 	if agent.exportStats {
-		agent.statsTabletType.Set(topoproto.TabletTypeLString(newTablet.Type))
+		s := topoproto.TabletTypeLString(newTablet.Type)
+		agent.statsTabletType.Set(s)
+		agent.statsTabletTypeCount.Add(s, 1)
 	}
 
 	// See if we need to start or stop any binlog player.
