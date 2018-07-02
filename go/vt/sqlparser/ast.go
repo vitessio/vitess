@@ -1290,19 +1290,14 @@ type Show struct {
 func (node *Show) Format(buf *TrackedBuffer) {
 	if (node.Type == "tables" || node.Type == "columns") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
-		if opt.DbName != "" {
-			if opt.Filter != nil {
-				buf.Myprintf("show %s%s%s from %s %v", opt.Extended, opt.Full, node.Type, opt.DbName, opt.Filter)
-			} else {
-				buf.Myprintf("show %s%s%s from %s", opt.Extended, opt.Full, node.Type, opt.DbName)
-			}
-		} else {
-			if opt.Filter != nil {
-				buf.Myprintf("show %s%s%s %v", opt.Extended, opt.Full, node.Type, opt.Filter)
-			} else {
-				buf.Myprintf("show %s%s%s", opt.Extended, opt.Full, node.Type)
-			}
+		buf.Myprintf("show %s%s", opt.Full, node.Type)
+		if node.Type == "columns" && node.HasOnTable() {
+			buf.Myprintf(" from %v", node.OnTable)
 		}
+		if opt.DbName != "" {
+			buf.Myprintf(" from %s", opt.DbName)
+		}
+		buf.Myprintf("%v", opt.Filter)
 		return
 	}
 	if node.Scope == "" {
@@ -1326,10 +1321,9 @@ func (node *Show) walkSubtree(visit Visit) error {
 
 // ShowTablesOpt is show tables option
 type ShowTablesOpt struct {
-	Extended string
-	Full     string
-	DbName   string
-	Filter   *ShowFilter
+	Full   string
+	DbName string
+	Filter *ShowFilter
 }
 
 // ShowFilter is show tables filter
@@ -1340,10 +1334,13 @@ type ShowFilter struct {
 
 // Format formats the node.
 func (node *ShowFilter) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
 	if node.Like != "" {
-		buf.Myprintf("like '%s'", node.Like)
+		buf.Myprintf(" like '%s'", node.Like)
 	} else {
-		buf.Myprintf("where %v", node.Filter)
+		buf.Myprintf(" where %v", node.Filter)
 	}
 }
 
