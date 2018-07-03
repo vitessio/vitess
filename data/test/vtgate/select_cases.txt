@@ -199,8 +199,8 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select 'targetString' from dual",
-    "FieldQuery": "select 'targetString' from dual where 1 != 1"
+    "Query": "select database() from dual",
+    "FieldQuery": "select database() from dual where 1 != 1"
   }
 }
 
