@@ -1398,6 +1398,10 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
+| SHOW COLLATION WHERE expression
+  {
+    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &$4}
+  }
 | SHOW VINDEXES ON table_name
   {
     $$ = &Show{Type: string($2), OnTable: $4}

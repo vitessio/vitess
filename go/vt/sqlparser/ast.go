@@ -1280,10 +1280,11 @@ func (node VindexParam) walkSubtree(visit Visit) error {
 
 // Show represents a show statement.
 type Show struct {
-	Type          string
-	OnTable       TableName
-	ShowTablesOpt *ShowTablesOpt
-	Scope         string
+	Type                   string
+	OnTable                TableName
+	ShowTablesOpt          *ShowTablesOpt
+	Scope                  string
+	ShowCollationFilterOpt *Expr
 }
 
 // Format formats the node.
@@ -1307,6 +1308,9 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	}
 	if node.HasOnTable() {
 		buf.Myprintf(" on %v", node.OnTable)
+	}
+	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
+		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
 	}
 }
 
