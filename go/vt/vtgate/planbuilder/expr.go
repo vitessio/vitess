@@ -126,8 +126,6 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (origin builder, pus
 				if rb, isRoute := pb.bldr.(*route); !isRoute || rb.ERoute.Keyspace.Sharded {
 					return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
 				}
-			case node.Name.EqualString("database"):
-				expr = sqlparser.ReplaceExpr(expr, node, sqlparser.NewStrVal([]byte(pb.vschema.TargetString())))
 			}
 			return true, nil
 		}
