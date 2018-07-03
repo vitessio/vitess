@@ -43,7 +43,7 @@ VReplication state: Open</br>
   </tr>
   <tr>
       <td>1</td>
-      <td>ks/0</td>
+      <td>keyspace:&#34;ks&#34; shard:&#34;0&#34; </td>
       <td>src1</td>
       <td>Running</td>
       <td>MariaDB/1-2-4</td>
@@ -54,7 +54,7 @@ VReplication state: Open</br>
       <td>Test Message</td>
     </tr><tr>
       <td>2</td>
-      <td>ks/1</td>
+      <td>keyspace:&#34;ks&#34; shard:&#34;1&#34; </td>
       <td>src2</td>
       <td>Stopped</td>
       <td>MariaDB/1-2-5</td>

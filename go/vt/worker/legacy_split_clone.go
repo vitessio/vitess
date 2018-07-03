@@ -92,10 +92,6 @@ type LegacySplitCloneWorker struct {
 	// populated during WorkerStateCopy
 	// tableStatusList holds the status for each table.
 	tableStatusList tableStatusList
-	// aliases of tablets that need to have their state refreshed.
-	// Only populated once, read-only after that.
-	refreshAliases [][]*topodatapb.TabletAlias
-	refreshTablets []map[string]*topo.TabletInfo
 
 	ev *events.SplitClone
 }
@@ -418,23 +414,6 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 	return nil
 }
 
-// Find all tablets on all destination shards. This should be done immediately before refreshing
-// state on these tablets, to minimize the chances of the topo changing in between.
-func (scw *LegacySplitCloneWorker) findRefreshTargets(ctx context.Context) error {
-	scw.refreshAliases = make([][]*topodatapb.TabletAlias, len(scw.destinationShards))
-	scw.refreshTablets = make([]map[string]*topo.TabletInfo, len(scw.destinationShards))
-
-	for shardIndex, si := range scw.destinationShards {
-		refreshAliases, refreshTablets, err := resolveRefreshTabletsForShard(ctx, si.Keyspace(), si.ShardName(), scw.wr)
-		if err != nil {
-			return err
-		}
-		scw.refreshAliases[shardIndex], scw.refreshTablets[shardIndex] = refreshAliases, refreshTablets
-	}
-
-	return nil
-}
-
 // copy phase:
 //	- copy the data from source tablets to destination masters (with replication on)
 // Assumes that the schema has already been created on each destination tablet
@@ -617,19 +596,23 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 		go func(keyspace, shard string, kr *topodatapb.KeyRange) {
 			defer destinationWaitGroup.Done()
 			scw.wr.Logger().Infof("Making and populating vreplication table")
-			keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
 
-			queries := binlogplayer.CreateVReplicationTable()
+			exc := newExecutor(scw.wr, scw.tsc, nil, keyspace, shard, 0)
 			for shardIndex, src := range scw.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
 					Keyspace: src.Keyspace(),
 					Shard:    src.ShardName(),
 					KeyRange: kr,
 				}
-				queries = append(queries, binlogplayer.CreateVReplication(uint32(shardIndex), "LegacySplitClone", bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix()))
-			}
-			if err := runSQLCommands(ctx, scw.wr, scw.tsc, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
-				processError("vreplication queries failed: %v", err)
+				qr, err := exc.vreplicationExec(ctx, binlogplayer.CreateVReplication("LegacySplitClone", bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix()))
+				if err != nil {
+					processError("vreplication queries failed: %v", err)
+					break
+				}
+				if err := scw.wr.SourceShardAdd(ctx, keyspace, shard, uint32(qr.InsertID), src.Keyspace(), src.ShardName(), src.Shard.KeyRange, nil); err != nil {
+					processError("could not add source shard: %v", err)
+					break
+				}
 			}
 		}(si.Keyspace(), si.ShardName(), si.KeyRange)
 	}
@@ -651,30 +634,6 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 			return fmt.Errorf("failed to set source shards: %v", err)
 		}
 	}
-
-	err = scw.findRefreshTargets(ctx)
-	if err != nil {
-		return fmt.Errorf("failed before refreshing state on destination tablets: %v", err)
-	}
-	// And force a state refresh (re-read topo) on all destination tablets.
-	// The master tablet will end up starting filtered replication
-	// at this point.
-	for shardIndex := range scw.destinationShards {
-		for _, tabletAlias := range scw.refreshAliases[shardIndex] {
-			destinationWaitGroup.Add(1)
-			go func(ti *topo.TabletInfo) {
-				defer destinationWaitGroup.Done()
-				scw.wr.Logger().Infof("Refreshing state on tablet %v", ti.AliasString())
-				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-				err := scw.wr.TabletManagerClient().RefreshState(shortCtx, ti.Tablet)
-				cancel()
-				if err != nil {
-					processError("RefreshState failed on tablet %v: %v", ti.AliasString(), err)
-				}
-			}(scw.refreshTablets[shardIndex][topoproto.TabletAliasString(tabletAlias)])
-		}
-	}
-	destinationWaitGroup.Wait()
 	return firstError
 }
 

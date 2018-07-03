@@ -283,6 +283,12 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 		agent.UpdateStream.Disable()
 	}
 
+	if tablet.Type == topodatapb.TabletType_MASTER && !agent.VREngine.IsOpen() {
+		if err := agent.VREngine.Open(agent.batchCtx); err == nil {
+			log.Info("VReplication engine successfully started")
+		}
+	}
+
 	// save the health record
 	record.Time = time.Now()
 	record.Error = healthErr

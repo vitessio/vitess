@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
@@ -244,16 +243,16 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 		wg.Add(1)
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
-			for _, sourceShard := range si.SourceShards {
-				// we're waiting on this guy
-				blpPosition := &tabletmanagerdatapb.BlpPosition{
-					Uid: sourceShard.Uid,
-				}
+			ctx, cancel := context.WithTimeout(ctx, waitTime)
+			defer cancel()
 
+			var pos string
+			for _, sourceShard := range si.SourceShards {
 				// find the position it should be at
-				for s, pos := range sourcePositions {
+				for s, sp := range sourcePositions {
 					if s.Keyspace() == sourceShard.Keyspace && s.ShardName() == sourceShard.Shard {
-						blpPosition.Position = pos
+						pos = sp
+						break
 					}
 				}
 
@@ -265,7 +264,7 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 					return
 				}
 
-				if err := wr.tmc.WaitBlpPosition(ctx, ti.Tablet, blpPosition, waitTime); err != nil {
+				if err := wr.tmc.VReplicationWaitForPos(ctx, ti.Tablet, int(sourceShard.Uid), pos); err != nil {
 					rec.RecordError(err)
 				} else {
 					wr.Logger().Infof("%v caught up", topoproto.TabletAliasString(si.MasterAlias))
@@ -723,6 +722,8 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 //   replication and starts accepting writes
 func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo, sourceShard *topo.ShardInfo, destinationShard *topo.ShardInfo, tables []string, ev *events.MigrateServedFrom, filteredReplicationWaitTime time.Duration) error {
 	// Read the data we need
+	ctx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
+	defer cancel()
 	sourceMasterTabletInfo, err := wr.ts.GetTablet(ctx, sourceShard.MasterAlias)
 	if err != nil {
 		return err
@@ -755,10 +756,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 
 	// wait for it
 	event.DispatchUpdate(ev, "waiting for destination master to catch up to source master")
-	if err := wr.tmc.WaitBlpPosition(ctx, destinationMasterTabletInfo.Tablet, &tabletmanagerdatapb.BlpPosition{
-		Uid:      0,
-		Position: masterPosition,
-	}, filteredReplicationWaitTime); err != nil {
+	if err := wr.tmc.VReplicationWaitForPos(ctx, destinationMasterTabletInfo.Tablet, int(destinationShard.SourceShards[0].Uid), masterPosition); err != nil {
 		return err
 	}
 

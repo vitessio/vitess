@@ -1080,9 +1080,8 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			go func(keyspace, shard string, kr *topodatapb.KeyRange) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Making and populating vreplication table")
-				keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
 
-				queries := binlogplayer.CreateVReplicationTable()
+				exc := newExecutor(scw.wr, scw.tsc, nil, keyspace, shard, 0)
 				for shardIndex, src := range scw.sourceShards {
 					bls := &binlogdatapb.BinlogSource{
 						Keyspace: src.Keyspace(),
@@ -1095,10 +1094,15 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 					}
 					// TODO(mberlin): Fill in scw.maxReplicationLag once the adapative
 					//                throttler is enabled by default.
-					queries = append(queries, binlogplayer.CreateVReplication(uint32(shardIndex), "SplitClone", bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix()))
-				}
-				if err := runSQLCommands(ctx, scw.wr, scw.tsc, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
-					processError("vreplication queries failed: %v", err)
+					qr, err := exc.vreplicationExec(ctx, binlogplayer.CreateVReplication("SplitClone", bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix()))
+					if err != nil {
+						processError("vreplication queries failed: %v", err)
+						break
+					}
+					if err := scw.wr.SourceShardAdd(ctx, keyspace, shard, uint32(qr.InsertID), src.Keyspace(), src.ShardName(), src.Shard.KeyRange, scw.tables); err != nil {
+						processError("could not add source shard: %v", err)
+						break
+					}
 				}
 			}(si.Keyspace(), si.ShardName(), si.KeyRange)
 		}
@@ -1106,53 +1110,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		if firstError != nil {
 			return firstError
 		}
-
-		// Configure filtered replication by setting the SourceShard info.
-		// The master tablets won't enable filtered replication (the binlog player)
-		//  until they re-read the topology due to a restart or a reload.
-		// TODO(alainjobart) this is a superset, some shards may not
-		// overlap, have to deal with this better (for N -> M splits
-		// where both N>1 and M>1)
-		for _, si := range scw.destinationShards {
-			scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v (tables: %v)", si.Keyspace(), si.ShardName(), scw.tables)
-			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.offlineSourceAliases, scw.tables)
-			cancel()
-			if err != nil {
-				return fmt.Errorf("failed to set source shards: %v", err)
-			}
-		}
-
-		// Force a state refresh (re-read of the "Shard" object from the topology)
-		// on all destination masters to start filtered replication.
-		rec := concurrency.AllErrorRecorder{}
-		for _, si := range scw.destinationShards {
-			destinationWaitGroup.Add(1)
-			go func(keyspace, shard string) {
-				defer destinationWaitGroup.Done()
-
-				masters := scw.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_MASTER)
-				if len(masters) == 0 {
-					rec.RecordError(fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in HealthCheck: empty TabletStats list", keyspace, shard, scw.cell))
-				}
-				master := masters[0]
-				alias := topoproto.TabletAliasString(master.Tablet.Alias)
-
-				scw.wr.Logger().Infof("Refreshing state on tablet %v", alias)
-				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-				defer cancel()
-				if err := scw.wr.TabletManagerClient().RefreshState(shortCtx, master.Tablet); err != nil {
-					rec.RecordError(fmt.Errorf("RefreshState failed on tablet %v: %v", alias, err))
-				}
-			}(si.Keyspace(), si.ShardName())
-		}
-		destinationWaitGroup.Wait()
-		if err := rec.Error(); err != nil {
-			processError("Triggering the start of filtered replication failed for some destination masters. Please run 'vtctl RefreshState' manually on the failed ones. Errors: %v", err)
-		}
 	} // clonePhase == offline
-
-	destinationWaitGroup.Wait()
 	return firstError
 }
 
