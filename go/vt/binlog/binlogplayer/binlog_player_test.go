@@ -28,8 +28,8 @@ import (
 
 func TestCreateVReplicationKeyRange(t *testing.T) {
 	want := "INSERT INTO _vt.vreplication " +
-		"(id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) " +
-		`VALUES (18372, 'Resharding', 'keyspace:"ks" shard:"0" key_range:<end:"\200" > ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Stopped')`
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) " +
+		`VALUES ('Resharding', 'keyspace:\"ks\" shard:\"0\" key_range:<end:\"\\200\" > ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running')`
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",
@@ -39,7 +39,7 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 		},
 	}
 
-	got := CreateVReplication(18372, "Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823)
+	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823)
 	if got != want {
 		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
 	}
@@ -47,8 +47,8 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 
 func TestCreateVReplicationTables(t *testing.T) {
 	want := "INSERT INTO _vt.vreplication " +
-		"(id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) " +
-		`VALUES (18372, 'Resharding', 'keyspace:"ks" shard:"0" tables:"a" tables:"b" ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Stopped')`
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) " +
+		`VALUES ('Resharding', 'keyspace:\"ks\" shard:\"0\" tables:\"a\" tables:\"b\" ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running')`
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",
@@ -56,7 +56,7 @@ func TestCreateVReplicationTables(t *testing.T) {
 		Tables:   []string{"a", "b"},
 	}
 
-	got := CreateVReplication(18372, "Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823)
+	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823)
 	if got != want {
 		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
 	}

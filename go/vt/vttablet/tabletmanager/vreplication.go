@@ -18,15 +18,22 @@ package tabletmanager
 
 import (
 	"golang.org/x/net/context"
+
+	"vitess.io/vitess/go/sqltypes"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // VReplicationExec executes a vreplication command.
 func (agent *ActionAgent) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
-	panic("unimplemented")
+	qr, err := agent.VREngine.Exec(query)
+	if err != nil {
+		return nil, err
+	}
+	return sqltypes.ResultToProto3(qr), nil
 }
 
 // VReplicationWaitForPos waits for the specified position.
 func (agent *ActionAgent) VReplicationWaitForPos(ctx context.Context, id int, pos string) error {
-	panic("unimplemented")
+	return agent.VREngine.WaitForPos(ctx, id, pos)
 }

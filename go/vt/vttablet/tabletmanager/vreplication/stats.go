@@ -34,8 +34,8 @@ func init() {
 }
 
 // StatusSummary returns the summary status of vreplication.
-func StatusSummary() (maxSecondsBehindMaster int64, binlogPlayersCount int64) {
-	return globalStats.maxSecondsBehindMaster(), globalStats.numControllers()
+func StatusSummary() (maxSecondsBehindMaster int64, binlogPlayersCount int32) {
+	return globalStats.maxSecondsBehindMaster(), int32(globalStats.numControllers())
 }
 
 // AddStatusPart adds the vreplication status to the status page.
@@ -129,8 +129,7 @@ func (st *vrStats) status() *EngineStatus {
 		}
 		status.Controllers[i] = &ControllerStatus{
 			Index:               ct.id,
-			SourceShard:         ct.source.Shard,
-			SourceKeyspace:      ct.source.Keyspace,
+			Source:              ct.source.String(),
 			StopPosition:        ct.stopPos,
 			LastPosition:        ct.blpStats.LastPosition().String(),
 			SecondsBehindMaster: ct.blpStats.SecondsBehindMaster.Get(),
@@ -155,7 +154,7 @@ type EngineStatus struct {
 // ControllerStatus contains a renderable status of a controller.
 type ControllerStatus struct {
 	Index               uint32
-	SourceKeyspace      string
+	Source              string
 	SourceShard         string
 	StopPosition        string
 	LastPosition        string
@@ -184,7 +183,7 @@ var vreplicationTemplate = `
   </tr>
   {{range .Controllers}}<tr>
       <td>{{.Index}}</td>
-      <td>{{.SourceKeyspace}}/{{.SourceShard}}</td>
+      <td>{{.Source}}</td>
       <td>{{.SourceTablet}}</td>
       <td>{{.State}}</td>
       <td>{{.StopPosition}}</td>

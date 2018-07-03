@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
@@ -158,7 +159,7 @@ func createTestAgent(ctx context.Context, t *testing.T, preStart func(*ActionAge
 	agent := NewTestActionAgent(ctx, ts, tabletAlias, port, 0, mysqlDaemon, preStart)
 
 	vtClientMocksChannel := make(chan *binlogplayer.VtClientMock, 1)
-	agent.BinlogPlayerMap = NewBinlogPlayerMap(ts, mysqlDaemon, func() binlogplayer.VtClient {
+	agent.VREngine = vreplication.NewEngine(ts, "cell1", mysqlDaemon, func() binlogplayer.VtClient {
 		return <-vtClientMocksChannel
 	})
 

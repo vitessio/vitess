@@ -20,9 +20,9 @@ limitations under the License.
 package binlogplayer
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -328,8 +328,6 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		msg = err.Error()
 	}
 	blp.blplStats.LastMessage.Set(msg)
-	// Get rid of single quotes before generating DML.
-	msg = strings.Replace(msg, "'", "", -1)
 	if err := setVReplicationState(blp.dbClient, blp.uid, state, msg); err != nil {
 		log.Errorf("Error writing stop state: %v", err)
 	}
@@ -502,7 +500,7 @@ func CreateVReplicationTable() []string {
 	return []string{
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		`CREATE TABLE IF NOT EXISTS _vt.vreplication (
-  id INT,
+  id INT AUTO_INCREMENT,
   workflow VARBINARY(1000),
   source VARBINARY(10000) NOT NULL,
   pos VARBINARY(10000) NOT NULL,
@@ -530,11 +528,11 @@ func setVReplicationState(dbClient VtClient, uid uint32, state, message string) 
 
 // CreateVReplication returns a statement to populate the first value into
 // the _vt.vreplication table.
-func CreateVReplication(index uint32, workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64) string {
+func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64) string {
 	return fmt.Sprintf("INSERT INTO _vt.vreplication "+
-		"(id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) "+
-		"VALUES (%v, '%v', '%s', '%v', %v, %v, %v, 0, '%v')",
-		index, workflow, source.String(), position, maxTPS, maxReplicationLag, timeUpdated, BlpStopped)
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) "+
+		"VALUES (%v, %v, %v, %v, %v, %v, 0, '%v')",
+		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag, timeUpdated, BlpRunning)
 }
 
 // updateVReplicationPos returns a statement to update a value in the
@@ -542,17 +540,40 @@ func CreateVReplication(index uint32, workflow string, source *binlogdatapb.Binl
 func updateVReplicationPos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64) string {
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
-			"UPDATE _vt.vreplication "+
-				"SET pos='%v', time_updated=%v, transaction_timestamp=%v "+
-				"WHERE id=%v",
-			mysql.EncodePosition(pos), timeUpdated, txTimestamp, uid)
+			"UPDATE _vt.vreplication SET pos=%v, time_updated=%v, transaction_timestamp=%v WHERE id=%v",
+			encodeString(mysql.EncodePosition(pos)), timeUpdated, txTimestamp, uid)
 	}
 
 	return fmt.Sprintf(
-		"UPDATE _vt.vreplication "+
-			"SET pos='%v', time_updated=%v "+
-			"WHERE id=%v",
-		mysql.EncodePosition(pos), timeUpdated, uid)
+		"UPDATE _vt.vreplication SET pos=%v, time_updated=%v WHERE id=%v",
+		encodeString(mysql.EncodePosition(pos)), timeUpdated, uid)
+}
+
+// StartVReplication returns a statement to start the replication.
+func StartVReplication(uid uint32) string {
+	return fmt.Sprintf(
+		"UPDATE _vt.vreplication SET state='%v', stop_pos=NULL WHERE id=%v",
+		BlpRunning, uid)
+}
+
+// StartVReplicationUntil returns a statement to start the replication with a stop position.
+func StartVReplicationUntil(uid uint32, pos string) string {
+	return fmt.Sprintf(
+		"UPDATE _vt.vreplication SET state='%v', stop_pos=%v WHERE id=%v",
+		BlpRunning, encodeString(pos), uid)
+}
+
+// StopVReplication returns a statement to stop the replication.
+func StopVReplication(uid uint32, message string) string {
+	return fmt.Sprintf(
+		"UPDATE _vt.vreplication SET state='%v', message=%v WHERE id=%v",
+		BlpStopped, encodeString(message), uid)
+}
+
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
 }
 
 // ReadVReplicationPos returns a statement to query the gtid for a

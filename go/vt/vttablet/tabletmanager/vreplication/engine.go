@@ -20,6 +20,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,7 +46,8 @@ type Engine struct {
 	isOpen      bool
 	controllers map[int]*controller
 	// wg is used in-flight functions that can run for long periods.
-	wg sync.WaitGroup
+	wg         sync.WaitGroup
+	mustCreate bool
 
 	// ctx is the root context for all controllers.
 	ctx context.Context
@@ -86,7 +88,7 @@ func (vre *Engine) Open(ctx context.Context) error {
 	vre.ctx, vre.cancel = context.WithCancel(ctx)
 	vre.isOpen = true
 	if err := vre.initAll(); err != nil {
-		defer vre.Close()
+		go vre.Close()
 		return err
 	}
 	vre.updateStats()
@@ -102,6 +104,12 @@ func (vre *Engine) initAll() error {
 
 	rows, err := readAllRows(dbClient)
 	if err != nil {
+		// Handle Table not found.
+		if strings.Contains(err.Error(), "(errno 1146)") {
+			vre.mustCreate = true
+			log.Info("_vt.vreplication table not found. Will create it later if needed")
+			return nil
+		}
 		return err
 	}
 	for _, row := range rows {
@@ -112,6 +120,13 @@ func (vre *Engine) initAll() error {
 		vre.controllers[int(ct.id)] = ct
 	}
 	return nil
+}
+
+// IsOpen returns true if Engine is open.
+func (vre *Engine) IsOpen() bool {
+	vre.mu.Lock()
+	defer vre.mu.Unlock()
+	return vre.isOpen
 }
 
 // Close closes the Engine service.
@@ -156,6 +171,15 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 		return nil, err
 	}
 	defer dbClient.Close()
+
+	if vre.mustCreate {
+		for _, query := range binlogplayer.CreateVReplicationTable() {
+			if _, err := dbClient.ExecuteFetch(query, 0); err != nil {
+				return nil, err
+			}
+		}
+		vre.mustCreate = false
+	}
 
 	switch plan.opcode {
 	case insertQuery:
@@ -293,6 +317,9 @@ func readRow(dbClient binlogplayer.VtClient, id int) (map[string]string, error) 
 	}
 	if len(qr.Rows) != 1 {
 		return nil, fmt.Errorf("unexpected number of rows: %v", qr)
+	}
+	if len(qr.Fields) != len(qr.Rows[0]) {
+		return nil, fmt.Errorf("fields don't match rows: %v", qr)
 	}
 	return rowToMap(qr, 0)
 }

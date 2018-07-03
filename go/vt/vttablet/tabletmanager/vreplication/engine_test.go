@@ -44,6 +44,9 @@ func TestEngineOpen(t *testing.T) {
 	// Test Insert
 
 	vre := NewEngine(ts, testCell, mysqld, dbClientFactory)
+	if vre.IsOpen() {
+		t.Errorf("IsOpen: %v, want false", vre.IsOpen())
+	}
 
 	dbClient.AddResult(sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -64,6 +67,9 @@ func TestEngineOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer vre.Close()
+	if !vre.IsOpen() {
+		t.Errorf("IsOpen: %v, want true", vre.IsOpen())
+	}
 
 	// Verify stats
 	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
