@@ -322,14 +322,14 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	}
 	vreplicationPos := qr.Rows[0][0].ToString()
 
+	// 2 - stop replication
+	sdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", sdw.sourceAlias, vreplicationPos)
 	// read the tablet
 	sourceTablet, err := sdw.wr.TopoServer().GetTablet(shortCtx, sdw.sourceAlias)
 	if err != nil {
 		return err
 	}
 
-	// stop replication
-	sdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", sdw.sourceAlias, vreplicationPos)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
 	mysqlPos, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet.Tablet, vreplicationPos, *remoteActionsTimeout)

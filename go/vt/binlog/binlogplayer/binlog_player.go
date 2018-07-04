@@ -488,17 +488,31 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) (string, error) {
 				}
 				break
 			}
-			log.Infof("Retrying txn")
+			log.Infof("Retrying txn in 1 second.")
 			time.Sleep(1 * time.Second)
 		}
 	}
 }
 
 // CreateVReplicationTable returns the statements required to create
-// the _vt.vreplication table
+// the _vt.vreplication table.
+// id: is an auto-increment column that identifies the stream.
+// workflow: documents the creator/manager of the stream. Example: 'SplitClone'.
+// source: contains a string proto representation of binlogpb.BinlogSource.
+// pos: initially, a start position, and is updated to the current position by the binlog player.
+// stop_pos: optional column that specifies the stop position.
+// max_tps: max transactions per second.
+// max_replication_lag: if replication lag exceeds this amount writing is throttled accordingly.
+// cell: optional column that overrides the current cell to replicate from.
+// tablet_types: optional column that overrides the tablet types to look to replicate from.
+// time_update: last time an event was applied.
+// transaction_timestamp: timestamp of the transaction (from the master).
+// state: Running, Error or Stopped.
+// message: Reason for current state.
 func CreateVReplicationTable() []string {
 	return []string{
 		"CREATE DATABASE IF NOT EXISTS _vt",
+		"DROP TABLE IF EXISTS _vt.blp_checkpoint",
 		`CREATE TABLE IF NOT EXISTS _vt.vreplication (
   id INT AUTO_INCREMENT,
   workflow VARBINARY(1000),
