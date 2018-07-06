@@ -50,10 +50,10 @@ func TestEngineOpen(t *testing.T) {
 
 	dbClient.AddResult(sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|state|source|pos",
-			"int64|varchar|varchar|varchar",
+			"id|state|source",
+			"int64|varchar|varchar",
 		),
-		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > |MariaDB/0-1-1083`,
+		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 	))
 	// update state
 	dbClient.AddResult(testDMLResponse)
@@ -80,14 +80,11 @@ func TestEngineOpen(t *testing.T) {
 	if ct == nil || ct.id != 1 {
 		t.Errorf("ct: %v, id should be 1", ct)
 	}
-	if ct == nil || ct.startPos != "MariaDB/0-1-1083" {
-		t.Errorf("ct: %v, startPos should be 'MariaDB/0-1-1083'", ct)
-	}
 
 	expectCommit(t, dbClient, []string{
 		"select * from _vt.vreplication",
 		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
-		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
+		"SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",
 		"UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=",
@@ -121,10 +118,10 @@ func TestEngineExec(t *testing.T) {
 	// select * from _vt.vreplication
 	dbClient.AddResult(sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|state|source|pos",
-			"int64|varchar|varchar|varchar",
+			"id|state|source",
+			"int64|varchar|varchar",
 		),
-		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > |MariaDB/0-1-1083`,
+		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 	))
 	// update state
 	dbClient.AddResult(testDMLResponse)
@@ -147,16 +144,13 @@ func TestEngineExec(t *testing.T) {
 	if ct == nil || ct.id != 1 {
 		t.Errorf("ct: %v, id should be 1", ct)
 	}
-	if ct == nil || ct.startPos != "MariaDB/0-1-1083" {
-		t.Errorf("ct: %v, startPos should be 'MariaDB/0-1-1083'", ct)
-	}
 
 	expectCommit(t, dbClient, []string{
 		"select * from _vt.vreplication",
 		"insert into _vt.vreplication values (null)",
 		"select * from _vt.vreplication where id = 1",
 		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
-		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
+		"SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",
 		"UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=",
@@ -170,6 +164,8 @@ func TestEngineExec(t *testing.T) {
 
 	// Test Update
 
+	savedBlp := ct.blpStats
+
 	// update for Stop
 	dbClient.AddResult(testDMLResponse)
 	// update _vt.vreplication
@@ -177,10 +173,10 @@ func TestEngineExec(t *testing.T) {
 	// select * from _vt.vreplication
 	dbClient.AddResult(sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|state|source|pos",
-			"int64|varchar|varchar|varchar",
+			"id|state|source",
+			"int64|varchar|varchar",
 		),
-		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > |MariaDB/0-1-1084`,
+		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 	))
 	// update state
 	dbClient.AddResult(testDMLResponse)
@@ -201,8 +197,10 @@ func TestEngineExec(t *testing.T) {
 	}
 
 	ct = vre.controllers[1]
-	if ct == nil || ct.startPos != "MariaDB/0-1-1084" {
-		t.Errorf("ct: %v, startPos should be 'MariaDB/0-1-1084'", ct)
+
+	// Verify that the new controller has reused the previous blpStats.
+	if ct.blpStats != savedBlp {
+		t.Errorf("BlpStats: %v and %v, must be same", ct.blpStats, savedBlp)
 	}
 
 	expectCommit(t, dbClient, []string{
@@ -210,7 +208,7 @@ func TestEngineExec(t *testing.T) {
 		"update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 1",
 		"select * from _vt.vreplication where id = 1",
 		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
-		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
+		"SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",
 		"UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=",

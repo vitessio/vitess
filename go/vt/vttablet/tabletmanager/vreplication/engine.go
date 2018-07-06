@@ -113,7 +113,7 @@ func (vre *Engine) initAll() error {
 		return err
 	}
 	for _, row := range rows {
-		ct, err := newController(vre.ctx, row, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr)
+		ct, err := newController(vre.ctx, row, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil)
 		if err != nil {
 			return err
 		}
@@ -190,21 +190,36 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 		if qr.InsertID == 0 {
 			return nil, fmt.Errorf("insert failed to generate an id")
 		}
-		if err := vre.initController(dbClient, int(qr.InsertID)); err != nil {
+		params, err := readRow(dbClient, int(qr.InsertID))
+		if err != nil {
 			return nil, err
 		}
+		ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil)
+		if err != nil {
+			return nil, err
+		}
+		vre.controllers[int(qr.InsertID)] = ct
 		return qr, nil
 	case updateQuery:
+		var blpStats *binlogplayer.Stats
 		if ct := vre.controllers[plan.id]; ct != nil {
 			ct.Stop()
+			blpStats = ct.blpStats
 		}
 		qr, err := dbClient.ExecuteFetch(plan.query, 1)
 		if err != nil {
 			return nil, err
 		}
-		if err := vre.initController(dbClient, plan.id); err != nil {
+		params, err := readRow(dbClient, plan.id)
+		if err != nil {
 			return nil, err
 		}
+		// For continuity, the new controller inherits the previous stats.
+		ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, blpStats)
+		if err != nil {
+			return nil, err
+		}
+		vre.controllers[plan.id] = ct
 		return qr, nil
 	case deleteQuery:
 		if ct := vre.controllers[plan.id]; ct != nil {
@@ -216,19 +231,6 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 		return dbClient.ExecuteFetch(plan.query, 10000)
 	}
 	panic("unreachable")
-}
-
-func (vre *Engine) initController(dbClient binlogplayer.VtClient, id int) error {
-	params, err := readRow(dbClient, id)
-	if err != nil {
-		return err
-	}
-	ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr)
-	if err != nil {
-		return err
-	}
-	vre.controllers[id] = ct
-	return nil
 }
 
 // WaitForPos waits for the replication to reach the specified position.

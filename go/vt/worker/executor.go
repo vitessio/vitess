@@ -98,6 +98,12 @@ func (e *executor) vreplicationExec(ctx context.Context, cmd string) (qr *sqltyp
 	return sqltypes.Proto3ToResult(result), err
 }
 
+func (e *executor) refreshState(ctx context.Context) error {
+	return e.fetchWithRetries(ctx, func(ctx context.Context, tablet *topodatapb.Tablet) error {
+		return e.wr.TabletManagerClient().RefreshState(ctx, tablet)
+	})
+}
+
 // fetchWithRetries will attempt to run ExecuteFetch for a single command, with
 // a reasonably small timeout.
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if

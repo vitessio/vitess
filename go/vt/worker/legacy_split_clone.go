@@ -614,26 +614,14 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 					break
 				}
 			}
+			// refreshState will cause the destination to become non-serving because
+			// it's now participating in the resharding workflow.
+			if err := exc.refreshState(ctx); err != nil {
+				processError("RefreshState failed on tablet %v/%v: %v", keyspace, shard, err)
+			}
 		}(si.Keyspace(), si.ShardName(), si.KeyRange)
 	}
 	destinationWaitGroup.Wait()
-	if firstError != nil {
-		return firstError
-	}
-
-	// Now we're done with data copy, update the shard's source info.
-	// TODO(alainjobart) this is a superset, some shards may not
-	// overlap, have to deal with this better (for N -> M splits
-	// where both N>1 and M>1)
-	for _, si := range scw.destinationShards {
-		scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
-		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
-		cancel()
-		if err != nil {
-			return fmt.Errorf("failed to set source shards: %v", err)
-		}
-	}
 	return firstError
 }
 

@@ -40,6 +40,8 @@ var (
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"),    // pos
+				sqltypes.NULL,                                // stop_pos
 				sqltypes.NewVarBinary("9223372036854775807"), // max_tps
 				sqltypes.NewVarBinary("9223372036854775807"), // max_replication_lag
 			},
@@ -58,7 +60,6 @@ func TestControllerKeyRange(t *testing.T) {
 		"id":     "1",
 		"state":  binlogplayer.BlpRunning,
 		"source": `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
-		"pos":    testPos,
 	}
 
 	dbClient := binlogplayer.NewVtClientMock()
@@ -75,7 +76,7 @@ func TestControllerKeyRange(t *testing.T) {
 	dbClientFactory := func() binlogplayer.VtClient { return dbClient }
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, ts, testCell, "replica")
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, ts, testCell, "replica", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +84,7 @@ func TestControllerKeyRange(t *testing.T) {
 
 	expectCommit(t, dbClient, []string{
 		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
-		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
+		"SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",
 		"UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=",
@@ -101,7 +102,6 @@ func TestControllerTables(t *testing.T) {
 		"id":     "1",
 		"state":  binlogplayer.BlpRunning,
 		"source": `keyspace:"ks" shard:"0" tables:"table1" tables:"/funtables_/" `,
-		"pos":    testPos,
 	}
 
 	dbClient := binlogplayer.NewVtClientMock()
@@ -143,7 +143,7 @@ func TestControllerTables(t *testing.T) {
 		},
 	}
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, ts, testCell, "replica")
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, ts, testCell, "replica", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestControllerTables(t *testing.T) {
 
 	expectCommit(t, dbClient, []string{
 		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
-		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
+		"SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",
 		"UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=",
@@ -164,7 +164,7 @@ func TestControllerBadID(t *testing.T) {
 	params := map[string]string{
 		"id": "bad",
 	}
-	_, err := newController(context.Background(), params, nil, nil, nil, "", "")
+	_, err := newController(context.Background(), params, nil, nil, nil, "", "", nil)
 	want := `strconv.Atoi: parsing "bad": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("newController err: %v, want %v", err, want)
@@ -177,7 +177,7 @@ func TestControllerStopped(t *testing.T) {
 		"state": binlogplayer.BlpStopped,
 	}
 
-	ct, err := newController(context.Background(), params, nil, nil, nil, "", "")
+	ct, err := newController(context.Background(), params, nil, nil, nil, "", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,6 @@ func TestControllerOverrides(t *testing.T) {
 		"id":           "1",
 		"state":        binlogplayer.BlpRunning,
 		"source":       `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
-		"pos":          testPos,
 		"cell":         testCell,
 		"tablet_types": "replica",
 	}
@@ -218,7 +217,7 @@ func TestControllerOverrides(t *testing.T) {
 	dbClientFactory := func() binlogplayer.VtClient { return dbClient }
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, ts, testCell, "rdonly")
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, ts, testCell, "rdonly", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +225,7 @@ func TestControllerOverrides(t *testing.T) {
 
 	expectCommit(t, dbClient, []string{
 		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
-		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
+		"SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",
 		"UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=",
@@ -243,12 +242,11 @@ func TestControllerCanceledContext(t *testing.T) {
 		"id":     "1",
 		"state":  binlogplayer.BlpRunning,
 		"source": `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
-		"pos":    testPos,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	ct, err := newController(ctx, params, nil, nil, ts, testCell, "rdonly")
+	ct, err := newController(ctx, params, nil, nil, ts, testCell, "rdonly", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +283,6 @@ func TestControllerRetry(t *testing.T) {
 		"id":           "1",
 		"state":        binlogplayer.BlpRunning,
 		"source":       `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
-		"pos":          testPos,
 		"cell":         testCell,
 		"tablet_types": "replica",
 	}
@@ -294,7 +291,7 @@ func TestControllerRetry(t *testing.T) {
 	dbClientFactory := func() binlogplayer.VtClient { return dbClient }
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, ts, testCell, "rdonly")
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, ts, testCell, "rdonly", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,18 +307,29 @@ func TestControllerStopPosition(t *testing.T) {
 	wantTablet := addTablet(ts, 100, "0", topodatapb.TabletType_REPLICA, true, true)
 
 	params := map[string]string{
-		"id":       "1",
-		"state":    binlogplayer.BlpRunning,
-		"source":   `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
-		"pos":      testPos,
-		"stop_pos": "MariaDB/0-1-1235",
+		"id":     "1",
+		"state":  binlogplayer.BlpRunning,
+		"source": `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 	}
 
 	dbClient := binlogplayer.NewVtClientMock()
 	// update state
 	dbClient.AddResult(testDMLResponse)
 	// select tps
-	dbClient.AddResult(testTPSResponse)
+	withStop := &sqltypes.Result{
+		Fields:       nil,
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"),    // pos
+				sqltypes.NewVarBinary("MariaDB/0-1-1235"),    // stop_pos
+				sqltypes.NewVarBinary("9223372036854775807"), // max_tps
+				sqltypes.NewVarBinary("9223372036854775807"), // max_replication_lag
+			},
+		},
+	}
+	dbClient.AddResult(withStop)
 	// insert into t
 	dbClient.AddResult(testDMLResponse)
 	// update _vt.vreplication
@@ -331,7 +339,7 @@ func TestControllerStopPosition(t *testing.T) {
 	dbClientFactory := func() binlogplayer.VtClient { return dbClient }
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, ts, testCell, "replica")
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, ts, testCell, "replica", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +347,7 @@ func TestControllerStopPosition(t *testing.T) {
 
 	expectCommit(t, dbClient, []string{
 		"UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1",
-		"SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
+		"SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1",
 		"BEGIN",
 		"insert into t values(1)",
 		"UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=",

@@ -25,6 +25,7 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo"
@@ -409,6 +410,18 @@ func (wr *Wrangler) migrateServedTypesLocked(ctx context.Context, keyspace strin
 	event.DispatchUpdate(ev, "updating destination shards")
 	needToRefreshDestinationTablets := false
 	for i, si := range destinationShards {
+		// Stop VReplication streams if we're migrating master (forward only).
+		if servedType == topodatapb.TabletType_MASTER && !reverse {
+			ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
+			if err != nil {
+				return err
+			}
+			for _, sourceShard := range si.SourceShards {
+				if _, err := wr.tmc.VReplicationExec(ctx, ti.Tablet, binlogplayer.DeleteVReplication(sourceShard.Uid)); err != nil {
+					return err
+				}
+			}
+		}
 		destinationShards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
 			if err := si.UpdateServedTypesMap(servedType, cells, reverse); err != nil {
 				return err
@@ -756,7 +769,14 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 
 	// wait for it
 	event.DispatchUpdate(ev, "waiting for destination master to catch up to source master")
-	if err := wr.tmc.VReplicationWaitForPos(ctx, destinationMasterTabletInfo.Tablet, int(destinationShard.SourceShards[0].Uid), masterPosition); err != nil {
+	uid := destinationShard.SourceShards[0].Uid
+	if err := wr.tmc.VReplicationWaitForPos(ctx, destinationMasterTabletInfo.Tablet, int(uid), masterPosition); err != nil {
+		return err
+	}
+
+	// Stop the VReplication stream.
+	event.DispatchUpdate(ev, "stopping vreplication")
+	if _, err := wr.tmc.VReplicationExec(ctx, destinationMasterTabletInfo.Tablet, binlogplayer.DeleteVReplication(uid)); err != nil {
 		return err
 	}
 

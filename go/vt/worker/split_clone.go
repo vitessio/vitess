@@ -1104,12 +1104,14 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 						break
 					}
 				}
+				// refreshState will cause the destination to become non-serving because
+				// it's now participating in the resharding workflow.
+				if err := exc.refreshState(ctx); err != nil {
+					processError("RefreshState failed on tablet %v/%v: %v", keyspace, shard, err)
+				}
 			}(si.Keyspace(), si.ShardName(), si.KeyRange)
 		}
 		destinationWaitGroup.Wait()
-		if firstError != nil {
-			return firstError
-		}
 	} // clonePhase == offline
 	return firstError
 }

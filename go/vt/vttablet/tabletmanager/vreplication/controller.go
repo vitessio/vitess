@@ -47,7 +47,6 @@ type controller struct {
 
 	id           uint32
 	source       binlogdatapb.BinlogSource
-	startPos     string
 	stopPos      string
 	tabletPicker *tabletPicker
 
@@ -58,11 +57,14 @@ type controller struct {
 	sourceTablet sync2.AtomicString
 }
 
-func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string) (*controller, error) {
+func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats) (*controller, error) {
+	if blpStats == nil {
+		blpStats = binlogplayer.NewStats()
+	}
 	ct := &controller{
 		dbClientFactory: dbClientFactory,
 		mysqld:          mysqld,
-		blpStats:        binlogplayer.NewStats(),
+		blpStats:        blpStats,
 		done:            make(chan struct{}),
 	}
 
@@ -80,11 +82,10 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		return ct, nil
 	}
 
-	// source, startPos, stopPos
+	// source, stopPos
 	if err := proto.UnmarshalText(params["source"], &ct.source); err != nil {
 		return nil, err
 	}
-	ct.startPos = params["pos"]
 	ct.stopPos = params["stop_pos"]
 
 	// tabletPicker
@@ -165,16 +166,10 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 			return fmt.Errorf("failed to resolve table names: %v", err)
 		}
 
-		player, err := binlogplayer.NewBinlogPlayerTables(dbClient, tablet, tables, ct.id, ct.startPos, ct.stopPos, ct.blpStats)
-		if err != nil {
-			return fmt.Errorf("NewBinlogPlayerTables failed: %v", err)
-		}
+		player := binlogplayer.NewBinlogPlayerTables(dbClient, tablet, tables, ct.id, ct.blpStats)
 		return player.ApplyBinlogEvents(ctx)
 	}
-	player, err := binlogplayer.NewBinlogPlayerKeyRange(dbClient, tablet, ct.source.KeyRange, ct.id, ct.startPos, ct.stopPos, ct.blpStats)
-	if err != nil {
-		return fmt.Errorf("NewBinlogPlayerKeyRange failed: %v", err)
-	}
+	player := binlogplayer.NewBinlogPlayerKeyRange(dbClient, tablet, ct.source.KeyRange, ct.id, ct.blpStats)
 	return player.ApplyBinlogEvents(ctx)
 }
 

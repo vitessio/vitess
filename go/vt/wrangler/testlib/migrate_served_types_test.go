@@ -25,9 +25,11 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -131,19 +133,22 @@ func TestMigrateServedTypes(t *testing.T) {
 	dest1Replica.StartActionLoop(t, wr)
 	defer dest1Replica.StopActionLoop(t)
 
-	// dest1Master will see the refresh, and has to respond to it.
-	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
-	dest1Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SELECT pos FROM _vt.vreplication WHERE id=0": {
-			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.NewVarBinary(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition)),
-				},
-			},
-		},
-	}
 	dest1Master.StartActionLoop(t, wr)
 	defer dest1Master.StopActionLoop(t)
+
+	// Override with a fake VREngine after Agent is initialized in action loop.
+	dbClient1 := binlogplayer.NewVtClientMock()
+	dbClientFactory1 := func() binlogplayer.VtClient { return dbClient1 }
+	dest1Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1)
+	// select * from _vt.vreplication during Open
+	dbClient1.AddResult(&sqltypes.Result{})
+	if err := dest1Master.Agent.VREngine.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// select pos from _vt.vreplication
+	dbClient1.AddResult(&sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/5-456-892"),
+	}}})
 
 	// dest2Rdonly will see the refresh
 	dest2Rdonly.StartActionLoop(t, wr)
@@ -153,19 +158,22 @@ func TestMigrateServedTypes(t *testing.T) {
 	dest2Replica.StartActionLoop(t, wr)
 	defer dest2Replica.StopActionLoop(t)
 
-	// dest2Master will see the refresh, and has to respond to it.
-	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
-	dest2Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SELECT pos FROM _vt.vreplication WHERE id=0": {
-			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.NewVarBinary(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition)),
-				},
-			},
-		},
-	}
 	dest2Master.StartActionLoop(t, wr)
 	defer dest2Master.StopActionLoop(t)
+
+	// Override with a fake VREngine after Agent is initialized in action loop.
+	dbClient2 := binlogplayer.NewVtClientMock()
+	dbClientFactory2 := func() binlogplayer.VtClient { return dbClient2 }
+	dest2Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2)
+	// select * from _vt.vreplication during Open
+	dbClient2.AddResult(&sqltypes.Result{})
+	if err := dest2Master.Agent.VREngine.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// select pos from _vt.vreplication
+	dbClient2.AddResult(&sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/5-456-892"),
+	}}})
 
 	// migrate will error if the overlapping shards have no "SourceShard" entry
 	// and we cannot decide which shard is the source or the destination.
