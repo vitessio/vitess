@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"html/template"
 	"math/rand" // not crypto-safe is OK here
+
 	"sort"
 	"sync"
 	"time"
@@ -300,12 +301,6 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 	defer vtClient.Close()
 
-	// Read the start position
-	startPosition, err := binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
-	if err != nil {
-		return fmt.Errorf("can't read startPosition: %v", err)
-	}
-
 	sourceTabletTypes, err := topoproto.ParseTabletTypes(*sourceTabletTypeStr)
 	if err != nil {
 		return fmt.Errorf("failed to parse list of source tablet types: %v", *sourceTabletTypeStr)
@@ -349,10 +344,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		}
 
 		// tables, just get them
-		player, err := binlogplayer.NewBinlogPlayerTables(vtClient, tablet, tables, bpc.sourceShard.Uid, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
-		if err != nil {
-			return fmt.Errorf("NewBinlogPlayerTables failed: %v", err)
-		}
+		player := binlogplayer.NewBinlogPlayerTables(vtClient, tablet, tables, bpc.sourceShard.Uid, bpc.binlogPlayerStats)
 		return player.ApplyBinlogEvents(bpc.ctx)
 	}
 	// the data we have to replicate is the intersection of the
@@ -362,10 +354,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 	}
 
-	player, err := binlogplayer.NewBinlogPlayerKeyRange(vtClient, tablet, overlap, bpc.sourceShard.Uid, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
-	if err != nil {
-		return fmt.Errorf("NewBinlogPlayerKeyRange failed: %v", err)
-	}
+	player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, tablet, overlap, bpc.sourceShard.Uid, bpc.binlogPlayerStats)
 	return player.ApplyBinlogEvents(bpc.ctx)
 }
 

@@ -1205,7 +1205,7 @@ class Vtctld(object):
         '-enable_queries',
         '-cell', 'test_nj',
         '-web_dir', environment.vttop + '/web/vtctld',
-        '-web_dir2', environment.vttop + '/web/vtctld2/dist',
+        '-web_dir2', environment.vttop + '/web/vtctld2',
         '--log_dir', environment.vtlogroot,
         '--port', str(self.port),
         '-tablet_manager_protocol',

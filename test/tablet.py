@@ -739,11 +739,11 @@ class Tablet(object):
               expected)
         logging.debug('  vttablet not answering at /debug/vars, waiting...')
       else:
-        if 'BinlogPlayerMapSize' not in v:
+        if 'VReplicationStreamCount' not in v:
           logging.debug(
-              '  vttablet not exporting BinlogPlayerMapSize, waiting...')
+              '  vttablet not exporting VReplicationStreamCount, waiting...')
         else:
-          s = v['BinlogPlayerMapSize']
+          s = v['VReplicationStreamCount']
           if s != expected:
             logging.debug("  vttablet's binlog player map has count %d != %d",
                           s, expected)

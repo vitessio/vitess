@@ -93,10 +93,3 @@ func TestReadVReplicationPos(t *testing.T) {
 		t.Errorf("ReadVReplicationThrottlerSettings(482821) = %#v, want %#v", got, want)
 	}
 }
-
-func TestReadVReplicationThrottlerSettings(t *testing.T) {
-	want := "SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=482821"
-	if got := ReadVReplicationThrottlerSettings(482821); got != want {
-		t.Errorf("ReadVReplicationThrottlerSettings(482821) = %#v, want %#v", got, want)
-	}
-}

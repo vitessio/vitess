@@ -121,7 +121,7 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.vreplication with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, tablet *topodatapb.Tablet, keyRange *topodatapb.KeyRange, uid uint32, startPosition, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
+func NewBinlogPlayerKeyRange(dbClient VtClient, tablet *topodatapb.Tablet, keyRange *topodatapb.KeyRange, uid uint32, blplStats *Stats) *BinlogPlayer {
 	result := &BinlogPlayer{
 		tablet:    tablet,
 		dbClient:  dbClient,
@@ -129,25 +129,14 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, tablet *topodatapb.Tablet, keyRa
 		uid:       uid,
 		blplStats: blplStats,
 	}
-	var err error
-	result.position, err = mysql.DecodePosition(startPosition)
-	if err != nil {
-		return nil, err
-	}
-	if stopPosition != "" {
-		result.stopPosition, err = mysql.DecodePosition(stopPosition)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return result, nil
+	return result
 }
 
 // NewBinlogPlayerTables returns a new BinlogPlayer pointing at the server
 // replicating the provided tables, starting at the startPosition,
 // and updating _vt.vreplication with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerTables(dbClient VtClient, tablet *topodatapb.Tablet, tables []string, uid uint32, startPosition string, stopPosition string, blplStats *Stats) (*BinlogPlayer, error) {
+func NewBinlogPlayerTables(dbClient VtClient, tablet *topodatapb.Tablet, tables []string, uid uint32, blplStats *Stats) *BinlogPlayer {
 	result := &BinlogPlayer{
 		tablet:    tablet,
 		dbClient:  dbClient,
@@ -155,19 +144,7 @@ func NewBinlogPlayerTables(dbClient VtClient, tablet *topodatapb.Tablet, tables 
 		uid:       uid,
 		blplStats: blplStats,
 	}
-	var err error
-	result.position, err = mysql.DecodePosition(startPosition)
-	if err != nil {
-		return nil, err
-	}
-	if stopPosition != "" {
-		var err error
-		result.stopPosition, err = mysql.DecodePosition(stopPosition)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return result, nil
+	return result
 }
 
 // writeRecoveryPosition writes the current GTID as the recovery position
@@ -207,6 +184,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 
 // ReadStartPosition returns the current start position for
 // the provided binlog player.
+// TODO(sougou): deprecate.
 func ReadStartPosition(dbClient VtClient, uid uint32) (string, error) {
 	selectRecovery := ReadVReplicationPos(uid)
 	qr, err := dbClient.ExecuteFetch(selectRecovery, 1)
@@ -217,31 +195,6 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (string, error) {
 		return "", fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
 	return qr.Rows[0][0].ToString(), nil
-}
-
-// readThrottlerSettings retrieves the throttler settings for
-// vreplication from the checkpoint table.
-func (blp *BinlogPlayer) readThrottlerSettings() (int64, int64, error) {
-	selectThrottlerSettings := ReadVReplicationThrottlerSettings(blp.uid)
-	qr, err := blp.dbClient.ExecuteFetch(selectThrottlerSettings, 1)
-	if err != nil {
-		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("error %v in selecting the throttler settings %v", err, selectThrottlerSettings)
-	}
-
-	if qr.RowsAffected != 1 {
-		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("checkpoint information not available in db for %v", blp.uid)
-	}
-
-	maxTPS, err := sqltypes.ToInt64(qr.Rows[0][0])
-	if err != nil {
-		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("failed to parse max_tps column: %v", err)
-	}
-	maxReplicationLag, err := sqltypes.ToInt64(qr.Rows[0][1])
-	if err != nil {
-		return throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
-	}
-
-	return maxTPS, maxReplicationLag, nil
 }
 
 func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) (ok bool, err error) {
@@ -336,11 +289,23 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 
 // applyEvents returns a recordable status message on termination or an error otherwise.
 func (blp *BinlogPlayer) applyEvents(ctx context.Context) (string, error) {
-	// Instantiate the throttler based on the configuration stored in the db.
-	maxTPS, maxReplicationLag, err := blp.readThrottlerSettings()
+	// Read starting values for replication.
+	pos, stopPos, maxTPS, maxReplicationLag, err := blp.readVRSettings()
 	if err != nil {
 		log.Error(err)
 		return "", err
+	}
+	blp.position, err = mysql.DecodePosition(pos)
+	if err != nil {
+		log.Error(err)
+		return "", err
+	}
+	if stopPos != "" {
+		blp.stopPosition, err = mysql.DecodePosition(stopPos)
+		if err != nil {
+			log.Error(err)
+			return "", err
+		}
 	}
 	t, err := throttler.NewThrottler(
 		fmt.Sprintf("BinlogPlayer/%d", blp.uid), "transactions", 1 /* threadCount */, maxTPS, maxReplicationLag)
@@ -540,6 +505,31 @@ func setVReplicationState(dbClient VtClient, uid uint32, state, message string) 
 	return nil
 }
 
+// readVRSettings retrieves the throttler settings for
+// vreplication from the checkpoint table.
+func (blp *BinlogPlayer) readVRSettings() (pos, stopPos string, maxTPS, maxReplicationLag int64, err error) {
+	query := fmt.Sprintf("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=%v", blp.uid)
+	qr, err := blp.dbClient.ExecuteFetch(query, 1)
+	if err != nil {
+		return "", "", throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
+	}
+
+	if qr.RowsAffected != 1 {
+		return "", "", throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("checkpoint information not available in db for %v", blp.uid)
+	}
+
+	maxTPS, err = sqltypes.ToInt64(qr.Rows[0][2])
+	if err != nil {
+		return "", "", throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("failed to parse max_tps column: %v", err)
+	}
+	maxReplicationLag, err = sqltypes.ToInt64(qr.Rows[0][3])
+	if err != nil {
+		return "", "", throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
+	}
+
+	return qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString(), maxTPS, maxReplicationLag, nil
+}
+
 // CreateVReplication returns a statement to populate the first value into
 // the _vt.vreplication table.
 func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64) string {
@@ -584,6 +574,11 @@ func StopVReplication(uid uint32, message string) string {
 		BlpStopped, encodeString(message), uid)
 }
 
+// DeleteVReplication returns a statement to delete the replication.
+func DeleteVReplication(uid uint32) string {
+	return fmt.Sprintf("DELETE FROM _vt.vreplication WHERE id=%v", uid)
+}
+
 func encodeString(in string) string {
 	buf := bytes.NewBuffer(nil)
 	sqltypes.NewVarChar(in).EncodeSQL(buf)
@@ -594,11 +589,4 @@ func encodeString(in string) string {
 // given shard from the _vt.vreplication table.
 func ReadVReplicationPos(index uint32) string {
 	return fmt.Sprintf("SELECT pos FROM _vt.vreplication WHERE id=%v", index)
-}
-
-// ReadVReplicationThrottlerSettings returns a statement to query the throttler settings
-// (used by vreplication) for a given shard from the_vt.vreplication
-// table.
-func ReadVReplicationThrottlerSettings(index uint32) string {
-	return fmt.Sprintf("SELECT max_tps, max_replication_lag FROM _vt.vreplication WHERE id=%v", index)
 }

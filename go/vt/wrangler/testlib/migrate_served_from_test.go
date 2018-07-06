@@ -24,8 +24,10 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -96,19 +98,22 @@ func TestMigrateServedFrom(t *testing.T) {
 	destReplica.StartActionLoop(t, wr)
 	defer destReplica.StopActionLoop(t)
 
-	// destMaster will see the refresh, and has to respond to it.
-	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
-	destMaster.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SELECT pos FROM _vt.vreplication WHERE id=0": {
-			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.NewVarBinary(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition)),
-				},
-			},
-		},
-	}
 	destMaster.StartActionLoop(t, wr)
 	defer destMaster.StopActionLoop(t)
+
+	// Override with a fake VREngine after Agent is initialized in action loop.
+	dbClient := binlogplayer.NewVtClientMock()
+	dbClientFactory := func() binlogplayer.VtClient { return dbClient }
+	destMaster.Agent.VREngine = vreplication.NewEngine(ts, "", destMaster.FakeMysqlDaemon, dbClientFactory)
+	// select * from _vt.vreplication during Open
+	dbClient.AddResult(&sqltypes.Result{})
+	if err := destMaster.Agent.VREngine.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// select pos from _vt.vreplication
+	dbClient.AddResult(&sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/5-456-892"),
+	}}})
 
 	// simulate the clone, by fixing the dest shard record
 	if err := vp.Run([]string{"SourceShardAdd", "--tables", "gone1,gone2", "dest/0", "0", "source/0"}); err != nil {
