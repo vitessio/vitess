@@ -21,8 +21,11 @@ package vtgate
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -53,6 +56,28 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+const (
+	// for health monitoring
+	statusHealthy   = "ok"
+	statusUnhealthy = "not ok"
+)
+
+type healthStatus struct {
+	mu     *sync.Mutex
+	health string
+}
+
+func (h healthStatus) SetHealth(body string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if strings.Contains(body, statusUnhealthy) {
+		h.health = statusUnhealthy
+	} else if strings.Contains(body, statusHealthy) {
+		h.health = statusHealthy
+	}
+}
+
 var (
 	transactionMode     = flag.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
 	normalizeQueries    = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
@@ -63,6 +88,7 @@ var (
 	enableForwarding    = flag.Bool("enable_forwarding", false, "if specified, this process will also expose a QueryService interface that allows other vtgates to talk through this vtgate to the underlying tablets.")
 	l2vtgateAddrs       flagutil.StringListValue
 	disableLocalGateway = flag.Bool("disable_local_gateway", false, "if specified, this process will not route any queries to local tablets in the local cell")
+	currentHealth       = healthStatus{health: statusHealthy}
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -263,11 +289,19 @@ func (vtg *VTGate) registerDebugHealthHandler() {
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain")
+
+		if r.Method == "PUT" {
+			body, err := ioutil.ReadAll(r.Body)
+			if err == nil {
+				currentHealth.SetHealth(string(body))
+			}
+		}
+
 		if err := vtg.IsHealthy(); err != nil {
-			w.Write([]byte("not ok"))
+			w.Write([]byte(statusUnhealthy))
 			return
 		}
-		w.Write([]byte("ok"))
+		w.Write([]byte(statusHealthy))
 	})
 }
 
