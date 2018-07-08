@@ -57,12 +57,12 @@ type Engine struct {
 	ts              *topo.Server
 	cell            string
 	mysqld          mysqlctl.MysqlDaemon
-	dbClientFactory func() binlogplayer.VtClient
+	dbClientFactory func() binlogplayer.DBClient
 }
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.VtClient) *Engine {
+func NewEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient) *Engine {
 	vre := &Engine{
 		controllers:     make(map[int]*controller),
 		ts:              ts,
@@ -296,7 +296,7 @@ func (vre *Engine) updateStats() {
 	}
 }
 
-func readAllRows(dbClient binlogplayer.VtClient) ([]map[string]string, error) {
+func readAllRows(dbClient binlogplayer.DBClient) ([]map[string]string, error) {
 	qr, err := dbClient.ExecuteFetch("select * from _vt.vreplication", 10000)
 	if err != nil {
 		return nil, err
@@ -312,7 +312,7 @@ func readAllRows(dbClient binlogplayer.VtClient) ([]map[string]string, error) {
 	return maps, nil
 }
 
-func readRow(dbClient binlogplayer.VtClient, id int) (map[string]string, error) {
+func readRow(dbClient binlogplayer.DBClient, id int) (map[string]string, error) {
 	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from _vt.vreplication where id = %d", id), 10)
 	if err != nil {
 		return nil, err

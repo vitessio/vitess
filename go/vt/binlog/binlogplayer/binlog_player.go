@@ -100,7 +100,7 @@ func NewStats() *Stats {
 // BinlogPlayer is for reading a stream of updates from BinlogServer.
 type BinlogPlayer struct {
 	tablet   *topodatapb.Tablet
-	dbClient VtClient
+	dbClient DBClient
 
 	// for key range base requests
 	keyRange *topodatapb.KeyRange
@@ -121,7 +121,7 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.vreplication with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, tablet *topodatapb.Tablet, keyRange *topodatapb.KeyRange, uid uint32, blplStats *Stats) *BinlogPlayer {
+func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRange *topodatapb.KeyRange, uid uint32, blplStats *Stats) *BinlogPlayer {
 	result := &BinlogPlayer{
 		tablet:    tablet,
 		dbClient:  dbClient,
@@ -136,7 +136,7 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, tablet *topodatapb.Tablet, keyRa
 // replicating the provided tables, starting at the startPosition,
 // and updating _vt.vreplication with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerTables(dbClient VtClient, tablet *topodatapb.Tablet, tables []string, uid uint32, blplStats *Stats) *BinlogPlayer {
+func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables []string, uid uint32, blplStats *Stats) *BinlogPlayer {
 	result := &BinlogPlayer{
 		tablet:    tablet,
 		dbClient:  dbClient,
@@ -185,7 +185,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 // ReadStartPosition returns the current start position for
 // the provided binlog player.
 // TODO(sougou): deprecate.
-func ReadStartPosition(dbClient VtClient, uid uint32) (string, error) {
+func ReadStartPosition(dbClient DBClient, uid uint32) (string, error) {
 	selectRecovery := ReadVReplicationPos(uid)
 	qr, err := dbClient.ExecuteFetch(selectRecovery, 1)
 	if err != nil {
@@ -204,7 +204,7 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 	}
 	for i, stmt := range tx.Statements {
 		// Make sure the statement is replayed in the proper charset.
-		if dbClient, ok := blp.dbClient.(*DBClient); ok {
+		if dbClient, ok := blp.dbClient.(*dbClientImpl); ok {
 			var stmtCharset *binlogdatapb.Charset
 			if stmt.Charset != nil {
 				stmtCharset = stmt.Charset
@@ -363,7 +363,7 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) (string, error) {
 	// Get the current charset of our connection, so we can ask the stream server
 	// to check that they match. The streamer will also only send per-statement
 	// charset data if that statement's charset is different from what we specify.
-	if dbClient, ok := blp.dbClient.(*DBClient); ok {
+	if dbClient, ok := blp.dbClient.(*dbClientImpl); ok {
 		blp.defaultCharset, err = mysql.GetCharset(dbClient.dbConn)
 		if err != nil {
 			return "", fmt.Errorf("can't get charset to request binlog stream: %v", err)
@@ -497,7 +497,7 @@ func CreateVReplicationTable() []string {
 }
 
 // setVReplicationState updates the state in the _vt.vreplication table.
-func setVReplicationState(dbClient VtClient, uid uint32, state, message string) error {
+func setVReplicationState(dbClient DBClient, uid uint32, state, message string) error {
 	query := fmt.Sprintf("UPDATE _vt.vreplication SET state='%v', message='%v' WHERE id=%v", state, message, uid)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)

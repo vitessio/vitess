@@ -52,8 +52,6 @@ func createVerticalSplitCloneDestinationFakeDb(t *testing.T, name string, insert
 		f.AddExpectedQuery("INSERT INTO `vt_destination_ks`.`moving1` (`id`, `msg`) VALUES (*", nil)
 	}
 
-	expectBlpCheckpointCreationQueries(f)
-
 	return f
 }
 
