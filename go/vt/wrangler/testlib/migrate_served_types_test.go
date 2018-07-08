@@ -137,18 +137,19 @@ func TestMigrateServedTypes(t *testing.T) {
 	defer dest1Master.StopActionLoop(t)
 
 	// Override with a fake VREngine after Agent is initialized in action loop.
-	dbClient1 := binlogplayer.NewVtClientMock()
-	dbClientFactory1 := func() binlogplayer.VtClient { return dbClient1 }
+	dbClient1 := binlogplayer.NewDBClientMock(t)
+	dbClientFactory1 := func() binlogplayer.DBClient { return dbClient1 }
 	dest1Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1)
 	// select * from _vt.vreplication during Open
-	dbClient1.AddResult(&sqltypes.Result{})
+	dbClient1.ExpectRequest("select * from _vt.vreplication", &sqltypes.Result{}, nil)
 	if err := dest1Master.Agent.VREngine.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	// select pos from _vt.vreplication
-	dbClient1.AddResult(&sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient1.ExpectRequest("SELECT pos FROM _vt.vreplication WHERE id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
-	}}})
+	}}}, nil)
+	dbClient1.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
 
 	// dest2Rdonly will see the refresh
 	dest2Rdonly.StartActionLoop(t, wr)
@@ -162,18 +163,19 @@ func TestMigrateServedTypes(t *testing.T) {
 	defer dest2Master.StopActionLoop(t)
 
 	// Override with a fake VREngine after Agent is initialized in action loop.
-	dbClient2 := binlogplayer.NewVtClientMock()
-	dbClientFactory2 := func() binlogplayer.VtClient { return dbClient2 }
+	dbClient2 := binlogplayer.NewDBClientMock(t)
+	dbClientFactory2 := func() binlogplayer.DBClient { return dbClient2 }
 	dest2Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2)
 	// select * from _vt.vreplication during Open
-	dbClient2.AddResult(&sqltypes.Result{})
+	dbClient2.ExpectRequest("select * from _vt.vreplication", &sqltypes.Result{}, nil)
 	if err := dest2Master.Agent.VREngine.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	// select pos from _vt.vreplication
-	dbClient2.AddResult(&sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient2.ExpectRequest("SELECT pos FROM _vt.vreplication WHERE id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
-	}}})
+	}}}, nil)
+	dbClient2.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
 
 	// migrate will error if the overlapping shards have no "SourceShard" entry
 	// and we cannot decide which shard is the source or the destination.
@@ -184,10 +186,10 @@ func TestMigrateServedTypes(t *testing.T) {
 	// simulate the clone, by fixing the dest shard record
 	checkShardSourceShards(t, ts, "-80", 0)
 	checkShardSourceShards(t, ts, "80-", 0)
-	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/-80", "0", "ks/0"}); err != nil {
+	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/-80", "1", "ks/0"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
-	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/80-", "0", "ks/0"}); err != nil {
+	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/80-", "1", "ks/0"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
 	checkShardSourceShards(t, ts, "-80", 1)

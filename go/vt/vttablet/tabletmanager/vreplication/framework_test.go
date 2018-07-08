@@ -19,7 +19,6 @@ package vreplication
 import (
 	"flag"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -212,20 +211,6 @@ func expectFBCRequest(t *testing.T, fbc *fakeBinlogClient, tablet *topodatapb.Ta
 	}
 	if !proto.Equal(kr, fbc.lastKeyRange) {
 		t.Errorf("Request KeyRange: %v, want %v", fbc.lastKeyRange, kr)
-	}
-}
-
-//--------------------------------------
-// dbClient helpers
-
-func expectCommit(t *testing.T, dbClient *binlogplayer.VtClientMock, want []string) {
-	t.Helper()
-	commit := <-dbClient.CommitChannel
-	for i, got := range commit {
-		if !strings.HasPrefix(got, want[i]) {
-			t.Errorf("vc.log:\n%v\nwant:\n%v", strings.Join(commit, "\n"), strings.Join(want, "\n"))
-			return
-		}
 	}
 }
 

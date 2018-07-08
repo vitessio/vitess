@@ -56,28 +56,6 @@ func runCommand(t *testing.T, wi *Instance, wr *wrangler.Wrangler, args []string
 	return nil
 }
 
-// expectBlpCheckpointCreationQueries fakes out the queries which vtworker
-// sends out to create the Binlog Player (BLP) checkpoint.
-func expectBlpCheckpointCreationQueries(f *fakesqldb.DB) {
-	f.AddExpectedQuery("CREATE DATABASE IF NOT EXISTS _vt", nil)
-	f.AddExpectedQuery("CREATE TABLE IF NOT EXISTS _vt.vreplication (\n"+
-		"  id INT,\n"+
-		"  workflow VARBINARY(1000),\n"+
-		"  source VARBINARY(10000) NOT NULL,\n"+
-		"  pos VARBINARY(10000) NOT NULL,\n"+
-		"  stop_pos VARBINARY(10000) DEFAULT NULL,\n"+
-		"  max_tps BIGINT(20) NOT NULL,\n"+
-		"  max_replication_lag BIGINT(20) NOT NULL,\n"+
-		"  cell VARBINARY(1000) DEFAULT NULL,\n"+
-		"  tablet_types VARBINARY(100) DEFAULT NULL,\n"+
-		"  time_updated BIGINT(20) NOT NULL,\n"+
-		"  transaction_timestamp BIGINT(20) NOT NULL,\n"+
-		"  state VARBINARY(100) NOT NULL,\n"+
-		"  message VARBINARY(1000) DEFAULT NULL,\n"+
-		"  PRIMARY KEY (id)\n) ENGINE=InnoDB", nil)
-	f.AddExpectedQuery("INSERT INTO _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) VALUES (0, *", nil)
-}
-
 // sourceRdonlyFakeDB fakes out the MIN, MAX query on the primary key.
 // (This query is used to calculate the split points for reading a table
 // using multiple threads.)

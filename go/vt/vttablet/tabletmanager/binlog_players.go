@@ -64,7 +64,7 @@ func init() {
 type BinlogPlayerController struct {
 	// Configuration parameters (set at construction, immutable).
 	ts              *topo.Server
-	vtClientFactory func() binlogplayer.VtClient
+	vtClientFactory func() binlogplayer.DBClient
 	mysqld          mysqlctl.MysqlDaemon
 
 	// Information about us (set at construction, immutable).
@@ -116,7 +116,7 @@ type BinlogPlayerController struct {
 // Use Start() and Stop() to start and stop it.
 // Once stopped, you should call Close() to stop and free resources e.g. the
 // healthcheck instance.
-func newBinlogPlayerController(ts *topo.Server, vtClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, cell string, keyRange *topodatapb.KeyRange, sourceShard *topodatapb.Shard_SourceShard, dbName string) *BinlogPlayerController {
+func newBinlogPlayerController(ts *topo.Server, vtClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, cell string, keyRange *topodatapb.KeyRange, sourceShard *topodatapb.Shard_SourceShard, dbName string) *BinlogPlayerController {
 	healthCheck := discovery.NewHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
 	return &BinlogPlayerController{
 		ts:                ts,
@@ -359,7 +359,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 }
 
 // BlpPosition returns the current position for a controller, as read from the database.
-func (bpc *BinlogPlayerController) BlpPosition(vtClient binlogplayer.VtClient) (*tabletmanagerdatapb.BlpPosition, error) {
+func (bpc *BinlogPlayerController) BlpPosition(vtClient binlogplayer.DBClient) (*tabletmanagerdatapb.BlpPosition, error) {
 	pos, err := binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 	if err != nil {
 		return nil, err
@@ -375,7 +375,7 @@ func (bpc *BinlogPlayerController) BlpPosition(vtClient binlogplayer.VtClient) (
 type BinlogPlayerMap struct {
 	// Immutable, set at construction time.
 	ts              *topo.Server
-	vtClientFactory func() binlogplayer.VtClient
+	vtClientFactory func() binlogplayer.DBClient
 	mysqld          mysqlctl.MysqlDaemon
 
 	// This mutex protects the map and the state.
@@ -392,7 +392,7 @@ const (
 )
 
 // NewBinlogPlayerMap creates a new map of players.
-func NewBinlogPlayerMap(ts *topo.Server, mysqld mysqlctl.MysqlDaemon, vtClientFactory func() binlogplayer.VtClient) *BinlogPlayerMap {
+func NewBinlogPlayerMap(ts *topo.Server, mysqld mysqlctl.MysqlDaemon, vtClientFactory func() binlogplayer.DBClient) *BinlogPlayerMap {
 	return &BinlogPlayerMap{
 		ts:              ts,
 		vtClientFactory: vtClientFactory,

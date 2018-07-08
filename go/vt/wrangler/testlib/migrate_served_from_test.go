@@ -102,21 +102,21 @@ func TestMigrateServedFrom(t *testing.T) {
 	defer destMaster.StopActionLoop(t)
 
 	// Override with a fake VREngine after Agent is initialized in action loop.
-	dbClient := binlogplayer.NewVtClientMock()
-	dbClientFactory := func() binlogplayer.VtClient { return dbClient }
+	dbClient := binlogplayer.NewDBClientMock(t)
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	destMaster.Agent.VREngine = vreplication.NewEngine(ts, "", destMaster.FakeMysqlDaemon, dbClientFactory)
-	// select * from _vt.vreplication during Open
-	dbClient.AddResult(&sqltypes.Result{})
+	dbClient.ExpectRequest("select * from _vt.vreplication", &sqltypes.Result{}, nil)
 	if err := destMaster.Agent.VREngine.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	// select pos from _vt.vreplication
-	dbClient.AddResult(&sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient.ExpectRequest("SELECT pos FROM _vt.vreplication WHERE id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
-	}}})
+	}}}, nil)
+	dbClient.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
 
 	// simulate the clone, by fixing the dest shard record
-	if err := vp.Run([]string{"SourceShardAdd", "--tables", "gone1,gone2", "dest/0", "0", "source/0"}); err != nil {
+	if err := vp.Run([]string{"SourceShardAdd", "--tables", "gone1,gone2", "dest/0", "1", "source/0"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
 

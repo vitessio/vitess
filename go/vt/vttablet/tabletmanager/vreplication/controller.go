@@ -41,7 +41,7 @@ var retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay
 // There is no mutext within a controller becaust its members are
 // either read-only or self-synchronized.
 type controller struct {
-	dbClientFactory func() binlogplayer.VtClient
+	dbClientFactory func() binlogplayer.DBClient
 	mysqld          mysqlctl.MysqlDaemon
 	blpStats        *binlogplayer.Stats
 
@@ -57,7 +57,7 @@ type controller struct {
 	sourceTablet sync2.AtomicString
 }
 
-func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.VtClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats) (*controller, error) {
+func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats) (*controller, error) {
 	if blpStats == nil {
 		blpStats = binlogplayer.NewStats()
 	}
@@ -120,6 +120,12 @@ func (ct *controller) run(ctx context.Context) {
 		err := ct.runBlp(ctx)
 		if err == nil {
 			return
+		}
+		// Sometimes, canceled contexts get wrapped as errors.
+		select {
+		case <-ctx.Done():
+			return
+		default:
 		}
 		log.Warningf("%v: %v", ct, err)
 		time.Sleep(*retryDelay)
