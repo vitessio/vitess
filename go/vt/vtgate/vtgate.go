@@ -78,6 +78,14 @@ func (h healthStatus) SetHealth(body string) {
 	}
 }
 
+// following the vtgate signature rather than returning a bool
+func (h healthStatus) isHealthy() error {
+	if h.health == statusHealthy {
+		return nil
+	}
+	return fmt.Errorf(statusUnhealthy)
+}
+
 var (
 	transactionMode     = flag.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
 	normalizeQueries    = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
@@ -308,7 +316,7 @@ func (vtg *VTGate) registerDebugHealthHandler() {
 // IsHealthy returns nil if server is healthy.
 // Otherwise, it returns an error indicating the reason.
 func (vtg *VTGate) IsHealthy() error {
-	return nil
+	return currentHealth.isHealthy()
 }
 
 // Gateway returns the current gateway implementation. Mostly used for tests.
