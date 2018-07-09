@@ -76,8 +76,9 @@ func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflo
 	subFlags := flag.NewFlagSet(horizontalReshardingFactoryName, flag.ContinueOnError)
 	keyspace := subFlags.String("keyspace", "", "Name of keyspace to perform horizontal resharding")
 	vtworkersStr := subFlags.String("vtworkers", "", "A comma-separated list of vtworker addresses")
-	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "1", "Minimum number of healthy RDONLY tablets required")
+	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "1", "Minimum number of healthy RDONLY tablets required in source shards")
 	splitCmd := subFlags.String("split_cmd", "SplitClone", "Split command to use to perform horizontal resharding (either SplitClone or LegacySplitClone)")
+	splitDiffDestTabletType := subFlags.String("split_diff_dest_tablet_type", "RDONLY", "Specifies tablet type to use in destination shards while performing SplitDiff operation")
 	enableApprovals := subFlags.Bool("enable_approvals", true, "If true, executions of tasks require user's approvals on the UI.")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -90,7 +91,7 @@ func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflo
 	vtworkers := strings.Split(*vtworkersStr, ",")
 	w.Name = fmt.Sprintf("Horizontal resharding on keyspace %s", *keyspace)
 
-	checkpoint, err := initCheckpoint(m.TopoServer(), *keyspace, vtworkers, *minHealthyRdonlyTablets, *splitCmd)
+	checkpoint, err := initCheckpoint(m.TopoServer(), *keyspace, vtworkers, *minHealthyRdonlyTablets, *splitCmd, *splitDiffDestTabletType)
 	if err != nil {
 		return err
 	}
@@ -211,12 +212,12 @@ func createUINodes(rootNode *workflow.Node, phaseName PhaseType, shards []string
 }
 
 // initCheckpoint initialize the checkpoint for the horizontal workflow.
-func initCheckpoint(ts *topo.Server, keyspace string, vtworkers []string, minHealthyRdonlyTablets string, splitCmd string) (*workflowpb.WorkflowCheckpoint, error) {
+func initCheckpoint(ts *topo.Server, keyspace string, vtworkers []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string) (*workflowpb.WorkflowCheckpoint, error) {
 	sourceShards, destinationShards, err := findSourceAndDestinationShards(ts, keyspace)
 	if err != nil {
 		return nil, err
 	}
-	return initCheckpointFromShards(keyspace, vtworkers, sourceShards, destinationShards, minHealthyRdonlyTablets, splitCmd)
+	return initCheckpointFromShards(keyspace, vtworkers, sourceShards, destinationShards, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType)
 }
 
 func findSourceAndDestinationShards(ts *topo.Server, keyspace string) ([]string, []string, error) {
@@ -246,7 +247,7 @@ func findSourceAndDestinationShards(ts *topo.Server, keyspace string) ([]string,
 	return sourceShards, destinationShards, nil
 }
 
-func initCheckpointFromShards(keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets string, splitCmd string) (*workflowpb.WorkflowCheckpoint, error) {
+func initCheckpointFromShards(keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string) (*workflowpb.WorkflowCheckpoint, error) {
 	if len(vtworkers) != len(sourceShards) {
 		return nil, fmt.Errorf("there are %v vtworkers, %v source shards: the number should be same", len(vtworkers), len(sourceShards))
 	}
@@ -278,6 +279,7 @@ func initCheckpointFromShards(keyspace string, vtworkers, sourceShards, destinat
 		return map[string]string{
 			"keyspace":          keyspace,
 			"destination_shard": shard,
+			"dest_tablet_type":  splitDiffDestTabletType,
 			"vtworker":          vtworkers[0],
 		}
 	})

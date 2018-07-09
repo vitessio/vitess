@@ -29,6 +29,8 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const splitDiffHTML = `
@@ -80,6 +82,7 @@ func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSe
 	sourceUID := subFlags.Int("source_uid", 0, "uid of the source shard to run the diff against")
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
 	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyRdonlyTablets, "minimum number of healthy RDONLY tablets before taking out one")
+	destTabletTypeStr := subFlags.String("dest_tablet_type", defaultDestTabletType, "destination tablet type (RDONLY or REPLICA) that will be used to compare the shards")
 	parallelDiffsCount := subFlags.Int("parallel_diffs_count", defaultParallelDiffsCount, "number of tables to diff in parallel")
 	if err := subFlags.Parse(args); err != nil {
 		return nil, err
@@ -96,7 +99,13 @@ func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSe
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return NewSplitDiffWorker(wr, wi.cell, keyspace, shard, uint32(*sourceUID), excludeTableArray, *minHealthyRdonlyTablets, *parallelDiffsCount), nil
+
+	destTabletType, ok := topodatapb.TabletType_value[*destTabletTypeStr]
+	if !ok {
+		return nil, fmt.Errorf("command SplitDiff invalid dest_tablet_type: %v", destTabletType)
+	}
+
+	return NewSplitDiffWorker(wr, wi.cell, keyspace, shard, uint32(*sourceUID), excludeTableArray, *minHealthyRdonlyTablets, *parallelDiffsCount, topodatapb.TabletType(destTabletType)), nil
 }
 
 // shardsWithSources returns all the shards that have SourceShards set
@@ -210,7 +219,8 @@ func interactiveSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangl
 	}
 
 	// start the diff job
-	wrk := NewSplitDiffWorker(wr, wi.cell, keyspace, shard, uint32(sourceUID), excludeTableArray, int(minHealthyRdonlyTablets), int(parallelDiffsCount))
+	// TODO: @rafael - Add option to set destination tablet type in UI form.
+	wrk := NewSplitDiffWorker(wr, wi.cell, keyspace, shard, uint32(sourceUID), excludeTableArray, int(minHealthyRdonlyTablets), int(parallelDiffsCount), topodatapb.TabletType_RDONLY)
 	return wrk, nil, nil, nil
 }
 

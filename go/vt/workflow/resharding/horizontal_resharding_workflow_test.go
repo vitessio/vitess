@@ -103,9 +103,9 @@ func setupFakeVtworker(keyspace, vtworkers string) *fakevtworkerclient.FakeVtwor
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"Reset"}, "", nil)
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitClone", "--min_healthy_rdonly_tablets=1", keyspace + "/0"}, "", nil)
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"Reset"}, "", nil)
-	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", keyspace + "/-80"}, "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=RDONLY", keyspace + "/-80"}, "", nil)
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"Reset"}, "", nil)
-	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", keyspace + "/80-"}, "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=RDONLY", keyspace + "/80-"}, "", nil)
 	return fakeVtworkerClient
 }
 
