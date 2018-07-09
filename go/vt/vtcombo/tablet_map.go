@@ -624,22 +624,6 @@ func (itmc *internalTabletManagerClient) GetSlaves(ctx context.Context, tablet *
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) WaitBlpPosition(ctx context.Context, tablet *topodatapb.Tablet, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
-	return fmt.Errorf("not implemented in vtcombo")
-}
-
-func (itmc *internalTabletManagerClient) StopBlp(ctx context.Context, tablet *topodatapb.Tablet) ([]*tabletmanagerdatapb.BlpPosition, error) {
-	return nil, fmt.Errorf("not implemented in vtcombo")
-}
-
-func (itmc *internalTabletManagerClient) StartBlp(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return fmt.Errorf("not implemented in vtcombo")
-}
-
-func (itmc *internalTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *topodatapb.Tablet, positions []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error) {
-	return "", fmt.Errorf("not implemented in vtcombo")
-}
-
 func (itmc *internalTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
