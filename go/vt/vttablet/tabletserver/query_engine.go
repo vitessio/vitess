@@ -262,6 +262,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 			"/debug/query_stats",
 			"/debug/query_rules",
 			"/debug/consolidations",
+			"/debug/acl",
 		}
 		for _, ep := range endpoints {
 			http.Handle(ep, qe)
@@ -551,6 +552,8 @@ func (qe *QueryEngine) ServeHTTP(response http.ResponseWriter, request *http.Req
 		qe.handleHTTPQueryStats(response, request)
 	case "/debug/query_rules":
 		qe.handleHTTPQueryRules(response, request)
+	case "/debug/acl":
+		qe.handleHTTPAclJSON(response, request)
 	case "/debug/consolidations":
 		qe.handleHTTPConsolidations(response, request)
 	default:
@@ -599,6 +602,23 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 func (qe *QueryEngine) handleHTTPQueryRules(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	b, err := json.MarshalIndent(qe.queryRuleSources, "", " ")
+	if err != nil {
+		response.Write([]byte(err.Error()))
+		return
+	}
+	buf := bytes.NewBuffer(nil)
+	json.HTMLEscape(buf, b)
+	response.Write(buf.Bytes())
+}
+
+func (qe *QueryEngine) handleHTTPAclJSON(response http.ResponseWriter, request *http.Request) {
+	aclConfig := tableacl.GetCurrentConfig()
+	if aclConfig == nil {
+		response.WriteHeader(http.StatusNotFound)
+		return
+	}
+	response.Header().Set("Content-Type", "application/json; charset=utf-8")
+	b, err := json.MarshalIndent(aclConfig, "", " ")
 	if err != nil {
 		response.Write([]byte(err.Error()))
 		return
