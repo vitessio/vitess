@@ -33,10 +33,13 @@ export class NewWorkflowFlags {
     this.flags['horizontal_resharding_split_cmd'] = new SplitCloneCommand(7, 'horizontal_resharding_split_cmd');
     this.flags['horizontal_resharding_split_cmd'].positional = true;
     this.flags['horizontal_resharding_split_cmd'].namedPositional = 'split_cmd';
-    this.flags['horizontal_resharding_min_healthy_rdonly_tablets'] = new HorizontalReshardingMinHealthyRdonlyTablets(8, 'horizontal_resharding_min_healthy_rdonly_tablets');
+    this.flags['horizontal_resharding_split_diff_dest_tablet_type'] = new SplitDiffTabletType(8, 'horizontal_resharding_split_diff_dest_tablet_type');
+    this.flags['horizontal_resharding_split_diff_dest_tablet_type'].positional = true;
+    this.flags['horizontal_resharding_split_diff_dest_tablet_type'].namedPositional = 'split_diff_dest_tablet_type';
+    this.flags['horizontal_resharding_min_healthy_rdonly_tablets'] = new HorizontalReshardingMinHealthyRdonlyTablets(9, 'horizontal_resharding_min_healthy_rdonly_tablets');
     this.flags['horizontal_resharding_min_healthy_rdonly_tablets'].positional = true;
     this.flags['horizontal_resharding_min_healthy_rdonly_tablets'].namedPositional = 'min_healthy_rdonly_tablets';
-    this.flags['horizontal_resharding_enable_approvals'] = new HorizontalReshardingEnableApprovalsFlag(9, 'horizontal_resharding_enable_approvals');
+    this.flags['horizontal_resharding_enable_approvals'] = new HorizontalReshardingEnableApprovalsFlag(10, 'horizontal_resharding_enable_approvals');
     this.flags['horizontal_resharding_enable_approvals'].positional = true;
     this.flags['horizontal_resharding_enable_approvals'].namedPositional = 'enable_approvals';
   }
@@ -53,6 +56,24 @@ export class SplitCloneCommand extends DropDownFlag {
         options.push({
             label: 'LegacySplitClone',
             value: 'LegacySplitClone'
+        });
+        this.setOptions(options);
+        this.value = options[0].value;
+        this.setDisplayOn('factory_name', 'horizontal_resharding');
+    }
+}
+
+export class SplitDiffTabletType extends DropDownFlag {
+    constructor(position: number, id: string) {
+        super(position, id, 'SplitDiff destination tablet type', 'Specifies tablet type to use in destination shards while performing SplitDiff operation', '');
+        let options = [];
+        options.push({
+            label: 'RDONLY',
+            value: 'RDONLY'
+        });
+        options.push({
+            label: 'REPLICA',
+            value: 'REPLICA'
         });
         this.setOptions(options);
         this.value = options[0].value;
@@ -136,7 +157,7 @@ export class HorizontalReshardingVtworkerFlag extends InputFlag {
 
 export class HorizontalReshardingMinHealthyRdonlyTablets extends InputFlag {
   constructor(position: number, id: string, value= '') {
-    super(position, id, 'min healthy rdonly tablets', 'Minimum number of healthy RDONLY tablets required', value);
+    super(position, id, 'min healthy rdonly tablets', 'Minimum number of healthy RDONLY tablets required in source shards', value);
     this.setDisplayOn('factory_name', 'horizontal_resharding');
   }
 }
