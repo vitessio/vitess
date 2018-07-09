@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	testTPSResponse = &sqltypes.Result{
+	testSettingsResponse = &sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 1,
 		InsertID:     0,
@@ -61,9 +61,9 @@ func TestControllerKeyRange(t *testing.T) {
 		"source": `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 	}
 
-	dbClient := binlogplayer.NewDBClientMock(t)
+	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testTPSResponse, nil)
+	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("BEGIN", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -96,9 +96,9 @@ func TestControllerTables(t *testing.T) {
 		"source": `keyspace:"ks" shard:"0" tables:"table1" tables:"/funtables_/" `,
 	}
 
-	dbClient := binlogplayer.NewDBClientMock(t)
+	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testTPSResponse, nil)
+	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("BEGIN", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -188,9 +188,9 @@ func TestControllerOverrides(t *testing.T) {
 		"tablet_types": "replica",
 	}
 
-	dbClient := binlogplayer.NewDBClientMock(t)
+	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testTPSResponse, nil)
+	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("BEGIN", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -237,17 +237,6 @@ func TestControllerCanceledContext(t *testing.T) {
 	}
 }
 
-var badConnFailed = make(chan bool, 10)
-
-type badConn struct {
-	binlogplayer.DBClient
-}
-
-func (bc *badConn) Connect() error {
-	badConnFailed <- true
-	return errors.New("err")
-}
-
 func TestControllerRetry(t *testing.T) {
 	savedDelay := *retryDelay
 	defer func() { *retryDelay = savedDelay }()
@@ -265,7 +254,16 @@ func TestControllerRetry(t *testing.T) {
 		"tablet_types": "replica",
 	}
 
-	dbClient := &badConn{DBClient: binlogplayer.NewDBClientMock(t)}
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", nil, errors.New("(expected error)"))
+	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Error', message='error (expected error) in selecting vreplication settings SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1' WHERE id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("BEGIN", nil, nil)
+	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
+	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("COMMIT", nil, nil)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 
@@ -273,10 +271,9 @@ func TestControllerRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Do it twice to ensure retry happened.
-	<-badConnFailed
-	<-badConnFailed
-	ct.Stop()
+	defer ct.Stop()
+
+	dbClient.Wait()
 }
 
 func TestControllerStopPosition(t *testing.T) {
@@ -290,7 +287,7 @@ func TestControllerStopPosition(t *testing.T) {
 		"source": `keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 	}
 
-	dbClient := binlogplayer.NewDBClientMock(t)
+	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
 	withStop := &sqltypes.Result{
 		Fields:       nil,

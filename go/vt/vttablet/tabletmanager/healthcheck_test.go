@@ -152,7 +152,7 @@ func createTestAgent(ctx context.Context, t *testing.T, preStart func(*ActionAge
 	}
 
 	mysqlDaemon := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
-	agent := NewTestActionAgent(ctx, ts, tabletAlias, port, 0, mysqlDaemon, nil, preStart)
+	agent := NewTestActionAgent(ctx, ts, tabletAlias, port, 0, mysqlDaemon, preStart)
 
 	agent.HealthReporter = &fakeHealthCheck{}
 

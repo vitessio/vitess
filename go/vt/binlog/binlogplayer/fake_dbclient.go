@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package testlib
+package binlogplayer
 
 import (
 	"fmt"
@@ -23,11 +23,12 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-// fakeDBClient returns some reasonable results for vreplication.
 type fakeDBClient struct {
 }
 
-func newFakeDBClient() *fakeDBClient {
+// NewFakeDBClient returns a fake DBClient. Its functions return
+// preset responses to requests.
+func NewFakeDBClient() DBClient {
 	return &fakeDBClient{}
 }
 

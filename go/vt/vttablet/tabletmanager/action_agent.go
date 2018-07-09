@@ -330,11 +330,7 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon, dbclientFunc func() binlogplayer.DBClient, preStart func(*ActionAgent)) *ActionAgent {
-	vre := vreplication.NewEngine(nil, "", nil, nil)
-	if dbclientFunc != nil {
-		vre = vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, dbclientFunc)
-	}
+func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon, preStart func(*ActionAgent)) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -345,7 +341,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
-		VREngine:            vre,
+		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient),
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
