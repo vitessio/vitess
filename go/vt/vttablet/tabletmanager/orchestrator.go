@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -126,6 +127,35 @@ func (orc *orcClient) EndMaintenance(tablet *topodatapb.Tablet) error {
 	}
 	_, err = orc.apiGet("end-maintenance", host, port)
 	return err
+}
+
+func (orc *orcClient) InActiveShardRecovery(tablet *topodatapb.Tablet) (bool, error) {
+	alias := fmt.Sprintf("%v.%v", tablet.GetKeyspace(), tablet.GetShard())
+
+	// TODO(zmagg): Replace this with simpler call to active-cluster-recovery
+	// when call with alias parameter is supported.
+	resp, err := orc.apiGet("audit-recovery", "alias", alias)
+
+	if err != nil {
+		return false, err
+	}
+
+	var r []map[string]interface{}
+
+	if err := json.Unmarshal(resp, &r); err != nil {
+		return false, err
+	}
+
+	if len(r) == 0 {
+		return false, fmt.Errorf("Orchestrator returned an empty audit-recovery response")
+	}
+
+	active, ok := r[0]["IsActive"].(bool)
+
+	if !ok {
+		return false, fmt.Errorf("Error parsing JSON response from Orchestrator")
+	}
+	return active, nil
 }
 
 func mysqlHostPort(tablet *topodatapb.Tablet) (host, port string, err error) {
