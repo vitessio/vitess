@@ -1111,8 +1111,8 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select u1.a from unsharded as u1 join unsharded as u2 on 'targetString'",
-    "FieldQuery": "select u1.a from unsharded as u1 join unsharded as u2 on 'targetString' where 1 != 1"
+    "Query": "select u1.a from unsharded as u1 join unsharded as u2 on database()",
+    "FieldQuery": "select u1.a from unsharded as u1 join unsharded as u2 on database() where 1 != 1"
   }
 }
 
