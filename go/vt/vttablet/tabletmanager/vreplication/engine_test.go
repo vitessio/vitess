@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
@@ -35,7 +36,7 @@ func TestEngineOpen(t *testing.T) {
 	ts := createTopo()
 	_ = addTablet(ts, 100, "0", topodatapb.TabletType_REPLICA, true, true)
 	_ = newFakeBinlogClient()
-	dbClient := binlogplayer.NewDBClientMock(t)
+	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 
@@ -54,7 +55,7 @@ func TestEngineOpen(t *testing.T) {
 		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 	), nil)
 	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testTPSResponse, nil)
+	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("BEGIN", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -84,7 +85,7 @@ func TestEngineExec(t *testing.T) {
 	ts := createTopo()
 	_ = addTablet(ts, 100, "0", topodatapb.TabletType_REPLICA, true, true)
 	_ = newFakeBinlogClient()
-	dbClient := binlogplayer.NewDBClientMock(t)
+	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 
@@ -107,7 +108,7 @@ func TestEngineExec(t *testing.T) {
 		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 	), nil)
 	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testTPSResponse, nil)
+	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("BEGIN", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -137,7 +138,6 @@ func TestEngineExec(t *testing.T) {
 
 	savedBlp := ct.blpStats
 
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Stopped', message='context canceled' WHERE id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -147,7 +147,7 @@ func TestEngineExec(t *testing.T) {
 		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 	), nil)
 	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testTPSResponse, nil)
+	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("BEGIN", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -177,7 +177,6 @@ func TestEngineExec(t *testing.T) {
 
 	// Test Delete
 
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Stopped', message='context canceled' WHERE id=1", testDMLResponse, nil)
 	delQuery := "delete from _vt.vreplication where id = 1"
 	dbClient.ExpectRequest(delQuery, testDMLResponse, nil)
 
@@ -209,7 +208,7 @@ func TestEngineBadInsert(t *testing.T) {
 	_ = addTablet(ts, 100, "0", topodatapb.TabletType_REPLICA, true, true)
 	_ = newFakeBinlogClient()
 
-	dbClient := binlogplayer.NewDBClientMock(t)
+	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 
@@ -238,7 +237,7 @@ func TestEngineSelect(t *testing.T) {
 	ts := createTopo()
 	_ = addTablet(ts, 100, "0", topodatapb.TabletType_REPLICA, true, true)
 	_ = newFakeBinlogClient()
-	dbClient := binlogplayer.NewDBClientMock(t)
+	dbClient := binlogplayer.NewMockDBClient(t)
 
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
@@ -274,7 +273,7 @@ func TestWaitForPos(t *testing.T) {
 	defer func() { waitRetryTime = savedRetryTime }()
 	waitRetryTime = 10 * time.Millisecond
 
-	dbClient := binlogplayer.NewDBClientMock(t)
+	dbClient := binlogplayer.NewMockDBClient(t)
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	vre := NewEngine(createTopo(), testCell, mysqld, dbClientFactory)
@@ -300,7 +299,7 @@ func TestWaitForPos(t *testing.T) {
 }
 
 func TestWaitForPosError(t *testing.T) {
-	dbClient := binlogplayer.NewDBClientMock(t)
+	dbClient := binlogplayer.NewMockDBClient(t)
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	vre := NewEngine(createTopo(), testCell, mysqld, dbClientFactory)
@@ -342,7 +341,7 @@ func TestWaitForPosError(t *testing.T) {
 }
 
 func TestWaitForPosCancel(t *testing.T) {
-	dbClient := binlogplayer.NewDBClientMock(t)
+	dbClient := binlogplayer.NewMockDBClient(t)
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	vre := NewEngine(createTopo(), testCell, mysqld, dbClientFactory)
@@ -375,4 +374,54 @@ func TestWaitForPosCancel(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("WaitForPos: %v, want %v", err, want)
 	}
+}
+
+func TestCreateDBAndTable(t *testing.T) {
+	defer func() { globalStats = &vrStats{} }()
+
+	ts := createTopo()
+	_ = addTablet(ts, 100, "0", topodatapb.TabletType_REPLICA, true, true)
+	_ = newFakeBinlogClient()
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+
+	// Test Insert
+
+	vre := NewEngine(ts, testCell, mysqld, dbClientFactory)
+
+	notFound := mysql.SQLError{Num: 1146, Message: "not found"}
+	dbClient.ExpectRequest("select * from _vt.vreplication", nil, &notFound)
+	if err := vre.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer vre.Close()
+
+	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("insert into _vt.vreplication values (null)", &sqltypes.Result{InsertID: 1}, nil)
+	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|state|source",
+			"int64|varchar|varchar",
+		),
+		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
+	), nil)
+	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("BEGIN", nil, nil)
+	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
+	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("COMMIT", nil, nil)
+
+	qr, err := vre.Exec("insert into _vt.vreplication values(null)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantqr := &sqltypes.Result{InsertID: 1}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("Exec: %v, want %v", qr, wantqr)
+	}
+	dbClient.Wait()
 }

@@ -115,6 +115,7 @@ type BinlogPlayer struct {
 	blplStats      *Stats
 	defaultCharset *binlogdatapb.Charset
 	currentCharset *binlogdatapb.Charset
+	deadlockRetry  time.Duration
 }
 
 // NewBinlogPlayerKeyRange returns a new BinlogPlayer pointing at the server
@@ -123,11 +124,12 @@ type BinlogPlayer struct {
 // If !stopPosition.IsZero(), it will stop when reaching that position.
 func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRange *topodatapb.KeyRange, uid uint32, blplStats *Stats) *BinlogPlayer {
 	result := &BinlogPlayer{
-		tablet:    tablet,
-		dbClient:  dbClient,
-		keyRange:  keyRange,
-		uid:       uid,
-		blplStats: blplStats,
+		tablet:        tablet,
+		dbClient:      dbClient,
+		keyRange:      keyRange,
+		uid:           uid,
+		blplStats:     blplStats,
+		deadlockRetry: 1 * time.Second,
 	}
 	return result
 }
@@ -138,11 +140,12 @@ func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRa
 // If !stopPosition.IsZero(), it will stop when reaching that position.
 func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables []string, uid uint32, blplStats *Stats) *BinlogPlayer {
 	result := &BinlogPlayer{
-		tablet:    tablet,
-		dbClient:  dbClient,
-		tables:    tables,
-		uid:       uid,
-		blplStats: blplStats,
+		tablet:        tablet,
+		dbClient:      dbClient,
+		tables:        tables,
+		uid:           uid,
+		blplStats:     blplStats,
+		deadlockRetry: 1 * time.Second,
 	}
 	return result
 }
@@ -167,10 +170,10 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
-		return fmt.Errorf("Error %v in writing recovery info %v", err, updateRecovery)
+		return fmt.Errorf("error %v in writing recovery info %v", err, updateRecovery)
 	}
 	if qr.RowsAffected != 1 {
-		return fmt.Errorf("Cannot update blp_recovery table, affected %v rows", qr.RowsAffected)
+		return fmt.Errorf("eannot update blp_recovery table, affected %v rows", qr.RowsAffected)
 	}
 
 	// Update position after successful write.
@@ -195,6 +198,205 @@ func ReadStartPosition(dbClient DBClient, uid uint32) (string, error) {
 		return "", fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
 	return qr.Rows[0][0].ToString(), nil
+}
+
+// ApplyBinlogEvents makes an RPC request to BinlogServer
+// and processes the events. It returns nil if the provided context
+// was canceled, or if we reached the stopping point.
+// Before returning, it updates vreplication in state to "Error" or "Stopped".
+func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
+	// Clear previous error, if any.
+	if err := setVReplicationState(blp.dbClient, blp.uid, BlpRunning, ""); err != nil {
+		log.Errorf("Error writing Running state: %v", err)
+	}
+	blp.blplStats.LastMessage.Set("")
+
+	if err := blp.applyEvents(ctx); err != nil {
+		msg := err.Error()
+		blp.blplStats.LastMessage.Set(msg)
+		if err := setVReplicationState(blp.dbClient, blp.uid, BlpError, msg); err != nil {
+			log.Errorf("Error writing stop state: %v", err)
+		}
+		return err
+	}
+	return nil
+}
+
+// applyEvents returns a recordable status message on termination or an error otherwise.
+func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
+	// Read starting values for replication.
+	pos, stopPos, maxTPS, maxReplicationLag, err := blp.readVRSettings()
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	blp.position, err = mysql.DecodePosition(pos)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	if stopPos != "" {
+		blp.stopPosition, err = mysql.DecodePosition(stopPos)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+	}
+	t, err := throttler.NewThrottler(
+		fmt.Sprintf("BinlogPlayer/%d", blp.uid),
+		"transactions",
+		1, /* threadCount */
+		maxTPS,
+		maxReplicationLag,
+	)
+	if err != nil {
+		err := fmt.Errorf("failed to instantiate throttler: %v", err)
+		log.Error(err)
+		return err
+	}
+	defer t.Close()
+
+	// Log the mode of operation and when the player stops.
+	if len(blp.tables) > 0 {
+		log.Infof("BinlogPlayer client %v for tables %v starting @ '%v', server: %v",
+			blp.uid,
+			blp.tables,
+			blp.position,
+			blp.tablet,
+		)
+	} else {
+		log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v', server: %v",
+			blp.uid,
+			hex.EncodeToString(blp.keyRange.Start),
+			hex.EncodeToString(blp.keyRange.End),
+			blp.position,
+			blp.tablet,
+		)
+	}
+	if !blp.stopPosition.IsZero() {
+		switch {
+		case blp.position.Equal(blp.stopPosition):
+			msg := fmt.Sprintf("not starting BinlogPlayer, we're already at the desired position %v", blp.stopPosition)
+			log.Info(msg)
+			if err := setVReplicationState(blp.dbClient, blp.uid, BlpStopped, msg); err != nil {
+				log.Errorf("Error writing stop state: %v", err)
+			}
+			return nil
+		case blp.position.AtLeast(blp.stopPosition):
+			msg := fmt.Sprintf("starting point %v greater than stopping point %v", blp.position, blp.stopPosition)
+			log.Error(msg)
+			if err := setVReplicationState(blp.dbClient, blp.uid, BlpStopped, msg); err != nil {
+				log.Errorf("Error writing stop state: %v", err)
+			}
+			// Don't return an error. Otherwise, it will keep retrying.
+			return nil
+		default:
+			log.Infof("Will stop player when reaching %v", blp.stopPosition)
+		}
+	}
+
+	clientFactory, ok := clientFactories[*binlogPlayerProtocol]
+	if !ok {
+		return fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
+	}
+	blplClient := clientFactory()
+	err = blplClient.Dial(blp.tablet)
+	if err != nil {
+		err := fmt.Errorf("error dialing binlog server: %v", err)
+		log.Error(err)
+		return err
+	}
+	defer blplClient.Close()
+
+	// Get the current charset of our connection, so we can ask the stream server
+	// to check that they match. The streamer will also only send per-statement
+	// charset data if that statement's charset is different from what we specify.
+	if dbClient, ok := blp.dbClient.(*dbClientImpl); ok {
+		blp.defaultCharset, err = mysql.GetCharset(dbClient.dbConn)
+		if err != nil {
+			return fmt.Errorf("can't get charset to request binlog stream: %v", err)
+		}
+		log.Infof("original charset: %v", blp.defaultCharset)
+		blp.currentCharset = blp.defaultCharset
+		// Restore original charset when we're done.
+		defer func() {
+			// If the connection has been closed, there's no need to restore
+			// this connection-specific setting.
+			if dbClient.dbConn == nil {
+				return
+			}
+			log.Infof("restoring original charset %v", blp.defaultCharset)
+			if csErr := mysql.SetCharset(dbClient.dbConn, blp.defaultCharset); csErr != nil {
+				log.Errorf("can't restore original charset %v: %v", blp.defaultCharset, csErr)
+			}
+		}()
+	}
+
+	var stream BinlogTransactionStream
+	if len(blp.tables) > 0 {
+		stream, err = blplClient.StreamTables(ctx, mysql.EncodePosition(blp.position), blp.tables, blp.defaultCharset)
+	} else {
+		stream, err = blplClient.StreamKeyRange(ctx, mysql.EncodePosition(blp.position), blp.keyRange, blp.defaultCharset)
+	}
+	if err != nil {
+		err := fmt.Errorf("error sending streaming query to binlog server: %v", err)
+		log.Error(err)
+		return err
+	}
+
+	for {
+		// Block if we are throttled.
+		for {
+			backoff := t.Throttle(0 /* threadID */)
+			if backoff == throttler.NotThrottled {
+				break
+			}
+			// We don't bother checking for context cancellation here because the
+			// sleep will block only up to 1 second. (Usually, backoff is 1s / rate
+			// e.g. a rate of 1000 TPS results into a backoff of 1 ms.)
+			time.Sleep(backoff)
+		}
+
+		// get the response
+		response, err := stream.Recv()
+		// Check context before checking error, because canceled
+		// contexts could be wrapped as regular errors.
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+		if err != nil {
+			return fmt.Errorf("error received from Stream %v", err)
+		}
+
+		// process the transaction
+		for {
+			ok, err = blp.processTransaction(response)
+			if err != nil {
+				log.Infof("transaction failed: %v", err)
+				for _, stmt := range response.Statements {
+					log.Infof("statement: %q", stmt.Sql)
+				}
+				return fmt.Errorf("error in processing binlog event %v", err)
+			}
+			if ok {
+				if !blp.stopPosition.IsZero() {
+					if blp.position.AtLeast(blp.stopPosition) {
+						msg := "Reached stopping position, done playing logs"
+						log.Info(msg)
+						if err := setVReplicationState(blp.dbClient, blp.uid, BlpStopped, msg); err != nil {
+							log.Errorf("Error writing stop state: %v", err)
+						}
+						return nil
+					}
+				}
+				break
+			}
+			log.Infof("Retrying txn in %v.", blp.deadlockRetry)
+			time.Sleep(blp.deadlockRetry)
+		}
+	}
 }
 
 func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) (ok bool, err error) {
@@ -263,202 +465,6 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 	return qr, err
 }
 
-// ApplyBinlogEvents makes an RPC request to BinlogServer
-// and processes the events. It returns nil if the provided context
-// was canceled, or if we reached the stopping point.
-// Before returning, it updates vreplication in state to "Error" or "Stopped".
-func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
-	if err := setVReplicationState(blp.dbClient, blp.uid, BlpRunning, ""); err != nil {
-		log.Errorf("Error writing Running state: %v", err)
-	}
-	blp.blplStats.LastMessage.Set("")
-
-	msg, err := blp.applyEvents(ctx)
-
-	state := BlpStopped
-	if err != nil {
-		state = BlpError
-		msg = err.Error()
-	}
-	blp.blplStats.LastMessage.Set(msg)
-	if err := setVReplicationState(blp.dbClient, blp.uid, state, msg); err != nil {
-		log.Errorf("Error writing stop state: %v", err)
-	}
-	return err
-}
-
-// applyEvents returns a recordable status message on termination or an error otherwise.
-func (blp *BinlogPlayer) applyEvents(ctx context.Context) (string, error) {
-	// Read starting values for replication.
-	pos, stopPos, maxTPS, maxReplicationLag, err := blp.readVRSettings()
-	if err != nil {
-		log.Error(err)
-		return "", err
-	}
-	blp.position, err = mysql.DecodePosition(pos)
-	if err != nil {
-		log.Error(err)
-		return "", err
-	}
-	if stopPos != "" {
-		blp.stopPosition, err = mysql.DecodePosition(stopPos)
-		if err != nil {
-			log.Error(err)
-			return "", err
-		}
-	}
-	t, err := throttler.NewThrottler(
-		fmt.Sprintf("BinlogPlayer/%d", blp.uid), "transactions", 1 /* threadCount */, maxTPS, maxReplicationLag)
-	if err != nil {
-		err := fmt.Errorf("failed to instantiate throttler: %v", err)
-		log.Error(err)
-		return "", err
-	}
-	defer t.Close()
-
-	// Log the mode of operation and when the player stops.
-	if len(blp.tables) > 0 {
-		log.Infof("BinlogPlayer client %v for tables %v starting @ '%v', server: %v",
-			blp.uid,
-			blp.tables,
-			blp.position,
-			blp.tablet,
-		)
-	} else {
-		log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v', server: %v",
-			blp.uid,
-			hex.EncodeToString(blp.keyRange.Start),
-			hex.EncodeToString(blp.keyRange.End),
-			blp.position,
-			blp.tablet,
-		)
-	}
-	if !blp.stopPosition.IsZero() {
-		// We need to stop at some point. Sanity check the point.
-		switch {
-		case blp.position.Equal(blp.stopPosition):
-			msg := fmt.Sprintf("Not starting BinlogPlayer, we're already at the desired position %v", blp.stopPosition)
-			log.Info(msg)
-			return msg, nil
-		case blp.position.AtLeast(blp.stopPosition):
-			return "", fmt.Errorf("starting point %v greater than stopping point %v", blp.position, blp.stopPosition)
-		default:
-			log.Infof("Will stop player when reaching %v", blp.stopPosition)
-		}
-	}
-
-	clientFactory, ok := clientFactories[*binlogPlayerProtocol]
-	if !ok {
-		return "", fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
-	}
-	blplClient := clientFactory()
-	err = blplClient.Dial(blp.tablet)
-	if err != nil {
-		err := fmt.Errorf("error dialing binlog server: %v", err)
-		log.Error(err)
-		return "", err
-	}
-	defer blplClient.Close()
-
-	// Get the current charset of our connection, so we can ask the stream server
-	// to check that they match. The streamer will also only send per-statement
-	// charset data if that statement's charset is different from what we specify.
-	if dbClient, ok := blp.dbClient.(*dbClientImpl); ok {
-		blp.defaultCharset, err = mysql.GetCharset(dbClient.dbConn)
-		if err != nil {
-			return "", fmt.Errorf("can't get charset to request binlog stream: %v", err)
-		}
-		log.Infof("original charset: %v", blp.defaultCharset)
-		blp.currentCharset = blp.defaultCharset
-		// Restore original charset when we're done.
-		defer func() {
-			// If the connection has been closed, there's no need to restore
-			// this connection-specific setting.
-			if dbClient.dbConn == nil {
-				return
-			}
-			log.Infof("restoring original charset %v", blp.defaultCharset)
-			if csErr := mysql.SetCharset(dbClient.dbConn, blp.defaultCharset); csErr != nil {
-				log.Errorf("can't restore original charset %v: %v", blp.defaultCharset, csErr)
-			}
-		}()
-	}
-
-	var stream BinlogTransactionStream
-	if len(blp.tables) > 0 {
-		stream, err = blplClient.StreamTables(ctx, mysql.EncodePosition(blp.position), blp.tables, blp.defaultCharset)
-	} else {
-		stream, err = blplClient.StreamKeyRange(ctx, mysql.EncodePosition(blp.position), blp.keyRange, blp.defaultCharset)
-	}
-	if err != nil {
-		err := fmt.Errorf("error sending streaming query to binlog server: %v", err)
-		log.Error(err)
-		return "", err
-	}
-
-	for {
-		// Block if we are throttled.
-		for {
-			backoff := t.Throttle(0 /* threadID */)
-			if backoff == throttler.NotThrottled {
-				break
-			}
-			// We don't bother checking for context cancellation here because the
-			// sleep will block only up to 1 second. (Usually, backoff is 1s / rate
-			// e.g. a rate of 1000 TPS results into a backoff of 1 ms.)
-			time.Sleep(backoff)
-		}
-
-		// get the response
-		response, err := stream.Recv()
-		if err != nil {
-			switch err {
-			case context.Canceled:
-				return context.Canceled.Error(), nil
-			default:
-				// if the context is canceled, we
-				// return nil (some RPC
-				// implementations will remap the
-				// context error to their own errors)
-				select {
-				case <-ctx.Done():
-					if ctx.Err() == context.Canceled {
-						if err := setVReplicationState(blp.dbClient, blp.uid, BlpStopped, context.Canceled.Error()); err != nil {
-							log.Errorf("Error writing stop state: %v", err)
-						}
-						return ctx.Err().Error(), nil
-					}
-				default:
-				}
-				return "", fmt.Errorf("Error received from Stream %v", err)
-			}
-		}
-
-		// process the transaction
-		for {
-			ok, err = blp.processTransaction(response)
-			if err != nil {
-				log.Infof("transaction failed: %v", err)
-				for _, stmt := range response.Statements {
-					log.Infof("statement: %q", stmt.Sql)
-				}
-				return "", fmt.Errorf("Error in processing binlog event %v", err)
-			}
-			if ok {
-				if !blp.stopPosition.IsZero() {
-					if blp.position.AtLeast(blp.stopPosition) {
-						log.Infof("Reached stopping position, done playing logs")
-						return "Reached stopping position, done playing logs", nil
-					}
-				}
-				break
-			}
-			log.Infof("Retrying txn in 1 second.")
-			time.Sleep(1 * time.Second)
-		}
-	}
-}
-
 // CreateVReplicationTable returns the statements required to create
 // the _vt.vreplication table.
 // id: is an auto-increment column that identifies the stream.
@@ -498,7 +504,7 @@ func CreateVReplicationTable() []string {
 
 // setVReplicationState updates the state in the _vt.vreplication table.
 func setVReplicationState(dbClient DBClient, uid uint32, state, message string) error {
-	query := fmt.Sprintf("UPDATE _vt.vreplication SET state='%v', message='%v' WHERE id=%v", state, message, uid)
+	query := fmt.Sprintf("UPDATE _vt.vreplication SET state='%v', message=%v WHERE id=%v", state, encodeString(message), uid)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}

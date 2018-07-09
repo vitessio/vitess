@@ -111,7 +111,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 
 func (ct *controller) run(ctx context.Context) {
 	defer func() {
-		log.Infof("%v: stopped", ct)
+		log.Infof("stream %v: stopped", ct.id)
 		ct.tabletPicker.Close()
 		close(ct.done)
 	}()
@@ -127,7 +127,7 @@ func (ct *controller) run(ctx context.Context) {
 			return
 		default:
 		}
-		log.Warningf("%v: %v", ct, err)
+		log.Warningf("stream %v: %v, retrying after %v", ct.id, err, *retryDelay)
 		time.Sleep(*retryDelay)
 	}
 }
@@ -136,7 +136,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	defer func() {
 		ct.sourceTablet.Set("")
 		if x := recover(); x != nil {
-			log.Errorf("%v: caught panic: %v\n%s", ct, x, tb.Stack(4))
+			log.Errorf("stream %v: caught panic: %v\n%s", ct.id, x, tb.Stack(4))
 			err = fmt.Errorf("panic: %v", x)
 		}
 	}()

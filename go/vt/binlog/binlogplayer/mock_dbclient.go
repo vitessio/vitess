@@ -24,8 +24,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-// DBClientMock mocks a DBClient.
-type DBClientMock struct {
+// MockDBClient mocks a DBClient.
+// It must be configured to expect requests in a specific order.
+type MockDBClient struct {
 	t             *testing.T
 	expect        []*mockExpect
 	currentResult int
@@ -39,9 +40,9 @@ type mockExpect struct {
 	err    error
 }
 
-// NewDBClientMock returns a new DBClientMock
-func NewDBClientMock(t *testing.T) *DBClientMock {
-	return &DBClientMock{
+// NewMockDBClient returns a new DBClientMock.
+func NewMockDBClient(t *testing.T) *MockDBClient {
+	return &MockDBClient{
 		t:    t,
 		done: make(chan struct{}),
 	}
@@ -49,7 +50,7 @@ func NewDBClientMock(t *testing.T) *DBClientMock {
 
 // ExpectRequest adds an expected result to the mock.
 // This function should not be called conncurrently with other commands.
-func (dc *DBClientMock) ExpectRequest(query string, result *sqltypes.Result, err error) {
+func (dc *MockDBClient) ExpectRequest(query string, result *sqltypes.Result, err error) {
 	select {
 	case <-dc.done:
 		dc.done = make(chan struct{})
@@ -65,7 +66,7 @@ func (dc *DBClientMock) ExpectRequest(query string, result *sqltypes.Result, err
 // ExpectRequestRE adds an expected result to the mock.
 // queryRE is a regular expression.
 // This function should not be called conncurrently with other commands.
-func (dc *DBClientMock) ExpectRequestRE(queryRE string, result *sqltypes.Result, err error) {
+func (dc *MockDBClient) ExpectRequestRE(queryRE string, result *sqltypes.Result, err error) {
 	select {
 	case <-dc.done:
 		dc.done = make(chan struct{})
@@ -82,51 +83,51 @@ func (dc *DBClientMock) ExpectRequestRE(queryRE string, result *sqltypes.Result,
 // Wait waits for all expected requests to be executed.
 // dc.t.Fatalf is executed on 1 second timeout. Wait should
 // not be called concurrently with ExpectRequest.
-func (dc *DBClientMock) Wait() {
+func (dc *MockDBClient) Wait() {
 	dc.t.Helper()
 	select {
 	case <-dc.done:
 		return
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		dc.t.Fatalf("timeout waiting for requests, want: %v", dc.expect[dc.currentResult].query)
 	}
 }
 
 // DBName is part of the DBClient interface
-func (dc *DBClientMock) DBName() string {
+func (dc *MockDBClient) DBName() string {
 	return "db"
 }
 
 // Connect is part of the DBClient interface
-func (dc *DBClientMock) Connect() error {
+func (dc *MockDBClient) Connect() error {
 	return nil
 }
 
 // Begin is part of the DBClient interface
-func (dc *DBClientMock) Begin() error {
+func (dc *MockDBClient) Begin() error {
 	_, err := dc.ExecuteFetch("BEGIN", 1)
 	return err
 }
 
 // Commit is part of the DBClient interface
-func (dc *DBClientMock) Commit() error {
+func (dc *MockDBClient) Commit() error {
 	_, err := dc.ExecuteFetch("COMMIT", 1)
 	return err
 }
 
 // Rollback is part of the DBClient interface
-func (dc *DBClientMock) Rollback() error {
+func (dc *MockDBClient) Rollback() error {
 	_, err := dc.ExecuteFetch("ROLLBACK", 1)
 	return err
 }
 
 // Close is part of the DBClient interface
-func (dc *DBClientMock) Close() {
+func (dc *MockDBClient) Close() {
 	return
 }
 
 // ExecuteFetch is part of the DBClient interface
-func (dc *DBClientMock) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
+func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
 	dc.t.Helper()
 	dc.t.Logf("DBClient query: %v", query)
 	if dc.currentResult >= len(dc.expect) {

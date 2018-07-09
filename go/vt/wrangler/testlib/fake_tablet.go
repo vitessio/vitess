@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -192,13 +191,9 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 		vtPort = int32(ft.HTTPListener.Addr().(*net.TCPAddr).Port)
 	}
 
-	dbclientFunc := func() binlogplayer.DBClient {
-		return newFakeDBClient()
-	}
-
 	// Create a test agent on that port, and re-read the record
 	// (it has new ports and IP).
-	ft.Agent = tabletmanager.NewTestActionAgent(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon, dbclientFunc, nil)
+	ft.Agent = tabletmanager.NewTestActionAgent(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon, nil)
 	ft.Tablet = ft.Agent.Tablet()
 
 	// Register the gRPC server, and starts listening.

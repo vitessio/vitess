@@ -20,7 +20,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -105,7 +104,7 @@ func (vre *Engine) initAll() error {
 	rows, err := readAllRows(dbClient)
 	if err != nil {
 		// Handle Table not found.
-		if strings.Contains(err.Error(), "(errno 1146)") {
+		if merr, ok := err.(*mysql.SQLError); ok && merr.Num == 1146 {
 			vre.mustCreate = true
 			log.Info("_vt.vreplication table not found. Will create it later if needed")
 			return nil

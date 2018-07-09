@@ -137,7 +137,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	defer dest1Master.StopActionLoop(t)
 
 	// Override with a fake VREngine after Agent is initialized in action loop.
-	dbClient1 := binlogplayer.NewDBClientMock(t)
+	dbClient1 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory1 := func() binlogplayer.DBClient { return dbClient1 }
 	dest1Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1)
 	// select * from _vt.vreplication during Open
@@ -163,7 +163,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	defer dest2Master.StopActionLoop(t)
 
 	// Override with a fake VREngine after Agent is initialized in action loop.
-	dbClient2 := binlogplayer.NewDBClientMock(t)
+	dbClient2 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory2 := func() binlogplayer.DBClient { return dbClient2 }
 	dest2Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2)
 	// select * from _vt.vreplication during Open
