@@ -524,62 +524,6 @@ func (client *Client) GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) 
 	return response.Addrs, nil
 }
 
-// WaitBlpPosition is part of the tmclient.TabletManagerClient interface.
-func (client *Client) WaitBlpPosition(ctx context.Context, tablet *topodatapb.Tablet, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return err
-	}
-	defer cc.Close()
-	_, err = c.WaitBlpPosition(ctx, &tabletmanagerdatapb.WaitBlpPositionRequest{
-		BlpPosition: blpPosition,
-		WaitTimeout: int64(waitTime),
-	})
-	return err
-}
-
-// StopBlp is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopBlp(ctx context.Context, tablet *topodatapb.Tablet) ([]*tabletmanagerdatapb.BlpPosition, error) {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return nil, err
-	}
-	defer cc.Close()
-	response, err := c.StopBlp(ctx, &tabletmanagerdatapb.StopBlpRequest{})
-	if err != nil {
-		return nil, err
-	}
-	return response.BlpPositions, nil
-}
-
-// StartBlp is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StartBlp(ctx context.Context, tablet *topodatapb.Tablet) error {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return err
-	}
-	defer cc.Close()
-	_, err = c.StartBlp(ctx, &tabletmanagerdatapb.StartBlpRequest{})
-	return err
-}
-
-// RunBlpUntil is part of the tmclient.TabletManagerClient interface.
-func (client *Client) RunBlpUntil(ctx context.Context, tablet *topodatapb.Tablet, positions []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error) {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return "", err
-	}
-	defer cc.Close()
-	response, err := c.RunBlpUntil(ctx, &tabletmanagerdatapb.RunBlpUntilRequest{
-		BlpPositions: positions,
-		WaitTimeout:  int64(waitTime),
-	})
-	if err != nil {
-		return "", err
-	}
-	return response.Position, nil
-}
-
 // VReplicationExec is part of the tmclient.TabletManagerClient interface.
 func (client *Client) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	cc, c, err := client.dial(tablet)

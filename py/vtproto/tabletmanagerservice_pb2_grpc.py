@@ -142,26 +142,6 @@ class TabletManagerStub(object):
         request_serializer=tabletmanagerdata__pb2.GetSlavesRequest.SerializeToString,
         response_deserializer=tabletmanagerdata__pb2.GetSlavesResponse.FromString,
         )
-    self.WaitBlpPosition = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/WaitBlpPosition',
-        request_serializer=tabletmanagerdata__pb2.WaitBlpPositionRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.WaitBlpPositionResponse.FromString,
-        )
-    self.StopBlp = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/StopBlp',
-        request_serializer=tabletmanagerdata__pb2.StopBlpRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.StopBlpResponse.FromString,
-        )
-    self.StartBlp = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/StartBlp',
-        request_serializer=tabletmanagerdata__pb2.StartBlpRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.StartBlpResponse.FromString,
-        )
-    self.RunBlpUntil = channel.unary_unary(
-        '/tabletmanagerservice.TabletManager/RunBlpUntil',
-        request_serializer=tabletmanagerdata__pb2.RunBlpUntilRequest.SerializeToString,
-        response_deserializer=tabletmanagerdata__pb2.RunBlpUntilResponse.FromString,
-        )
     self.VReplicationExec = channel.unary_unary(
         '/tabletmanagerservice.TabletManager/VReplicationExec',
         request_serializer=tabletmanagerdata__pb2.VReplicationExecRequest.SerializeToString,
@@ -451,36 +431,6 @@ class TabletManagerServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
-  def WaitBlpPosition(self, request, context):
-    """WaitBlpPosition tells the remote tablet to wait until it reaches
-    the specified binolg player position
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def StopBlp(self, request, context):
-    """StopBlp asks the tablet to stop all its binlog players,
-    and returns the current position for all of them
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def StartBlp(self, request, context):
-    """StartBlp asks the tablet to restart its binlog players
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
-  def RunBlpUntil(self, request, context):
-    """RunBlpUntil asks the tablet to restart its binlog players
-    """
-    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-    context.set_details('Method not implemented!')
-    raise NotImplementedError('Method not implemented!')
-
   def VReplicationExec(self, request, context):
     """VReplication API
     """
@@ -723,26 +673,6 @@ def add_TabletManagerServicer_to_server(servicer, server):
           servicer.GetSlaves,
           request_deserializer=tabletmanagerdata__pb2.GetSlavesRequest.FromString,
           response_serializer=tabletmanagerdata__pb2.GetSlavesResponse.SerializeToString,
-      ),
-      'WaitBlpPosition': grpc.unary_unary_rpc_method_handler(
-          servicer.WaitBlpPosition,
-          request_deserializer=tabletmanagerdata__pb2.WaitBlpPositionRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.WaitBlpPositionResponse.SerializeToString,
-      ),
-      'StopBlp': grpc.unary_unary_rpc_method_handler(
-          servicer.StopBlp,
-          request_deserializer=tabletmanagerdata__pb2.StopBlpRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.StopBlpResponse.SerializeToString,
-      ),
-      'StartBlp': grpc.unary_unary_rpc_method_handler(
-          servicer.StartBlp,
-          request_deserializer=tabletmanagerdata__pb2.StartBlpRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.StartBlpResponse.SerializeToString,
-      ),
-      'RunBlpUntil': grpc.unary_unary_rpc_method_handler(
-          servicer.RunBlpUntil,
-          request_deserializer=tabletmanagerdata__pb2.RunBlpUntilRequest.FromString,
-          response_serializer=tabletmanagerdata__pb2.RunBlpUntilResponse.SerializeToString,
       ),
       'VReplicationExec': grpc.unary_unary_rpc_method_handler(
           servicer.VReplicationExec,

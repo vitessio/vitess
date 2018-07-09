@@ -270,7 +270,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	defer cancel()
 	_, err = vsdw.wr.TabletManagerClient().VReplicationExec(shortCtx, masterInfo.Tablet, binlogplayer.StopVReplication(ss.Uid, "for split diff"))
 	if err != nil {
-		return fmt.Errorf("StopBlp on master %v failed: %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
+		return fmt.Errorf("Stop VReplication on master %v failed: %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
 	}
 	wrangler.RecordVReplicationAction(vsdw.cleaner, masterInfo.Tablet, binlogplayer.StartVReplication(ss.Uid))
 	p3qr, err := vsdw.wr.TabletManagerClient().VReplicationExec(shortCtx, masterInfo.Tablet, binlogplayer.ReadVReplicationPos(ss.Uid))

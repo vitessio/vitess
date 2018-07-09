@@ -380,7 +380,7 @@ func TestLegacySplitCloneV2_RetryDueToReparent(t *testing.T) {
 	defer tc.tearDown()
 
 	// Provoke a reparent just before the copy finishes.
-	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
+	// leftReplica will take over for the last, 30th, insert and the vreplication checkpoint.
 	tc.leftReplicaFakeDb.AddExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 
 	// Do not let leftMaster succeed the 30th write.
@@ -439,7 +439,7 @@ func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
 
-	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
+	// leftReplica will take over for the last, 30th, insert and the vreplication checkpoint.
 	tc.leftReplicaFakeDb.AddExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 
 	// During the 29th write, let the MASTER disappear.
