@@ -994,6 +994,9 @@ var (
 		input:  "show collation",
 		output: "show collation",
 	}, {
+		input:  "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
+		output: "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
+	}, {
 		input:  "show create database d",
 		output: "show create database",
 	}, {
