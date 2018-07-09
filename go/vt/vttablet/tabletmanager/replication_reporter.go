@@ -115,6 +115,7 @@ func repairReplication(ctx context.Context, agent *ActionAgent) error {
 
 	ts := agent.TopoServer
 	tablet := agent.Tablet()
+
 	si, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return err
@@ -122,7 +123,26 @@ func repairReplication(ctx context.Context, agent *ActionAgent) error {
 	if !si.HasMaster() {
 		return fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
-	return agent.setMasterLocked(ctx, si.MasterAlias, 0, true)
+
+	// If Orchestrator is configured and if Orchestrator is actively reparenting, we should not repairReplication
+	if agent.orc != nil {
+		re, err := agent.orc.InActiveShardRecovery(tablet)
+		if err != nil {
+			return err
+		}
+		if re {
+			return fmt.Errorf("Orchestrator actively reparenting shard %v, skipping repairReplication", si)
+		}
+
+		// Before repairing replication, tell Orchestrator to enter maintenance mode for this tablet and to
+		// lock any other actions on this tablet by Orchestrator.
+		if err := agent.orc.BeginMaintenance(agent.Tablet(), "vttablet has been told to StopSlave"); err != nil {
+			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
+			return fmt.Errorf("Orchestrator BeginMaintenance failed :%v, skipping repairReplication", err)
+		}
+	}
+
+	return agent.setMasterRepairReplication(ctx, si.MasterAlias, 0, true)
 }
 
 func registerReplicationReporter(agent *ActionAgent) {
