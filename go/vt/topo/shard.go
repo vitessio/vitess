@@ -182,7 +182,7 @@ func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardI
 
 	value := &topodatapb.Shard{}
 	if err = proto.Unmarshal(data, value); err != nil {
-		return nil, fmt.Errorf("bad shard data: %v", err)
+		return nil, fmt.Errorf("GetShard(%v,%v): bad shard data: %v", keyspace, shard, err)
 	}
 	return &ShardInfo{
 		keyspace:  keyspace,
@@ -237,12 +237,12 @@ func (ts *Server) UpdateShardFields(ctx context.Context, keyspace, shard string,
 			return nil, err
 		}
 		if err = update(si); err != nil {
-			if err == ErrNoUpdateNeeded {
+			if IsErrType(err, NoUpdateNeeded) {
 				return nil, nil
 			}
 			return nil, err
 		}
-		if err = ts.updateShard(ctx, si); err != ErrBadVersion {
+		if err = ts.updateShard(ctx, si); !IsErrType(err, BadVersion) {
 			return si, err
 		}
 	}
@@ -280,7 +280,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		// if we are using range-based sharding, we don't want
 		// overlapping shards to all serve and confuse the clients.
 		sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
-		if err != nil && err != ErrNoNode {
+		if err != nil && !IsErrType(err, NoNode) {
 			return err
 		}
 		for _, si := range sis {
@@ -323,17 +323,17 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 // already exist. Note the shard creation is protected by a keyspace Lock.
 func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) (si *ShardInfo, err error) {
 	si, err = ts.GetShard(ctx, keyspace, shard)
-	if err != ErrNoNode {
+	if !IsErrType(err, NoNode) {
 		return
 	}
 
 	// create the keyspace, maybe it already exists
-	if err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && err != ErrNodeExists {
+	if err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && !IsErrType(err, NodeExists) {
 		return nil, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
 	}
 
 	// now try to create with the lock, may already exist
-	if err = ts.CreateShard(ctx, keyspace, shard); err != nil && err != ErrNodeExists {
+	if err = ts.CreateShard(ctx, keyspace, shard); err != nil && !IsErrType(err, NodeExists) {
 		return nil, fmt.Errorf("CreateShard(%v/%v) failed: %v", keyspace, shard, err)
 	}
 
@@ -656,7 +656,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	err = nil
 	if rec.HasErrors() {
 		log.Warningf("FindAllTabletAliasesInShard(%v,%v): got partial result: %v", keyspace, shard, rec.Error())
-		err = ErrPartialResult
+		err = NewError(PartialResult, shard)
 	}
 
 	result := make([]*topodatapb.TabletAlias, 0, len(resultAsMap))
@@ -684,7 +684,7 @@ func (ts *Server) GetTabletMapForShardByCell(ctx context.Context, keyspace, shar
 	// if we get a partial result, we keep going. It most likely means
 	// a cell is out of commission.
 	aliases, err := ts.FindAllTabletAliasesInShardByCell(ctx, keyspace, shard, cells)
-	if err != nil && err != ErrPartialResult {
+	if err != nil && !IsErrType(err, PartialResult) {
 		return nil, err
 	}
 

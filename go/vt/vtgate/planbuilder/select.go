@@ -33,13 +33,6 @@ func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive e
 	if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
 		return nil, err
 	}
-	if rb, ok := pb.bldr.(*route); ok {
-		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
-		rb.ERoute.QueryTimeout = queryTimeout(directives)
-		if rb.ERoute.TargetDestination != nil {
-			return nil, errors.New("unsupported: SELECT with a target destination")
-		}
-	}
 	return pb.bldr.Primitive(), nil
 }
 
@@ -81,6 +74,14 @@ func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive e
 func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
 	if err := pb.processTableExprs(sel.From); err != nil {
 		return err
+	}
+
+	if rb, ok := pb.bldr.(*route); ok {
+		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+		rb.ERoute.QueryTimeout = queryTimeout(directives)
+		if rb.ERoute.TargetDestination != nil {
+			return errors.New("unsupported: SELECT with a target destination")
+		}
 	}
 	// Set the outer symtab after processing of FROM clause.
 	// This is because correlation is not allowed there.

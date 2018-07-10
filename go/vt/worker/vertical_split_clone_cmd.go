@@ -276,8 +276,23 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 		return nil, nil, nil, fmt.Errorf("cannot parse maxReplicationLag: %s", err)
 	}
 
+	// Figure out the shard
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	shardMap, err := wr.TopoServer().FindAllShardsInKeyspace(shortCtx, keyspace)
+	cancel()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("cannot find shard name for keyspace %s: %s", keyspace, err)
+	}
+	if len(shardMap) != 1 {
+		return nil, nil, nil, fmt.Errorf("found the wrong number of shards, there should be only one, %v", shardMap)
+	}
+	var shard string
+	for s := range shardMap {
+		shard = s
+	}
+
 	// start the clone job
-	wrk, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, "0", online, offline, tableArray, strategy, int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS, maxReplicationLag)
+	wrk, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, online, offline, tableArray, strategy, int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS, maxReplicationLag)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}

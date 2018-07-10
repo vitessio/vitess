@@ -98,6 +98,12 @@ type ActionAgent struct {
 	// only used if exportStats is true.
 	statsTabletType *stats.String
 
+	// statsTabletTypeCount exposes the current tablet type as a label,
+	// with the value counting the occurances of the respective tablet type.
+	// Useful for Prometheus which doesn't support exporting strings as stat values
+	// only used if exportStats is true.
+	statsTabletTypeCount *stats.CountersWithSingleLabel
+
 	// batchCtx is given to the agent by its creator, and should be used for
 	// any background tasks spawned by the agent.
 	batchCtx context.Context
@@ -238,6 +244,7 @@ func NewActionAgent(
 	// Create the TabletType stats
 	agent.exportStats = true
 	agent.statsTabletType = stats.NewString("TabletType")
+	agent.statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
 
 	// Start the binlog player services, not playing at start.
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(ts, mysqld, func() binlogplayer.VtClient {

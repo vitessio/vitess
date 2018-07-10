@@ -19,7 +19,6 @@ package automation
 import (
 	"bytes"
 	"fmt"
-	"time"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/log"
@@ -44,8 +43,6 @@ func ExecuteVtctl(ctx context.Context, server string, args []string) (string, er
 
 	err := vtctlclient.RunCommandAndWait(
 		ctx, server, args,
-		// TODO(mberlin): Should this value be configurable as flags?
-		time.Hour, // actionTimeout
 		loggerToBufferFunc)
 
 	endMsg := fmt.Sprintf("Executed remote vtctl command: %v server: %v err: %v", args, server, err)

@@ -52,8 +52,9 @@ type VerticalSplitDiffWorker struct {
 	shardInfo    *topo.ShardInfo
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAlias      *topodatapb.TabletAlias
-	destinationAlias *topodatapb.TabletAlias
+	sourceAlias           *topodatapb.TabletAlias
+	destinationAlias      *topodatapb.TabletAlias
+	destinationTabletType topodatapb.TabletType
 
 	// populated during WorkerStateDiff
 	sourceSchemaDefinition      *tabletmanagerdatapb.SchemaDefinition
@@ -61,7 +62,7 @@ type VerticalSplitDiffWorker struct {
 }
 
 // NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
-func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, minHealthyRdonlyTablets, parallelDiffsCount int) Worker {
+func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, minHealthyRdonlyTablets, parallelDiffsCount int, destintationTabletType topodatapb.TabletType) Worker {
 	return &VerticalSplitDiffWorker{
 		StatusWorker: NewStatusWorker(),
 		wr:           wr,
@@ -69,6 +70,7 @@ func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard str
 		keyspace:     keyspace,
 		shard:        shard,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
+		destinationTabletType:   destintationTabletType,
 		parallelDiffsCount:      parallelDiffsCount,
 		cleaner:                 &wrangler.Cleaner{},
 	}
@@ -198,21 +200,31 @@ func (vsdw *VerticalSplitDiffWorker) init(ctx context.Context) error {
 }
 
 // findTargets phase:
+// - find one destinationTabletType in destination shard
 // - find one rdonly per source shard
-// - find one rdonly in destination shard
 // - mark them all as 'worker' pointing back to us
 func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 	vsdw.SetState(WorkerStateFindTargets)
 
 	// find an appropriate tablet in destination shard
 	var err error
-	vsdw.destinationAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, nil /* tsc */, vsdw.cell, vsdw.keyspace, vsdw.shard, vsdw.minHealthyRdonlyTablets)
+	vsdw.destinationAlias, err = FindWorkerTablet(
+		ctx,
+		vsdw.wr,
+		vsdw.cleaner,
+		nil, /* tsc */
+		vsdw.cell,
+		vsdw.keyspace,
+		vsdw.shard,
+		1, /* minHealthyTablets */
+		vsdw.destinationTabletType,
+	)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", vsdw.cell, vsdw.keyspace, vsdw.shard, err)
 	}
 
 	// find an appropriate tablet in the source shard
-	vsdw.sourceAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, nil /* tsc */, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, vsdw.minHealthyRdonlyTablets)
+	vsdw.sourceAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, nil /* tsc */, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, vsdw.minHealthyRdonlyTablets, topodatapb.TabletType_RDONLY)
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, err)
 	}

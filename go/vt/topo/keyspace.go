@@ -235,7 +235,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 			defer wg.Done()
 			si, err := ts.GetShard(ctx, keyspace, shard)
 			if err != nil {
-				if err == ErrNoNode {
+				if IsErrType(err, NoNode) {
 					log.Warningf("GetShard(%v, %v) returned ErrNoNode, consider checking the topology.", keyspace, shard)
 				} else {
 					rec.RecordError(fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err))
@@ -272,10 +272,10 @@ func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 // GetKeyspaces returns the list of keyspaces in the topology.
 func (ts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 	children, err := ts.globalCell.ListDir(ctx, KeyspacesPath, false /*full*/)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		return DirEntriesToStringArray(children), nil
-	case ErrNoNode:
+	case IsErrType(err, NoNode):
 		return nil, nil
 	default:
 		return nil, err
@@ -286,7 +286,7 @@ func (ts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 func (ts *Server) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
 	shardsPath := path.Join(KeyspacesPath, keyspace, ShardsPath)
 	children, err := ts.globalCell.ListDir(ctx, shardsPath, false /*full*/)
-	if err == ErrNoNode {
+	if IsErrType(err, NoNode) {
 		// The directory doesn't exist, let's see if the keyspace
 		// is here or not.
 		_, kerr := ts.GetKeyspace(ctx, keyspace)

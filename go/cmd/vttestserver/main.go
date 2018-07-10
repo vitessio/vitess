@@ -125,6 +125,9 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 	flag.StringVar(&config.WebDir2, "web_dir2", "",
 		"location of the vtctld2 web server files.")
 
+	flag.StringVar(&config.MySQLBindHost, "mysql_bind_host", "localhost",
+		"which host to bind vtgate mysql listener to")
+
 	flag.StringVar(&mycnf, "extra_my_cnf", "",
 		"extra files to add to the config, separated by ':'")
 
@@ -205,12 +208,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Info("Local cluster started. Waiting for stdin input...")
+	log.Info("Local cluster started.")
 
-	_, err = fmt.Scanln()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Info("Shutting down cleanly")
+	select {}
 }

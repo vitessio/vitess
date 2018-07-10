@@ -72,7 +72,7 @@ func (sri *ShardReplicationInfo) GetShardReplicationNode(tabletAlias *topodatapb
 			return rl, nil
 		}
 	}
-	return nil, ErrNoNode
+	return nil, NewError(NoNode, tabletAlias.String())
 }
 
 // UpdateShardReplicationRecord is a low level function to add / update an
@@ -107,7 +107,7 @@ func UpdateShardReplicationRecord(ctx context.Context, ts *Server, keyspace, sha
 			modified = true
 		}
 		if !modified {
-			return ErrNoUpdateNeeded
+			return NewError(NoUpdateNeeded, tabletAlias.String())
 		}
 		sr.Nodes = nodes
 		return nil
@@ -140,7 +140,7 @@ func FixShardReplication(ctx context.Context, ts *Server, logger logutil.Logger,
 
 	for _, node := range sri.Nodes {
 		ti, err := ts.GetTablet(ctx, node.TabletAlias)
-		if err == ErrNoNode {
+		if IsErrType(err, NoNode) {
 			logger.Warningf("Tablet %v is in the replication graph, but does not exist, removing it", node.TabletAlias)
 			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, node.TabletAlias)
 		}
@@ -173,10 +173,10 @@ func (ts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspa
 	for {
 		data, version, err := conn.Get(ctx, nodePath)
 		sr := &topodatapb.ShardReplication{}
-		switch err {
-		case ErrNoNode:
+		switch {
+		case IsErrType(err, NoNode):
 			// Empty node, version is nil
-		case nil:
+		case err == nil:
 			// Use any data we got.
 			if err = proto.Unmarshal(data, sr); err != nil {
 				return fmt.Errorf("bad ShardReplication data %v", err)
@@ -186,10 +186,10 @@ func (ts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspa
 		}
 
 		err = update(sr)
-		switch err {
-		case ErrNoUpdateNeeded:
+		switch {
+		case IsErrType(err, NoUpdateNeeded):
 			return nil
-		case nil:
+		case err == nil:
 			// keep going
 		default:
 			return err
@@ -201,9 +201,9 @@ func (ts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspa
 			return err
 		}
 		if version == nil {
-			// We have to create, and we catch ErrNodeExists.
+			// We have to create, and we catch NodeExists.
 			_, err = conn.Create(ctx, nodePath, data)
-			if err == ErrNodeExists {
+			if IsErrType(err, NodeExists) {
 				// Node was created by another process, try
 				// again.
 				continue
@@ -213,7 +213,7 @@ func (ts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspa
 
 		// We have to update, and we catch ErrBadVersion.
 		_, err = conn.Update(ctx, nodePath, data, version)
-		if err == ErrBadVersion {
+		if IsErrType(err, BadVersion) {
 			// Node was updated by another process, try again.
 			continue
 		}

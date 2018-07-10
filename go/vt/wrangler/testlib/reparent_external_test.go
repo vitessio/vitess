@@ -81,19 +81,19 @@ func TestTabletExternallyReparented(t *testing.T) {
 		t.Fatalf("FindTabletByHostAndPort(slave1) failed: %v %v", err, master)
 	}
 	slave2, err := topotools.FindTabletByHostAndPort(tabletMap, goodSlave2.Tablet.Hostname, "vt", goodSlave2.Tablet.PortMap["vt"])
-	if err != topo.ErrNoNode {
+	if !topo.IsErrType(err, topo.NoNode) {
 		t.Fatalf("FindTabletByHostAndPort(slave2) worked: %v %v", err, slave2)
 	}
 
 	// Make sure the master is not exported in other cells
 	tabletMap, err = ts.GetTabletMapForShardByCell(ctx, "test_keyspace", "0", []string{"cell2"})
 	master, err = topotools.FindTabletByHostAndPort(tabletMap, oldMaster.Tablet.Hostname, "vt", oldMaster.Tablet.PortMap["vt"])
-	if err != topo.ErrNoNode {
+	if !topo.IsErrType(err, topo.NoNode) {
 		t.Fatalf("FindTabletByHostAndPort(master) worked in cell2: %v %v", err, master)
 	}
 
 	tabletMap, err = ts.GetTabletMapForShard(ctx, "test_keyspace", "0")
-	if err != topo.ErrPartialResult {
+	if !topo.IsErrType(err, topo.PartialResult) {
 		t.Fatalf("GetTabletMapForShard should have returned ErrPartialResult but got: %v", err)
 	}
 	master, err = topotools.FindTabletByHostAndPort(tabletMap, oldMaster.Tablet.Hostname, "vt", oldMaster.Tablet.PortMap["vt"])

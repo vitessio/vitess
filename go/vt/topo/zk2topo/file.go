@@ -33,7 +33,7 @@ func (zs *Server) Create(ctx context.Context, filePath string, contents []byte) 
 
 	pathCreated, err := CreateRecursive(ctx, zs.conn, zkPath, contents, 0, zk.WorldACL(PermFile), -1)
 	if err != nil {
-		return nil, convertError(err)
+		return nil, convertError(err, zkPath)
 	}
 
 	// Now do a Get to get the version. If the content doesn't
@@ -42,7 +42,7 @@ func (zs *Server) Create(ctx context.Context, filePath string, contents []byte) 
 	// and let the calling process recover if it can.
 	data, stat, err := zs.conn.Get(ctx, pathCreated)
 	if err != nil {
-		return nil, convertError(err)
+		return nil, convertError(err, zkPath)
 	}
 	if bytes.Compare(data, contents) != 0 {
 		return nil, fmt.Errorf("file contents changed between zk.Create and zk.Get")
@@ -71,7 +71,7 @@ func (zs *Server) Update(ctx context.Context, filePath string, contents []byte, 
 		return zs.Create(ctx, filePath, contents)
 	}
 	if err != nil {
-		return nil, convertError(err)
+		return nil, convertError(err, zkPath)
 	}
 	return ZKVersion(stat.Version), nil
 }
@@ -82,7 +82,7 @@ func (zs *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Versio
 
 	contents, stat, err := zs.conn.Get(ctx, zkPath)
 	if err != nil {
-		return nil, nil, convertError(err)
+		return nil, nil, convertError(err, zkPath)
 	}
 	return contents, ZKVersion(stat.Version), nil
 }
@@ -100,7 +100,7 @@ func (zs *Server) Delete(ctx context.Context, filePath string, version topo.Vers
 	}
 
 	if err := zs.conn.Delete(ctx, zkPath, zkVersion); err != nil {
-		return convertError(err)
+		return convertError(err, zkPath)
 	}
 	return zs.recursiveDeleteParentIfEmpty(ctx, filePath)
 }

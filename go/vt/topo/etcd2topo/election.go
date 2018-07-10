@@ -64,7 +64,7 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 	// If Stop was already called, mp.done is closed, so we are interrupted.
 	select {
 	case <-mp.done:
-		return nil, topo.ErrInterrupted
+		return nil, topo.NewError(topo.Interrupted, "mastership")
 	default:
 	}
 
@@ -116,7 +116,7 @@ func (mp *etcdMasterParticipation) GetCurrentMasterID(ctx context.Context) (stri
 		clientv3.WithSort(clientv3.SortByModRevision, clientv3.SortAscend),
 		clientv3.WithLimit(1))
 	if err != nil {
-		return "", convertError(err)
+		return "", convertError(err, electionPath)
 	}
 	if len(resp.Kvs) == 0 {
 		// No key starts with this prefix, means nobody is the master.

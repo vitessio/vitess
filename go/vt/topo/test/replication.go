@@ -28,7 +28,7 @@ import (
 // checkShardReplication tests ShardReplication objects
 func checkShardReplication(t *testing.T, ts *topo.Server) {
 	ctx := context.Background()
-	if _, err := ts.GetShardReplication(ctx, LocalCellName, "test_keyspace", "-10"); err != topo.ErrNoNode {
+	if _, err := ts.GetShardReplication(ctx, LocalCellName, "test_keyspace", "-10"); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("GetShardReplication(not there): %v", err)
 	}
 
@@ -43,7 +43,7 @@ func checkShardReplication(t *testing.T, ts *topo.Server) {
 		},
 	}
 	if err := ts.UpdateShardReplicationFields(ctx, LocalCellName, "test_keyspace", "-10", func(oldSr *topodatapb.ShardReplication) error {
-		return topo.ErrNoUpdateNeeded
+		return topo.NewError(topo.NoUpdateNeeded, LocalCellName)
 	}); err != nil {
 		t.Fatalf("UpdateShardReplicationFields() failed: %v", err)
 	}
@@ -91,16 +91,16 @@ func checkShardReplication(t *testing.T, ts *topo.Server) {
 	if err := ts.DeleteShardReplication(ctx, LocalCellName, "test_keyspace", "-10"); err != nil {
 		t.Errorf("DeleteShardReplication(existing) failed: %v", err)
 	}
-	if err := ts.DeleteShardReplication(ctx, LocalCellName, "test_keyspace", "-10"); err != topo.ErrNoNode {
+	if err := ts.DeleteShardReplication(ctx, LocalCellName, "test_keyspace", "-10"); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("DeleteShardReplication(again) returned: %v", err)
 	}
 
 	// Some implementations may already remove the directory if not data is in there, so we ignore topo.ErrNoNode.
-	if err := ts.DeleteKeyspaceReplication(ctx, LocalCellName, "test_keyspace"); err != nil && err != topo.ErrNoNode {
+	if err := ts.DeleteKeyspaceReplication(ctx, LocalCellName, "test_keyspace"); err != nil && !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("DeleteKeyspaceReplication(existing) failed: %v", err)
 	}
 	// The second time though, it should be gone.
-	if err := ts.DeleteKeyspaceReplication(ctx, LocalCellName, "test_keyspace"); err != topo.ErrNoNode {
+	if err := ts.DeleteKeyspaceReplication(ctx, LocalCellName, "test_keyspace"); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("DeleteKeyspaceReplication(again) returned: %v", err)
 	}
 }

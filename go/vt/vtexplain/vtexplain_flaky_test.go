@@ -35,6 +35,7 @@ func defaultTestOpts() *Options {
 		ReplicationMode: "ROW",
 		NumShards:       4,
 		Normalize:       true,
+		StrictDDL:       true,
 	}
 }
 

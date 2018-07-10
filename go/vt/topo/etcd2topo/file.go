@@ -36,10 +36,10 @@ func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (
 		Then(clientv3.OpPut(nodePath, string(contents))).
 		Commit()
 	if err != nil {
-		return nil, convertError(err)
+		return nil, convertError(err, nodePath)
 	}
 	if !txnresp.Succeeded {
-		return nil, topo.ErrNodeExists
+		return nil, topo.NewError(topo.NodeExists, nodePath)
 	}
 	return EtcdVersion(txnresp.Header.Revision), nil
 }
@@ -56,10 +56,10 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 			Then(clientv3.OpPut(nodePath, string(contents))).
 			Commit()
 		if err != nil {
-			return nil, convertError(err)
+			return nil, convertError(err, nodePath)
 		}
 		if !txnresp.Succeeded {
-			return nil, topo.ErrBadVersion
+			return nil, topo.NewError(topo.BadVersion, nodePath)
 		}
 		return EtcdVersion(txnresp.Header.Revision), nil
 	}
@@ -67,7 +67,7 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 	// No version specified. We can use a simple unconditional Put.
 	resp, err := s.cli.Put(ctx, nodePath, string(contents))
 	if err != nil {
-		return nil, convertError(err)
+		return nil, convertError(err, nodePath)
 	}
 	return EtcdVersion(resp.Header.Revision), nil
 }
@@ -78,10 +78,10 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 
 	resp, err := s.cli.Get(ctx, nodePath)
 	if err != nil {
-		return nil, nil, convertError(err)
+		return nil, nil, convertError(err, nodePath)
 	}
 	if len(resp.Kvs) != 1 {
-		return nil, nil, topo.ErrNoNode
+		return nil, nil, topo.NewError(topo.NoNode, nodePath)
 	}
 
 	return resp.Kvs[0].Value, EtcdVersion(resp.Kvs[0].ModRevision), nil
@@ -104,15 +104,15 @@ func (s *Server) Delete(ctx context.Context, filePath string, version topo.Versi
 			Else(clientv3.OpGet(nodePath)).
 			Commit()
 		if err != nil {
-			return convertError(err)
+			return convertError(err, nodePath)
 		}
 		if !txnresp.Succeeded {
 			if len(txnresp.Responses) > 0 {
 				if len(txnresp.Responses[0].GetResponseRange().Kvs) > 0 {
-					return topo.ErrBadVersion
+					return topo.NewError(topo.BadVersion, nodePath)
 				}
 			}
-			return topo.ErrNoNode
+			return topo.NewError(topo.NoNode, nodePath)
 		}
 		return nil
 	}
@@ -120,10 +120,10 @@ func (s *Server) Delete(ctx context.Context, filePath string, version topo.Versi
 	// This is just a regular unconditional Delete here.
 	resp, err := s.cli.Delete(ctx, nodePath)
 	if err != nil {
-		return convertError(err)
+		return convertError(err, nodePath)
 	}
 	if resp.Deleted != 1 {
-		return topo.ErrNoNode
+		return topo.NewError(topo.NoNode, nodePath)
 	}
 	return nil
 }

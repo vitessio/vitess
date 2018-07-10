@@ -37,11 +37,11 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	initial, err := s.cli.Get(ctx, nodePath)
 	if err != nil {
 		// Generic error.
-		return &topo.WatchData{Err: convertError(err)}, nil, nil
+		return &topo.WatchData{Err: convertError(err, nodePath)}, nil, nil
 	}
 	if len(initial.Kvs) != 1 {
 		// Node doesn't exist.
-		return &topo.WatchData{Err: topo.ErrNoNode}, nil, nil
+		return &topo.WatchData{Err: topo.NewError(topo.NoNode, nodePath)}, nil, nil
 	}
 	wd := &topo.WatchData{
 		Contents: initial.Kvs[0].Value,
@@ -72,7 +72,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 			case <-watchCtx.Done():
 				// This includes context cancelation errors.
 				notifications <- &topo.WatchData{
-					Err: convertError(watchCtx.Err()),
+					Err: convertError(watchCtx.Err(), nodePath),
 				}
 				return
 			case wresp, ok := <-watcher:
@@ -95,7 +95,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 				if wresp.Canceled {
 					// Final notification.
 					notifications <- &topo.WatchData{
-						Err: convertError(wresp.Err()),
+						Err: convertError(wresp.Err(), nodePath),
 					}
 					return
 				}
@@ -112,7 +112,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					case mvccpb.DELETE:
 						// Node is gone, send a final notice.
 						notifications <- &topo.WatchData{
-							Err: topo.ErrNoNode,
+							Err: topo.NewError(topo.NoNode, nodePath),
 						}
 						return
 					default:

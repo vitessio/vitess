@@ -174,12 +174,12 @@ func (c *L2VTGateConn) GetAggregateStats(target *querypb.Target) (*querypb.Aggre
 	defer c.mu.RUnlock()
 	e, ok := c.stats[key]
 	if !ok {
-		return nil, topo.ErrNoNode
+		return nil, topo.NewError(topo.NoNode, target.String())
 	}
 
 	a, ok := e.aggregates[target.Cell]
 	if !ok {
-		return nil, topo.ErrNoNode
+		return nil, topo.NewError(topo.NoNode, target.String())
 	}
 	return a, nil
 }
@@ -195,13 +195,13 @@ func (c *L2VTGateConn) GetMasterCell(keyspace, shard string) (cell string, err e
 	defer c.mu.RUnlock()
 	e, ok := c.stats[key]
 	if !ok {
-		return "", topo.ErrNoNode
+		return "", topo.NewError(topo.NoNode, keyspace+"/"+shard)
 	}
 
 	for cell := range e.aggregates {
 		return cell, nil
 	}
-	return "", topo.ErrNoNode
+	return "", topo.NewError(topo.NoNode, keyspace+"/"+shard)
 }
 
 // CacheStatus returns a list of TabletCacheStatus per

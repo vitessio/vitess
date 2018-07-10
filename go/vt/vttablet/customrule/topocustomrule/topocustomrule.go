@@ -151,7 +151,7 @@ func (cr *topoCustomRule) oneWatch() error {
 		cancel()
 		for range wdChannel {
 		}
-		return topo.ErrInterrupted
+		return topo.NewError(topo.Interrupted, "watch")
 	}
 	cr.cancel = cancel
 	cr.mu.Unlock()

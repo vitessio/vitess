@@ -535,21 +535,21 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	switch scw.cloneType {
 	case horizontalResharding:
 		if err := scw.initShardsForHorizontalResharding(ctx); err != nil {
-			return err
+			return fmt.Errorf("failed initShardsForHorizontalResharding: %s", err)
 		}
 	case verticalSplit:
 		if err := scw.initShardsForVerticalSplit(ctx); err != nil {
-			return err
+			return fmt.Errorf("failed initShardsForVerticalSplit: %s", err)
 		}
 	}
 
 	if err := scw.sanityCheckShardInfos(); err != nil {
-		return err
+		return fmt.Errorf("failed sanityCheckShardInfos: %s", err)
 	}
 
 	if scw.cloneType == horizontalResharding {
 		if err := scw.loadVSchema(ctx); err != nil {
-			return err
+			return fmt.Errorf("failed loadVSchema: %s", err)
 		}
 	}
 
@@ -622,8 +622,22 @@ func (scw *SplitCloneWorker) initShardsForVerticalSplit(ctx context.Context) err
 	}
 	sourceKeyspace := servedFrom
 
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	shardMap, err := scw.wr.TopoServer().FindAllShardsInKeyspace(shortCtx, sourceKeyspace)
+	cancel()
+	if err != nil {
+		return fmt.Errorf("cannot find source shard for source keyspace %s: %s", sourceKeyspace, err)
+	}
+	if len(shardMap) != 1 {
+		return fmt.Errorf("found the wrong number of source shards, there should be only one, %v", shardMap)
+	}
+	var sourceShard string
+	for s := range shardMap {
+		sourceShard = s
+	}
+
 	// Init the source and destination shard info.
-	sourceShardInfo, err := scw.wr.TopoServer().GetShard(ctx, sourceKeyspace, scw.shard)
+	sourceShardInfo, err := scw.wr.TopoServer().GetShard(ctx, sourceKeyspace, sourceShard)
 	if err != nil {
 		return err
 	}
@@ -708,7 +722,7 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 	scw.offlineSourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
 		var err error
-		scw.offlineSourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets)
+		scw.offlineSourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets, topodatapb.TabletType_RDONLY)
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
@@ -789,7 +803,7 @@ func (scw *SplitCloneWorker) waitForTablets(ctx context.Context, shardInfos []*t
 			// We wait for --min_healthy_rdonly_tablets because we will use several
 			// tablets per shard to spread reading the chunks of rows across as many
 			// tablets as possible.
-			if _, err := waitForHealthyRdonlyTablets(ctx, scw.wr, scw.tsc, scw.cell, keyspace, shard, scw.minHealthyRdonlyTablets, timeout); err != nil {
+			if _, err := waitForHealthyTablets(ctx, scw.wr, scw.tsc, scw.cell, keyspace, shard, scw.minHealthyRdonlyTablets, timeout, topodatapb.TabletType_RDONLY); err != nil {
 				rec.RecordError(err)
 			}
 		}(si.Keyspace(), si.ShardName())

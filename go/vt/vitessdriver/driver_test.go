@@ -574,9 +574,8 @@ func TestTx(t *testing.T) {
 	// Commit on committed transaction is caught by Golang sql package.
 	// We actually don't have to cover this in our code.
 	err = tx.Commit()
-	want := "sql: Transaction has already been committed or rolled back"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, does not contain %s", err, want)
+	if err != sql.ErrTxDone {
+		t.Errorf("err: %v, not ErrTxDone", err)
 	}
 
 	// Test rollback now.
@@ -599,9 +598,8 @@ func TestTx(t *testing.T) {
 	// Rollback on rolled back transaction is caught by Golang sql package.
 	// We actually don't have to cover this in our code.
 	err = tx.Rollback()
-	want = "sql: Transaction has already been committed or rolled back"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, does not contain %s", err, want)
+	if err != sql.ErrTxDone {
+		t.Errorf("err: %v, not ErrTxDone", err)
 	}
 }
 

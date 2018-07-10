@@ -37,7 +37,7 @@ func waitForInitialValue(t *testing.T, conn topo.Conn, srvKeyspace *topodatapb.S
 	start := time.Now()
 	for {
 		current, changes, cancel = conn.Watch(ctx, "keyspaces/test_keyspace/SrvKeyspace")
-		if current.Err == topo.ErrNoNode {
+		if topo.IsErrType(current.Err, topo.NoNode) {
 			// hasn't appeared yet
 			if time.Now().Sub(start) > 10*time.Second {
 				t.Fatalf("time out waiting for file to appear")
@@ -73,7 +73,7 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 
 	// start watching something that doesn't exist -> error
 	current, changes, cancel := conn.Watch(ctx, "keyspaces/test_keyspace/SrvKeyspace")
-	if current.Err != topo.ErrNoNode {
+	if !topo.IsErrType(current.Err, topo.NoNode) {
 		t.Errorf("watch on missing node didn't return ErrNoNode: %v %v", current, changes)
 	}
 
@@ -135,7 +135,7 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 		if !ok {
 			t.Fatalf("watch channel unexpectedly closed")
 		}
-		if wd.Err == topo.ErrNoNode {
+		if topo.IsErrType(wd.Err, topo.NoNode) {
 			// good
 			break
 		}
@@ -188,7 +188,7 @@ func checkWatchInterrupt(t *testing.T, ts *topo.Server) {
 		if !ok {
 			t.Fatalf("watch channel unexpectedly closed")
 		}
-		if wd.Err == topo.ErrInterrupted {
+		if topo.IsErrType(wd.Err, topo.Interrupted) {
 			// good
 			break
 		}

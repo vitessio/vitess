@@ -342,7 +342,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		"select id from none",
 		nil,
 	)
-	want = "vtgate: : target: TestUnsharded.noshard.master, no valid tablet: node doesn't exist"
+	want = "vtgate: : target: TestUnsharded.noshard.master, no valid tablet: node doesn't exist: TestUnsharded/noshard (MASTER)"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute: %v, want %s", err, want)
 	}

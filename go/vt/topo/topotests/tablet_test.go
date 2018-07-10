@@ -63,7 +63,7 @@ func TestCreateTablet(t *testing.T) {
 	}
 
 	// Create the same tablet again, make sure it fails with ErrNodeExists.
-	if err := ts.CreateTablet(ctx, tablet); err != topo.ErrNodeExists {
+	if err := ts.CreateTablet(ctx, tablet); !topo.IsErrType(err, topo.NodeExists) {
 		t.Fatalf("CreateTablet(again) returned: %v", err)
 	}
 
@@ -76,7 +76,7 @@ func TestCreateTablet(t *testing.T) {
 	if err != nil || len(sri.Nodes) != 0 {
 		t.Fatalf("Modifed ShardReplication doesn't match: %v %v", sri, err)
 	}
-	if err := ts.CreateTablet(ctx, tablet); err != topo.ErrNodeExists {
+	if err := ts.CreateTablet(ctx, tablet); !topo.IsErrType(err, topo.NodeExists) {
 		t.Fatalf("CreateTablet(again and again) returned: %v", err)
 	}
 	sri, err = ts.GetShardReplication(ctx, cell, keyspace, shard)

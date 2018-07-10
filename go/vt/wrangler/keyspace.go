@@ -814,10 +814,10 @@ func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, 
 func (wr *Wrangler) RefreshTabletsByShard(ctx context.Context, si *topo.ShardInfo, tabletTypes []topodatapb.TabletType, cells []string) error {
 	wr.Logger().Infof("RefreshTabletsByShard called on shard %v/%v", si.Keyspace(), si.ShardName())
 	tabletMap, err := wr.ts.GetTabletMapForShardByCell(ctx, si.Keyspace(), si.ShardName(), cells)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		// keep going
-	case topo.ErrPartialResult:
+	case topo.IsErrType(err, topo.PartialResult):
 		wr.Logger().Warningf("RefreshTabletsByShard: got partial result for shard %v/%v, may not refresh all tablets everywhere", si.Keyspace(), si.ShardName())
 	default:
 		return err
@@ -866,7 +866,7 @@ func (wr *Wrangler) DeleteKeyspace(ctx context.Context, keyspace string, recursi
 		wr.Logger().Infof("Deleting all shards (and their tablets) in keyspace %v", keyspace)
 		for _, shard := range shards {
 			wr.Logger().Infof("Recursively deleting shard %v/%v", keyspace, shard)
-			if err := wr.DeleteShard(ctx, keyspace, shard, true /* recursive */, true /* evenIfServing */); err != nil && err != topo.ErrNoNode {
+			if err := wr.DeleteShard(ctx, keyspace, shard, true /* recursive */, true /* evenIfServing */); err != nil && !topo.IsErrType(err, topo.NoNode) {
 				// Unlike the errors below in non-recursive steps, we don't want to
 				// continue if a DeleteShard fails. If we continue and delete the
 				// keyspace, the tablet records will be orphaned, since we'll
@@ -887,11 +887,11 @@ func (wr *Wrangler) DeleteKeyspace(ctx context.Context, keyspace string, recursi
 		return err
 	}
 	for _, cell := range cells {
-		if err := wr.ts.DeleteKeyspaceReplication(ctx, cell, keyspace); err != nil && err != topo.ErrNoNode {
+		if err := wr.ts.DeleteKeyspaceReplication(ctx, cell, keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
 			wr.Logger().Warningf("Cannot delete KeyspaceReplication in cell %v for %v: %v", cell, keyspace, err)
 		}
 
-		if err := wr.ts.DeleteSrvKeyspace(ctx, cell, keyspace); err != nil && err != topo.ErrNoNode {
+		if err := wr.ts.DeleteSrvKeyspace(ctx, cell, keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
 			wr.Logger().Warningf("Cannot delete SrvKeyspace in cell %v for %v: %v", cell, keyspace, err)
 		}
 	}
@@ -899,7 +899,7 @@ func (wr *Wrangler) DeleteKeyspace(ctx context.Context, keyspace string, recursi
 	// Delete the cell-global VSchema path
 	// If not remove this, vtctld web page Dashboard will Display Error
 	vschema := &vschemapb.Keyspace{}
-	if err := wr.ts.SaveVSchema(ctx, keyspace, vschema); err != nil && err != topo.ErrNoNode {
+	if err := wr.ts.SaveVSchema(ctx, keyspace, vschema); err != nil && !topo.IsErrType(err, topo.NoNode) {
 		return err
 	}
 
