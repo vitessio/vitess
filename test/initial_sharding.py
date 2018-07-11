@@ -618,7 +618,14 @@ index by_msg (msg)
     # on both destination shards now.
     # we ask for 2 splits to only have one per shard
     sql = 'select id, msg from resharding1'
-    s = utils.vtgate.split_query(sql, 'test_keyspace', 2)
+    timeout = 10.0
+    while True:
+      try:
+        s = utils.vtgate.split_query(sql, 'test_keyspace', 2)
+        break
+      except Exception:  # pylint: disable=broad-except
+        timeout = utils.wait_step(
+            'vtgate executes split_query properly', timeout)
     self.assertEqual(len(s), 2)
     self.assertEqual(s[0]['key_range_part']['keyspace'], 'test_keyspace')
     self.assertEqual(s[1]['key_range_part']['keyspace'], 'test_keyspace')
