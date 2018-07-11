@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -97,17 +98,21 @@ func TestMultiCountersDot(t *testing.T) {
 	c.Add([]string{"c1.a", "c1b"}, 1)
 	c.Add([]string{"c2a", "c2.b"}, 1)
 	c.Add([]string{"c2a", "c2.b"}, 1)
-	want1 := `{"c1_a.c1b": 1, "c2a.c2_b": 2}`
-	want2 := `{"c2a.c2_b": 2, "c1_a.c1b": 1}`
+	c1a := safeLabel("c1.a")
+	c1aJSON := strings.Replace(c1a, "\\", "\\\\", -1)
+	c2b := safeLabel("c2.b")
+	c2bJSON := strings.Replace(c2b, "\\", "\\\\", -1)
+	want1 := `{"` + c1aJSON + `.c1b": 1, "c2a.` + c2bJSON + `": 2}`
+	want2 := `{"c2a.` + c2bJSON + `": 2, "` + c1aJSON + `.c1b": 1}`
 	if s := c.String(); s != want1 && s != want2 {
 		t.Errorf("want %s or %s, got %s", want1, want2, s)
 	}
 	counts := c.Counts()
-	if counts["c1_a.c1b"] != 1 {
-		t.Errorf("want 1, got %d", counts["c1_a.c1b"])
+	if counts[c1a+".c1b"] != 1 {
+		t.Errorf("want 1, got %d", counts[c1a+".c1b"])
 	}
-	if counts["c2a.c2_b"] != 2 {
-		t.Errorf("want 2, got %d", counts["c2a.c2_b"])
+	if counts["c2a."+c2b] != 2 {
+		t.Errorf("want 2, got %d", counts["c2a."+c2b])
 	}
 }
 
