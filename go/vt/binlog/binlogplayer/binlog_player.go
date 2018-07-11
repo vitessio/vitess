@@ -150,60 +150,11 @@ func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables 
 	return result
 }
 
-// writeRecoveryPosition writes the current GTID as the recovery position
-// for the next transaction.
-// It also tries to get the timestamp for the transaction. Two cases:
-// - we have statements, and they start with a SET TIMESTAMP that we
-//   can parse: then we update transaction_timestamp in vreplication
-//   with it, and set SecondsBehindMaster to now() - transaction_timestamp
-// - otherwise (the statements are probably filtered out), we leave
-//   transaction_timestamp alone (keeping the old value), and we don't
-//   change SecondsBehindMaster
-func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
-	position, err := mysql.DecodePosition(tx.EventToken.Position)
-	if err != nil {
-		return err
-	}
-
-	now := time.Now().Unix()
-	updateRecovery := updateVReplicationPos(blp.uid, position, now, tx.EventToken.Timestamp)
-
-	qr, err := blp.exec(updateRecovery)
-	if err != nil {
-		return fmt.Errorf("error %v in writing recovery info %v", err, updateRecovery)
-	}
-	if qr.RowsAffected != 1 {
-		return fmt.Errorf("eannot update blp_recovery table, affected %v rows", qr.RowsAffected)
-	}
-
-	// Update position after successful write.
-	blp.position = position
-	blp.blplStats.SetLastPosition(blp.position)
-	if tx.EventToken.Timestamp != 0 {
-		blp.blplStats.SecondsBehindMaster.Set(now - tx.EventToken.Timestamp)
-	}
-	return nil
-}
-
-// ReadStartPosition returns the current start position for
-// the provided binlog player.
-// TODO(sougou): deprecate.
-func ReadStartPosition(dbClient DBClient, uid uint32) (string, error) {
-	selectRecovery := ReadVReplicationPos(uid)
-	qr, err := dbClient.ExecuteFetch(selectRecovery, 1)
-	if err != nil {
-		return "", fmt.Errorf("error %v in selecting from recovery table %v", err, selectRecovery)
-	}
-	if qr.RowsAffected != 1 {
-		return "", fmt.Errorf("checkpoint information not available in db for %v", uid)
-	}
-	return qr.Rows[0][0].ToString(), nil
-}
-
 // ApplyBinlogEvents makes an RPC request to BinlogServer
 // and processes the events. It returns nil if the provided context
 // was canceled, or if we reached the stopping point.
-// Before returning, it updates vreplication in state to "Error" or "Stopped".
+// If an error is encountered, it updates the vreplication state to "Error".
+// If a stop position was specifed, and reached, the state is updated to "Stopped".
 func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	// Clear previous error, if any.
 	if err := setVReplicationState(blp.dbClient, blp.uid, BlpRunning, ""); err != nil {
@@ -224,8 +175,8 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 
 // applyEvents returns a recordable status message on termination or an error otherwise.
 func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
-	// Read starting values for replication.
-	pos, stopPos, maxTPS, maxReplicationLag, err := blp.readVRSettings()
+	// Read starting values for vreplication.
+	pos, stopPos, maxTPS, maxReplicationLag, err := readVRSettings(blp.dbClient, blp.uid)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -465,6 +416,41 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 	return qr, err
 }
 
+// writeRecoveryPosition writes the current GTID as the recovery position
+// for the next transaction.
+// It also tries to get the timestamp for the transaction. Two cases:
+// - we have statements, and they start with a SET TIMESTAMP that we
+//   can parse: then we update transaction_timestamp in vreplication
+//   with it, and set SecondsBehindMaster to now() - transaction_timestamp
+// - otherwise (the statements are probably filtered out), we leave
+//   transaction_timestamp alone (keeping the old value), and we don't
+//   change SecondsBehindMaster
+func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
+	position, err := mysql.DecodePosition(tx.EventToken.Position)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().Unix()
+	updateRecovery := updateVReplicationPos(blp.uid, position, now, tx.EventToken.Timestamp)
+
+	qr, err := blp.exec(updateRecovery)
+	if err != nil {
+		return fmt.Errorf("error %v in writing recovery info %v", err, updateRecovery)
+	}
+	if qr.RowsAffected != 1 {
+		return fmt.Errorf("cannot update vreplication table, affected %v rows", qr.RowsAffected)
+	}
+
+	// Update position after successful write.
+	blp.position = position
+	blp.blplStats.SetLastPosition(blp.position)
+	if tx.EventToken.Timestamp != 0 {
+		blp.blplStats.SecondsBehindMaster.Set(now - tx.EventToken.Timestamp)
+	}
+	return nil
+}
+
 // CreateVReplicationTable returns the statements required to create
 // the _vt.vreplication table.
 // id: is an auto-increment column that identifies the stream.
@@ -504,7 +490,7 @@ func CreateVReplicationTable() []string {
 
 // setVReplicationState updates the state in the _vt.vreplication table.
 func setVReplicationState(dbClient DBClient, uid uint32, state, message string) error {
-	query := fmt.Sprintf("UPDATE _vt.vreplication SET state='%v', message=%v WHERE id=%v", state, encodeString(message), uid)
+	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(message), uid)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
@@ -513,15 +499,15 @@ func setVReplicationState(dbClient DBClient, uid uint32, state, message string) 
 
 // readVRSettings retrieves the throttler settings for
 // vreplication from the checkpoint table.
-func (blp *BinlogPlayer) readVRSettings() (pos, stopPos string, maxTPS, maxReplicationLag int64, err error) {
-	query := fmt.Sprintf("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=%v", blp.uid)
-	qr, err := blp.dbClient.ExecuteFetch(query, 1)
+func readVRSettings(dbClient DBClient, uid uint32) (pos, stopPos string, maxTPS, maxReplicationLag int64, err error) {
+	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=%v", uid)
+	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return "", "", throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
 	}
 
 	if qr.RowsAffected != 1 {
-		return "", "", throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("checkpoint information not available in db for %v", blp.uid)
+		return "", "", throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
 
 	maxTPS, err = sqltypes.ToInt64(qr.Rows[0][2])
@@ -539,9 +525,9 @@ func (blp *BinlogPlayer) readVRSettings() (pos, stopPos string, maxTPS, maxRepli
 // CreateVReplication returns a statement to populate the first value into
 // the _vt.vreplication table.
 func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64) string {
-	return fmt.Sprintf("INSERT INTO _vt.vreplication "+
+	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) "+
-		"VALUES (%v, %v, %v, %v, %v, %v, 0, '%v')",
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v')",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag, timeUpdated, BlpRunning)
 }
 
@@ -550,39 +536,39 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 func updateVReplicationPos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64) string {
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
-			"UPDATE _vt.vreplication SET pos=%v, time_updated=%v, transaction_timestamp=%v WHERE id=%v",
+			"update _vt.vreplication set pos=%v, time_updated=%v, transaction_timestamp=%v where id=%v",
 			encodeString(mysql.EncodePosition(pos)), timeUpdated, txTimestamp, uid)
 	}
 
 	return fmt.Sprintf(
-		"UPDATE _vt.vreplication SET pos=%v, time_updated=%v WHERE id=%v",
+		"update _vt.vreplication set pos=%v, time_updated=%v where id=%v",
 		encodeString(mysql.EncodePosition(pos)), timeUpdated, uid)
 }
 
 // StartVReplication returns a statement to start the replication.
 func StartVReplication(uid uint32) string {
 	return fmt.Sprintf(
-		"UPDATE _vt.vreplication SET state='%v', stop_pos=NULL WHERE id=%v",
+		"update _vt.vreplication set state='%v', stop_pos=NULL where id=%v",
 		BlpRunning, uid)
 }
 
 // StartVReplicationUntil returns a statement to start the replication with a stop position.
 func StartVReplicationUntil(uid uint32, pos string) string {
 	return fmt.Sprintf(
-		"UPDATE _vt.vreplication SET state='%v', stop_pos=%v WHERE id=%v",
+		"update _vt.vreplication set state='%v', stop_pos=%v where id=%v",
 		BlpRunning, encodeString(pos), uid)
 }
 
 // StopVReplication returns a statement to stop the replication.
 func StopVReplication(uid uint32, message string) string {
 	return fmt.Sprintf(
-		"UPDATE _vt.vreplication SET state='%v', message=%v WHERE id=%v",
+		"update _vt.vreplication set state='%v', message=%v where id=%v",
 		BlpStopped, encodeString(message), uid)
 }
 
 // DeleteVReplication returns a statement to delete the replication.
 func DeleteVReplication(uid uint32) string {
-	return fmt.Sprintf("DELETE FROM _vt.vreplication WHERE id=%v", uid)
+	return fmt.Sprintf("delete from _vt.vreplication where id=%v", uid)
 }
 
 func encodeString(in string) string {
@@ -594,5 +580,5 @@ func encodeString(in string) string {
 // ReadVReplicationPos returns a statement to query the gtid for a
 // given shard from the _vt.vreplication table.
 func ReadVReplicationPos(index uint32) string {
-	return fmt.Sprintf("SELECT pos FROM _vt.vreplication WHERE id=%v", index)
+	return fmt.Sprintf("select pos from _vt.vreplication where id=%v", index)
 }

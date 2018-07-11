@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// plan is the plan for vreplication control statements.
 type plan struct {
 	opcode int
 	query  string
@@ -36,6 +37,7 @@ const (
 	selectQuery
 )
 
+// getPlan parses the input query and returns an appropriate plan.
 func getPlan(query string) (*plan, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
@@ -109,6 +111,11 @@ func buildUpdatePlan(upd *sqlparser.Update) (*plan, error) {
 	}
 	if upd.OrderBy != nil || upd.Limit != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(upd))
+	}
+	for _, expr := range upd.Exprs {
+		if expr.Name.Name.EqualString("id") {
+			return nil, fmt.Errorf("id cannot be changed: %v", sqlparser.String(expr))
+		}
 	}
 
 	id, err := extractID(upd.Where)

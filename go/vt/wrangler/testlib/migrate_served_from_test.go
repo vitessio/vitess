@@ -110,7 +110,7 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatal(err)
 	}
 	// select pos from _vt.vreplication
-	dbClient.ExpectRequest("SELECT pos FROM _vt.vreplication WHERE id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
 	}}}, nil)
 	dbClient.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)

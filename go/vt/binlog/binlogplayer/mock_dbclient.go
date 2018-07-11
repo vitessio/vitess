@@ -105,19 +105,19 @@ func (dc *MockDBClient) Connect() error {
 
 // Begin is part of the DBClient interface
 func (dc *MockDBClient) Begin() error {
-	_, err := dc.ExecuteFetch("BEGIN", 1)
+	_, err := dc.ExecuteFetch("begin", 1)
 	return err
 }
 
 // Commit is part of the DBClient interface
 func (dc *MockDBClient) Commit() error {
-	_, err := dc.ExecuteFetch("COMMIT", 1)
+	_, err := dc.ExecuteFetch("commit", 1)
 	return err
 }
 
 // Rollback is part of the DBClient interface
 func (dc *MockDBClient) Rollback() error {
-	_, err := dc.ExecuteFetch("ROLLBACK", 1)
+	_, err := dc.ExecuteFetch("rollback", 1)
 	return err
 }
 

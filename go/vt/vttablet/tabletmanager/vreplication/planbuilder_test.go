@@ -94,6 +94,9 @@ func TestPlanBuilder(t *testing.T) {
 		in:  "update _vt.vreplication set state='Running' where id = 1 limit 1",
 		err: "unsupported construct: update _vt.vreplication set state = 'Running' where id = 1 limit 1",
 	}, {
+		in:  "update _vt.vreplication set state='Running', id = 2 where id = 1",
+		err: "id cannot be changed: id = 2",
+	}, {
 		in:  "update _vt.vreplication set state='Running'",
 		err: "invalid where clause:",
 	}, {
