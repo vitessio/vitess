@@ -146,7 +146,7 @@ func TestMigrateServedTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	// select pos from _vt.vreplication
-	dbClient1.ExpectRequest("SELECT pos FROM _vt.vreplication WHERE id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient1.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
 	}}}, nil)
 	dbClient1.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
@@ -172,7 +172,7 @@ func TestMigrateServedTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	// select pos from _vt.vreplication
-	dbClient2.ExpectRequest("SELECT pos FROM _vt.vreplication WHERE id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient2.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
 	}}}, nil)
 	dbClient2.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)

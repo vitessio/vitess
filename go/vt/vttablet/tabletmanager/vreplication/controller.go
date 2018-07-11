@@ -38,7 +38,7 @@ import (
 var retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed binlog connection")
 
 // controller is created by Engine. Members are initialized upfront.
-// There is no mutext within a controller becaust its members are
+// There is no mutex within a controller becaust its members are
 // either read-only or self-synchronized.
 type controller struct {
 	dbClientFactory func() binlogplayer.DBClient
@@ -57,6 +57,8 @@ type controller struct {
 	sourceTablet sync2.AtomicString
 }
 
+// newController creates a new controller. Unless a stream is explicitly 'Stopped',
+// this function launches a goroutine to perform continuous vreplication.
 func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats) (*controller, error) {
 	if blpStats == nil {
 		blpStats = binlogplayer.NewStats()

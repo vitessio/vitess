@@ -54,12 +54,12 @@ func TestEngineOpen(t *testing.T) {
 		),
 		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 	), nil)
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
-	dbClient.ExpectRequest("BEGIN", nil, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("COMMIT", nil, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
 	if err := vre.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -107,12 +107,12 @@ func TestEngineExec(t *testing.T) {
 		),
 		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 	), nil)
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
-	dbClient.ExpectRequest("BEGIN", nil, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("COMMIT", nil, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
 
 	qr, err := vre.Exec("insert into _vt.vreplication values(null)")
 	if err != nil {
@@ -146,12 +146,12 @@ func TestEngineExec(t *testing.T) {
 		),
 		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 	), nil)
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
-	dbClient.ExpectRequest("BEGIN", nil, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("COMMIT", nil, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
 
 	qr, err = vre.Exec("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 1")
 	if err != nil {
@@ -283,10 +283,10 @@ func TestWaitForPos(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dbClient.ExpectRequest("SELECT pos FROM _vt.vreplication WHERE id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
 	}}}, nil)
-	dbClient.ExpectRequest("SELECT pos FROM _vt.vreplication WHERE id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1084"),
 	}}}, nil)
 	start := time.Now()
@@ -321,14 +321,14 @@ func TestWaitForPosError(t *testing.T) {
 		t.Errorf("WaitForPos: %v, want %v", err, want)
 	}
 
-	dbClient.ExpectRequest("SELECT pos FROM _vt.vreplication WHERE id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{}}}, nil)
+	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
 	want = "unexpected result: &{[] 0 0 [[]] <nil>}"
 	if err == nil || err.Error() != want {
 		t.Errorf("WaitForPos: %v, want %v", err, want)
 	}
 
-	dbClient.ExpectRequest("SELECT pos FROM _vt.vreplication WHERE id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
 	}, {
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
@@ -351,7 +351,7 @@ func TestWaitForPosCancel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dbClient.ExpectRequest("SELECT pos FROM _vt.vreplication WHERE id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
 	}}}, nil)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -366,7 +366,7 @@ func TestWaitForPosCancel(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 		vre.Close()
 	}()
-	dbClient.ExpectRequest("SELECT pos FROM _vt.vreplication WHERE id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
 	}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
@@ -408,12 +408,12 @@ func TestCreateDBAndTable(t *testing.T) {
 		),
 		`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
 	), nil)
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
-	dbClient.ExpectRequest("BEGIN", nil, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("COMMIT", nil, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
 
 	qr, err := vre.Exec("insert into _vt.vreplication values(null)")
 	if err != nil {

@@ -257,7 +257,7 @@ func NewActionAgent(
 	// The db name will get set by the Start function called below, before
 	// VREngine gets to invoke the FilteredWithDB call.
 	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
-		return binlogplayer.NewDbClient(agent.DBConfigs.FilteredWithDB())
+		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
 	})
 	servenv.OnTerm(agent.VREngine.Close)
 

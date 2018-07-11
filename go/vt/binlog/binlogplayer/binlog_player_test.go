@@ -50,12 +50,12 @@ var (
 
 func TestNewBinlogPlayerKeyRange(t *testing.T) {
 	dbClient := NewMockDBClient(t)
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
-	dbClient.ExpectRequest("BEGIN", nil, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("COMMIT", nil, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
 
 	fbc := newFakeBinlogClient()
 	wantTablet := &topodatapb.Tablet{
@@ -81,12 +81,12 @@ func TestNewBinlogPlayerKeyRange(t *testing.T) {
 
 func TestNewBinlogPlayerTables(t *testing.T) {
 	dbClient := NewMockDBClient(t)
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
-	dbClient.ExpectRequest("BEGIN", nil, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("COMMIT", nil, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
 
 	fbc := newFakeBinlogClient()
 	wantTablet := &topodatapb.Tablet{
@@ -113,10 +113,10 @@ func TestNewBinlogPlayerTables(t *testing.T) {
 // TestApplyEventsFail ensures the error is recorded in the vreplication table if there's a failure.
 func TestApplyEventsFail(t *testing.T) {
 	dbClient := NewMockDBClient(t)
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
-	dbClient.ExpectRequest("BEGIN", nil, errors.New("err"))
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Error', message='error in processing binlog event failed query BEGIN, err: err' WHERE id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("begin", nil, errors.New("err"))
+	dbClient.ExpectRequest("update _vt.vreplication set state='Error', message='error in processing binlog event failed query BEGIN, err: err' where id=1", testDMLResponse, nil)
 
 	_ = newFakeBinlogClient()
 
@@ -134,7 +134,7 @@ func TestApplyEventsFail(t *testing.T) {
 // TestStopPosEqual ensures player stops if stopPos==pos.
 func TestStopPosEqual(t *testing.T) {
 	dbClient := NewMockDBClient(t)
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	posEqual := &sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 1,
@@ -148,8 +148,8 @@ func TestStopPosEqual(t *testing.T) {
 			},
 		},
 	}
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", posEqual, nil)
-	dbClient.ExpectRequest(`UPDATE _vt.vreplication SET state='Stopped', message='not starting BinlogPlayer, we\'re already at the desired position 0-1-1083' WHERE id=1`, testDMLResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=1", posEqual, nil)
+	dbClient.ExpectRequest(`update _vt.vreplication set state='Stopped', message='not starting BinlogPlayer, we\'re already at the desired position 0-1-1083' where id=1`, testDMLResponse, nil)
 
 	_ = newFakeBinlogClient()
 
@@ -166,7 +166,7 @@ func TestStopPosEqual(t *testing.T) {
 // TestStopPosLess ensures player stops if stopPos<pos.
 func TestStopPosLess(t *testing.T) {
 	dbClient := NewMockDBClient(t)
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	posEqual := &sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 1,
@@ -180,8 +180,8 @@ func TestStopPosLess(t *testing.T) {
 			},
 		},
 	}
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", posEqual, nil)
-	dbClient.ExpectRequest(`UPDATE _vt.vreplication SET state='Stopped', message='starting point 0-1-1083 greater than stopping point 0-1-1082' WHERE id=1`, testDMLResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=1", posEqual, nil)
+	dbClient.ExpectRequest(`update _vt.vreplication set state='Stopped', message='starting point 0-1-1083 greater than stopping point 0-1-1082' where id=1`, testDMLResponse, nil)
 
 	_ = newFakeBinlogClient()
 
@@ -198,7 +198,7 @@ func TestStopPosLess(t *testing.T) {
 // TestStopPosGreater ensures player stops if stopPos>pos.
 func TestStopPosGreater(t *testing.T) {
 	dbClient := NewMockDBClient(t)
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	posEqual := &sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 1,
@@ -212,12 +212,12 @@ func TestStopPosGreater(t *testing.T) {
 			},
 		},
 	}
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", posEqual, nil)
-	dbClient.ExpectRequest("BEGIN", nil, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=1", posEqual, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("COMMIT", nil, nil)
-	dbClient.ExpectRequest(`UPDATE _vt.vreplication SET state='Stopped', message='Reached stopping position, done playing logs' WHERE id=1`, testDMLResponse, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
+	dbClient.ExpectRequest(`update _vt.vreplication set state='Stopped', message='Reached stopping position, done playing logs' where id=1`, testDMLResponse, nil)
 
 	_ = newFakeBinlogClient()
 
@@ -234,7 +234,7 @@ func TestStopPosGreater(t *testing.T) {
 // TestContextCancel ensures player does not record error or stop if context is canceled.
 func TestContextCancel(t *testing.T) {
 	dbClient := NewMockDBClient(t)
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	posEqual := &sqltypes.Result{
 		Fields:       nil,
 		RowsAffected: 1,
@@ -248,12 +248,12 @@ func TestContextCancel(t *testing.T) {
 			},
 		},
 	}
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", posEqual, nil)
-	dbClient.ExpectRequest("BEGIN", nil, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=1", posEqual, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("COMMIT", nil, nil)
-	dbClient.ExpectRequest(`UPDATE _vt.vreplication SET state='Stopped', message='Reached stopping position, done playing logs' WHERE id=1`, testDMLResponse, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
+	dbClient.ExpectRequest(`update _vt.vreplication set state='Stopped', message='Reached stopping position, done playing logs' where id=1`, testDMLResponse, nil)
 
 	_ = newFakeBinlogClient()
 
@@ -274,16 +274,16 @@ func TestContextCancel(t *testing.T) {
 
 func TestRetryOnDeadlock(t *testing.T) {
 	dbClient := NewMockDBClient(t)
-	dbClient.ExpectRequest("UPDATE _vt.vreplication SET state='Running', message='' WHERE id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("SELECT pos, stop_pos, max_tps, max_replication_lag FROM _vt.vreplication WHERE id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=1", testSettingsResponse, nil)
 	deadlocked := &mysql.SQLError{Num: 1213, Message: "deadlocked"}
-	dbClient.ExpectRequest("BEGIN", nil, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", nil, deadlocked)
-	dbClient.ExpectRequest("ROLLBACK", nil, nil)
-	dbClient.ExpectRequest("BEGIN", nil, nil)
+	dbClient.ExpectRequest("rollback", nil, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("UPDATE _vt.vreplication SET pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("COMMIT", nil, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
 
 	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, NewStats())
 	blp.deadlockRetry = 10 * time.Millisecond
@@ -314,9 +314,9 @@ func applyEvents(blp *BinlogPlayer) func() error {
 }
 
 func TestCreateVReplicationKeyRange(t *testing.T) {
-	want := "INSERT INTO _vt.vreplication " +
+	want := "insert into _vt.vreplication " +
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) " +
-		`VALUES ('Resharding', 'keyspace:\"ks\" shard:\"0\" key_range:<end:\"\\200\" > ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running')`
+		`values ('Resharding', 'keyspace:\"ks\" shard:\"0\" key_range:<end:\"\\200\" > ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running')`
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",
@@ -333,9 +333,9 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 }
 
 func TestCreateVReplicationTables(t *testing.T) {
-	want := "INSERT INTO _vt.vreplication " +
+	want := "insert into _vt.vreplication " +
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) " +
-		`VALUES ('Resharding', 'keyspace:\"ks\" shard:\"0\" tables:\"a\" tables:\"b\" ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running')`
+		`values ('Resharding', 'keyspace:\"ks\" shard:\"0\" tables:\"a\" tables:\"b\" ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running')`
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",
@@ -351,9 +351,9 @@ func TestCreateVReplicationTables(t *testing.T) {
 
 func TestUpdateVReplicationPos(t *testing.T) {
 	gtid := mysql.MustParseGTID("MariaDB", "0-1-8283")
-	want := "UPDATE _vt.vreplication " +
-		"SET pos='MariaDB/0-1-8283', time_updated=88822 " +
-		"WHERE id=78522"
+	want := "update _vt.vreplication " +
+		"set pos='MariaDB/0-1-8283', time_updated=88822 " +
+		"where id=78522"
 
 	got := updateVReplicationPos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0)
 	if got != want {
@@ -363,9 +363,9 @@ func TestUpdateVReplicationPos(t *testing.T) {
 
 func TestUpdateVReplicationTimestamp(t *testing.T) {
 	gtid := mysql.MustParseGTID("MariaDB", "0-2-582")
-	want := "UPDATE _vt.vreplication " +
-		"SET pos='MariaDB/0-2-582', time_updated=88822, transaction_timestamp=481828 " +
-		"WHERE id=78522"
+	want := "update _vt.vreplication " +
+		"set pos='MariaDB/0-2-582', time_updated=88822, transaction_timestamp=481828 " +
+		"where id=78522"
 
 	got := updateVReplicationPos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828)
 	if got != want {
@@ -374,7 +374,7 @@ func TestUpdateVReplicationTimestamp(t *testing.T) {
 }
 
 func TestReadVReplicationPos(t *testing.T) {
-	want := "SELECT pos FROM _vt.vreplication WHERE id=482821"
+	want := "select pos from _vt.vreplication where id=482821"
 	got := ReadVReplicationPos(482821)
 	if got != want {
 		t.Errorf("ReadVReplicationThrottlerSettings(482821) = %#v, want %#v", got, want)

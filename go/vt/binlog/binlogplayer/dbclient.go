@@ -44,8 +44,8 @@ type dbClientImpl struct {
 	dbConn   *mysql.Conn
 }
 
-// NewDbClient creates a DBClient instance
-func NewDbClient(params *mysql.ConnParams) DBClient {
+// NewDBClient creates a DBClient instance
+func NewDBClient(params *mysql.ConnParams) DBClient {
 	return &dbClientImpl{
 		dbConfig: params,
 	}

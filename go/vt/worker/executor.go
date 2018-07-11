@@ -36,6 +36,7 @@ import (
 // To-be-written data will be passed in through a channel.
 // The main purpose of this struct is to aggregate the objects which won't
 // change during the execution and remove them from method signatures.
+// executor is also used for executing vreplication and RefreshState commands.
 type executor struct {
 	wr        *wrangler.Wrangler
 	tsc       *discovery.TabletStatsCache

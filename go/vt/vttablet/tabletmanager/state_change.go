@@ -304,7 +304,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		agent.statsTabletTypeCount.Add(s, 1)
 	}
 
-	// See if we need to start or stop vreplication
+	// See if we need to start or stop vreplication.
 	if newTablet.Type == topodatapb.TabletType_MASTER {
 		if err := agent.VREngine.Open(agent.batchCtx); err != nil {
 			log.Errorf("Could not start VReplication engine: %v. Will keep retrying at health check intervals.", err)

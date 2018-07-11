@@ -36,6 +36,12 @@ import (
 var tabletTypesStr = flag.String("vreplication_tablet_type", "REPLICA", "comma separated list of tablet types used as a source")
 
 // waitRetryTime can be changed to a smaller value for tests.
+// A VReplication stream can be created by sending an insert statement
+// to the Engine. Such a stream can also be updated or deleted. The fields
+// of the table are described in binlogplayer.binlog_player.go. Changing
+// values in a vreplication row will cause the Engine to accordingly react.
+// For example, setting the state to 'Stopped' will cause that stream to
+// stop replicating.
 var waitRetryTime = 1 * time.Second
 
 // Engine is the engine for handling vreplication.
@@ -44,7 +50,7 @@ type Engine struct {
 	mu          sync.Mutex
 	isOpen      bool
 	controllers map[int]*controller
-	// wg is used in-flight functions that can run for long periods.
+	// wg is used by in-flight functions that can run for long periods.
 	wg         sync.WaitGroup
 	mustCreate bool
 
@@ -153,6 +159,14 @@ func (vre *Engine) Close() {
 }
 
 // Exec executes the query and the related actions.
+// Example insert statement:
+// insert into _vt.vreplication
+//	(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state)
+//	values ('Resharding', 'keyspace:"ks" shard:"0" tables:"a" tables:"b" ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running')`
+// Example update statement:
+// update _vt.vreplication set state='Stopped', message='testing stop' where id=1
+// Example delete: delete from _vt.vreplication where id=1
+// Example select: select * from _vt.vreplication
 func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
@@ -193,6 +207,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 		if err != nil {
 			return nil, err
 		}
+		// Create a controller for the newly created row.
 		ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil)
 		if err != nil {
 			return nil, err
@@ -202,6 +217,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	case updateQuery:
 		var blpStats *binlogplayer.Stats
 		if ct := vre.controllers[plan.id]; ct != nil {
+			// Stop the current controller.
 			ct.Stop()
 			blpStats = ct.blpStats
 		}
@@ -213,6 +229,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 		if err != nil {
 			return nil, err
 		}
+		// Create a new controller in place of the old one.
 		// For continuity, the new controller inherits the previous stats.
 		ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, blpStats)
 		if err != nil {
@@ -221,12 +238,14 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 		vre.controllers[plan.id] = ct
 		return qr, nil
 	case deleteQuery:
+		// Stop and delete the current controller.
 		if ct := vre.controllers[plan.id]; ct != nil {
 			ct.Stop()
 			delete(vre.controllers, plan.id)
 		}
 		return dbClient.ExecuteFetch(plan.query, 1)
 	case selectQuery:
+		// select queries are passed through.
 		return dbClient.ExecuteFetch(plan.query, 10000)
 	}
 	panic("unreachable")
@@ -244,6 +263,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		vre.mu.Unlock()
 		return errors.New("vreplication engine is closed")
 	}
+	// Ensure that the engine won't be closed while this is running.
 	vre.wg.Add(1)
 	vre.mu.Unlock()
 	defer vre.wg.Done()
@@ -325,6 +345,7 @@ func readRow(dbClient binlogplayer.DBClient, id int) (map[string]string, error) 
 	return rowToMap(qr, 0)
 }
 
+// rowToMap converts a row into a map for easier processing.
 func rowToMap(qr *sqltypes.Result, rownum int) (map[string]string, error) {
 	row := qr.Rows[rownum]
 	m := make(map[string]string, len(row))
