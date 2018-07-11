@@ -209,11 +209,12 @@ func (mt *MultiTimings) Labels() []string {
 }
 
 // safeJoinLabels joins the label values with ".", but first replaces any existing
-// "." characters in the labels with "_" to avoid issues parsing them apart later.
+// "." characters in the labels with the proper replacement, to avoid issues parsing
+// them apart later.
 func safeJoinLabels(labels []string) string {
-	sanitizedLabels := make([]string, len(labels), len(labels))
+	sanitizedLabels := make([]string, len(labels))
 	for idx, label := range labels {
-		sanitizedLabels[idx] = strings.Replace(label, ".", "_", -1)
+		sanitizedLabels[idx] = safeLabel(label)
 	}
 	return strings.Join(sanitizedLabels, ".")
 }
