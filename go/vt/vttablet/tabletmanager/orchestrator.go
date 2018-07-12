@@ -146,8 +146,9 @@ func (orc *orcClient) InActiveShardRecovery(tablet *topodatapb.Tablet) (bool, er
 		return false, err
 	}
 
+	// Orchestrator returns a 0-length response when it has no history of recovery on this cluster.
 	if len(r) == 0 {
-		return false, fmt.Errorf("Orchestrator returned an empty audit-recovery response")
+		return false, nil
 	}
 
 	active, ok := r[0]["IsActive"].(bool)
