@@ -1839,6 +1839,17 @@ func TestCreateTable(t *testing.T) {
 			"	key by_email (email(10), username)\n" +
 			")",
 
+		// foreign keys
+		"create table t (\n" +
+			"	id int auto_increment,\n" +
+			"	username varchar,\n" +
+			"	k int,\n" +
+			"	Z int,\n" +
+			"	primary key (id, username),\n" +
+			"	key by_email (email(10), username),\n" +
+			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b)\n" +
+			")",
+
 		// table options
 		"create table t (\n" +
 			"	id int auto_increment\n" +

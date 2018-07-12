@@ -292,7 +292,7 @@ var keywords = map[string]int{
 	"reads":               UNUSED,
 	"read_write":          UNUSED,
 	"real":                REAL,
-	"references":          UNUSED,
+	"references":          REFERENCES,
 	"regexp":              REGEXP,
 	"release":             UNUSED,
 	"rename":              RENAME,
