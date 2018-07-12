@@ -84,6 +84,16 @@ func ParseStrictDDL(sql string) (Statement, error) {
 // the next call to ParseNext to parse any subsequent SQL statements. When
 // there are no more statements to parse, a error of io.EOF is returned.
 func ParseNext(tokenizer *Tokenizer) (Statement, error) {
+	return parseNext(tokenizer, false)
+}
+
+// ParseNextStrictDDL is the same as ParseNext except it errors on
+// partially parsed DDL statements.
+func ParseNextStrictDDL(tokenizer *Tokenizer) (Statement, error) {
+	return parseNext(tokenizer, true)
+}
+
+func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 	if tokenizer.lastChar == ';' {
 		tokenizer.next()
 		tokenizer.skipBlank()
@@ -95,7 +105,7 @@ func ParseNext(tokenizer *Tokenizer) (Statement, error) {
 	tokenizer.reset()
 	tokenizer.multi = true
 	if yyParse(tokenizer) != 0 {
-		if tokenizer.partialDDL != nil {
+		if tokenizer.partialDDL != nil && !strict {
 			tokenizer.ParseTree = tokenizer.partialDDL
 			return tokenizer.ParseTree, nil
 		}
