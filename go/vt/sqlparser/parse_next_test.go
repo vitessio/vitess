@@ -161,3 +161,36 @@ func TestParseNextEdgeCases(t *testing.T) {
 		}
 	}
 }
+
+// TestParseNextEdgeCases tests various ParseNext edge cases.
+func TestParseNextStrictNonStrict(t *testing.T) {
+	// This is one of the edge cases above.
+	input := "create table a ignore me this is garbage; select 1 from a"
+	want := []string{"create table a", "select 1 from a"}
+
+	// First go through as expected with non-strict DDL parsing.
+	tokens := NewStringTokenizer(input)
+	for i, want := range want {
+		tree, err := ParseNext(tokens)
+		if err != nil {
+			t.Fatalf("[%d] ParseNext(%q) err = %q, want nil", i, input, err)
+		}
+		if got := String(tree); got != want {
+			t.Fatalf("[%d] ParseNext(%q) = %q, want %q", i, input, got, want)
+		}
+	}
+
+	// Now try again with strict parsing and observe the expected error.
+	tokens = NewStringTokenizer(input)
+	tree, err := ParseNextStrictDDL(tokens)
+	if err == nil || !strings.Contains(err.Error(), "ignore") {
+		t.Fatalf("ParseNext(%q) err = %q, want nil", input, err)
+	}
+	tree, err = ParseNextStrictDDL(tokens)
+	if err != nil {
+		t.Fatalf("ParseNext(%q) err = %q, want nil", input, err)
+	}
+	if got := String(tree); got != want[1] {
+		t.Fatalf("ParseNext(%q) = %q, want %q", input, got, want)
+	}
+}
