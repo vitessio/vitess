@@ -103,7 +103,7 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	_, err := qe.GetPlan(ctx, logStats, "", false)
-	want := "syntax error"
+	want := "empty statement"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("qe.GetPlan: %v, want %s", err, want)
 	}
