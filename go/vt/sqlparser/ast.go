@@ -807,9 +807,10 @@ func (node *PartitionDefinition) walkSubtree(visit Visit) error {
 
 // TableSpec describes the structure of a table from a CREATE TABLE statement
 type TableSpec struct {
-	Columns []*ColumnDefinition
-	Indexes []*IndexDefinition
-	Options string
+	Columns     []*ColumnDefinition
+	Indexes     []*IndexDefinition
+	Constraints []*ConstraintDefinition
+	Options     string
 }
 
 // Format formats the node.
@@ -825,6 +826,9 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	for _, idx := range ts.Indexes {
 		buf.Myprintf(",\n\t%v", idx)
 	}
+	for _, c := range ts.Constraints {
+		buf.Myprintf(",\n\t%v", c)
+	}
 
 	buf.Myprintf("\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
 }
@@ -839,6 +843,11 @@ func (ts *TableSpec) AddIndex(id *IndexDefinition) {
 	ts.Indexes = append(ts.Indexes, id)
 }
 
+// AddConstraint appends the given index to the list in the spec
+func (ts *TableSpec) AddConstraint(cd *ConstraintDefinition) {
+	ts.Constraints = append(ts.Constraints, cd)
+}
+
 func (ts *TableSpec) walkSubtree(visit Visit) error {
 	if ts == nil {
 		return nil
@@ -851,6 +860,12 @@ func (ts *TableSpec) walkSubtree(visit Visit) error {
 	}
 
 	for _, n := range ts.Indexes {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+
+	for _, n := range ts.Constraints {
 		if err := Walk(visit, n); err != nil {
 			return err
 		}
@@ -1276,6 +1291,56 @@ func (node VindexParam) walkSubtree(visit Visit) error {
 	return Walk(visit,
 		node.Key,
 	)
+}
+
+// ConstraintDefinition describes a constraint in a CREATE TABLE statement
+type ConstraintDefinition struct {
+	Name    string
+	Details ConstraintInfo
+}
+
+// ConstraintInfo details a constraint in a CREATE TABLE statement
+type ConstraintInfo interface {
+	SQLNode
+	constraintInfo()
+}
+
+// Format formats the node.
+func (c *ConstraintDefinition) Format(buf *TrackedBuffer) {
+	if c.Name != "" {
+		buf.Myprintf("constraint %s ", c.Name)
+	}
+	c.Details.Format(buf)
+}
+
+func (c *ConstraintDefinition) walkSubtree(visit Visit) error {
+	return Walk(visit, c.Details)
+}
+
+// ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
+type ForeignKeyDefinition struct {
+	Source            Columns
+	ReferencedTable   TableName
+	ReferencedColumns Columns
+}
+
+var _ ConstraintInfo = &ForeignKeyDefinition{}
+
+// Format formats the node.
+func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
+	buf.Myprintf("foreign key %v references %v %v", f.Source, f.ReferencedTable, f.ReferencedColumns)
+}
+
+func (f *ForeignKeyDefinition) constraintInfo() {}
+
+func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
+	if err := Walk(visit, f.Source); err != nil {
+		return err
+	}
+	if err := Walk(visit, f.ReferencedTable); err != nil {
+		return err
+	}
+	return Walk(visit, f.ReferencedColumns)
 }
 
 // Show represents a show statement.
