@@ -362,7 +362,7 @@ var keywords = map[string]int{
 	"undo":                UNUSED,
 	"union":               UNION,
 	"unique":              UNIQUE,
-	"unlock":              UNUSED,
+	"unlock":              UNLOCK,
 	"unsigned":            UNSIGNED,
 	"update":              UPDATE,
 	"usage":               UNUSED,
