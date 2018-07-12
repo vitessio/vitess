@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -58,6 +59,9 @@ func Parse(sql string) (Statement, error) {
 		}
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
 	}
+	if tokenizer.ParseTree == nil {
+		return nil, ErrEmpty
+	}
 	return tokenizer.ParseTree, nil
 }
 
@@ -67,6 +71,9 @@ func ParseStrictDDL(sql string) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
 	if yyParse(tokenizer) != 0 {
 		return nil, tokenizer.LastError
+	}
+	if tokenizer.ParseTree == nil {
+		return nil, ErrEmpty
 	}
 	return tokenizer.ParseTree, nil
 }
@@ -94,8 +101,14 @@ func ParseNext(tokenizer *Tokenizer) (Statement, error) {
 		}
 		return nil, tokenizer.LastError
 	}
+	if tokenizer.ParseTree == nil {
+		return ParseNext(tokenizer)
+	}
 	return tokenizer.ParseTree, nil
 }
+
+// ErrEmpty is a sentinel error returned when parsing empty statements.
+var ErrEmpty = errors.New("empty statement")
 
 // SplitStatement returns the first sql statement up to either a ; or EOF
 // and the remainder from the given buffer

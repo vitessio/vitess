@@ -1633,6 +1633,9 @@ func TestConvert(t *testing.T) {
 	}, {
 		input:  "select convert('abc', decimal(4+9)) from t",
 		output: "syntax error at position 33",
+	}, {
+		input:  "/* a comment */",
+		output: "empty statement",
 	}}
 
 	for _, tcase := range invalidSQL {
