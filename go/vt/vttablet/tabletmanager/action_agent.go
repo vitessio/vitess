@@ -588,23 +588,18 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	// Get and fix the dbname if necessary, only for real instances.
 	if !agent.DBConfigs.IsZero() {
 		dbname := topoproto.TabletDbName(agent.initialTablet)
-
-		// Update our DB config to match the info we have in the tablet
-		if agent.DBConfigs.App.DbName == "" {
-			agent.DBConfigs.App.DbName = dbname
-		}
-		if agent.DBConfigs.Filtered.DbName == "" {
-			agent.DBConfigs.Filtered.DbName = dbname
-		}
+		agent.DBConfigs.SetDBName(dbname, dbconfigs.AllButDbaConfig)
 	}
 
 	// Create and register the RPC services from UpdateStream.
 	// (it needs the dbname, so it has to be delayed up to here,
 	// but it has to be before updateState below that may use it)
 	if initUpdateStream {
-		cp := agent.DBConfigs.Dba
-		cp.DbName = agent.DBConfigs.App.DbName
-		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, &cp, agent.QueryServiceControl.SchemaEngine())
+		// This particular dba config needs the db name to be set.
+		// In all other cases (like mysqld), the db name must not be set.
+		dbaconfig := agent.DBConfigs.Dba
+		dbaconfig.DbName = agent.DBConfigs.App.DbName
+		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, &dbaconfig, agent.QueryServiceControl.SchemaEngine())
 		agent.UpdateStream = us
 		servenv.OnRun(func() {
 			us.RegisterService()

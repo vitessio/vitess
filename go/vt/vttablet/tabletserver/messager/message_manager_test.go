@@ -787,6 +787,7 @@ func newMMConnPool(db *fakesqldb.DB) *connpool.Pool {
 	pool := connpool.New("", 20, time.Duration(10*time.Minute), newFakeTabletServer())
 	dbconfigs := dbconfigs.DBConfigs{
 		App:           *db.ConnParams(),
+		Dba:           *db.ConnParams(),
 		SidecarDBName: "_vt",
 	}
 	pool.Open(&dbconfigs.App, &dbconfigs.Dba, &dbconfigs.AppDebug)

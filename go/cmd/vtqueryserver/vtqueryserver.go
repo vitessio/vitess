@@ -57,12 +57,12 @@ func main() {
 
 	servenv.Init()
 
-	dbcfgs, err := dbconfigs.Init(*mysqlSocketFile, dbconfigFlags)
+	dbcfgs, err := dbconfigs.Init(*mysqlSocketFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = vtqueryserver.Init(dbcfgs)
+	err = vtqueryserver.Init(&dbcfgs)
 	if err != nil {
 		log.Exitf("error initializing proxy: %v", err)
 	}

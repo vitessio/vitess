@@ -27,96 +27,19 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// We keep a global singleton for the db configs, and that's the one
-// the flags will change
-var dbConfigs = DBConfigs{
-	SidecarDBName: "_vt",
-}
-
-// DBConfigFlag describes which flags we need
-type DBConfigFlag int
-
-// config flags
-const (
-	EmptyConfig DBConfigFlag = 0
-	AppConfig   DBConfigFlag = 1 << iota
-	AppDebugConfig
-	// AllPrivs user should have more privileges than App (should include possibility to do
-	// schema changes and write to internal Vitess tables), but it shouldn't have SUPER
-	// privilege like Dba has.
-	AllPrivsConfig
-	DbaConfig
-	FilteredConfig
-	ReplConfig
+var (
+	dbFlags       DBConfigFlag
+	dbConfigs     = DBConfigs{SidecarDBName: "_vt"}
+	baseConfig    = mysql.ConnParams{}
+	allConnParams = []*mysql.ConnParams{
+		&dbConfigs.App,
+		&dbConfigs.AppDebug,
+		&dbConfigs.AllPrivs,
+		&dbConfigs.Dba,
+		&dbConfigs.Filtered,
+		&dbConfigs.Repl,
+	}
 )
-
-// redactedPassword is used in redacted configs so it's not in logs.
-const redactedPassword = "****"
-
-// The flags will change the global singleton
-func registerConnFlags(connParams *mysql.ConnParams, name string) {
-	flag.StringVar(&connParams.Host, "db-config-"+name+"-host", "", "db "+name+" connection host")
-	flag.IntVar(&connParams.Port, "db-config-"+name+"-port", 0, "db "+name+" connection port")
-	flag.StringVar(&connParams.Uname, "db-config-"+name+"-uname", "", "db "+name+" connection uname")
-	flag.StringVar(&connParams.Pass, "db-config-"+name+"-pass", "", "db "+name+" connection pass")
-	flag.StringVar(&connParams.DbName, "db-config-"+name+"-dbname", "", "db "+name+" connection dbname")
-	flag.StringVar(&connParams.UnixSocket, "db-config-"+name+"-unixsocket", "", "db "+name+" connection unix socket")
-	flag.StringVar(&connParams.Charset, "db-config-"+name+"-charset", "", "db "+name+" connection charset")
-	flag.Uint64Var(&connParams.Flags, "db-config-"+name+"-flags", 0, "db "+name+" connection flags")
-	flag.StringVar(&connParams.SslCa, "db-config-"+name+"-ssl-ca", "", "db "+name+" connection ssl ca")
-	flag.StringVar(&connParams.SslCaPath, "db-config-"+name+"-ssl-ca-path", "", "db "+name+" connection ssl ca path")
-	flag.StringVar(&connParams.SslCert, "db-config-"+name+"-ssl-cert", "", "db "+name+" connection ssl certificate")
-	flag.StringVar(&connParams.SslKey, "db-config-"+name+"-ssl-key", "", "db "+name+" connection ssl key")
-}
-
-// RegisterFlags registers the flags for the given DBConfigFlag.
-// For instance, vttablet will register client, dba and repl.
-// Returns all registered flags.
-func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
-	if flags == EmptyConfig {
-		panic("No DB config is provided.")
-	}
-	registeredFlags := EmptyConfig
-	if AppConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.App, "app")
-		registeredFlags |= AppConfig
-	}
-	if AppDebugConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.AppDebug, "appdebug")
-		registeredFlags |= AppDebugConfig
-	}
-	if AllPrivsConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.AllPrivs, "allprivs")
-		registeredFlags |= AllPrivsConfig
-	}
-	if DbaConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.Dba, "dba")
-		registeredFlags |= DbaConfig
-	}
-	if FilteredConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.Filtered, "filtered")
-		registeredFlags |= FilteredConfig
-	}
-	if ReplConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.Repl, "repl")
-		registeredFlags |= ReplConfig
-	}
-	return registeredFlags
-}
-
-// initConnParams may overwrite the socket file,
-// and refresh the password to check that works.
-func initConnParams(cp *mysql.ConnParams, socketFile string) error {
-	// Always try to connect with the socket if provided.
-	if socketFile != "" {
-		cp.UnixSocket = socketFile
-	}
-
-	// See if the CredentialsServer is working. We do not use the
-	// result for anything, this is just a check.
-	_, err := WithCredentials(cp)
-	return err
-}
 
 // DBConfigs is all we need for a smart tablet server:
 // - App access with db name for serving app queries
@@ -136,6 +59,100 @@ type DBConfigs struct {
 	SidecarDBName string
 }
 
+// DBConfigFlag describes which flags we need
+type DBConfigFlag int
+
+// config flags
+const (
+	EmptyConfig DBConfigFlag = 0
+	AppConfig   DBConfigFlag = 1 << iota
+	AppDebugConfig
+	// AllPrivs user should have more privileges than App (should include possibility to do
+	// schema changes and write to internal Vitess tables), but it shouldn't have SUPER
+	// privilege like Dba has.
+	AllPrivsConfig
+	DbaConfig
+	FilteredConfig
+	ReplConfig
+)
+
+// AllConfig represents all connection configurations.
+const AllConfig = (AppConfig | AppDebugConfig | AllPrivsConfig | DbaConfig | FilteredConfig | ReplConfig)
+
+// AllButDbaConfig represents all connection configurations except Dba.
+const AllButDbaConfig = (AppConfig | AppDebugConfig | AllPrivsConfig | FilteredConfig | ReplConfig)
+
+// redactedPassword is used in redacted configs so it's not in logs.
+const redactedPassword = "****"
+
+func registerBaseFlags() {
+	flag.StringVar(&baseConfig.Host, "db_host", "", "connection host")
+	flag.IntVar(&baseConfig.Port, "db_port", 0, "connection port")
+	flag.StringVar(&baseConfig.UnixSocket, "db_socket", "", "connection unix socket")
+	flag.StringVar(&baseConfig.Charset, "db_charset", "utf8", "connection charset")
+	flag.Uint64Var(&baseConfig.Flags, "db_flags", 0, "connection flags")
+	flag.StringVar(&baseConfig.SslCa, "db_ssl_ca", "", "connection ssl ca")
+	flag.StringVar(&baseConfig.SslCaPath, "db_ssl_ca_path", "", "connection ssl ca path")
+	flag.StringVar(&baseConfig.SslCert, "db_ssl_cert", "", "connection ssl certificate")
+	flag.StringVar(&baseConfig.SslKey, "db_ssl_key", "", "connection ssl key")
+}
+
+// The flags will change the global singleton
+// TODO(sougou): deprecate the legacy flags.
+func registerUserFlags(connParams *mysql.ConnParams, name string) {
+	newUserFlag := "db_" + name + "_user"
+	flag.StringVar(&connParams.Uname, "db-config-"+name+"-uname", "vt_"+name, "deprecated: use "+newUserFlag)
+	flag.StringVar(&connParams.Uname, newUserFlag, "vt_"+name, "db "+name+" user name")
+
+	newPasswordFlag := "db_" + name + "_password"
+	flag.StringVar(&connParams.Pass, "db-config-"+name+"-pass", "", "db "+name+" deprecated: use "+newPasswordFlag)
+	flag.StringVar(&connParams.Pass, newPasswordFlag, "", "db "+name+" password")
+
+	flag.StringVar(&connParams.Host, "db-config-"+name+"-host", "", "deprecated: use db_host")
+	flag.IntVar(&connParams.Port, "db-config-"+name+"-port", 0, "deprecated: use db_port")
+	flag.StringVar(&connParams.UnixSocket, "db-config-"+name+"-unixsocket", "", "deprecated: use db_socket")
+	flag.StringVar(&connParams.Charset, "db-config-"+name+"-charset", "utf8", "deprecated: use db_charset")
+	flag.Uint64Var(&connParams.Flags, "db-config-"+name+"-flags", 0, "deprecated: use db_flags")
+	flag.StringVar(&connParams.SslCa, "db-config-"+name+"-ssl-ca", "", "deprecated: use db_ssl_ca")
+	flag.StringVar(&connParams.SslCaPath, "db-config-"+name+"-ssl-ca-path", "", "deprecated: use db_ssl_ca_path")
+	flag.StringVar(&connParams.SslCert, "db-config-"+name+"-ssl-cert", "", "deprecated: use db_ssl_cert")
+	flag.StringVar(&connParams.SslKey, "db-config-"+name+"-ssl-key", "", "deprecated: use db_ssl_key")
+}
+
+// RegisterFlags registers the flags for the given DBConfigFlag.
+// For instance, vttablet will register client, dba and repl.
+// Returns all registered flags.
+func RegisterFlags(flags DBConfigFlag) {
+	if flags == EmptyConfig {
+		panic("No DB config is provided.")
+	}
+	registerBaseFlags()
+	if AppConfig&flags != 0 {
+		registerUserFlags(&dbConfigs.App, "app")
+		dbFlags |= AppConfig
+	}
+	if AppDebugConfig&flags != 0 {
+		registerUserFlags(&dbConfigs.AppDebug, "appdebug")
+		dbFlags |= AppDebugConfig
+	}
+	if AllPrivsConfig&flags != 0 {
+		registerUserFlags(&dbConfigs.AllPrivs, "allprivs")
+		dbFlags |= AllPrivsConfig
+	}
+	if DbaConfig&flags != 0 {
+		registerUserFlags(&dbConfigs.Dba, "dba")
+		dbFlags |= DbaConfig
+	}
+	if FilteredConfig&flags != 0 {
+		registerUserFlags(&dbConfigs.Filtered, "filtered")
+		dbFlags |= FilteredConfig
+	}
+	if ReplConfig&flags != 0 {
+		registerUserFlags(&dbConfigs.Repl, "repl")
+		dbFlags |= ReplConfig
+	}
+}
+
 func (dbcfgs *DBConfigs) String() string {
 	if dbcfgs.App.Pass != redactedPassword {
 		panic("Cannot log a non-redacted DBConfig")
@@ -148,6 +165,28 @@ func (dbcfgs *DBConfigs) String() string {
 		return err.Error()
 	}
 	return string(data)
+}
+
+// SetDBName sets the dbname for the specified connections.
+func (dbcfgs *DBConfigs) SetDBName(dbName string, flags DBConfigFlag) {
+	if AppConfig&flags != 0 {
+		dbcfgs.App.DbName = dbName
+	}
+	if AppDebugConfig&flags != 0 {
+		dbcfgs.AppDebug.DbName = dbName
+	}
+	if AllPrivsConfig&flags != 0 {
+		dbcfgs.AllPrivs.DbName = dbName
+	}
+	if DbaConfig&flags != 0 {
+		dbcfgs.Dba.DbName = dbName
+	}
+	if FilteredConfig&flags != 0 {
+		dbcfgs.Filtered.DbName = dbName
+	}
+	if ReplConfig&flags != 0 {
+		dbcfgs.Repl.DbName = dbName
+	}
 }
 
 // Redact will remove the password, so the object can be logged
@@ -166,49 +205,38 @@ func (dbcfgs *DBConfigs) IsZero() bool {
 }
 
 // Init will initialize app, allprivs, dba, filtered and repl configs.
-func Init(socketFile string, flags DBConfigFlag) (*DBConfigs, error) {
-	if flags == EmptyConfig {
+func Init(defaultSocketFile string) (DBConfigs, error) {
+	if dbFlags == EmptyConfig {
 		panic("No DB config is provided.")
 	}
-	if AppConfig&flags != 0 {
-		if err := initConnParams(&dbConfigs.App, socketFile); err != nil {
-			return nil, fmt.Errorf("app dbconfig cannot be initialized: %v", err)
+
+	// This is to support legacy behavior: use supplied socket value
+	// if conn parameters are not specified.
+	// TODO(sougou): deprecate.
+	for _, param := range allConnParams {
+		if param.UnixSocket == "" && param.Host == "" {
+			param.UnixSocket = defaultSocketFile
 		}
 	}
-	if AppDebugConfig&flags != 0 {
-		if err := initConnParams(&dbConfigs.AppDebug, socketFile); err != nil {
-			return nil, fmt.Errorf("appdebug dbconfig cannot be initialized: %v", err)
+
+	// The new base configs, if set, supersede legacy settings.
+	if baseConfig.Host != "" || baseConfig.UnixSocket != "" {
+		for _, param := range allConnParams {
+			tmpconfig := baseConfig
+			tmpconfig.Uname = param.Uname
+			tmpconfig.Pass = param.Pass
+			*param = tmpconfig
 		}
 	}
-	if AllPrivsConfig&flags != 0 {
-		if err := initConnParams(&dbConfigs.AllPrivs, socketFile); err != nil {
-			return nil, fmt.Errorf("allprivs dbconfig cannot be initialized: %v", err)
-		}
-	}
-	if DbaConfig&flags != 0 {
-		if err := initConnParams(&dbConfigs.Dba, socketFile); err != nil {
-			return nil, fmt.Errorf("dba dbconfig cannot be initialized: %v", err)
-		}
-	}
-	if FilteredConfig&flags != 0 {
-		if err := initConnParams(&dbConfigs.Filtered, socketFile); err != nil {
-			return nil, fmt.Errorf("filtered dbconfig cannot be initialized: %v", err)
-		}
-	}
-	if ReplConfig&flags != 0 {
-		if err := initConnParams(&dbConfigs.Repl, socketFile); err != nil {
-			return nil, fmt.Errorf("repl dbconfig cannot be initialized: %v", err)
-		}
-	}
-	// the Dba connection is not linked to a specific database
-	// (allows us to create them)
-	if dbConfigs.Dba.DbName != "" {
-		log.Warningf("dba dbname is set to '%v', ignoring the value", dbConfigs.Dba.DbName)
-		dbConfigs.Dba.DbName = ""
+
+	// See if the CredentialsServer is working. We do not use the
+	// result for anything, this is just a check.
+	if _, err := WithCredentials(&dbConfigs.App); err != nil {
+		return DBConfigs{}, fmt.Errorf("dbconfig cannot be initialized: %v", err)
 	}
 
 	toLog := dbConfigs
 	toLog.Redact()
 	log.Infof("DBConfigs: %v\n", toLog.String())
-	return &dbConfigs, nil
+	return dbConfigs, nil
 }

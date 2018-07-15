@@ -336,13 +336,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs dbconfigs.DB
 	}
 	tsv.target = target
 	tsv.dbconfigs = dbcfgs
-	// Massage Dba so that it inherits the
-	// App values but keeps the credentials.
-	tsv.dbconfigs.Dba = dbcfgs.App
-	if n, p := dbcfgs.Dba.Uname, dbcfgs.Dba.Pass; n != "" {
-		tsv.dbconfigs.Dba.Uname = n
-		tsv.dbconfigs.Dba.Pass = p
-	}
+	tsv.dbconfigs.SetDBName(dbcfgs.App.DbName, dbconfigs.AllConfig)
 
 	tsv.se.InitDBConfig(tsv.dbconfigs)
 	tsv.qe.InitDBConfig(tsv.dbconfigs)
@@ -1796,9 +1790,7 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 	}
 	defer tsv.endRequest(false)
 
-	cp := tsv.dbconfigs.Dba
-	cp.DbName = tsv.dbconfigs.App.DbName
-	s := binlog.NewEventStreamer(&cp, tsv.se, p, timestamp, callback)
+	s := binlog.NewEventStreamer(&tsv.dbconfigs.Dba, tsv.se, p, timestamp, callback)
 
 	// Create a cancelable wrapping context.
 	streamCtx, streamCancel := context.WithCancel(ctx)
