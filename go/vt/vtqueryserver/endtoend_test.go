@@ -107,6 +107,7 @@ func TestMain(m *testing.M) {
 		// Initialize the query service on top of the vttest MySQL database.
 		dbcfgs := dbconfigs.DBConfigs{
 			App: mysqlConnParams,
+			Dba: mysqlConnParams,
 		}
 		queryServer, err = initProxy(&dbcfgs)
 		if err != nil {

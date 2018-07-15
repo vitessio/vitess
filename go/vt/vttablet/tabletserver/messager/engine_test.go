@@ -263,6 +263,7 @@ func newTestEngine(db *fakesqldb.DB) *Engine {
 	te := NewEngine(tsv, se, config)
 	te.InitDBConfig(dbconfigs.DBConfigs{
 		App:           *db.ConnParams(),
+		Dba:           *db.ConnParams(),
 		SidecarDBName: "_vt",
 	})
 	te.Open()

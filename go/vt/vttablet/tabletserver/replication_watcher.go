@@ -116,9 +116,7 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs dbconfigs.
 	}()
 	for {
 		log.Infof("Starting a binlog Streamer from current replication position to monitor binlogs")
-		cp := dbconfigs.Dba
-		cp.DbName = dbconfigs.App.DbName
-		streamer := binlog.NewStreamer(&cp, rpw.se, nil /*clientCharset*/, mysql.Position{}, 0 /*timestamp*/, func(eventToken *querypb.EventToken, statements []binlog.FullBinlogStatement) error {
+		streamer := binlog.NewStreamer(&dbconfigs.Dba, rpw.se, nil /*clientCharset*/, mysql.Position{}, 0 /*timestamp*/, func(eventToken *querypb.EventToken, statements []binlog.FullBinlogStatement) error {
 			// Save the event token.
 			rpw.mu.Lock()
 			rpw.eventToken = eventToken

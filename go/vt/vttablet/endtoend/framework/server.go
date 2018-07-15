@@ -62,6 +62,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams) error {
 	dbcfgs := dbconfigs.DBConfigs{
 		App:           connParams,
 		AppDebug:      connAppDebugParams,
+		Dba:           connParams,
 		SidecarDBName: "_vt",
 	}
 

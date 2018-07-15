@@ -29,18 +29,23 @@ func TestRegisterFlagsWithoutFlags(t *testing.T) {
 }
 
 func TestRegisterFlagsWithSomeFlags(t *testing.T) {
+	saved := dbFlags
+	defer func() {
+		dbFlags = saved
+	}()
+
 	dbConfigs = DBConfigs{}
-	registeredFlags := RegisterFlags(DbaConfig | ReplConfig)
-	if registeredFlags&AppConfig != 0 {
+	RegisterFlags(DbaConfig | ReplConfig)
+	if dbFlags&AppConfig != 0 {
 		t.Error("App connection params should not be registered.")
 	}
-	if registeredFlags&DbaConfig == 0 {
+	if dbFlags&DbaConfig == 0 {
 		t.Error("Dba connection params should be registered.")
 	}
-	if registeredFlags&FilteredConfig != 0 {
+	if dbFlags&FilteredConfig != 0 {
 		t.Error("Filtered connection params should not be registered.")
 	}
-	if registeredFlags&ReplConfig == 0 {
+	if dbFlags&ReplConfig == 0 {
 		t.Error("Repl connection params should be registered.")
 	}
 }
@@ -51,5 +56,5 @@ func TestInitWithEmptyFlags(t *testing.T) {
 			t.Error("Init should panic with empty db flags")
 		}
 	}()
-	Init("", EmptyConfig)
+	Init("")
 }
