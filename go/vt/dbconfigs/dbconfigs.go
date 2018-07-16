@@ -14,8 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package dbconfigs is reusable by vt tools to load
-// the db configs file.
+// Package dbconfigs provides the registration for command line options
+// to collect db connection parameters. Once registered and collected,
+// it provides variables and functions to build connection parameters
+// for connecting to the database.
 package dbconfigs
 
 import (
@@ -42,14 +44,22 @@ var (
 	}
 )
 
-// DBConfigs is all we need for a smart tablet server:
-// - App access with db name for serving app queries
-// - AllPrivs access for administrative actions (like schema changes)
-//   that should be done without SUPER privilege
-// - Dba access for any dba-type operation (db creation, replication, ...)
-// - Filtered access for filtered replication
-// - Replication access to change master
-// - SidecarDBName for storing operational metadata
+// DBConfigs stores all the data needed to build various connection
+// parameters for the db. It stores credentials for app, appdebug,
+// allprivs, dba, filtered and repl users.
+// It contains other connection parameters like socket, charset, etc.
+// It also stores the default db name, which it can combine with the
+// rest of the data to build db-sepcific connection parameters.
+// It also supplies the SidecarDBName. This is currently hardcoded
+// to "_vt", but will soon become customizable.
+// The life-cycle of this package is as follows:
+// App must call RegisterFlags to request the types of connections
+// it wants support for. This must be done before involing flags.Parse.
+// After flag parsing, app invokes the Init function, which will return
+// a DBConfigs object.
+// The app must store the DBConfigs object internally, and use it to
+// build connection parameters as needed.
+// The DBName is initially empty and may later be set or changed by the app.
 type DBConfigs struct {
 	app           mysql.ConnParams
 	appDebug      mysql.ConnParams
@@ -113,11 +123,11 @@ func RegisterFlags(flags DBConfigFlag) {
 }
 
 func registerBaseFlags() {
-	flag.StringVar(&baseConfig.Host, "db_host", "", "connection host")
-	flag.IntVar(&baseConfig.Port, "db_port", 0, "connection port")
-	flag.StringVar(&baseConfig.UnixSocket, "db_socket", "", "connection unix socket")
-	flag.StringVar(&baseConfig.Charset, "db_charset", "utf8", "connection charset")
-	flag.Uint64Var(&baseConfig.Flags, "db_flags", 0, "connection flags")
+	flag.StringVar(&baseConfig.UnixSocket, "db_socket", "", "The unix socket to connect on. If this is specifed, host and port will not be used.")
+	flag.StringVar(&baseConfig.Host, "db_host", "", "The host name for the tcp connection.")
+	flag.IntVar(&baseConfig.Port, "db_port", 0, "tcp port")
+	flag.StringVar(&baseConfig.Charset, "db_charset", "utf8", "Character set. Only utf8 or latin1 based character sets are supported.")
+	flag.Uint64Var(&baseConfig.Flags, "db_flags", 0, "Flag values as defined by MySQL.")
 	flag.StringVar(&baseConfig.SslCa, "db_ssl_ca", "", "connection ssl ca")
 	flag.StringVar(&baseConfig.SslCaPath, "db_ssl_ca_path", "", "connection ssl ca path")
 	flag.StringVar(&baseConfig.SslCert, "db_ssl_cert", "", "connection ssl certificate")
@@ -241,7 +251,13 @@ func (dbcfgs *DBConfigs) Copy() *DBConfigs {
 	return result
 }
 
-// Init will initialize app, allprivs, dba, filtered and repl configs.
+// Init will initialize all the necessary connection parameters.
+// Precedence is as follows: if baseConfig command line options are
+// set, they supersede all other settings.
+// If baseConfig is not set, the next priority is with per-user connection
+// parameters. This is only for legacy support.
+// If no per-user parameters are supplied, then the defaultSocketFile
+// is used to initialize the per-user conn params.
 func Init(defaultSocketFile string) (*DBConfigs, error) {
 	// This is to support legacy behavior: use supplied socket value
 	// if conn parameters are not specified.
