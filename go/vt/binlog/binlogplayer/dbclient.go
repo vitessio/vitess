@@ -53,7 +53,7 @@ func (dc *DBClient) Connect() error {
 		return err
 	}
 	ctx := context.Background()
-	dc.dbConn, err = mysql.Connect(ctx, &params)
+	dc.dbConn, err = mysql.Connect(ctx, params)
 	if err != nil {
 		return fmt.Errorf("error in connecting to mysql db, err %v", err)
 	}

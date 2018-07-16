@@ -49,12 +49,8 @@ func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result int
 	}
 }
 
-func (util *testUtils) newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
-	return dbconfigs.DBConfigs{
-		App:           *db.ConnParams(),
-		Dba:           *db.ConnParams(),
-		SidecarDBName: "_vt",
-	}
+func (util *testUtils) newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
+	return dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
 }
 
 func (util *testUtils) newQueryServiceConfig() tabletenv.TabletConfig {

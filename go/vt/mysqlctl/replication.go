@@ -216,7 +216,7 @@ func (mysqld *Mysqld) SetSlavePosition(ctx context.Context, pos mysql.Position) 
 // SetMaster makes the provided host / port the master. It optionally
 // stops replication before, and starts it after.
 func (mysqld *Mysqld) SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error {
-	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Repl)
+	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Repl())
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func (mysqld *Mysqld) SetMaster(ctx context.Context, masterHost string, masterPo
 	if slaveStopBefore {
 		cmds = append(cmds, conn.StopSlaveCommand())
 	}
-	smc := conn.SetMasterCommand(&params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
+	smc := conn.SetMasterCommand(params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
 	cmds = append(cmds, smc)
 	if slaveStartAfter {
 		cmds = append(cmds, conn.StartSlaveCommand())

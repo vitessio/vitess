@@ -109,7 +109,7 @@ func (tqsc *Controller) AddStatusPart() {
 }
 
 // InitDBConfig is part of the tabletserver.Controller interface
-func (tqsc *Controller) InitDBConfig(target querypb.Target, dbcfgs dbconfigs.DBConfigs) error {
+func (tqsc *Controller) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) error {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 

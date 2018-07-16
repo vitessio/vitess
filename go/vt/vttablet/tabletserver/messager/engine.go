@@ -47,7 +47,7 @@ type TabletService interface {
 
 // Engine is the engine for handling messages.
 type Engine struct {
-	dbconfigs dbconfigs.DBConfigs
+	dbconfigs *dbconfigs.DBConfigs
 
 	mu       sync.Mutex
 	isOpen   bool
@@ -76,7 +76,7 @@ func NewEngine(tsv TabletService, se *schema.Engine, config tabletenv.TabletConf
 }
 
 // InitDBConfig must be called before Open.
-func (me *Engine) InitDBConfig(dbcfgs dbconfigs.DBConfigs) {
+func (me *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 	me.dbconfigs = dbcfgs
 }
 
@@ -85,7 +85,7 @@ func (me *Engine) Open() error {
 	if me.isOpen {
 		return nil
 	}
-	me.conns.Open(&me.dbconfigs.App, &me.dbconfigs.Dba, &me.dbconfigs.AppDebug)
+	me.conns.Open(me.dbconfigs.AppWithDB(), me.dbconfigs.DbaWithDB(), me.dbconfigs.AppDebugWithDB())
 	me.se.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
 	return nil

@@ -433,10 +433,6 @@ func newEngine(queryPlanCacheSize int, reloadTime time.Duration, idleTimeout tim
 	return se
 }
 
-func newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
-	return dbconfigs.DBConfigs{
-		App:           *db.ConnParams(),
-		Dba:           *db.ConnParams(),
-		SidecarDBName: "_vt",
-	}
+func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
+	return dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
 }
