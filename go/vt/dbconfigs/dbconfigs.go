@@ -24,20 +24,21 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 )
 
 var (
 	dbFlags       DBConfigFlag
-	dbConfigs     = DBConfigs{SidecarDBName: "_vt"}
+	dbConfigs     DBConfigs
 	baseConfig    = mysql.ConnParams{}
 	allConnParams = []*mysql.ConnParams{
-		&dbConfigs.App,
-		&dbConfigs.AppDebug,
-		&dbConfigs.AllPrivs,
-		&dbConfigs.Dba,
-		&dbConfigs.Filtered,
-		&dbConfigs.Repl,
+		&dbConfigs.app,
+		&dbConfigs.appDebug,
+		&dbConfigs.allPrivs,
+		&dbConfigs.dba,
+		&dbConfigs.filtered,
+		&dbConfigs.repl,
 	}
 )
 
@@ -50,13 +51,14 @@ var (
 // - Replication access to change master
 // - SidecarDBName for storing operational metadata
 type DBConfigs struct {
-	App           mysql.ConnParams
-	AppDebug      mysql.ConnParams
-	AllPrivs      mysql.ConnParams
-	Dba           mysql.ConnParams
-	Filtered      mysql.ConnParams
-	Repl          mysql.ConnParams
-	SidecarDBName string
+	app           mysql.ConnParams
+	appDebug      mysql.ConnParams
+	allPrivs      mysql.ConnParams
+	dba           mysql.ConnParams
+	filtered      mysql.ConnParams
+	repl          mysql.ConnParams
+	DBName        sync2.AtomicString
+	SidecarDBName sync2.AtomicString
 }
 
 // DBConfigFlag describes which flags we need
@@ -76,14 +78,39 @@ const (
 	ReplConfig
 )
 
-// AllConfig represents all connection configurations.
-const AllConfig = (AppConfig | AppDebugConfig | AllPrivsConfig | DbaConfig | FilteredConfig | ReplConfig)
-
-// AllButDbaConfig represents all connection configurations except Dba.
-const AllButDbaConfig = (AppConfig | AppDebugConfig | AllPrivsConfig | FilteredConfig | ReplConfig)
-
-// redactedPassword is used in redacted configs so it's not in logs.
-const redactedPassword = "****"
+// RegisterFlags registers the flags for the given DBConfigFlag.
+// For instance, vttablet will register client, dba and repl.
+// Returns all registered flags.
+func RegisterFlags(flags DBConfigFlag) {
+	if flags == EmptyConfig {
+		panic("No DB config is provided.")
+	}
+	registerBaseFlags()
+	if AppConfig&flags != 0 {
+		registerUserFlags(&dbConfigs.app, "app")
+		dbFlags |= AppConfig
+	}
+	if AppDebugConfig&flags != 0 {
+		registerUserFlags(&dbConfigs.appDebug, "appdebug")
+		dbFlags |= AppDebugConfig
+	}
+	if AllPrivsConfig&flags != 0 {
+		registerUserFlags(&dbConfigs.allPrivs, "allprivs")
+		dbFlags |= AllPrivsConfig
+	}
+	if DbaConfig&flags != 0 {
+		registerUserFlags(&dbConfigs.dba, "dba")
+		dbFlags |= DbaConfig
+	}
+	if FilteredConfig&flags != 0 {
+		registerUserFlags(&dbConfigs.filtered, "filtered")
+		dbFlags |= FilteredConfig
+	}
+	if ReplConfig&flags != 0 {
+		registerUserFlags(&dbConfigs.repl, "repl")
+		dbFlags |= ReplConfig
+	}
+}
 
 func registerBaseFlags() {
 	flag.StringVar(&baseConfig.Host, "db_host", "", "connection host")
@@ -119,97 +146,103 @@ func registerUserFlags(connParams *mysql.ConnParams, name string) {
 	flag.StringVar(&connParams.SslKey, "db-config-"+name+"-ssl-key", "", "deprecated: use db_ssl_key")
 }
 
-// RegisterFlags registers the flags for the given DBConfigFlag.
-// For instance, vttablet will register client, dba and repl.
-// Returns all registered flags.
-func RegisterFlags(flags DBConfigFlag) {
-	if flags == EmptyConfig {
-		panic("No DB config is provided.")
-	}
-	registerBaseFlags()
-	if AppConfig&flags != 0 {
-		registerUserFlags(&dbConfigs.App, "app")
-		dbFlags |= AppConfig
-	}
-	if AppDebugConfig&flags != 0 {
-		registerUserFlags(&dbConfigs.AppDebug, "appdebug")
-		dbFlags |= AppDebugConfig
-	}
-	if AllPrivsConfig&flags != 0 {
-		registerUserFlags(&dbConfigs.AllPrivs, "allprivs")
-		dbFlags |= AllPrivsConfig
-	}
-	if DbaConfig&flags != 0 {
-		registerUserFlags(&dbConfigs.Dba, "dba")
-		dbFlags |= DbaConfig
-	}
-	if FilteredConfig&flags != 0 {
-		registerUserFlags(&dbConfigs.Filtered, "filtered")
-		dbFlags |= FilteredConfig
-	}
-	if ReplConfig&flags != 0 {
-		registerUserFlags(&dbConfigs.Repl, "repl")
-		dbFlags |= ReplConfig
-	}
+// AppWithDB returns connection parameters for app with dbname set.
+func (dbcfgs *DBConfigs) AppWithDB() *mysql.ConnParams {
+	result := dbcfgs.app
+	result.DbName = dbcfgs.DBName.Get()
+	return &result
+}
+
+// AppDebugWithDB returns connection parameters for appdebug with dbname set.
+func (dbcfgs *DBConfigs) AppDebugWithDB() *mysql.ConnParams {
+	result := dbcfgs.appDebug
+	result.DbName = dbcfgs.DBName.Get()
+	return &result
+}
+
+// AllPrivsWithDB returns connection parameters for appdebug with dbname set.
+func (dbcfgs *DBConfigs) AllPrivsWithDB() *mysql.ConnParams {
+	result := dbcfgs.allPrivs
+	result.DbName = dbcfgs.DBName.Get()
+	return &result
+}
+
+// Dba returns connection parameters for dba with no dbname set.
+func (dbcfgs *DBConfigs) Dba() *mysql.ConnParams {
+	result := dbcfgs.dba
+	return &result
+}
+
+// DbaWithDB returns connection parameters for appdebug with dbname set.
+func (dbcfgs *DBConfigs) DbaWithDB() *mysql.ConnParams {
+	result := dbcfgs.dba
+	result.DbName = dbcfgs.DBName.Get()
+	return &result
+}
+
+// FilteredWithDB returns connection parameters for appdebug with dbname set.
+func (dbcfgs *DBConfigs) FilteredWithDB() *mysql.ConnParams {
+	result := dbcfgs.filtered
+	result.DbName = dbcfgs.DBName.Get()
+	return &result
+}
+
+// Repl returns connection parameters for appdebug with no dbname set.
+func (dbcfgs *DBConfigs) Repl() *mysql.ConnParams {
+	result := dbcfgs.repl
+	return &result
+}
+
+// IsZero returns true if DBConfigs was uninitialized.
+func (dbcfgs *DBConfigs) IsZero() bool {
+	return dbcfgs.app.Uname == ""
 }
 
 func (dbcfgs *DBConfigs) String() string {
-	if dbcfgs.App.Pass != redactedPassword {
-		panic("Cannot log a non-redacted DBConfig")
+	out := struct {
+		App           mysql.ConnParams
+		AppDebug      string
+		AllPrivs      string
+		Dba           string
+		Filtered      string
+		Repl          string
+		DBName        string
+		SidecarDBName string
+	}{
+		App:           dbcfgs.app,
+		AppDebug:      dbcfgs.appDebug.Uname,
+		AllPrivs:      dbcfgs.allPrivs.Uname,
+		Dba:           dbcfgs.dba.Uname,
+		Filtered:      dbcfgs.filtered.Uname,
+		Repl:          dbcfgs.repl.Uname,
+		DBName:        dbcfgs.DBName.Get(),
+		SidecarDBName: dbcfgs.SidecarDBName.Get(),
 	}
-	if dbcfgs.AppDebug.Pass != redactedPassword {
-		panic("Cannot log a non-redacted DBConfig")
-	}
-	data, err := json.MarshalIndent(dbcfgs, "", "  ")
+	out.App.Pass = "****"
+	data, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return err.Error()
 	}
 	return string(data)
 }
 
-// SetDBName sets the dbname for the specified connections.
-func (dbcfgs *DBConfigs) SetDBName(dbName string, flags DBConfigFlag) {
-	if AppConfig&flags != 0 {
-		dbcfgs.App.DbName = dbName
+// Copy returns a copy of the DBConfig.
+func (dbcfgs *DBConfigs) Copy() *DBConfigs {
+	result := &DBConfigs{
+		app:      dbcfgs.app,
+		appDebug: dbcfgs.appDebug,
+		allPrivs: dbcfgs.allPrivs,
+		dba:      dbcfgs.dba,
+		filtered: dbcfgs.filtered,
+		repl:     dbcfgs.repl,
 	}
-	if AppDebugConfig&flags != 0 {
-		dbcfgs.AppDebug.DbName = dbName
-	}
-	if AllPrivsConfig&flags != 0 {
-		dbcfgs.AllPrivs.DbName = dbName
-	}
-	if DbaConfig&flags != 0 {
-		dbcfgs.Dba.DbName = dbName
-	}
-	if FilteredConfig&flags != 0 {
-		dbcfgs.Filtered.DbName = dbName
-	}
-	if ReplConfig&flags != 0 {
-		dbcfgs.Repl.DbName = dbName
-	}
-}
-
-// Redact will remove the password, so the object can be logged
-func (dbcfgs *DBConfigs) Redact() {
-	dbcfgs.App.Pass = redactedPassword
-	dbcfgs.AppDebug.Pass = redactedPassword
-	dbcfgs.AllPrivs.Pass = redactedPassword
-	dbcfgs.Dba.Pass = redactedPassword
-	dbcfgs.Filtered.Pass = redactedPassword
-	dbcfgs.Repl.Pass = redactedPassword
-}
-
-// IsZero returns true if DBConfigs was uninitialized.
-func (dbcfgs *DBConfigs) IsZero() bool {
-	return dbcfgs.App.Uname == ""
+	result.DBName.Set(dbcfgs.DBName.Get())
+	result.SidecarDBName.Set(dbcfgs.SidecarDBName.Get())
+	return result
 }
 
 // Init will initialize app, allprivs, dba, filtered and repl configs.
-func Init(defaultSocketFile string) (DBConfigs, error) {
-	if dbFlags == EmptyConfig {
-		panic("No DB config is provided.")
-	}
-
+func Init(defaultSocketFile string) (*DBConfigs, error) {
 	// This is to support legacy behavior: use supplied socket value
 	// if conn parameters are not specified.
 	// TODO(sougou): deprecate.
@@ -231,12 +264,26 @@ func Init(defaultSocketFile string) (DBConfigs, error) {
 
 	// See if the CredentialsServer is working. We do not use the
 	// result for anything, this is just a check.
-	if _, err := WithCredentials(&dbConfigs.App); err != nil {
-		return DBConfigs{}, fmt.Errorf("dbconfig cannot be initialized: %v", err)
+	if _, err := WithCredentials(&dbConfigs.app); err != nil {
+		return nil, fmt.Errorf("dbconfig cannot be initialized: %v", err)
 	}
+	dbConfigs.SidecarDBName.Set("_vt")
 
-	toLog := dbConfigs
-	toLog.Redact()
-	log.Infof("DBConfigs: %v\n", toLog.String())
-	return dbConfigs, nil
+	log.Infof("DBConfigs: %v\n", dbConfigs.String())
+	return &dbConfigs, nil
+}
+
+// NewTestDBConfigs returns a DBConfigs meant for testing.
+func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbName string) *DBConfigs {
+	dbcfgs := &DBConfigs{
+		app:      genParams,
+		appDebug: appDebugParams,
+		allPrivs: genParams,
+		dba:      genParams,
+		filtered: genParams,
+		repl:     genParams,
+	}
+	dbcfgs.DBName.Set(dbName)
+	dbcfgs.SidecarDBName.Set("_vt")
+	return dbcfgs
 }

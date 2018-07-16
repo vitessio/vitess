@@ -103,11 +103,11 @@ func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 
 	// Create and open the connection pool for dba access.
 	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout)
-	result.dbaPool.Open(&dbcfgs.Dba, dbaMysqlStats)
+	result.dbaPool.Open(dbcfgs.Dba(), dbaMysqlStats)
 
 	// Create and open the connection pool for app access.
 	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout)
-	result.appPool.Open(&dbcfgs.App, appMysqlStats)
+	result.appPool.Open(dbcfgs.AppWithDB(), appMysqlStats)
 
 	return result
 }
@@ -156,11 +156,11 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 	// privileges' right in the middle, and then subsequent
 	// commands fail if we don't use valid credentials. So let's
 	// use dba credentials.
-	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
 	if err != nil {
 		return err
 	}
-	cnf, err := mysqld.defaultsExtraFile(&params)
+	cnf, err := mysqld.defaultsExtraFile(params)
 	if err != nil {
 		return err
 	}
@@ -298,12 +298,12 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, mysqldArgs ...string) err
 // will use the dba credentials to try to connect. Use wait() with
 // different credentials if needed.
 func (mysqld *Mysqld) Wait(ctx context.Context) error {
-	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
 	if err != nil {
 		return err
 	}
 
-	return mysqld.wait(ctx, &params)
+	return mysqld.wait(ctx, params)
 }
 
 // wait is the internal version of Wait, that takes credentials.
@@ -388,11 +388,11 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, waitForMysqld bool) error {
 		if err != nil {
 			return err
 		}
-		params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+		params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
 		if err != nil {
 			return err
 		}
-		cnf, err := mysqld.defaultsExtraFile(&params)
+		cnf, err := mysqld.defaultsExtraFile(params)
 		if err != nil {
 			return err
 		}
@@ -907,12 +907,12 @@ func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (*dbconnpool.PooledD
 
 // GetDbaConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.Dba, dbaMysqlStats)
+	return dbconnpool.NewDBConnection(mysqld.dbcfgs.Dba(), dbaMysqlStats)
 }
 
 // GetAllPrivsConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.AllPrivs, allprivsMysqlStats)
+	return dbconnpool.NewDBConnection(mysqld.dbcfgs.AllPrivsWithDB(), allprivsMysqlStats)
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba

@@ -35,7 +35,7 @@ import (
 func TestQueryzHandler(t *testing.T) {
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
-	qe := newTestQueryEngine(100, 10*time.Second, true, dbconfigs.DBConfigs{})
+	qe := newTestQueryEngine(100, 10*time.Second, true, &dbconfigs.DBConfigs{})
 
 	plan1 := &TabletPlan{
 		Plan: &planbuilder.Plan{

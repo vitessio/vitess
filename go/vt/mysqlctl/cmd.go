@@ -52,7 +52,7 @@ func CreateMysqld(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*Mysql
 		return nil, fmt.Errorf("couldn't Init dbconfigs: %v", err)
 	}
 
-	return NewMysqld(mycnf, &dbcfgs), nil
+	return NewMysqld(mycnf, dbcfgs), nil
 }
 
 // OpenMysqld returns a Mysqld object to use for working with a MySQL
@@ -70,5 +70,5 @@ func OpenMysqld(tabletUID uint32) (*Mysqld, error) {
 		return nil, fmt.Errorf("couldn't Init dbconfigs: %v", err)
 	}
 
-	return NewMysqld(mycnf, &dbcfgs), nil
+	return NewMysqld(mycnf, dbcfgs), nil
 }

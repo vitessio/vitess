@@ -88,7 +88,7 @@ type ActionAgent struct {
 	TopoServer          *topo.Server
 	TabletAlias         *topodatapb.TabletAlias
 	MysqlDaemon         mysqlctl.MysqlDaemon
-	DBConfigs           dbconfigs.DBConfigs
+	DBConfigs           *dbconfigs.DBConfigs
 	BinlogPlayerMap     *BinlogPlayerMap
 
 	// exportStats is set only for production tablet.
@@ -213,7 +213,7 @@ func NewActionAgent(
 	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.Controller,
 	tabletAlias *topodatapb.TabletAlias,
-	dbcfgs dbconfigs.DBConfigs,
+	dbcfgs *dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
 	port, gRPCPort int32,
 ) (agent *ActionAgent, err error) {
@@ -248,7 +248,7 @@ func NewActionAgent(
 
 	// Start the binlog player services, not playing at start.
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(ts, mysqld, func() binlogplayer.VtClient {
-		return binlogplayer.NewDbClient(&agent.DBConfigs.Filtered)
+		return binlogplayer.NewDbClient(agent.DBConfigs.FilteredWithDB())
 	})
 	// Stop all binlog players upon entering lameduck.
 	servenv.OnTerm(agent.BinlogPlayerMap.StopAllPlayersAndReset)
@@ -256,9 +256,9 @@ func NewActionAgent(
 
 	var mysqlHost string
 	var mysqlPort int32
-	if dbcfgs.App.Host != "" {
-		mysqlHost = dbcfgs.App.Host
-		mysqlPort = int32(dbcfgs.App.Port)
+	if appConfig := dbcfgs.AppWithDB(); appConfig.Host != "" {
+		mysqlHost = appConfig.Host
+		mysqlPort = int32(appConfig.Port)
 	} else {
 		// Assume unix socket was specified and try to figure out the mysql port
 		// by other means.
@@ -337,7 +337,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		TopoServer:          ts,
 		TabletAlias:         tabletAlias,
 		MysqlDaemon:         mysqlDaemon,
-		DBConfigs:           dbconfigs.DBConfigs{},
+		DBConfigs:           &dbconfigs.DBConfigs{},
 		BinlogPlayerMap:     nil,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
@@ -366,7 +366,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 // NewComboActionAgent creates an agent tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
-func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
+func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -588,18 +588,14 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	// Get and fix the dbname if necessary, only for real instances.
 	if !agent.DBConfigs.IsZero() {
 		dbname := topoproto.TabletDbName(agent.initialTablet)
-		agent.DBConfigs.SetDBName(dbname, dbconfigs.AllButDbaConfig)
+		agent.DBConfigs.DBName.Set(dbname)
 	}
 
 	// Create and register the RPC services from UpdateStream.
 	// (it needs the dbname, so it has to be delayed up to here,
 	// but it has to be before updateState below that may use it)
 	if initUpdateStream {
-		// This particular dba config needs the db name to be set.
-		// In all other cases (like mysqld), the db name must not be set.
-		dbaconfig := agent.DBConfigs.Dba
-		dbaconfig.DbName = agent.DBConfigs.App.DbName
-		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, &dbaconfig, agent.QueryServiceControl.SchemaEngine())
+		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, agent.DBConfigs.DbaWithDB(), agent.QueryServiceControl.SchemaEngine())
 		agent.UpdateStream = us
 		servenv.OnRun(func() {
 			us.RegisterService()

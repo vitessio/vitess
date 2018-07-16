@@ -16,7 +16,11 @@ limitations under the License.
 
 package dbconfigs
 
-import "testing"
+import (
+	"testing"
+
+	"vitess.io/vitess/go/mysql"
+)
 
 func TestRegisterFlagsWithoutFlags(t *testing.T) {
 	defer func() {
@@ -50,11 +54,76 @@ func TestRegisterFlagsWithSomeFlags(t *testing.T) {
 	}
 }
 
-func TestInitWithEmptyFlags(t *testing.T) {
+func TestInit(t *testing.T) {
+	savedDBConfig := dbConfigs
+	savedBaseConfig := baseConfig
 	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Init should panic with empty db flags")
-		}
+		dbConfigs = savedDBConfig
+		baseConfig = savedBaseConfig
 	}()
-	Init("")
+
+	dbConfigs = DBConfigs{
+		app: mysql.ConnParams{
+			UnixSocket: "socket",
+		},
+		dba: mysql.ConnParams{
+			Host: "host",
+		},
+	}
+	dbc, err := Init("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := dbc.app.UnixSocket, "socket"; got != want {
+		t.Errorf("dbc.app.UnixSocket: %v, want %v", got, want)
+	}
+	if got, want := dbc.dba.Host, "host"; got != want {
+		t.Errorf("dbc.app.Host: %v, want %v", got, want)
+	}
+	if got, want := dbc.appDebug.UnixSocket, "default"; got != want {
+		t.Errorf("dbc.app.UnixSocket: %v, want %v", got, want)
+	}
+
+	baseConfig = mysql.ConnParams{
+		Host: "basehost",
+	}
+	dbc, err = Init("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := dbc.app.UnixSocket, ""; got != want {
+		t.Errorf("dbc.app.UnixSocket: %v, want %v", got, want)
+	}
+	if got, want := dbc.dba.Host, "basehost"; got != want {
+		t.Errorf("dbc.app.Host: %v, want %v", got, want)
+	}
+	if got, want := dbc.appDebug.Host, "basehost"; got != want {
+		t.Errorf("dbc.app.Host: %v, want %v", got, want)
+	}
+}
+
+func TestAccessors(t *testing.T) {
+	dbc := &DBConfigs{}
+	dbc.DBName.Set("db")
+	if got, want := dbc.AppWithDB().DbName, "db"; got != want {
+		t.Errorf("dbc.AppWithDB().DbName: %v, want %v", got, want)
+	}
+	if got, want := dbc.AppDebugWithDB().DbName, "db"; got != want {
+		t.Errorf("dbc.AppDebugWithDB().DbName: %v, want %v", got, want)
+	}
+	if got, want := dbc.AllPrivsWithDB().DbName, "db"; got != want {
+		t.Errorf("dbc.AllPrivsWithDB().DbName: %v, want %v", got, want)
+	}
+	if got, want := dbc.Dba().DbName, ""; got != want {
+		t.Errorf("dbc.Dba().DbName: %v, want %v", got, want)
+	}
+	if got, want := dbc.DbaWithDB().DbName, "db"; got != want {
+		t.Errorf("dbc.DbaWithDB().DbName: %v, want %v", got, want)
+	}
+	if got, want := dbc.FilteredWithDB().DbName, "db"; got != want {
+		t.Errorf("dbc.FilteredWithDB().DbName: %v, want %v", got, want)
+	}
+	if got, want := dbc.Repl().DbName, ""; got != want {
+		t.Errorf("dbc.Repl().DbName: %v, want %v", got, want)
+	}
 }
