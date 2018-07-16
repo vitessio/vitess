@@ -39,17 +39,23 @@ const (
 	// timing metric keys
 	connectTimingKey = "Connect"
 	queryTimingKey   = "Query"
-
-	unauthenticatedUsername = "unauthenticated user"
 )
 
 var (
 	// Metrics
-	timings          = stats.NewTimings("MysqlServerTimings", "MySQL server timings", "operation")
-	connCount        = stats.NewGauge("MysqlServerConnCount", "Active MySQL server connections")
+	timings    = stats.NewTimings("MysqlServerTimings", "MySQL server timings", "operation")
+	connCount  = stats.NewGauge("MysqlServerConnCount", "Active MySQL server connections")
+	connAccept = stats.NewCounter("MysqlServerConnAccepted", "Connections accepted by MySQL server")
+	connSlow   = stats.NewCounter("MysqlServerConnSlow", "Connections that took more than the configured mysql_slow_connect_warn_threshold to establish")
+
 	connCountPerUser = stats.NewGaugesWithSingleLabel("MysqlServerConnCountPerUser", "Active MySQL server connections per user", "count")
-	connAccept       = stats.NewCounter("MysqlServerConnAccepted", "Connections accepted by MySQL server")
-	connSlow         = stats.NewCounter("MysqlServerConnSlow", "Connections that took more than the configured mysql_slow_connect_warn_threshold to establish")
+	_                = stats.NewGaugeFunc("MysqlServerConnCountUnauthenticated", "Active MySQL server connections that haven't authenticated yet", func() int64 {
+		totalUsers := int64(0)
+		for _, v := range connCountPerUser.Counts() {
+			totalUsers += v
+		}
+		return connCount.Get() - totalUsers
+	})
 )
 
 // A Handler is an interface used by Listener to send queries.
@@ -168,7 +174,6 @@ func (l *Listener) Accept() {
 		l.connectionID++
 
 		connCount.Add(1)
-		connCountPerUser.Add(unauthenticatedUsername, 1)
 		connAccept.Add(1)
 
 		go l.handle(conn, connectionID, acceptTime)
@@ -199,109 +204,105 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	// Adjust the count of open connections
 	defer connCount.Add(-1)
 
-	func() { // function scope for "unauthenticated user" count defer
-		defer connCountPerUser.Add(unauthenticatedUsername, -1)
+	// First build and send the server handshake packet.
+	salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig != nil)
+	if err != nil {
+		log.Errorf("Cannot send HandshakeV10 packet to %s: %v", c, err)
+		return
+	}
 
-		// First build and send the server handshake packet.
-		salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig != nil)
+	// Wait for the client response. This has to be a direct read,
+	// so we don't buffer the TLS negotiation packets.
+	response, err := c.readPacketDirect()
+	if err != nil {
+		// Don't log EOF errors. They cause too much spam, same as main read loop.
+		if err != io.EOF {
+			log.Errorf("Cannot read client handshake response from %s: %v", c, err)
+		}
+		return
+	}
+	user, authMethod, authResponse, err := l.parseClientHandshakePacket(c, true, response)
+	if err != nil {
+		log.Errorf("Cannot parse client handshake response from %s: %v", c, err)
+		return
+	}
+
+	if c.Capabilities&CapabilityClientSSL > 0 {
+		// SSL was enabled. We need to re-read the auth packet.
+		response, err = c.readEphemeralPacket()
 		if err != nil {
-			log.Errorf("Cannot send HandshakeV10 packet to %s: %v", c, err)
+			log.Errorf("Cannot read post-SSL client handshake response from %s: %v", c, err)
 			return
 		}
 
-		// Wait for the client response. This has to be a direct read,
-		// so we don't buffer the TLS negotiation packets.
-		response, err := c.readPacketDirect()
+		// Returns copies of the data, so we can recycle the buffer.
+		user, authMethod, authResponse, err = l.parseClientHandshakePacket(c, false, response)
 		if err != nil {
-			// Don't log EOF errors. They cause too much spam, same as main read loop.
-			if err != io.EOF {
-				log.Errorf("Cannot read client handshake response from %s: %v", c, err)
-			}
+			log.Errorf("Cannot parse post-SSL client handshake response from %s: %v", c, err)
 			return
 		}
-		user, authMethod, authResponse, err := l.parseClientHandshakePacket(c, true, response)
+		c.recycleReadPacket()
+	}
+
+	// See what auth method the AuthServer wants to use for that user.
+	authServerMethod, err := l.authServer.AuthMethod(user)
+	if err != nil {
+		c.writeErrorPacketFromError(err)
+		return
+	}
+
+	// Compare with what the client sent back.
+	switch {
+	case authServerMethod == MysqlNativePassword && authMethod == MysqlNativePassword:
+		// Both server and client want to use MysqlNativePassword:
+		// the negotiation can be completed right away, using the
+		// ValidateHash() method.
+		userData, err := l.authServer.ValidateHash(salt, user, authResponse, conn.RemoteAddr())
 		if err != nil {
-			log.Errorf("Cannot parse client handshake response from %s: %v", c, err)
+			log.Warningf("Error authenticating user using MySQL native password: %v", err)
+			c.writeErrorPacketFromError(err)
+			return
+		}
+		c.User = user
+		c.UserData = userData
+
+	case authServerMethod == MysqlNativePassword:
+		// The server really wants to use MysqlNativePassword,
+		// but the client returned a result for something else:
+		// not sure this can happen, so not supporting this now.
+		c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Client asked for auth %v, but server wants auth mysql_native_password", authMethod)
+		return
+
+	default:
+		// The server wants to use something else, re-negotiate.
+
+		// The negotiation happens in clear text. Let's check we can.
+		if !l.AllowClearTextWithoutTLS && c.Capabilities&CapabilityClientSSL == 0 {
+			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
 			return
 		}
 
-		if c.Capabilities&CapabilityClientSSL > 0 {
-			// SSL was enabled. We need to re-read the auth packet.
-			response, err = c.readEphemeralPacket()
-			if err != nil {
-				log.Errorf("Cannot read post-SSL client handshake response from %s: %v", c, err)
-				return
-			}
-
-			// Returns copies of the data, so we can recycle the buffer.
-			user, authMethod, authResponse, err = l.parseClientHandshakePacket(c, false, response)
-			if err != nil {
-				log.Errorf("Cannot parse post-SSL client handshake response from %s: %v", c, err)
-				return
-			}
-			c.recycleReadPacket()
+		// Switch our auth method to what the server wants.
+		// Dialog plugin expects an AskPassword prompt.
+		var data []byte
+		if authServerMethod == MysqlDialog {
+			data = authServerDialogSwitchData()
+		}
+		if err := c.writeAuthSwitchRequest(authServerMethod, data); err != nil {
+			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
+			return
 		}
 
-		// See what auth method the AuthServer wants to use for that user.
-		authServerMethod, err := l.authServer.AuthMethod(user)
+		// Then hand over the rest of the negotiation to the
+		// auth server.
+		userData, err := l.authServer.Negotiate(c, user, conn.RemoteAddr())
 		if err != nil {
 			c.writeErrorPacketFromError(err)
 			return
 		}
-
-		// Compare with what the client sent back.
-		switch {
-		case authServerMethod == MysqlNativePassword && authMethod == MysqlNativePassword:
-			// Both server and client want to use MysqlNativePassword:
-			// the negotiation can be completed right away, using the
-			// ValidateHash() method.
-			userData, err := l.authServer.ValidateHash(salt, user, authResponse, conn.RemoteAddr())
-			if err != nil {
-				log.Warningf("Error authenticating user using MySQL native password: %v", err)
-				c.writeErrorPacketFromError(err)
-				return
-			}
-			c.User = user
-			c.UserData = userData
-
-		case authServerMethod == MysqlNativePassword:
-			// The server really wants to use MysqlNativePassword,
-			// but the client returned a result for something else:
-			// not sure this can happen, so not supporting this now.
-			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Client asked for auth %v, but server wants auth mysql_native_password", authMethod)
-			return
-
-		default:
-			// The server wants to use something else, re-negotiate.
-
-			// The negotiation happens in clear text. Let's check we can.
-			if !l.AllowClearTextWithoutTLS && c.Capabilities&CapabilityClientSSL == 0 {
-				c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
-				return
-			}
-
-			// Switch our auth method to what the server wants.
-			// Dialog plugin expects an AskPassword prompt.
-			var data []byte
-			if authServerMethod == MysqlDialog {
-				data = authServerDialogSwitchData()
-			}
-			if err := c.writeAuthSwitchRequest(authServerMethod, data); err != nil {
-				log.Errorf("Error writing auth switch packet for %s: %v", c, err)
-				return
-			}
-
-			// Then hand over the rest of the negotiation to the
-			// auth server.
-			userData, err := l.authServer.Negotiate(c, user, conn.RemoteAddr())
-			if err != nil {
-				c.writeErrorPacketFromError(err)
-				return
-			}
-			c.User = user
-			c.UserData = userData
-		}
-	}() // end of closure for defer
+		c.User = user
+		c.UserData = userData
+	}
 
 	if c.User != "" {
 		connCountPerUser.Add(c.User, 1)
