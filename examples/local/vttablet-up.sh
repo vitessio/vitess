@@ -74,7 +74,6 @@ for uid_index in $uids; do
   $VTROOT/bin/mysqlctl \
     -log_dir $VTDATAROOT/tmp \
     -tablet_uid $uid \
-    $dbconfig_dba_flags \
     -mysql_port $mysql_port \
     $action &
 done
