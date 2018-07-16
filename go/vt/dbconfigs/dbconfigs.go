@@ -31,17 +31,8 @@ import (
 )
 
 var (
-	dbFlags       DBConfigFlag
-	dbConfigs     DBConfigs
-	baseConfig    = mysql.ConnParams{}
-	allConnParams = []*mysql.ConnParams{
-		&dbConfigs.app,
-		&dbConfigs.appDebug,
-		&dbConfigs.allPrivs,
-		&dbConfigs.dba,
-		&dbConfigs.filtered,
-		&dbConfigs.repl,
-	}
+	dbConfigs  = DBConfigs{userConfigs: make(map[string]*userConfig)}
+	baseConfig = mysql.ConnParams{}
 )
 
 // DBConfigs stores all the data needed to build various connection
@@ -61,64 +52,41 @@ var (
 // build connection parameters as needed.
 // The DBName is initially empty and may later be set or changed by the app.
 type DBConfigs struct {
-	app           mysql.ConnParams
-	appDebug      mysql.ConnParams
-	allPrivs      mysql.ConnParams
-	dba           mysql.ConnParams
-	filtered      mysql.ConnParams
-	repl          mysql.ConnParams
+	userConfigs   map[string]*userConfig
 	DBName        sync2.AtomicString
 	SidecarDBName sync2.AtomicString
 }
 
-// DBConfigFlag describes which flags we need
-type DBConfigFlag int
+type userConfig struct {
+	useSSL bool
+	param  mysql.ConnParams
+}
 
 // config flags
 const (
-	EmptyConfig DBConfigFlag = 0
-	AppConfig   DBConfigFlag = 1 << iota
-	AppDebugConfig
+	App      = "app"
+	AppDebug = "appdebug"
 	// AllPrivs user should have more privileges than App (should include possibility to do
 	// schema changes and write to internal Vitess tables), but it shouldn't have SUPER
 	// privilege like Dba has.
-	AllPrivsConfig
-	DbaConfig
-	FilteredConfig
-	ReplConfig
+	AllPrivs = "allprivs"
+	Dba      = "dba"
+	Filtered = "filtered"
+	Repl     = "repl"
 )
+
+// All can be used to register all flags: RegisterFlags(All...)
+var All = []string{App, AppDebug, AllPrivs, Dba, Filtered, Repl}
 
 // RegisterFlags registers the flags for the given DBConfigFlag.
 // For instance, vttablet will register client, dba and repl.
 // Returns all registered flags.
-func RegisterFlags(flags DBConfigFlag) {
-	if flags == EmptyConfig {
-		panic("No DB config is provided.")
-	}
+func RegisterFlags(names ...string) {
 	registerBaseFlags()
-	if AppConfig&flags != 0 {
-		registerUserFlags(&dbConfigs.app, "app")
-		dbFlags |= AppConfig
-	}
-	if AppDebugConfig&flags != 0 {
-		registerUserFlags(&dbConfigs.appDebug, "appdebug")
-		dbFlags |= AppDebugConfig
-	}
-	if AllPrivsConfig&flags != 0 {
-		registerUserFlags(&dbConfigs.allPrivs, "allprivs")
-		dbFlags |= AllPrivsConfig
-	}
-	if DbaConfig&flags != 0 {
-		registerUserFlags(&dbConfigs.dba, "dba")
-		dbFlags |= DbaConfig
-	}
-	if FilteredConfig&flags != 0 {
-		registerUserFlags(&dbConfigs.filtered, "filtered")
-		dbFlags |= FilteredConfig
-	}
-	if ReplConfig&flags != 0 {
-		registerUserFlags(&dbConfigs.repl, "repl")
-		dbFlags |= ReplConfig
+	for _, name := range names {
+		uc := &userConfig{}
+		dbConfigs.userConfigs[name] = uc
+		registerUserFlags(uc, name)
 	}
 }
 
@@ -136,99 +104,97 @@ func registerBaseFlags() {
 
 // The flags will change the global singleton
 // TODO(sougou): deprecate the legacy flags.
-func registerUserFlags(connParams *mysql.ConnParams, name string) {
+func registerUserFlags(dbc *userConfig, name string) {
 	newUserFlag := "db_" + name + "_user"
-	flag.StringVar(&connParams.Uname, "db-config-"+name+"-uname", "vt_"+name, "deprecated: use "+newUserFlag)
-	flag.StringVar(&connParams.Uname, newUserFlag, "vt_"+name, "db "+name+" user name")
+	flag.StringVar(&dbc.param.Uname, "db-config-"+name+"-uname", "vt_"+name, "deprecated: use "+newUserFlag)
+	flag.StringVar(&dbc.param.Uname, newUserFlag, "vt_"+name, "db "+name+" user name")
 
 	newPasswordFlag := "db_" + name + "_password"
-	flag.StringVar(&connParams.Pass, "db-config-"+name+"-pass", "", "db "+name+" deprecated: use "+newPasswordFlag)
-	flag.StringVar(&connParams.Pass, newPasswordFlag, "", "db "+name+" password")
+	flag.StringVar(&dbc.param.Pass, "db-config-"+name+"-pass", "", "db "+name+" deprecated: use "+newPasswordFlag)
+	flag.StringVar(&dbc.param.Pass, newPasswordFlag, "", "db "+name+" password")
 
-	flag.StringVar(&connParams.Host, "db-config-"+name+"-host", "", "deprecated: use db_host")
-	flag.IntVar(&connParams.Port, "db-config-"+name+"-port", 0, "deprecated: use db_port")
-	flag.StringVar(&connParams.UnixSocket, "db-config-"+name+"-unixsocket", "", "deprecated: use db_socket")
-	flag.StringVar(&connParams.Charset, "db-config-"+name+"-charset", "utf8", "deprecated: use db_charset")
-	flag.Uint64Var(&connParams.Flags, "db-config-"+name+"-flags", 0, "deprecated: use db_flags")
-	flag.StringVar(&connParams.SslCa, "db-config-"+name+"-ssl-ca", "", "deprecated: use db_ssl_ca")
-	flag.StringVar(&connParams.SslCaPath, "db-config-"+name+"-ssl-ca-path", "", "deprecated: use db_ssl_ca_path")
-	flag.StringVar(&connParams.SslCert, "db-config-"+name+"-ssl-cert", "", "deprecated: use db_ssl_cert")
-	flag.StringVar(&connParams.SslKey, "db-config-"+name+"-ssl-key", "", "deprecated: use db_ssl_key")
+	flag.BoolVar(&dbc.useSSL, "db_"+name+"_use_ssl", true, "Set this flag to false to make the "+name+" connection to not use ssl")
+
+	flag.StringVar(&dbc.param.Host, "db-config-"+name+"-host", "", "deprecated: use db_host")
+	flag.IntVar(&dbc.param.Port, "db-config-"+name+"-port", 0, "deprecated: use db_port")
+	flag.StringVar(&dbc.param.UnixSocket, "db-config-"+name+"-unixsocket", "", "deprecated: use db_socket")
+	flag.StringVar(&dbc.param.Charset, "db-config-"+name+"-charset", "utf8", "deprecated: use db_charset")
+	flag.Uint64Var(&dbc.param.Flags, "db-config-"+name+"-flags", 0, "deprecated: use db_flags")
+	flag.StringVar(&dbc.param.SslCa, "db-config-"+name+"-ssl-ca", "", "deprecated: use db_ssl_ca")
+	flag.StringVar(&dbc.param.SslCaPath, "db-config-"+name+"-ssl-ca-path", "", "deprecated: use db_ssl_ca_path")
+	flag.StringVar(&dbc.param.SslCert, "db-config-"+name+"-ssl-cert", "", "deprecated: use db_ssl_cert")
+	flag.StringVar(&dbc.param.SslKey, "db-config-"+name+"-ssl-key", "", "deprecated: use db_ssl_key")
 }
 
 // AppWithDB returns connection parameters for app with dbname set.
 func (dbcfgs *DBConfigs) AppWithDB() *mysql.ConnParams {
-	result := dbcfgs.app
-	result.DbName = dbcfgs.DBName.Get()
-	return &result
+	return dbcfgs.makeParams(App, true)
 }
 
 // AppDebugWithDB returns connection parameters for appdebug with dbname set.
 func (dbcfgs *DBConfigs) AppDebugWithDB() *mysql.ConnParams {
-	result := dbcfgs.appDebug
-	result.DbName = dbcfgs.DBName.Get()
-	return &result
+	return dbcfgs.makeParams(AppDebug, true)
 }
 
 // AllPrivsWithDB returns connection parameters for appdebug with dbname set.
 func (dbcfgs *DBConfigs) AllPrivsWithDB() *mysql.ConnParams {
-	result := dbcfgs.allPrivs
-	result.DbName = dbcfgs.DBName.Get()
-	return &result
+	return dbcfgs.makeParams(AllPrivs, true)
 }
 
 // Dba returns connection parameters for dba with no dbname set.
 func (dbcfgs *DBConfigs) Dba() *mysql.ConnParams {
-	result := dbcfgs.dba
-	return &result
+	return dbcfgs.makeParams(Dba, false)
 }
 
 // DbaWithDB returns connection parameters for appdebug with dbname set.
 func (dbcfgs *DBConfigs) DbaWithDB() *mysql.ConnParams {
-	result := dbcfgs.dba
-	result.DbName = dbcfgs.DBName.Get()
-	return &result
+	return dbcfgs.makeParams(Dba, true)
 }
 
 // FilteredWithDB returns connection parameters for appdebug with dbname set.
 func (dbcfgs *DBConfigs) FilteredWithDB() *mysql.ConnParams {
-	result := dbcfgs.filtered
-	result.DbName = dbcfgs.DBName.Get()
-	return &result
+	return dbcfgs.makeParams(Filtered, true)
 }
 
 // Repl returns connection parameters for appdebug with no dbname set.
 func (dbcfgs *DBConfigs) Repl() *mysql.ConnParams {
-	result := dbcfgs.repl
+	return dbcfgs.makeParams(Repl, false)
+}
+
+// AppWithDB returns connection parameters for app with dbname set.
+func (dbcfgs *DBConfigs) makeParams(name string, withDB bool) *mysql.ConnParams {
+	orig := dbcfgs.userConfigs[name]
+	if orig == nil {
+		return &mysql.ConnParams{}
+	}
+	result := orig.param
+	if withDB {
+		result.DbName = dbcfgs.DBName.Get()
+	}
 	return &result
 }
 
 // IsZero returns true if DBConfigs was uninitialized.
 func (dbcfgs *DBConfigs) IsZero() bool {
-	return dbcfgs.app.Uname == ""
+	return len(dbcfgs.userConfigs) == 0
 }
 
 func (dbcfgs *DBConfigs) String() string {
 	out := struct {
-		App           mysql.ConnParams
-		AppDebug      string
-		AllPrivs      string
-		Dba           string
-		Filtered      string
-		Repl          string
-		DBName        string
-		SidecarDBName string
+		Conn  mysql.ConnParams
+		Users map[string]string
 	}{
-		App:           dbcfgs.app,
-		AppDebug:      dbcfgs.appDebug.Uname,
-		AllPrivs:      dbcfgs.allPrivs.Uname,
-		Dba:           dbcfgs.dba.Uname,
-		Filtered:      dbcfgs.filtered.Uname,
-		Repl:          dbcfgs.repl.Uname,
-		DBName:        dbcfgs.DBName.Get(),
-		SidecarDBName: dbcfgs.SidecarDBName.Get(),
+		Users: make(map[string]string),
 	}
-	out.App.Pass = "****"
+	if conn := dbcfgs.userConfigs[App]; conn != nil {
+		out.Conn = conn.param
+	} else if conn := dbcfgs.userConfigs[Dba]; conn != nil {
+		out.Conn = conn.param
+	}
+	out.Conn.Pass = "****"
+	for k, uc := range dbcfgs.userConfigs {
+		out.Users[k] = uc.param.Uname
+	}
 	data, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return err.Error()
@@ -238,13 +204,10 @@ func (dbcfgs *DBConfigs) String() string {
 
 // Copy returns a copy of the DBConfig.
 func (dbcfgs *DBConfigs) Copy() *DBConfigs {
-	result := &DBConfigs{
-		app:      dbcfgs.app,
-		appDebug: dbcfgs.appDebug,
-		allPrivs: dbcfgs.allPrivs,
-		dba:      dbcfgs.dba,
-		filtered: dbcfgs.filtered,
-		repl:     dbcfgs.repl,
+	result := &DBConfigs{userConfigs: make(map[string]*userConfig)}
+	for k, u := range dbcfgs.userConfigs {
+		newu := *u
+		result.userConfigs[k] = &newu
 	}
 	result.DBName.Set(dbcfgs.DBName.Get())
 	result.SidecarDBName.Set(dbcfgs.SidecarDBName.Get())
@@ -262,26 +225,37 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 	// This is to support legacy behavior: use supplied socket value
 	// if conn parameters are not specified.
 	// TODO(sougou): deprecate.
-	for _, param := range allConnParams {
-		if param.UnixSocket == "" && param.Host == "" {
-			param.UnixSocket = defaultSocketFile
+	for _, uc := range dbConfigs.userConfigs {
+		if uc.param.UnixSocket == "" && uc.param.Host == "" {
+			uc.param.UnixSocket = defaultSocketFile
 		}
 	}
 
 	// The new base configs, if set, supersede legacy settings.
 	if baseConfig.Host != "" || baseConfig.UnixSocket != "" {
-		for _, param := range allConnParams {
-			tmpconfig := baseConfig
-			tmpconfig.Uname = param.Uname
-			tmpconfig.Pass = param.Pass
-			*param = tmpconfig
+		for _, uc := range dbConfigs.userConfigs {
+			uc.param.Host = baseConfig.Host
+			uc.param.Port = baseConfig.Port
+			uc.param.UnixSocket = baseConfig.UnixSocket
+			uc.param.Charset = baseConfig.Charset
+			uc.param.Flags = baseConfig.Flags
+			if uc.useSSL {
+				uc.param.SslCa = baseConfig.SslCa
+				uc.param.SslCaPath = baseConfig.SslCaPath
+				uc.param.SslCert = baseConfig.SslCert
+				uc.param.SslKey = baseConfig.SslKey
+			}
 		}
 	}
 
 	// See if the CredentialsServer is working. We do not use the
 	// result for anything, this is just a check.
-	if _, err := WithCredentials(&dbConfigs.app); err != nil {
-		return nil, fmt.Errorf("dbconfig cannot be initialized: %v", err)
+	for _, uc := range dbConfigs.userConfigs {
+		if _, err := WithCredentials(&uc.param); err != nil {
+			return nil, fmt.Errorf("dbconfig cannot be initialized: %v", err)
+		}
+		// Check for only one.
+		break
 	}
 	dbConfigs.SidecarDBName.Set("_vt")
 
@@ -292,12 +266,14 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 // NewTestDBConfigs returns a DBConfigs meant for testing.
 func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbName string) *DBConfigs {
 	dbcfgs := &DBConfigs{
-		app:      genParams,
-		appDebug: appDebugParams,
-		allPrivs: genParams,
-		dba:      genParams,
-		filtered: genParams,
-		repl:     genParams,
+		userConfigs: map[string]*userConfig{
+			App:      {param: genParams},
+			AppDebug: {param: appDebugParams},
+			AllPrivs: {param: genParams},
+			Dba:      {param: genParams},
+			Filtered: {param: genParams},
+			Repl:     {param: genParams},
+		},
 	}
 	dbcfgs.DBName.Set(dbName)
 	dbcfgs.SidecarDBName.Set("_vt")

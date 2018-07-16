@@ -40,8 +40,7 @@ func init() {
 }
 
 func main() {
-	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AppDebugConfig
-	dbconfigs.RegisterFlags(dbconfigFlags)
+	dbconfigs.RegisterFlags(dbconfigs.App, dbconfigs.AppDebug)
 	flag.Parse()
 
 	if *servenv.Version {

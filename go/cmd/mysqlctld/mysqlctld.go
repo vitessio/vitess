@@ -56,7 +56,7 @@ func main() {
 	defer logutil.Flush()
 
 	// mysqlctld only starts and stops mysql, only needs dba.
-	dbconfigs.RegisterFlags(dbconfigs.DbaConfig)
+	dbconfigs.RegisterFlags(dbconfigs.Dba)
 	servenv.ParseFlags("mysqlctld")
 
 	// We'll register this OnTerm handler before mysqld starts, so we get notified

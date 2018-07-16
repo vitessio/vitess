@@ -270,26 +270,31 @@ VTTablet requires multiple user credentials to perform its tasks. Since it's req
 
 * **db\_app\_user**: App username.
 * **db\_app\_password**: Password for the app username. If you need a more secure way of managing and supplying passwords, VTTablet does allow you to plug into a "password server" that can securely supply and refresh usernames and passwords. Please contact the Vitess team for help if you’d like to write such a custom plugin.
+* **db\_app\_use\_ssl**: Set this flag to false if you don't want to use SSL for this connection. This will allow you to turn off SSL for all users except for `repl`, which may have to be turned on for replication that goes over open networks.
 
 **appdebug** credentials are for the appdebug user:
 
 * **db\_appdebug\_user**
 * **db\_appdebug\_password**
+* **db\_appdebug\_use\_ssl**
 
 **dba** credentials will be used for housekeeping work like loading the schema or killing runaway queries:
 
 * **db\_dba\_user**
 * **db\_dba\_password**
+* **db\_dba\_use\_ssl**
 
 **repl** credentials are for managing replication.
 
 * **db\_repl\_user**
 * **db\_repl\_password**
+* **db\_repl\_use\_ssl**
 
 **filtered** credentials are for performing resharding:
 
 * **db\_filtered\_user**
 * **db\_filtered\_password**
+* **db\_filtered\_use\_ssl**
 
 ### Monitoring
 
