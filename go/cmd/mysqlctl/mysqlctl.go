@@ -235,7 +235,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\n")
 	}
 
-	dbconfigs.RegisterFlags(dbconfigs.DbaConfig)
+	dbconfigs.RegisterFlags(dbconfigs.Dba)
 	flag.Parse()
 
 	tabletAddr = netutil.JoinHostPort("localhost", int32(*port))
