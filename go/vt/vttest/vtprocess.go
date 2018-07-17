@@ -208,12 +208,11 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	}
 
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
-		"-db-config-app-charset", charset,
-		"-db-config-app-uname", user,
-		"-db-config-app-pass", pass,
-		"-db-config-dba-charset", charset,
-		"-db-config-dba-uname", user,
-		"-db-config-dba-pass", pass,
+		"-db_charset", charset,
+		"-db_app_user", user,
+		"-db_app_password", pass,
+		"-db_dba_user", user,
+		"-db_dba_password", pass,
 		"-proto_topo", proto.CompactTextString(args.Topology),
 		"-mycnf_server_id", "1",
 		"-mycnf_socket_file", socket,
@@ -235,18 +234,15 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 
 	if socket != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
-			"-db-config-app-unixsocket", socket,
-			"-db-config-dba-unixsocket", socket,
+			"-db_socket", socket,
 		}...)
 	} else {
 		hostname, p := mysql.Address()
 		port := fmt.Sprintf("%d", p)
 
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
-			"-db-config-app-host", hostname,
-			"-db-config-app-port", port,
-			"-db-config-dba-host", hostname,
-			"-db-config-dba-port", port,
+			"-db_host", hostname,
+			"-db_port", port,
 		}...)
 	}
 

@@ -29,7 +29,7 @@ import (
 // CreateMysqld returns a Mysqld object to use for working with a MySQL
 // installation that hasn't been set up yet. This will generate a new my.cnf
 // from scratch and use that to call NewMysqld().
-func CreateMysqld(tabletUID uint32, mysqlSocket string, mysqlPort int32, dbconfigFlags dbconfigs.DBConfigFlag) (*Mysqld, error) {
+func CreateMysqld(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*Mysqld, error) {
 	mycnf := NewMycnf(tabletUID, mysqlPort)
 	// Choose a random MySQL server-id, since this is a fresh data dir.
 	// We don't want to use the tablet UID as the MySQL server-id,
@@ -47,28 +47,28 @@ func CreateMysqld(tabletUID uint32, mysqlSocket string, mysqlPort int32, dbconfi
 		mycnf.SocketFile = mysqlSocket
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, dbconfigFlags)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't Init dbconfigs: %v", err)
 	}
 
-	return NewMysqld(mycnf, dbcfgs, dbconfigFlags), nil
+	return NewMysqld(mycnf, dbcfgs), nil
 }
 
 // OpenMysqld returns a Mysqld object to use for working with a MySQL
 // installation that already exists. This will look for an existing my.cnf file
 // and use that to call NewMysqld().
-func OpenMysqld(tabletUID uint32, dbconfigFlags dbconfigs.DBConfigFlag) (*Mysqld, error) {
+func OpenMysqld(tabletUID uint32) (*Mysqld, error) {
 	// We pass a port of 0, this will be read and overwritten from the path on disk
 	mycnf, err := ReadMycnf(NewMycnf(tabletUID, 0))
 	if err != nil {
 		return nil, fmt.Errorf("couldn't read my.cnf file: %v", err)
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, dbconfigFlags)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't Init dbconfigs: %v", err)
 	}
 
-	return NewMysqld(mycnf, dbcfgs, dbconfigFlags), nil
+	return NewMysqld(mycnf, dbcfgs), nil
 }

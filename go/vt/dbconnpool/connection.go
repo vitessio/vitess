@@ -124,7 +124,7 @@ func NewDBConnection(info *mysql.ConnParams, mysqlStats *stats.Timings) (*DBConn
 		return nil, err
 	}
 	ctx := context.Background()
-	c, err := mysql.Connect(ctx, &params)
+	c, err := mysql.Connect(ctx, params)
 	if err != nil {
 		mysqlStats.Record("ConnectError", start)
 	}

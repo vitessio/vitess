@@ -56,8 +56,7 @@ func main() {
 	defer logutil.Flush()
 
 	// mysqlctld only starts and stops mysql, only needs dba.
-	dbconfigFlags := dbconfigs.DbaConfig
-	dbconfigs.RegisterFlags(dbconfigFlags)
+	dbconfigs.RegisterFlags(dbconfigs.Dba)
 	servenv.ParseFlags("mysqlctld")
 
 	// We'll register this OnTerm handler before mysqld starts, so we get notified
@@ -75,7 +74,7 @@ func main() {
 		log.Infof("mycnf file (%s) doesn't exist, initializing", mycnfFile)
 
 		var err error
-		mysqld, err = mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort), dbconfigFlags)
+		mysqld, err = mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort))
 		if err != nil {
 			log.Errorf("failed to initialize mysql config: %v", err)
 			exit.Return(1)
@@ -91,7 +90,7 @@ func main() {
 		log.Infof("mycnf file (%s) already exists, starting without init", mycnfFile)
 
 		var err error
-		mysqld, err = mysqlctl.OpenMysqld(uint32(*tabletUID), dbconfigFlags)
+		mysqld, err = mysqlctl.OpenMysqld(uint32(*tabletUID))
 		if err != nil {
 			log.Errorf("failed to find mysql config: %v", err)
 			exit.Return(1)

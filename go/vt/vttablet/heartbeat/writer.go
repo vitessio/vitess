@@ -56,7 +56,7 @@ const (
 // Writer runs on master tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
 type Writer struct {
-	dbconfigs dbconfigs.DBConfigs
+	dbconfigs *dbconfigs.DBConfigs
 
 	enabled       bool
 	interval      time.Duration
@@ -89,7 +89,7 @@ func NewWriter(checker connpool.MySQLChecker, alias topodatapb.TabletAlias, conf
 }
 
 // InitDBConfig must be called before Init.
-func (w *Writer) InitDBConfig(dbcfgs dbconfigs.DBConfigs) {
+func (w *Writer) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 	w.dbconfigs = dbcfgs
 }
 
@@ -102,9 +102,9 @@ func (w *Writer) Init(target querypb.Target) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	log.Info("Initializing heartbeat table.")
-	w.dbName = sqlescape.EscapeID(w.dbconfigs.SidecarDBName)
+	w.dbName = sqlescape.EscapeID(w.dbconfigs.SidecarDBName.Get())
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
-	err := w.initializeTables(&w.dbconfigs.Dba)
+	err := w.initializeTables(w.dbconfigs.DbaWithDB())
 	if err != nil {
 		w.recordError(err)
 		return err
@@ -127,7 +127,7 @@ func (w *Writer) Open() {
 		return
 	}
 	log.Info("Beginning heartbeat writes")
-	w.pool.Open(&w.dbconfigs.App, &w.dbconfigs.Dba, &w.dbconfigs.AppDebug)
+	w.pool.Open(w.dbconfigs.AppWithDB(), w.dbconfigs.DbaWithDB(), w.dbconfigs.AppDebugWithDB())
 	w.ticks.Start(func() { w.writeHeartbeat() })
 	w.isOpen = true
 }

@@ -76,7 +76,7 @@ func connectForReplication(cp *mysql.ConnParams) (*mysql.Conn, error) {
 	}
 
 	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &params)
+	conn, err := mysql.Connect(ctx, params)
 	if err != nil {
 		return nil, err
 	}
