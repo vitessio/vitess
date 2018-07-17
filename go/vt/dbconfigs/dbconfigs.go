@@ -81,12 +81,12 @@ var All = []string{App, AppDebug, AllPrivs, Dba, Filtered, Repl}
 // RegisterFlags registers the flags for the given DBConfigFlag.
 // For instance, vttablet will register client, dba and repl.
 // Returns all registered flags.
-func RegisterFlags(names ...string) {
+func RegisterFlags(userKeys ...string) {
 	registerBaseFlags()
-	for _, name := range names {
+	for _, userKey := range userKeys {
 		uc := &userConfig{}
-		dbConfigs.userConfigs[name] = uc
-		registerUserFlags(uc, name)
+		dbConfigs.userConfigs[userKey] = uc
+		registerPerUserFlags(uc, userKey)
 	}
 }
 
@@ -104,26 +104,26 @@ func registerBaseFlags() {
 
 // The flags will change the global singleton
 // TODO(sougou): deprecate the legacy flags.
-func registerUserFlags(dbc *userConfig, name string) {
-	newUserFlag := "db_" + name + "_user"
-	flag.StringVar(&dbc.param.Uname, "db-config-"+name+"-uname", "vt_"+name, "deprecated: use "+newUserFlag)
-	flag.StringVar(&dbc.param.Uname, newUserFlag, "vt_"+name, "db "+name+" user name")
+func registerPerUserFlags(dbc *userConfig, userKey string) {
+	newUserFlag := "db_" + userKey + "_user"
+	flag.StringVar(&dbc.param.Uname, "db-config-"+userKey+"-uname", "vt_"+userKey, "deprecated: use "+newUserFlag)
+	flag.StringVar(&dbc.param.Uname, newUserFlag, "vt_"+userKey, "db "+userKey+" user userKey")
 
-	newPasswordFlag := "db_" + name + "_password"
-	flag.StringVar(&dbc.param.Pass, "db-config-"+name+"-pass", "", "db "+name+" deprecated: use "+newPasswordFlag)
-	flag.StringVar(&dbc.param.Pass, newPasswordFlag, "", "db "+name+" password")
+	newPasswordFlag := "db_" + userKey + "_password"
+	flag.StringVar(&dbc.param.Pass, "db-config-"+userKey+"-pass", "", "db "+userKey+" deprecated: use "+newPasswordFlag)
+	flag.StringVar(&dbc.param.Pass, newPasswordFlag, "", "db "+userKey+" password")
 
-	flag.BoolVar(&dbc.useSSL, "db_"+name+"_use_ssl", true, "Set this flag to false to make the "+name+" connection to not use ssl")
+	flag.BoolVar(&dbc.useSSL, "db_"+userKey+"_use_ssl", true, "Set this flag to false to make the "+userKey+" connection to not use ssl")
 
-	flag.StringVar(&dbc.param.Host, "db-config-"+name+"-host", "", "deprecated: use db_host")
-	flag.IntVar(&dbc.param.Port, "db-config-"+name+"-port", 0, "deprecated: use db_port")
-	flag.StringVar(&dbc.param.UnixSocket, "db-config-"+name+"-unixsocket", "", "deprecated: use db_socket")
-	flag.StringVar(&dbc.param.Charset, "db-config-"+name+"-charset", "utf8", "deprecated: use db_charset")
-	flag.Uint64Var(&dbc.param.Flags, "db-config-"+name+"-flags", 0, "deprecated: use db_flags")
-	flag.StringVar(&dbc.param.SslCa, "db-config-"+name+"-ssl-ca", "", "deprecated: use db_ssl_ca")
-	flag.StringVar(&dbc.param.SslCaPath, "db-config-"+name+"-ssl-ca-path", "", "deprecated: use db_ssl_ca_path")
-	flag.StringVar(&dbc.param.SslCert, "db-config-"+name+"-ssl-cert", "", "deprecated: use db_ssl_cert")
-	flag.StringVar(&dbc.param.SslKey, "db-config-"+name+"-ssl-key", "", "deprecated: use db_ssl_key")
+	flag.StringVar(&dbc.param.Host, "db-config-"+userKey+"-host", "", "deprecated: use db_host")
+	flag.IntVar(&dbc.param.Port, "db-config-"+userKey+"-port", 0, "deprecated: use db_port")
+	flag.StringVar(&dbc.param.UnixSocket, "db-config-"+userKey+"-unixsocket", "", "deprecated: use db_socket")
+	flag.StringVar(&dbc.param.Charset, "db-config-"+userKey+"-charset", "utf8", "deprecated: use db_charset")
+	flag.Uint64Var(&dbc.param.Flags, "db-config-"+userKey+"-flags", 0, "deprecated: use db_flags")
+	flag.StringVar(&dbc.param.SslCa, "db-config-"+userKey+"-ssl-ca", "", "deprecated: use db_ssl_ca")
+	flag.StringVar(&dbc.param.SslCaPath, "db-config-"+userKey+"-ssl-ca-path", "", "deprecated: use db_ssl_ca_path")
+	flag.StringVar(&dbc.param.SslCert, "db-config-"+userKey+"-ssl-cert", "", "deprecated: use db_ssl_cert")
+	flag.StringVar(&dbc.param.SslKey, "db-config-"+userKey+"-ssl-key", "", "deprecated: use db_ssl_key")
 }
 
 // AppWithDB returns connection parameters for app with dbname set.
@@ -162,8 +162,8 @@ func (dbcfgs *DBConfigs) Repl() *mysql.ConnParams {
 }
 
 // AppWithDB returns connection parameters for app with dbname set.
-func (dbcfgs *DBConfigs) makeParams(name string, withDB bool) *mysql.ConnParams {
-	orig := dbcfgs.userConfigs[name]
+func (dbcfgs *DBConfigs) makeParams(userKey string, withDB bool) *mysql.ConnParams {
+	orig := dbcfgs.userConfigs[userKey]
 	if orig == nil {
 		return &mysql.ConnParams{}
 	}
