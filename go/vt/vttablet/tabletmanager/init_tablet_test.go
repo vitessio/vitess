@@ -50,7 +50,7 @@ func TestInitTablet(t *testing.T) {
 		TopoServer:      ts,
 		TabletAlias:     tabletAlias,
 		MysqlDaemon:     mysqlDaemon,
-		DBConfigs:       dbconfigs.DBConfigs{},
+		DBConfigs:       &dbconfigs.DBConfigs{},
 		BinlogPlayerMap: nil,
 		batchCtx:        ctx,
 		History:         history.New(historyLength),

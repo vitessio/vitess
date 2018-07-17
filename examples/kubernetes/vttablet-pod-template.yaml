@@ -64,18 +64,6 @@ spec:
           -init_tablet_type {{tablet_type}}
           -health_check_interval 5s
           -mysqlctl_socket $VTDATAROOT/mysqlctl.sock
-          -db-config-app-uname vt_app
-          -db-config-app-dbname vt_{{keyspace}}
-          -db-config-app-charset utf8
-          -db-config-dba-uname vt_dba
-          -db-config-dba-dbname vt_{{keyspace}}
-          -db-config-dba-charset utf8
-          -db-config-repl-uname vt_repl
-          -db-config-repl-dbname vt_{{keyspace}}
-          -db-config-repl-charset utf8
-          -db-config-filtered-uname vt_filtered
-          -db-config-filtered-dbname vt_{{keyspace}}
-          -db-config-filtered-charset utf8
           -enable_semi_sync
           -enable_replication_reporter
           -orc_api_url http://orchestrator/api
@@ -107,8 +95,6 @@ spec:
           -alsologtostderr
           -tablet_uid {{uid}}
           -socket_file $VTDATAROOT/mysqlctl.sock
-          -db-config-dba-uname vt_dba
-          -db-config-dba-charset utf8
           -init_db_sql_file $VTROOT/config/init_db.sql" vitess
       env:
         - name: EXTRA_MY_CNF

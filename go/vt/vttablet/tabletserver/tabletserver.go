@@ -155,7 +155,7 @@ type TabletServer struct {
 
 	// The following variables should be initialized only once
 	// before starting the tabletserver.
-	dbconfigs dbconfigs.DBConfigs
+	dbconfigs *dbconfigs.DBConfigs
 
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
@@ -328,7 +328,7 @@ func (tsv *TabletServer) IsServing() bool {
 
 // InitDBConfig inititalizes the db config variables for TabletServer. You must call this function before
 // calling SetServingType.
-func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs dbconfigs.DBConfigs) error {
+func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) error {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateNotConnected {
@@ -336,13 +336,6 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs dbconfigs.DB
 	}
 	tsv.target = target
 	tsv.dbconfigs = dbcfgs
-	// Massage Dba so that it inherits the
-	// App values but keeps the credentials.
-	tsv.dbconfigs.Dba = dbcfgs.App
-	if n, p := dbcfgs.Dba.Uname, dbcfgs.Dba.Pass; n != "" {
-		tsv.dbconfigs.Dba.Uname = n
-		tsv.dbconfigs.Dba.Pass = p
-	}
 
 	tsv.se.InitDBConfig(tsv.dbconfigs)
 	tsv.qe.InitDBConfig(tsv.dbconfigs)
@@ -356,7 +349,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs dbconfigs.DB
 
 // StartService is a convenience function for InitDBConfig->SetServingType
 // with serving=true.
-func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs dbconfigs.DBConfigs) (err error) {
+func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) (err error) {
 	// Save tablet type away to prevent data races
 	tabletType := target.TabletType
 	err = tsv.InitDBConfig(target, dbcfgs)
@@ -465,7 +458,7 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 }
 
 func (tsv *TabletServer) fullStart() (err error) {
-	c, err := dbconnpool.NewDBConnection(&tsv.dbconfigs.App, tabletenv.MySQLStats)
+	c, err := dbconnpool.NewDBConnection(tsv.dbconfigs.AppWithDB(), tabletenv.MySQLStats)
 	if err != nil {
 		log.Errorf("error creating db app connection: %v", err)
 		return err
@@ -1796,9 +1789,7 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 	}
 	defer tsv.endRequest(false)
 
-	cp := tsv.dbconfigs.Dba
-	cp.DbName = tsv.dbconfigs.App.DbName
-	s := binlog.NewEventStreamer(&cp, tsv.se, p, timestamp, callback)
+	s := binlog.NewEventStreamer(tsv.dbconfigs.DbaWithDB(), tsv.se, p, timestamp, callback)
 
 	// Create a cancelable wrapping context.
 	streamCtx, streamCancel := context.WithCancel(ctx)

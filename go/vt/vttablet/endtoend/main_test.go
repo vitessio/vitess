@@ -79,7 +79,7 @@ func TestMain(m *testing.M) {
 
 		connParams = cluster.MySQLConnParams()
 		connAppDebugParams = cluster.MySQLAppDebugConnParams()
-		err := framework.StartServer(connParams, connAppDebugParams)
+		err := framework.StartServer(connParams, connAppDebugParams, cluster.DbName())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1

@@ -94,7 +94,7 @@ type Mysqld struct {
 
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
-func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconfigs.DBConfigFlag) *Mysqld {
+func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	result := &Mysqld{
 		config:    config,
 		dbcfgs:    dbcfgs,
@@ -102,16 +102,12 @@ func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconf
 	}
 
 	// Create and open the connection pool for dba access.
-	if dbconfigs.DbaConfig&dbconfigsFlags != 0 {
-		result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout)
-		result.dbaPool.Open(&dbcfgs.Dba, dbaMysqlStats)
-	}
+	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout)
+	result.dbaPool.Open(dbcfgs.Dba(), dbaMysqlStats)
 
 	// Create and open the connection pool for app access.
-	if dbconfigs.AppConfig&dbconfigsFlags != 0 {
-		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout)
-		result.appPool.Open(&dbcfgs.App, appMysqlStats)
-	}
+	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout)
+	result.appPool.Open(dbcfgs.AppWithDB(), appMysqlStats)
 
 	return result
 }
@@ -160,11 +156,11 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 	// privileges' right in the middle, and then subsequent
 	// commands fail if we don't use valid credentials. So let's
 	// use dba credentials.
-	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
 	if err != nil {
 		return err
 	}
-	cnf, err := mysqld.defaultsExtraFile(&params)
+	cnf, err := mysqld.defaultsExtraFile(params)
 	if err != nil {
 		return err
 	}
@@ -302,7 +298,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, mysqldArgs ...string) err
 // will use the dba credentials to try to connect. Use wait() with
 // different credentials if needed.
 func (mysqld *Mysqld) Wait(ctx context.Context) error {
-	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
 	if err != nil {
 		return err
 	}
@@ -311,7 +307,7 @@ func (mysqld *Mysqld) Wait(ctx context.Context) error {
 }
 
 // wait is the internal version of Wait, that takes credentials.
-func (mysqld *Mysqld) wait(ctx context.Context, params mysql.ConnParams) error {
+func (mysqld *Mysqld) wait(ctx context.Context, params *mysql.ConnParams) error {
 	log.Infof("Waiting for mysqld socket file (%v) to be ready...", mysqld.config.SocketFile)
 
 	for {
@@ -324,7 +320,7 @@ func (mysqld *Mysqld) wait(ctx context.Context, params mysql.ConnParams) error {
 		_, statErr := os.Stat(mysqld.config.SocketFile)
 		if statErr == nil {
 			// Make sure the socket file isn't stale.
-			conn, connErr := mysql.Connect(ctx, &params)
+			conn, connErr := mysql.Connect(ctx, params)
 			if connErr == nil {
 				conn.Close()
 				return nil
@@ -333,7 +329,7 @@ func (mysqld *Mysqld) wait(ctx context.Context, params mysql.ConnParams) error {
 		} else if !os.IsNotExist(statErr) {
 			return fmt.Errorf("can't stat mysqld socket file: %v", statErr)
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 	}
 }
 
@@ -392,11 +388,11 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, waitForMysqld bool) error {
 		if err != nil {
 			return err
 		}
-		params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+		params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
 		if err != nil {
 			return err
 		}
-		cnf, err := mysqld.defaultsExtraFile(&params)
+		cnf, err := mysqld.defaultsExtraFile(params)
 		if err != nil {
 			return err
 		}
@@ -528,7 +524,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 
 	// Wait for mysqld to be ready, using root credentials, as no
 	// user is created yet.
-	params := mysql.ConnParams{
+	params := &mysql.ConnParams{
 		Uname:      "root",
 		Charset:    "utf8",
 		UnixSocket: mysqld.config.SocketFile,
@@ -544,7 +540,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 		return fmt.Errorf("can't open init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
 	defer sqlFile.Close()
-	if err := mysqld.executeMysqlScript(&params, sqlFile); err != nil {
+	if err := mysqld.executeMysqlScript(params, sqlFile); err != nil {
 		return fmt.Errorf("can't run init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
 
@@ -911,12 +907,12 @@ func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (*dbconnpool.PooledD
 
 // GetDbaConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.Dba, dbaMysqlStats)
+	return dbconnpool.NewDBConnection(mysqld.dbcfgs.Dba(), dbaMysqlStats)
 }
 
 // GetAllPrivsConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.AllPrivs, allprivsMysqlStats)
+	return dbconnpool.NewDBConnection(mysqld.dbcfgs.AllPrivsWithDB(), allprivsMysqlStats)
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba

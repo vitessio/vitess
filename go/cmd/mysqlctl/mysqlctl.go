@@ -44,17 +44,11 @@ var (
 	tabletAddr string
 )
 
-const (
-	// dbconfigFlags is only set to DbaConfig, as mysqlctl only
-	// starts and stops mysqld, and that is only done with the dba user.
-	dbconfigFlags = dbconfigs.DbaConfig
-)
-
 func initConfigCmd(subFlags *flag.FlagSet, args []string) error {
 	subFlags.Parse(args)
 
 	// Generate my.cnf from scratch and use it to find mysqld.
-	mysqld, err := mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort), dbconfigFlags)
+	mysqld, err := mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort))
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}
@@ -71,7 +65,7 @@ func initCmd(subFlags *flag.FlagSet, args []string) error {
 	subFlags.Parse(args)
 
 	// Generate my.cnf from scratch and use it to find mysqld.
-	mysqld, err := mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort), dbconfigFlags)
+	mysqld, err := mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort))
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}
@@ -87,7 +81,7 @@ func initCmd(subFlags *flag.FlagSet, args []string) error {
 
 func reinitConfigCmd(subFlags *flag.FlagSet, args []string) error {
 	// There ought to be an existing my.cnf, so use it to find mysqld.
-	mysqld, err := mysqlctl.OpenMysqld(uint32(*tabletUID), dbconfigFlags)
+	mysqld, err := mysqlctl.OpenMysqld(uint32(*tabletUID))
 	if err != nil {
 		return fmt.Errorf("failed to find mysql config: %v", err)
 	}
@@ -104,7 +98,7 @@ func shutdownCmd(subFlags *flag.FlagSet, args []string) error {
 	subFlags.Parse(args)
 
 	// There ought to be an existing my.cnf, so use it to find mysqld.
-	mysqld, err := mysqlctl.OpenMysqld(uint32(*tabletUID), dbconfigFlags)
+	mysqld, err := mysqlctl.OpenMysqld(uint32(*tabletUID))
 	if err != nil {
 		return fmt.Errorf("failed to find mysql config: %v", err)
 	}
@@ -125,7 +119,7 @@ func startCmd(subFlags *flag.FlagSet, args []string) error {
 	subFlags.Parse(args)
 
 	// There ought to be an existing my.cnf, so use it to find mysqld.
-	mysqld, err := mysqlctl.OpenMysqld(uint32(*tabletUID), dbconfigFlags)
+	mysqld, err := mysqlctl.OpenMysqld(uint32(*tabletUID))
 	if err != nil {
 		return fmt.Errorf("failed to find mysql config: %v", err)
 	}
@@ -145,7 +139,7 @@ func teardownCmd(subFlags *flag.FlagSet, args []string) error {
 	subFlags.Parse(args)
 
 	// There ought to be an existing my.cnf, so use it to find mysqld.
-	mysqld, err := mysqlctl.OpenMysqld(uint32(*tabletUID), dbconfigFlags)
+	mysqld, err := mysqlctl.OpenMysqld(uint32(*tabletUID))
 	if err != nil {
 		return fmt.Errorf("failed to find mysql config: %v", err)
 	}
@@ -241,7 +235,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\n")
 	}
 
-	dbconfigs.RegisterFlags(dbconfigFlags)
+	dbconfigs.RegisterFlags(dbconfigs.Dba)
 	flag.Parse()
 
 	tabletAddr = netutil.JoinHostPort("localhost", int32(*port))

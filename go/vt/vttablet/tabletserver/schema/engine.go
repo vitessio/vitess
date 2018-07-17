@@ -49,7 +49,7 @@ type notifier func(full map[string]*Table, created, altered, dropped []string)
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
 type Engine struct {
-	dbconfigs dbconfigs.DBConfigs
+	dbconfigs *dbconfigs.DBConfigs
 
 	// mu protects the following fields.
 	mu         sync.Mutex
@@ -93,7 +93,7 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 }
 
 // InitDBConfig must be called before Open.
-func (se *Engine) InitDBConfig(dbcfgs dbconfigs.DBConfigs) {
+func (se *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 	se.dbconfigs = dbcfgs
 }
 
@@ -108,7 +108,7 @@ func (se *Engine) Open() error {
 	start := time.Now()
 	defer log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 	ctx := tabletenv.LocalContext()
-	dbaParams := &se.dbconfigs.Dba
+	dbaParams := se.dbconfigs.DbaWithDB()
 	se.conns.Open(dbaParams, dbaParams, dbaParams)
 
 	conn, err := se.conns.Get(ctx)

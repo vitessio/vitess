@@ -38,8 +38,6 @@ class MySqlDBMysqlctl(mysql_db.MySqlDB):
         '-alsologtostderr',
         '-tablet_uid', '1',
         '-mysql_port', str(self._port),
-        '-db-config-dba-charset', 'utf8',
-        '-db-config-dba-uname', 'vt_dba',
         'init',
         '-init_db_sql_file',
         os.path.join(os.environ['VTTOP'], 'config/init_db.sql'),
@@ -60,8 +58,6 @@ class MySqlDBMysqlctl(mysql_db.MySqlDB):
         '-alsologtostderr',
         '-tablet_uid', '1',
         '-mysql_port', str(self._port),
-        '-db-config-dba-charset', 'utf8',
-        '-db-config-dba-uname', 'vt_dba',
         'shutdown',
     ]
     result = subprocess.call(cmd)

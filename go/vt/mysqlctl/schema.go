@@ -37,12 +37,12 @@ var autoIncr = regexp.MustCompile(" AUTO_INCREMENT=\\d+")
 // executeSchemaCommands executes some SQL commands, using the mysql
 // command line tool. It uses the dba connection parameters, with credentials.
 func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
-	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
 	if err != nil {
 		return err
 	}
 
-	return mysqld.executeMysqlScript(&params, strings.NewReader(sql))
+	return mysqld.executeMysqlScript(params, strings.NewReader(sql))
 }
 
 // GetSchema returns the schema for database for tables listed in

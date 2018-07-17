@@ -20,9 +20,9 @@ The following adjustments need to be made to VTTablet command line parameters:
 
 * Do not use `-mycnf_socket_file`. There is no local MySQL unix socket file.
 
-* Specify the host and port of the MySQL daemon for the `-db-config-XXX-host`
-  and `-db-config-XXX-port` command line parameters. Do not specify
-  `-db-config-XXX-unixsocket` parameters.
+* Specify the host and port of the MySQL daemon for the `-db\_host`
+  and `-db\_port` command line parameters. Do not specify
+  `-db\_socket` parameters.
 
 * Disable restores / backups, by not passing any backup command line
   parameters. Specifically, `-restore_from_backup` and
