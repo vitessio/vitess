@@ -1803,6 +1803,20 @@ class TestVTGateFunctions(unittest.TestCase):
          [('id', self.varbinary_type),
           ('keyspace_id', self.varbinary_type)]))
 
+  def test_analyze_table(self):
+    vtgate_conn = get_connection()
+    self.execute_on_master(
+        vtgate_conn,
+        'use user',
+        {})
+    result = self.execute_on_master(
+        vtgate_conn,
+        'analyze table vt_user',
+        {})
+    self.assertEqual(
+        result[0],
+        [('vt_user.vt_user', 'analyze', 'status', 'OK')])
+
   def test_transaction_modes(self):
     vtgate_conn = get_connection()
     cursor = vtgate_conn.cursor(
