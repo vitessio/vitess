@@ -437,6 +437,7 @@ func (qe *QueryEngine) IsMySQLReachable() bool {
 		return true
 	}
 	conn.Close()
+	log.Infof("IsMySQLReachable: success")
 	return true
 }
 
