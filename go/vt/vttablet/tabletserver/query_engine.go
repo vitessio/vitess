@@ -452,6 +452,7 @@ func (qe *QueryEngine) QueryPlanCacheCap() int {
 	return int(qe.plans.Capacity())
 }
 
+// QueryStats tracks query stats for export per planName/tableName
 type QueryStats struct {
 	queryCount int64
 	time       time.Duration
@@ -460,6 +461,7 @@ type QueryStats struct {
 	errorCount int64
 }
 
+// AddStats adds the given stats for the planName.tableName
 func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
 	qe.queryStatsMu.Lock()
 	defer qe.queryStatsMu.Unlock()
@@ -483,6 +485,7 @@ func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, du
 	qe.queryStats[planName+"."+tableName] = qstats
 }
 
+// Stats returns the stored QueryStats for the planName.tableName
 func (qe *QueryEngine) Stats(planName, tableName string) *QueryStats {
 	qe.queryStatsMu.Lock()
 	defer qe.queryStatsMu.Unlock()
