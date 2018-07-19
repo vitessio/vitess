@@ -87,6 +87,7 @@ type ActionAgent struct {
 	HealthReporter      health.Reporter
 	TopoServer          *topo.Server
 	TabletAlias         *topodatapb.TabletAlias
+	Cnf                 *mysqlctl.Mycnf
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           *dbconfigs.DBConfigs
 	BinlogPlayerMap     *BinlogPlayerMap
@@ -228,12 +229,18 @@ func NewActionAgent(
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
 		TabletAlias:         tabletAlias,
+		Cnf:                 mycnf,
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 		orc:                 orc,
 	}
+	// Sanity check for inconsistent flags
+	if agent.Cnf == nil && *restoreFromBackup {
+		return nil, fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
+	}
+
 	agent.registerQueryRuleSources()
 
 	// try to initialize the tablet if we have to
@@ -260,16 +267,11 @@ func NewActionAgent(
 		mysqlHost = appConfig.Host
 		mysqlPort = int32(appConfig.Port)
 	} else {
-		// Assume unix socket was specified and try to figure out the mysql port
-		// by other means.
-		mysqlPort = mycnf.MysqlPort
-		if mysqlPort == 0 {
-			// we don't know the port, try to get it from mysqld
-			var err error
-			mysqlPort, err = mysqld.GetMysqlPort()
-			if err != nil {
-				log.Warningf("Cannot get current mysql port, will use 0 for now: %v", err)
-			}
+		// Assume unix socket was specified and try to get the port from mysqld
+		var err error
+		mysqlPort, err = mysqld.GetMysqlPort()
+		if err != nil {
+			log.Warningf("Cannot get current mysql port, will try to get it later: %v", err)
 		}
 	}
 
@@ -336,6 +338,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
 		TabletAlias:         tabletAlias,
+		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		BinlogPlayerMap:     nil,
@@ -374,6 +377,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
 		TabletAlias:         tabletAlias,
+		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           dbcfgs,
 		BinlogPlayerMap:     nil,
@@ -477,9 +481,14 @@ func (agent *ActionAgent) slaveStopped() bool {
 		return *agent._slaveStopped
 	}
 
+	// If there's no Cnf file, don't read state.
+	if agent.Cnf == nil {
+		return false
+	}
+
 	// If the marker file exists, we're stopped.
 	// Treat any read error as if the file doesn't exist.
-	_, err := os.Stat(path.Join(agent.MysqlDaemon.TabletDir(), slaveStoppedFile))
+	_, err := os.Stat(path.Join(agent.Cnf.TabletDir(), slaveStoppedFile))
 	slaveStopped := err == nil
 	agent._slaveStopped = &slaveStopped
 	return slaveStopped
@@ -495,7 +504,10 @@ func (agent *ActionAgent) setSlaveStopped(slaveStopped bool) {
 	// We store a marker in the filesystem so it works regardless of whether
 	// mysqld is running, and so it's tied to this particular instance of the
 	// tablet data dir (the one that's paused at a known replication position).
-	tabletDir := agent.MysqlDaemon.TabletDir()
+	if agent.Cnf == nil {
+		return
+	}
+	tabletDir := agent.Cnf.TabletDir()
 	if tabletDir == "" {
 		return
 	}

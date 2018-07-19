@@ -44,9 +44,6 @@ type FakeMysqlDaemon struct {
 	// appPool is set if db is set.
 	appPool *dbconnpool.ConnectionPool
 
-	// Mycnf will be returned by Cnf()
-	Mycnf *mysqlctl.Mycnf
-
 	// Running is used by Start / Shutdown
 	Running bool
 
@@ -151,18 +148,8 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 	return result
 }
 
-// Cnf is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) Cnf() *mysqlctl.Mycnf {
-	return fmd.Mycnf
-}
-
-// TabletDir is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) TabletDir() string {
-	return ""
-}
-
 // Start is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) Start(ctx context.Context, mysqldArgs ...string) error {
+func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *mysqlctl.Mycnf, mysqldArgs ...string) error {
 	if fmd.Running {
 		return fmt.Errorf("fake mysql daemon already running")
 	}
@@ -171,7 +158,7 @@ func (fmd *FakeMysqlDaemon) Start(ctx context.Context, mysqldArgs ...string) err
 }
 
 // Shutdown is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, waitForMysqld bool) error {
+func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *mysqlctl.Mycnf, waitForMysqld bool) error {
 	if !fmd.Running {
 		return fmt.Errorf("fake mysql daemon not running")
 	}
@@ -185,17 +172,17 @@ func (fmd *FakeMysqlDaemon) RunMysqlUpgrade() error {
 }
 
 // ReinitConfig is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) ReinitConfig(ctx context.Context) error {
+func (fmd *FakeMysqlDaemon) ReinitConfig(ctx context.Context, cnf *mysqlctl.Mycnf) error {
 	return nil
 }
 
 // RefreshConfig is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) RefreshConfig(ctx context.Context) error {
+func (fmd *FakeMysqlDaemon) RefreshConfig(ctx context.Context, cnf *mysqlctl.Mycnf) error {
 	return nil
 }
 
 // Wait is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) Wait(ctx context.Context) error {
+func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, cnf *mysqlctl.Mycnf) error {
 	return nil
 }
 

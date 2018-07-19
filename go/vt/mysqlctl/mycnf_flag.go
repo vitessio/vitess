@@ -119,9 +119,6 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 	}
 
 	if *flagMycnfFile == "" {
-		if uid == 0 {
-			log.Exitf("No mycnf_server_id, no mycnf-file, and no backup server id to use")
-		}
 		*flagMycnfFile = MycnfFile(uid)
 		log.Infof("No mycnf_server_id, no mycnf-file specified, using default config for server id %v: %v", uid, *flagMycnfFile)
 	} else {

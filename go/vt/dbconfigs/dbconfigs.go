@@ -214,6 +214,14 @@ func (dbcfgs *DBConfigs) Copy() *DBConfigs {
 	return result
 }
 
+// HasConnectionParams returns true if connection parameters were
+// specified in the command-line. This will allow the caller to
+// search for alternate ways to connect, like looking in the my.cnf
+// file.
+func HasConnectionParams() bool {
+	return baseConfig.Host != "" || baseConfig.UnixSocket != ""
+}
+
 // Init will initialize all the necessary connection parameters.
 // Precedence is as follows: if baseConfig command line options are
 // set, they supersede all other settings.
@@ -222,15 +230,6 @@ func (dbcfgs *DBConfigs) Copy() *DBConfigs {
 // If no per-user parameters are supplied, then the defaultSocketFile
 // is used to initialize the per-user conn params.
 func Init(defaultSocketFile string) (*DBConfigs, error) {
-	// This is to support legacy behavior: use supplied socket value
-	// if conn parameters are not specified.
-	// TODO(sougou): deprecate.
-	for _, uc := range dbConfigs.userConfigs {
-		if uc.param.UnixSocket == "" && uc.param.Host == "" {
-			uc.param.UnixSocket = defaultSocketFile
-		}
-	}
-
 	// The new base configs, if set, supersede legacy settings.
 	if baseConfig.Host != "" || baseConfig.UnixSocket != "" {
 		for _, uc := range dbConfigs.userConfigs {
@@ -244,6 +243,13 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 				uc.param.SslCaPath = baseConfig.SslCaPath
 				uc.param.SslCert = baseConfig.SslCert
 				uc.param.SslKey = baseConfig.SslKey
+			}
+		}
+	} else {
+		// Use supplied socket value if conn parameters are not specified.
+		for _, uc := range dbConfigs.userConfigs {
+			if uc.param.UnixSocket == "" && uc.param.Host == "" {
+				uc.param.UnixSocket = defaultSocketFile
 			}
 		}
 	}

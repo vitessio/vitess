@@ -48,6 +48,9 @@ func (agent *ActionAgent) RestoreData(ctx context.Context, logger logutil.Logger
 		return err
 	}
 	defer agent.unlock()
+	if agent.Cnf == nil {
+		return fmt.Errorf("cannot perform restore without my.cnf, please restart vttablet with a my.cnf file specified")
+	}
 	return agent.restoreDataLocked(ctx, logger, deleteBeforeRestore)
 }
 
@@ -75,7 +78,7 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	localMetadata := agent.getLocalMetadataValues(originalType)
 	tablet := agent.Tablet()
 	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
-	pos, err := mysqlctl.Restore(ctx, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore, topoproto.TabletDbName(tablet))
+	pos, err := mysqlctl.Restore(ctx, agent.Cnf, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore, topoproto.TabletDbName(tablet))
 	switch err {
 	case nil:
 		// Starting from here we won't be able to recover if we get stopped by a cancelled

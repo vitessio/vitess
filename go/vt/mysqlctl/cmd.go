@@ -27,9 +27,9 @@ import (
 )
 
 // CreateMysqld returns a Mysqld object to use for working with a MySQL
-// installation that hasn't been set up yet. This will generate a new my.cnf
-// from scratch and use that to call NewMysqld().
-func CreateMysqld(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*Mysqld, error) {
+// installation that hasn't been set up yet. This will additionally generate
+// a new my.cnf from scratch and return a corresponding *Mycnf.
+func CreateMysqld(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*Mysqld, *Mycnf, error) {
 	mycnf := NewMycnf(tabletUID, mysqlPort)
 	// Choose a random MySQL server-id, since this is a fresh data dir.
 	// We don't want to use the tablet UID as the MySQL server-id,
@@ -41,7 +41,7 @@ func CreateMysqld(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*Mysql
 	// lose data by skipping binlog events due to replicate-same-server-id=FALSE,
 	// which is the default setting.
 	if err := mycnf.RandomizeMysqlServerID(); err != nil {
-		return nil, fmt.Errorf("couldn't generate random MySQL server_id: %v", err)
+		return nil, nil, fmt.Errorf("couldn't generate random MySQL server_id: %v", err)
 	}
 	if mysqlSocket != "" {
 		mycnf.SocketFile = mysqlSocket
@@ -49,26 +49,26 @@ func CreateMysqld(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*Mysql
 
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't Init dbconfigs: %v", err)
+		return nil, nil, fmt.Errorf("couldn't Init dbconfigs: %v", err)
 	}
 
-	return NewMysqld(mycnf, dbcfgs), nil
+	return NewMysqld(dbcfgs), mycnf, nil
 }
 
 // OpenMysqld returns a Mysqld object to use for working with a MySQL
 // installation that already exists. This will look for an existing my.cnf file
-// and use that to call NewMysqld().
-func OpenMysqld(tabletUID uint32) (*Mysqld, error) {
+// and return a corresponding *Mycnf.
+func OpenMysqld(tabletUID uint32) (*Mysqld, *Mycnf, error) {
 	// We pass a port of 0, this will be read and overwritten from the path on disk
 	mycnf, err := ReadMycnf(NewMycnf(tabletUID, 0))
 	if err != nil {
-		return nil, fmt.Errorf("couldn't read my.cnf file: %v", err)
+		return nil, nil, fmt.Errorf("couldn't read my.cnf file: %v", err)
 	}
 
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't Init dbconfigs: %v", err)
+		return nil, nil, fmt.Errorf("couldn't Init dbconfigs: %v", err)
 	}
 
-	return NewMysqld(mycnf, dbcfgs), nil
+	return NewMysqld(dbcfgs), mycnf, nil
 }
