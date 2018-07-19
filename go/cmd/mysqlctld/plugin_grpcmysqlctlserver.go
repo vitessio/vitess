@@ -27,7 +27,7 @@ func init() {
 	servenv.InitServiceMap("grpc", "mysqlctl")
 	servenv.OnRun(func() {
 		if servenv.GRPCCheckServiceMap("mysqlctl") {
-			grpcmysqlctlserver.StartServer(servenv.GRPCServer, mysqld)
+			grpcmysqlctlserver.StartServer(servenv.GRPCServer, cnf, mysqld)
 		}
 	})
 }

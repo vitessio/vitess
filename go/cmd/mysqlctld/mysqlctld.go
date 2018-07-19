@@ -36,6 +36,7 @@ import (
 var (
 	// mysqld is used by the rpc implementation plugin.
 	mysqld *mysqlctl.Mysqld
+	cnf    *mysqlctl.Mycnf
 
 	mysqlPort   = flag.Int("mysql_port", 3306, "mysql port")
 	tabletUID   = flag.Uint("tablet_uid", 41983, "tablet uid")
@@ -74,14 +75,14 @@ func main() {
 		log.Infof("mycnf file (%s) doesn't exist, initializing", mycnfFile)
 
 		var err error
-		mysqld, err = mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort))
+		mysqld, cnf, err = mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort))
 		if err != nil {
 			log.Errorf("failed to initialize mysql config: %v", err)
 			exit.Return(1)
 		}
 		mysqld.OnTerm(onTermFunc)
 
-		if err := mysqld.Init(ctx, *initDBSQLFile); err != nil {
+		if err := mysqld.Init(ctx, cnf, *initDBSQLFile); err != nil {
 			log.Errorf("failed to initialize mysql data dir and start mysqld: %v", err)
 			exit.Return(1)
 		}
@@ -90,20 +91,20 @@ func main() {
 		log.Infof("mycnf file (%s) already exists, starting without init", mycnfFile)
 
 		var err error
-		mysqld, err = mysqlctl.OpenMysqld(uint32(*tabletUID))
+		mysqld, cnf, err = mysqlctl.OpenMysqld(uint32(*tabletUID))
 		if err != nil {
 			log.Errorf("failed to find mysql config: %v", err)
 			exit.Return(1)
 		}
 		mysqld.OnTerm(onTermFunc)
 
-		err = mysqld.RefreshConfig(ctx)
+		err = mysqld.RefreshConfig(ctx, cnf)
 		if err != nil {
 			log.Errorf("failed to refresh config: %v", err)
 			exit.Return(1)
 		}
 
-		if err := mysqld.Start(ctx); err != nil {
+		if err := mysqld.Start(ctx, cnf); err != nil {
 			log.Errorf("failed to start mysqld: %v", err)
 			exit.Return(1)
 		}
@@ -117,7 +118,7 @@ func main() {
 	servenv.OnTermSync(func() {
 		log.Infof("mysqlctl received SIGTERM, shutting down mysqld first")
 		ctx := context.Background()
-		mysqld.Shutdown(ctx, true)
+		mysqld.Shutdown(ctx, cnf, true)
 	})
 
 	// Start RPC server and wait for SIGTERM.
