@@ -191,6 +191,15 @@ class TestTabletManager(unittest.TestCase):
     qr = tablet_62044.execute('select id, msg from vt_select_test')
     self.assertEqual(len(qr['rows']), 4,
                      'expected 4 rows in vt_select_test: %s' % str(qr))
+
+    # Verify backup fails
+    try:
+      utils.run_vtctl(['Backup', tablet_62044.tablet_alias])
+    except Exception as e:
+      self.assertIn('cannot perform backup without my.cnf', str(e))
+    else:
+        self.assertFail('did not get an exception')
+
     tablet_62044.kill_vttablet()
 
   def test_actions_and_timeouts(self):
