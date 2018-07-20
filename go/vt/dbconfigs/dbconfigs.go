@@ -231,7 +231,7 @@ func HasConnectionParams() bool {
 // is used to initialize the per-user conn params.
 func Init(defaultSocketFile string) (*DBConfigs, error) {
 	// The new base configs, if set, supersede legacy settings.
-	if baseConfig.Host != "" || baseConfig.UnixSocket != "" {
+	if HasConnectionParams() {
 		for _, uc := range dbConfigs.userConfigs {
 			uc.param.Host = baseConfig.Host
 			uc.param.Port = baseConfig.Port

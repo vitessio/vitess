@@ -26,10 +26,9 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 )
 
-// CreateMysqld returns a Mysqld object to use for working with a MySQL
-// installation that hasn't been set up yet. This will additionally generate
-// a new my.cnf from scratch and return a corresponding *Mycnf.
-func CreateMysqld(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*Mysqld, *Mycnf, error) {
+// CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
+// installation that hasn't been set up yet.
+func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*Mysqld, *Mycnf, error) {
 	mycnf := NewMycnf(tabletUID, mysqlPort)
 	// Choose a random MySQL server-id, since this is a fresh data dir.
 	// We don't want to use the tablet UID as the MySQL server-id,
@@ -55,10 +54,10 @@ func CreateMysqld(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*Mysql
 	return NewMysqld(dbcfgs), mycnf, nil
 }
 
-// OpenMysqld returns a Mysqld object to use for working with a MySQL
-// installation that already exists. This will look for an existing my.cnf file
-// and return a corresponding *Mycnf.
-func OpenMysqld(tabletUID uint32) (*Mysqld, *Mycnf, error) {
+// OpenMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
+// installation that already exists. The Mycnf will be built based on the my.cnf file
+// of the MySQL instance.
+func OpenMysqldAndMycnf(tabletUID uint32) (*Mysqld, *Mycnf, error) {
 	// We pass a port of 0, this will be read and overwritten from the path on disk
 	mycnf, err := ReadMycnf(NewMycnf(tabletUID, 0))
 	if err != nil {
