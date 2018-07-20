@@ -87,8 +87,9 @@ func main() {
 		log.Info("connection parameters were specified. Not loading my.cnf.")
 	}
 
-	// If connection parameters were not specified, we'll use
-	// mycnf's socket file (if present).
+	// If connection parameters were specified, socketFile will be empty.
+	// Otherwise, the socketFile (read from mycnf) will be used to initialize
+	// dbconfigs.
 	dbcfgs, err := dbconfigs.Init(socketFile)
 	if err != nil {
 		log.Warning(err)

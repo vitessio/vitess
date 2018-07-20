@@ -75,7 +75,7 @@ func main() {
 		log.Infof("mycnf file (%s) doesn't exist, initializing", mycnfFile)
 
 		var err error
-		mysqld, cnf, err = mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort))
+		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort))
 		if err != nil {
 			log.Errorf("failed to initialize mysql config: %v", err)
 			exit.Return(1)
@@ -91,7 +91,7 @@ func main() {
 		log.Infof("mycnf file (%s) already exists, starting without init", mycnfFile)
 
 		var err error
-		mysqld, cnf, err = mysqlctl.OpenMysqld(uint32(*tabletUID))
+		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(uint32(*tabletUID))
 		if err != nil {
 			log.Errorf("failed to find mysql config: %v", err)
 			exit.Return(1)
