@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strconv"
 )
 
@@ -105,6 +106,11 @@ type Mycnf struct {
 
 	mycnfMap map[string]string
 	path     string // the actual path that represents this mycnf
+}
+
+// TabletDir returns the tablet directory.
+func (cnf *Mycnf) TabletDir() string {
+	return path.Dir(cnf.DataDir)
 }
 
 func (cnf *Mycnf) lookup(key string) string {
