@@ -36,6 +36,10 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	}
 	defer agent.unlock()
 
+	if agent.Cnf == nil {
+		return fmt.Errorf("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
+	}
+
 	// update our type to BACKUP
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
@@ -60,7 +64,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	// now we can run the backup
 	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
 	name := fmt.Sprintf("%v.%v", time.Now().UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tablet.Alias))
-	returnErr := mysqlctl.Backup(ctx, agent.MysqlDaemon, l, dir, name, concurrency, agent.hookExtraEnv())
+	returnErr := mysqlctl.Backup(ctx, agent.Cnf, agent.MysqlDaemon, l, dir, name, concurrency, agent.hookExtraEnv())
 
 	// change our type back to the original value
 	_, err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType)
