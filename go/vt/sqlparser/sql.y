@@ -2840,6 +2840,10 @@ set_expression:
   {
     $$ = &SetExpr{Name: NewColIdent(string($1)), Expr: $2}
   }
+| charset_or_character_set charset_value COLLATE charset_value
+  {
+    $$ = &SetExpr{Name: NewColIdent(string($1)), Expr: $2}
+  }
 
 charset_or_character_set:
   CHARSET
