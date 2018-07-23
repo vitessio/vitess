@@ -1012,6 +1012,10 @@ collate_opt:
   {
     $$ = string($2)
   }
+| COLLATE charset_value
+  {
+    $$ = ""
+  }
 
 column_key_opt:
   {
@@ -2837,10 +2841,6 @@ set_expression:
     $$ = &SetExpr{Name: $1, Expr: $3}
   }
 | charset_or_character_set charset_value collate_opt
-  {
-    $$ = &SetExpr{Name: NewColIdent(string($1)), Expr: $2}
-  }
-| charset_or_character_set charset_value COLLATE charset_value
   {
     $$ = &SetExpr{Name: NewColIdent(string($1)), Expr: $2}
   }

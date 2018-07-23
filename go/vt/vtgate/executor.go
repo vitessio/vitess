@@ -713,9 +713,10 @@ func validateSetOnOff(v interface{}, typ string) (int64, error) {
 	case int64:
 		val = v
 	case string:
-		if v == "on" || v == "ON" {
+		lcaseV := strings.ToLower(v)
+		if lcaseV == "on" {
 			val = 1
-		} else if v == "off" || v == "OFF" {
+		} else if lcaseV == "off" {
 			val = 0
 		} else {
 			return -1, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for %s: %s", typ, v)
