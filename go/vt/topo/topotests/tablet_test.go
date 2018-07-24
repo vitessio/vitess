@@ -22,7 +22,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -58,28 +57,6 @@ func TestCreateTablet(t *testing.T) {
 		t.Fatalf("Created Tablet doesn't match: %v %v", ti, err)
 	}
 	sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
-	if err != nil || len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, alias) {
-		t.Fatalf("Created ShardReplication doesn't match: %v %v", sri, err)
-	}
-
-	// Create the same tablet again, make sure it fails with ErrNodeExists.
-	if err := ts.CreateTablet(ctx, tablet); !topo.IsErrType(err, topo.NodeExists) {
-		t.Fatalf("CreateTablet(again) returned: %v", err)
-	}
-
-	// Remove the ShardReplication record, try to create the
-	// tablets again, make sure it's fixed.
-	if err := topo.RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, alias); err != nil {
-		t.Fatalf("RemoveShardReplicationRecord failed: %v", err)
-	}
-	sri, err = ts.GetShardReplication(ctx, cell, keyspace, shard)
-	if err != nil || len(sri.Nodes) != 0 {
-		t.Fatalf("Modifed ShardReplication doesn't match: %v %v", sri, err)
-	}
-	if err := ts.CreateTablet(ctx, tablet); !topo.IsErrType(err, topo.NodeExists) {
-		t.Fatalf("CreateTablet(again and again) returned: %v", err)
-	}
-	sri, err = ts.GetShardReplication(ctx, cell, keyspace, shard)
 	if err != nil || len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, alias) {
 		t.Fatalf("Created ShardReplication doesn't match: %v %v", sri, err)
 	}

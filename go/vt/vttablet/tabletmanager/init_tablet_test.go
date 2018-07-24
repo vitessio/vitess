@@ -22,6 +22,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
@@ -30,6 +32,70 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+// Init tablet fixes replication data when safe
+func TestInitTabletFixesReplicationData(t *testing.T) {
+	ctx := context.Background()
+	cell := "cell1"
+	ts := memorytopo.NewServer(cell, "cell2")
+	tabletAlias := &topodatapb.TabletAlias{
+		Cell: cell,
+		Uid:  1,
+	}
+
+	// start with a tablet record that doesn't exist
+	port := int32(1234)
+	gRPCPort := int32(3456)
+	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(nil)
+	agent := &ActionAgent{
+		TopoServer:      ts,
+		TabletAlias:     tabletAlias,
+		MysqlDaemon:     mysqlDaemon,
+		DBConfigs:       &dbconfigs.DBConfigs{},
+		BinlogPlayerMap: nil,
+		batchCtx:        ctx,
+		History:         history.New(historyLength),
+		_healthy:        fmt.Errorf("healthcheck not run yet"),
+	}
+
+	// 1. Initialize the tablet as REPLICA.
+	*tabletHostname = "localhost"
+	*initKeyspace = "test_keyspace"
+	*initShard = "-C0"
+	*initTabletType = "replica"
+	tabletAlias = &topodatapb.TabletAlias{
+		Cell: cell,
+		Uid:  2,
+	}
+	agent.TabletAlias = tabletAlias
+	if err := agent.InitTablet(port, gRPCPort); err != nil {
+		t.Fatalf("InitTablet(type) failed: %v", err)
+	}
+	sri, err := ts.GetShardReplication(ctx, cell, *initKeyspace, "-c0")
+	if err != nil || len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, tabletAlias) {
+		t.Fatalf("Created ShardReplication doesn't match: %v %v", sri, err)
+	}
+
+	// Remove the ShardReplication record, try to create the
+	// tablets again, make sure it's fixed.
+	if err := topo.RemoveShardReplicationRecord(ctx, ts, cell, *initKeyspace, "-c0", tabletAlias); err != nil {
+		t.Fatalf("RemoveShardReplicationRecord failed: %v", err)
+	}
+	sri, err = ts.GetShardReplication(ctx, cell, *initKeyspace, "-c0")
+	if err != nil || len(sri.Nodes) != 0 {
+		t.Fatalf("Modifed ShardReplication doesn't match: %v %v", sri, err)
+	}
+
+	// Initialize the same tablet again, CreateTablet will fail, but it should recreate shard replication data
+	if err := agent.InitTablet(port, gRPCPort); err != nil {
+		t.Fatalf("InitTablet(type) failed: %v", err)
+	}
+
+	sri, err = ts.GetShardReplication(ctx, cell, *initKeyspace, "-c0")
+	if err != nil || len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, tabletAlias) {
+		t.Fatalf("Created ShardReplication doesn't match: %v %v", sri, err)
+	}
+}
 
 // This is a test to make sure a regression does not happen in the future.
 // There is code in InitTablet that updates replication data if tablet fails
