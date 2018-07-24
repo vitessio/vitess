@@ -34,7 +34,6 @@ type MysqlDaemon interface {
 	Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool) error
 	RunMysqlUpgrade() error
 	ReinitConfig(ctx context.Context, cnf *Mycnf) error
-	RefreshConfig(ctx context.Context, cnf *Mycnf) error
 	Wait(ctx context.Context, cnf *Mycnf) error
 
 	// GetMysqlPort returns the current port mysql is listening on.
