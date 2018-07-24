@@ -338,15 +338,10 @@ func (ts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) e
 		return err
 	}
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(tablet.Alias), TabletFile)
-	if _, err = conn.Create(ctx, tabletPath, data); err != nil && !IsErrType(err, NodeExists) {
+	if _, err = conn.Create(ctx, tabletPath, data); err != nil {
 		return err
 	}
 
-	// Update ShardReplication in any case, to be sure.  This is
-	// meant to fix the case when a Tablet record was created, but
-	// then the ShardReplication record was not (because for
-	// instance of a startup timeout). Upon running this code
-	// again, we want to fix ShardReplication.
 	if updateErr := UpdateTabletReplicationData(ctx, ts, tablet); updateErr != nil {
 		return updateErr
 	}
