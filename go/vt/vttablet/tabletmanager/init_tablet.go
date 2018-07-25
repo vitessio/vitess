@@ -187,6 +187,15 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 			return fmt.Errorf("InitTablet failed because existing tablet keyspace and shard %v/%v differ from the provided ones %v/%v", oldTablet.Keyspace, oldTablet.Shard, tablet.Keyspace, tablet.Shard)
 		}
 
+		// Update ShardReplication in any case, to be sure.  This is
+		// meant to fix the case when a Tablet record was created, but
+		// then the ShardReplication record was not (because for
+		// instance of a startup timeout). Upon running this code
+		// again, we want to fix ShardReplication.
+		if updateErr := topo.UpdateTabletReplicationData(ctx, agent.TopoServer, tablet); updateErr != nil {
+			return updateErr
+		}
+
 		// Then overwrite everything, ignoring version mismatch.
 		if err := agent.TopoServer.UpdateTablet(ctx, topo.NewTabletInfo(tablet, nil)); err != nil {
 			return fmt.Errorf("UpdateTablet failed: %v", err)
