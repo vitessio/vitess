@@ -1012,9 +1012,9 @@ collate_opt:
   {
     $$ = string($2)
   }
-| COLLATE charset_value
+| COLLATE STRING
   {
-    $$ = ""
+    $$ = string($2)
   }
 
 column_key_opt:
