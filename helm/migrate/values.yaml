@@ -1,0 +1,37 @@
+# This file contains default values for vitess.
+#
+# You can override these defaults when installing:
+#   helm install -f site-values.yaml .
+#
+# The contents of site-values.yaml will be merged into this default config.
+# It's not necessary to copy the defaults into site-values.yaml.
+#
+# For command-line flag maps like backupFlags or extraFlags,
+# use 'flag_name: true|false' to enable or disable a boolean flag.
+
+# the job name is used to retrieve job logs and check status
+jobName: my-import-4
+
+# supply publicly accessible urls to apply to the db
+# files can either be raw sql or gzipped
+remoteFiles:
+  - "https://storage.googleapis.com/nozzle/urlmetrics.sql.gz"
+  # - "https://storage.googleapis.com/mybucket/myfile.sql.gz"
+
+
+vtgateService: vtgate-azcentralus
+parallelism: 2
+mysql:
+  user: nozzleadmin
+  passwordSecret: mysql-password
+
+# the temp disk will need to be large enough to store your sql file,
+# including an uncompressed copy if necessary
+tempDisk:
+  dataVolumeClaimAnnotations:
+  dataVolumeClaimSpec:
+    storageClassName: "managed-premium"
+    accessModes: ["ReadWriteOnce"]
+    resources:
+      requests:
+        storage: "40Gi"
