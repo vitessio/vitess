@@ -110,6 +110,22 @@ func TestIsDML(t *testing.T) {
 	}
 }
 
+func TestIsLoadData(t *testing.T) {
+	testcases := []struct {
+		sql  string
+		want bool
+	}{
+		{"   LOAD DATA  ...", true},
+		{"LOAD DATA LOCAL", true},
+		{"load data local ...", true},
+	}
+	for _, tcase := range testcases {
+		if got := IsLoadData(tcase.sql); got != tcase.want {
+			t.Errorf("IsLoadData(%s): %v, want %v", tcase.sql, got, tcase.want)
+		}
+	}
+}
+
 func TestGetTableName(t *testing.T) {
 	testcases := []struct {
 		in, out string

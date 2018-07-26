@@ -48,6 +48,7 @@ const (
 	StmtOther
 	StmtUnknown
 	StmtComment
+	StmtLoadData
 )
 
 // Preview analyzes the beginning of the query using a simpler and faster
@@ -75,6 +76,8 @@ func Preview(sql string) int {
 		return StmtUpdate
 	case "delete":
 		return StmtDelete
+	case "load":
+		return StmtLoadData
 	}
 	// For the following statements it is not sufficient to rely
 	// on loweredFirstWord. This is because they are not statements
@@ -139,6 +142,8 @@ func StmtType(stmtType int) string {
 		return "USE"
 	case StmtOther:
 		return "OTHER"
+	case StmtLoadData:
+		return "load data"
 	default:
 		return "UNKNOWN"
 	}
@@ -148,6 +153,15 @@ func StmtType(stmtType int) string {
 func IsDML(sql string) bool {
 	switch Preview(sql) {
 	case StmtInsert, StmtReplace, StmtUpdate, StmtDelete:
+		return true
+	}
+	return false
+}
+
+// IsLoadData returns true if the query is an StmtLoadData statement.
+func IsLoadData(sql string) bool {
+	switch Preview(sql) {
+	case StmtLoadData:
 		return true
 	}
 	return false

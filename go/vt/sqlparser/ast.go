@@ -233,22 +233,23 @@ type Statement interface {
 	SQLNode
 }
 
-func (*Union) iStatement()      {}
-func (*Select) iStatement()     {}
-func (*Stream) iStatement()     {}
-func (*Insert) iStatement()     {}
-func (*Update) iStatement()     {}
-func (*Delete) iStatement()     {}
-func (*Set) iStatement()        {}
-func (*DBDDL) iStatement()      {}
-func (*DDL) iStatement()        {}
-func (*Show) iStatement()       {}
-func (*Use) iStatement()        {}
-func (*Begin) iStatement()      {}
-func (*Commit) iStatement()     {}
-func (*Rollback) iStatement()   {}
-func (*OtherRead) iStatement()  {}
-func (*OtherAdmin) iStatement() {}
+func (*Union) iStatement()        {}
+func (*Select) iStatement()       {}
+func (*Stream) iStatement()       {}
+func (*Insert) iStatement()       {}
+func (*LoadDataStmt) iStatement() {}
+func (*Update) iStatement()       {}
+func (*Delete) iStatement()       {}
+func (*Set) iStatement()          {}
+func (*DBDDL) iStatement()        {}
+func (*DDL) iStatement()          {}
+func (*Show) iStatement()         {}
+func (*Use) iStatement()          {}
+func (*Begin) iStatement()        {}
+func (*Commit) iStatement()       {}
+func (*Rollback) iStatement()     {}
+func (*OtherRead) iStatement()    {}
+func (*OtherAdmin) iStatement()   {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -534,6 +535,61 @@ func (node *Insert) walkSubtree(visit Visit) error {
 type InsertRows interface {
 	iInsertRows()
 	SQLNode
+}
+
+// LoadDataStmt represents an INSERT statement.
+type LoadDataStmt struct {
+	Action     string
+	IsLocal    bool
+	Path       string
+	Table      TableName
+	Columns    Columns
+	FieldsInfo *FieldsClause
+	LinesInfo  *LinesClause
+}
+
+// Format formats the node.
+func (node *LoadDataStmt) Format(buf *TrackedBuffer) {
+}
+
+// walkSubtree walks the nodes of the subtree.
+func (node *LoadDataStmt) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// FieldsClause represents fields references clause in load data statement.
+type FieldsClause struct {
+	Terminated string
+	Enclosed   byte
+	Escaped    byte
+	Expr       Expr
+	Direction  string
+}
+
+// Format formats the node.
+func (node *FieldsClause) Format(buf *TrackedBuffer) {
+}
+
+// walkSubtree walks the nodes of the subtree.
+func (node *FieldsClause) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// LinesClause represents lines references clause in load data statement.
+type LinesClause struct {
+	Starting   string
+	Terminated string
+	Expr       Expr
+	Direction  string
+}
+
+// Format formats the node.
+func (node *LinesClause) Format(buf *TrackedBuffer) {
+}
+
+// walkSubtree walks the nodes of the subtree.
+func (node *LinesClause) walkSubtree(visit Visit) error {
+	return nil
 }
 
 func (*Select) iInsertRows()      {}

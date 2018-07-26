@@ -484,6 +484,37 @@ func (c *Conn) sendColumnCount(count uint64) error {
 	return c.writeEphemeralPacket(false)
 }
 
+// calcPacketSize calculate size of request file package
+func calcPacketSize(fileName []byte) int {
+	if fileName == nil {
+		return 1
+	}
+	return 1 + len(fileName)
+}
+
+//WriteRequestFilePacket  write the package of request file
+func (c *Conn) WriteRequestFilePacket(fileName []byte) error {
+
+	size := calcPacketSize(fileName)
+	var length = size // lenEncStringSize("def")
+
+	data := c.startEphemeralPacket(length)
+	pos := 0
+	pos = writeByte(data, pos, 0xfb) // load flag fb
+
+	if fileName != nil {
+		pos = writeEOFString(data, pos, string(fileName))
+
+	}
+
+	if pos != len(data) {
+		return fmt.Errorf("internal error: packing of column definition used %v bytes instead of %v", pos, len(data))
+	}
+
+	return c.writeEphemeralPacket(true)
+
+}
+
 func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 	length := 4 + // lenEncStringSize("def")
 		lenEncStringSize(field.Database) +

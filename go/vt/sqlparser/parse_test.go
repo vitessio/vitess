@@ -2159,3 +2159,52 @@ func BenchmarkParse3(b *testing.B) {
 		}
 	}
 }
+
+func TestLoadDataStmt(t *testing.T) {
+	type testCase struct {
+		src string
+		ok  bool
+	}
+	table := []testCase{
+		// load data
+		{"load data infile '/tmp/t.csv' into table t", true},
+		{"load data infile '/tmp/t.csv' into table t fields terminated by 'ab'", true},
+		{"load data infile '/tmp/t.csv' into table t columns terminated by 'ab'", true},
+		{"load data infile '/tmp/t.csv' into table t fields terminated by 'ab' enclosed by 'b'", true},
+		{"load data infile '/tmp/t.csv' into table t fields terminated by 'ab' enclosed by 'b' escaped by '*'", true},
+		{"load data infile '/tmp/t.csv' into table t lines starting by 'ab'", true},
+		{"load data infile '/tmp/t.csv' into table t lines starting by 'ab' terminated by 'xy'", true},
+		{"load data infile '/tmp/t.csv' into table t fields terminated by 'ab' lines terminated by 'xy'", true},
+		{"load data infile '/tmp/t.csv' into table t terminated by 'xy' fields terminated by 'ab'", false},
+		{"load data local infile '/tmp/t.csv' into table t", true},
+		{"load data local infile '/tmp/t.csv' into table t fields terminated by 'ab'", true},
+		{"load data local infile '/tmp/t.csv' into table t columns terminated by 'ab'", true},
+		{"load data local infile '/tmp/t.csv' into table t fields terminated by 'ab' enclosed by 'b'", true},
+		{"load data local infile '/tmp/t.csv' into table t fields terminated by 'ab' enclosed by 'b' escaped by '*'", true},
+		{"load data local infile '/tmp/t.csv' into table t lines starting by 'ab'", true},
+		{"load data local infile '/tmp/t.csv' into table t lines starting by 'ab' terminated by 'xy'", true},
+		{"load data local infile '/tmp/t.csv' into table t fields terminated by 'ab' lines terminated by 'xy'", true},
+		{"load data local infile '/tmp/t.csv' into table t terminated by 'xy' fields terminated by 'ab'", false},
+		{"load data infile '/tmp/t.csv' into table t (a,b)", true},
+		{"load data local infile '/tmp/t.csv' into table t (a,b)", true},
+		{"load data local infile '/tmp/t.csv' into table t fields terminated by 'ab' (a,b)", true},
+		{"load data local infile '/tmp/t.csv' into table t columns terminated by 'ab' (a,b)", true},
+		{"load data local infile '/tmp/t.csv' into table t fields terminated by 'ab' enclosed by 'b' (a,b)", true},
+		{"load data local infile '/tmp/t.csv' into table t fields terminated by 'ab' enclosed by 'b' escaped by '*' (a,b)", true},
+		{"load data local infile '/tmp/t.csv' into table t lines starting by 'ab' (a,b)", true},
+		{"load data local infile '/tmp/t.csv' into table t lines starting by 'ab' terminated by 'xy' (a,b)", true},
+		{"load data local infile '/tmp/t.csv' into table t fields terminated by 'ab' lines terminated by 'xy' (a,b)", true},
+		{"load data local infile '/tmp/t.csv' into table t (a,b) fields terminated by 'ab'", false},
+	}
+	for index, tb := range table {
+		tree, err := Parse(tb.src)
+		if err != nil {
+			if tb.ok {
+				t.Errorf("input: %d  %s, err: %v", index, tb.src, err)
+			} else {
+				t.Logf("input: %d  %s  %v %v", index, tb.src, err, tree)
+
+			}
+		}
+	}
+}

@@ -112,6 +112,7 @@ func forceEOF(yylex interface{}) {
   vindexParam   VindexParam
   vindexParams  []VindexParam
   showFilter    *ShowFilter
+  item interface{}
 }
 
 %token LEX_ERROR
@@ -197,6 +198,9 @@ func forceEOF(yylex interface{}) {
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <bytes> UNUSED
 
+// MySQL load data key word
+%token <bytes>TERMINATED STARTING ESCAPED ENCLOSED FIELDS  DATA LOAD INFILE LOCAL LINES
+
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement
@@ -244,7 +248,7 @@ func forceEOF(yylex interface{}) {
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
-%type <columns> ins_column_list column_list
+%type <columns> ins_column_list column_list ins_column_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
@@ -297,6 +301,13 @@ func forceEOF(yylex interface{}) {
 %type <colIdent> vindex_type vindex_type_opt
 %type <bytes> alter_object_type
 
+// load  statement
+%type <statement> load_data_statement
+
+// load option
+%type <item> lines fields escaped enclosed fields_terminated starting lines_terminated
+%type <str> local_opt
+
 %start any_command
 
 %%
@@ -333,6 +344,7 @@ command:
 | commit_statement
 | rollback_statement
 | other_statement
+| load_data_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -423,6 +435,128 @@ insert_or_replace:
   {
     $$ = ReplaceStr
   }
+
+
+    /**************************************LoadDataStmt*****************************************
+      * See https://dev.mysql.com/doc/refman/5.7/en/load-data.html
+      *******************************************************************************************/
+     load_data_statement:
+     	LOAD  DATA local_opt INFILE STRING INTO TABLE table_name fields lines ins_column_list_opt
+     	{
+     		x := &LoadDataStmt{
+     		    Action:     string($1),
+     			Path:       string($5),
+     			Table:      $8,
+     			Columns:    $11,
+     		}
+     		if $3 != "" {
+     			x.IsLocal = true
+     		}
+     		if $9 != nil {
+     			x.FieldsInfo = $9.(*FieldsClause)
+     		}
+     		if $10 != nil {
+     			x.LinesInfo = $10.(*LinesClause)
+     		}
+     		$$ = x
+     	}
+
+     local_opt:
+     	{
+     		$$ = ""
+     	}
+     |	LOCAL
+     	{
+     		$$ = string($1)
+     	}
+  fields:
+       	{
+  		escape := "\\"
+  		$$ = &FieldsClause{
+  			Terminated: "\t",
+  			Escaped:    escape[0],
+  		}
+  	}
+  |	FieldsOrColumns fields_terminated enclosed escaped
+  	{
+  		escape := $4.(string)
+  		if escape != "\\" && len(escape) > 1 {
+  			yylex.Error("Incorrect arguments  to ESCAPE")
+  			return 1
+  		}
+  		var enclosed byte
+  		str := $3.(string)
+  		if len(str) > 1 {
+  			yylex.Error("Incorrect arguments  to ENCLOSED")
+  			return 1
+  		}else if len(str) != 0 {
+  			enclosed = str[0]
+  		}
+  		$$ = &FieldsClause{
+  			Terminated: $2.(string),
+  			Enclosed:   enclosed,
+  			Escaped:    escape[0],
+  		}
+  	}
+
+  FieldsOrColumns:
+  FIELDS | COLUMNS
+
+  fields_terminated:
+  	{
+  		$$ = "\t"
+  	}
+  |	TERMINATED BY STRING
+  	{
+  		$$ = string($3)
+  	}
+
+  enclosed:
+  	{
+  		$$ = ""
+  	}
+  |	ENCLOSED BY STRING
+  	{
+  		$$ = string($3)
+  	}
+
+  escaped:
+  	{
+  		$$ = "\\"
+  	}
+  |	ESCAPED BY STRING
+  	{
+  		$$ = string($3)
+  	}
+
+  lines:
+  	{
+  		$$ = &LinesClause{Terminated: "\n"}
+  	}
+  |	LINES starting lines_terminated
+  	{
+  		$$ = &LinesClause{Starting: $2.(string), Terminated: $3.(string)}
+  	}
+
+  starting:
+  	{
+  		$$ = ""
+  	}
+  |	STARTING BY STRING
+  	{
+  		$$ = string($3)
+
+  	}
+
+  lines_terminated:
+  	{
+  		$$ = "\n"
+  	}
+  |	TERMINATED BY STRING
+  	{
+  		$$ = string($3)
+  	}
+
 
 update_statement:
   UPDATE comment_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
@@ -2734,6 +2868,15 @@ insert_data:
     $$ = &Insert{Columns: $2, Rows: $5}
   }
 
+ins_column_list_opt:
+  {
+    $$ = nil
+  }
+| openb ins_column_list closeb
+  {
+    $$ = $2
+  }
+
 ins_column_list:
   sql_id
   {
@@ -3023,6 +3166,7 @@ reserved_keyword:
 | LIMIT
 | LOCALTIME
 | LOCALTIMESTAMP
+| LOCAL
 | LOCK
 | MATCH
 | MAXVALUE
@@ -3062,7 +3206,13 @@ reserved_keyword:
 | VALUES
 | WHEN
 | WHERE
-
+| TERMINATED
+| STARTING
+| ESCAPED
+| ENCLOSED
+| LOAD
+| INFILE
+| LINES
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
   Some of them may be reserved in MySQL. The good news is we backtick quote them
@@ -3087,11 +3237,13 @@ non_reserved_keyword:
 | COMMITTED
 | DATE
 | DATETIME
+| DATA
 | DECIMAL
 | DOUBLE
 | DUPLICATE
 | ENUM
 | EXPANSION
+| FIELDS
 | FLOAT_TYPE
 | FOREIGN
 | FULLTEXT

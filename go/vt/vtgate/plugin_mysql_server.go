@@ -57,8 +57,16 @@ var (
 	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
 	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", 0, "mysql query timeout")
 
+	loadMaxRowsInBatch = flag.Int("load_max_rows_in_batch", 2000, "max insert rows in batch of load data")
+	loadMaxRetryCount  = flag.Int("load_max_retry_count", 10, "load data retry count for executing batch insert ")
+
 	busyConnections int32
 )
+
+// Context glue
+type loadConnKeyType string
+
+var loadConnKey loadConnKeyType
 
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection, if a transaction
@@ -117,6 +125,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
+	ctx = context.WithValue(ctx, loadConnKey, c) // conn for load data
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session == nil {
 		session = &vtgatepb.Session{
