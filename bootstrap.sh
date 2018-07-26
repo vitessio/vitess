@@ -233,7 +233,7 @@ function install_chromedriver() {
   unzip -o -q chromedriver_linux64.zip -d "$dist"
   rm chromedriver_linux64.zip
 }
-install_dep "chromedriver" "2.25" "$VTROOT/dist/chromedriver" install_chromedriver
+install_dep "chromedriver" "2.40" "$VTROOT/dist/chromedriver" install_chromedriver
 
 
 #
