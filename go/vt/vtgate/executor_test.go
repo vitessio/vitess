@@ -249,6 +249,9 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set autocommit = on",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
+		in:  "set autocommit = ON",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
 		in:  "set autocommit = 'on'",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
@@ -262,6 +265,9 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{},
 	}, {
 		in:  "set autocommit = off",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set autocommit = OFF",
 		out: &vtgatepb.Session{},
 	}, {
 		in:  "set AUTOCOMMIT = 0",
