@@ -215,41 +215,6 @@ func PublishJSONFunc(name string, f func() string) {
 	publish(name, JSONFunc(f))
 }
 
-// StringMap is a map of string -> string
-type StringMap struct {
-	mu     sync.Mutex
-	values map[string]string
-}
-
-// NewStringMap returns a new StringMap
-func NewStringMap(name string) *StringMap {
-	v := &StringMap{values: make(map[string]string)}
-	publish(name, v)
-	return v
-}
-
-// Set will set a value (existing or not)
-func (v *StringMap) Set(name, value string) {
-	v.mu.Lock()
-	v.values[name] = value
-	v.mu.Unlock()
-}
-
-// Get will return the value, or "" f not set.
-func (v *StringMap) Get(name string) string {
-	v.mu.Lock()
-	s := v.values[name]
-	v.mu.Unlock()
-	return s
-}
-
-// String is the implementation of expvar.Var
-func (v *StringMap) String() string {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	return stringMapToString(v.values)
-}
-
 // StringMapFunc is the function equivalent of StringMap
 type StringMapFunc func() map[string]string
 
