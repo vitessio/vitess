@@ -149,46 +149,6 @@ func emitToBackend(emitPeriod *time.Duration) {
 	}
 }
 
-// Float is expvar.Float+Get+hook
-type Float struct {
-	mu sync.Mutex
-	f  float64
-}
-
-// NewFloat creates a new Float and exports it.
-func NewFloat(name string) *Float {
-	v := new(Float)
-	publish(name, v)
-	return v
-}
-
-// Add adds the provided value to the Float
-func (v *Float) Add(delta float64) {
-	v.mu.Lock()
-	v.f += delta
-	v.mu.Unlock()
-}
-
-// Set sets the value
-func (v *Float) Set(value float64) {
-	v.mu.Lock()
-	v.f = value
-	v.mu.Unlock()
-}
-
-// Get returns the value
-func (v *Float) Get() float64 {
-	v.mu.Lock()
-	f := v.f
-	v.mu.Unlock()
-	return f
-}
-
-// String is the implementation of expvar.var
-func (v *Float) String() string {
-	return strconv.FormatFloat(v.Get(), 'g', -1, 64)
-}
-
 // FloatFunc converts a function that returns
 // a float64 as an expvar.
 type FloatFunc func() float64
@@ -238,6 +198,21 @@ type StringFunc func() string
 // String is the implementation of expvar.var
 func (f StringFunc) String() string {
 	return strconv.Quote(f())
+}
+
+// JSONFunc is the public type for a single function that returns json directly.
+type JSONFunc func() string
+
+// String is the implementation of expvar.var
+func (f JSONFunc) String() string {
+	return f()
+}
+
+// PublishJSONFunc publishes any function that returns
+// a JSON string as a variable. The string is sent to
+// expvar as is.
+func PublishJSONFunc(name string, f func() string) {
+	publish(name, JSONFunc(f))
 }
 
 // StringMap is a map of string -> string
