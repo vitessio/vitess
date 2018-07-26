@@ -3141,7 +3141,10 @@ reserved_keyword:
 | DROP
 | ELSE
 | END
+| ENCLOSED
 | ESCAPE
+| ESCAPED
+
 | EXISTS
 | EXPLAIN
 | FALSE
@@ -3154,6 +3157,7 @@ reserved_keyword:
 | IGNORE
 | IN
 | INDEX
+| INFILE
 | INNER
 | INSERT
 | INTERVAL
@@ -3164,9 +3168,10 @@ reserved_keyword:
 | LEFT
 | LIKE
 | LIMIT
+| LINES
+| LOAD
 | LOCALTIME
 | LOCALTIMESTAMP
-| LOCAL
 | LOCK
 | MATCH
 | MAXVALUE
@@ -3180,6 +3185,7 @@ reserved_keyword:
 | ORDER
 | OUTER
 | REGEXP
+| READ
 | RENAME
 | REPLACE
 | RIGHT
@@ -3189,8 +3195,10 @@ reserved_keyword:
 | SET
 | SHOW
 | STRAIGHT_JOIN
+| STARTING
 | TABLE
 | TABLES
+| TERMINATED
 | THEN
 | TO
 | TRUE
@@ -3206,13 +3214,7 @@ reserved_keyword:
 | VALUES
 | WHEN
 | WHERE
-| TERMINATED
-| STARTING
-| ESCAPED
-| ENCLOSED
-| LOAD
-| INFILE
-| LINES
+| WRITE
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
   Some of them may be reserved in MySQL. The good news is we backtick quote them
@@ -3261,6 +3263,7 @@ non_reserved_keyword:
 | LESS
 | LEVEL
 | LINESTRING
+| LOCAL
 | LONGBLOB
 | LONGTEXT
 | MEDIUMBLOB
@@ -3282,7 +3285,6 @@ non_reserved_keyword:
 | PRIMARY
 | PROCEDURE
 | QUERY
-| READ
 | REAL
 | REFERENCES
 | REORGANIZE
@@ -3321,7 +3323,6 @@ non_reserved_keyword:
 | VITESS_TABLETS
 | VSCHEMA_TABLES
 | WITH
-| WRITE
 | YEAR
 | ZEROFILL
 
