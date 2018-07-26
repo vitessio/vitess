@@ -35,41 +35,6 @@ func TestNoHook(t *testing.T) {
 	}
 }
 
-func TestFloat(t *testing.T) {
-	var gotname string
-	var gotv *Float
-	clear()
-	Register(func(name string, v expvar.Var) {
-		gotname = name
-		gotv = v.(*Float)
-	})
-	v := NewFloat("Float")
-	if gotname != "Float" {
-		t.Errorf("want Float, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
-	v.Set(5.1)
-	if v.Get() != 5.1 {
-		t.Errorf("want 5.1, got %v", v.Get())
-	}
-	v.Add(1.0)
-	if v.Get() != 6.1 {
-		t.Errorf("want 6.1, got %v", v.Get())
-	}
-	if v.String() != "6.1" {
-		t.Errorf("want 6.1, got %v", v.Get())
-	}
-
-	f := FloatFunc(func() float64 {
-		return 1.234
-	})
-	if f.String() != "1.234" {
-		t.Errorf("want 1.234, got %v", f.String())
-	}
-}
-
 func TestString(t *testing.T) {
 	var gotname string
 	var gotv *String
