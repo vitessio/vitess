@@ -153,6 +153,11 @@ func emitToBackend(emitPeriod *time.Duration) {
 // a float64 as an expvar.
 type FloatFunc func() float64
 
+// Help returns the help string (undefined currently)
+func (f FloatFunc) Help() string {
+	return "help"
+}
+
 // String is the implementation of expvar.var
 func (f FloatFunc) String() string {
 	return strconv.FormatFloat(f(), 'g', -1, 64)

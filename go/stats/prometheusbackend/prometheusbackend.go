@@ -38,6 +38,8 @@ func (be PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 		newMetricFuncCollector(st, be.buildPromName(name), prometheus.GaugeValue, func() float64 { return float64(st.Get()) })
 	case *stats.GaugeFunc:
 		newMetricFuncCollector(st, be.buildPromName(name), prometheus.GaugeValue, func() float64 { return float64(st.F()) })
+	case stats.FloatFunc:
+		newMetricFuncCollector(st, be.buildPromName(name), prometheus.GaugeValue, func() float64 { return (st)() })
 	case *stats.CountersWithSingleLabel:
 		newCountersWithSingleLabelCollector(st, be.buildPromName(name), st.Label(), prometheus.CounterValue)
 	case *stats.CountersWithMultiLabels:

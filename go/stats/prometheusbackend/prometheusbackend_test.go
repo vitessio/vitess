@@ -59,6 +59,13 @@ func TestPrometheusGaugeFunc(t *testing.T) {
 	checkHandlerForMetrics(t, name, -3)
 }
 
+func TestPrometheusFloatFunc(t *testing.T) {
+	name := "blah_floatfunc"
+
+	stats.Publish(name, stats.FloatFunc(func() float64 { return -4 }))
+	checkHandlerForMetrics(t, name, -4)
+}
+
 func TestPrometheusCounterDuration(t *testing.T) {
 	name := "blah_counterduration"
 
