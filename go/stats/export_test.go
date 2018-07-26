@@ -129,15 +129,21 @@ func f() string {
 	return "abcd"
 }
 
+type expvarFunc func() string
+
+func (f expvarFunc) String() string {
+	return f()
+}
+
 func TestPublishFunc(t *testing.T) {
 	var gotname string
-	var gotv JSONFunc
+	var gotv expvarFunc
 	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
-		gotv = v.(JSONFunc)
+		gotv = v.(expvarFunc)
 	})
-	PublishJSONFunc("Myfunc", f)
+	publish("Myfunc", expvarFunc(f))
 	if gotname != "Myfunc" {
 		t.Errorf("want Myfunc, got %s", gotname)
 	}

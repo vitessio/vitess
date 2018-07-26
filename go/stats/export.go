@@ -240,21 +240,6 @@ func (f StringFunc) String() string {
 	return strconv.Quote(f())
 }
 
-// JSONFunc is the public type for a single function that returns json directly.
-type JSONFunc func() string
-
-// String is the implementation of expvar.var
-func (f JSONFunc) String() string {
-	return f()
-}
-
-// PublishJSONFunc publishes any function that returns
-// a JSON string as a variable. The string is sent to
-// expvar as is.
-func PublishJSONFunc(name string, f func() string) {
-	publish(name, JSONFunc(f))
-}
-
 // StringMap is a map of string -> string
 type StringMap struct {
 	mu     sync.Mutex
