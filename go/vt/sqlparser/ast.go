@@ -780,10 +780,7 @@ func (node *OptLike) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	if err := Walk(visit, node.LikeTable); err != nil {
-		return err
-	}
-	return nil
+	return Walk(visit, node.LikeTable)
 }
 
 // PartitionSpec describe partition actions (for alter and create)
