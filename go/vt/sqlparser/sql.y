@@ -112,6 +112,7 @@ func forceEOF(yylex interface{}) {
   vindexParam   VindexParam
   vindexParams  []VindexParam
   showFilter    *ShowFilter
+  OptLike       *OptLike
 }
 
 %token LEX_ERROR
@@ -282,6 +283,7 @@ func forceEOF(yylex interface{}) {
 %type <str> index_or_key
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
+%type <OptLike> create_like
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
 %type <indexColumn> index_column
@@ -543,6 +545,12 @@ create_statement:
     $1.TableSpec = $2
     $$ = $1
   }
+| create_table_prefix create_like
+  {
+    // Create table [name] like [name]
+    $1.OptLike = $2
+    $$ = $1
+  }
 | CREATE constraint_opt INDEX ID using_opt ON table_name ddl_force_eof
   {
     // Change this to an alter statement
@@ -627,6 +635,16 @@ table_spec:
   {
     $$ = $2
     $$.Options = $4
+  }
+
+create_like:
+  LIKE table_name
+  {
+    $$ = &OptLike{LikeTable: $2}
+  }
+| '(' LIKE table_name ')'
+  {
+    $$ = &OptLike{LikeTable: $3}
   }
 
 table_column_list:
