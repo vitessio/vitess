@@ -682,6 +682,7 @@ type DDL struct {
 	NewName       TableName
 	IfExists      bool
 	TableSpec     *TableSpec
+	OptLike       *OptLike
 	PartitionSpec *PartitionSpec
 	VindexSpec    *VindexSpec
 	VindexCols    []ColIdent
@@ -706,10 +707,12 @@ const (
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
-		if node.TableSpec == nil {
-			buf.Myprintf("%s table %v", node.Action, node.NewName)
-		} else {
+		if node.OptLike != nil {
+			buf.Myprintf("%s table %v %v", node.Action, node.NewName, node.OptLike)
+		} else if node.TableSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.NewName, node.TableSpec)
+		} else {
+			buf.Myprintf("%s table %v", node.Action, node.NewName)
 		}
 	case DropStr:
 		exists := ""
@@ -762,6 +765,26 @@ func (node *DDL) walkSubtree(visit Visit) error {
 const (
 	ReorganizeStr = "reorganize partition"
 )
+
+// OptLike works for create table xxx like xxx
+type OptLike struct {
+	LikeTable TableName
+}
+
+// Format formats the node.
+func (node *OptLike) Format(buf *TrackedBuffer) {
+	buf.Myprintf("like %v", node.LikeTable)
+}
+
+func (node *OptLike) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	if err := Walk(visit, node.LikeTable); err != nil {
+		return err
+	}
+	return nil
+}
 
 // PartitionSpec describe partition actions (for alter and create)
 type PartitionSpec struct {
