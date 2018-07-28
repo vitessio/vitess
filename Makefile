@@ -135,7 +135,6 @@ PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
 PROTO_PY_OUTS = $(foreach name, $(PROTO_SRC_NAMES), py/vtproto/$(name)_pb2.py)
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
-PROTO_GO_TEMPS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/.proto.tmp/$(name).pb.go)
 
 # This rule rebuilds all the go and python files from the proto definitions for gRPC.
 proto: proto_banner $(PROTO_GO_OUTS) $(PROTO_PY_OUTS)
@@ -152,18 +151,10 @@ endif
 $(PROTO_PY_OUTS): py/vtproto/%_pb2.py: proto/%.proto
 	$(PROTOC_COMMAND) -Iproto $< --python_out=py/vtproto --grpc_python_out=py/vtproto
 
-$(PROTO_GO_OUTS): $(PROTO_GO_TEMPS)
+$(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
 	for name in $(PROTO_SRC_NAMES); do \
-		mkdir -p go/vt/proto/$${name}; \
-		cp -a go/vt/.proto.tmp/$${name}.pb.go go/vt/proto/$${name}/$${name}.pb.go; \
+		cd $(VTROOT)/src && PATH=$(VTROOT)/bin:$(PATH) $(VTROOT)/bin/protoc --go_out=plugins=grpc:. -Ivitess.io/vitess/proto vitess.io/vitess/proto/$${name}.proto; \
 	done
-
-$(PROTO_GO_TEMPS): install_protoc-gen-go
-
-$(PROTO_GO_TEMPS): go/vt/.proto.tmp/%.pb.go: proto/%.proto
-	mkdir -p go/vt/.proto.tmp
-	$(PROTOC_COMMAND) -Iproto $< --plugin=grpc=protoc-gen-go --go_out=plugins=grpc:go/vt/.proto.tmp
-	sed -i -e 's,import \([a-z0-9_]*\) ".",import \1 "vitess.io/vitess/go/vt/proto/\1",g' $@
 
 # Helper targets for building Docker images.
 # Please read docker/README.md to understand the different available images.
