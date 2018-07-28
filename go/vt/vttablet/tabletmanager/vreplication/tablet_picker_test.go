@@ -17,9 +17,9 @@ limitations under the License.
 package vreplication
 
 import (
-	"reflect"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -40,7 +40,7 @@ func TestPickSimple(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(want, tablet) {
+	if !proto.Equal(want, tablet) {
 		t.Errorf("Pick: %v, want %v", tablet, want)
 	}
 }
@@ -61,7 +61,7 @@ func TestPickFromTwoHealthy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(tablet, want1) {
+	if !proto.Equal(tablet, want1) {
 		t.Errorf("Pick:\n%v, want\n%v", tablet, want1)
 	}
 
@@ -75,7 +75,7 @@ func TestPickFromTwoHealthy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(tablet, want2) {
+	if !proto.Equal(tablet, want2) {
 		t.Errorf("Pick:\n%v, want\n%v", tablet, want2)
 	}
 }
@@ -96,7 +96,7 @@ func TestPickFromSomeUnhealthy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(tablet, want) {
+	if !proto.Equal(tablet, want) {
 		t.Errorf("Pick:\n%v, want\n%v", tablet, want)
 	}
 }
