@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtctlservice.proto',
   package='vtctlservice',
   syntax='proto3',
-  serialized_pb=_b('\n\x12vtctlservice.proto\x12\x0cvtctlservice\x1a\x0fvtctldata.proto2q\n\x05Vtctl\x12h\n\x13\x45xecuteVtctlCommand\x12%.vtctldata.ExecuteVtctlCommandRequest\x1a&.vtctldata.ExecuteVtctlCommandResponse\"\x00\x30\x01\x62\x06proto3')
+  serialized_pb=_b('\n\x12vtctlservice.proto\x12\x0cvtctlservice\x1a\x0fvtctldata.proto2q\n\x05Vtctl\x12h\n\x13\x45xecuteVtctlCommand\x12%.vtctldata.ExecuteVtctlCommandRequest\x1a&.vtctldata.ExecuteVtctlCommandResponse\"\x00\x30\x01\x42+Z)vitess.io/vitess/go/vt/proto/vtctlserviceb\x06proto3')
   ,
   dependencies=[vtctldata__pb2.DESCRIPTOR,])
 
@@ -29,6 +29,8 @@ DESCRIPTOR = _descriptor.FileDescriptor(
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('Z)vitess.io/vitess/go/vt/proto/vtctlservice'))
 
 _VTCTL = _descriptor.ServiceDescriptor(
   name='Vtctl',

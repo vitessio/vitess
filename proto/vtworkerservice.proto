@@ -18,6 +18,7 @@ limitations under the License.
 // The interface is very similar to the vtctld interface (see vtctlservice.proto).
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/vtworkerservice";
 
 package vtworkerservice;
 

@@ -19,6 +19,7 @@ limitations under the License.
 // replication (vttablet).
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/throttlerservice";
 
 package throttlerservice;
 

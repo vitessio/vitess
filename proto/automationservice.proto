@@ -17,6 +17,7 @@ limitations under the License.
 // Protobuf service for the automation framework.
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/automationservice";
 
 package automationservice;
 

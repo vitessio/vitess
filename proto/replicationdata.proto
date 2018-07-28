@@ -17,6 +17,7 @@ limitations under the License.
 // This file defines the replication related structures we use.
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/replicationdata";
 
 package replicationdata;
 

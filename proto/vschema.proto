@@ -17,6 +17,7 @@ limitations under the License.
 // This file contains the types needed to define a vschema.
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/vschema";
 
 package vschema;
 
