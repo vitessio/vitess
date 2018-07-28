@@ -49,14 +49,13 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 	gRPCPort := int32(3456)
 	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	agent := &ActionAgent{
-		TopoServer:      ts,
-		TabletAlias:     tabletAlias,
-		MysqlDaemon:     mysqlDaemon,
-		DBConfigs:       &dbconfigs.DBConfigs{},
-		BinlogPlayerMap: nil,
-		batchCtx:        ctx,
-		History:         history.New(historyLength),
-		_healthy:        fmt.Errorf("healthcheck not run yet"),
+		TopoServer:  ts,
+		TabletAlias: tabletAlias,
+		MysqlDaemon: mysqlDaemon,
+		DBConfigs:   &dbconfigs.DBConfigs{},
+		batchCtx:    ctx,
+		History:     history.New(historyLength),
+		_healthy:    fmt.Errorf("healthcheck not run yet"),
 	}
 
 	// 1. Initialize the tablet as REPLICA.
@@ -115,14 +114,13 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 	gRPCPort := int32(3456)
 	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	agent := &ActionAgent{
-		TopoServer:      ts,
-		TabletAlias:     tabletAlias,
-		MysqlDaemon:     mysqlDaemon,
-		DBConfigs:       &dbconfigs.DBConfigs{},
-		BinlogPlayerMap: nil,
-		batchCtx:        ctx,
-		History:         history.New(historyLength),
-		_healthy:        fmt.Errorf("healthcheck not run yet"),
+		TopoServer:  ts,
+		TabletAlias: tabletAlias,
+		MysqlDaemon: mysqlDaemon,
+		DBConfigs:   &dbconfigs.DBConfigs{},
+		batchCtx:    ctx,
+		History:     history.New(historyLength),
+		_healthy:    fmt.Errorf("healthcheck not run yet"),
 	}
 
 	// 1. Initialize the tablet as REPLICA.
