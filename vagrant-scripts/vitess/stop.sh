@@ -7,7 +7,7 @@ printf "\nStopping Vitess cluster\n"
 export VTROOT=/vagrant
 export VTDATAROOT=/tmp/vtdata-dev
 export MYSQL_FLAVOR=MySQL56
-cd $VITESS_WORKSPACE/examples/local
+cd "$VITESS_WORKSPACE"/examples/local
 
 ./vtgate-down.sh
 ./vttablet-down.sh
