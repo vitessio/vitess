@@ -14,6 +14,7 @@ printf "\nStarting Vitess test suite...\n"
 cd "$VITESS_WORKSPACE"
 # shellcheck disable=SC1091
 source dev.env
+source /vagrant/dist/grpc/usr/local/bin/activate
 make site_test
 rm -rf "$VTDATAROOT"
 

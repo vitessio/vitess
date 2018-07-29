@@ -18,6 +18,8 @@ cd "$VITESS_WORKSPACE"
 ./bootstrap.sh
 # shellcheck disable=SC1091
 source dev.env
+source /vagrant/dist/grpc/usr/local/bin/activate
+pip install mysqlclient
 make build
 
 printf "\Build completed\n\n."
