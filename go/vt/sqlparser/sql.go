@@ -101,7 +101,7 @@ type yySymType struct {
 	vindexParam          VindexParam
 	vindexParams         []VindexParam
 	showFilter           *ShowFilter
-	OptLike              *OptLike
+	optLike              *OptLike
 }
 
 const LEX_ERROR = 57346
@@ -3030,8 +3030,8 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		//line sql.y:549
 		{
-			// create table [name] like [name]
-			yyDollar[1].ddl.OptLike = yyDollar[2].OptLike
+			// Create table [name] like [name]
+			yyDollar[1].ddl.OptLike = yyDollar[2].optLike
 			yyVAL.statement = yyDollar[1].ddl
 		}
 	case 63:
@@ -3143,13 +3143,13 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		//line sql.y:642
 		{
-			yyVAL.OptLike = &OptLike{LikeTable: yyDollar[2].tableName}
+			yyVAL.optLike = &OptLike{LikeTable: yyDollar[2].tableName}
 		}
 	case 80:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		//line sql.y:646
 		{
-			yyVAL.OptLike = &OptLike{LikeTable: yyDollar[3].tableName}
+			yyVAL.optLike = &OptLike{LikeTable: yyDollar[3].tableName}
 		}
 	case 81:
 		yyDollar = yyS[yypt-1 : yypt+1]
