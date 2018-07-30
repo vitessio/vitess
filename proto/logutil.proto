@@ -17,6 +17,7 @@ limitations under the License.
 // This package contains the data structures for the logging service.
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/logutil";
 
 package logutil;
 

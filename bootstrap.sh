@@ -139,6 +139,24 @@ function install_grpc() {
 install_dep "gRPC" "1.10.0" "$VTROOT/dist/grpc" install_grpc
 
 
+# Install protoc.
+function install_protoc() {
+  local version="$1"
+  local dist="$2"
+
+  case $(uname) in
+    Linux)  local platform=linux;;
+    Darwin) local platform=osx;;
+  esac
+
+  wget "https://github.com/google/protobuf/releases/download/v$version/protoc-$version-$platform-x86_64.zip"
+  unzip "protoc-$version-$platform-x86_64.zip"
+  ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
+}
+protoc_ver=3.5.1
+install_dep "protoc" "$protoc_ver" "$VTROOT/dist/vt-protoc-$protoc_ver" install_protoc
+
+
 # Install Zookeeper.
 function install_zookeeper() {
   local version="$1"
@@ -233,7 +251,7 @@ function install_chromedriver() {
   unzip -o -q chromedriver_linux64.zip -d "$dist"
   rm chromedriver_linux64.zip
 }
-install_dep "chromedriver" "2.25" "$VTROOT/dist/chromedriver" install_chromedriver
+install_dep "chromedriver" "2.40" "$VTROOT/dist/chromedriver" install_chromedriver
 
 
 #

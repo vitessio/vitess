@@ -20,6 +20,7 @@ limitations under the License.
 // service.
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/topodata";
 
 option java_package="io.vitess.proto";
 

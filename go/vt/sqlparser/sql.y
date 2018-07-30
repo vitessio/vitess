@@ -178,7 +178,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES FULL PROCESSLIST COLUMNS
+%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -1030,6 +1030,10 @@ collate_opt:
   {
     $$ = string($2)
   }
+| COLLATE STRING
+  {
+    $$ = string($2)
+  }
 
 column_key_opt:
   {
@@ -1462,6 +1466,10 @@ show_statement:
     $$ = &Show{Type: string($2)}
   }
 | SHOW VITESS_TABLETS
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW VITESS_TARGET
   {
     $$ = &Show{Type: string($2)}
   }
@@ -3186,6 +3194,7 @@ non_reserved_keyword:
 | VITESS_SHARDS
 | VITESS_TABLETS
 | VSCHEMA_TABLES
+| VITESS_TARGET
 | WITH
 | WRITE
 | YEAR
