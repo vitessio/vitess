@@ -605,56 +605,56 @@ func TestLogTruncation(t *testing.T) {
 
 	// Test that a long error string is not truncated by default
 	_, err := client.Execute(
-		"insert into vitess_test values(123, :data, null, null)",
+		"insert into vitess_test values(123, null, :data, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	wantLog := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) (CallerID: dev): Sql: \"insert into vitess_test values(123, :data, null, null)\", BindVars: {#maxLimit: \"type:INT64 value:\\\"10001\\\" \"data: \"type:VARCHAR value:\\\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\\\" \"}"
-	wantErr := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) (CallerID: dev): Sql: \"insert into vitess_test values(123, :data, null, null)\", BindVars: {#maxLimit: \"type:INT64 value:\\\"10001\\\" \"data: \"type:VARCHAR value:\\\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\\\" \"}"
+	wantLog := `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {#maxLimit: "type:INT64 value:\"10001\" "data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
+	wantErr := wantLog
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
 	if getTestLog(0) != wantLog {
-		t.Errorf("log was unexpectedly truncated: got '%s', want '%s'", getTestLog(0), wantLog)
+		t.Errorf("log was unexpectedly truncated: got\n'%s', want\n'%s'", getTestLog(0), wantLog)
 	}
 
 	if err.Error() != wantErr {
-		t.Errorf("error was unexpectedly truncated: got '%s', want '%s'", err.Error(), wantErr)
+		t.Errorf("error was unexpectedly truncated: got\n'%s', want\n'%s'", err.Error(), wantErr)
 	}
 
 	// Test that the data too long error is truncated once the option is set
 	*sqlparser.TruncateErrLen = 30
 	_, err = client.Execute(
-		"insert into vitess_test values(123, :data, null, null)",
+		"insert into vitess_test values(123, null, :data, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	wantLog = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) (CallerID: dev): Sql: \"insert into vitess [TRUNCATED]\", BindVars: {#maxLim [TRUNCATED]"
-	wantErr = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) (CallerID: dev): Sql: \"insert into vitess_test values(123, :data, null, null)\", BindVars: {#maxLimit: \"type:INT64 value:\\\"10001\\\" \"data: \"type:VARCHAR value:\\\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\\\" \"}"
+	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED]", BindVars: {#maxLim [TRUNCATED]`
+	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {#maxLimit: "type:INT64 value:\"10001\" "data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
 	if getTestLog(1) != wantLog {
-		t.Errorf("log was not truncated properly: got '%s', want '%s'", getTestLog(1), wantLog)
+		t.Errorf("log was not truncated properly: got\n'%s', want\n'%s'", getTestLog(1), wantLog)
 	}
 	if err.Error() != wantErr {
-		t.Errorf("error was unexpectedly truncated: got '%s', want '%s'", err.Error(), wantErr)
+		t.Errorf("error was unexpectedly truncated: got\n'%s', want\n'%s'", err.Error(), wantErr)
 	}
 
 	// Test that trailing comments are preserved data too long error is truncated once the option is set
 	*sqlparser.TruncateErrLen = 30
 	_, err = client.Execute(
-		"insert into vitess_test values(123, :data, null, null) /* KEEP ME */",
+		"insert into vitess_test values(123, null, :data, null) /* KEEP ME */",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
 	)
-	wantLog = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) (CallerID: dev): Sql: \"insert into vitess [TRUNCATED] /* KEEP ME */\", BindVars: {#maxLim [TRUNCATED]"
-	wantErr = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) (CallerID: dev): Sql: \"insert into vitess_test values(123, :data, null, null) /* KEEP ME */\", BindVars: {#maxLimit: \"type:INT64 value:\\\"10001\\\" \"data: \"type:VARCHAR value:\\\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\\\" \"}"
+	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED] /* KEEP ME */", BindVars: {#maxLim [TRUNCATED]`
+	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null) /* KEEP ME */", BindVars: {#maxLimit: "type:INT64 value:\"10001\" "data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\" "}`
 	if err == nil {
 		t.Errorf("query unexpectedly succeeded")
 	}
 	if getTestLog(2) != wantLog {
-		t.Errorf("log was not truncated properly: got '%s', want '%s'", getTestLog(2), wantLog)
+		t.Errorf("log was not truncated properly: got\n'%s', want\n'%s'", getTestLog(2), wantLog)
 	}
 	if err.Error() != wantErr {
-		t.Errorf("error was unexpectedly truncated: got '%s', want '%s'", err.Error(), wantErr)
+		t.Errorf("error was unexpectedly truncated: got\n'%s', want\n'%s'", err.Error(), wantErr)
 	}
 }
 
