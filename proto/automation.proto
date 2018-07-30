@@ -20,6 +20,7 @@ limitations under the License.
 // (e.g. retrieving the current status of a pending cluster operation).
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/automation";
 
 package automation;
 
