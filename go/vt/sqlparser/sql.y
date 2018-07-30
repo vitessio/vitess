@@ -112,7 +112,7 @@ func forceEOF(yylex interface{}) {
   vindexParam   VindexParam
   vindexParams  []VindexParam
   showFilter    *ShowFilter
-  OptLike       *OptLike
+  optLike       *OptLike
 }
 
 %token LEX_ERROR
@@ -283,7 +283,7 @@ func forceEOF(yylex interface{}) {
 %type <str> index_or_key
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
-%type <OptLike> create_like
+%type <optLike> create_like
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
 %type <indexColumn> index_column
