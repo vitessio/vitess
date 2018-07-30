@@ -198,7 +198,7 @@ func parseSchema(sqlSchema string, opts *Options) ([]*sqlparser.DDL, error) {
 			log.Infof("ignoring %s table statement", ddl.Action)
 			continue
 		}
-		if ddl.TableSpec == nil {
+		if ddl.TableSpec == nil && ddl.OptLike == nil {
 			log.Errorf("invalid create table statement: %s", sql)
 			continue
 		}
