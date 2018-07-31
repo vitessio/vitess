@@ -395,8 +395,17 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 			Rows:         [][]sqltypes.Value{showTableRows[i]},
 		}
 
+		if ddl.OptLike != nil {
+			likeTable := ddl.OptLike.LikeTable.Name.String()
+			if _, ok := schemaQueries["describe "+likeTable]; !ok {
+				return fmt.Errorf("check your schema, table[%s] doesnt exist", likeTable)
+			}
+			schemaQueries["show index from "+table] = schemaQueries["show index from "+likeTable]
+			schemaQueries["describe "+table] = schemaQueries["describe "+likeTable]
+			schemaQueries["select * from "+table+" where 1 != 1"] = schemaQueries["select * from "+likeTable+" where 1 != 1"]
+			continue
+		}
 		pkColumns := make(map[string]bool)
-
 		indexRows := make([][]sqltypes.Value, 0, 4)
 		for _, idx := range ddl.TableSpec.Indexes {
 			for i, col := range idx.Columns {
