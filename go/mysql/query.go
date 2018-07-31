@@ -18,6 +18,9 @@ package mysql
 
 import (
 	"fmt"
+	"math"
+	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -65,6 +68,93 @@ func (c *Conn) writeComSetOption(operation uint16) error {
 	data := c.startEphemeralPacket(16 + 1)
 	data[0] = ComSetOption
 	writeUint16(data, 1, operation)
+	if err := c.writeEphemeralPacket(true); err != nil {
+		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
+	}
+	return nil
+}
+
+// writeComPrepare send prepare statements to server.
+// Returns SQLError(CRServerGone) if it can't.
+func (c *Conn) writeComPrepare(query string) error {
+	data := c.startEphemeralPacket(len(query) + 1)
+	data[0] = ComPrepare
+	copy(data[1:], query)
+	if err := c.writeEphemeralPacket(true); err != nil {
+		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
+	}
+	return nil
+}
+
+// writeComStmtExecute send COM_STMT_EXECUTE command to server.
+// Returns SQLError(CRServerGone) if it can't.
+func (c *Conn) writeComStmtExecute(stmtID uint32, flags int, newParamsBoundFlag int, parameters []sqltypes.Value) error {
+	paramsLen := len(parameters)
+	nullBitMapLen := (paramsLen + 7) / 8
+	length := 1 + // length of COM_STMT_EXECUTE
+		4 + // statement ID
+		1 + // flags
+		4 + // iteration-count
+		1 // new-params-bound-flag
+
+	if paramsLen > 0 {
+		length += nullBitMapLen // NULL-bitmap length
+		if newParamsBoundFlag == 1 {
+			length += paramsLen * 2
+		}
+		for _, param := range parameters {
+			if !param.IsNull() {
+				l, err := param.ToMySQLLen()
+				if err != nil {
+					return fmt.Errorf("parameter %v get MySQL value length error: %v", param, err)
+				}
+				length += l
+			}
+		}
+	}
+
+	data := c.startEphemeralPacket(length)
+	pos := 0
+
+	pos = writeByte(data, pos, ComStmtExecute)
+	pos = writeUint32(data, pos, uint32(stmtID))
+	pos = writeByte(data, pos, byte(flags))
+	pos = writeUint32(data, pos, 1)
+
+	if paramsLen > 0 {
+		for i := 0; i < nullBitMapLen; i++ {
+			pos = writeByte(data, pos, 0x00)
+		}
+	}
+
+	pos = writeByte(data, pos, byte(newParamsBoundFlag))
+
+	if newParamsBoundFlag == 1 {
+		for _, param := range parameters {
+			typ, flags := sqltypes.TypeToMySQL(param.Type())
+			pos = writeByte(data, pos, byte(typ))
+			pos = writeByte(data, pos, byte(flags))
+		}
+	}
+
+	for i, param := range parameters {
+		if param.IsNull() {
+			bytePos := i/8 + 1
+			bitPos := i % 8
+			data[bytePos] |= 1 << uint(bitPos)
+		} else {
+			v, err := param.ToMySQL()
+			if err != nil {
+				return fmt.Errorf("parameter %v to MySQL value error: %v", param, err)
+			}
+			pos += copy(data[pos:], v)
+		}
+	}
+
+	if pos != length {
+		return fmt.Errorf("internal error packet row: got %v bytes but expected %v", pos, length)
+	}
+
 	if err := c.writeEphemeralPacket(true); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
@@ -472,6 +562,346 @@ func (c *Conn) parseComSetOption(data []byte) (uint16, bool) {
 	val, _, ok := readUint16(data, 1)
 	return val, ok
 }
+func (c *Conn) parseComPrepare(data []byte) string {
+	return string(data[1:])
+}
+
+func (c *Conn) parseComStmtExecute(data []byte) (uint32, byte, error) {
+	pos := 0
+	payload := data[1:]
+	bitMap := make([]byte, 0)
+
+	// statement ID
+	statementID, pos, ok := readUint32(payload, 0)
+	if !ok {
+		return 0, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading statement ID failed")
+	}
+	prepareData, ok := c.prepareData[statementID]
+	if !ok {
+		return 0, 0, NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "statement ID is not found from record")
+	}
+
+	// cursor type flags
+	cursorType, pos, ok := readByte(payload, pos)
+	if !ok {
+		return statementID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading cursor type flags failed")
+	}
+
+	// iteration count
+	iterCount, pos, ok := readUint32(payload, pos)
+	if !ok {
+		return statementID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading iteration count failed")
+	}
+	if iterCount != uint32(1) {
+		return statementID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "iteration count is not equal to 1")
+	}
+
+	if prepareData.paramsCount > 0 {
+		bitMap, pos, ok = readBytes(payload, pos, int((prepareData.paramsCount+7)/8))
+		if !ok {
+			return statementID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading NULL-bitmap failed")
+		}
+	}
+
+	newParamsBoundFlag, pos, ok := readByte(payload, pos)
+	if newParamsBoundFlag == 0x01 {
+		var mysqlType, flags byte
+		for i := uint16(0); i < prepareData.paramsCount; i++ {
+			mysqlType, pos, ok = readByte(payload, pos)
+			if !ok {
+				return statementID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading parameter type failed")
+			}
+
+			flags, pos, ok = readByte(payload, pos)
+			if !ok {
+				return statementID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading parameter flags failed")
+			}
+
+			// Convert MySQL type to Vitess type.
+			valType, err := sqltypes.MySQLToType(int64(mysqlType), int64(flags))
+			if err != nil {
+				return statementID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "MySQLToType(%v,%v) failed: %v", mysqlType, flags, err)
+			}
+
+			prepareData.paramsType[i] = int32(valType)
+		}
+	}
+
+	for i := 0; i < len(prepareData.paramsType); i++ {
+		var val interface{}
+		if prepareData.paramsType[i] == int32(sqltypes.Text) || prepareData.paramsType[i] == int32(sqltypes.Blob) {
+			continue
+		}
+
+		if (bitMap[i/8] & (1 << uint(i%8))) > 0 {
+			val, pos, ok = c.parseValues(nil, sqltypes.Null, pos)
+		} else {
+			val, pos, ok = c.parseValues(payload, querypb.Type(prepareData.paramsType[i]), pos)
+		}
+		if !ok {
+			return statementID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "decoding parameter value failed: %v", prepareData.paramsType[i])
+		}
+
+		// If value is nil, must set bind variables to nil.
+		bv, err := sqltypes.BuildBindVariable(val)
+		if err != nil {
+			return statementID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "build converted parameter value failed: %v", err)
+		}
+
+		prepareData.bindVars[fmt.Sprintf("v%d", i+1)] = bv
+	}
+
+	return statementID, cursorType, nil
+}
+
+func (c *Conn) parseValues(data []byte, typ querypb.Type, pos int) (interface{}, int, bool) {
+	switch typ {
+	case sqltypes.Null:
+		return nil, pos, true
+	case sqltypes.Int8, sqltypes.Uint8:
+		return readByte(data, pos)
+	case sqltypes.Uint16:
+		return readUint16(data, pos)
+	case sqltypes.Int16, sqltypes.Year:
+		val, pos, ok := readUint16(data, pos)
+		return int16(val), pos, ok
+	case sqltypes.Uint24, sqltypes.Uint32:
+		return readUint32(data, pos)
+	case sqltypes.Int24, sqltypes.Int32:
+		val, pos, ok := readUint32(data, pos)
+		return int32(val), pos, ok
+	case sqltypes.Float32:
+		val, pos, ok := readUint32(data, pos)
+		return math.Float32frombits(val), pos, ok
+	case sqltypes.Uint64:
+		return readUint64(data, pos)
+	case sqltypes.Int64:
+		val, pos, ok := readUint64(data, pos)
+		return int64(val), pos, ok
+	case sqltypes.Float64:
+		val, pos, ok := readUint64(data, pos)
+		return math.Float64frombits(val), pos, ok
+	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Datetime:
+		var out []byte
+		size, pos, ok := readByte(data, pos)
+		if !ok {
+			return nil, 0, false
+		}
+		switch size {
+		case 0x00:
+			out = append(out, ' ')
+		case 0x0b:
+			year, pos, ok := readUint16(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			month, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			day, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			hour, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			minute, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			second, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			microSecond, pos, ok := readUint32(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			val := strconv.Itoa(int(year)) + "-" +
+				strconv.Itoa(int(month)) + "-" +
+				strconv.Itoa(int(day)) + " " +
+				strconv.Itoa(int(hour)) + ":" +
+				strconv.Itoa(int(minute)) + ":" +
+				strconv.Itoa(int(second)) + "." +
+				strconv.Itoa(int(microSecond))
+			out = []byte(val)
+			return out, pos, ok
+		case 0x07:
+			year, pos, ok := readUint16(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			month, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			day, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			hour, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			minute, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			second, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			val := strconv.Itoa(int(year)) + "-" +
+				strconv.Itoa(int(month)) + "-" +
+				strconv.Itoa(int(day)) + " " +
+				strconv.Itoa(int(hour)) + ":" +
+				strconv.Itoa(int(minute)) + ":" +
+				strconv.Itoa(int(second))
+			out = []byte(val)
+			return out, pos, ok
+		case 0x04:
+			year, pos, ok := readUint16(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			month, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			day, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			val := strconv.Itoa(int(year)) + "-" +
+				strconv.Itoa(int(month)) + "-" +
+				strconv.Itoa(int(day))
+			out = []byte(val)
+			return out, pos, ok
+		default:
+			return nil, 0, false
+		}
+	case sqltypes.Time:
+		var out []byte
+		size, pos, ok := readByte(data, pos)
+		if !ok {
+			return nil, 0, false
+		}
+		switch size {
+		case 0x00:
+			copy(out, "00:00:00")
+		case 0x0c:
+			isNegative, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			days, pos, ok := readUint32(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			hour, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+
+			hours := uint32(hour) + days*uint32(24)
+
+			minute, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			second, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			microSecond, pos, ok := readUint32(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+
+			val := ""
+			if isNegative == 0x01 {
+				val += "-"
+			}
+			val += strconv.Itoa(int(hours)) + ":" +
+				strconv.Itoa(int(minute)) + ":" +
+				strconv.Itoa(int(second)) + "." +
+				strconv.Itoa(int(microSecond))
+			out = []byte(val)
+			return out, pos, ok
+		case 0x08:
+			isNegative, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			days, pos, ok := readUint32(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			hour, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+
+			hours := uint32(hour) + days*uint32(24)
+
+			minute, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+			second, pos, ok := readByte(data, pos)
+			if !ok {
+				return nil, 0, false
+			}
+
+			val := ""
+			if isNegative == 0x01 {
+				val += "-"
+			}
+			val += strconv.Itoa(int(hours)) + ":" +
+				strconv.Itoa(int(minute)) + ":" +
+				strconv.Itoa(int(second))
+			out = []byte(val)
+			return out, pos, ok
+		default:
+			return nil, 0, false
+		}
+	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar, sqltypes.Char,
+		sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry, sqltypes.TypeJSON:
+		return readLenEncString(data, pos)
+	case sqltypes.VarBinary, sqltypes.Binary:
+		return readLenEncStringAsBytes(data, pos)
+	default:
+		return nil, pos, false
+	}
+	return nil, pos, false
+}
+
+func (c *Conn) parseComStmtSendLongData(data []byte) (uint32, uint16, []byte, bool) {
+	pos := 1
+	statementID, pos, ok := readUint32(data, pos)
+	if !ok {
+		return 0, 0, nil, false
+	}
+
+	paramID, pos, ok := readUint16(data, pos)
+	if !ok {
+		return 0, 0, nil, false
+	}
+
+	return statementID, paramID, data[pos:], true
+}
+
+func (c *Conn) parseComStmtClose(data []byte) (uint32, bool) {
+	val, _, ok := readUint32(data, 1)
+	return val, ok
+}
+
+func (c *Conn) parseComStmtReset(data []byte) (uint32, bool) {
+	val, _, ok := readUint32(data, 1)
+	return val, ok
+}
 
 func (c *Conn) parseComInitDB(data []byte) string {
 	return string(data[1:])
@@ -486,7 +916,7 @@ func (c *Conn) sendColumnCount(count uint64) error {
 
 func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 	length := 4 + // lenEncStringSize("def")
-		lenEncStringSize(field.Database) +
+		lenEncStringSize(strings.TrimPrefix(field.Database, "vt_")) +
 		lenEncStringSize(field.Table) +
 		lenEncStringSize(field.OrgTable) +
 		lenEncStringSize(field.Name) +
@@ -511,7 +941,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 	pos := 0
 
 	pos = writeLenEncString(data, pos, "def") // Always the same.
-	pos = writeLenEncString(data, pos, field.Database)
+	pos = writeLenEncString(data, pos, strings.TrimPrefix(field.Database, "vt_"))
 	pos = writeLenEncString(data, pos, field.Table)
 	pos = writeLenEncString(data, pos, field.OrgTable)
 	pos = writeLenEncString(data, pos, field.Name)
@@ -620,4 +1050,60 @@ func (c *Conn) writeEndResult(more bool) error {
 	}
 
 	return nil
+}
+
+func (c *Conn) writeBinaryRows(result *sqltypes.Result) error {
+	// Now send one packet per row.
+	for _, row := range result.Rows {
+		if err := c.writeBinaryRow(len(result.Fields), row); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *Conn) writeBinaryRow(columnCount int, row []sqltypes.Value) error {
+	length := 0
+	nullBitMapLen := (columnCount + 7 + 2) / 8
+	for _, val := range row {
+		if !val.IsNull() {
+			l, err := val.ToMySQLLen()
+			if err != nil {
+				return fmt.Errorf("internal value %v get MySQL value length error: %v", val, err)
+			}
+			length += l
+		}
+	}
+
+	length += nullBitMapLen + 1
+
+	data := c.startEphemeralPacket(length)
+	pos := 0
+
+	pos = writeByte(data, pos, 0x00)
+
+	for i := 0; i < nullBitMapLen; i++ {
+		pos = writeByte(data, pos, 0x00)
+	}
+
+	for i, val := range row {
+		if val.IsNull() {
+			bytePos := (i+2)/8 + 1
+			bitPos := (i + 2) % 8
+			data[bytePos] |= 1 << uint(bitPos)
+		} else {
+			v, err := val.ToMySQL()
+			if err != nil {
+				return fmt.Errorf("internal value %v to MySQL value error: %v", val, err)
+			}
+			pos += copy(data[pos:], v)
+		}
+	}
+
+	if pos != length {
+		return fmt.Errorf("internal error packet row: got %v bytes but expected %v", pos, length)
+	}
+
+	return c.writeEphemeralPacket(false)
 }

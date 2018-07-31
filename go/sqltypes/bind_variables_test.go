@@ -58,7 +58,9 @@ func TestBuildBindVariables(t *testing.T) {
 		in: map[string]interface{}{
 			"k": byte(1),
 		},
-		err: "k: type uint8 not supported as bind var: 1",
+		out: map[string]*querypb.BindVariable{
+			"k": Uint64BindVariable(1),
+		},
 	}}
 	for _, tcase := range tcases {
 		bindVars, err := BuildBindVariables(tcase.in)
@@ -222,11 +224,23 @@ func TestBuildBindVariable(t *testing.T) {
 			}},
 		},
 	}, {
-		in:  byte(1),
-		err: "type uint8 not supported as bind var: 1",
+		in: byte(1),
+		out: &querypb.BindVariable{
+			Type:  querypb.Type_UINT64,
+			Value: []byte("1"),
+		},
 	}, {
-		in:  []interface{}{1, byte(1)},
-		err: "type uint8 not supported as bind var: 1",
+		in: []interface{}{1, byte(1)},
+		out: &querypb.BindVariable{
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{{
+				Type:  querypb.Type_INT64,
+				Value: []byte("1"),
+			}, {
+				Type:  querypb.Type_UINT64,
+				Value: []byte("1"),
+			}},
+		},
 	}}
 	for _, tcase := range tcases {
 		bv, err := BuildBindVariable(tcase.in)

@@ -215,6 +215,73 @@ func TestVTGateRollbackNil(t *testing.T) {
 	}
 }
 
+func TestVTGatePrepare(t *testing.T) {
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	_, qr, err := rpcVTGate.Prepare(
+		context.Background(),
+		&vtgatepb.Session{
+			Autocommit:   true,
+			TargetString: "@master",
+			Options:      executeOptions,
+		},
+		"select id from t1",
+		nil,
+	)
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
+		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
+	}
+	if !proto.Equal(sbc.Options[0], executeOptions) {
+		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
+	}
+
+	session, err := rpcVTGate.Begin(context.Background(), false)
+	if !session.InTransaction {
+		t.Errorf("want true, got false")
+	}
+	rpcVTGate.Prepare(
+		context.Background(),
+		session,
+		"select id from t1",
+		nil,
+	)
+	wantSession := &vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   KsTestUnsharded,
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+		}},
+	}
+	if !proto.Equal(wantSession, session) {
+		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
+	}
+
+	rpcVTGate.Commit(context.Background(), false, session)
+	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
+	}
+
+	session, err = rpcVTGate.Begin(context.Background(), false)
+	rpcVTGate.Execute(
+		context.Background(),
+		session,
+		"select id from t1",
+		nil,
+	)
+	rpcVTGate.Rollback(context.Background(), session)
+	if sbc.RollbackCount.Get() != 1 {
+		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
+	}
+}
+
 func TestVTGateExecute(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()

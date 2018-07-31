@@ -111,8 +111,11 @@ func forceEOF(yylex interface{}) {
   partSpec      *PartitionSpec
   vindexParam   VindexParam
   vindexParams  []VindexParam
+<<<<<<< HEAD
   showFilter    *ShowFilter
   optLike       *OptLike
+=======
+>>>>>>> b6795cae0... Added PREPARE statement support plus many other fixes required by OMS
 }
 
 %token LEX_ERROR
@@ -181,7 +184,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS
 
 // SET tokens
-%token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
+%token <bytes> NAMES CHARSET GLOBAL SESSION
 
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
@@ -249,10 +252,10 @@ func forceEOF(yylex interface{}) {
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
-%type <setExprs> set_list transaction_chars
+%type <setExprs> set_list
 %type <bytes> charset_or_character_set
 %type <updateExpr> update_expression
-%type <setExpr> set_expression transaction_char isolation_level
+%type <setExpr> set_expression
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist
@@ -473,61 +476,11 @@ set_statement:
   SET comment_opt set_list
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
-  }
+   }
 | SET comment_opt set_session_or_global set_list
   {
     $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $4}
-  }
-| SET comment_opt set_session_or_global TRANSACTION transaction_chars
-  {
-    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $5}
-  }
-| SET comment_opt TRANSACTION transaction_chars
-  {
-    $$ = &Set{Comments: Comments($2), Exprs: $4}
-  }
-
-transaction_chars:
-  transaction_char
-  {
-    $$ = SetExprs{$1}
-  }
-| transaction_chars ',' transaction_char
-  {
-    $$ = append($$, $3)
-  }
-
-transaction_char:
-  ISOLATION LEVEL isolation_level
-  {
-    $$ = $3
-  }
-| READ WRITE
-  {
-    $$ = &SetExpr{Name: NewColIdent("tx_read_only"), Expr: NewIntVal([]byte("0"))}
-  }
-| READ ONLY
-  {
-    $$ = &SetExpr{Name: NewColIdent("tx_read_only"), Expr: NewIntVal([]byte("1"))}
-  }
-
-isolation_level:
-  REPEATABLE READ
-  {
-    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("repeatable read"))}
-  }
-| READ COMMITTED
-  {
-    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("read committed"))}
-  }
-| READ UNCOMMITTED
-  {
-    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("read uncommitted"))}
-  }
-| SERIALIZABLE
-  {
-    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("serializable"))}
-  }
+   }
 
 set_session_or_global:
   SESSION
@@ -1488,6 +1441,7 @@ show_statement:
     $$ = &Show{Type: string($2)}
   }
 
+<<<<<<< HEAD
 tables_or_processlist:
   TABLES
   {
@@ -1536,6 +1490,8 @@ like_or_where_opt:
     $$ = &ShowFilter{Filter:$2}
   }
 
+=======
+>>>>>>> b6795cae0... Added PREPARE statement support plus many other fixes required by OMS
 show_session_or_global:
   /* empty */
   {
@@ -3110,7 +3066,6 @@ non_reserved_keyword:
 | COLUMNS
 | COMMENT_KEYWORD
 | COMMIT
-| COMMITTED
 | DATE
 | DATETIME
 | DECIMAL
@@ -3126,14 +3081,12 @@ non_reserved_keyword:
 | GLOBAL
 | INT
 | INTEGER
-| ISOLATION
 | JSON
 | KEY_BLOCK_SIZE
 | KEYS
 | LANGUAGE
 | LAST_INSERT_ID
 | LESS
-| LEVEL
 | LINESTRING
 | LONGBLOB
 | LONGTEXT
@@ -3148,7 +3101,6 @@ non_reserved_keyword:
 | NCHAR
 | NUMERIC
 | OFFSET
-| ONLY
 | OPTIMIZE
 | PARTITION
 | POINT
@@ -3156,15 +3108,12 @@ non_reserved_keyword:
 | PRIMARY
 | PROCEDURE
 | QUERY
-| READ
 | REAL
 | REFERENCES
 | REORGANIZE
 | REPAIR
-| REPEATABLE
 | ROLLBACK
 | SESSION
-| SERIALIZABLE
 | SHARE
 | SIGNED
 | SMALLINT
@@ -3181,7 +3130,6 @@ non_reserved_keyword:
 | TRANSACTION
 | TRIGGER
 | TRUNCATE
-| UNCOMMITTED
 | UNSIGNED
 | UNUSED
 | VARBINARY
@@ -3196,7 +3144,6 @@ non_reserved_keyword:
 | VSCHEMA_TABLES
 | VITESS_TARGET
 | WITH
-| WRITE
 | YEAR
 | ZEROFILL
 

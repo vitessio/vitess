@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/netutil"
@@ -29,6 +30,8 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 const (
@@ -39,6 +42,13 @@ const (
 	// timing metric keys
 	connectTimingKey = "Connect"
 	queryTimingKey   = "Query"
+
+	// MaxAllowedPacket The maximum size of one packet or any
+	// generated/intermediate string, or any parameter sent by
+	// the mysql_stmt_send_long_data() C API function.(https://
+	// dev.mysql.com/doc/refman/5.7/en/server-system-variables.
+	// html#sysvar_max_allowed_packet)
+	MaxAllowedPacket = 33554432
 )
 
 var (
@@ -74,7 +84,10 @@ type Handler interface {
 	// Note the contents of the query slice may change after
 	// the first call to callback. So the Handler should not
 	// hang on to the byte slice.
-	ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error
+	ComQuery(c *Conn, query string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error
+
+	// ComPrepare is called when a connection receives a prepare statement query.
+	ComPrepare(c *Conn, query string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error
 }
 
 // Listener is the MySQL server protocol listener.
@@ -347,7 +360,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			fieldSent := false
 			// sendFinished is set if the response should just be an OK packet.
 			sendFinished := false
-			err := l.handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
+			err := l.handler.ComQuery(c, query, make(map[string]*querypb.BindVariable), func(qr *sqltypes.Result) error {
 				if sendFinished {
 					// Failsafe: Unreachable if server is well-behaved.
 					return io.EOF
@@ -424,6 +437,205 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 				if err := c.writeEndResult(false); err != nil {
 					log.Errorf("Error writeEndResult error %v ", err)
 					return
+				}
+				log.Errorf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
+				if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
+					log.Errorf("Error writing error packet to client: %v", err)
+					return
+				}
+			}
+		case ComPrepare:
+			query := c.parseComPrepare(data)
+			c.recycleReadPacket()
+			c.statementID++
+			prepareData := &prepareData{
+				statementID: c.statementID,
+				prepareStmt: query,
+				paramsCount: uint16(strings.Count(query, "?")),
+			}
+
+			if prepareData.paramsCount > 0 {
+				prepareData.paramsType = make([]int32, prepareData.paramsCount)
+				prepareData.bindVars = make(map[string]*querypb.BindVariable, prepareData.paramsCount)
+			}
+
+			c.prepareData[c.statementID] = prepareData
+
+			bindVars := make(map[string]*querypb.BindVariable, prepareData.paramsCount)
+			for i := uint16(0); i < prepareData.paramsCount; i++ {
+				bindVars[fmt.Sprintf("v%d", i+1)] = &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("?")}
+			}
+
+			err := l.handler.ComPrepare(c, query, bindVars, func(qr *sqltypes.Result) error {
+				if err := c.writePreparePacket(qr, prepareData); err != nil {
+					log.Errorf("Error writing prepare packet to client %v: %v", c.ConnectionID, err)
+					return err
+				}
+				return nil
+			})
+
+			if err != nil {
+				if werr := c.writeErrorPacketFromError(err); werr != nil {
+					// If we can't even write the error, we're done.
+					log.Errorf("Error writing query error to client %v: %v", c.ConnectionID, werr)
+					return
+				}
+				delete(c.prepareData, c.statementID)
+				continue
+			}
+		case ComStmtExecute:
+			queryStart := time.Now()
+			statementID, _, err := c.parseComStmtExecute(data)
+			c.recycleReadPacket()
+			if err != nil {
+				if statementID != uint32(0) {
+					prepareData := c.prepareData[statementID]
+					if prepareData.paramsCount > 0 {
+						prepareData.bindVars = make(map[string]*querypb.BindVariable, prepareData.paramsCount)
+					}
+				}
+				if werr := c.writeErrorPacketFromError(err); werr != nil {
+					// If we can't even write the error, we're done.
+					log.Errorf("Error writing query error to client %v: %v", c.ConnectionID, werr)
+					return
+				}
+				continue
+			}
+
+			prepareData := c.prepareData[statementID]
+
+			fieldSent := false
+			// sendFinished is set if the response should just be an OK packet.
+			sendFinished := false
+			err = l.handler.ComQuery(c, prepareData.prepareStmt, prepareData.bindVars, func(qr *sqltypes.Result) error {
+				if sendFinished {
+					// Failsafe: Unreachable if server is well-behaved.
+					return io.EOF
+				}
+
+				if !fieldSent {
+					fieldSent = true
+
+					if len(qr.Fields) == 0 {
+						sendFinished = true
+						// We should not send any more packets after this.
+						return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+					}
+
+					// replace the field name.
+					r := qr
+					for i := range r.Fields {
+						if prepareData != nil && len(prepareData.columnNames) > 0 {
+							r.Fields[i].Name = prepareData.columnNames[i]
+						}
+					}
+
+					if err := c.writeFields(r); err != nil {
+						return err
+					}
+				}
+
+				return c.writeBinaryRows(qr)
+			})
+
+			if prepareData.paramsCount > 0 {
+				prepareData.bindVars = make(map[string]*querypb.BindVariable, prepareData.paramsCount)
+			}
+
+			// If no field was sent, we expect an error.
+			if !fieldSent {
+				// This is just a failsafe. Should never happen.
+				if err == nil || err == io.EOF {
+					err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+				}
+				if werr := c.writeErrorPacketFromError(err); werr != nil {
+					// If we can't even write the error, we're done.
+					log.Errorf("Error writing query error to %s: %v", c, werr)
+					return
+				}
+				continue
+			}
+
+			if err != nil {
+				// We can't send an error in the middle of a stream.
+				// All we can do is abort the send, which will cause a 2013.
+				log.Errorf("Error in the middle of a stream to %s: %v", c, err)
+				return
+			}
+
+			// Send the end packet only sendFinished is false (results were streamed).
+			if !sendFinished {
+				if err := c.writeEndResult(); err != nil {
+					log.Errorf("Error writing result to %s: %v", c, err)
+					return
+				}
+			}
+
+			timings.Record(queryTimingKey, queryStart)
+		case ComStmtSendLongData:
+			statementID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
+			c.recycleReadPacket()
+			if !ok {
+				log.Errorf("Error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
+				return
+			}
+
+			prepareData, ok := c.prepareData[statementID]
+			if !ok {
+				log.Errorf("Got wrong statement id from client %v, statement ID(%v) is not found from record", c.ConnectionID, statementID)
+				return
+			}
+
+			if prepareData.bindVars == nil || prepareData.paramsCount == uint16(0) || paramID >= prepareData.paramsCount {
+				log.Errorf("Invalid parameter Number from client %v, statement: %v", c.ConnectionID, prepareData.prepareStmt)
+				return
+			}
+
+			chunkDataSize := len(chunkData)
+			if chunkDataSize > MaxAllowedPacket {
+				log.Errorf("long data size %v exceed the max allowed packet size %v", chunkDataSize, MaxAllowedPacket)
+				return
+			}
+
+			chunk := make([]byte, chunkDataSize)
+			copy(chunk, chunkData)
+
+			key := fmt.Sprintf("v%d", paramID+1)
+			if val, ok := prepareData.bindVars[key]; ok {
+				prepareData.bindVars[key] = &querypb.BindVariable{Type: sqltypes.VarBinary, Value: append(val.Value, chunk...)}
+
+				longDataSize := len(prepareData.bindVars[key].Value)
+				if longDataSize > MaxAllowedPacket {
+					log.Errorf("long data size %v exceed the max allowed packet size %v", longDataSize, MaxAllowedPacket)
+					return
+				}
+			} else {
+				prepareData.bindVars[key] = &querypb.BindVariable{Type: sqltypes.VarBinary, Value: chunk}
+			}
+		case ComStmtClose:
+			statementID, ok := c.parseComStmtClose(data)
+			c.recycleReadPacket()
+			if ok {
+				delete(c.prepareData, statementID)
+			}
+		case ComStmtReset:
+			statementID, ok := c.parseComStmtReset(data)
+			c.recycleReadPacket()
+			if ok {
+				if prepareData, ok := c.prepareData[statementID]; ok {
+					if prepareData.paramsCount > 0 {
+						prepareData.bindVars = make(map[string]*querypb.BindVariable, prepareData.paramsCount)
+					}
+					if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
+						log.Errorf("Error writing ComStmtReset OK packet to client %v: %v", c.ConnectionID, err)
+						return
+					}
+				} else {
+					log.Errorf("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data)
+					if err := c.writeErrorPacket(CRCommandsOutOfSync, SSUnknownComError, "commands were executed in an improper order: %v", data); err != nil {
+						log.Errorf("Error writing error packet to client: %v", err)
+						return
+					}
 				}
 			} else {
 				log.Errorf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)

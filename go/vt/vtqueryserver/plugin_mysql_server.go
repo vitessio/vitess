@@ -86,7 +86,7 @@ func (mh *proxyHandler) ConnectionClosed(c *mysql.Conn) {
 	}
 }
 
-func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	if *mysqlQueryTimeout != 0 {
@@ -129,6 +129,11 @@ func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sql
 		return err
 	}
 
+	return callback(result)
+}
+
+func (mh *proxyHandler) ComPrepare(c *mysql.Conn, query string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+	result := &sqltypes.Result{}
 	return callback(result)
 }
 

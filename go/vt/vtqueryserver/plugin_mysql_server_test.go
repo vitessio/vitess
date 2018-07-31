@@ -26,6 +26,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type testHandler struct {
@@ -39,7 +41,11 @@ func (th *testHandler) NewConnection(c *mysql.Conn) {
 func (th *testHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
-func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
+func (th *testHandler) ComQuery(c *mysql.Conn, q string, bv map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
+func (th *testHandler) ComPrepare(c *mysql.Conn, q string, bv map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	return nil
 }
 
