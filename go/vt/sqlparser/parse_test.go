@@ -1945,6 +1945,37 @@ func TestCreateTable(t *testing.T) {
 	}
 }
 
+func TestCreateTableLike(t *testing.T) {
+	normal := "create table a like b"
+	testCases := []struct {
+		input  string
+		output string
+	}{
+		{
+			"create table a like b",
+			normal,
+		},
+		{
+			"create table a (like b)",
+			normal,
+		},
+		{
+			"create table ks.a like unsharded_ks.b",
+			"create table ks.a like unsharded_ks.b",
+		},
+	}
+	for _, tcase := range testCases {
+		tree, err := ParseStrictDDL(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+		if got, want := String(tree.(*DDL)), tcase.output; got != want {
+			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
+		}
+	}
+}
+
 func TestCreateTableEscaped(t *testing.T) {
 	testCases := []struct {
 		input  string
