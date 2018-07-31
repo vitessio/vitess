@@ -795,6 +795,12 @@ func TestWindow(t *testing.T) {
 	// (queue becomes not empty a second time).
 	flag.Set("buffer_window", "10m")
 
+	// This is a hack. The buffering semaphore gets released asynchronously.
+	// Sometimes the next issueRequest tries to acquire before that release
+	// and ends up failing. Waiting for the previous goroutines to exit ensures
+	// that the sema will get released.
+	b.waitForShutdown()
+
 	// This time the request does not go out of window and gets evicted by a third
 	// request instead.
 	t.Logf("second request does not exceed its window")

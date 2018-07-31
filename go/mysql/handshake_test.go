@@ -116,7 +116,7 @@ func TestSSLConnection(t *testing.T) {
 	}
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
-	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "IP:"+host)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 
 	// Create the server with TLS config.
@@ -139,10 +139,11 @@ func TestSSLConnection(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 		// SSL flags.
-		Flags:   CapabilityClientSSL,
-		SslCa:   path.Join(root, "ca-cert.pem"),
-		SslCert: path.Join(root, "client-cert.pem"),
-		SslKey:  path.Join(root, "client-key.pem"),
+		Flags:      CapabilityClientSSL,
+		SslCa:      path.Join(root, "ca-cert.pem"),
+		SslCert:    path.Join(root, "client-cert.pem"),
+		SslKey:     path.Join(root, "client-key.pem"),
+		ServerName: "server.example.com",
 	}
 
 	t.Run("Basics", func(t *testing.T) {
