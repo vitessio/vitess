@@ -182,6 +182,7 @@ type Conn struct {
 	// - startEphemeralPacket / writeEphemeralPacket methods for writes.
 	// - readEphemeralPacket / recycleReadPacket methods for reads.
 	currentEphemeralPolicy int
+	// TODO (danieltahara): Ultimately get rid of this delineation.
 	currentEphemeralPacket []byte
 	currentEphemeralBuffer *[]byte
 }
@@ -379,7 +380,8 @@ func (c *Conn) recycleReadPacket() {
 		c.currentEphemeralBuffer = nil
 	case ephemeralReadBigBuffer:
 		// We allocated a one-time buffer we can't re-use.
-		// Nothing to do.
+		// Nothing to do. Nil out for safety.
+		c.currentEphemeralBuffer = nil
 	case ephemeralUnused, ephemeralWriteGlobalBuffer, ephemeralWriteSingleBuffer, ephemeralWriteBigBuffer:
 		// Programming error.
 		panic(fmt.Errorf("trying to call recycleReadPacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
@@ -565,9 +567,7 @@ func (c *Conn) startEphemeralPacket(length int) []byte {
 // startEphemeralPacket. If 'direct' is set, we write to the
 // underlying connection directly, by-passing the write buffer.
 func (c *Conn) writeEphemeralPacket(direct bool) error {
-	defer func() {
-		c.currentEphemeralPolicy = ephemeralUnused
-	}()
+	defer c.recycleWritePacket()
 
 	var w io.Writer = c.writer
 	if direct {
@@ -607,6 +607,28 @@ func (c *Conn) writeEphemeralPacket(direct bool) error {
 	}
 
 	return nil
+}
+
+// recycleWritePacket recycles the write packet. It needs to be called
+// after writeEphemeralPacket was called.
+func (c *Conn) recycleWritePacket() {
+	switch c.currentEphemeralPolicy {
+	case ephemeralWriteGlobalBuffer:
+		// We used small built-in buffer, nothing to do.
+	case ephemeralWriteSingleBuffer:
+		// Release our reference so the buffer can be gced
+		c.currentEphemeralPacket = nil
+	case ephemeralWriteBigBuffer:
+		// We allocated a one-time buffer we can't re-use.
+		// N.B. Unlike the read packet, we actually assign the big buffer to currentEphemeralBuffer,
+		// so we should remove our reference to it.
+		c.currentEphemeralPacket = nil
+	case ephemeralUnused, ephemeralReadGlobalBuffer,
+		ephemeralReadSingleBuffer, ephemeralReadBigBuffer:
+		// Programming error.
+		panic(fmt.Errorf("trying to call recycleWritePacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
+	}
+	c.currentEphemeralPolicy = ephemeralUnused
 }
 
 // flush flushes the written data to the socket.
