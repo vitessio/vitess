@@ -133,58 +133,6 @@ func (stats *LogStats) SizeOfResponse() int {
 	return size
 }
 
-// FmtBindVariables returns the map of bind variables as a string or a json
-// string depending on the streamlog.QueryLogFormat value. If RedactDebugUIQueries
-// is true then this returns the string "[REDACTED]"
-//
-// For values that are strings or byte slices it only reports their type
-// and length unless full is true.
-func (stats *LogStats) FmtBindVariables(full bool) string {
-	if *streamlog.RedactDebugUIQueries {
-		return "\"[REDACTED]\""
-	}
-
-	var out map[string]*querypb.BindVariable
-	if full {
-		out = stats.BindVariables
-	} else {
-		// NOTE(szopa): I am getting rid of potentially large bind
-		// variables.
-		out = make(map[string]*querypb.BindVariable)
-		for k, v := range stats.BindVariables {
-			if sqltypes.IsIntegral(v.Type) || sqltypes.IsFloat(v.Type) {
-				out[k] = v
-			} else if v.Type == querypb.Type_TUPLE {
-				out[k] = sqltypes.StringBindVariable(fmt.Sprintf("%v items", len(v.Values)))
-			} else {
-				out[k] = sqltypes.StringBindVariable(fmt.Sprintf("%v bytes", len(v.Value)))
-			}
-		}
-	}
-
-	if *streamlog.QueryLogFormat == streamlog.QueryLogFormatJSON {
-		var buf bytes.Buffer
-		buf.WriteString("{")
-		first := true
-		for k, v := range out {
-			if !first {
-				buf.WriteString(", ")
-			} else {
-				first = false
-			}
-			if sqltypes.IsIntegral(v.Type) || sqltypes.IsFloat(v.Type) {
-				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %v}", k, v.Type, string(v.Value))
-			} else {
-				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %q}", k, v.Type, string(v.Value))
-			}
-		}
-		buf.WriteString("}")
-		return buf.String()
-	}
-
-	return fmt.Sprintf("%v", out)
-}
-
 // FmtQuerySources returns a comma separated list of query
 // sources. If there were no query sources, it returns the string
 // "none".
@@ -232,12 +180,18 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 // Format returns a tab separated list of logged fields.
 func (stats *LogStats) Format(params url.Values) string {
 	rewrittenSQL := "[REDACTED]"
+	formattedBindVars := "\"[REDACTED]\""
+
 	if !*streamlog.RedactDebugUIQueries {
 		rewrittenSQL = stats.RewrittenSQL()
-	}
 
-	_, fullBindParams := params["full"]
-	formattedBindVars := stats.FmtBindVariables(fullBindParams)
+		_, fullBindParams := params["full"]
+		formattedBindVars = sqltypes.FormatBindVariables(
+			stats.BindVariables,
+			fullBindParams,
+			*streamlog.QueryLogFormat == streamlog.QueryLogFormatJSON,
+		)
+	}
 
 	// TODO: remove username here we fully enforce immediate caller id
 	remoteAddr, username := stats.RemoteAddrUsername()
