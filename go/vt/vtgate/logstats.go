@@ -17,9 +17,9 @@ limitations under the License.
 package vtgate
 
 import (
-	"bytes"
 	"fmt"
 	"html/template"
+	"io"
 	"net/url"
 	"time"
 
@@ -118,8 +118,9 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 	return ci.RemoteAddr(), ci.Username()
 }
 
-// Format returns a tab separated list of logged fields.
-func (stats *LogStats) Format(params url.Values) string {
+// Logf formats the log record to the given writer, either as
+// tab-separated list of logged fields or as JSON.
+func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	formattedBindVars := "\"[REDACTED]\""
 	if !*streamlog.RedactDebugUIQueries {
 		_, fullBindParams := params["full"]
@@ -141,7 +142,8 @@ func (stats *LogStats) Format(params url.Values) string {
 		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q}\n"
 	}
 
-	return fmt.Sprintf(
+	_, err := fmt.Fprintf(
+		w,
 		fmtString,
 		stats.Method,
 		remoteAddr,
@@ -161,4 +163,5 @@ func (stats *LogStats) Format(params url.Values) string {
 		stats.RowsAffected,
 		stats.ErrorStr(),
 	)
+	return err
 }

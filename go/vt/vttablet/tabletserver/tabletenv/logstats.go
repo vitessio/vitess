@@ -17,9 +17,9 @@ limitations under the License.
 package tabletenv
 
 import (
-	"bytes"
 	"fmt"
 	"html/template"
+	"io"
 	"net/url"
 	"strings"
 	"time"
@@ -177,8 +177,9 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 	return ci.RemoteAddr(), ci.Username()
 }
 
-// Format returns a tab separated list of logged fields.
-func (stats *LogStats) Format(params url.Values) string {
+// Logf formats the log record to the given writer, either as
+// tab-separated list of logged fields or as JSON.
+func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	rewrittenSQL := "[REDACTED]"
 	formattedBindVars := "\"[REDACTED]\""
 
@@ -205,7 +206,8 @@ func (stats *LogStats) Format(params url.Values) string {
 		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanType\": %q, \"OriginalSQL\": %q, \"BindVars\": %v, \"Queries\": %v, \"RewrittenSQL\": %q, \"QuerySources\": %q, \"MysqlTime\": %.6f, \"ConnWaitTime\": %.6f, \"RowsAffected\": %v, \"ResponseSize\": %v, \"Error\": %q}\n"
 	}
 
-	return fmt.Sprintf(
+	_, err := fmt.Fprintf(
+		w,
 		fmtString,
 		stats.Method,
 		remoteAddr,
@@ -227,4 +229,5 @@ func (stats *LogStats) Format(params url.Values) string {
 		stats.SizeOfResponse(),
 		stats.ErrorStr(),
 	)
+	return err
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/url"
@@ -33,6 +34,12 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+func testFormat(stats *LogStats, params url.Values) string {
+	var b bytes.Buffer
+	stats.Logf(&b, params)
+	return b.String()
+}
+
 func TestLogStatsFormat(t *testing.T) {
 	logStats := NewLogStats(context.Background(), "test", "sql1", map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)})
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
@@ -41,7 +48,7 @@ func TestLogStatsFormat(t *testing.T) {
 
 	*streamlog.RedactDebugUIQueries = false
 	*streamlog.QueryLogFormat = "text"
-	got := logStats.Format(url.Values(params))
+	got := testFormat(logStats, url.Values(params))
 	want := "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1\"\tmap[intVal:type:INT64 value:\"1\" ]\t0\t0\t\"\"\t\n"
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
@@ -49,7 +56,7 @@ func TestLogStatsFormat(t *testing.T) {
 
 	*streamlog.RedactDebugUIQueries = true
 	*streamlog.QueryLogFormat = "text"
-	got = logStats.Format(url.Values(params))
+	got = testFormat(logStats, url.Values(params))
 	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1\"\t\"[REDACTED]\"\t0\t0\t\"\"\t\n"
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
@@ -57,7 +64,7 @@ func TestLogStatsFormat(t *testing.T) {
 
 	*streamlog.RedactDebugUIQueries = false
 	*streamlog.QueryLogFormat = "json"
-	got = logStats.Format(url.Values(params))
+	got = testFormat(logStats, url.Values(params))
 	var parsed map[string]interface{}
 	err := json.Unmarshal([]byte(got), &parsed)
 	if err != nil {
@@ -74,7 +81,7 @@ func TestLogStatsFormat(t *testing.T) {
 
 	*streamlog.RedactDebugUIQueries = true
 	*streamlog.QueryLogFormat = "json"
-	got = logStats.Format(url.Values(params))
+	got = testFormat(logStats, url.Values(params))
 	err = json.Unmarshal([]byte(got), &parsed)
 	if err != nil {
 		t.Errorf("logstats format: error unmarshaling json: %v -- got:\n%v", err, got)
@@ -95,14 +102,14 @@ func TestLogStatsFormat(t *testing.T) {
 	logStats.BindVariables = map[string]*querypb.BindVariable{"strVal": sqltypes.StringBindVariable("abc")}
 
 	*streamlog.QueryLogFormat = "text"
-	got = logStats.Format(url.Values(params))
+	got = testFormat(logStats, url.Values(params))
 	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1\"\tmap[strVal:type:VARCHAR value:\"abc\" ]\t0\t0\t\"\"\t\n"
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
 	}
 
 	*streamlog.QueryLogFormat = "json"
-	got = logStats.Format(url.Values(params))
+	got = testFormat(logStats, url.Values(params))
 	err = json.Unmarshal([]byte(got), &parsed)
 	if err != nil {
 		t.Errorf("logstats format: error unmarshaling json: %v -- got:\n%v", err, got)
