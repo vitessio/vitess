@@ -17,6 +17,7 @@ limitations under the License.
 package sqltypes
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
@@ -265,4 +266,54 @@ func CopyBindVariables(bindVariables map[string]*querypb.BindVariable) map[strin
 		result[key] = value
 	}
 	return result
+}
+
+// FormatBindVariables returns a string representation of the
+// bind variables.
+//
+// If full is false, then large string or tuple values are truncated
+// to only print the lengths.
+//
+// If asJson is true, then the resulting string is a valid JSON
+// representation, otherwise it is the golang printed map representation.
+func FormatBindVariables(bindVariables map[string]*querypb.BindVariable, full, asJSON bool) string {
+	var out map[string]*querypb.BindVariable
+	if full {
+		out = bindVariables
+	} else {
+		// NOTE(szopa): I am getting rid of potentially large bind
+		// variables.
+		out = make(map[string]*querypb.BindVariable)
+		for k, v := range bindVariables {
+			if IsIntegral(v.Type) || IsFloat(v.Type) {
+				out[k] = v
+			} else if v.Type == querypb.Type_TUPLE {
+				out[k] = StringBindVariable(fmt.Sprintf("%v items", len(v.Values)))
+			} else {
+				out[k] = StringBindVariable(fmt.Sprintf("%v bytes", len(v.Value)))
+			}
+		}
+	}
+
+	if asJSON {
+		var buf bytes.Buffer
+		buf.WriteString("{")
+		first := true
+		for k, v := range out {
+			if !first {
+				buf.WriteString(", ")
+			} else {
+				first = false
+			}
+			if IsIntegral(v.Type) || IsFloat(v.Type) {
+				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %v}", k, v.Type, string(v.Value))
+			} else {
+				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %q}", k, v.Type, string(v.Value))
+			}
+		}
+		buf.WriteString("}")
+		return buf.String()
+	}
+
+	return fmt.Sprintf("%v", out)
 }
