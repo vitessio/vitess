@@ -133,7 +133,9 @@ func (p *ParallelRunner) Run() error {
 		}
 		select {
 		case <-p.ctx.Done():
-			log.Info("Workflow is cancelled, will not run task: %v", task)
+			log.Infof("Workflow is cancelled, will not run task: %v", task)
+			// Break this run and return early. Do not try to to execute any subsequent tasks.
+			return nil
 		default:
 			wg.Add(1)
 			go func(t *workflowpb.Task) {
