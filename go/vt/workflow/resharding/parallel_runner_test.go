@@ -38,7 +38,7 @@ func TestParallelRunner(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell")
 
-	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, false /* enableApprovals*/, false /* retry */)
+	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, false /* enableApprovals*/, false /* retry */, false /* sequential */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestParallelRunnerApproval(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell")
 
-	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */)
+	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */, false /* sequential */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestParallelRunnerApprovalOnStoppedWorkflow(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell")
 
-	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */)
+	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */, false /* sequential */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,10 +132,38 @@ func TestParallelRunnerApprovalOnStoppedWorkflow(t *testing.T) {
 	wg.Wait()
 }
 
+func TestParallelRunnerStoppingWorkflowWithSequentialSteps(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell")
+
+	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */, false /* sequential */)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, index, err := setupNotifications(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.NodeManager().CloseWatcher(index)
+
+	// Start the job
+	if err := m.Start(ctx, uuid); err != nil {
+		t.Fatalf("cannot start testworkflow: %v", err)
+	}
+
+	if err := m.Stop(ctx, uuid); err != nil {
+		t.Fatalf("cannot stop testworkflow: %v", err)
+	}
+	cancel()
+	wg.Wait()
+
+}
+
 func TestParallelRunnerApprovalFromFirstDone(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell")
-	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */)
+	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */, false /* sequential */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +213,7 @@ func TestParallelRunnerApprovalFromFirstDone(t *testing.T) {
 func TestParallelRunnerApprovalFromFirstRunning(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell")
-	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */)
+	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */, false /* sequential */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +265,7 @@ func TestParallelRunnerApprovalFromFirstRunning(t *testing.T) {
 func TestParallelRunnerApprovalFromFirstDoneSecondRunning(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell")
-	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */)
+	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */, false /* sequential */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +319,7 @@ func TestParallelRunnerApprovalFromFirstDoneSecondRunning(t *testing.T) {
 func TestParallelRunnerApprovalFirstRunningSecondRunning(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell")
-	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */)
+	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */, false /* sequential */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +374,7 @@ func TestParallelRunnerApprovalFirstRunningSecondRunning(t *testing.T) {
 func TestParallelRunnerApprovalFromAllDone(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell")
-	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */)
+	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */, false /* sequential */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -407,7 +435,7 @@ func TestParallelRunnerRetry(t *testing.T) {
 	// retry task1, after it is finished successfully, we retry task2.
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell")
-	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, false /* enableApprovals*/, true /* retry */)
+	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, false /* enableApprovals*/, true /* retry */, false /* sequential */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -506,7 +534,7 @@ func TestParallelRunnerRetry(t *testing.T) {
 	wg.Wait()
 }
 
-func setupTestWorkflow(ctx context.Context, ts *topo.Server, enableApprovals, retry bool) (*workflow.Manager, string, *sync.WaitGroup, context.CancelFunc, error) {
+func setupTestWorkflow(ctx context.Context, ts *topo.Server, enableApprovals, retry, sequential bool) (*workflow.Manager, string, *sync.WaitGroup, context.CancelFunc, error) {
 	m := workflow.NewManager(ts)
 	// Run the manager in the background.
 	wg, _, cancel := startManager(m)
@@ -514,7 +542,8 @@ func setupTestWorkflow(ctx context.Context, ts *topo.Server, enableApprovals, re
 	// Create a testworkflow.
 	enableApprovalsFlag := fmt.Sprintf("-enable_approvals=%v", enableApprovals)
 	retryFlag := fmt.Sprintf("-retry=%v", retry)
-	uuid, err := m.Create(ctx, testWorkflowFactoryName, []string{retryFlag, "-count=2", enableApprovalsFlag})
+	sequentialFlag := fmt.Sprintf("-sequential=%v", sequential)
+	uuid, err := m.Create(ctx, testWorkflowFactoryName, []string{retryFlag, "-count=2", enableApprovalsFlag, sequentialFlag})
 	if err != nil {
 		return nil, "", nil, nil, fmt.Errorf("cannot create testworkflow: %v", err)
 	}
