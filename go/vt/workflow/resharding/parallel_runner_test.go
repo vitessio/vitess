@@ -136,7 +136,7 @@ func TestParallelRunnerStoppingWorkflowWithSequentialSteps(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell")
 
-	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */, false /* sequential */)
+	m, uuid, wg, cancel, err := setupTestWorkflow(ctx, ts, true /* enableApprovals*/, false /* retry */, true /* sequential */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,6 @@ func TestParallelRunnerStoppingWorkflowWithSequentialSteps(t *testing.T) {
 	}
 	cancel()
 	wg.Wait()
-
 }
 
 func TestParallelRunnerApprovalFromFirstDone(t *testing.T) {
