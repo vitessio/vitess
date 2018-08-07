@@ -141,12 +141,6 @@ func TestParallelRunnerStoppingWorkflowWithSequentialSteps(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, index, err := setupNotifications(m)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer m.NodeManager().CloseWatcher(index)
-
 	// Start the job
 	if err := m.Start(ctx, uuid); err != nil {
 		t.Fatalf("cannot start testworkflow: %v", err)
