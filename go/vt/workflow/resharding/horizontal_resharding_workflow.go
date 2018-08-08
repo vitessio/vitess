@@ -248,8 +248,12 @@ func findSourceAndDestinationShards(ts *topo.Server, keyspace string) ([]string,
 }
 
 func initCheckpointFromShards(keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string) (*workflowpb.WorkflowCheckpoint, error) {
-	if len(vtworkers) != len(sourceShards) {
-		return nil, fmt.Errorf("there are %v vtworkers, %v source shards: the number should be same", len(vtworkers), len(sourceShards))
+	if len(vtworkers) != len(destinationShards) {
+		return nil, fmt.Errorf("there are %v vtworkers, %v destination shards: the number should be same", len(vtworkers), len(destinationShards))
+	}
+
+	if minHealthyRdonlyTabletsVal, err := strconv.Atoi(minHealthyRdonlyTablets); err != nil || minHealthyRdonlyTabletsVal < 2 {
+		return nil, fmt.Errorf("there are not enough rdonly tablets in source shards. You need at least 2, it got: %v", minHealthyRdonlyTablets)
 	}
 
 	tasks := make(map[string]*workflowpb.Task)
@@ -382,7 +386,7 @@ func (hw *HorizontalReshardingWorkflow) runWorkflow() error {
 	}
 
 	diffTasks := hw.GetTasks(phaseDiff)
-	diffRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, diffTasks, hw.runSplitDiff, Sequential, hw.enableApprovals)
+	diffRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, diffTasks, hw.runSplitDiff, Parallel, hw.enableApprovals)
 	if err := diffRunner.Run(); err != nil {
 		return err
 	}
