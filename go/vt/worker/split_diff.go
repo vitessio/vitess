@@ -241,9 +241,9 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 		if ss.Uid == sdw.sourceUID {
 			// During an horizontal shard split, multiple workers could race to get
 			// a RDONLY tablet in the source shard. When this happen, one of the workers
-			// will fail to drain the tablet and FindWorkerTablet will fail.
-			// The following works in an optimistic way, but it fails,
-			// it retries as long the context does not timeouts.
+			// will fail to drain the tablet and FindWorkerTablet will return an error.
+			// The following works in an optimistic way, but in the case of a failure,
+			// it will retry as long the context does not timeout.
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 			for {
 				select {
