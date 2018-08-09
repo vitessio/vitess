@@ -252,7 +252,8 @@ func forceEOF(yylex interface{}) {
 %type <setExprs> set_list transaction_chars
 %type <bytes> charset_or_character_set
 %type <updateExpr> update_expression
-%type <setExpr> set_expression transaction_char isolation_level
+%type <setExpr> set_expression transaction_char
+%type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist
@@ -500,33 +501,33 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = $3
+    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte($3))}
   }
 | READ WRITE
   {
-    $$ = &SetExpr{Name: NewColIdent("tx_read_only"), Expr: NewIntVal([]byte("0"))}
+    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte(TxReadWrite))}
   }
 | READ ONLY
   {
-    $$ = &SetExpr{Name: NewColIdent("tx_read_only"), Expr: NewIntVal([]byte("1"))}
+    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte(TxReadOnly))}
   }
 
 isolation_level:
   REPEATABLE READ
   {
-    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("repeatable read"))}
+    $$ = IsolationLevelRepeatableRead
   }
 | READ COMMITTED
   {
-    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("read committed"))}
+    $$ = IsolationLevelReadCommitted
   }
 | READ UNCOMMITTED
   {
-    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("read uncommitted"))}
+    $$ = IsolationLevelReadUncommitted
   }
 | SERIALIZABLE
   {
-    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("serializable"))}
+    $$ = IsolationLevelSerializable
   }
 
 set_session_or_global:
