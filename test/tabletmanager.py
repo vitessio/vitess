@@ -507,6 +507,12 @@ class TestTabletManager(unittest.TestCase):
     # implementation.)  The tablet will stay healthy, and the
     # query service is still running.
     utils.run_vtctl(['ChangeSlaveType', tablet_62044.tablet_alias, 'drained'])
+    # Trying to drain the same tablet again, should error
+    try:
+      utils.run_vtctl(['ChangeSlaveType', tablet_62044.tablet_alias, 'drained'])
+    except Exception as e:
+      s = str(e)
+      self.assertIn("already drained", s)
     utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias])
     # Trigger healthcheck explicitly to avoid waiting for the next interval.
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])

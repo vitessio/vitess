@@ -252,8 +252,9 @@ func initCheckpointFromShards(keyspace string, vtworkers, sourceShards, destinat
 		return nil, fmt.Errorf("there are %v vtworkers, %v destination shards: the number should be same", len(vtworkers), len(destinationShards))
 	}
 
-	if minHealthyRdonlyTabletsVal, err := strconv.Atoi(minHealthyRdonlyTablets); err != nil || minHealthyRdonlyTabletsVal < 2 {
-		return nil, fmt.Errorf("there are not enough rdonly tablets in source shards. You need at least 2, it got: %v", minHealthyRdonlyTablets)
+	splitRatio := len(destinationShards) / len(sourceShards)
+	if minHealthyRdonlyTabletsVal, err := strconv.Atoi(minHealthyRdonlyTablets); err != nil || minHealthyRdonlyTabletsVal < splitRatio {
+		return nil, fmt.Errorf("there are not enough rdonly tablets in source shards. You need at least %v, it got: %v", splitRatio, minHealthyRdonlyTablets)
 	}
 
 	tasks := make(map[string]*workflowpb.Task)
@@ -284,7 +285,7 @@ func initCheckpointFromShards(keyspace string, vtworkers, sourceShards, destinat
 			"keyspace":          keyspace,
 			"destination_shard": shard,
 			"dest_tablet_type":  splitDiffDestTabletType,
-			"vtworker":          vtworkers[0],
+			"vtworker":          vtworkers[i],
 		}
 	})
 	initTasks(tasks, phaseMigrateRdonly, sourceShards, func(i int, shard string) map[string]string {
