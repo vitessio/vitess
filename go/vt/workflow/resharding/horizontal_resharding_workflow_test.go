@@ -66,7 +66,8 @@ func TestHorizontalResharding(t *testing.T) {
 	// Run the manager in the background.
 	wg, _, cancel := startManager(m)
 	// Create the workflow.
-	uuid, err := m.Create(ctx, horizontalReshardingFactoryName, []string{"-keyspace=" + testKeyspace, "-vtworkers=" + testVtworkers, "-enable_approvals=false"})
+	vtworkersParameter := testVtworkers + "," + testVtworkers
+	uuid, err := m.Create(ctx, horizontalReshardingFactoryName, []string{"-keyspace=" + testKeyspace, "-vtworkers=" + vtworkersParameter, "-enable_approvals=false", "-min_healthy_rdonly_tablets=2"})
 	if err != nil {
 		t.Fatalf("cannot create resharding workflow: %v", err)
 	}
@@ -101,7 +102,7 @@ func setupFakeVtworker(keyspace, vtworkers string) *fakevtworkerclient.FakeVtwor
 	flag.Set("vtworker_client_protocol", "fake")
 	fakeVtworkerClient := fakevtworkerclient.NewFakeVtworkerClient()
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"Reset"}, "", nil)
-	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitClone", "--min_healthy_rdonly_tablets=1", keyspace + "/0"}, "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitClone", "--min_healthy_rdonly_tablets=2", keyspace + "/0"}, "", nil)
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"Reset"}, "", nil)
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=RDONLY", keyspace + "/-80"}, "", nil)
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"Reset"}, "", nil)

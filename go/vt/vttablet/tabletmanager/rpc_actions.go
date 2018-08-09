@@ -62,6 +62,9 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 	}
 	defer agent.unlock()
 
+	if tabletType == topodatapb.TabletType_DRAINED && agent.Tablet().Type == topodatapb.TabletType_DRAINED {
+		return fmt.Errorf("Tablet: %v, is already drained", agent.TabletAlias)
+	}
 	// change our type in the topology
 	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType)
 	if err != nil {
