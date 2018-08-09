@@ -161,6 +161,18 @@ func (wr *Wrangler) ChangeSlaveType(ctx context.Context, tabletAlias *topodatapb
 	return wr.tmc.ChangeType(ctx, ti.Tablet, tabletType)
 }
 
+// RefreshTabletState refreshes tablet state
+func (wr *Wrangler) RefreshTabletState(ctx context.Context, tabletAlias *topodatapb.TabletAlias) error {
+	// Load tablet to find endpoint, and keyspace and shard assignment.
+	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	// and ask the tablet to refresh itself
+	return wr.tmc.RefreshState(ctx, ti.Tablet)
+}
+
 // ExecuteFetchAsDba executes a query remotely using the DBA pool
 func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query string, maxRows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
