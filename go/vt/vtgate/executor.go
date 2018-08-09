@@ -713,9 +713,10 @@ func validateSetOnOff(v interface{}, typ string) (int64, error) {
 	case int64:
 		val = v
 	case string:
-		if v == "on" {
+		lcaseV := strings.ToLower(v)
+		if lcaseV == "on" {
 			val = 1
-		} else if v == "off" {
+		} else if lcaseV == "off" {
 			val = 0
 		} else {
 			return -1, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for %s: %s", typ, v)
@@ -819,6 +820,14 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}
 		return &sqltypes.Result{
 			Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname"),
+			Rows:         rows,
+			RowsAffected: uint64(len(rows)),
+		}, nil
+	case sqlparser.KeywordString(sqlparser.VITESS_TARGET):
+		var rows [][]sqltypes.Value
+		rows = append(rows, buildVarCharRow(safeSession.TargetString))
+		return &sqltypes.Result{
+			Fields:       buildVarCharFields("Target"),
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil

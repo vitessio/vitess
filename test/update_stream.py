@@ -383,13 +383,18 @@ class TestUpdateStream(unittest.TestCase):
           'EventTokenPosition must be up to date but got %s (expected %s)' %
           (value, replica_position), timeout)
 
+    # Replica position can still move forward after this when things are slow.
+    # Compare only server ids.
+    replica_position = replica_position.split(":")[0]
+
     # With vttablet up to date, test a vttablet query returns the EventToken.
     qr = replica_tablet.execute('select * from vt_insert_test',
                                 execute_options='include_event_token:true ')
     logging.debug('Got result: %s', qr)
     self.assertIn('extras', qr)
     self.assertIn('event_token', qr['extras'])
-    self.assertEqual(qr['extras']['event_token']['position'], replica_position)
+    pos = qr['extras']['event_token']['position'].split(":")[0]
+    self.assertEqual(pos, replica_position)
 
     # Same thing through vtgate
     qr = utils.vtgate.execute('select * from vt_insert_test',
@@ -398,7 +403,8 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug('Got result: %s', qr)
     self.assertIn('extras', qr)
     self.assertIn('event_token', qr['extras'])
-    self.assertEqual(qr['extras']['event_token']['position'], replica_position)
+    pos = qr['extras']['event_token']['position'].split(":")[0]
+    self.assertEqual(pos, replica_position)
 
     # Make sure the compare_event_token flag works, by sending a very
     # old timestamp, or a timestamp in the future.
@@ -441,7 +447,8 @@ class TestUpdateStream(unittest.TestCase):
     self.assertIn('fresher', qr['extras'])
     self.assertTrue(qr['extras']['fresher'])
     self.assertIn('event_token', qr['extras'])
-    self.assertEqual(qr['extras']['event_token']['position'], replica_position)
+    pos = qr['extras']['event_token']['position'].split(":")[0]
+    self.assertEqual(pos, replica_position)
 
     future_timestamp = long(time.time()) + 100
     qr = replica_tablet.execute('select * from vt_insert_test',
@@ -450,7 +457,8 @@ class TestUpdateStream(unittest.TestCase):
                                 future_timestamp)
     self.assertNotIn('fresher', qr['extras'])
     self.assertIn('event_token', qr['extras'])
-    self.assertEqual(qr['extras']['event_token']['position'], replica_position)
+    pos = qr['extras']['event_token']['position'].split(":")[0]
+    self.assertEqual(pos, replica_position)
 
     # Same thing through vtgate
     qr = utils.vtgate.execute('select * from vt_insert_test',
@@ -461,7 +469,8 @@ class TestUpdateStream(unittest.TestCase):
     self.assertIn('fresher', qr['extras'])
     self.assertTrue(qr['extras']['fresher'])
     self.assertIn('event_token', qr['extras'])
-    self.assertEqual(qr['extras']['event_token']['position'], replica_position)
+    pos = qr['extras']['event_token']['position'].split(":")[0]
+    self.assertEqual(pos, replica_position)
 
     future_timestamp = long(time.time()) + 100
     qr = utils.vtgate.execute('select * from vt_insert_test',
@@ -471,7 +480,8 @@ class TestUpdateStream(unittest.TestCase):
                               future_timestamp)
     self.assertNotIn('fresher', qr['extras'])
     self.assertIn('event_token', qr['extras'])
-    self.assertEqual(qr['extras']['event_token']['position'], replica_position)
+    pos = qr['extras']['event_token']['position'].split(":")[0]
+    self.assertEqual(pos, replica_position)
 
   def test_update_stream_interrupt(self):
     """Checks that a running query is terminated on going non-serving."""

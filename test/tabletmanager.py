@@ -14,9 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# vim: tabstop=8 expandtab shiftwidth=2 softtabstop=2
 
 import json
 import logging
+import os
 import time
 import unittest
 import urllib
@@ -171,6 +173,34 @@ class TestTabletManager(unittest.TestCase):
   _populate_vt_select_test = [
       "insert into vt_select_test (msg) values ('test %s')" % x
       for x in xrange(4)]
+
+  # Test if a vttablet can be pointed at an existing mysql
+  # We point 62044 at 62344's mysql and try to read from it.
+  def test_command_line(self):
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+    tablet_62044.init_tablet('master', 'test_keyspace', '0')
+    tablet_62344.populate('vt_test_keyspace', self._create_vt_select_test,
+                          self._populate_vt_select_test)
+
+    # mycnf_server_id prevents vttablet from reading the mycnf
+    extra_args = [
+        '-mycnf_server_id', str(tablet_62044.tablet_uid),
+        '-db_socket', os.path.join(tablet_62344.tablet_dir, 'mysql.sock')]
+    # supports_backup=False prevents vttablet from trying to restore
+    tablet_62044.start_vttablet(extra_args=extra_args, supports_backups=False)
+    qr = tablet_62044.execute('select id, msg from vt_select_test')
+    self.assertEqual(len(qr['rows']), 4,
+                     'expected 4 rows in vt_select_test: %s' % str(qr))
+
+    # Verify backup fails
+    try:
+      utils.run_vtctl(['Backup', tablet_62044.tablet_alias])
+    except Exception as e:
+      self.assertIn('cannot perform backup without my.cnf', str(e))
+    else:
+        self.assertFail('did not get an exception')
+
+    tablet_62044.kill_vttablet()
 
   def test_actions_and_timeouts(self):
     # Start up a master mysql and vttablet

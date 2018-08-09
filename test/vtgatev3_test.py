@@ -25,6 +25,7 @@ import urllib
 import environment
 import keyspace_util
 import utils
+from protocols_flavor import protocols_flavor
 
 from vtdb import dbexceptions
 from vtdb import vtgate_cursor
@@ -669,7 +670,7 @@ class TestVTGateFunctions(unittest.TestCase):
       self.fail('Execute went through')
     except dbexceptions.DatabaseError as e:
       s = str(e)
-      self.assertIn('DeadlineExceeded', s)
+      self.assertIn(protocols_flavor().rpc_timeout_message(), s)
 
     # test directive timeout longer than the query time
     cursor.execute('SELECT /*vt+ QUERY_TIMEOUT_MS=2000 */ SLEEP(1)', {})
@@ -1801,6 +1802,20 @@ class TestVTGateFunctions(unittest.TestCase):
          0,
          [('id', self.varbinary_type),
           ('keyspace_id', self.varbinary_type)]))
+
+  def test_analyze_table(self):
+    vtgate_conn = get_connection()
+    self.execute_on_master(
+        vtgate_conn,
+        'use user',
+        {})
+    result = self.execute_on_master(
+        vtgate_conn,
+        'analyze table vt_user',
+        {})
+    self.assertEqual(
+        result[0],
+        [('vt_user.vt_user', 'analyze', 'status', 'OK')])
 
   def test_transaction_modes(self):
     vtgate_conn = get_connection()

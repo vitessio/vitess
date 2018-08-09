@@ -118,7 +118,7 @@ func (ep *TabletPlan) buildAuthorized() {
 // function is called.
 type QueryEngine struct {
 	se        *schema.Engine
-	dbconfigs dbconfigs.DBConfigs
+	dbconfigs *dbconfigs.DBConfigs
 
 	// mu protects the following fields.
 	mu               sync.RWMutex
@@ -273,13 +273,13 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 }
 
 // InitDBConfig must be called before Open.
-func (qe *QueryEngine) InitDBConfig(dbcfgs dbconfigs.DBConfigs) {
+func (qe *QueryEngine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 	qe.dbconfigs = dbcfgs
 }
 
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open() error {
-	qe.conns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba, &qe.dbconfigs.AppDebug)
+	qe.conns.Open(qe.dbconfigs.AppWithDB(), qe.dbconfigs.DbaWithDB(), qe.dbconfigs.AppDebugWithDB())
 
 	conn, err := qe.conns.Get(tabletenv.LocalContext())
 	if err != nil {
@@ -294,7 +294,7 @@ func (qe *QueryEngine) Open() error {
 		return err
 	}
 
-	qe.streamConns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba, &qe.dbconfigs.AppDebug)
+	qe.streamConns.Open(qe.dbconfigs.AppWithDB(), qe.dbconfigs.DbaWithDB(), qe.dbconfigs.AppDebugWithDB())
 	qe.se.RegisterNotifier("qe", qe.schemaChanged)
 	return nil
 }
@@ -428,7 +428,7 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 
 // IsMySQLReachable returns true if we can connect to MySQL.
 func (qe *QueryEngine) IsMySQLReachable() bool {
-	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App, tabletenv.MySQLStats)
+	conn, err := dbconnpool.NewDBConnection(qe.dbconfigs.AppWithDB(), tabletenv.MySQLStats)
 	if err != nil {
 		if mysql.IsConnErr(err) {
 			return false

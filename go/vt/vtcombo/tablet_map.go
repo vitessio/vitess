@@ -73,7 +73,7 @@ var tabletMap map[uint32]*tablet
 
 // CreateTablet creates an individual tablet, with its agent, and adds
 // it to the map. If it's a master tablet, it also issues a TER.
-func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32, keyspace, shard, dbname string, tabletType topodatapb.TabletType, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs) error {
+func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32, keyspace, shard, dbname string, tabletType topodatapb.TabletType, mysqld mysqlctl.MysqlDaemon, dbcfgs *dbconfigs.DBConfigs) error {
 	alias := &topodatapb.TabletAlias{
 		Cell: cell,
 		Uid:  uid,
@@ -106,7 +106,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 
 // InitTabletMap creates the action agents and associated data structures
 // for all tablets, based on the vttest proto parameter.
-func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf) error {
+func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs *dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf) error {
 	tabletMap = make(map[uint32]*tablet)
 
 	ctx := context.Background()
@@ -165,9 +165,9 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 					if dbname == "" {
 						dbname = fmt.Sprintf("vt_%v_%v", keyspace, shard)
 					}
-					dbcfgs.App.DbName = dbname
-					// Override SidecarDBName because there will be one for each db.
-					dbcfgs.SidecarDBName = "_" + dbname
+					// Copy dbcfgs and override SidecarDBName because there will be one for each db.
+					copydbcfgs := dbcfgs.Copy()
+					copydbcfgs.SidecarDBName.Set("_" + dbname)
 
 					replicas := int(kpb.ReplicaCount)
 					if replicas == 0 {
@@ -183,7 +183,7 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 						replicas--
 
 						// create the master
-						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_MASTER, mysqld, dbcfgs); err != nil {
+						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_MASTER, mysqld, copydbcfgs); err != nil {
 							return err
 						}
 						uid++
@@ -191,7 +191,7 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 
 					for i := 0; i < replicas; i++ {
 						// create a replica slave
-						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs); err != nil {
+						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, copydbcfgs); err != nil {
 							return err
 						}
 						uid++
@@ -199,7 +199,7 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 
 					for i := 0; i < rdonlys; i++ {
 						// create a rdonly slave
-						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs); err != nil {
+						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, copydbcfgs); err != nil {
 							return err
 						}
 						uid++

@@ -104,18 +104,21 @@ func forceEOF(yylex interface{}) {
   indexOptions  []*IndexOption
   indexColumn   *IndexColumn
   indexColumns  []*IndexColumn
+  constraintDefinition *ConstraintDefinition
+  constraintInfo ConstraintInfo
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
   vindexParam   VindexParam
   vindexParams  []VindexParam
   showFilter    *ShowFilter
+  optLike       *OptLike
 }
 
 %token LEX_ERROR
 %left <bytes> UNION
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYS
+%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE
@@ -153,7 +156,7 @@ func forceEOF(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN KEY_BLOCK_SIZE
+%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN REFERENCES KEY_BLOCK_SIZE
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
@@ -175,7 +178,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES FULL PROCESSLIST COLUMNS
+%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -276,15 +279,18 @@ func forceEOF(yylex interface{}) {
 %type <strs> enum_values
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
+%type <constraintDefinition> constraint_definition
 %type <str> index_or_key
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
+%type <optLike> create_like
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list
+%type <constraintInfo> constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
@@ -329,6 +335,10 @@ command:
 | commit_statement
 | rollback_statement
 | other_statement
+| /*empty*/
+{
+  setParseTree(yylex, nil)
+}
 
 select_statement:
   base_select order_by_opt limit_opt lock_opt
@@ -535,6 +545,12 @@ create_statement:
     $1.TableSpec = $2
     $$ = $1
   }
+| create_table_prefix create_like
+  {
+    // Create table [name] like [name]
+    $1.OptLike = $2
+    $$ = $1
+  }
 | CREATE constraint_opt INDEX ID using_opt ON table_name ddl_force_eof
   {
     // Change this to an alter statement
@@ -621,6 +637,16 @@ table_spec:
     $$.Options = $4
   }
 
+create_like:
+  LIKE table_name
+  {
+    $$ = &OptLike{LikeTable: $2}
+  }
+| '(' LIKE table_name ')'
+  {
+    $$ = &OptLike{LikeTable: $3}
+  }
+
 table_column_list:
   column_definition
   {
@@ -634,6 +660,10 @@ table_column_list:
 | table_column_list ',' index_definition
   {
     $$.AddIndex($3)
+  }
+| table_column_list ',' constraint_definition
+  {
+    $$.AddConstraint($3)
   }
 
 column_definition:
@@ -1000,6 +1030,10 @@ collate_opt:
   {
     $$ = string($2)
   }
+| COLLATE STRING
+  {
+    $$ = string($2)
+  }
 
 column_key_opt:
   {
@@ -1122,6 +1156,23 @@ index_column:
   sql_id length_opt
   {
       $$ = &IndexColumn{Column: $1, Length: $2}
+  }
+
+constraint_definition:
+  CONSTRAINT ID constraint_info
+  {
+    $$ = &ConstraintDefinition{Name: string($2), Details: $3}
+  }
+|  constraint_info
+  {
+    $$ = &ConstraintDefinition{Details: $1}
+  }
+
+
+constraint_info:
+  FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')'
+  {
+    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9}
   }
 
 table_option_list:
@@ -1398,6 +1449,10 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
+| SHOW COLLATION WHERE expression
+  {
+    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &$4}
+  }
 | SHOW VINDEXES ON table_name
   {
     $$ = &Show{Type: string($2), OnTable: $4}
@@ -1411,6 +1466,10 @@ show_statement:
     $$ = &Show{Type: string($2)}
   }
 | SHOW VITESS_TABLETS
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW VITESS_TARGET
   {
     $$ = &Show{Type: string($2)}
   }
@@ -1541,6 +1600,14 @@ other_statement:
     $$ = &OtherAdmin{}
   }
 | OPTIMIZE force_eof
+  {
+    $$ = &OtherAdmin{}
+  }
+| LOCK TABLES force_eof
+  {
+    $$ = &OtherAdmin{}
+  }
+| UNLOCK TABLES force_eof
   {
     $$ = &OtherAdmin{}
   }
@@ -3011,6 +3078,7 @@ reserved_keyword:
 | TRUE
 | UNION
 | UNIQUE
+| UNLOCK
 | UPDATE
 | USE
 | USING
@@ -3090,6 +3158,7 @@ non_reserved_keyword:
 | QUERY
 | READ
 | REAL
+| REFERENCES
 | REORGANIZE
 | REPAIR
 | REPEATABLE
@@ -3125,6 +3194,7 @@ non_reserved_keyword:
 | VITESS_SHARDS
 | VITESS_TABLETS
 | VSCHEMA_TABLES
+| VITESS_TARGET
 | WITH
 | WRITE
 | YEAR

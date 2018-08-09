@@ -47,7 +47,7 @@ func TestClientServer(t *testing.T) {
 	CreateCA(root)
 
 	CreateSignedCert(root, CA, "01", "servers", "Servers CA")
-	CreateSignedCert(root, "servers", "01", "server-instance", "Server Instance")
+	CreateSignedCert(root, "servers", "01", "server-instance", "server.example.com")
 
 	CreateSignedCert(root, CA, "02", "clients", "Clients CA")
 	CreateSignedCert(root, "clients", "01", "client-instance", "Client Instance")
@@ -62,7 +62,7 @@ func TestClientServer(t *testing.T) {
 		path.Join(root, "client-instance-cert.pem"),
 		path.Join(root, "client-instance-key.pem"),
 		path.Join(root, "servers-cert.pem"),
-		"Server Instance")
+		"server.example.com")
 	if err != nil {
 		t.Fatalf("TLSClientConfig failed: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestClientServer(t *testing.T) {
 		path.Join(root, "server-instance-cert.pem"),
 		path.Join(root, "server-instance-key.pem"),
 		path.Join(root, "servers-cert.pem"),
-		"Server Instance")
+		"server.example.com")
 	if err != nil {
 		t.Fatalf("TLSClientConfig failed: %v", err)
 	}

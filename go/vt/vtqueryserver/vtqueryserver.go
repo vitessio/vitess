@@ -58,7 +58,7 @@ func initProxy(dbcfgs *dbconfigs.DBConfigs) (*tabletserver.TabletServer, error) 
 	qs.SetAllowUnsafeDMLs(*allowUnsafeDMLs)
 	mysqlProxy = mysqlproxy.NewProxy(&target, qs, *normalizeQueries)
 
-	err := qs.StartService(target, *dbcfgs)
+	err := qs.StartService(target, dbcfgs)
 	if err != nil {
 		return nil, err
 	}

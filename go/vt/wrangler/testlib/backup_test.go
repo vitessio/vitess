@@ -108,13 +108,14 @@ func TestBackupRestore(t *testing.T) {
 		"STOP SLAVE",
 		"START SLAVE",
 	}
-	sourceTablet.FakeMysqlDaemon.Mycnf = &mysqlctl.Mycnf{
+	sourceTablet.StartActionLoop(t, wr)
+	defer sourceTablet.StopActionLoop(t)
+
+	sourceTablet.Agent.Cnf = &mysqlctl.Mycnf{
 		DataDir:               sourceDataDir,
 		InnodbDataHomeDir:     sourceInnodbDataDir,
 		InnodbLogGroupHomeDir: sourceInnodbLogDir,
 	}
-	sourceTablet.StartActionLoop(t, wr)
-	defer sourceTablet.StopActionLoop(t)
 
 	// run the backup
 	if err := vp.Run([]string{"Backup", topoproto.TabletAliasString(sourceTablet.Tablet.Alias)}); err != nil {
@@ -150,15 +151,6 @@ func TestBackupRestore(t *testing.T) {
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
-	destTablet.FakeMysqlDaemon.Mycnf = &mysqlctl.Mycnf{
-		DataDir:               sourceDataDir,
-		InnodbDataHomeDir:     sourceInnodbDataDir,
-		InnodbLogGroupHomeDir: sourceInnodbLogDir,
-		BinLogPath:            path.Join(root, "bin-logs/filename_prefix"),
-		RelayLogPath:          path.Join(root, "relay-logs/filename_prefix"),
-		RelayLogIndexPath:     path.Join(root, "relay-log.index"),
-		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
-	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {},
 	}
@@ -167,6 +159,16 @@ func TestBackupRestore(t *testing.T) {
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
+
+	destTablet.Agent.Cnf = &mysqlctl.Mycnf{
+		DataDir:               sourceDataDir,
+		InnodbDataHomeDir:     sourceInnodbDataDir,
+		InnodbLogGroupHomeDir: sourceInnodbLogDir,
+		BinLogPath:            path.Join(root, "bin-logs/filename_prefix"),
+		RelayLogPath:          path.Join(root, "relay-logs/filename_prefix"),
+		RelayLogIndexPath:     path.Join(root, "relay-log.index"),
+		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
+	}
 
 	if err := destTablet.Agent.RestoreData(ctx, logutil.NewConsoleLogger(), false /* deleteBeforeRestore */); err != nil {
 		t.Fatalf("RestoreData failed: %v", err)

@@ -69,34 +69,6 @@ class Tablet(object):
   default_uid = 62344
   seq = 0
   tablets_running = 0
-  default_db_dba_config = {
-      'dba': {
-          'uname': 'vt_dba',
-          'charset': 'utf8'
-      },
-  }
-  default_db_config = {
-      'app': {
-          'uname': 'vt_app',
-          'charset': 'utf8'
-      },
-      'allprivs': {
-          'uname': 'vt_allprivs',
-          'charset': 'utf8'
-      },
-      'dba': {
-          'uname': 'vt_dba',
-          'charset': 'utf8'
-      },
-      'filtered': {
-          'uname': 'vt_filtered',
-          'charset': 'utf8'
-      },
-      'repl': {
-          'uname': 'vt_repl',
-          'charset': 'utf8'
-      }
-  }
 
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None,
                use_mysqlctld=False, vt_dba_passwd=None):
@@ -158,7 +130,6 @@ class Tablet(object):
     if with_ports:
       args.extend(['-port', str(self.port),
                    '-mysql_port', str(self.mysql_port)])
-    self._add_dbconfigs(self.default_db_dba_config, args)
     if verbose:
       args.append('-alsologtostderr')
     if extra_args:
@@ -186,7 +157,6 @@ class Tablet(object):
         '-tablet_uid', str(self.tablet_uid),
         '-mysql_port', str(self.mysql_port),
         '-socket_file', os.path.join(self.tablet_dir, 'mysqlctl.sock')]
-    self._add_dbconfigs(self.default_db_dba_config, args)
     if verbose:
       args.append('-alsologtostderr')
     if extra_args:
@@ -587,8 +557,6 @@ class Tablet(object):
     args.extend(['-port', '%s' % (port or self.port),
                  '-log_dir', environment.vtlogroot])
 
-    self._add_dbconfigs(self.default_db_config, args, repl_extra_flags)
-
     if topocustomrule_path:
       args.extend(['-topocustomrule_path', topocustomrule_path])
 
@@ -687,22 +655,6 @@ class Tablet(object):
         return
       timeout = utils.wait_step('waiting for socket files: %s' % str(wait_for),
                                 timeout, sleep_time=2.0)
-
-  def _add_dbconfigs(self, cfg, args, repl_extra_flags=None):
-    """Helper method to generate and add --db-config-* flags to 'args'."""
-    if repl_extra_flags is None:
-      repl_extra_flags = {}
-    config = dict(cfg)
-    if self.keyspace:
-      if 'app' in config:
-        config['app']['dbname'] = self.dbname
-      if 'repl' in config:
-        config['repl']['dbname'] = self.dbname
-    if 'repl' in config:
-      config['repl'].update(repl_extra_flags)
-    for key1 in config:
-      for key2 in config[key1]:
-        args.extend(['-db-config-' + key1 + '-' + key2, config[key1][key2]])
 
   def get_status(self):
     return utils.get_status(self.port)

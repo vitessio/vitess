@@ -87,8 +87,9 @@ type ActionAgent struct {
 	HealthReporter      health.Reporter
 	TopoServer          *topo.Server
 	TabletAlias         *topodatapb.TabletAlias
+	Cnf                 *mysqlctl.Mycnf
 	MysqlDaemon         mysqlctl.MysqlDaemon
-	DBConfigs           dbconfigs.DBConfigs
+	DBConfigs           *dbconfigs.DBConfigs
 	BinlogPlayerMap     *BinlogPlayerMap
 
 	// exportStats is set only for production tablet.
@@ -213,7 +214,7 @@ func NewActionAgent(
 	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.Controller,
 	tabletAlias *topodatapb.TabletAlias,
-	dbcfgs dbconfigs.DBConfigs,
+	dbcfgs *dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
 	port, gRPCPort int32,
 ) (agent *ActionAgent, err error) {
@@ -228,12 +229,18 @@ func NewActionAgent(
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
 		TabletAlias:         tabletAlias,
+		Cnf:                 mycnf,
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 		orc:                 orc,
 	}
+	// Sanity check for inconsistent flags
+	if agent.Cnf == nil && *restoreFromBackup {
+		return nil, fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
+	}
+
 	agent.registerQueryRuleSources()
 
 	// try to initialize the tablet if we have to
@@ -248,7 +255,7 @@ func NewActionAgent(
 
 	// Start the binlog player services, not playing at start.
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(ts, mysqld, func() binlogplayer.VtClient {
-		return binlogplayer.NewDbClient(&agent.DBConfigs.Filtered)
+		return binlogplayer.NewDbClient(agent.DBConfigs.FilteredWithDB())
 	})
 	// Stop all binlog players upon entering lameduck.
 	servenv.OnTerm(agent.BinlogPlayerMap.StopAllPlayersAndReset)
@@ -256,20 +263,15 @@ func NewActionAgent(
 
 	var mysqlHost string
 	var mysqlPort int32
-	if dbcfgs.App.Host != "" {
-		mysqlHost = dbcfgs.App.Host
-		mysqlPort = int32(dbcfgs.App.Port)
+	if appConfig := dbcfgs.AppWithDB(); appConfig.Host != "" {
+		mysqlHost = appConfig.Host
+		mysqlPort = int32(appConfig.Port)
 	} else {
-		// Assume unix socket was specified and try to figure out the mysql port
-		// by other means.
-		mysqlPort = mycnf.MysqlPort
-		if mysqlPort == 0 {
-			// we don't know the port, try to get it from mysqld
-			var err error
-			mysqlPort, err = mysqld.GetMysqlPort()
-			if err != nil {
-				log.Warningf("Cannot get current mysql port, will use 0 for now: %v", err)
-			}
+		// Assume unix socket was specified and try to get the port from mysqld
+		var err error
+		mysqlPort, err = mysqld.GetMysqlPort()
+		if err != nil {
+			log.Warningf("Cannot get current mysql port, will try to get it later: %v", err)
 		}
 	}
 
@@ -336,8 +338,9 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
 		TabletAlias:         tabletAlias,
+		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
-		DBConfigs:           dbconfigs.DBConfigs{},
+		DBConfigs:           &dbconfigs.DBConfigs{},
 		BinlogPlayerMap:     nil,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
@@ -366,7 +369,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 // NewComboActionAgent creates an agent tailored specifically to run
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
-func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
+func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -374,6 +377,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
 		TabletAlias:         tabletAlias,
+		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           dbcfgs,
 		BinlogPlayerMap:     nil,
@@ -477,9 +481,14 @@ func (agent *ActionAgent) slaveStopped() bool {
 		return *agent._slaveStopped
 	}
 
+	// If there's no Cnf file, don't read state.
+	if agent.Cnf == nil {
+		return false
+	}
+
 	// If the marker file exists, we're stopped.
 	// Treat any read error as if the file doesn't exist.
-	_, err := os.Stat(path.Join(agent.MysqlDaemon.TabletDir(), slaveStoppedFile))
+	_, err := os.Stat(path.Join(agent.Cnf.TabletDir(), slaveStoppedFile))
 	slaveStopped := err == nil
 	agent._slaveStopped = &slaveStopped
 	return slaveStopped
@@ -495,7 +504,10 @@ func (agent *ActionAgent) setSlaveStopped(slaveStopped bool) {
 	// We store a marker in the filesystem so it works regardless of whether
 	// mysqld is running, and so it's tied to this particular instance of the
 	// tablet data dir (the one that's paused at a known replication position).
-	tabletDir := agent.MysqlDaemon.TabletDir()
+	if agent.Cnf == nil {
+		return
+	}
+	tabletDir := agent.Cnf.TabletDir()
 	if tabletDir == "" {
 		return
 	}
@@ -588,23 +600,14 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	// Get and fix the dbname if necessary, only for real instances.
 	if !agent.DBConfigs.IsZero() {
 		dbname := topoproto.TabletDbName(agent.initialTablet)
-
-		// Update our DB config to match the info we have in the tablet
-		if agent.DBConfigs.App.DbName == "" {
-			agent.DBConfigs.App.DbName = dbname
-		}
-		if agent.DBConfigs.Filtered.DbName == "" {
-			agent.DBConfigs.Filtered.DbName = dbname
-		}
+		agent.DBConfigs.DBName.Set(dbname)
 	}
 
 	// Create and register the RPC services from UpdateStream.
 	// (it needs the dbname, so it has to be delayed up to here,
 	// but it has to be before updateState below that may use it)
 	if initUpdateStream {
-		cp := agent.DBConfigs.Dba
-		cp.DbName = agent.DBConfigs.App.DbName
-		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, &cp, agent.QueryServiceControl.SchemaEngine())
+		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, agent.DBConfigs.DbaWithDB(), agent.QueryServiceControl.SchemaEngine())
 		agent.UpdateStream = us
 		servenv.OnRun(func() {
 			us.RegisterService()

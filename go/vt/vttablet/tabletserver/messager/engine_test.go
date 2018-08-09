@@ -261,10 +261,7 @@ func newTestEngine(db *fakesqldb.DB) *Engine {
 	tsv := newFakeTabletServer()
 	se := schema.NewEngine(tsv, config)
 	te := NewEngine(tsv, se, config)
-	te.InitDBConfig(dbconfigs.DBConfigs{
-		App:           *db.ConnParams(),
-		SidecarDBName: "_vt",
-	})
+	te.InitDBConfig(dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), ""))
 	te.Open()
 	return te
 }

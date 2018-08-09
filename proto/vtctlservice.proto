@@ -18,6 +18,7 @@ limitations under the License.
 // proxy for vt commands.
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/vtctlservice";
 
 package vtctlservice;
 

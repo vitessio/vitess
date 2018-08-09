@@ -57,6 +57,27 @@ func TestParseNextValid(t *testing.T) {
 	}
 }
 
+func TestIgnoreSpecialComments(t *testing.T) {
+	input := `SELECT 1;/*! ALTER TABLE foo DISABLE KEYS */;SELECT 2;`
+
+	tokenizer := NewStringTokenizer(input)
+	tokenizer.SkipSpecialComments = true
+	one, err := ParseNextStrictDDL(tokenizer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := ParseNextStrictDDL(tokenizer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := String(one), "select 1 from dual"; got != want {
+		t.Fatalf("got %s want %s", got, want)
+	}
+	if got, want := String(two), "select 2 from dual"; got != want {
+		t.Fatalf("got %s want %s", got, want)
+	}
+}
+
 // TestParseNextErrors tests all the error cases, and ensures a valid
 // SQL statement can be passed afterwards.
 func TestParseNextErrors(t *testing.T) {
@@ -159,5 +180,38 @@ func TestParseNextEdgeCases(t *testing.T) {
 		if tree, err := ParseNext(tokens); err != io.EOF {
 			t.Errorf("ParseNext(%q) = (%q, %v) want io.EOF", test.input, String(tree), err)
 		}
+	}
+}
+
+// TestParseNextEdgeCases tests various ParseNext edge cases.
+func TestParseNextStrictNonStrict(t *testing.T) {
+	// This is one of the edge cases above.
+	input := "create table a ignore me this is garbage; select 1 from a"
+	want := []string{"create table a", "select 1 from a"}
+
+	// First go through as expected with non-strict DDL parsing.
+	tokens := NewStringTokenizer(input)
+	for i, want := range want {
+		tree, err := ParseNext(tokens)
+		if err != nil {
+			t.Fatalf("[%d] ParseNext(%q) err = %q, want nil", i, input, err)
+		}
+		if got := String(tree); got != want {
+			t.Fatalf("[%d] ParseNext(%q) = %q, want %q", i, input, got, want)
+		}
+	}
+
+	// Now try again with strict parsing and observe the expected error.
+	tokens = NewStringTokenizer(input)
+	tree, err := ParseNextStrictDDL(tokens)
+	if err == nil || !strings.Contains(err.Error(), "ignore") {
+		t.Fatalf("ParseNext(%q) err = %q, want nil", input, err)
+	}
+	tree, err = ParseNextStrictDDL(tokens)
+	if err != nil {
+		t.Fatalf("ParseNext(%q) err = %q, want nil", input, err)
+	}
+	if got := String(tree); got != want[1] {
+		t.Fatalf("ParseNext(%q) = %q, want %q", input, got, want)
 	}
 }

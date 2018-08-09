@@ -18,6 +18,7 @@ package stats
 
 import (
 	"expvar"
+	"strings"
 	"testing"
 	"time"
 )
@@ -50,7 +51,9 @@ func TestMultiTimingsDot(t *testing.T) {
 	clear()
 	mtm := NewMultiTimings("maptimings2", "help", []string{"label"})
 	mtm.Add([]string{"value.dot"}, 500*time.Microsecond)
-	want := `{"TotalCount":1,"TotalTime":500000,"Histograms":{"value_dot":{"500000":1,"1000000":1,"5000000":1,"10000000":1,"50000000":1,"100000000":1,"500000000":1,"1000000000":1,"5000000000":1,"10000000000":1,"inf":1,"Count":1,"Time":500000}}}`
+	safe := safeLabel("value.dot")
+	safeJSON := strings.Replace(safe, "\\", "\\\\", -1)
+	want := `{"TotalCount":1,"TotalTime":500000,"Histograms":{"` + safeJSON + `":{"500000":1,"1000000":1,"5000000":1,"10000000":1,"50000000":1,"100000000":1,"500000000":1,"1000000000":1,"5000000000":1,"10000000000":1,"inf":1,"Count":1,"Time":500000}}}`
 	if got := mtm.String(); got != want {
 		t.Errorf("got %s, want %s", got, want)
 	}

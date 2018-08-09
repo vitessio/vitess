@@ -70,3 +70,6 @@ releases
 /web/vtctld2/bower.json~
 /web/vtctld2/public/bower_components/
 
+
+# Vagrant
+.vagrant

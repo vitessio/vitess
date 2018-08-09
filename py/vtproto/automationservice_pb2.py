@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='automationservice.proto',
   package='automationservice',
   syntax='proto3',
-  serialized_pb=_b('\n\x17\x61utomationservice.proto\x12\x11\x61utomationservice\x1a\x10\x61utomation.proto2\x81\x02\n\nAutomation\x12t\n\x17\x45nqueueClusterOperation\x12*.automation.EnqueueClusterOperationRequest\x1a+.automation.EnqueueClusterOperationResponse\"\x00\x12}\n\x1aGetClusterOperationDetails\x12-.automation.GetClusterOperationDetailsRequest\x1a..automation.GetClusterOperationDetailsResponse\"\x00\x62\x06proto3')
+  serialized_pb=_b('\n\x17\x61utomationservice.proto\x12\x11\x61utomationservice\x1a\x10\x61utomation.proto2\x81\x02\n\nAutomation\x12t\n\x17\x45nqueueClusterOperation\x12*.automation.EnqueueClusterOperationRequest\x1a+.automation.EnqueueClusterOperationResponse\"\x00\x12}\n\x1aGetClusterOperationDetails\x12-.automation.GetClusterOperationDetailsRequest\x1a..automation.GetClusterOperationDetailsResponse\"\x00\x42\x30Z.vitess.io/vitess/go/vt/proto/automationserviceb\x06proto3')
   ,
   dependencies=[automation__pb2.DESCRIPTOR,])
 
@@ -29,6 +29,8 @@ DESCRIPTOR = _descriptor.FileDescriptor(
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('Z.vitess.io/vitess/go/vt/proto/automationservice'))
 
 _AUTOMATION = _descriptor.ServiceDescriptor(
   name='Automation',

@@ -60,8 +60,6 @@ func (ctl *Mysqlctl) Setup() error {
 		"-alsologtostderr",
 		"-tablet_uid", "1",
 		"-mysql_port", fmt.Sprintf("%d", ctl.Port),
-		"-db-config-dba-charset", "utf8",
-		"-db-config-dba-uname", "vt_dba",
 		"init",
 		"-init_db_sql_file", ctl.InitFile,
 	)
@@ -86,8 +84,6 @@ func (ctl *Mysqlctl) TearDown() error {
 		"-alsologtostderr",
 		"-tablet_uid", "1",
 		"-mysql_port", fmt.Sprintf("%d", ctl.Port),
-		"-db-config-dba-charset", "utf8",
-		"-db-config-dba-uname", "vt_dba",
 		"shutdown",
 	)
 

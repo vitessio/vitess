@@ -37,7 +37,7 @@ import (
 
 // TxEngine handles transactions.
 type TxEngine struct {
-	dbconfigs dbconfigs.DBConfigs
+	dbconfigs *dbconfigs.DBConfigs
 
 	isOpen, twopcEnabled bool
 	shutdownGracePeriod  time.Duration
@@ -107,7 +107,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 }
 
 // InitDBConfig must be called before Init.
-func (te *TxEngine) InitDBConfig(dbcfgs dbconfigs.DBConfigs) {
+func (te *TxEngine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 	te.dbconfigs = dbcfgs
 }
 
@@ -115,7 +115,7 @@ func (te *TxEngine) InitDBConfig(dbcfgs dbconfigs.DBConfigs) {
 // up the metadata tables.
 func (te *TxEngine) Init() error {
 	if te.twopcEnabled {
-		return te.twoPC.Init(te.dbconfigs.SidecarDBName, &te.dbconfigs.Dba)
+		return te.twoPC.Init(te.dbconfigs.SidecarDBName.Get(), te.dbconfigs.DbaWithDB())
 	}
 	return nil
 }
@@ -126,7 +126,7 @@ func (te *TxEngine) Open() {
 	if te.isOpen {
 		return
 	}
-	te.txPool.Open(&te.dbconfigs.App, &te.dbconfigs.Dba, &te.dbconfigs.AppDebug)
+	te.txPool.Open(te.dbconfigs.AppWithDB(), te.dbconfigs.DbaWithDB(), te.dbconfigs.AppDebugWithDB())
 	if !te.twopcEnabled {
 		te.isOpen = true
 		return

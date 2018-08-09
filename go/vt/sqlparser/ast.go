@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -58,6 +59,9 @@ func Parse(sql string) (Statement, error) {
 		}
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
 	}
+	if tokenizer.ParseTree == nil {
+		return nil, ErrEmpty
+	}
 	return tokenizer.ParseTree, nil
 }
 
@@ -68,6 +72,9 @@ func ParseStrictDDL(sql string) (Statement, error) {
 	if yyParse(tokenizer) != 0 {
 		return nil, tokenizer.LastError
 	}
+	if tokenizer.ParseTree == nil {
+		return nil, ErrEmpty
+	}
 	return tokenizer.ParseTree, nil
 }
 
@@ -77,6 +84,16 @@ func ParseStrictDDL(sql string) (Statement, error) {
 // the next call to ParseNext to parse any subsequent SQL statements. When
 // there are no more statements to parse, a error of io.EOF is returned.
 func ParseNext(tokenizer *Tokenizer) (Statement, error) {
+	return parseNext(tokenizer, false)
+}
+
+// ParseNextStrictDDL is the same as ParseNext except it errors on
+// partially parsed DDL statements.
+func ParseNextStrictDDL(tokenizer *Tokenizer) (Statement, error) {
+	return parseNext(tokenizer, true)
+}
+
+func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 	if tokenizer.lastChar == ';' {
 		tokenizer.next()
 		tokenizer.skipBlank()
@@ -88,14 +105,20 @@ func ParseNext(tokenizer *Tokenizer) (Statement, error) {
 	tokenizer.reset()
 	tokenizer.multi = true
 	if yyParse(tokenizer) != 0 {
-		if tokenizer.partialDDL != nil {
+		if tokenizer.partialDDL != nil && !strict {
 			tokenizer.ParseTree = tokenizer.partialDDL
 			return tokenizer.ParseTree, nil
 		}
 		return nil, tokenizer.LastError
 	}
+	if tokenizer.ParseTree == nil {
+		return ParseNext(tokenizer)
+	}
 	return tokenizer.ParseTree, nil
 }
+
+// ErrEmpty is a sentinel error returned when parsing empty statements.
+var ErrEmpty = errors.New("empty statement")
 
 // SplitStatement returns the first sql statement up to either a ; or EOF
 // and the remainder from the given buffer
@@ -659,6 +682,7 @@ type DDL struct {
 	NewName       TableName
 	IfExists      bool
 	TableSpec     *TableSpec
+	OptLike       *OptLike
 	PartitionSpec *PartitionSpec
 	VindexSpec    *VindexSpec
 	VindexCols    []ColIdent
@@ -683,10 +707,12 @@ const (
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
-		if node.TableSpec == nil {
-			buf.Myprintf("%s table %v", node.Action, node.NewName)
-		} else {
+		if node.OptLike != nil {
+			buf.Myprintf("%s table %v %v", node.Action, node.NewName, node.OptLike)
+		} else if node.TableSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.NewName, node.TableSpec)
+		} else {
+			buf.Myprintf("%s table %v", node.Action, node.NewName)
 		}
 	case DropStr:
 		exists := ""
@@ -739,6 +765,23 @@ func (node *DDL) walkSubtree(visit Visit) error {
 const (
 	ReorganizeStr = "reorganize partition"
 )
+
+// OptLike works for create table xxx like xxx
+type OptLike struct {
+	LikeTable TableName
+}
+
+// Format formats the node.
+func (node *OptLike) Format(buf *TrackedBuffer) {
+	buf.Myprintf("like %v", node.LikeTable)
+}
+
+func (node *OptLike) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.LikeTable)
+}
 
 // PartitionSpec describe partition actions (for alter and create)
 type PartitionSpec struct {
@@ -807,9 +850,10 @@ func (node *PartitionDefinition) walkSubtree(visit Visit) error {
 
 // TableSpec describes the structure of a table from a CREATE TABLE statement
 type TableSpec struct {
-	Columns []*ColumnDefinition
-	Indexes []*IndexDefinition
-	Options string
+	Columns     []*ColumnDefinition
+	Indexes     []*IndexDefinition
+	Constraints []*ConstraintDefinition
+	Options     string
 }
 
 // Format formats the node.
@@ -825,6 +869,9 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	for _, idx := range ts.Indexes {
 		buf.Myprintf(",\n\t%v", idx)
 	}
+	for _, c := range ts.Constraints {
+		buf.Myprintf(",\n\t%v", c)
+	}
 
 	buf.Myprintf("\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
 }
@@ -839,6 +886,11 @@ func (ts *TableSpec) AddIndex(id *IndexDefinition) {
 	ts.Indexes = append(ts.Indexes, id)
 }
 
+// AddConstraint appends the given index to the list in the spec
+func (ts *TableSpec) AddConstraint(cd *ConstraintDefinition) {
+	ts.Constraints = append(ts.Constraints, cd)
+}
+
 func (ts *TableSpec) walkSubtree(visit Visit) error {
 	if ts == nil {
 		return nil
@@ -851,6 +903,12 @@ func (ts *TableSpec) walkSubtree(visit Visit) error {
 	}
 
 	for _, n := range ts.Indexes {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+
+	for _, n := range ts.Constraints {
 		if err := Walk(visit, n); err != nil {
 			return err
 		}
@@ -1278,12 +1336,63 @@ func (node VindexParam) walkSubtree(visit Visit) error {
 	)
 }
 
+// ConstraintDefinition describes a constraint in a CREATE TABLE statement
+type ConstraintDefinition struct {
+	Name    string
+	Details ConstraintInfo
+}
+
+// ConstraintInfo details a constraint in a CREATE TABLE statement
+type ConstraintInfo interface {
+	SQLNode
+	constraintInfo()
+}
+
+// Format formats the node.
+func (c *ConstraintDefinition) Format(buf *TrackedBuffer) {
+	if c.Name != "" {
+		buf.Myprintf("constraint %s ", c.Name)
+	}
+	c.Details.Format(buf)
+}
+
+func (c *ConstraintDefinition) walkSubtree(visit Visit) error {
+	return Walk(visit, c.Details)
+}
+
+// ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
+type ForeignKeyDefinition struct {
+	Source            Columns
+	ReferencedTable   TableName
+	ReferencedColumns Columns
+}
+
+var _ ConstraintInfo = &ForeignKeyDefinition{}
+
+// Format formats the node.
+func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
+	buf.Myprintf("foreign key %v references %v %v", f.Source, f.ReferencedTable, f.ReferencedColumns)
+}
+
+func (f *ForeignKeyDefinition) constraintInfo() {}
+
+func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
+	if err := Walk(visit, f.Source); err != nil {
+		return err
+	}
+	if err := Walk(visit, f.ReferencedTable); err != nil {
+		return err
+	}
+	return Walk(visit, f.ReferencedColumns)
+}
+
 // Show represents a show statement.
 type Show struct {
-	Type          string
-	OnTable       TableName
-	ShowTablesOpt *ShowTablesOpt
-	Scope         string
+	Type                   string
+	OnTable                TableName
+	ShowTablesOpt          *ShowTablesOpt
+	Scope                  string
+	ShowCollationFilterOpt *Expr
 }
 
 // Format formats the node.
@@ -1307,6 +1416,9 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	}
 	if node.HasOnTable() {
 		buf.Myprintf(" on %v", node.OnTable)
+	}
+	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
+		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
 	}
 }
 

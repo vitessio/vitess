@@ -14,22 +14,6 @@ if [ "$uid" = "1" ]; then
     tablet_role='master'
 fi
 
-dbconfig_dba_flags="\
-    -db-config-dba-uname root \
-    -db-config-dba-charset utf8"
-
-dbconfig_flags="$dbconfig_dba_flags \
-    -db-config-app-uname root \
-    -db-config-app-charset utf8 \
-    -db-config-appdebug-uname root \
-    -db-config-appdebug-charset utf8 \
-    -db-config-allprivs-uname root \
-    -db-config-allprivs-charset utf8 \
-    -db-config-repl-uname root \
-    -db-config-repl-charset utf8 \
-    -db-config-filtered-uname root \
-    -db-config-filtered-charset utf8"
-
 init_db_sql_file="$VTROOT/init_db.sql"
 echo "GRANT ALL ON *.* TO 'root'@'%';" > $init_db_sql_file
 
@@ -52,7 +36,6 @@ fi
 $VTROOT/bin/mysqlctl \
   -log_dir $VTDATAROOT/tmp \
   -tablet_uid $uid \
-  $dbconfig_dba_flags \
   -mysql_port 3306 \
   $action &
 
@@ -78,5 +61,4 @@ exec $VTROOT/bin/vttablet \
   -grpc_port $GRPC_PORT \
   -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
   -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
-  -vtctld_addr http://vtctld:$WEB_PORT/ \
-  $dbconfig_flags
+  -vtctld_addr "http://vtctld:$WEB_PORT/"
