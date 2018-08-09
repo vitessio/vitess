@@ -127,8 +127,6 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 		return nil, err
 	}
 
-	// We add the tag before calling ChangeSlaveType, so the destination
-	// vttablet reloads the worker URL when it reloads the tablet.
 	ourURL := servenv.ListeningURL.String()
 	wr.Logger().Infof("Adding tag[worker]=%v to tablet %v", ourURL, topoproto.TabletAliasString(tabletAlias))
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
@@ -150,8 +148,17 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
 	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "drain_reason", "")
 
-	// Record a clean-up action to take the tablet back to rdonly.
-	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topodatapb.TabletType_DRAINED, topodatapb.TabletType_RDONLY)
+	// Record a clean-up action to take the tablet back to tabletAlias.
+	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topodatapb.TabletType_DRAINED, tabletType)
+
+	// We refresh the destination vttablet reloads the worker URL when it reloads the tablet.
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	wr.RefreshTabletState(shortCtx, tabletAlias)
+	if err != nil {
+		return nil, err
+	}
+	cancel()
+
 	return tabletAlias, nil
 }
 
