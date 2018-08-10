@@ -83,6 +83,10 @@ var (
 	// The lower bound for window size is 64K and any value smaller than that will be ignored.
 	GRPCInitialWindowSize = flag.Int("grpc_server_initial_window_size", 0, "grpc server initial window size")
 
+	// EnforcementPolicy MinTime that sets the keepalive enforcement policy on the server.
+	// This is the minimum amount of time a client should wait before sending a keepalive ping.
+	GRPCEnforcementPolicyMinTime = flag.Duration("grpc_enforcement_min_time", 5*time.Minute, "grpc server minimum keepalive time")
+
 	authPlugin Authenticator
 )
 
@@ -142,6 +146,11 @@ func createGRPCServer() {
 		log.Infof("Setting grpc server initial window size to %d", int32(*GRPCInitialWindowSize))
 		opts = append(opts, grpc.InitialWindowSize(int32(*GRPCInitialWindowSize)))
 	}
+
+	ep := keepalive.EnforcementPolicy{
+		MinTime: *GRPCEnforcementPolicyMinTime,
+	}
+	opts = append(opts, grpc.KeepaliveEnforcementPolicy(ep))
 
 	if GRPCMaxConnectionAge != nil {
 		ka := keepalive.ServerParameters{
