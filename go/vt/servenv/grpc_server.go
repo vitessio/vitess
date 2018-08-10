@@ -148,7 +148,7 @@ func createGRPCServer() {
 	}
 
 	ep := keepalive.EnforcementPolicy{
-		MinTime: *GRPCEnforcementPolicyMinTime,
+		MinTime: *GRPCKeepAliveEnforcementPolicyMinTime,
 	}
 	opts = append(opts, grpc.KeepaliveEnforcementPolicy(ep))
 
