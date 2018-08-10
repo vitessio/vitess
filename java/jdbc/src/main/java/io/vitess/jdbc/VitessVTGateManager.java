@@ -152,7 +152,7 @@ public class VitessVTGateManager {
 
     private static void closeRefreshedConnection(final VTGateConnection old) {
         if (vtgateClosureTimer != null) {
-            logger.info("Closing " + old + " with a delay of " + vtgateClosureDelaySeconds + " seconds");
+            logger.info(String.format("%s Closing connection with a %s second delay", old, vtgateClosureDelaySeconds));
             vtgateClosureTimer.schedule(new TimerTask() {
                 @Override
                 public void run() {
@@ -167,10 +167,10 @@ public class VitessVTGateManager {
 
     private static void actuallyCloseRefreshedConnection(final VTGateConnection old) {
         try {
-            logger.info("Closing old connection " + old);
+            logger.info(old + " Closing connection because it had been refreshed");
             old.close();
         } catch (IOException ioe) {
-            logger.log(Level.WARNING, "Error closing VTGateConnection", ioe);
+            logger.log(Level.WARNING, String.format("Error closing VTGateConnection %s", old), ioe);
         }
     }
 
