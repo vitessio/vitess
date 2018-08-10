@@ -693,6 +693,9 @@ var (
 		input:  "set names utf8 collate foo",
 		output: "set names 'utf8'",
 	}, {
+		input:  "set names utf8 collate 'foo'",
+		output: "set names 'utf8'",
+	}, {
 		input:  "set character set utf8",
 		output: "set charset 'utf8'",
 	}, {
@@ -994,6 +997,9 @@ var (
 		input:  "show collation",
 		output: "show collation",
 	}, {
+		input:  "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
+		output: "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
+	}, {
 		input:  "show create database d",
 		output: "show create database",
 	}, {
@@ -1199,6 +1205,12 @@ var (
 		output: "otheradmin",
 	}, {
 		input:  "optimize foo",
+		output: "otheradmin",
+	}, {
+		input:  "lock tables foo",
+		output: "otheradmin",
+	}, {
+		input:  "unlock tables foo",
 		output: "otheradmin",
 	}, {
 		input: "select /* EQ true */ 1 from t where a = true",
@@ -1624,6 +1636,9 @@ func TestConvert(t *testing.T) {
 	}, {
 		input:  "select convert('abc', decimal(4+9)) from t",
 		output: "syntax error at position 33",
+	}, {
+		input:  "/* a comment */",
+		output: "empty statement",
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -1830,6 +1845,17 @@ func TestCreateTable(t *testing.T) {
 			"	key by_email (email(10), username)\n" +
 			")",
 
+		// foreign keys
+		"create table t (\n" +
+			"	id int auto_increment,\n" +
+			"	username varchar,\n" +
+			"	k int,\n" +
+			"	Z int,\n" +
+			"	primary key (id, username),\n" +
+			"	key by_email (email(10), username),\n" +
+			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b)\n" +
+			")",
+
 		// table options
 		"create table t (\n" +
 			"	id int auto_increment\n" +
@@ -1906,6 +1932,37 @@ func TestCreateTable(t *testing.T) {
 			"	unique by_username3 (username) key_block_size 4\n" +
 			")",
 	},
+	}
+	for _, tcase := range testCases {
+		tree, err := ParseStrictDDL(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+		if got, want := String(tree.(*DDL)), tcase.output; got != want {
+			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
+		}
+	}
+}
+
+func TestCreateTableLike(t *testing.T) {
+	normal := "create table a like b"
+	testCases := []struct {
+		input  string
+		output string
+	}{
+		{
+			"create table a like b",
+			normal,
+		},
+		{
+			"create table a (like b)",
+			normal,
+		},
+		{
+			"create table ks.a like unsharded_ks.b",
+			"create table ks.a like unsharded_ks.b",
+		},
 	}
 	for _, tcase := range testCases {
 		tree, err := ParseStrictDDL(tcase.input)

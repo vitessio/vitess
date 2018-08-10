@@ -54,6 +54,7 @@ func TestStrictTransTables(t *testing.T) {
 	// config.EnforceStrictTransTable is true by default.
 	qe := NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
 	qe.InitDBConfig(dbcfgs)
+	qe.se.InitDBConfig(dbcfgs)
 	qe.se.Open()
 	if err := qe.Open(); err != nil {
 		t.Error(err)
@@ -103,7 +104,7 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	_, err := qe.GetPlan(ctx, logStats, "", false)
-	want := "syntax error"
+	want := "empty statement"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("qe.GetPlan: %v, want %s", err, want)
 	}
@@ -291,7 +292,7 @@ func TestStatsURL(t *testing.T) {
 	qe.ServeHTTP(response, request)
 }
 
-func newTestQueryEngine(queryPlanCacheSize int, idleTimeout time.Duration, strict bool, dbcfgs dbconfigs.DBConfigs) *QueryEngine {
+func newTestQueryEngine(queryPlanCacheSize int, idleTimeout time.Duration, strict bool, dbcfgs *dbconfigs.DBConfigs) *QueryEngine {
 	config := tabletenv.DefaultQsConfig
 	config.QueryPlanCacheSize = queryPlanCacheSize
 	config.IdleTimeout = float64(idleTimeout) / 1e9

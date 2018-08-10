@@ -63,9 +63,7 @@ func main() {
 	defer exit.Recover()
 
 	// flag parsing
-	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
-		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
-	dbconfigs.RegisterFlags(dbconfigFlags)
+	dbconfigs.RegisterFlags(dbconfigs.All...)
 	mysqlctl.RegisterFlags()
 	servenv.ParseFlags("vtcombo")
 
@@ -96,21 +94,16 @@ func main() {
 	servenv.Init()
 	tabletenv.Init()
 
-	// database configs
-	mycnf, err := mysqlctl.NewMycnfFromFlags(0)
-	if err != nil {
-		log.Errorf("mycnf read failed: %v", err)
-		exit.Return(1)
-	}
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, dbconfigFlags)
+	dbcfgs, err := dbconfigs.Init("")
 	if err != nil {
 		log.Warning(err)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags)
+	mysqld := mysqlctl.NewMysqld(dbcfgs)
 	servenv.OnClose(mysqld.Close)
 
-	// tablets configuration and init
-	if err := vtcombo.InitTabletMap(ts, tpb, mysqld, *dbcfgs, *schemaDir, mycnf); err != nil {
+	// tablets configuration and init.
+	// Send mycnf as nil because vtcombo won't do backups and restores.
+	if err := vtcombo.InitTabletMap(ts, tpb, mysqld, dbcfgs, *schemaDir, nil); err != nil {
 		log.Errorf("initTabletMapProto failed: %v", err)
 		exit.Return(1)
 	}

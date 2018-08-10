@@ -79,7 +79,7 @@ func TestMain(m *testing.M) {
 
 		connParams = cluster.MySQLConnParams()
 		connAppDebugParams = cluster.MySQLAppDebugConnParams()
-		err := framework.StartServer(connParams, connAppDebugParams)
+		err := framework.StartServer(connParams, connAppDebugParams, cluster.DbName())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
@@ -117,7 +117,7 @@ func initTableACL() error {
 	return nil
 }
 
-var testSchema = `create table vitess_test(intval int default 0, floatval float default null, charval varchar(256) default null, binval varbinary(256) default null, primary key(intval));
+var testSchema = `create table vitess_test(intval int default 0, floatval float default null, charval varchar(10) default null, binval varbinary(256) default null, primary key(intval));
 create table vitess_test_debuguser(intval int default 0, floatval float default null, charval varchar(256) default null, binval varbinary(256) default null, primary key(intval));
 grant select, show databases, process on *.* to 'vt_appdebug'@'localhost';
 revoke select on *.* from 'vt_appdebug'@'localhost';

@@ -19,6 +19,7 @@ limitations under the License.
 // server.
 
 syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/workflow";
 
 package workflow;
 

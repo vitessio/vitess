@@ -105,10 +105,8 @@ func TestMain(m *testing.M) {
 		defer func() { tabletenv.Config = tabletenv.DefaultQsConfig }()
 
 		// Initialize the query service on top of the vttest MySQL database.
-		dbcfgs := dbconfigs.DBConfigs{
-			App: mysqlConnParams,
-		}
-		queryServer, err = initProxy(&dbcfgs)
+		dbcfgs := dbconfigs.NewTestDBConfigs(mysqlConnParams, mysqlConnParams, cluster.DbName())
+		queryServer, err = initProxy(dbcfgs)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "could not start proxy: %v\n", err)
 			return 1

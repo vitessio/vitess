@@ -39,7 +39,7 @@ import (
 // replication stream. It can tell you the current event token,
 // and it will trigger schema reloads if a DDL is encountered.
 type ReplicationWatcher struct {
-	dbconfigs dbconfigs.DBConfigs
+	dbconfigs *dbconfigs.DBConfigs
 
 	// Life cycle management vars
 	isOpen bool
@@ -82,7 +82,7 @@ func NewReplicationWatcher(se *schema.Engine, config tabletenv.TabletConfig) *Re
 }
 
 // InitDBConfig must be called before Open.
-func (rpw *ReplicationWatcher) InitDBConfig(dbcfgs dbconfigs.DBConfigs) {
+func (rpw *ReplicationWatcher) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 	rpw.dbconfigs = dbcfgs
 }
 
@@ -109,16 +109,14 @@ func (rpw *ReplicationWatcher) Close() {
 }
 
 // Process processes the replication stream.
-func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs dbconfigs.DBConfigs) {
+func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs *dbconfigs.DBConfigs) {
 	defer func() {
 		tabletenv.LogError()
 		rpw.wg.Done()
 	}()
 	for {
 		log.Infof("Starting a binlog Streamer from current replication position to monitor binlogs")
-		cp := dbconfigs.Dba
-		cp.DbName = dbconfigs.App.DbName
-		streamer := binlog.NewStreamer(&cp, rpw.se, nil /*clientCharset*/, mysql.Position{}, 0 /*timestamp*/, func(eventToken *querypb.EventToken, statements []binlog.FullBinlogStatement) error {
+		streamer := binlog.NewStreamer(dbconfigs.DbaWithDB(), rpw.se, nil /*clientCharset*/, mysql.Position{}, 0 /*timestamp*/, func(eventToken *querypb.EventToken, statements []binlog.FullBinlogStatement) error {
 			// Save the event token.
 			rpw.mu.Lock()
 			rpw.eventToken = eventToken

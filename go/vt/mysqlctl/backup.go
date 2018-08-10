@@ -222,7 +222,7 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, error) {
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
-func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
+func Backup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
 	// Start the backup with the BackupStorage.
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
@@ -235,7 +235,7 @@ func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir,
 	}
 
 	// Take the backup, and either AbortBackup or EndBackup.
-	usable, err := backup(ctx, mysqld, logger, bh, backupConcurrency, hookExtraEnv)
+	usable, err := backup(ctx, cnf, mysqld, logger, bh, backupConcurrency, hookExtraEnv)
 	var finishErr error
 	if usable {
 		finishErr = bh.EndBackup(ctx)
@@ -259,7 +259,7 @@ func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir,
 
 // backup returns a boolean that indicates if the backup is usable,
 // and an overall error.
-func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error) {
+func backup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error) {
 	// Save initial state so we can restore.
 	slaveStartRequired := false
 	sourceIsMaster := false
@@ -312,22 +312,17 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	logger.Infof("using replication position: %v", replicationPosition)
 
 	// shutdown mysqld
-	err = mysqld.Shutdown(ctx, true)
+	err = mysqld.Shutdown(ctx, cnf, true)
 	if err != nil {
 		return false, fmt.Errorf("can't shutdown mysqld: %v", err)
 	}
 
 	// Backup everything, capture the error.
-	backupErr := backupFiles(ctx, mysqld, logger, bh, replicationPosition, backupConcurrency, hookExtraEnv)
+	backupErr := backupFiles(ctx, cnf, mysqld, logger, bh, replicationPosition, backupConcurrency, hookExtraEnv)
 	usable := backupErr == nil
 
 	// Try to restart mysqld
-	err = mysqld.RefreshConfig(ctx)
-	if err != nil {
-		return usable, fmt.Errorf("can't refresh mysqld config: %v", err)
-	}
-
-	err = mysqld.Start(ctx)
+	err = mysqld.Start(ctx, cnf)
 	if err != nil {
 		return usable, fmt.Errorf("can't restart mysqld: %v", err)
 	}
@@ -365,9 +360,9 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
-func backupFiles(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition mysql.Position, backupConcurrency int, hookExtraEnv map[string]string) (err error) {
+func backupFiles(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition mysql.Position, backupConcurrency int, hookExtraEnv map[string]string) (err error) {
 	// Get the files to backup.
-	fes, err := findFilesToBackup(mysqld.Cnf())
+	fes, err := findFilesToBackup(cnf)
 	if err != nil {
 		return fmt.Errorf("can't find files to backup: %v", err)
 	}
@@ -392,7 +387,7 @@ func backupFiles(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger,
 
 			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
-			rec.RecordError(backupFile(ctx, mysqld, logger, bh, &fes[i], name, hookExtraEnv))
+			rec.RecordError(backupFile(ctx, cnf, mysqld, logger, bh, &fes[i], name, hookExtraEnv))
 		}(i)
 	}
 
@@ -431,10 +426,10 @@ func backupFiles(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger,
 }
 
 // backupFile backs up an individual file.
-func backupFile(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fe *FileEntry, name string, hookExtraEnv map[string]string) (err error) {
+func backupFile(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fe *FileEntry, name string, hookExtraEnv map[string]string) (err error) {
 	// Open the source file for reading.
 	var source *os.File
-	source, err = fe.open(mysqld.Cnf(), true)
+	source, err = fe.open(cnf, true)
 	if err != nil {
 		return err
 	}
@@ -734,6 +729,7 @@ func removeExistingFiles(cnf *Mycnf) error {
 // and returns ErrNoBackup. Any other error is returned.
 func Restore(
 	ctx context.Context,
+	cnf *Mycnf,
 	mysqld MysqlDaemon,
 	dir string,
 	restoreConcurrency int,
@@ -744,7 +740,7 @@ func Restore(
 	dbName string) (mysql.Position, error) {
 
 	// Wait for mysqld to be ready, in case it was launched in parallel with us.
-	if err := mysqld.Wait(ctx); err != nil {
+	if err := mysqld.Wait(ctx, cnf); err != nil {
 		return mysql.Position{}, err
 	}
 
@@ -817,24 +813,24 @@ func Restore(
 	// context. Thus we use the background context to get through to the finish.
 
 	logger.Infof("Restore: shutdown mysqld")
-	err = mysqld.Shutdown(context.Background(), true)
+	err = mysqld.Shutdown(context.Background(), cnf, true)
 	if err != nil {
 		return mysql.Position{}, err
 	}
 
 	logger.Infof("Restore: deleting existing files")
-	if err := removeExistingFiles(mysqld.Cnf()); err != nil {
+	if err := removeExistingFiles(cnf); err != nil {
 		return mysql.Position{}, err
 	}
 
 	logger.Infof("Restore: reinit config file")
-	err = mysqld.ReinitConfig(context.Background())
+	err = mysqld.ReinitConfig(context.Background(), cnf)
 	if err != nil {
 		return mysql.Position{}, err
 	}
 
 	logger.Infof("Restore: copying all files")
-	if err := restoreFiles(context.Background(), mysqld.Cnf(), bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv); err != nil {
+	if err := restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv); err != nil {
 		return mysql.Position{}, err
 	}
 
@@ -847,7 +843,7 @@ func Restore(
 	// of those who can connect.
 	logger.Infof("Restore: starting mysqld for mysql_upgrade")
 	// Note Start will use dba user for waiting, this is fine, it will be allowed.
-	err = mysqld.Start(context.Background(), "--skip-grant-tables", "--skip-networking")
+	err = mysqld.Start(context.Background(), cnf, "--skip-grant-tables", "--skip-networking")
 	if err != nil {
 		return mysql.Position{}, err
 	}
@@ -868,11 +864,11 @@ func Restore(
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
 	logger.Infof("Restore: restarting mysqld after mysql_upgrade")
-	err = mysqld.Shutdown(context.Background(), true)
+	err = mysqld.Shutdown(context.Background(), cnf, true)
 	if err != nil {
 		return mysql.Position{}, err
 	}
-	err = mysqld.Start(context.Background())
+	err = mysqld.Start(context.Background(), cnf)
 	if err != nil {
 		return mysql.Position{}, err
 	}

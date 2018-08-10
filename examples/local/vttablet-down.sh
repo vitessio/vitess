@@ -41,7 +41,6 @@ for uid_index in $uids; do
 
   echo "Stopping MySQL for tablet $alias..."
   $VTROOT/bin/mysqlctl \
-    -db-config-dba-uname vt_dba \
     -tablet_uid $uid \
     shutdown &
 done

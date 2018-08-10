@@ -63,7 +63,7 @@ func TestCharaterSet(t *testing.T) {
 				OrgTable:     "vitess_test",
 				Database:     "vttest",
 				OrgName:      "charval",
-				ColumnLength: 768,
+				ColumnLength: 30,
 				Charset:      33,
 			}, {
 				Name:         "binval",

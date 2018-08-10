@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='logutil.proto',
   package='logutil',
   syntax='proto3',
-  serialized_pb=_b('\n\rlogutil.proto\x12\x07logutil\",\n\x04Time\x12\x0f\n\x07seconds\x18\x01 \x01(\x03\x12\x13\n\x0bnanoseconds\x18\x02 \x01(\x05\"n\n\x05\x45vent\x12\x1b\n\x04time\x18\x01 \x01(\x0b\x32\r.logutil.Time\x12\x1d\n\x05level\x18\x02 \x01(\x0e\x32\x0e.logutil.Level\x12\x0c\n\x04\x66ile\x18\x03 \x01(\t\x12\x0c\n\x04line\x18\x04 \x01(\x03\x12\r\n\x05value\x18\x05 \x01(\t*6\n\x05Level\x12\x08\n\x04INFO\x10\x00\x12\x0b\n\x07WARNING\x10\x01\x12\t\n\x05\x45RROR\x10\x02\x12\x0b\n\x07\x43ONSOLE\x10\x03\x62\x06proto3')
+  serialized_pb=_b('\n\rlogutil.proto\x12\x07logutil\",\n\x04Time\x12\x0f\n\x07seconds\x18\x01 \x01(\x03\x12\x13\n\x0bnanoseconds\x18\x02 \x01(\x05\"n\n\x05\x45vent\x12\x1b\n\x04time\x18\x01 \x01(\x0b\x32\r.logutil.Time\x12\x1d\n\x05level\x18\x02 \x01(\x0e\x32\x0e.logutil.Level\x12\x0c\n\x04\x66ile\x18\x03 \x01(\t\x12\x0c\n\x04line\x18\x04 \x01(\x03\x12\r\n\x05value\x18\x05 \x01(\t*6\n\x05Level\x12\x08\n\x04INFO\x10\x00\x12\x0b\n\x07WARNING\x10\x01\x12\t\n\x05\x45RROR\x10\x02\x12\x0b\n\x07\x43ONSOLE\x10\x03\x42&Z$vitess.io/vitess/go/vt/proto/logutilb\x06proto3')
 )
 
 _LEVEL = _descriptor.EnumDescriptor(
@@ -179,4 +179,6 @@ Event = _reflection.GeneratedProtocolMessageType('Event', (_message.Message,), d
 _sym_db.RegisterMessage(Event)
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('Z$vitess.io/vitess/go/vt/proto/logutil'))
 # @@protoc_insertion_point(module_scope)

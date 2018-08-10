@@ -38,6 +38,10 @@ create table t2 (
 create table t3 (
     b bit(1) default B'0'
 );
+
+create table t4 like t3;
+
+create table t5 (like t2);
 `
 
 	ddls, err := parseSchema(testSchema, &Options{StrictDDL: true})
@@ -85,5 +89,33 @@ create table t3 (
 
 	if t2.HasPrimary() || len(t2.PKColumns) != 0 {
 		t.Errorf("expected !HasPrimary && t2.PKColumns == [] got %v", t2.PKColumns)
+	}
+
+	t5 := tables["t5"]
+	if t5 == nil {
+		t.Fatalf("table t5 wasn't parsed properly")
+	}
+	got, _ = json.Marshal(t5.Columns)
+	if wantCols != string(got) {
+		t.Errorf("expected %s got %s", wantCols, string(got))
+	}
+
+	if t5.HasPrimary() || len(t5.PKColumns) != 0 {
+		t.Errorf("expected !HasPrimary && t5.PKColumns == [] got %v", t5.PKColumns)
+	}
+}
+
+func TestErrParseSchema(t *testing.T) {
+	testSchema := `
+create table t1 like t2;
+`
+	expected := "check your schema, table[t2] doesnt exist"
+	ddl, err := parseSchema(testSchema, &Options{StrictDDL: true})
+	if err != nil {
+		t.Fatalf("parseSchema: %v", err)
+	}
+	err = initTabletEnvironment(ddl, defaultTestOpts())
+	if err.Error() != expected {
+		t.Errorf("want: %s, got %s", expected, err.Error())
 	}
 }

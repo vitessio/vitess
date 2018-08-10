@@ -249,6 +249,9 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set autocommit = on",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
+		in:  "set autocommit = ON",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
 		in:  "set autocommit = 'on'",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
@@ -262,6 +265,9 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{},
 	}, {
 		in:  "set autocommit = off",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set autocommit = OFF",
 		out: &vtgatepb.Session{},
 	}, {
 		in:  "set AUTOCOMMIT = 0",
@@ -608,6 +614,10 @@ func TestExecutorShow(t *testing.T) {
 		t.Error(err)
 	}
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "show collation", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'", nil)
 	if err != nil {
 		t.Error(err)
 	}

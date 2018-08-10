@@ -256,36 +256,45 @@ the binlogs in `/mnt/bin-logs`:
 
 VTTablet requires multiple user credentials to perform its tasks. Since it's required to run on the same machine as MySQL, it’s most beneficial to use the more efficient unix socket connections.
 
+**connection** parameters
+
+* **db\_socket**: The unix socket to connect on. If this is specifed, host and port will not be used.
+* **db\_host**: The host name for the tcp connection.
+* **db\_port**: The tcp port to be used with the db\_host.
+* **db\_charset**: Character set. Only utf8 or latin1 based character sets are supported.
+* **db\_flags**: Flag values as defined by MySQL.
+* **db\ssl\_ca, db\_ssl\_ca\_path, db\_ssl\_cert, db\_ssl\_key**: SSL flags.
+
+
 **app** credentials are for serving app queries:
 
-* **db-config-app-unixsocket**: MySQL socket name to connect to.
-* **db-config-app-uname**: App username.
-* **db-config-app-pass**: Password for the app username. If you need a more secure way of managing and supplying passwords, VTTablet does allow you to plug into a "password server" that can securely supply and refresh usernames and passwords. Please contact the Vitess team for help if you’d like to write such a custom plugin.
-* **db-config-app-charset**: The only supported character set is utf8. Vitess still works with latin1, but it’s getting deprecated.
+* **db\_app\_user**: App username.
+* **db\_app\_password**: Password for the app username. If you need a more secure way of managing and supplying passwords, VTTablet does allow you to plug into a "password server" that can securely supply and refresh usernames and passwords. Please contact the Vitess team for help if you’d like to write such a custom plugin.
+* **db\_app\_use\_ssl**: Set this flag to false if you don't want to use SSL for this connection. This will allow you to turn off SSL for all users except for `repl`, which may have to be turned on for replication that goes over open networks.
+
+**appdebug** credentials are for the appdebug user:
+
+* **db\_appdebug\_user**
+* **db\_appdebug\_password**
+* **db\_appdebug\_use\_ssl**
 
 **dba** credentials will be used for housekeeping work like loading the schema or killing runaway queries:
 
-* **db-config-dba-unixsocket**
-* **db-config-dba-uname**
-* **db-config-dba-pass**
-* **db-config-dba-charset**
+* **db\_dba\_user**
+* **db\_dba\_password**
+* **db\_dba\_use\_ssl**
 
-**repl** credentials are for managing replication. Since repl connections can be used across machines, you can optionally turn on encryption:
+**repl** credentials are for managing replication.
 
-* **db-config-repl-uname**
-* **db-config-repl-pass**
-* **db-config-repl-charset**
-* **db-config-repl-flags**: If you want to enable SSL, this must be set to 2048.
-* **db-config-repl-ssl-ca**
-* **db-config-repl-ssl-cert**
-* **db-config-repl-ssl-key**
+* **db\_repl\_user**
+* **db\_repl\_password**
+* **db\_repl\_use\_ssl**
 
 **filtered** credentials are for performing resharding:
 
-* **db-config-filtered-unixsocket**
-* **db-config-filtered-uname**
-* **db-config-filtered-pass**
-* **db-config-filtered-charset**
+* **db\_filtered\_user**
+* **db\_filtered\_password**
+* **db\_filtered\_use\_ssl**
 
 ### Monitoring
 

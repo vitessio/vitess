@@ -49,7 +49,7 @@ var (
 // StartServer starts the server and initializes
 // all the global variables. This function should only be called
 // once at the beginning of the test.
-func StartServer(connParams, connAppDebugParams mysql.ConnParams) error {
+func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string) error {
 	// Setup a fake vtgate server.
 	protocol := "resolveTest"
 	*vtgateconn.VtgateProtocol = protocol
@@ -59,11 +59,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams) error {
 		}, nil
 	})
 
-	dbcfgs := dbconfigs.DBConfigs{
-		App:           connParams,
-		AppDebug:      connAppDebugParams,
-		SidecarDBName: "_vt",
-	}
+	dbcfgs := dbconfigs.NewTestDBConfigs(connParams, connAppDebugParams, dbName)
 
 	config := tabletenv.DefaultQsConfig
 	config.EnableAutoCommit = true

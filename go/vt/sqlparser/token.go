@@ -34,19 +34,20 @@ const (
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
-	InStream       io.Reader
-	AllowComments  bool
-	ForceEOF       bool
-	lastChar       uint16
-	Position       int
-	lastToken      []byte
-	LastError      error
-	posVarIndex    int
-	ParseTree      Statement
-	partialDDL     *DDL
-	nesting        int
-	multi          bool
-	specialComment *Tokenizer
+	InStream            io.Reader
+	AllowComments       bool
+	SkipSpecialComments bool
+	ForceEOF            bool
+	lastChar            uint16
+	Position            int
+	lastToken           []byte
+	LastError           error
+	posVarIndex         int
+	ParseTree           Statement
+	partialDDL          *DDL
+	nesting             int
+	multi               bool
+	specialComment      *Tokenizer
 
 	buf     []byte
 	bufPos  int
@@ -292,7 +293,7 @@ var keywords = map[string]int{
 	"reads":               UNUSED,
 	"read_write":          UNUSED,
 	"real":                REAL,
-	"references":          UNUSED,
+	"references":          REFERENCES,
 	"regexp":              REGEXP,
 	"release":             UNUSED,
 	"rename":              RENAME,
@@ -362,7 +363,7 @@ var keywords = map[string]int{
 	"undo":                UNUSED,
 	"union":               UNION,
 	"unique":              UNIQUE,
-	"unlock":              UNUSED,
+	"unlock":              UNLOCK,
 	"unsigned":            UNSIGNED,
 	"update":              UPDATE,
 	"usage":               UNUSED,
@@ -384,6 +385,7 @@ var keywords = map[string]int{
 	"vitess_keyspaces":    VITESS_KEYSPACES,
 	"vitess_shards":       VITESS_SHARDS,
 	"vitess_tablets":      VITESS_TABLETS,
+	"vitess_target":       VITESS_TARGET,
 	"vschema_tables":      VSCHEMA_TABLES,
 	"when":                WHEN,
 	"where":               WHERE,
@@ -535,12 +537,10 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				return tkn.scanCommentType1("//")
 			case '*':
 				tkn.next()
-				switch tkn.lastChar {
-				case '!':
+				if tkn.lastChar == '!' && !tkn.SkipSpecialComments {
 					return tkn.scanMySQLSpecificComment()
-				default:
-					return tkn.scanCommentType2()
 				}
+				return tkn.scanCommentType2()
 			default:
 				return int(ch), nil
 			}

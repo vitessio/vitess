@@ -28,16 +28,19 @@ import (
 )
 
 var (
+	dbName          string
 	mysqlSocketFile = flag.String("mysql-socket-file", "", "path to unix socket file to connect to mysql")
 )
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	// TODO(demmer): remove once migrated to using db_name
+	flag.StringVar(&dbName, "db-config-app-dbname", "", "db connection dbname")
+	flag.StringVar(&dbName, "db_name", "", "db connection dbname")
 }
 
 func main() {
-	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AppDebugConfig
-	dbconfigs.RegisterFlags(dbconfigFlags)
+	dbconfigs.RegisterFlags(dbconfigs.App, dbconfigs.AppDebug)
 	flag.Parse()
 
 	if *servenv.Version {
@@ -57,10 +60,12 @@ func main() {
 
 	servenv.Init()
 
-	dbcfgs, err := dbconfigs.Init(*mysqlSocketFile, dbconfigFlags)
+	dbcfgs, err := dbconfigs.Init(*mysqlSocketFile)
 	if err != nil {
 		log.Fatal(err)
 	}
+	// DB name must be explicitly set.
+	dbcfgs.DBName.Set(dbName)
 
 	err = vtqueryserver.Init(dbcfgs)
 	if err != nil {

@@ -111,19 +111,15 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 	config.HeartbeatEnable = true
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 
-	dbc := dbconfigs.DBConfigs{
-		App:           *db.ConnParams(),
-		Dba:           *db.ConnParams(),
-		SidecarDBName: "_vt",
-	}
+	dbc := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
 
 	tw := NewWriter(&fakeMysqlChecker{},
 		topodatapb.TabletAlias{Cell: "test", Uid: 1111},
 		config)
-	tw.dbName = sqlescape.EscapeID(dbc.SidecarDBName)
+	tw.dbName = sqlescape.EscapeID(dbc.SidecarDBName.Get())
 	tw.keyspaceShard = "test:0"
 	tw.now = nowFunc
-	tw.pool.Open(&dbc.App, &dbc.Dba, &dbc.AppDebug)
+	tw.pool.Open(dbc.AppWithDB(), dbc.DbaWithDB(), dbc.AppDebugWithDB())
 
 	return tw
 }

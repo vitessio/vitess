@@ -36,25 +36,6 @@ fi
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-dbconfig_dba_flags="\
-    -db-config-dba-uname vt_dba \
-    -db-config-dba-charset utf8"
-dbconfig_flags="$dbconfig_dba_flags \
-    -db-config-app-uname vt_app \
-    -db-config-app-dbname vt_$keyspace \
-    -db-config-app-charset utf8 \
-    -db-config-appdebug-uname vt_appdebug \
-    -db-config-appdebug-dbname vt_$keyspace \
-    -db-config-appdebug-charset utf8 \
-    -db-config-allprivs-uname vt_allprivs \
-    -db-config-allprivs-dbname vt_$keyspace \
-    -db-config-allprivs-charset utf8 \
-    -db-config-repl-uname vt_repl \
-    -db-config-repl-dbname vt_$keyspace \
-    -db-config-repl-charset utf8 \
-    -db-config-filtered-uname vt_filtered \
-    -db-config-filtered-dbname vt_$keyspace \
-    -db-config-filtered-charset utf8"
 init_db_sql_file="$VTROOT/config/init_db.sql"
 
 case "$MYSQL_FLAVOR" in
@@ -93,7 +74,6 @@ for uid_index in $uids; do
   $VTROOT/bin/mysqlctl \
     -log_dir $VTDATAROOT/tmp \
     -tablet_uid $uid \
-    $dbconfig_dba_flags \
     -mysql_port $mysql_port \
     $action &
 done
@@ -142,7 +122,6 @@ for uid_index in $uids; do
     -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
     -vtctld_addr http://$hostname:$vtctld_web_port/ \
     $optional_auth_args \
-    $dbconfig_flags \
     > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
   echo "Access tablet $alias at http://$hostname:$port/debug/status"
