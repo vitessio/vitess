@@ -252,4 +252,11 @@ public class VTGateConnection implements Closeable {
         client.close();
     }
 
+    @Override
+    public String toString() {
+        return String.format("[VTGateConnection-%s client=%s]",
+                Integer.toHexString(this.hashCode()),
+                client.toString()
+        );
+    }
 }
