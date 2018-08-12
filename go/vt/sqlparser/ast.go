@@ -619,8 +619,9 @@ type Set struct {
 
 // Set.Scope or Show.Scope
 const (
-	SessionStr = "session"
-	GlobalStr  = "global"
+	SessionStr  = "session"
+	GlobalStr   = "global"
+	ImplicitStr = ""
 )
 
 // Format formats the node.
@@ -3329,11 +3330,28 @@ type SetExpr struct {
 	Expr Expr
 }
 
+// SetExpr.Expr, for SET TRANSACTION ... or START TRANSACTION
+const (
+	// TransactionStr is the Name for a SET TRANSACTION statement
+	TransactionStr = "transaction"
+
+	IsolationLevelReadUncommitted = "isolation level read uncommitted"
+	IsolationLevelReadCommitted   = "isolation level read committed"
+	IsolationLevelRepeatableRead  = "isolation level repeatable read"
+	IsolationLevelSerializable    = "isolation level serializable"
+
+	TxReadOnly  = "read only"
+	TxReadWrite = "read write"
+)
+
 // Format formats the node.
 func (node *SetExpr) Format(buf *TrackedBuffer) {
 	// We don't have to backtick set variable names.
 	if node.Name.EqualString("charset") || node.Name.EqualString("names") {
 		buf.Myprintf("%s %v", node.Name.String(), node.Expr)
+	} else if node.Name.EqualString(TransactionStr) {
+		sqlVal := node.Expr.(*SQLVal)
+		buf.Myprintf("%s %s", node.Name.String(), strings.ToLower(string(sqlVal.Val)))
 	} else {
 		buf.Myprintf("%s = %v", node.Name.String(), node.Expr)
 	}
