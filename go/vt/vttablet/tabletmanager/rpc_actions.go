@@ -62,6 +62,12 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 	}
 	defer agent.unlock()
 
+	// We don't want to allow multiple callers to claim a tablet as drained. There is a race that could happen during
+	// horizontal resharding where two vtworkers will try to DRAIN the same tablet. This check prevents that race from
+	// causing errors.
+	if tabletType == topodatapb.TabletType_DRAINED && agent.Tablet().Type == topodatapb.TabletType_DRAINED {
+		return fmt.Errorf("Tablet: %v, is already drained", agent.TabletAlias)
+	}
 	// change our type in the topology
 	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType)
 	if err != nil {

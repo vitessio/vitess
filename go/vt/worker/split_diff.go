@@ -239,14 +239,29 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	// find an appropriate tablet in the source shard
 	for _, ss := range sdw.shardInfo.SourceShards {
 		if ss.Uid == sdw.sourceUID {
-			sdw.sourceAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */, sdw.cell, sdw.keyspace, ss.Shard, sdw.minHealthyRdonlyTablets, topodatapb.TabletType_RDONLY)
-			if err != nil {
-				return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, ss.Shard, err)
+			// During an horizontal shard split, multiple workers will race to get
+			// a RDONLY tablet in the source shard. When this happen, concurrent calls
+			// to FindWorkerTablet could attempt to set to DRAIN state the same tablet. Only
+			// one of these calls to FindWorkerTablet will succeed and the rest will fail.
+			// The following, makes sures we keep trying to find a worker tablet when this error occur.
+			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+			for {
+				select {
+				case <-shortCtx.Done():
+					return fmt.Errorf("Could not find healthy table for %v/%v%v: after: %v, aborting", sdw.cell, sdw.keyspace, ss.Shard, *remoteActionsTimeout)
+				default:
+					sdw.sourceAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */, sdw.cell, sdw.keyspace, ss.Shard, sdw.minHealthyRdonlyTablets, topodatapb.TabletType_RDONLY)
+					if err != nil {
+						sdw.wr.Logger().Infof("FindWorkerTablet() failed for %v/%v/%v: %v retrying...", sdw.cell, sdw.keyspace, ss.Shard, err)
+						continue
+					}
+					cancel()
+					return nil
+				}
 			}
 		}
 	}
-
-	return nil
+	panic("unreachable")
 }
 
 // synchronizeReplication phase:
