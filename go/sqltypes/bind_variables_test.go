@@ -553,3 +553,84 @@ func TestBindVariablesEqual(t *testing.T) {
 		t.Errorf("%v = %v, want not equal", bv1, bv3)
 	}
 }
+
+func TestBindVariablesFormat(t *testing.T) {
+	tupleBindVar, err := BuildBindVariable([]int64{1, 2})
+	if err != nil {
+		t.Fatalf("failed to create a tuple bind var: %v", err)
+	}
+
+	bindVariables := map[string]*querypb.BindVariable{
+		"key_1": StringBindVariable("val_1"),
+		"key_2": Int64BindVariable(789),
+		"key_3": BytesBindVariable([]byte("val_3")),
+		"key_4": tupleBindVar,
+	}
+
+	formattedStr := FormatBindVariables(bindVariables, true /* full */, false /* asJSON */)
+	if !strings.Contains(formattedStr, "key_1") ||
+		!strings.Contains(formattedStr, "val_1") {
+		t.Fatalf("bind variable 'key_1': 'val_1' is not formatted")
+	}
+	if !strings.Contains(formattedStr, "key_2") ||
+		!strings.Contains(formattedStr, "789") {
+		t.Fatalf("bind variable 'key_2': '789' is not formatted")
+	}
+	if !strings.Contains(formattedStr, "key_3") || !strings.Contains(formattedStr, "val_3") {
+		t.Fatalf("bind variable 'key_3': 'val_3' is not formatted")
+	}
+	if !strings.Contains(formattedStr, "key_4") ||
+		!strings.Contains(formattedStr, "values:<type:INT64 value:\"1\" > values:<type:INT64 value:\"2\" >") {
+		t.Fatalf("bind variable 'key_4': (1, 2) is not formatted")
+	}
+
+	formattedStr = FormatBindVariables(bindVariables, false /* full */, false /* asJSON */)
+	if !strings.Contains(formattedStr, "key_1") {
+		t.Fatalf("bind variable 'key_1' is not formatted")
+	}
+	if !strings.Contains(formattedStr, "key_2") ||
+		!strings.Contains(formattedStr, "789") {
+		t.Fatalf("bind variable 'key_2': '789' is not formatted")
+	}
+	if !strings.Contains(formattedStr, "key_3") || !strings.Contains(formattedStr, "5 bytes") {
+		t.Fatalf("bind variable 'key_3' is not formatted")
+	}
+	if !strings.Contains(formattedStr, "key_4") || !strings.Contains(formattedStr, "2 items") {
+		t.Fatalf("bind variable 'key_4' is not formatted")
+	}
+
+	formattedStr = FormatBindVariables(bindVariables, true /* full */, true /* asJSON */)
+	t.Logf("%q", formattedStr)
+	if !strings.Contains(formattedStr, "\"key_1\": {\"type\": \"VARCHAR\", \"value\": \"val_1\"}") {
+		t.Fatalf("bind variable 'key_1' is not formatted")
+	}
+
+	if !strings.Contains(formattedStr, "\"key_2\": {\"type\": \"INT64\", \"value\": 789}") {
+		t.Fatalf("bind variable 'key_2' is not formatted")
+	}
+
+	if !strings.Contains(formattedStr, "\"key_3\": {\"type\": \"VARBINARY\", \"value\": \"val_3\"}") {
+		t.Fatalf("bind variable 'key_3' is not formatted")
+	}
+
+	if !strings.Contains(formattedStr, "\"key_4\": {\"type\": \"TUPLE\", \"value\": \"\"}") {
+		t.Fatalf("bind variable 'key_4' is not formatted")
+	}
+
+	formattedStr = FormatBindVariables(bindVariables, false /* full */, true /* asJSON */)
+	if !strings.Contains(formattedStr, "\"key_1\": {\"type\": \"VARCHAR\", \"value\": \"5 bytes\"}") {
+		t.Fatalf("bind variable 'key_1' is not formatted")
+	}
+
+	if !strings.Contains(formattedStr, "\"key_2\": {\"type\": \"INT64\", \"value\": 789}") {
+		t.Fatalf("bind variable 'key_2' is not formatted")
+	}
+
+	if !strings.Contains(formattedStr, "\"key_3\": {\"type\": \"VARCHAR\", \"value\": \"5 bytes\"}") {
+		t.Fatalf("bind variable 'key_3' is not formatted")
+	}
+
+	if !strings.Contains(formattedStr, "\"key_4\": {\"type\": \"VARCHAR\", \"value\": \"2 items\"}") {
+		t.Fatalf("bind variable 'key_4' is not formatted")
+	}
+}

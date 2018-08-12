@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -482,8 +483,9 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 		return nil
 	}
 
-	log := streamlog.GetFormatter(QueryLogger)(nil, logStats)
-	fields := strings.Split(log, "\t")
+	var log bytes.Buffer
+	streamlog.GetFormatter(QueryLogger)(&log, nil, logStats)
+	fields := strings.Split(log.String(), "\t")
 
 	// fields[0] is the method
 	if method != fields[0] {

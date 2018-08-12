@@ -17,6 +17,7 @@ limitations under the License.
 package tabletenv
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/url"
@@ -49,10 +50,12 @@ func TestLogStats(t *testing.T) {
 	if logStats.SizeOfResponse() <= 0 {
 		t.Fatalf("log stats has some rows, should have positive response size")
 	}
+}
 
-	params := map[string][]string{"full": {}}
-
-	logStats.Format(url.Values(params))
+func testFormat(stats *LogStats, params url.Values) string {
+	var b bytes.Buffer
+	stats.Logf(&b, params)
+	return b.String()
 }
 
 func TestLogStatsFormat(t *testing.T) {
@@ -68,7 +71,7 @@ func TestLogStatsFormat(t *testing.T) {
 
 	*streamlog.RedactDebugUIQueries = false
 	*streamlog.QueryLogFormat = "text"
-	got := logStats.Format(url.Values(params))
+	got := testFormat(logStats, url.Values(params))
 	want := "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql\"\tmap[intVal:type:INT64 value:\"1\" ]\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t1\t\"\"\t\n"
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
@@ -76,7 +79,7 @@ func TestLogStatsFormat(t *testing.T) {
 
 	*streamlog.RedactDebugUIQueries = true
 	*streamlog.QueryLogFormat = "text"
-	got = logStats.Format(url.Values(params))
+	got = testFormat(logStats, url.Values(params))
 	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql\"\t\"[REDACTED]\"\t1\t\"[REDACTED]\"\tmysql\t0.000000\t0.000000\t0\t1\t\"\"\t\n"
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
@@ -84,7 +87,7 @@ func TestLogStatsFormat(t *testing.T) {
 
 	*streamlog.RedactDebugUIQueries = false
 	*streamlog.QueryLogFormat = "json"
-	got = logStats.Format(url.Values(params))
+	got = testFormat(logStats, url.Values(params))
 	var parsed map[string]interface{}
 	err := json.Unmarshal([]byte(got), &parsed)
 	if err != nil {
@@ -101,7 +104,7 @@ func TestLogStatsFormat(t *testing.T) {
 
 	*streamlog.RedactDebugUIQueries = true
 	*streamlog.QueryLogFormat = "json"
-	got = logStats.Format(url.Values(params))
+	got = testFormat(logStats, url.Values(params))
 	err = json.Unmarshal([]byte(got), &parsed)
 	if err != nil {
 		t.Errorf("logstats format: error unmarshaling json: %v -- got:\n%v", err, got)
@@ -122,14 +125,14 @@ func TestLogStatsFormat(t *testing.T) {
 	logStats.BindVariables = map[string]*querypb.BindVariable{"strVal": sqltypes.StringBindVariable("abc")}
 
 	*streamlog.QueryLogFormat = "text"
-	got = logStats.Format(url.Values(params))
+	got = testFormat(logStats, url.Values(params))
 	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql\"\tmap[strVal:type:VARCHAR value:\"abc\" ]\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t1\t\"\"\t\n"
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
 	}
 
 	*streamlog.QueryLogFormat = "json"
-	got = logStats.Format(url.Values(params))
+	got = testFormat(logStats, url.Values(params))
 	err = json.Unmarshal([]byte(got), &parsed)
 	if err != nil {
 		t.Errorf("logstats format: error unmarshaling json: %v -- got:\n%v", err, got)
@@ -144,53 +147,6 @@ func TestLogStatsFormat(t *testing.T) {
 	}
 
 	*streamlog.QueryLogFormat = "text"
-}
-
-func TestLogStatsFormatBindVariables(t *testing.T) {
-	tupleBindVar, err := sqltypes.BuildBindVariable([]int64{1, 2})
-	if err != nil {
-		t.Fatalf("failed to create a tuple bind var: %v", err)
-	}
-
-	logStats := NewLogStats(context.Background(), "test")
-	logStats.BindVariables = map[string]*querypb.BindVariable{
-		"key_1": sqltypes.StringBindVariable("val_1"),
-		"key_2": sqltypes.Int64BindVariable(789),
-		"key_3": sqltypes.BytesBindVariable([]byte("val_3")),
-		"key_4": tupleBindVar,
-	}
-
-	formattedStr := logStats.FmtBindVariables(true)
-	if !strings.Contains(formattedStr, "key_1") ||
-		!strings.Contains(formattedStr, "val_1") {
-		t.Fatalf("bind variable 'key_1': 'val_1' is not formatted")
-	}
-	if !strings.Contains(formattedStr, "key_2") ||
-		!strings.Contains(formattedStr, "789") {
-		t.Fatalf("bind variable 'key_2': '789' is not formatted")
-	}
-	if !strings.Contains(formattedStr, "key_3") || !strings.Contains(formattedStr, "val_3") {
-		t.Fatalf("bind variable 'key_3': 'val_3' is not formatted")
-	}
-	if !strings.Contains(formattedStr, "key_4") ||
-		!strings.Contains(formattedStr, "values:<type:INT64 value:\"1\" > values:<type:INT64 value:\"2\" >") {
-		t.Fatalf("bind variable 'key_4': (1, 2) is not formatted")
-	}
-
-	formattedStr = logStats.FmtBindVariables(false)
-	if !strings.Contains(formattedStr, "key_1") {
-		t.Fatalf("bind variable 'key_1' is not formatted")
-	}
-	if !strings.Contains(formattedStr, "key_2") ||
-		!strings.Contains(formattedStr, "789") {
-		t.Fatalf("bind variable 'key_2': '789' is not formatted")
-	}
-	if !strings.Contains(formattedStr, "key_3") || !strings.Contains(formattedStr, "5 bytes") {
-		t.Fatalf("bind variable 'key_3' is not formatted")
-	}
-	if !strings.Contains(formattedStr, "key_4") || !strings.Contains(formattedStr, "2 items") {
-		t.Fatalf("bind variable 'key_4' is not formatted")
-	}
 }
 
 func TestLogStatsFormatQuerySources(t *testing.T) {
