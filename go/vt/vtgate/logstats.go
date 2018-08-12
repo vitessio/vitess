@@ -17,9 +17,9 @@ limitations under the License.
 package vtgate
 
 import (
-	"bytes"
 	"fmt"
 	"html/template"
+	"io"
 	"net/url"
 	"time"
 
@@ -94,55 +94,6 @@ func (stats *LogStats) TotalTime() time.Duration {
 	return stats.EndTime.Sub(stats.StartTime)
 }
 
-// FmtBindVariables returns the map of bind variables as JSON. For
-// values that are strings or byte slices it only reports their type
-// and length.
-func (stats *LogStats) FmtBindVariables(full bool) string {
-	if *streamlog.RedactDebugUIQueries {
-		return "\"[REDACTED]\""
-	}
-
-	var out map[string]*querypb.BindVariable
-	if full {
-		out = stats.BindVariables
-	} else {
-		// NOTE(szopa): I am getting rid of potentially large bind
-		// variables.
-		out = make(map[string]*querypb.BindVariable)
-		for k, v := range stats.BindVariables {
-			if sqltypes.IsIntegral(v.Type) || sqltypes.IsFloat(v.Type) {
-				out[k] = v
-			} else if v.Type == querypb.Type_TUPLE {
-				out[k] = sqltypes.StringBindVariable(fmt.Sprintf("%v items", len(v.Values)))
-			} else {
-				out[k] = sqltypes.StringBindVariable(fmt.Sprintf("%v bytes", len(v.Value)))
-			}
-		}
-	}
-
-	if *streamlog.QueryLogFormat == streamlog.QueryLogFormatJSON {
-		var buf bytes.Buffer
-		buf.WriteString("{")
-		first := true
-		for k, v := range out {
-			if !first {
-				buf.WriteString(", ")
-			} else {
-				first = false
-			}
-			if sqltypes.IsIntegral(v.Type) || sqltypes.IsFloat(v.Type) {
-				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %v}", k, v.Type, string(v.Value))
-			} else {
-				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %q}", k, v.Type, string(v.Value))
-			}
-		}
-		buf.WriteString("}")
-		return buf.String()
-	}
-
-	return fmt.Sprintf("%v", out)
-}
-
 // ContextHTML returns the HTML version of the context that was used, or "".
 // This is a method on LogStats instead of a field so that it doesn't need
 // to be passed by value everywhere.
@@ -167,10 +118,18 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 	return ci.RemoteAddr(), ci.Username()
 }
 
-// Format returns a tab separated list of logged fields.
-func (stats *LogStats) Format(params url.Values) string {
-	_, fullBindParams := params["full"]
-	formattedBindVars := stats.FmtBindVariables(fullBindParams)
+// Logf formats the log record to the given writer, either as
+// tab-separated list of logged fields or as JSON.
+func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
+	formattedBindVars := "\"[REDACTED]\""
+	if !*streamlog.RedactDebugUIQueries {
+		_, fullBindParams := params["full"]
+		formattedBindVars = sqltypes.FormatBindVariables(
+			stats.BindVariables,
+			fullBindParams,
+			*streamlog.QueryLogFormat == streamlog.QueryLogFormatJSON,
+		)
+	}
 
 	// TODO: remove username here we fully enforce immediate caller id
 	remoteAddr, username := stats.RemoteAddrUsername()
@@ -183,7 +142,8 @@ func (stats *LogStats) Format(params url.Values) string {
 		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q}\n"
 	}
 
-	return fmt.Sprintf(
+	_, err := fmt.Fprintf(
+		w,
 		fmtString,
 		stats.Method,
 		remoteAddr,
@@ -203,4 +163,5 @@ func (stats *LogStats) Format(params url.Values) string {
 		stats.RowsAffected,
 		stats.ErrorStr(),
 	)
+	return err
 }

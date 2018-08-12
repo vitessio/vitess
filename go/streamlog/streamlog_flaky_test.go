@@ -19,6 +19,7 @@ package streamlog
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -38,6 +39,11 @@ func (l *logMessage) Format(params url.Values) string {
 	return l.val + "\n"
 }
 
+func testLogf(w io.Writer, params url.Values, m interface{}) error {
+	_, err := io.WriteString(w, m.(*logMessage).Format(params))
+	return err
+}
+
 func TestHTTP(t *testing.T) {
 	l, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -49,7 +55,7 @@ func TestHTTP(t *testing.T) {
 	go http.Serve(l, nil)
 
 	logger := New("logger", 1)
-	logger.ServeLogs("/log", func(params url.Values, x interface{}) string { return x.(*logMessage).Format(params) })
+	logger.ServeLogs("/log", testLogf)
 
 	// This should not block - there are no subscribers yet.
 	logger.Send(&logMessage{"val1"})
@@ -194,7 +200,7 @@ func TestFile(t *testing.T) {
 	}
 
 	logPath := path.Join(dir, "test.log")
-	logChan, err := logger.LogToFile(logPath, func(params url.Values, x interface{}) string { return x.(*logMessage).Format(params) })
+	logChan, err := logger.LogToFile(logPath, testLogf)
 	defer logger.Unsubscribe(logChan)
 	if err != nil {
 		t.Errorf("error enabling file logger: %v", err)

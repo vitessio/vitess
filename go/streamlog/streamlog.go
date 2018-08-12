@@ -68,6 +68,10 @@ type StreamLogger struct {
 	subscribed map[chan interface{}]string
 }
 
+// LogFormatter is the function signature used to format an arbitrary
+// message for the given output writer.
+type LogFormatter func(out io.Writer, params url.Values, message interface{}) error
+
 // New returns a new StreamLogger that can stream events to subscribers.
 // The size parameter defines the channel size for the subscribers.
 func New(name string, size int) *StreamLogger {
@@ -121,7 +125,7 @@ func (logger *StreamLogger) Name() string {
 
 // ServeLogs registers the URL on which messages will be broadcast.
 // It is safe to register multiple URLs for the same StreamLogger.
-func (logger *StreamLogger) ServeLogs(url string, messageFmt func(url.Values, interface{}) string) {
+func (logger *StreamLogger) ServeLogs(url string, logf LogFormatter) {
 	http.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 			acl.SendError(w, err)
@@ -138,7 +142,7 @@ func (logger *StreamLogger) ServeLogs(url string, messageFmt func(url.Values, in
 		w.(http.Flusher).Flush()
 
 		for message := range ch {
-			if _, err := io.WriteString(w, messageFmt(r.Form, message)); err != nil {
+			if err := logf(w, r.Form, message); err != nil {
 				return
 			}
 			w.(http.Flusher).Flush()
@@ -152,7 +156,7 @@ func (logger *StreamLogger) ServeLogs(url string, messageFmt func(url.Values, in
 //
 // Returns the channel used for the subscription which can be used to close
 // it.
-func (logger *StreamLogger) LogToFile(path string, messageFmt func(url.Values, interface{}) string) (chan interface{}, error) {
+func (logger *StreamLogger) LogToFile(path string, logf LogFormatter) (chan interface{}, error) {
 	rotateChan := make(chan os.Signal, 1)
 	signal.Notify(rotateChan, syscall.SIGUSR2)
 
@@ -168,8 +172,7 @@ func (logger *StreamLogger) LogToFile(path string, messageFmt func(url.Values, i
 		for {
 			select {
 			case record, _ := <-logChan:
-				formatted := messageFmt(formatParams, record)
-				f.WriteString(formatted)
+				logf(f, formatParams, record)
 			case _, _ = <-rotateChan:
 				f.Close()
 				f, _ = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
@@ -183,17 +186,18 @@ func (logger *StreamLogger) LogToFile(path string, messageFmt func(url.Values, i
 // Formatter is a simple interface for objects that expose a Format function
 // as needed for streamlog.
 type Formatter interface {
-	Format(url.Values) string
+	Logf(io.Writer, url.Values) error
 }
 
 // GetFormatter returns a formatter function for objects conforming to the
 // Formatter interface
-func GetFormatter(logger *StreamLogger) func(url.Values, interface{}) string {
-	return func(params url.Values, val interface{}) string {
+func GetFormatter(logger *StreamLogger) LogFormatter {
+	return func(w io.Writer, params url.Values, val interface{}) error {
 		fmter, ok := val.(Formatter)
 		if !ok {
-			return fmt.Sprintf("Error: unexpected value of type %T in %s!", val, logger.Name())
+			_, err := fmt.Fprintf(w, "Error: unexpected value of type %T in %s!", val, logger.Name())
+			return err
 		}
-		return fmter.Format(params)
+		return fmter.Logf(w, params)
 	}
 }
