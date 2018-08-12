@@ -179,45 +179,24 @@ In addition, Vitess requires the software and libraries listed below.
 5.  Run the following commands:
 
     ``` sh
-    brew install go automake libtool python git bison curl wget homebrew/versions/mysql56
+    brew install go automake libtool python git bison curl wget mysql56
     pip install --upgrade pip setuptools
     pip install virtualenv
     pip install MySQL-python
     pip install tox
+
     ```
     
-6.  Install Java runtime from this URL: https://support.apple.com/kb/dl1572?locale=en_US
-    Apple only supports Java 6. If you need to install a newer version, this link might be helpful:
-    [http://osxdaily.com/2015/10/17/how-to-install-java-in-os-x-el-capitan/](http://osxdaily.com/2015/10/17/how-to-install-java-in-os-x-el-capitan/)
-    
-7.  The Vitess bootstrap script makes some checks for the go runtime, so it is recommended to have the following
-    commands in your ~/.profile or ~/.bashrc or ~/.zshrc:
+6.  The Vitess bootstrap script makes some checks for the go runtime, so it is recommended to have the following
+    commands in your ~/.profile or ~/.bashrc or ~/.zshrc or ~/.bash_profile:
     
     ``` sh
-    export PATH=/usr/local/opt/go/libexec/bin:$PATH
-    export GOROOT=/usr/local/opt/go/libexec
+    export PATH="/usr/local/opt/mysql@5.6/bin:$PATH"
+    export PATH=/usr/local/go/bin:$PATH
+    export GOROOT=/usr/local/go
     ```
     
-8.  There is a problem with installing the enum34 Python package using pip, so the following file has to be edited:
-    ```
-    /usr/local/opt/python/Frameworks/Python.framework/Versions/2.7/lib/python2.7/distutils/distutils.cfg
-    ```
-    
-    and this line:
-    
-    ```
-    prefix=/usr/local
-    ```
-    
-    has to be commented out:
-    
-    ```
-    # prefix=/usr/local
-    ```
-    
-    After running the ./bootstrap.sh script from the next step, you can revert the change.
-    
-9.  For the Vitess hostname resolving functions to work correctly, a new entry has to be added into the /etc/hosts file
+7.  For the Vitess hostname resolving functions to work correctly, a new entry has to be added into the /etc/hosts file
     with the current LAN IP address of the computer (preferably IPv4) and the current hostname, which you get by
     typing the 'hostname' command in the terminal.
     
@@ -232,38 +211,40 @@ In addition, Vitess requires the software and libraries listed below.
 
 1.  Navigate to the directory where you want to download the Vitess
     source code and clone the Vitess Github repo. After doing so,
-    navigate to the `src/vitess.io/vitess` directory.
+    navigate to the `src/vitess.io/vitess` directory. For go to work 
+    correctly, you should create a symbolic link to this inide your ${HOME}/go/src
 
     ``` sh
     cd $WORKSPACE
     git clone https://github.com/vitessio/vitess.git \
         src/vitess.io/vitess
-    cd src/vitess.io/vitess
+    ln -s src/vitess.io ${HOME}/go/src/vitess.io
+    cd ${HOME}/go/src/vitess.io/vitess
     ```
 
 1.  Set the `MYSQL_FLAVOR` environment variable. Choose the appropriate
     value for your database. This value is case-sensitive.
 
     ``` sh
-    export MYSQL_FLAVOR=MariaDB
+    # export MYSQL_FLAVOR=MariaDB
     # or (mandatory for OS X)
-    # export MYSQL_FLAVOR=MySQL56
+    export MYSQL_FLAVOR=MySQL56
     ```
 
 1.  If your selected database installed in a location other than `/usr/bin`,
     set the `VT_MYSQL_ROOT` variable to the root directory of your
-    MariaDB installation. For example, if MariaDB is installed in
+    MariaDB installation. For example, if mysql is installed in
     `/usr/local/mysql`, run the following command.
 
     ``` sh
-    export VT_MYSQL_ROOT=/usr/local/mysql
+    # export VT_MYSQL_ROOT=/usr/local/mysql
     
     # on OS X, this is the correct value:
-    # export VT_MYSQL_ROOT=/usr/local/opt/mysql56
+    export VT_MYSQL_ROOT=/usr/local/opt/mysql@5.6
     ```
 
     Note that the command indicates that the `mysql` executable should
-    be found at `/usr/local/mysql/bin/mysql`.
+    be found at `/usr/local/opt/mysql@5.6/bin/mysql`.
 
 1.  Run `mysqld --version` and confirm that you
     are running the correct version of MariaDB or MySQL. The value should
