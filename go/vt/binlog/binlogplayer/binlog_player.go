@@ -119,8 +119,8 @@ type BinlogPlayer struct {
 }
 
 // NewBinlogPlayerKeyRange returns a new BinlogPlayer pointing at the server
-// replicating the provided keyrange, starting at the startPosition,
-// and updating _vt.vreplication with uid=startPosition.Uid.
+// replicating the provided keyrange and updating _vt.vreplication
+// with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
 func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRange *topodatapb.KeyRange, uid uint32, blplStats *Stats) *BinlogPlayer {
 	result := &BinlogPlayer{
@@ -135,8 +135,8 @@ func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRa
 }
 
 // NewBinlogPlayerTables returns a new BinlogPlayer pointing at the server
-// replicating the provided tables, starting at the startPosition,
-// and updating _vt.vreplication with uid=startPosition.Uid.
+// replicating the provided tables and updating _vt.vreplication
+// with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
 func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables []string, uid uint32, blplStats *Stats) *BinlogPlayer {
 	result := &BinlogPlayer{
