@@ -34,6 +34,10 @@ type ConnParams struct {
 	SslCert    string `json:"ssl_cert"`
 	SslKey     string `json:"ssl_key"`
 	ServerName string `json:"server_name"`
+
+	// The following is only set when the deprecated "dbname" flags are
+	// supplied and will be removed.
+	DeprecatedDBName string
 }
 
 // EnableSSL will set the right flag on the parameters.
