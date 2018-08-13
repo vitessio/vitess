@@ -466,8 +466,9 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	}
 }
 
-// CreateBlpCheckpoint returns the statements required to create
-// the _vt.blp_checkpoint table
+// CreateBlpCheckpoint returns the statements required to create the
+// _vt.blp_checkpoint table and ensure it is empty.  If the database or
+// table already exist they will not be re-created.
 func CreateBlpCheckpoint() []string {
 	return []string{
 		"CREATE DATABASE IF NOT EXISTS _vt",
@@ -480,7 +481,8 @@ func CreateBlpCheckpoint() []string {
   transaction_timestamp BIGINT(20) UNSIGNED NOT NULL,
   flags VARBINARY(250) DEFAULT NULL,
   PRIMARY KEY (source_shard_uid)
-) ENGINE=InnoDB`, mysql.MaximumPositionSize)}
+) ENGINE=InnoDB`, mysql.MaximumPositionSize),
+		"TRUNCATE TABLE _vt.blp_checkpoint"}
 }
 
 // PopulateBlpCheckpoint returns a statement to populate the first value into
