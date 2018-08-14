@@ -492,8 +492,8 @@ func (qe *QueryEngine) AddStats(planName, tableName, query string, queryCount in
 
 // Stats returns the stored QueryStats for the planName.tableName.query
 func (qe *QueryEngine) Stats(planName, tableName, query string) *QueryStats {
-	qe.queryStatsMu.Lock()
-	defer qe.queryStatsMu.Unlock()
+	qe.queryStatsMu.RLock()
+	defer qe.queryStatsMu.RUnlock()
 	s, ok := qe.queryStats[planName+"."+tableName+"."+query]
 	if !ok {
 		return nil
@@ -503,6 +503,8 @@ func (qe *QueryEngine) Stats(planName, tableName, query string) *QueryStats {
 
 func (qe *QueryEngine) getQueryCount() map[string]int64 {
 	qstats := make(map[string]int64)
+	qe.queryStatsMu.RLock()
+	defer qe.queryStatsMu.RUnlock()
 	for k, qs := range qe.queryStats {
 		qs.mu.Lock()
 		qstats[k] = qs.queryCount
@@ -513,6 +515,8 @@ func (qe *QueryEngine) getQueryCount() map[string]int64 {
 
 func (qe *QueryEngine) getQueryTime() map[string]int64 {
 	qstats := make(map[string]int64)
+	qe.queryStatsMu.RLock()
+	defer qe.queryStatsMu.RUnlock()
 	for k, qs := range qe.queryStats {
 		qs.mu.Lock()
 		qstats[k] = int64(qs.time)
@@ -523,6 +527,8 @@ func (qe *QueryEngine) getQueryTime() map[string]int64 {
 
 func (qe *QueryEngine) getQueryRowCount() map[string]int64 {
 	qstats := make(map[string]int64)
+	qe.queryStatsMu.RLock()
+	defer qe.queryStatsMu.RUnlock()
 	for k, qs := range qe.queryStats {
 		qs.mu.Lock()
 		qstats[k] = qs.rowCount
@@ -533,6 +539,8 @@ func (qe *QueryEngine) getQueryRowCount() map[string]int64 {
 
 func (qe *QueryEngine) getQueryErrorCount() map[string]int64 {
 	qstats := make(map[string]int64)
+	qe.queryStatsMu.RLock()
+	defer qe.queryStatsMu.RUnlock()
 	for k, qs := range qe.queryStats {
 		qs.mu.Lock()
 		qstats[k] = qs.errorCount
