@@ -622,14 +622,7 @@ func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) error {
 	default:
 		return errors.New("unsupported: scatter subquery")
 	}
-
-	if rb.ERoute.Opcode != engine.SelectEqualUnique {
-		return errors.New("unsupported: subquery does not depend on scatter outer query")
-	}
-	if !valEqual(rb.condition, inner.condition) {
-		return errors.New("unsupported: subquery and parent route to different shards")
-	}
-	return nil
+	return rb.isSameShardedRoute(inner)
 }
 
 // UnionCanMerge returns nil if the supplied route that represents
@@ -654,12 +647,21 @@ func (rb *route) UnionCanMerge(right *route) error {
 		}
 		return errIntermixingUnsupported
 	}
+	return rb.isSameShardedRoute(right)
+}
 
+// isSameShardedRoute returns nil if the supplied route has
+// the same single shard target as the current route. If not, it
+// returns an appropriate error.
+func (rb *route) isSameShardedRoute(right *route) error {
 	if rb.ERoute.Opcode != engine.SelectEqualUnique || right.ERoute.Opcode != engine.SelectEqualUnique {
-		return errors.New("unsupported: UNION on multi-shard queries")
+		return errors.New("unsupported: UNION or subquery containing multi-shard queries")
+	}
+	if rb.ERoute.Vindex != right.ERoute.Vindex {
+		return errors.New("unsupported: UNION or subquery on different shards: vindexes are different")
 	}
 	if !valEqual(rb.condition, right.condition) {
-		return errors.New("unsupported: UNION queries with different target shards")
+		return errors.New("unsupported: UNION or subquery on different shards: vindex values are different")
 	}
 	return nil
 }
