@@ -454,6 +454,7 @@ func (qe *QueryEngine) QueryPlanCacheCap() int {
 
 // QueryStats tracks query stats for export per planName/tableName
 type QueryStats struct {
+	mu         sync.Mutex
 	queryCount int64
 	time       time.Duration
 	mysqlTime  time.Duration
@@ -463,26 +464,30 @@ type QueryStats struct {
 
 // AddStats adds the given stats for the planName.tableName
 func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
-	qe.queryStatsMu.Lock()
-	defer qe.queryStatsMu.Unlock()
+	key := planName + "." + tableName
 
-	qstats := &QueryStats{
-		queryCount: queryCount,
-		time:       duration,
-		mysqlTime:  mysqlTime,
-		rowCount:   rowCount,
-		errorCount: errorCount}
+	qe.queryStatsMu.RLock()
+	stats, ok := qe.queryStats[key]
+	qe.queryStatsMu.RUnlock()
 
-	if stats, ok := qe.queryStats[planName+"."+tableName]; ok {
-		qstats = &QueryStats{
-			queryCount: stats.queryCount + queryCount,
-			time:       stats.time + duration,
-			mysqlTime:  stats.mysqlTime + mysqlTime,
-			rowCount:   stats.rowCount + rowCount,
-			errorCount: stats.errorCount + errorCount}
+	if !ok {
+		// Check again with the write lock held and
+		// create a new record only if none exists
+		qe.queryStatsMu.Lock()
+		if stats, ok = qe.queryStats[key]; !ok {
+			stats = &QueryStats{}
+			qe.queryStats[key] = stats
+		}
+		qe.queryStatsMu.Unlock()
 	}
 
-	qe.queryStats[planName+"."+tableName] = qstats
+	stats.mu.Lock()
+	stats.queryCount += queryCount
+	stats.time += duration
+	stats.mysqlTime += mysqlTime
+	stats.rowCount += rowCount
+	stats.errorCount += errorCount
+	stats.mu.Unlock()
 }
 
 // Stats returns the stored QueryStats for the planName.tableName
@@ -588,11 +593,13 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 			pqstats.Table = plan.TableName().String()
 			pqstats.Plan = plan.PlanID
 			if stats := qe.Stats(pqstats.Plan.String(), pqstats.Table); stats != nil {
+				stats.mu.Lock()
 				pqstats.QueryCount = stats.queryCount
 				pqstats.Time = stats.time
 				pqstats.MysqlTime = stats.mysqlTime
 				pqstats.RowCount = stats.rowCount
 				pqstats.ErrorCount = stats.errorCount
+				stats.mu.Unlock()
 			}
 
 			qstats = append(qstats, pqstats)
