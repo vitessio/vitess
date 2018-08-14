@@ -276,10 +276,8 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 		}
 
 		// Both l & r routes point to the same shard.
-		if lRoute.ERoute.Opcode == engine.SelectEqualUnique && rRoute.ERoute.Opcode == engine.SelectEqualUnique {
-			if valEqual(lRoute.condition, rRoute.condition) {
-				return pb.mergeRoutes(rpb, ajoin)
-			}
+		if lRoute.isSameShardedRoute(rRoute) == nil {
+			return pb.mergeRoutes(rpb, ajoin)
 		}
 	}
 
