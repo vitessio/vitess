@@ -463,8 +463,8 @@ type QueryStats struct {
 }
 
 // AddStats adds the given stats for the planName.tableName
-func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
-	key := planName + "." + tableName
+func (qe *QueryEngine) AddStats(planName, tableName, query string, queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
+	key := planName + "." + tableName + "." + query
 
 	qe.queryStatsMu.RLock()
 	stats, ok := qe.queryStats[key]
@@ -490,11 +490,11 @@ func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, du
 	stats.mu.Unlock()
 }
 
-// Stats returns the stored QueryStats for the planName.tableName
-func (qe *QueryEngine) Stats(planName, tableName string) *QueryStats {
+// Stats returns the stored QueryStats for the planName.tableName.query
+func (qe *QueryEngine) Stats(planName, tableName, query string) *QueryStats {
 	qe.queryStatsMu.Lock()
 	defer qe.queryStatsMu.Unlock()
-	s, ok := qe.queryStats[planName+"."+tableName]
+	s, ok := qe.queryStats[planName+"."+tableName+"."+query]
 	if !ok {
 		return nil
 	}
@@ -600,7 +600,7 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 			pqstats.Query = unicoded(sqlparser.TruncateForUI(v))
 			pqstats.Table = plan.TableName().String()
 			pqstats.Plan = plan.PlanID
-			if stats := qe.Stats(pqstats.Plan.String(), pqstats.Table); stats != nil {
+			if stats := qe.Stats(pqstats.Plan.String(), pqstats.Table, pqstats.Query); stats != nil {
 				stats.mu.Lock()
 				pqstats.QueryCount = stats.queryCount
 				pqstats.Time = stats.time

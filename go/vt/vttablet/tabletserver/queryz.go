@@ -155,7 +155,7 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 			Plan:   plan.PlanID,
 			Reason: plan.Reason,
 		}
-		qs := qe.Stats(plan.PlanID.String(), plan.TableName().String())
+		qs := qe.Stats(plan.PlanID.String(), plan.TableName().String(), v)
 		qs.mu.Lock()
 		Value.Count = qs.queryCount
 		Value.tm = qs.time
