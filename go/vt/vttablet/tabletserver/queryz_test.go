@@ -44,7 +44,7 @@ func TestQueryzHandler(t *testing.T) {
 			Reason: planbuilder.ReasonTable,
 		},
 	}
-	qe.AddStats(plan1.PlanID.String(), "test_table", plan1.Query, 10, 2*time.Second, 1*time.Second, 2, 0)
+	qe.AddStats(plan1.PlanID.String(), "test_table", plan1.FullQuery.Query, 10, 2*time.Second, 1*time.Second, 2, 0)
 	qe.plans.Set("select name from test_table", plan1)
 
 	plan2 := &TabletPlan{
@@ -54,7 +54,7 @@ func TestQueryzHandler(t *testing.T) {
 			Reason: planbuilder.ReasonDefault,
 		},
 	}
-	qe.AddStats(plan2.PlanID.String(), "test_table", plan2.Query, 1, 2*time.Millisecond, 1*time.Millisecond, 1, 0)
+	qe.AddStats(plan2.PlanID.String(), "test_table", plan2.FullQuery.Query, 1, 2*time.Millisecond, 1*time.Millisecond, 1, 0)
 	qe.plans.Set("insert into test_table values 1", plan2)
 
 	plan3 := &TabletPlan{
@@ -64,7 +64,7 @@ func TestQueryzHandler(t *testing.T) {
 			Reason: planbuilder.ReasonDefault,
 		},
 	}
-	qe.AddStats(plan3.PlanID.String(), "", plan3.Query, 1, 75*time.Millisecond, 50*time.Millisecond, 1, 0)
+	qe.AddStats(plan3.PlanID.String(), "", plan3.FullQuery.Query, 1, 75*time.Millisecond, 50*time.Millisecond, 1, 0)
 	qe.plans.Set("show tables", plan3)
 	qe.plans.Set("", (*TabletPlan)(nil))
 
@@ -75,7 +75,7 @@ func TestQueryzHandler(t *testing.T) {
 			Reason: planbuilder.ReasonDefault,
 		},
 	}
-	qe.AddStats(plan4.PlanID.String(), "", plan4.Query, 1, 1*time.Millisecond, 1*time.Millisecond, 1, 0)
+	qe.AddStats(plan4.PlanID.String(), "", plan4.FullQuery.Query, 1, 1*time.Millisecond, 1*time.Millisecond, 1, 0)
 	hugeInsert := "insert into test_table values 0"
 	for i := 1; i < 1000; i++ {
 		hugeInsert = hugeInsert + fmt.Sprintf(", %d", i)
