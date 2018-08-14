@@ -156,6 +156,9 @@
             }
           ]
         },
+        "pin_test": {
+          "pinned": "80"
+        },
         "weird`name": {
           "column_vindexes": [
             {
