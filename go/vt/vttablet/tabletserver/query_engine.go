@@ -504,7 +504,9 @@ func (qe *QueryEngine) Stats(planName, tableName string) *QueryStats {
 func (qe *QueryEngine) getQueryCount() map[string]int64 {
 	qstats := make(map[string]int64)
 	for k, qs := range qe.queryStats {
+		qs.mu.Lock()
 		qstats[k] = qs.queryCount
+		qs.mu.Unlock()
 	}
 	return qstats
 }
@@ -512,7 +514,9 @@ func (qe *QueryEngine) getQueryCount() map[string]int64 {
 func (qe *QueryEngine) getQueryTime() map[string]int64 {
 	qstats := make(map[string]int64)
 	for k, qs := range qe.queryStats {
+		qs.mu.Lock()
 		qstats[k] = int64(qs.time)
+		qs.mu.Unlock()
 	}
 	return qstats
 }
@@ -520,7 +524,9 @@ func (qe *QueryEngine) getQueryTime() map[string]int64 {
 func (qe *QueryEngine) getQueryRowCount() map[string]int64 {
 	qstats := make(map[string]int64)
 	for k, qs := range qe.queryStats {
+		qs.mu.Lock()
 		qstats[k] = qs.rowCount
+		qs.mu.Unlock()
 	}
 	return qstats
 }
@@ -528,7 +534,9 @@ func (qe *QueryEngine) getQueryRowCount() map[string]int64 {
 func (qe *QueryEngine) getQueryErrorCount() map[string]int64 {
 	qstats := make(map[string]int64)
 	for k, qs := range qe.queryStats {
+		qs.mu.Lock()
 		qstats[k] = qs.errorCount
+		qs.mu.Unlock()
 	}
 	return qstats
 }
