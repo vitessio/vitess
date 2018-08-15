@@ -360,11 +360,11 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	}
 
 	// Check corner cases we're going to depend on
-	if topoproto.TabletAliasEqual(masterElectTabletAlias, avoidMasterTabletAlias) {
+	if masterElectTabletAlias != nil && avoidMasterTabletAlias != nil && topoproto.TabletAliasEqual(masterElectTabletAlias, avoidMasterTabletAlias) {
 		return fmt.Errorf("master-elect tablet %v is the same as the tablet to avoid", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
 	if masterElectTabletAlias == nil {
-		if !topoproto.TabletAliasEqual(avoidMasterTabletAlias, shardInfo.MasterAlias) {
+		if masterElectTabletAlias != nil && avoidMasterTabletAlias != nil && topoproto.TabletAliasEqual(masterElectTabletAlias, avoidMasterTabletAlias) {
 			event.DispatchUpdate(ev, "current master is different than -avoid_master, nothing to do")
 			return nil
 		}
@@ -539,9 +539,9 @@ func (wr *Wrangler) chooseNewMaster(
 	avoidMasterTabletAlias *topodatapb.TabletAlias,
 	waitSlaveTimeout time.Duration) (*topodatapb.TabletAlias, error) {
 
-	if avoidMasterTabletAlias == nil {
-		return nil, fmt.Errorf("tablet to avoid for reparent is not provided, cannot choose new master")
-	}
+	// if avoidMasterTabletAlias == nil {
+	// 	return nil, fmt.Errorf("tablet to avoid for reparent is not provided, cannot choose new master")
+	// }
 	var masterCell string
 	if shardInfo.MasterAlias != nil {
 		masterCell = shardInfo.MasterAlias.Cell
