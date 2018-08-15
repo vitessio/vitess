@@ -1850,7 +1850,14 @@ func TestCreateTable(t *testing.T) {
 			"	Z int,\n" +
 			"	primary key (id, username),\n" +
 			"	key by_email (email(10), username),\n" +
-			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b)\n" +
+			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b),\n" +
+			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete restrict,\n" +
+			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete no action,\n" +
+			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete cascade on update set default,\n" +
+			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set default on update set null,\n" +
+			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on delete set null on update restrict,\n" +
+			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update no action,\n" +
+			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update cascade\n" +
 			")",
 
 		// table options
