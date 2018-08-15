@@ -155,14 +155,7 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 			Plan:   plan.PlanID,
 			Reason: plan.Reason,
 		}
-		qs := qe.Stats(plan.PlanID.String(), plan.TableName().String(), v)
-		qs.mu.Lock()
-		Value.Count = qs.queryCount
-		Value.tm = qs.time
-		Value.mysqlTime = qs.mysqlTime
-		Value.Rows = qs.rowCount
-		Value.Errors = qs.errorCount
-		qs.mu.Unlock()
+		Value.Count, Value.tm, Value.mysqlTime, Value.Rows, Value.Errors = plan.Stats()
 		var timepq time.Duration
 		if Value.Count != 0 {
 			timepq = time.Duration(int64(Value.tm) / Value.Count)
