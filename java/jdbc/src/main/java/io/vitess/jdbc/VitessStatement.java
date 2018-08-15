@@ -619,7 +619,7 @@ public class VitessStatement implements Statement {
                     updateCounts[i] = truncatedUpdateCount;
                     long insertId = cursorWithError.getCursor().getInsertId();
                     if (this.retrieveGeneratedKeys && !queryBatchUpsert || insertId > 0) {
-                        generatedKeys.add(new long[]{cursorWithError.getCursor().getInsertId(), truncatedUpdateCount});
+                        generatedKeys.add(new long[]{insertId, truncatedUpdateCount});
                     }
                 } catch (SQLException ex) {
                         /* This case should not happen as API has returned cursor and not error.
