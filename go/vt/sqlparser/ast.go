@@ -1361,11 +1361,47 @@ func (c *ConstraintDefinition) walkSubtree(visit Visit) error {
 	return Walk(visit, c.Details)
 }
 
+// ReferenceAction indicates the action takes by a referential constraint e.g.
+// the `CASCADE` in a `FOREIGN KEY .. ON DELETE CASCADE` table definition.
+type ReferenceAction int
+
+// These map to the SQL-defined reference actions.
+// See https://dev.mysql.com/doc/refman/8.0/en/create-table-foreign-keys.html#foreign-keys-referential-actions
+const (
+	// DefaultAction indicates no action was explicitly specified.
+	DefaultAction ReferenceAction = iota
+	Restrict
+	Cascade
+	NoAction
+	SetNull
+	SetDefault
+)
+
+func (a ReferenceAction) walkSubtree(visit Visit) error { return nil }
+
+// Format formats the node.
+func (a ReferenceAction) Format(buf *TrackedBuffer) {
+	switch a {
+	case Restrict:
+		buf.WriteString("restrict")
+	case Cascade:
+		buf.WriteString("cascade")
+	case NoAction:
+		buf.WriteString("no action")
+	case SetNull:
+		buf.WriteString("set null")
+	case SetDefault:
+		buf.WriteString("set default")
+	}
+}
+
 // ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
 type ForeignKeyDefinition struct {
 	Source            Columns
 	ReferencedTable   TableName
 	ReferencedColumns Columns
+	OnDelete          ReferenceAction
+	OnUpdate          ReferenceAction
 }
 
 var _ ConstraintInfo = &ForeignKeyDefinition{}
@@ -1373,6 +1409,12 @@ var _ ConstraintInfo = &ForeignKeyDefinition{}
 // Format formats the node.
 func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 	buf.Myprintf("foreign key %v references %v %v", f.Source, f.ReferencedTable, f.ReferencedColumns)
+	if f.OnDelete != DefaultAction {
+		buf.Myprintf(" on delete %v", f.OnDelete)
+	}
+	if f.OnUpdate != DefaultAction {
+		buf.Myprintf(" on update %v", f.OnUpdate)
+	}
 }
 
 func (f *ForeignKeyDefinition) constraintInfo() {}
