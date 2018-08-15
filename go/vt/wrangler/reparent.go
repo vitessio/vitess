@@ -364,7 +364,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		return fmt.Errorf("master-elect tablet %v is the same as the tablet to avoid", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
 	if masterElectTabletAlias == nil {
-		if masterElectTabletAlias != nil && avoidMasterTabletAlias != nil && topoproto.TabletAliasEqual(masterElectTabletAlias, avoidMasterTabletAlias) {
+		if avoidMasterTabletAlias != nil && topoproto.TabletAliasEqual(masterElectTabletAlias, avoidMasterTabletAlias) {
 			event.DispatchUpdate(ev, "current master is different than -avoid_master, nothing to do")
 			return nil
 		}
