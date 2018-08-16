@@ -386,8 +386,6 @@ primary key (name)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias,
                      'rdonly'], auto_log=True)
 
-    # TODO(alainjobart): experiment with the dontStartBinlogPlayer option
-
     # check the startup values are in the right place
     self._check_startup_values()
 
@@ -403,10 +401,12 @@ primary key (name)
     self.check_binlog_server_vars(shard_1_slave1, horizontal=True)
 
     # Check that the throttler was enabled.
+    # The stream id is hard-coded as 1, which is the first id generated
+    # through auto-inc.
     self.check_throttler_service(shard_2_master.rpc_endpoint(),
-                                 ['BinlogPlayer/0'], 9999)
+                                 ['BinlogPlayer/1'], 9999)
     self.check_throttler_service(shard_3_master.rpc_endpoint(),
-                                 ['BinlogPlayer/0'], 9999)
+                                 ['BinlogPlayer/1'], 9999)
 
     # testing filtered replication: insert a bunch of data on shard 1,
     # check we get most of it after a few seconds, wait for binlog server
@@ -591,10 +591,10 @@ primary key (name)
 
     # mock with the SourceShard records to test 'vtctl SourceShardDelete'
     # and 'vtctl SourceShardAdd'
-    utils.run_vtctl(['SourceShardDelete', 'test_keyspace/c0-', '0'],
+    utils.run_vtctl(['SourceShardDelete', 'test_keyspace/c0-', '1'],
                     auto_log=True)
     utils.run_vtctl(['SourceShardAdd', '--key_range=80-',
-                     'test_keyspace/c0-', '0', 'test_keyspace/80-'],
+                     'test_keyspace/c0-', '1', 'test_keyspace/80-'],
                     auto_log=True)
 
     # then serve master from the split shards, make sure the source master's

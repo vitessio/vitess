@@ -125,19 +125,9 @@ service TabletManager {
   // GetSlaves asks for the list of mysql slaves
   rpc GetSlaves(tabletmanagerdata.GetSlavesRequest) returns (tabletmanagerdata.GetSlavesResponse) {};
 
-  // WaitBlpPosition tells the remote tablet to wait until it reaches
-  // the specified binolg player position
-  rpc WaitBlpPosition(tabletmanagerdata.WaitBlpPositionRequest) returns (tabletmanagerdata.WaitBlpPositionResponse) {};
-
-  // StopBlp asks the tablet to stop all its binlog players,
-  // and returns the current position for all of them
-  rpc StopBlp(tabletmanagerdata.StopBlpRequest) returns (tabletmanagerdata.StopBlpResponse) {};
-
-  // StartBlp asks the tablet to restart its binlog players
-  rpc StartBlp(tabletmanagerdata.StartBlpRequest) returns (tabletmanagerdata.StartBlpResponse) {};
-
-  // RunBlpUntil asks the tablet to restart its binlog players
-  rpc RunBlpUntil(tabletmanagerdata.RunBlpUntilRequest) returns (tabletmanagerdata.RunBlpUntilResponse) {};
+  // VReplication API
+  rpc VReplicationExec(tabletmanagerdata.VReplicationExecRequest) returns(tabletmanagerdata.VReplicationExecResponse) {};
+  rpc VReplicationWaitForPos(tabletmanagerdata.VReplicationWaitForPosRequest) returns(tabletmanagerdata.VReplicationWaitForPosResponse) {};
 
   //
   // Reparenting related functions

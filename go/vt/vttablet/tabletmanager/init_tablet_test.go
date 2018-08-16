@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -48,14 +49,13 @@ func TestInitTabletFixesReplicationData(t *testing.T) {
 	gRPCPort := int32(3456)
 	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	agent := &ActionAgent{
-		TopoServer:      ts,
-		TabletAlias:     tabletAlias,
-		MysqlDaemon:     mysqlDaemon,
-		DBConfigs:       &dbconfigs.DBConfigs{},
-		BinlogPlayerMap: nil,
-		batchCtx:        ctx,
-		History:         history.New(historyLength),
-		_healthy:        fmt.Errorf("healthcheck not run yet"),
+		TopoServer:  ts,
+		TabletAlias: tabletAlias,
+		MysqlDaemon: mysqlDaemon,
+		DBConfigs:   &dbconfigs.DBConfigs{},
+		batchCtx:    ctx,
+		History:     history.New(historyLength),
+		_healthy:    fmt.Errorf("healthcheck not run yet"),
 	}
 
 	// 1. Initialize the tablet as REPLICA.
@@ -114,14 +114,13 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 	gRPCPort := int32(3456)
 	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	agent := &ActionAgent{
-		TopoServer:      ts,
-		TabletAlias:     tabletAlias,
-		MysqlDaemon:     mysqlDaemon,
-		DBConfigs:       &dbconfigs.DBConfigs{},
-		BinlogPlayerMap: nil,
-		batchCtx:        ctx,
-		History:         history.New(historyLength),
-		_healthy:        fmt.Errorf("healthcheck not run yet"),
+		TopoServer:  ts,
+		TabletAlias: tabletAlias,
+		MysqlDaemon: mysqlDaemon,
+		DBConfigs:   &dbconfigs.DBConfigs{},
+		batchCtx:    ctx,
+		History:     history.New(historyLength),
+		_healthy:    fmt.Errorf("healthcheck not run yet"),
 	}
 
 	// 1. Initialize the tablet as REPLICA.
@@ -176,14 +175,14 @@ func TestInitTablet(t *testing.T) {
 	gRPCPort := int32(3456)
 	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 	agent := &ActionAgent{
-		TopoServer:      ts,
-		TabletAlias:     tabletAlias,
-		MysqlDaemon:     mysqlDaemon,
-		DBConfigs:       &dbconfigs.DBConfigs{},
-		BinlogPlayerMap: nil,
-		batchCtx:        ctx,
-		History:         history.New(historyLength),
-		_healthy:        fmt.Errorf("healthcheck not run yet"),
+		TopoServer:  ts,
+		TabletAlias: tabletAlias,
+		MysqlDaemon: mysqlDaemon,
+		DBConfigs:   &dbconfigs.DBConfigs{},
+		VREngine:    vreplication.NewEngine(nil, "", nil, nil),
+		batchCtx:    ctx,
+		History:     history.New(historyLength),
+		_healthy:    fmt.Errorf("healthcheck not run yet"),
 	}
 
 	// 1. Initialize the tablet as REPLICA.

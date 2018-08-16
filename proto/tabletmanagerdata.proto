@@ -93,12 +93,6 @@ message Permissions {
   repeated DbPermission db_permissions = 2;
 }
 
-// BlpPosition is a replication position for a given binlog player
-message BlpPosition {
-  uint32 uid = 1;
-  string position = 2;
-}
-
 //
 // RPC payloads
 //
@@ -309,40 +303,26 @@ message GetSlavesResponse {
   repeated string addrs = 1;
 }
 
-message WaitBlpPositionRequest {
-  BlpPosition blp_position = 1;
-  int64 wait_timeout = 2;
-}
-
-message WaitBlpPositionResponse {
-}
-
-message StopBlpRequest {
-}
-
-message StopBlpResponse {
-  repeated BlpPosition blp_positions = 1;
-}
-
-message StartBlpRequest {
-}
-
-message StartBlpResponse {
-}
-
-message RunBlpUntilRequest {
-  repeated BlpPosition blp_positions = 1;
-  int64 wait_timeout = 2;
-}
-
-message RunBlpUntilResponse {
-  string position = 1;
-}
-
 message ResetReplicationRequest {
 }
 
 message ResetReplicationResponse {
+}
+
+message VReplicationExecRequest {
+  string query = 1;
+}
+
+message VReplicationExecResponse {
+  query.QueryResult result = 1;
+}
+
+message VReplicationWaitForPosRequest {
+  int64 id = 1;
+  string position = 2;
+}
+
+message VReplicationWaitForPosResponse {
 }
 
 message InitMasterRequest {
