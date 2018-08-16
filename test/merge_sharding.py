@@ -366,7 +366,7 @@ index by_msg (msg)
                         'SplitDiff',
                         '--exclude_tables', 'unrelated',
                         '--min_healthy_rdonly_tablets', '1',
-                        '--source_uid', '0',
+                        '--source_uid', '1',
                         'test_keyspace/-80'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_0_rdonly.tablet_alias, 'rdonly'],
@@ -379,7 +379,7 @@ index by_msg (msg)
                         'SplitDiff',
                         '--exclude_tables', 'unrelated',
                         '--min_healthy_rdonly_tablets', '1',
-                        '--source_uid', '1',
+                        '--source_uid', '2',
                         'test_keyspace/-80'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly.tablet_alias, 'rdonly'],

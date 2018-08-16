@@ -403,9 +403,9 @@ class TestBaseSplitClone(unittest.TestCase, base_sharding.BaseShardingTest):
         t.reset_replication()
         t.set_semi_sync_enabled(master=False)
         t.clean_dbs()
-        # _vt.blp_checkpoint should be dropped to avoid interference between
+        # _vt.vreplication should be dropped to avoid interference between
         # test cases
-        t.mquery('', 'drop table if exists _vt.blp_checkpoint')
+        t.mquery('', 'drop table if exists _vt.vreplication')
         t.kill_vttablet()
         # we allow failures here as some tablets will be gone sometimes
         # (the master tablets after an emergency reparent)

@@ -23,7 +23,7 @@ import (
 
 func TestTabletExternallyReparentedAlwaysUpdatesTimestamp(t *testing.T) {
 	ctx := context.Background()
-	agent, _ := createTestAgent(ctx, t, nil)
+	agent := createTestAgent(ctx, t, nil)
 
 	// Initial call sets the timestamp.
 	if err := agent.TabletExternallyReparented(ctx, "unused_id"); err != nil {

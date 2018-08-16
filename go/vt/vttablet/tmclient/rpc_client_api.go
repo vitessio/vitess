@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -132,20 +133,9 @@ type TabletManagerClient interface {
 	// GetSlaves returns the addresses of the slaves
 	GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error)
 
-	// WaitBlpPosition asks the tablet to wait until it reaches that
-	// position in replication
-	WaitBlpPosition(ctx context.Context, tablet *topodatapb.Tablet, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error
-
-	// StopBlp asks the tablet to stop all its binlog players,
-	// and returns the current position for all of them
-	StopBlp(ctx context.Context, tablet *topodatapb.Tablet) ([]*tabletmanagerdatapb.BlpPosition, error)
-
-	// StartBlp asks the tablet to restart its binlog players
-	StartBlp(ctx context.Context, tablet *topodatapb.Tablet) error
-
-	// RunBlpUntil asks the tablet to restart its binlog players until
-	// it reaches the given positions, if not there yet.
-	RunBlpUntil(ctx context.Context, tablet *topodatapb.Tablet, positions []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error)
+	// VReplicationExec executes a VReplication command
+	VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error)
+	VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error
 
 	//
 	// Reparenting related functions

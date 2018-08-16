@@ -23,7 +23,9 @@ import (
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -254,49 +256,44 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	vsdw.SetState(WorkerStateSyncReplication)
 
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	defer cancel()
 	masterInfo, err := vsdw.wr.TopoServer().GetTablet(shortCtx, vsdw.shardInfo.MasterAlias)
-	cancel()
 	if err != nil {
 		return fmt.Errorf("synchronizeReplication: cannot get Tablet record for master %v: %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
 	}
 
+	ss := vsdw.shardInfo.SourceShards[0]
+
 	// 1 - stop the master binlog replication, get its current position
 	vsdw.wr.Logger().Infof("Stopping master binlog replication on %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias))
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	blpPositionList, err := vsdw.wr.TabletManagerClient().StopBlp(shortCtx, masterInfo.Tablet)
-	cancel()
+	defer cancel()
+	_, err = vsdw.wr.TabletManagerClient().VReplicationExec(shortCtx, masterInfo.Tablet, binlogplayer.StopVReplication(ss.Uid, "for split diff"))
 	if err != nil {
-		return fmt.Errorf("StopBlp on master %v failed: %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
+		return fmt.Errorf("Stop VReplication on master %v failed: %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
 	}
-	wrangler.RecordStartBlpAction(vsdw.cleaner, masterInfo.Tablet)
-
-	// 2 - stop the source tablet at a binlog position
-	//     higher than the destination master
-	stopPositionList := make([]*tabletmanagerdatapb.BlpPosition, 1)
-	ss := vsdw.shardInfo.SourceShards[0]
-	// find where we should be stopping
-	blpPos := tmutils.FindBlpPositionByID(blpPositionList, ss.Uid)
-	if blpPos == nil {
-		return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
+	wrangler.RecordVReplicationAction(vsdw.cleaner, masterInfo.Tablet, binlogplayer.StartVReplication(ss.Uid))
+	p3qr, err := vsdw.wr.TabletManagerClient().VReplicationExec(shortCtx, masterInfo.Tablet, binlogplayer.ReadVReplicationPos(ss.Uid))
+	if err != nil {
+		return fmt.Errorf("VReplicationExec(stop) for %v failed: %v", vsdw.shardInfo.MasterAlias, err)
 	}
+	qr := sqltypes.Proto3ToResult(p3qr)
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return fmt.Errorf("Unexpected result while reading position: %v", qr)
+	}
+	vreplicationPos := qr.Rows[0][0].ToString()
 
 	// stop replication
-	vsdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", topoproto.TabletAliasString(vsdw.sourceAlias), blpPos.Position)
+	vsdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", topoproto.TabletAliasString(vsdw.sourceAlias), vreplicationPos)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	defer cancel()
 	sourceTablet, err := vsdw.wr.TopoServer().GetTablet(shortCtx, vsdw.sourceAlias)
-	cancel()
 	if err != nil {
 		return err
 	}
-	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet.Tablet, blpPos.Position, *remoteActionsTimeout)
-	cancel()
+	mysqlPos, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet.Tablet, vreplicationPos, *remoteActionsTimeout)
 	if err != nil {
-		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", topoproto.TabletAliasString(vsdw.sourceAlias), blpPos.Position, err)
-	}
-	stopPositionList[0] = &tabletmanagerdatapb.BlpPosition{
-		Uid:      ss.Uid,
-		Position: stoppedAt,
+		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", topoproto.TabletAliasString(vsdw.sourceAlias), vreplicationPos, err)
 	}
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
@@ -305,26 +302,33 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
-	vsdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), stopPositionList)
+	vsdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), mysqlPos)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo.Tablet, stopPositionList, *remoteActionsTimeout)
-	cancel()
+	defer cancel()
+	_, err = vsdw.wr.TabletManagerClient().VReplicationExec(shortCtx, masterInfo.Tablet, binlogplayer.StartVReplicationUntil(ss.Uid, mysqlPos))
 	if err != nil {
-		return fmt.Errorf("RunBlpUntil on %v until %v failed: %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), stopPositionList, err)
+		return fmt.Errorf("VReplication(start until) for %v until %v failed: %v", vsdw.shardInfo.MasterAlias, mysqlPos, err)
+	}
+	if err := vsdw.wr.TabletManagerClient().VReplicationWaitForPos(shortCtx, masterInfo.Tablet, int(ss.Uid), mysqlPos); err != nil {
+		return fmt.Errorf("VReplicationWaitForPos for %v until %v failed: %v", vsdw.shardInfo.MasterAlias, mysqlPos, err)
+	}
+	masterPos, err := vsdw.wr.TabletManagerClient().MasterPosition(shortCtx, masterInfo.Tablet)
+	if err != nil {
+		return fmt.Errorf("MasterPosition for %v failed: %v", vsdw.shardInfo.MasterAlias, err)
 	}
 
 	// 4 - wait until the destination tablet is equal or passed
 	//     that master binlog position, and stop its replication.
 	vsdw.wr.Logger().Infof("Waiting for destination tablet %v to catch up to %v", topoproto.TabletAliasString(vsdw.destinationAlias), masterPos)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	defer cancel()
 	destinationTablet, err := vsdw.wr.TopoServer().GetTablet(shortCtx, vsdw.destinationAlias)
-	cancel()
 	if err != nil {
 		return err
 	}
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	defer cancel()
 	_, err = vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, destinationTablet.Tablet, masterPos, *remoteActionsTimeout)
-	cancel()
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum on %v at %v failed: %v", topoproto.TabletAliasString(vsdw.destinationAlias), masterPos, err)
 	}
@@ -333,13 +337,9 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	// 5 - restart filtered replication on destination master
 	vsdw.wr.Logger().Infof("Restarting filtered replication on master %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias))
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = vsdw.wr.TabletManagerClient().StartBlp(shortCtx, masterInfo.Tablet)
-	if err := vsdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias)); err != nil {
-		vsdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
-	}
-	cancel()
-	if err != nil {
-		return fmt.Errorf("StartBlp on %v failed: %v", topoproto.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
+	defer cancel()
+	if _, err = vsdw.wr.TabletManagerClient().VReplicationExec(ctx, masterInfo.Tablet, binlogplayer.StartVReplication(ss.Uid)); err != nil {
+		return fmt.Errorf("VReplicationExec(start) failed for %v: %v", vsdw.shardInfo.MasterAlias, err)
 	}
 
 	return nil

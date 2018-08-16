@@ -27,27 +27,41 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// DBClient is a real VtClient backed by a mysql connection.
-type DBClient struct {
+// DBClient is a high level interface to the database.
+type DBClient interface {
+	DBName() string
+	Connect() error
+	Begin() error
+	Commit() error
+	Rollback() error
+	Close()
+	ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error)
+}
+
+// dbClientImpl is a real DBClient backed by a mysql connection.
+type dbClientImpl struct {
 	dbConfig *mysql.ConnParams
 	dbConn   *mysql.Conn
 }
 
-// NewDbClient creates a DBClient instance
-func NewDbClient(params *mysql.ConnParams) *DBClient {
-	return &DBClient{
+// NewDBClient creates a DBClient instance
+func NewDBClient(params *mysql.ConnParams) DBClient {
+	return &dbClientImpl{
 		dbConfig: params,
 	}
 }
 
-func (dc *DBClient) handleError(err error) {
+func (dc *dbClientImpl) handleError(err error) {
 	if mysql.IsConnErr(err) {
 		dc.Close()
 	}
 }
 
-// Connect connects to a db server
-func (dc *DBClient) Connect() error {
+func (dc *dbClientImpl) DBName() string {
+	return dc.dbConfig.DbName
+}
+
+func (dc *dbClientImpl) Connect() error {
 	params, err := dbconfigs.WithCredentials(dc.dbConfig)
 	if err != nil {
 		return err
@@ -60,8 +74,7 @@ func (dc *DBClient) Connect() error {
 	return nil
 }
 
-// Begin starts a transaction
-func (dc *DBClient) Begin() error {
+func (dc *dbClientImpl) Begin() error {
 	_, err := dc.dbConn.ExecuteFetch("begin", 1, false)
 	if err != nil {
 		log.Errorf("BEGIN failed w/ error %v", err)
@@ -70,8 +83,7 @@ func (dc *DBClient) Begin() error {
 	return err
 }
 
-// Commit commits the current transaction
-func (dc *DBClient) Commit() error {
+func (dc *dbClientImpl) Commit() error {
 	_, err := dc.dbConn.ExecuteFetch("commit", 1, false)
 	if err != nil {
 		log.Errorf("COMMIT failed w/ error %v", err)
@@ -80,8 +92,7 @@ func (dc *DBClient) Commit() error {
 	return err
 }
 
-// Rollback rollbacks the current transaction
-func (dc *DBClient) Rollback() error {
+func (dc *dbClientImpl) Rollback() error {
 	_, err := dc.dbConn.ExecuteFetch("rollback", 1, false)
 	if err != nil {
 		log.Errorf("ROLLBACK failed w/ error %v", err)
@@ -90,17 +101,15 @@ func (dc *DBClient) Rollback() error {
 	return err
 }
 
-// Close closes connection to the db server
-func (dc *DBClient) Close() {
+func (dc *dbClientImpl) Close() {
 	if dc.dbConn != nil {
 		dc.dbConn.Close()
 		dc.dbConn = nil
 	}
 }
 
-// ExecuteFetch sends query to the db server and fetch the result
-func (dc *DBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
-	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, false)
+func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, true)
 	if err != nil {
 		log.Errorf("ExecuteFetch failed w/ error %v", err)
 		dc.handleError(err)

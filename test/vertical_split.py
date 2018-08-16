@@ -435,6 +435,13 @@ msg varchar(64)
       self._check_values(destination_master, 'vt_destination_keyspace',
                          'moving3_no_pk', self.moving3_no_pk_first, 100)
 
+    # Verify vreplication table entries
+    result = destination_master.mquery('_vt', 'select * from vreplication')
+    self.assertEqual(len(result), 1)
+    self.assertEqual(result[0][1], 'SplitClone')
+    self.assertEqual(result[0][2],
+      'keyspace:"source_keyspace" shard:"0" tables:"/moving/" tables:"view1" ')
+
     # check the binlog player is running and exporting vars
     self.check_destination_master(destination_master, ['source_keyspace/0'])
 
