@@ -27,19 +27,25 @@ export class NewWorkflowFlags {
     this.flags['horizontal_resharding_keyspace'] = new HorizontalReshardingKeyspaceFlag(5, 'horizontal_resharding_keyspace');
     this.flags['horizontal_resharding_keyspace'].positional = true;
     this.flags['horizontal_resharding_keyspace'].namedPositional = 'keyspace';
-    this.flags['horizontal_resharding_vtworkers'] = new HorizontalReshardingVtworkerFlag(6, 'horizontal_resharding_vtworkers');
+    this.flags['horizontal_resharding_source_shards'] = new HorizontalReshardingSourceShardsFlag(6, 'horizontal_resharding_source_shards');
+    this.flags['horizontal_resharding_source_shards'].positional = true;
+    this.flags['horizontal_resharding_source_shards'].namedPositional = 'source_shards';
+    this.flags['horizontal_resharding_destination_shards'] = new HorizontalReshardingDestinationShardsFlag(7, 'horizontal_resharding_destination_shards');
+    this.flags['horizontal_resharding_destination_shards'].positional = true;
+    this.flags['horizontal_resharding_destination_shards'].namedPositional = 'destination_shards';
+    this.flags['horizontal_resharding_vtworkers'] = new HorizontalReshardingVtworkerFlag(8, 'horizontal_resharding_vtworkers');
     this.flags['horizontal_resharding_vtworkers'].positional = true;
     this.flags['horizontal_resharding_vtworkers'].namedPositional = 'vtworkers';
-    this.flags['horizontal_resharding_split_cmd'] = new SplitCloneCommand(7, 'horizontal_resharding_split_cmd');
+    this.flags['horizontal_resharding_split_cmd'] = new SplitCloneCommand(9, 'horizontal_resharding_split_cmd');
     this.flags['horizontal_resharding_split_cmd'].positional = true;
     this.flags['horizontal_resharding_split_cmd'].namedPositional = 'split_cmd';
-    this.flags['horizontal_resharding_split_diff_dest_tablet_type'] = new SplitDiffTabletType(8, 'horizontal_resharding_split_diff_dest_tablet_type');
+    this.flags['horizontal_resharding_split_diff_dest_tablet_type'] = new SplitDiffTabletType(10, 'horizontal_resharding_split_diff_dest_tablet_type');
     this.flags['horizontal_resharding_split_diff_dest_tablet_type'].positional = true;
     this.flags['horizontal_resharding_split_diff_dest_tablet_type'].namedPositional = 'split_diff_dest_tablet_type';
-    this.flags['horizontal_resharding_min_healthy_rdonly_tablets'] = new HorizontalReshardingMinHealthyRdonlyTablets(9, 'horizontal_resharding_min_healthy_rdonly_tablets');
+    this.flags['horizontal_resharding_min_healthy_rdonly_tablets'] = new HorizontalReshardingMinHealthyRdonlyTablets(11, 'horizontal_resharding_min_healthy_rdonly_tablets');
     this.flags['horizontal_resharding_min_healthy_rdonly_tablets'].positional = true;
     this.flags['horizontal_resharding_min_healthy_rdonly_tablets'].namedPositional = 'min_healthy_rdonly_tablets';
-    this.flags['horizontal_resharding_enable_approvals'] = new HorizontalReshardingEnableApprovalsFlag(10, 'horizontal_resharding_enable_approvals');
+    this.flags['horizontal_resharding_enable_approvals'] = new HorizontalReshardingEnableApprovalsFlag(12, 'horizontal_resharding_enable_approvals');
     this.flags['horizontal_resharding_enable_approvals'].positional = true;
     this.flags['horizontal_resharding_enable_approvals'].namedPositional = 'enable_approvals';
   }
@@ -146,6 +152,20 @@ export class HorizontalReshardingKeyspaceFlag extends InputFlag {
     super(position, id, 'Keyspace', 'Name of a keyspace.', value);
     this.setDisplayOn('factory_name', 'horizontal_resharding');
   }
+}
+
+export class HorizontalReshardingSourceShardsFlag extends InputFlag {
+    constructor(position: number, id: string, value= '') {
+        super(position, id, 'Source Shards', 'A comma-separated list of source shards.', value);
+        this.setDisplayOn('factory_name', 'horizontal_resharding');
+    }
+}
+
+export class HorizontalReshardingDestinationShardsFlag extends InputFlag {
+    constructor(position: number, id: string, value= '') {
+        super(position, id, 'Destination Shards', 'A comma-separated list of destination shards.', value);
+        this.setDisplayOn('factory_name', 'horizontal_resharding');
+    }
 }
 
 export class HorizontalReshardingVtworkerFlag extends InputFlag {

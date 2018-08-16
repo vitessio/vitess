@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -76,6 +75,8 @@ func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflo
 	subFlags := flag.NewFlagSet(horizontalReshardingFactoryName, flag.ContinueOnError)
 	keyspace := subFlags.String("keyspace", "", "Name of keyspace to perform horizontal resharding")
 	vtworkersStr := subFlags.String("vtworkers", "", "A comma-separated list of vtworker addresses")
+	sourceShardsStr := subFlags.String("source_shards", "", "A comma-separated list of source shards")
+	destinationShardsStr := subFlags.String("destination_shards", "", "A comma-separated list of destination shards")
 	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "1", "Minimum number of healthy RDONLY tablets required in source shards")
 	splitCmd := subFlags.String("split_cmd", "SplitClone", "Split command to use to perform horizontal resharding (either SplitClone or LegacySplitClone)")
 	splitDiffDestTabletType := subFlags.String("split_diff_dest_tablet_type", "RDONLY", "Specifies tablet type to use in destination shards while performing SplitDiff operation")
@@ -89,9 +90,11 @@ func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflo
 	}
 
 	vtworkers := strings.Split(*vtworkersStr, ",")
-	w.Name = fmt.Sprintf("Horizontal resharding on keyspace %s", *keyspace)
+	sourceShards := strings.Split(*sourceShardsStr, ",")
+	destinationShards := strings.Split(*destinationShardsStr, ",")
 
-	checkpoint, err := initCheckpoint(m.TopoServer(), *keyspace, vtworkers, *minHealthyRdonlyTablets, *splitCmd, *splitDiffDestTabletType)
+	w.Name = fmt.Sprintf("Horizontal resharding on keyspace %s", *keyspace)
+	checkpoint, err := initCheckpoint(*keyspace, vtworkers, sourceShards, destinationShards, *minHealthyRdonlyTablets, *splitCmd, *splitDiffDestTabletType)
 	if err != nil {
 		return err
 	}
@@ -212,42 +215,10 @@ func createUINodes(rootNode *workflow.Node, phaseName PhaseType, shards []string
 }
 
 // initCheckpoint initialize the checkpoint for the horizontal workflow.
-func initCheckpoint(ts *topo.Server, keyspace string, vtworkers []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string) (*workflowpb.WorkflowCheckpoint, error) {
-	sourceShards, destinationShards, err := findSourceAndDestinationShards(ts, keyspace)
-	if err != nil {
-		return nil, err
+func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string) (*workflowpb.WorkflowCheckpoint, error) {
+	if len(sourceShards) == 0 || len(destinationShards) == 0 {
+		return nil, fmt.Errorf("invalid source or destination shards")
 	}
-	return initCheckpointFromShards(keyspace, vtworkers, sourceShards, destinationShards, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType)
-}
-
-func findSourceAndDestinationShards(ts *topo.Server, keyspace string) ([]string, []string, error) {
-	overlappingShards, err := topotools.FindOverlappingShards(context.Background(), ts, keyspace)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var sourceShards, destinationShards []string
-
-	for _, os := range overlappingShards {
-		var sourceShardInfo *topo.ShardInfo
-		var destinationShardInfos []*topo.ShardInfo
-		// Judge which side is source shard by checking the number of servedTypes.
-		if len(os.Left[0].ServedTypes) > 0 {
-			sourceShardInfo = os.Left[0]
-			destinationShardInfos = os.Right
-		} else {
-			sourceShardInfo = os.Right[0]
-			destinationShardInfos = os.Left
-		}
-		sourceShards = append(sourceShards, sourceShardInfo.ShardName())
-		for _, d := range destinationShardInfos {
-			destinationShards = append(destinationShards, d.ShardName())
-		}
-	}
-	return sourceShards, destinationShards, nil
-}
-
-func initCheckpointFromShards(keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string) (*workflowpb.WorkflowCheckpoint, error) {
 	if len(vtworkers) != len(destinationShards) {
 		return nil, fmt.Errorf("there are %v vtworkers, %v destination shards: the number should be same", len(vtworkers), len(destinationShards))
 	}
