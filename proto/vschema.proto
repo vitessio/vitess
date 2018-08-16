@@ -60,6 +60,11 @@ message Table {
   AutoIncrement auto_increment = 3;
   // columns lists the columns for the table.
   repeated Column columns = 4;
+  // pinned pins an unsharded table to a specific
+  // shard, as dictated by the keyspace id.
+  // The keyspace id is represened in hex form
+  // like in keyranges.
+  string pinned =5;
 }
 
 // ColumnVindex is used to associate a column to a vindex.
