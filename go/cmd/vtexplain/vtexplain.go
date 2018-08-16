@@ -40,6 +40,7 @@ var (
 	replicationMode = flag.String("replication-mode", "ROW", "The replication mode to simulate -- must be set to either ROW or STATEMENT")
 	normalize       = flag.Bool("normalize", false, "Whether to enable vtgate normalization")
 	outputMode      = flag.String("output-mode", "text", "Output in human-friendly text or json")
+	dbName          = flag.String("dbname", "", "Optional database target to override normal routing")
 
 	// vtexplainFlags lists all the flags that should show in usage
 	vtexplainFlags = []string{
@@ -53,6 +54,7 @@ var (
 		"sql-file",
 		"vschema",
 		"vschema-file",
+		"dbname",
 	}
 )
 
@@ -153,6 +155,7 @@ func parseAndRun() error {
 		ReplicationMode: *replicationMode,
 		NumShards:       *numShards,
 		Normalize:       *normalize,
+		Target:          *dbName,
 	}
 
 	log.V(100).Infof("sql %s\n", sql)
