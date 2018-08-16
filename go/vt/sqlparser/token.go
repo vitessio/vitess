@@ -85,6 +85,7 @@ func NewTokenizer(r io.Reader) *Tokenizer {
 // in identifiers. See the docs for each grammar to determine which one to put it into.
 var keywords = map[string]int{
 	"accessible":          UNUSED,
+	"action":              ACTION,
 	"add":                 ADD,
 	"against":             AGAINST,
 	"all":                 ALL,
@@ -109,7 +110,7 @@ var keywords = map[string]int{
 	"both":                UNUSED,
 	"by":                  BY,
 	"call":                UNUSED,
-	"cascade":             UNUSED,
+	"cascade":             CASCADE,
 	"case":                CASE,
 	"cast":                CAST,
 	"change":              UNUSED,
@@ -264,6 +265,7 @@ var keywords = map[string]int{
 	"natural":             NATURAL,
 	"nchar":               NCHAR,
 	"next":                NEXT,
+	"no":                  NO,
 	"not":                 NOT,
 	"no_write_to_binlog":  UNUSED,
 	"null":                NULL,
@@ -304,7 +306,7 @@ var keywords = map[string]int{
 	"replace":             REPLACE,
 	"require":             UNUSED,
 	"resignal":            UNUSED,
-	"restrict":            UNUSED,
+	"restrict":            RESTRICT,
 	"return":              UNUSED,
 	"revoke":              UNUSED,
 	"right":               RIGHT,

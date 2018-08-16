@@ -106,6 +106,7 @@ func forceEOF(yylex interface{}) {
   indexColumns  []*IndexColumn
   constraintDefinition *ConstraintDefinition
   constraintInfo ConstraintInfo
+  ReferenceAction ReferenceAction
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
@@ -156,7 +157,8 @@ func forceEOF(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN REFERENCES KEY_BLOCK_SIZE
+%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN  SPATIAL FULLTEXT KEY_BLOCK_SIZE
+%token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
@@ -299,6 +301,7 @@ func forceEOF(yylex interface{}) {
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> vindex_type vindex_type_opt
 %type <bytes> alter_object_type
+%type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 
 %start any_command
 
@@ -1174,6 +1177,52 @@ constraint_info:
   FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')'
   {
     $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9}
+  }
+| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete
+  {
+    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11}
+  }
+| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update
+  {
+    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnUpdate: $11}
+  }
+| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
+  {
+    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11, OnUpdate: $12}
+  }
+
+fk_on_delete:
+  ON DELETE fk_reference_action
+  {
+    $$ = $3
+  }
+
+fk_on_update:
+  ON UPDATE fk_reference_action
+  {
+    $$ = $3
+  }
+
+fk_reference_action:
+  RESTRICT
+  {
+    $$ = Restrict
+  }
+| CASCADE
+  {
+    $$ = Cascade
+  }
+| NO ACTION
+  {
+    $$ = NoAction
+  }
+| SET DEFAULT
+  {
+    $$ = SetDefault
+  }
+| SET NULL
+  {
+    $$ = SetNull
   }
 
 table_option_list:
@@ -3104,6 +3153,7 @@ non_reserved_keyword:
 | BIT
 | BLOB
 | BOOL
+| CASCADE
 | CHAR
 | CHARACTER
 | CHARSET
@@ -3147,6 +3197,7 @@ non_reserved_keyword:
 | MULTIPOLYGON
 | NAMES
 | NCHAR
+| NO
 | NUMERIC
 | OFFSET
 | ONLY
@@ -3163,6 +3214,7 @@ non_reserved_keyword:
 | REORGANIZE
 | REPAIR
 | REPEATABLE
+| RESTRICT
 | ROLLBACK
 | SESSION
 | SERIALIZABLE
