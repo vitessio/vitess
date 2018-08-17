@@ -40,6 +40,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"strings"
 )
 
 var (
@@ -390,7 +391,17 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				blp.currentCharset = stmtCharset
 			}
 		}
-		if _, err = blp.exec(string(stmt.Sql)); err == nil {
+		sql := string(stmt.Sql)
+		if qr, err := blp.exec(sql); err == nil {
+			// TODO we should only check this with RBR
+			if strings.HasPrefix(sql, "INSERT") || strings.HasPrefix(sql, "UPDATE") || strings.HasPrefix(sql, "DELETE") {
+				if qr.RowsAffected != 1 {
+					if err = blp.dbClient.Rollback(); err != nil {
+						return false, err
+					}
+					return false, fmt.Errorf("binlog player statement did not affect exactly one row: %q", sql)
+				}
+			}
 			continue
 		}
 		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock {
