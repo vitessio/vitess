@@ -93,7 +93,7 @@ func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflo
 	sourceShards := strings.Split(*sourceShardsStr, ",")
 	destinationShards := strings.Split(*destinationShardsStr, ",")
 
-	w.Name = fmt.Sprintf("Horizontal resharding on keyspace %s", *keyspace)
+	w.Name = fmt.Sprintf("Reshard shards %v into shards %v of keyspace %v.", *keyspace, *sourceShardsStr, *destinationShardsStr)
 	checkpoint, err := initCheckpoint(*keyspace, vtworkers, sourceShards, destinationShards, *minHealthyRdonlyTablets, *splitCmd, *splitDiffDestTabletType)
 	if err != nil {
 		return err
