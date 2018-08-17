@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -32,12 +32,12 @@ import utils
 shard_0_master = tablet.Tablet(use_mysqlctld=True)
 shard_0_replica = tablet.Tablet(use_mysqlctld=True)
 shard_0_rdonly = tablet.Tablet(use_mysqlctld=True)
-all_shard_0_tablets = [shard_0_master, shard_0_replica, shard_0_rdonly]
+all_shard_0_tablets = (shard_0_master, shard_0_replica, shard_0_rdonly)
 # range 80 - ''
 shard_1_master = tablet.Tablet(use_mysqlctld=True)
 shard_1_replica = tablet.Tablet(use_mysqlctld=True)
 shard_1_rdonly = tablet.Tablet(use_mysqlctld=True)
-all_shard_1_tablets = [shard_1_master, shard_1_replica, shard_1_rdonly]
+all_shard_1_tablets = (shard_1_master, shard_1_replica, shard_1_rdonly)
 # all tablets
 all_tablets = all_shard_0_tablets + all_shard_1_tablets
 
@@ -120,27 +120,45 @@ class TestSchemaSwap(unittest.TestCase):
                        init_shard=shard_name,
                        extra_args=utils.vtctld.process_args())
 
+  keyspace = 'vt_test_keyspace'
   create_table_sql = ('DROP TABLE IF EXISTS test; '
                       'CREATE TABLE test (id int, PRIMARY KEY(id)) '
                       'Engine=InnoDB')
   schema_swap_sql = 'ALTER TABLE test ADD COLUMN (t TEXT)'
   show_schema_sql = 'SHOW CREATE TABLE test'
-  schema_check_string = '`t` text,'
+  final_schema_check_string = '`t` text,'
+  initial_schema_check_string = 'CREATE TABLE `test`'
 
-  def _check_final_schema(self):
-    """Check that schema of test table is correct after a successful swap."""
-    schema_0 = shard_0_master.mquery('vt_test_keyspace',
-                                     self.show_schema_sql)[0][1]
-    schema_1 = shard_1_master.mquery('vt_test_keyspace',
-                                     self.show_schema_sql)[0][1]
+  def _get_schema(self, source=shard_0_master):
+    return source.mquery(self.keyspace, self.show_schema_sql)[0][1]
+
+  def _check_schema(self, contents):
+    """Check that schema of test table matches the given string."""
+    schema_0 = self._get_schema(shard_0_master)
+    schema_1 = self._get_schema(shard_1_master)
+    logging.debug('shard 0 schema: %s', schema_0)
+    logging.debug('shard 1 schema: %s', schema_0)
     self.assertEqual(schema_0, schema_1)
-    self.assertIn(self.schema_check_string, schema_0)
+    self.assertIn(contents, schema_0)
+
+  def _wait_for_schema_propagation(self,
+                                   source=shard_0_master,
+                                   targets=all_tablets):
+    """Wait until the current schema has propagated to all tablets."""
+    schema = self._get_schema(source)
+    timeout = 60  # seconds
+    condition_msg = 'propagation of schema: %s' % schema
+    for target in targets:
+      while schema != self._get_schema(target):
+        timeout = utils.wait_step(condition_msg, timeout)
 
   def setUp(self):
     utils.run_vtctl(['ApplySchema',
                      '-sql=%s' % self.create_table_sql,
                      'test_keyspace'],
                     auto_log=True)
+    self._check_schema(self.initial_schema_check_string)
+    self._wait_for_schema_propagation()
 
     for t in [shard_0_master, shard_1_master]:
       tablet_info = utils.run_vtctl_json(['GetTablet', t.tablet_alias])
@@ -344,7 +362,7 @@ class TestSchemaSwap(unittest.TestCase):
     swap_uuid = self._start_swap(self.schema_swap_sql)
     err = self._wait_for_success_or_error(swap_uuid)
     self.assertEqual(err, 'Schema swap is finished')
-    self._check_final_schema()
+    self._check_schema(self.final_schema_check_string)
     self._delete_swap(swap_uuid)
 
   def test_restarted_swap(self):
@@ -370,7 +388,7 @@ class TestSchemaSwap(unittest.TestCase):
     swap_uuid = self._start_swap(self.schema_swap_sql)
     err = self._wait_for_success_or_error(swap_uuid)
     self.assertEqual(err, 'Schema swap is finished')
-    self._check_final_schema()
+    self._check_schema(self.final_schema_check_string)
     self._delete_swap(swap_uuid)
 
   def _retry_or_restart_swap(self, swap_uuid, use_retry):
@@ -405,7 +423,7 @@ class TestSchemaSwap(unittest.TestCase):
     swap_uuid = self._retry_or_restart_swap(swap_uuid, use_retry=use_retry)
     err = self._wait_for_success_or_error(swap_uuid, reset_error=True)
     self.assertEqual(err, 'Schema swap is finished')
-    self._check_final_schema()
+    self._check_schema(self.final_schema_check_string)
     self._delete_swap(swap_uuid)
 
   def test_init_error_with_retry(self):
@@ -418,16 +436,20 @@ class TestSchemaSwap(unittest.TestCase):
     """Schema swap interrupted while applying seed schema change."""
     # Renaming the test table to cause ALTER TABLE executed during schema swap
     # to fail.
-    shard_1_master.mquery('vt_test_keyspace', 'RENAME TABLE test TO test2')
+    logging.debug('running in shard 1: "RENAME TABLE test TO test2"')
+    shard_1_master.mquery(self.keyspace, 'RENAME TABLE test TO test2')
+    # self._wait_for_schema_propagation(shard_1_master, all_shard_1_tablets)
     swap_uuid = self._start_swap(self.schema_swap_sql)
     err = self._wait_for_success_or_error(swap_uuid)
-    self.assertIn("Table 'vt_test_keyspace.test' doesn't exist", err)
+    self.assertIn("Table '"+self.keyspace+".test' doesn't exist", err)
 
-    shard_1_master.mquery('vt_test_keyspace', 'RENAME TABLE test2 TO test')
+    logging.debug('running in shard 1: "RENAME TABLE test2 TO test"')
+    shard_1_master.mquery(self.keyspace, 'RENAME TABLE test2 TO test')
+    # self._wait_for_schema_propagation(shard_1_master, all_shard_1_tablets)
     swap_uuid = self._retry_or_restart_swap(swap_uuid, use_retry=use_retry)
     err = self._wait_for_success_or_error(swap_uuid, reset_error=True)
     self.assertEqual(err, 'Schema swap is finished')
-    self._check_final_schema()
+    self._check_schema(self.final_schema_check_string)
     self._delete_swap(swap_uuid)
 
   def test_apply_error_with_retry(self):
@@ -469,7 +491,7 @@ class TestSchemaSwap(unittest.TestCase):
     # restarted by vtctld when it's started.
     err = self._wait_for_success_or_error(swap_uuid, reset_error=True)
     self.assertEqual(err, 'Schema swap is finished')
-    self._check_final_schema()
+    self._check_schema(self.final_schema_check_string)
     self._delete_swap(swap_uuid)
 
 
