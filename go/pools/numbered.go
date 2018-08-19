@@ -64,31 +64,47 @@ func NewNumbered() *Numbered {
 // It does not lock the object.
 // It returns an error if the id already exists.
 func (nu *Numbered) Register(id int64, val interface{}, enforceTimeout bool) error {
-	nu.mu.Lock()
-	defer nu.mu.Unlock()
-	if _, ok := nu.resources[id]; ok {
-		return fmt.Errorf("already present")
-	}
+	// Optimistically assume we're not double registering.
 	now := time.Now()
-	nu.resources[id] = &numberedWrapper{
+	resource := &numberedWrapper{
 		val:            val,
 		timeCreated:    now,
 		timeUsed:       now,
 		enforceTimeout: enforceTimeout,
 	}
+
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+
+	_, ok := nu.resources[id]
+	if ok {
+		return fmt.Errorf("already present")
+	}
+	nu.resources[id] = resource
 	return nil
 }
 
-// Unregiester forgets the specified resource.
-// If the resource is not present, it's ignored.
+// Unregister forgets the specified resource.  If the resource is not present, it's ignored.
 func (nu *Numbered) Unregister(id int64, reason string) {
+	success := nu.unregister(id, reason)
+	if success {
+		nu.recentlyUnregistered.Set(
+			fmt.Sprintf("%v", id), &unregistered{reason: reason, timeUnregistered: time.Now()})
+	}
+}
+
+// unregister forgets the resource, if it exists. Returns whether or not the resource existed at
+// time of Unregister.
+func (nu *Numbered) unregister(id int64, reason string) bool {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
+
+	_, ok := nu.resources[id]
 	delete(nu.resources, id)
 	if len(nu.resources) == 0 {
 		nu.empty.Broadcast()
 	}
-	nu.recentlyUnregistered.Set(fmt.Sprintf("%v", id), &unregistered{reason: reason, timeUnregistered: time.Now()})
+	return ok
 }
 
 // Get locks the resource for use. It accepts a purpose as a string.
