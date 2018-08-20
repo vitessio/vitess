@@ -57,7 +57,7 @@ type ParallelRunner struct {
 	uiLogger         *logutil.MemoryLogger
 	rootUINode       *workflow.Node
 	phaseUINode      *workflow.Node
-	checkpointWriter *CheckpointWriter
+	checkpointWriter *workflow.CheckpointWriter
 	// tasks stores selected tasks for the phase with expected execution order.
 	tasks            []*workflowpb.Task
 	concurrencyLevel level
@@ -76,7 +76,7 @@ type ParallelRunner struct {
 }
 
 // NewParallelRunner returns a new ParallelRunner.
-func NewParallelRunner(ctx context.Context, rootUINode *workflow.Node, cp *CheckpointWriter, tasks []*workflowpb.Task, executeFunc func(context.Context, *workflowpb.Task) error, concurrencyLevel level, enableApprovals bool) *ParallelRunner {
+func NewParallelRunner(ctx context.Context, rootUINode *workflow.Node, cp *workflow.CheckpointWriter, tasks []*workflowpb.Task, executeFunc func(context.Context, *workflowpb.Task) error, concurrencyLevel level, enableApprovals bool) *ParallelRunner {
 	if len(tasks) < 1 {
 		log.Fatal("BUG: No tasks passed into ParallelRunner")
 	}

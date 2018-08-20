@@ -169,7 +169,7 @@ type TestWorkflow struct {
 	rootUINode *workflow.Node
 
 	checkpoint       *workflowpb.WorkflowCheckpoint
-	checkpointWriter *CheckpointWriter
+	checkpointWriter *workflow.CheckpointWriter
 
 	enableApprovals bool
 	sequential      bool
@@ -179,7 +179,7 @@ type TestWorkflow struct {
 func (tw *TestWorkflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
 	tw.ctx = ctx
 	tw.wi = wi
-	tw.checkpointWriter = NewCheckpointWriter(tw.topoServer, tw.checkpoint, tw.wi)
+	tw.checkpointWriter = workflow.NewCheckpointWriter(tw.topoServer, tw.checkpoint, tw.wi)
 
 	tw.rootUINode.Display = workflow.NodeDisplayDeterminate
 	tw.rootUINode.BroadcastChanges(true /* updateChildren */)

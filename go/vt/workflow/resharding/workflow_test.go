@@ -76,7 +76,7 @@ func TestHorizontalResharding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fail to get workflow from manager: %v", err)
 	}
-	hw := w.(*HorizontalReshardingWorkflow)
+	hw := w.(*horizontalReshardingWorkflow)
 	hw.wr = mockWranglerInterface
 
 	// Start the job.

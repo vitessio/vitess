@@ -24,7 +24,7 @@ export class NewWorkflowFlags {
     this.flags['schema_swap_sql'].namedPositional = 'sql';
 
     // Flags for Horizontal Resharding workflow.
-      this.flags['horizontal_resharding_keyspace'] = new HorizontalReshardingKeyspaceFlag(5, 'horizontal_resharding_keyspace', 'horizontal_resharding');
+    this.flags['horizontal_resharding_keyspace'] = new HorizontalReshardingKeyspaceFlag(5, 'horizontal_resharding_keyspace', 'horizontal_resharding');
     this.flags['horizontal_resharding_keyspace'].positional = true;
     this.flags['horizontal_resharding_keyspace'].namedPositional = 'keyspace';
     this.flags['horizontal_resharding_source_shards'] = new HorizontalReshardingSourceShardsFlag(6, 'horizontal_resharding_source_shards', 'horizontal_resharding');
@@ -50,24 +50,24 @@ export class NewWorkflowFlags {
     this.flags['horizontal_resharding_enable_approvals'].namedPositional = 'enable_approvals';
 
     // Flags for keyspace resharding workflow.
-    this.flags['horizontal_resharding_full_keyspace_keyspace'] = new HorizontalReshardingKeyspaceFlag(13, 'horizontal_resharding_full_keyspace_keyspace', 'horizontal_resharding_full_keyspace');
-    this.flags['horizontal_resharding_full_keyspace_keyspace'].positional = true;
-    this.flags['horizontal_resharding_full_keyspace_keyspace'].namedPositional = 'keyspace';
-    this.flags['horizontal_resharding_full_keyspace_vtworkers'] = new HorizontalReshardingVtworkerFlag(14, 'horizontal_resharding_full_keyspace_vtworkers', 'horizontal_resharding_full_keyspace');
-    this.flags['horizontal_resharding_full_keyspace_vtworkers'].positional = true;
-    this.flags['horizontal_resharding_full_keyspace_vtworkers'].namedPositional = 'vtworkers';
-    this.flags['horizontal_resharding_full_keyspace_split_cmd'] = new SplitCloneCommand(15, 'horizontal_resharding_full_keyspace_split_cmd', 'horizontal_resharding_full_keyspace');
-    this.flags['horizontal_resharding_full_keyspace_split_cmd'].positional = true;
-    this.flags['horizontal_resharding_full_keyspace_split_cmd'].namedPositional = 'split_cmd';
-    this.flags['horizontal_resharding_full_keyspace_split_diff_dest_tablet_type'] = new SplitDiffTabletType(16, 'horizontal_resharding_full_keyspace_split_diff_dest_tablet_type', 'horizontal_resharding_full_keyspace');
-    this.flags['horizontal_resharding_full_keyspace_split_diff_dest_tablet_type'].positional = true;
-    this.flags['horizontal_resharding_full_keyspace_split_diff_dest_tablet_type'].namedPositional = 'split_diff_dest_tablet_type';
-    this.flags['horizontal_resharding_full_keyspace_min_healthy_rdonly_tablets'] = new HorizontalReshardingMinHealthyRdonlyTablets(17, 'horizontal_resharding_full_keyspace_min_healthy_rdonly_tablets', 'horizontal_resharding_full_keyspace');
-    this.flags['horizontal_resharding_full_keyspace_min_healthy_rdonly_tablets'].positional = true;
-    this.flags['horizontal_resharding_full_keyspace_min_healthy_rdonly_tablets'].namedPositional = 'min_healthy_rdonly_tablets';
-    this.flags['horizontal_resharding_full_keyspace_enable_approvals'] = new HorizontalReshardingEnableApprovalsFlag(18, 'horizontal_resharding_full_keyspace_enable_approvals', 'horizontal_resharding_full_keyspace');
-    this.flags['horizontal_resharding_full_keyspace_enable_approvals'].positional = true;
-    this.flags['horizontal_resharding_full_keyspace_enable_approvals'].namedPositional = 'enable_approvals';
+    this.flags['keyspace_resharding_keyspace'] = new HorizontalReshardingKeyspaceFlag(13, 'keyspace_resharding_keyspace', 'keyspace_resharding');
+    this.flags['keyspace_resharding_keyspace'].positional = true;
+    this.flags['keyspace_resharding_keyspace'].namedPositional = 'keyspace';
+    this.flags['keyspace_resharding_vtworkers'] = new HorizontalReshardingVtworkerFlag(14, 'keyspace_resharding_vtworkers', 'keyspace_resharding');
+    this.flags['keyspace_resharding_vtworkers'].positional = true;
+    this.flags['keyspace_resharding_vtworkers'].namedPositional = 'vtworkers';
+    this.flags['keyspace_resharding_split_cmd'] = new SplitCloneCommand(15, 'keyspace_resharding_split_cmd', 'keyspace_resharding');
+    this.flags['keyspace_resharding_split_cmd'].positional = true;
+    this.flags['keyspace_resharding_split_cmd'].namedPositional = 'split_cmd';
+    this.flags['keyspace_resharding_split_diff_dest_tablet_type'] = new SplitDiffTabletType(16, 'keyspace_resharding_split_diff_dest_tablet_type', 'keyspace_resharding');
+    this.flags['keyspace_resharding_split_diff_dest_tablet_type'].positional = true;
+    this.flags['keyspace_resharding_split_diff_dest_tablet_type'].namedPositional = 'split_diff_dest_tablet_type';
+    this.flags['keyspace_resharding_min_healthy_rdonly_tablets'] = new HorizontalReshardingMinHealthyRdonlyTablets(17, 'keyspace_resharding_min_healthy_rdonly_tablets', 'keyspace_resharding');
+    this.flags['keyspace_resharding_min_healthy_rdonly_tablets'].positional = true;
+    this.flags['keyspace_resharding_min_healthy_rdonly_tablets'].namedPositional = 'min_healthy_rdonly_tablets';
+    this.flags['keyspace_resharding_enable_approvals'] = new HorizontalReshardingEnableApprovalsFlag(18, 'keyspace_resharding_enable_approvals', 'keyspace_resharding');
+    this.flags['keyspace_resharding_enable_approvals'].positional = true;
+    this.flags['keyspace_resharding_enable_approvals'].namedPositional = 'enable_approvals';
 
   }
 }
@@ -112,10 +112,10 @@ export class FactoryNameFlag extends DropDownFlag {
   constructor(position: number, id: string, workflows) {
     super(position, id, 'Factory Name', 'Specifies the type of workflow to create.', '');
     let options = [];
-    if (workflows.horizontal_resharding_full_keyspace) {
+    if (workflows.keyspace_resharding) {
       options.push({
-          label: 'Full keyspace horizontal resharding',
-          value: 'horizontal_resharding_full_keyspace'
+          label: 'Keyspace resharding',
+          value: 'keyspace_resharding'
       });
     }
 

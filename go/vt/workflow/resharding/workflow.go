@@ -63,15 +63,15 @@ const (
 // Register registers the HorizontalReshardingWorkflowFactory as a factory
 // in the workflow framework.
 func Register() {
-	workflow.Register(horizontalReshardingFactoryName, &HorizontalReshardingWorkflowFactory{})
+	workflow.Register(horizontalReshardingFactoryName, &Factory{})
 }
 
-// HorizontalReshardingWorkflowFactory is the factory to create
+// Factory is the factory to create
 // a horizontal resharding workflow.
-type HorizontalReshardingWorkflowFactory struct{}
+type Factory struct{}
 
 // Init is part of the workflow.Factory interface.
-func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string) error {
+func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string) error {
 	subFlags := flag.NewFlagSet(horizontalReshardingFactoryName, flag.ContinueOnError)
 	keyspace := subFlags.String("keyspace", "", "Name of keyspace to perform horizontal resharding")
 	vtworkersStr := subFlags.String("vtworkers", "", "A comma-separated list of vtworker addresses")
@@ -109,7 +109,7 @@ func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflo
 }
 
 // Instantiate is part the workflow.Factory interface.
-func (*HorizontalReshardingWorkflowFactory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
+func (*Factory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
 	rootNode.Message = "This is a workflow to execute horizontal resharding automatically."
 
 	checkpoint := &workflowpb.WorkflowCheckpoint{}
@@ -122,7 +122,7 @@ func (*HorizontalReshardingWorkflowFactory) Instantiate(m *workflow.Manager, w *
 		return nil, err
 	}
 
-	hw := &HorizontalReshardingWorkflow{
+	hw := &horizontalReshardingWorkflow{
 		checkpoint:      checkpoint,
 		rootUINode:      rootNode,
 		logger:          logutil.NewMemoryLogger(),
@@ -302,9 +302,9 @@ func initTasks(tasks map[string]*workflowpb.Task, phase PhaseType, shards []stri
 	}
 }
 
-// HorizontalReshardingWorkflow contains meta-information and methods to
+// horizontalReshardingWorkflow contains meta-information and methods to
 // control the horizontal resharding workflow.
-type HorizontalReshardingWorkflow struct {
+type horizontalReshardingWorkflow struct {
 	ctx        context.Context
 	wr         ReshardingWrangler
 	manager    *workflow.Manager
@@ -317,17 +317,17 @@ type HorizontalReshardingWorkflow struct {
 	rootUINode *workflow.Node
 
 	checkpoint       *workflowpb.WorkflowCheckpoint
-	checkpointWriter *CheckpointWriter
+	checkpointWriter *workflow.CheckpointWriter
 
 	enableApprovals bool
 }
 
 // Run executes the horizontal resharding process.
 // It implements the workflow.Workflow interface.
-func (hw *HorizontalReshardingWorkflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
+func (hw *horizontalReshardingWorkflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
 	hw.ctx = ctx
 	hw.wi = wi
-	hw.checkpointWriter = NewCheckpointWriter(hw.topoServer, hw.checkpoint, hw.wi)
+	hw.checkpointWriter = workflow.NewCheckpointWriter(hw.topoServer, hw.checkpoint, hw.wi)
 	hw.rootUINode.Display = workflow.NodeDisplayDeterminate
 	hw.rootUINode.BroadcastChanges(true /* updateChildren */)
 
@@ -338,7 +338,7 @@ func (hw *HorizontalReshardingWorkflow) Run(ctx context.Context, manager *workfl
 	return nil
 }
 
-func (hw *HorizontalReshardingWorkflow) runWorkflow() error {
+func (hw *horizontalReshardingWorkflow) runWorkflow() error {
 	copySchemaTasks := hw.GetTasks(phaseCopySchema)
 	copySchemaRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, copySchemaTasks, hw.runCopySchema, Parallel, hw.enableApprovals)
 	if err := copySchemaRunner.Run(); err != nil {
@@ -384,8 +384,9 @@ func (hw *HorizontalReshardingWorkflow) runWorkflow() error {
 	return nil
 }
 
-func (hw *HorizontalReshardingWorkflow) setUIMessage(message string) {
+func (hw *horizontalReshardingWorkflow) setUIMessage(message string) {
 	log.Infof("Horizontal resharding : %v.", message)
+	hw.logger.Infof(message)
 	hw.rootUINode.Log = hw.logger.String()
 	hw.rootUINode.Message = message
 	hw.rootUINode.BroadcastChanges(false /* updateChildren */)

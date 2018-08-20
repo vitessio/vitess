@@ -23,6 +23,7 @@ package keyspaceresharding
 import (
 	"flag"
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 
@@ -35,7 +36,6 @@ import (
 
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/workflow"
-	"vitess.io/vitess/go/vt/workflow/resharding"
 
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
@@ -43,23 +43,23 @@ import (
 const (
 	codeVersion = 1
 
-	horizontalReshardingFullKeyspaceFactoryName = "horizontal_resharding_full_keyspace"
-	phaseName                                   = "create_workflows"
+	keyspaceReshardingFactoryName = "keyspace_resharding"
+	phaseName                     = "create_workflows"
 )
 
-// Register registers the HorizontalReshardingFullKeyspaceFactory as a factory
+// Register registers the KeyspaceResharding as a factory
 // in the workflow framework.
 func Register() {
-	workflow.Register(horizontalReshardingFullKeyspaceFactoryName, &HorizontalReshardingFullKeyspaceFactory{})
+	workflow.Register(keyspaceReshardingFactoryName, &Factory{})
 }
 
-// HorizontalReshardingFullKeyspaceFactory is the factory to create
+// Factory is the factory to create
 // a horizontal resharding workflow.
-type HorizontalReshardingFullKeyspaceFactory struct{}
+type Factory struct{}
 
 // Init is part of the workflow.Factory interface.
-func (*HorizontalReshardingFullKeyspaceFactory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string) error {
-	subFlags := flag.NewFlagSet(horizontalReshardingFullKeyspaceFactoryName, flag.ContinueOnError)
+func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string) error {
+	subFlags := flag.NewFlagSet(keyspaceReshardingFactoryName, flag.ContinueOnError)
 	keyspace := subFlags.String("keyspace", "", "Name of keyspace to perform horizontal resharding")
 	vtworkersStr := subFlags.String("vtworkers", "", "A comma-separated list of vtworker addresses")
 	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "1", "Minimum number of healthy RDONLY tablets required in source shards")
@@ -77,7 +77,7 @@ func (*HorizontalReshardingFullKeyspaceFactory) Init(m *workflow.Manager, w *wor
 
 	vtworkers := strings.Split(*vtworkersStr, ",")
 
-	w.Name = fmt.Sprintf("Full keyspace reshard on %s", *keyspace)
+	w.Name = fmt.Sprintf("Keyspace reshard on %s", *keyspace)
 	shardsToSplit, err := findSourceAndDestinationShards(m.TopoServer(), *keyspace)
 	if err != nil {
 		return err
@@ -105,8 +105,8 @@ func (*HorizontalReshardingFullKeyspaceFactory) Init(m *workflow.Manager, w *wor
 }
 
 // Instantiate is part the workflow.Factory interface.
-func (*HorizontalReshardingFullKeyspaceFactory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
-	rootNode.Message = "This is a workflow to execute horizontal resharding automatically."
+func (*Factory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
+	rootNode.Message = "This is a workflow to execute a keyspace resharding automatically."
 
 	checkpoint := &workflowpb.WorkflowCheckpoint{}
 	if err := proto.Unmarshal(w.Data, checkpoint); err != nil {
@@ -118,7 +118,7 @@ func (*HorizontalReshardingFullKeyspaceFactory) Instantiate(m *workflow.Manager,
 		return nil, err
 	}
 
-	hw := &HorizontalReshardingFullKeyspace{
+	hw := &keyspaceResharding{
 		checkpoint:                   checkpoint,
 		rootUINode:                   rootNode,
 		logger:                       logutil.NewMemoryLogger(),
@@ -186,7 +186,7 @@ func findSourceAndDestinationShards(ts *topo.Server, keyspace string) ([][][]str
 	return shardsToSplit, nil
 }
 
-// initCheckpoint initialize the checkpoint for full keyspace split
+// initCheckpoint initialize the checkpoint for keyspace reshard
 func initCheckpoint(keyspace string, vtworkers []string, shardsToSplit [][][]string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string, enableApprovals, skipStartWorkflows bool) (*workflowpb.WorkflowCheckpoint, error) {
 	sourceShards := 0
 	destShards := 0
@@ -237,9 +237,9 @@ func initCheckpoint(keyspace string, vtworkers []string, shardsToSplit [][][]str
 	}, nil
 }
 
-// HorizontalReshardingFullKeyspace contains meta-information and methods to
+// keyspaceResharding contains meta-information and methods to
 // control the horizontal resharding workflow.
-type HorizontalReshardingFullKeyspace struct {
+type keyspaceResharding struct {
 	ctx        context.Context
 	manager    *workflow.Manager
 	topoServer *topo.Server
@@ -251,7 +251,7 @@ type HorizontalReshardingFullKeyspace struct {
 	rootUINode *workflow.Node
 
 	checkpoint       *workflowpb.WorkflowCheckpoint
-	checkpointWriter *resharding.CheckpointWriter
+	checkpointWriter *workflow.CheckpointWriter
 
 	workflowsCount int
 
@@ -264,23 +264,24 @@ type HorizontalReshardingFullKeyspace struct {
 	skipStartWorkflowParam       string
 }
 
-// Run executes the horizontal resharding process.
+// Run executes the keyspace resharding workflow
 // It implements the workflow.Workflow interface.
-func (hw *HorizontalReshardingFullKeyspace) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
+func (hw *keyspaceResharding) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
 	hw.ctx = ctx
 	hw.wi = wi
-	hw.checkpointWriter = resharding.NewCheckpointWriter(hw.topoServer, hw.checkpoint, hw.wi)
+	hw.checkpointWriter = workflow.NewCheckpointWriter(hw.topoServer, hw.checkpoint, hw.wi)
 	hw.rootUINode.Display = workflow.NodeDisplayDeterminate
 	hw.rootUINode.BroadcastChanges(true /* updateChildren */)
 
 	if err := hw.runWorkflow(); err != nil {
+		hw.setUIMessage(hw.rootUINode, fmt.Sprintf("Keyspace resharding failed to create workflows"))
 		return err
 	}
-	hw.setUIMessage(fmt.Sprintf("Horizontal Resharding is finished successfully."))
+	hw.setUIMessage(hw.rootUINode, fmt.Sprintf("Keyspace resharding is finished successfully."))
 	return nil
 }
 
-func (hw *HorizontalReshardingFullKeyspace) runWorkflow() error {
+func (hw *keyspaceResharding) runWorkflow() error {
 	var tasks []*workflowpb.Task
 	for i := 0; i < hw.workflowsCount; i++ {
 		taskID := fmt.Sprintf("%s/%v", phaseName, i)
@@ -289,7 +290,6 @@ func (hw *HorizontalReshardingFullKeyspace) runWorkflow() error {
 
 	ctx := context.Background()
 	skipStart, err := strconv.ParseBool(hw.skipStartWorkflowParam)
-	log.Infof("This is skipStart")
 	if err != nil {
 		return err
 
@@ -307,14 +307,22 @@ func (hw *HorizontalReshardingFullKeyspace) runWorkflow() error {
 			"-enable_approvals=" + hw.enableApprovalsParam,
 		}
 		log.Infof("This are the params %v", horizontalReshardingParams)
-		uuid, err := hw.manager.Create(ctx, "horizontal_resharding", horizontalReshardingParams)
-
+		phaseID := path.Dir(task.Id)
+		phaseUINode, err := hw.rootUINode.GetChildByPath(phaseID)
 		if err != nil {
 			return err
 		}
+
+		uuid, err := hw.manager.Create(ctx, "horizontal_resharding", horizontalReshardingParams)
+		if err != nil {
+			hw.setUIMessage(phaseUINode, fmt.Sprintf("Couldn't create shard split workflow for source shards: %v. Got error: %v", task.Attributes["source_shards"], err))
+			return err
+		}
+		hw.setUIMessage(phaseUINode, fmt.Sprintf("Created shard split workflow: %v for source shards: %v.", uuid, task.Attributes["source_shards"]))
 		if !skipStart {
 			err = hw.manager.Start(ctx, uuid)
 			if err != nil {
+				hw.setUIMessage(phaseUINode, fmt.Sprintf("Couldn't start shard split workflow: %v for source shards: %v. Got error: %v", uuid, task.Attributes["source_shards"], err))
 				return err
 			}
 		}
@@ -323,9 +331,10 @@ func (hw *HorizontalReshardingFullKeyspace) runWorkflow() error {
 	return nil
 }
 
-func (hw *HorizontalReshardingFullKeyspace) setUIMessage(message string) {
-	log.Infof("Horizontal resharding : %v.", message)
-	hw.rootUINode.Log = hw.logger.String()
-	hw.rootUINode.Message = message
-	hw.rootUINode.BroadcastChanges(false /* updateChildren */)
+func (hw *keyspaceResharding) setUIMessage(node *workflow.Node, message string) {
+	log.Infof("Keyspace resharding : %v.", message)
+	hw.logger.Infof(message)
+	node.Log = hw.logger.String()
+	node.Message = message
+	node.BroadcastChanges(false /* updateChildren */)
 }

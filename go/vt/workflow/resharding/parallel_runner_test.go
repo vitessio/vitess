@@ -171,7 +171,7 @@ func TestParallelRunnerApprovalFromFirstDone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fail to get workflow info from manager: %v", err)
 	}
-	checkpointWriter := NewCheckpointWriter(ts, tw.checkpoint, wi)
+	checkpointWriter := workflow.NewCheckpointWriter(ts, tw.checkpoint, wi)
 	task1ID := createTestTaskID(phaseSimple, 0)
 	checkpointWriter.UpdateTask(task1ID, workflowpb.TaskState_TaskDone, nil)
 
@@ -221,7 +221,7 @@ func TestParallelRunnerApprovalFromFirstRunning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fail to get workflow info from manager: %v", err)
 	}
-	checkpointWriter := NewCheckpointWriter(ts, tw.checkpoint, wi)
+	checkpointWriter := workflow.NewCheckpointWriter(ts, tw.checkpoint, wi)
 	task1ID := createTestTaskID(phaseSimple, 0)
 	checkpointWriter.UpdateTask(task1ID, workflowpb.TaskState_TaskRunning, nil)
 
@@ -273,7 +273,7 @@ func TestParallelRunnerApprovalFromFirstDoneSecondRunning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fail to get workflow info from manager: %v", err)
 	}
-	checkpointWriter := NewCheckpointWriter(ts, tw.checkpoint, wi)
+	checkpointWriter := workflow.NewCheckpointWriter(ts, tw.checkpoint, wi)
 	task1ID := createTestTaskID(phaseSimple, 0)
 	checkpointWriter.UpdateTask(task1ID, workflowpb.TaskState_TaskDone, nil)
 	task2ID := createTestTaskID(phaseSimple, 1)
@@ -327,7 +327,7 @@ func TestParallelRunnerApprovalFirstRunningSecondRunning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fail to get workflow info from manager: %v", err)
 	}
-	checkpointWriter := NewCheckpointWriter(ts, tw.checkpoint, wi)
+	checkpointWriter := workflow.NewCheckpointWriter(ts, tw.checkpoint, wi)
 	task1ID := createTestTaskID(phaseSimple, 0)
 	checkpointWriter.UpdateTask(task1ID, workflowpb.TaskState_TaskRunning, nil)
 	task2ID := createTestTaskID(phaseSimple, 1)
@@ -382,7 +382,7 @@ func TestParallelRunnerApprovalFromAllDone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fail to get workflow info from manager: %v", err)
 	}
-	checkpointWriter := NewCheckpointWriter(ts, tw.checkpoint, wi)
+	checkpointWriter := workflow.NewCheckpointWriter(ts, tw.checkpoint, wi)
 	task1ID := createTestTaskID(phaseSimple, 0)
 	checkpointWriter.UpdateTask(task1ID, workflowpb.TaskState_TaskDone, nil)
 	task2ID := createTestTaskID(phaseSimple, 1)
