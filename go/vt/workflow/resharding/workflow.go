@@ -42,7 +42,7 @@ import (
 )
 
 const (
-	codeVersion = 1
+	codeVersion = 2
 
 	horizontalReshardingFactoryName = "horizontal_resharding"
 )
@@ -80,7 +80,8 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "1", "Minimum number of healthy RDONLY tablets required in source shards")
 	splitCmd := subFlags.String("split_cmd", "SplitClone", "Split command to use to perform horizontal resharding (either SplitClone or LegacySplitClone)")
 	splitDiffDestTabletType := subFlags.String("split_diff_dest_tablet_type", "RDONLY", "Specifies tablet type to use in destination shards while performing SplitDiff operation")
-	enableApprovals := subFlags.Bool("enable_approvals", true, "If true, executions of tasks require user's approvals on the UI.")
+	phaseEnaableApprovalsDesc := fmt.Sprintf("Comma separated phases that require explicit approval in the UI to execute. Phase names are: %v", strings.Join(WorkflowPhases(), ","))
+	phaseEnableApprovalsStr := subFlags.String("phase_enable_approvals", strings.Join(WorkflowPhases(), ","), phaseEnaableApprovalsDesc)
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -92,6 +93,18 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	vtworkers := strings.Split(*vtworkersStr, ",")
 	sourceShards := strings.Split(*sourceShardsStr, ",")
 	destinationShards := strings.Split(*destinationShardsStr, ",")
+	phaseEnableApprovals := parsePhaseEnableApprovals(*phaseEnableApprovalsStr)
+	for _, phase := range phaseEnableApprovals {
+		validPhase := false
+		for _, registeredPhase := range WorkflowPhases() {
+			if phase == registeredPhase {
+				validPhase = true
+			}
+		}
+		if !validPhase {
+			return fmt.Errorf("Invalid phase in phase_enable_approvals: %v", phase)
+		}
+	}
 
 	w.Name = fmt.Sprintf("Reshard shards %v into shards %v of keyspace %v.", *keyspace, *sourceShardsStr, *destinationShardsStr)
 	checkpoint, err := initCheckpoint(*keyspace, vtworkers, sourceShards, destinationShards, *minHealthyRdonlyTablets, *splitCmd, *splitDiffDestTabletType)
@@ -99,7 +112,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 		return err
 	}
 
-	checkpoint.Settings["enable_approvals"] = fmt.Sprintf("%v", *enableApprovals)
+	checkpoint.Settings["phase_enable_approvals"] = *phaseEnableApprovalsStr
 
 	w.Data, err = proto.Marshal(checkpoint)
 	if err != nil {
@@ -117,19 +130,19 @@ func (*Factory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNod
 		return nil, err
 	}
 
-	enableApprovals, err := strconv.ParseBool(checkpoint.Settings["enable_approvals"])
-	if err != nil {
-		return nil, err
+	phaseEnableApprovals := make(map[string]bool)
+	for _, phase := range parsePhaseEnableApprovals(checkpoint.Settings["phase_enable_approvals"]) {
+		phaseEnableApprovals[phase] = true
 	}
 
 	hw := &horizontalReshardingWorkflow{
-		checkpoint:      checkpoint,
-		rootUINode:      rootNode,
-		logger:          logutil.NewMemoryLogger(),
-		wr:              wrangler.New(logutil.NewConsoleLogger(), m.TopoServer(), tmclient.NewTabletManagerClient()),
-		topoServer:      m.TopoServer(),
-		manager:         m,
-		enableApprovals: enableApprovals,
+		checkpoint:           checkpoint,
+		rootUINode:           rootNode,
+		logger:               logutil.NewMemoryLogger(),
+		wr:                   wrangler.New(logutil.NewConsoleLogger(), m.TopoServer(), tmclient.NewTabletManagerClient()),
+		topoServer:           m.TopoServer(),
+		manager:              m,
+		phaseEnableApprovals: phaseEnableApprovals,
 	}
 	copySchemaUINode := &workflow.Node{
 		Name:     "CopySchemaShard",
@@ -319,7 +332,7 @@ type horizontalReshardingWorkflow struct {
 	checkpoint       *workflowpb.WorkflowCheckpoint
 	checkpointWriter *workflow.CheckpointWriter
 
-	enableApprovals bool
+	phaseEnableApprovals map[string]bool
 }
 
 // Run executes the horizontal resharding process.
@@ -340,43 +353,43 @@ func (hw *horizontalReshardingWorkflow) Run(ctx context.Context, manager *workfl
 
 func (hw *horizontalReshardingWorkflow) runWorkflow() error {
 	copySchemaTasks := hw.GetTasks(phaseCopySchema)
-	copySchemaRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, copySchemaTasks, hw.runCopySchema, Parallel, hw.enableApprovals)
+	copySchemaRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, copySchemaTasks, hw.runCopySchema, Parallel, hw.phaseEnableApprovals[string(phaseCopySchema)])
 	if err := copySchemaRunner.Run(); err != nil {
 		return err
 	}
 
 	cloneTasks := hw.GetTasks(phaseClone)
-	cloneRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, cloneTasks, hw.runSplitClone, Parallel, hw.enableApprovals)
+	cloneRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, cloneTasks, hw.runSplitClone, Parallel, hw.phaseEnableApprovals[string(phaseClone)])
 	if err := cloneRunner.Run(); err != nil {
 		return err
 	}
 
 	waitForFilteredReplicationTasks := hw.GetTasks(phaseWaitForFilteredReplication)
-	waitForFilteredReplicationRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, waitForFilteredReplicationTasks, hw.runWaitForFilteredReplication, Parallel, hw.enableApprovals)
+	waitForFilteredReplicationRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, waitForFilteredReplicationTasks, hw.runWaitForFilteredReplication, Parallel, hw.phaseEnableApprovals[string(phaseWaitForFilteredReplication)])
 	if err := waitForFilteredReplicationRunner.Run(); err != nil {
 		return err
 	}
 
 	diffTasks := hw.GetTasks(phaseDiff)
-	diffRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, diffTasks, hw.runSplitDiff, Parallel, hw.enableApprovals)
+	diffRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, diffTasks, hw.runSplitDiff, Parallel, hw.phaseEnableApprovals[string(phaseWaitForFilteredReplication)])
 	if err := diffRunner.Run(); err != nil {
 		return err
 	}
 
 	migrateRdonlyTasks := hw.GetTasks(phaseMigrateRdonly)
-	migrateRdonlyRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateRdonlyTasks, hw.runMigrate, Sequential, hw.enableApprovals)
+	migrateRdonlyRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateRdonlyTasks, hw.runMigrate, Sequential, hw.phaseEnableApprovals[string(phaseMigrateRdonly)])
 	if err := migrateRdonlyRunner.Run(); err != nil {
 		return err
 	}
 
 	migrateReplicaTasks := hw.GetTasks(phaseMigrateReplica)
-	migrateReplicaRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateReplicaTasks, hw.runMigrate, Sequential, hw.enableApprovals)
+	migrateReplicaRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateReplicaTasks, hw.runMigrate, Sequential, hw.phaseEnableApprovals[string(phaseMigrateReplica)])
 	if err := migrateReplicaRunner.Run(); err != nil {
 		return err
 	}
 
 	migrateMasterTasks := hw.GetTasks(phaseMigrateMaster)
-	migrateMasterRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateMasterTasks, hw.runMigrate, Sequential, hw.enableApprovals)
+	migrateMasterRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateMasterTasks, hw.runMigrate, Sequential, hw.phaseEnableApprovals[string(phaseMigrateReplica)])
 	if err := migrateMasterRunner.Run(); err != nil {
 		return err
 	}
@@ -390,4 +403,41 @@ func (hw *horizontalReshardingWorkflow) setUIMessage(message string) {
 	hw.rootUINode.Log = hw.logger.String()
 	hw.rootUINode.Message = message
 	hw.rootUINode.BroadcastChanges(false /* updateChildren */)
+}
+
+func defaultPhaseDisableApprovals() map[PhaseType]bool {
+	return map[PhaseType]bool{
+		phaseCopySchema:                 false,
+		phaseClone:                      false,
+		phaseWaitForFilteredReplication: false,
+		phaseDiff:                       false,
+		phaseMigrateRdonly:              false,
+		phaseMigrateReplica:             false,
+		phaseMigrateMaster:              false,
+	}
+}
+
+// WorkflowPhases returns phases for resharding workflow
+func WorkflowPhases() []string {
+	return []string{
+		string(phaseCopySchema),
+		string(phaseClone),
+		string(phaseWaitForFilteredReplication),
+		string(phaseDiff),
+		string(phaseMigrateReplica),
+		string(phaseMigrateRdonly),
+		string(phaseMigrateMaster),
+	}
+}
+
+func parsePhaseEnableApprovals(phaseEnableApprovalsStr string) []string {
+	var phaseEnableApprovals []string
+	if phaseEnableApprovalsStr == "" {
+		return phaseEnableApprovals
+	}
+	phaseEnableApprovals = strings.Split(phaseEnableApprovalsStr, ",")
+	for i, phase := range phaseEnableApprovals {
+		phaseEnableApprovals[i] = strings.Trim(phase, " ")
+	}
+	return phaseEnableApprovals
 }

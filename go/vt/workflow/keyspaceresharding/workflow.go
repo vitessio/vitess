@@ -36,6 +36,7 @@ import (
 
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/workflow"
+	"vitess.io/vitess/go/vt/workflow/resharding"
 
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
@@ -65,8 +66,9 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "1", "Minimum number of healthy RDONLY tablets required in source shards")
 	splitCmd := subFlags.String("split_cmd", "SplitClone", "Split command to use to perform horizontal resharding (either SplitClone or LegacySplitClone)")
 	splitDiffDestTabletType := subFlags.String("split_diff_dest_tablet_type", "RDONLY", "Specifies tablet type to use in destination shards while performing SplitDiff operation")
-	enableApprovals := subFlags.Bool("enable_approvals", true, "If true, executions of tasks require user's approvals on the UI.")
-	skipStartWorkflows := subFlags.Bool("skip_start_workflows", false, "If true, newly created workflows will have skip_start set")
+	skipStartWorkflows := subFlags.Bool("skip_start_workflows", true, "If true, newly created workflows will have skip_start set")
+	phaseEnaableApprovalsDesc := fmt.Sprintf("Comma separated phases that require explicit approval in the UI to execute. Phase names are: %v", strings.Join(resharding.WorkflowPhases(), ","))
+	phaseEnableApprovalsStr := subFlags.String("phase_enable_approvals", strings.Join(resharding.WorkflowPhases(), ","), phaseEnaableApprovalsDesc)
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -90,7 +92,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 		*minHealthyRdonlyTablets,
 		*splitCmd,
 		*splitDiffDestTabletType,
-		*enableApprovals,
+		*phaseEnableApprovalsStr,
 		*skipStartWorkflows,
 	)
 	if err != nil {
@@ -124,7 +126,7 @@ func (*Factory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNod
 		logger:                       logutil.NewMemoryLogger(),
 		topoServer:                   m.TopoServer(),
 		manager:                      m,
-		enableApprovalsParam:         checkpoint.Settings["enable_approvals"],
+		phaseEnableApprovalsParam:    checkpoint.Settings["phase_enable_approvals"],
 		skipStartWorkflowParam:       checkpoint.Settings["skip_start_workflows"],
 		minHealthyRdonlyTabletsParam: checkpoint.Settings["min_healthy_rdonly_tablets"],
 		keyspaceParam:                checkpoint.Settings["keyspace"],
@@ -187,7 +189,7 @@ func findSourceAndDestinationShards(ts *topo.Server, keyspace string) ([][][]str
 }
 
 // initCheckpoint initialize the checkpoint for keyspace reshard
-func initCheckpoint(keyspace string, vtworkers []string, shardsToSplit [][][]string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string, enableApprovals, skipStartWorkflows bool) (*workflowpb.WorkflowCheckpoint, error) {
+func initCheckpoint(keyspace string, vtworkers []string, shardsToSplit [][][]string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType, phaseEnableApprovals string, skipStartWorkflows bool) (*workflowpb.WorkflowCheckpoint, error) {
 	sourceShards := 0
 	destShards := 0
 	for _, shardToSplit := range shardsToSplit {
@@ -229,7 +231,7 @@ func initCheckpoint(keyspace string, vtworkers []string, shardsToSplit [][][]str
 			"min_healthy_rdonly_tablets":  minHealthyRdonlyTablets,
 			"split_cmd":                   splitCmd,
 			"split_diff_dest_tablet_type": splitDiffDestTabletType,
-			"enable_approvals":            fmt.Sprintf("%v", enableApprovals),
+			"phase_enable_approvals":      phaseEnableApprovals,
 			"skip_start_workflows":        fmt.Sprintf("%v", skipStartWorkflows),
 			"workflows_count":             fmt.Sprintf("%v", len(shardsToSplit)),
 			"keyspace":                    keyspace,
@@ -256,7 +258,7 @@ type keyspaceResharding struct {
 	workflowsCount int
 
 	// params to horizontal reshard workflow
-	enableApprovalsParam         string
+	phaseEnableApprovalsParam    string
 	minHealthyRdonlyTabletsParam string
 	keyspaceParam                string
 	splitDiffDestTabletTypeParam string
@@ -298,15 +300,14 @@ func (hw *keyspaceResharding) runWorkflow() error {
 		horizontalReshardingParams := []string{
 			"-keyspace=" + hw.keyspaceParam,
 			"-vtworkers=" + task.Attributes["vtworkers"],
-			"-enable_approvals=" + hw.enableApprovalsParam,
 			"-split_cmd=" + hw.splitCmdParam,
 			"-split_diff_dest_tablet_type=" + hw.splitDiffDestTabletTypeParam,
 			"-min_healthy_rdonly_tablets=" + hw.minHealthyRdonlyTabletsParam,
 			"-source_shards=" + task.Attributes["source_shards"],
 			"-destination_shards=" + task.Attributes["destination_shards"],
-			"-enable_approvals=" + hw.enableApprovalsParam,
+			"-phase_enable_approvals=" + hw.phaseEnableApprovalsParam,
 		}
-		log.Infof("This are the params %v", horizontalReshardingParams)
+		log.Infof("These are the params %v", horizontalReshardingParams)
 		phaseID := path.Dir(task.Id)
 		phaseUINode, err := hw.rootUINode.GetChildByPath(phaseID)
 		if err != nil {
