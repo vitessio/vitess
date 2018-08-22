@@ -149,49 +149,14 @@ func emitToBackend(emitPeriod *time.Duration) {
 	}
 }
 
-// Float is expvar.Float+Get+hook
-type Float struct {
-	mu sync.Mutex
-	f  float64
-}
-
-// NewFloat creates a new Float and exports it.
-func NewFloat(name string) *Float {
-	v := new(Float)
-	publish(name, v)
-	return v
-}
-
-// Add adds the provided value to the Float
-func (v *Float) Add(delta float64) {
-	v.mu.Lock()
-	v.f += delta
-	v.mu.Unlock()
-}
-
-// Set sets the value
-func (v *Float) Set(value float64) {
-	v.mu.Lock()
-	v.f = value
-	v.mu.Unlock()
-}
-
-// Get returns the value
-func (v *Float) Get() float64 {
-	v.mu.Lock()
-	f := v.f
-	v.mu.Unlock()
-	return f
-}
-
-// String is the implementation of expvar.var
-func (v *Float) String() string {
-	return strconv.FormatFloat(v.Get(), 'g', -1, 64)
-}
-
 // FloatFunc converts a function that returns
 // a float64 as an expvar.
 type FloatFunc func() float64
+
+// Help returns the help string (undefined currently)
+func (f FloatFunc) Help() string {
+	return "help"
+}
 
 // String is the implementation of expvar.var
 func (f FloatFunc) String() string {
@@ -253,41 +218,6 @@ func (f JSONFunc) String() string {
 // expvar as is.
 func PublishJSONFunc(name string, f func() string) {
 	publish(name, JSONFunc(f))
-}
-
-// StringMap is a map of string -> string
-type StringMap struct {
-	mu     sync.Mutex
-	values map[string]string
-}
-
-// NewStringMap returns a new StringMap
-func NewStringMap(name string) *StringMap {
-	v := &StringMap{values: make(map[string]string)}
-	publish(name, v)
-	return v
-}
-
-// Set will set a value (existing or not)
-func (v *StringMap) Set(name, value string) {
-	v.mu.Lock()
-	v.values[name] = value
-	v.mu.Unlock()
-}
-
-// Get will return the value, or "" f not set.
-func (v *StringMap) Get(name string) string {
-	v.mu.Lock()
-	s := v.values[name]
-	v.mu.Unlock()
-	return s
-}
-
-// String is the implementation of expvar.Var
-func (v *StringMap) String() string {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	return stringMapToString(v.values)
 }
 
 // StringMapFunc is the function equivalent of StringMap
