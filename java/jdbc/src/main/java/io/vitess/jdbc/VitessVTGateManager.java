@@ -16,7 +16,6 @@
 
 package io.vitess.jdbc;
 
-import java.io.File;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -30,10 +29,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 
-import com.google.common.io.Closeables;
-
 import io.vitess.client.Context;
-import io.vitess.client.RpcClient;
 import io.vitess.client.VTGateConnection;
 import io.vitess.client.RefreshableVTGateConnection;
 import io.vitess.client.grpc.GrpcClientFactory;
@@ -52,6 +48,8 @@ public class VitessVTGateManager {
     private static ConcurrentHashMap<String, VTGateConnection> vtGateConnHashMap =
         new ConcurrentHashMap<>();
     private static Timer vtgateConnRefreshTimer = null;
+    private static Timer vtgateClosureTimer = null;
+    private static long vtgateClosureDelaySeconds = 0L;
 
     /**
      * VTGateConnections object consist of vtGateIdentifire list and return vtGate object in round robin.
@@ -66,6 +64,7 @@ public class VitessVTGateManager {
          * @param connection
          */
         public VTGateConnections(final VitessConnection connection) {
+            maybeStartClosureTimer(connection);
             for (final VitessJDBCUrl.HostInfo hostInfo : connection.getUrl().getHostInfos()) {
                 String identifier = getIdentifer(hostInfo.getHostname(), hostInfo.getPort(), connection.getUsername(), connection.getTarget());
                 synchronized (VitessVTGateManager.class) {
@@ -105,6 +104,17 @@ public class VitessVTGateManager {
 
     }
 
+    private static void maybeStartClosureTimer(VitessConnection connection) {
+        if (connection.getRefreshClosureDelayed() && vtgateClosureTimer == null) {
+            synchronized (VitessVTGateManager.class) {
+                if (vtgateClosureTimer == null) {
+                    vtgateClosureTimer = new Timer("vtgate-conn-closure", true);
+                    vtgateClosureDelaySeconds = connection.getRefreshClosureDelaySeconds();
+                }
+            }
+        }
+    }
+
     private static String getIdentifer(String hostname, int port, String userIdentifer, String keyspace) {
         return (hostname + port + userIdentifer + keyspace);
     }
@@ -130,17 +140,37 @@ public class VitessVTGateManager {
                     if (existing.checkKeystoreUpdates()) {
                         updatedCount++;
                         VTGateConnection old = vtGateConnHashMap.replace(entry.getKey(), getVtGateConn(hostInfo, connection));
-                        try {
-                            old.close();
-                        } catch (IOException ioe) {
-                            logger.log(Level.WARNING, "Error closing VTGateConnection", ioe);
-                        }
+                        closeRefreshedConnection(old);
                     }
                 }
             }
             if (updatedCount > 0) {
                 logger.info("refreshed " + updatedCount + " vtgate connections due to keystore update");
             }
+        }
+    }
+
+    private static void closeRefreshedConnection(final VTGateConnection old) {
+        if (vtgateClosureTimer != null) {
+            logger.info(String.format("%s Closing connection with a %s second delay", old, vtgateClosureDelaySeconds));
+            vtgateClosureTimer.schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    actuallyCloseRefreshedConnection(old);
+                }
+            },
+            TimeUnit.SECONDS.toMillis(vtgateClosureDelaySeconds));
+        } else {
+            actuallyCloseRefreshedConnection(old);
+        }
+    }
+
+    private static void actuallyCloseRefreshedConnection(final VTGateConnection old) {
+        try {
+            logger.info(old + " Closing connection because it had been refreshed");
+            old.close();
+        } catch (IOException ioe) {
+            logger.log(Level.WARNING, String.format("Error closing VTGateConnection %s", old), ioe);
         }
     }
 
