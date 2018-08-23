@@ -24,6 +24,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/peer"
 )
 
 // GRPCCallInfo returns an augmented context with a CallInfo structure,
@@ -33,17 +34,25 @@ func GRPCCallInfo(ctx context.Context) context.Context {
 	if !ok {
 		return ctx
 	}
-	return NewContext(ctx, &gRPCCallInfoImpl{
+
+	callinfo := &gRPCCallInfoImpl{
 		method: method,
-	})
+	}
+	peer, ok := peer.FromContext(ctx)
+	if ok {
+		callinfo.remoteAddr = peer.Addr.String()
+	}
+
+	return NewContext(ctx, callinfo)
 }
 
 type gRPCCallInfoImpl struct {
-	method string
+	method     string
+	remoteAddr string
 }
 
 func (gci *gRPCCallInfoImpl) RemoteAddr() string {
-	return "remote"
+	return gci.remoteAddr
 }
 
 func (gci *gRPCCallInfoImpl) Username() string {
@@ -51,9 +60,9 @@ func (gci *gRPCCallInfoImpl) Username() string {
 }
 
 func (gci *gRPCCallInfoImpl) Text() string {
-	return fmt.Sprintf("%s(gRPC)", gci.method)
+	return fmt.Sprintf("%s:%s(gRPC)", gci.remoteAddr, gci.method)
 }
 
 func (gci *gRPCCallInfoImpl) HTML() template.HTML {
-	return template.HTML("<b>Method:</b> " + gci.method)
+	return template.HTML("<b>Method:</b> " + gci.method + " <b>Remote Addr:</b> " + gci.remoteAddr)
 }
