@@ -287,40 +287,19 @@ func (s *server) GetSlaves(ctx context.Context, request *tabletmanagerdatapb.Get
 	return response, err
 }
 
-func (s *server) WaitBlpPosition(ctx context.Context, request *tabletmanagerdatapb.WaitBlpPositionRequest) (response *tabletmanagerdatapb.WaitBlpPositionResponse, err error) {
-	defer s.agent.HandleRPCPanic(ctx, "WaitBlpPosition", request, response, true /*verbose*/, &err)
+func (s *server) VReplicationExec(ctx context.Context, request *tabletmanagerdatapb.VReplicationExecRequest) (response *tabletmanagerdatapb.VReplicationExecResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "VReplicationExec", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.WaitBlpPositionResponse{}
-	return response, s.agent.WaitBlpPosition(ctx, request.BlpPosition, time.Duration(request.WaitTimeout))
-}
-
-func (s *server) StopBlp(ctx context.Context, request *tabletmanagerdatapb.StopBlpRequest) (response *tabletmanagerdatapb.StopBlpResponse, err error) {
-	defer s.agent.HandleRPCPanic(ctx, "StopBlp", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.StopBlpResponse{}
-	positions, err := s.agent.StopBlp(ctx)
-	if err == nil {
-		response.BlpPositions = positions
-	}
+	response = &tabletmanagerdatapb.VReplicationExecResponse{}
+	response.Result, err = s.agent.VReplicationExec(ctx, request.Query)
 	return response, err
 }
 
-func (s *server) StartBlp(ctx context.Context, request *tabletmanagerdatapb.StartBlpRequest) (response *tabletmanagerdatapb.StartBlpResponse, err error) {
-	defer s.agent.HandleRPCPanic(ctx, "StartBlp", request, response, true /*verbose*/, &err)
+func (s *server) VReplicationWaitForPos(ctx context.Context, request *tabletmanagerdatapb.VReplicationWaitForPosRequest) (response *tabletmanagerdatapb.VReplicationWaitForPosResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "VReplicationWaitForPos", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.StartBlpResponse{}
-	return response, s.agent.StartBlp(ctx)
-}
-
-func (s *server) RunBlpUntil(ctx context.Context, request *tabletmanagerdatapb.RunBlpUntilRequest) (response *tabletmanagerdatapb.RunBlpUntilResponse, err error) {
-	defer s.agent.HandleRPCPanic(ctx, "RunBlpUntil", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.RunBlpUntilResponse{}
-	position, err := s.agent.RunBlpUntil(ctx, request.BlpPositions, time.Duration(request.WaitTimeout))
-	if err == nil {
-		response.Position = position
-	}
-	return response, err
+	err = s.agent.VReplicationWaitForPos(ctx, int(request.Id), request.Position)
+	return &tabletmanagerdatapb.VReplicationWaitForPosResponse{}, err
 }
 
 //

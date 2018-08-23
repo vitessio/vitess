@@ -24,6 +24,7 @@ import (
 	_ "vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 )
 
@@ -120,48 +121,6 @@ var (
   <dd>will not serve traffic.</dd>
 </dl>
 `
-
-	// binlogTemplate is about the binlog players
-	binlogTemplate = `
-{{if .Controllers}}
-Binlog player state: {{.State}}</br>
-<table>
-  <tr>
-    <th>Index</th>
-    <th>SourceShard</th>
-    <th>State</th>
-    <th>StopPosition</th>
-    <th>LastPosition</th>
-    <th>SecondsBehindMaster</th>
-    <th>Counts</th>
-    <th>Rates</th>
-    <th>Last Error</th>
-  </tr>
-  {{range .Controllers}}
-    <tr>
-      <td>{{.Index}}</td>
-      <td>{{.SourceShardAsHTML}}</td>
-      <td>{{.State}}
-        {{if eq .State "Running"}}
-          {{if .SourceTabletAlias}}
-            (from {{github_com_vitessio_vitess_vtctld_tablet .SourceTabletAlias}})
-          {{else}}
-            (picking source tablet)
-          {{end}}
-        {{end}}</td>
-      <td>{{if .StopPosition}}{{.StopPosition}}{{end}}</td>
-      <td>{{.LastPosition}}</td>
-      <td>{{.SecondsBehindMaster}}</td>
-      <td>{{range $key, $value := .Counts}}<b>{{$key}}</b>: {{$value}}<br>{{end}}</td>
-      <td>{{range $key, $values := .Rates}}<b>{{$key}}</b>: {{range $values}}{{.}} {{end}}<br>{{end}}</td>
-      <td>{{.LastError}}</td>
-    </tr>
-  {{end}}
-</table>
-{{else}}
-No binlog player is running.
-{{end}}
-`
 )
 
 type healthStatus struct {
@@ -212,9 +171,7 @@ func addStatusParts(qsc tabletserver.Controller) {
 		}
 	})
 	qsc.AddStatusPart()
-	servenv.AddStatusPart("Binlog Player", binlogTemplate, func() interface{} {
-		return agent.BinlogPlayerMap.Status()
-	})
+	vreplication.AddStatusPart()
 	if onStatusRegistered != nil {
 		onStatusRegistered()
 	}

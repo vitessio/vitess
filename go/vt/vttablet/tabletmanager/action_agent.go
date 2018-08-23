@@ -62,6 +62,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
@@ -90,7 +91,7 @@ type ActionAgent struct {
 	Cnf                 *mysqlctl.Mycnf
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           *dbconfigs.DBConfigs
-	BinlogPlayerMap     *BinlogPlayerMap
+	VREngine            *vreplication.Engine
 
 	// exportStats is set only for production tablet.
 	exportStats bool
@@ -253,13 +254,12 @@ func NewActionAgent(
 	agent.statsTabletType = stats.NewString("TabletType")
 	agent.statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
 
-	// Start the binlog player services, not playing at start.
-	agent.BinlogPlayerMap = NewBinlogPlayerMap(ts, mysqld, func() binlogplayer.VtClient {
-		return binlogplayer.NewDbClient(agent.DBConfigs.FilteredWithDB())
+	// The db name will get set by the Start function called below, before
+	// VREngine gets to invoke the FilteredWithDB call.
+	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
+		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
 	})
-	// Stop all binlog players upon entering lameduck.
-	servenv.OnTerm(agent.BinlogPlayerMap.StopAllPlayersAndReset)
-	RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
+	servenv.OnTerm(agent.VREngine.Close)
 
 	var mysqlHost string
 	var mysqlPort int32
@@ -341,7 +341,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
-		BinlogPlayerMap:     nil,
+		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient),
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
@@ -380,7 +380,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           dbcfgs,
-		BinlogPlayerMap:     nil,
+		VREngine:            vreplication.NewEngine(nil, "", nil, nil),
 		gotMysqlPort:        true,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
@@ -684,9 +684,7 @@ func (agent *ActionAgent) Stop() {
 	if agent.UpdateStream != nil {
 		agent.UpdateStream.Disable()
 	}
-	if agent.BinlogPlayerMap != nil {
-		agent.BinlogPlayerMap.StopAllPlayersAndReset()
-	}
+	agent.VREngine.Close()
 	if agent.MysqlDaemon != nil {
 		agent.MysqlDaemon.Close()
 	}

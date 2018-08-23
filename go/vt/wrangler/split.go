@@ -48,7 +48,7 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 
 	// Insert their KeyRange in the SourceShards array.
 	// We use a linear 0-based id, that matches what worker/split_clone.go
-	// inserts into _vt.blp_checkpoint.
+	// inserts into _vt.vreplication.
 	// We want to guarantee sourceShards[i] is using sources[i],
 	// So iterating over the sourceTablets map would be a bad idea.
 	sourceShards := make([]*topodatapb.Shard_SourceShard, len(sourceTablets))

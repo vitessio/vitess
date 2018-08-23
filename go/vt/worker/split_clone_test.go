@@ -243,8 +243,6 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 		// leftReplica is unused by default.
 		tc.rightMasterFakeDb.AddExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 	}
-	expectBlpCheckpointCreationQueries(tc.leftMasterFakeDb)
-	expectBlpCheckpointCreationQueries(tc.rightMasterFakeDb)
 
 	// Fake stream health reponses because vtworker needs them to find the master.
 	tc.leftMasterQs = fakes.NewStreamHealthQueryService(leftMaster.Target())
@@ -835,8 +833,6 @@ func TestSplitCloneV2_Offline_Reconciliation(t *testing.T) {
 	// Delete statements. (All are combined in one.)
 	tc.leftMasterFakeDb.AddExpectedQuery("DELETE FROM `vt_ks`.`table1` WHERE (`id`=190) OR (`id`=192) OR (`id`=194) OR (`id`=196) OR (`id`=198)", nil)
 	tc.rightMasterFakeDb.AddExpectedQuery("DELETE FROM `vt_ks`.`table1` WHERE (`id`=191) OR (`id`=193) OR (`id`=195) OR (`id`=197) OR (`id`=199)", nil)
-	expectBlpCheckpointCreationQueries(tc.leftMasterFakeDb)
-	expectBlpCheckpointCreationQueries(tc.rightMasterFakeDb)
 
 	// Run the vtworker command.
 	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
@@ -927,9 +923,8 @@ func TestSplitCloneV2_RetryDueToReparent(t *testing.T) {
 	defer tc.tearDown()
 
 	// Provoke a reparent just before the copy finishes.
-	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
+	// leftReplica will take over for the last, 30th, insert and the vreplication checkpoint.
 	tc.leftReplicaFakeDb.AddExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
-	expectBlpCheckpointCreationQueries(tc.leftReplicaFakeDb)
 
 	// Do not let leftMaster succeed the 30th write.
 	tc.leftMasterFakeDb.DeleteAllEntriesAfterIndex(28)
@@ -987,9 +982,8 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
 
-	// leftReplica will take over for the last, 30th, insert and the BLP checkpoint.
+	// leftReplica will take over for the last, 30th, insert and the vreplication checkpoint.
 	tc.leftReplicaFakeDb.AddExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
-	expectBlpCheckpointCreationQueries(tc.leftReplicaFakeDb)
 
 	// During the 29th write, let the MASTER disappear.
 	tc.leftMasterFakeDb.GetEntry(28).AfterFunc = func() {
@@ -1032,6 +1026,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 		}
 
 		// Make leftReplica the new MASTER.
+		tc.leftReplica.Agent.TabletExternallyReparented(ctx, "1")
 		tc.leftReplicaQs.UpdateType(topodatapb.TabletType_MASTER)
 		tc.leftReplicaQs.AddDefaultHealthResponse()
 	}()

@@ -345,18 +345,12 @@ func (fmd *FakeMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (
 
 // EnableBinlogPlayback is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) EnableBinlogPlayback() error {
-	if fmd.BinlogPlayerEnabled {
-		return fmt.Errorf("binlog player already enabled")
-	}
 	fmd.BinlogPlayerEnabled = true
 	return nil
 }
 
 // DisableBinlogPlayback disable playback of binlog events
 func (fmd *FakeMysqlDaemon) DisableBinlogPlayback() error {
-	if fmd.BinlogPlayerEnabled {
-		return fmt.Errorf("binlog player already disabled")
-	}
 	fmd.BinlogPlayerEnabled = false
 	return nil
 }

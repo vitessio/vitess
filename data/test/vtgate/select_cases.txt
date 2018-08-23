@@ -254,6 +254,26 @@
   }
 }
 
+# select from pinned table
+"select * from pin_test"
+{
+  "Original": "select * from pin_test",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from pin_test",
+    "FieldQuery": "select * from pin_test where 1 != 1",
+    "Vindex": "binary",
+    "Values": [
+      "\ufffd"
+    ]
+  }
+}
+
+
 # select from dual on sharded keyspace
 "select @@session.auto_increment_increment from user.dual"
 {

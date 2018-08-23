@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -203,7 +204,13 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 			if table.Type == "sequence" {
 				t.IsSequence = true
 			}
-			if keyspace.Sharded && len(table.ColumnVindexes) == 0 {
+			if table.Pinned != "" {
+				decoded, err := hex.DecodeString(table.Pinned)
+				if err != nil {
+					return fmt.Errorf("could not decode the keyspace id for pin: %v", err)
+				}
+				t.Pinned = decoded
+			} else if keyspace.Sharded && len(table.ColumnVindexes) == 0 {
 				return fmt.Errorf("missing primary col vindex for table: %s", tname)
 			}
 

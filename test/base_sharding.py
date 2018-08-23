@@ -183,29 +183,29 @@ class BaseShardingTest(object):
                                  this value.
     """
     v = utils.get_vars(tablet_obj.port)
-    self.assertIn('BinlogPlayerMapSize', v)
-    self.assertEquals(v['BinlogPlayerMapSize'], len(source_shards))
-    self.assertIn('BinlogPlayerSecondsBehindMaster', v)
-    self.assertIn('BinlogPlayerSecondsBehindMasterMap', v)
-    self.assertIn('BinlogPlayerSourceShardNameMap', v)
-    shards = v['BinlogPlayerSourceShardNameMap'].values()
+    self.assertIn('VReplicationStreamCount', v)
+    self.assertEquals(v['VReplicationStreamCount'], len(source_shards))
+    self.assertIn('VReplicationSecondsBehindMasterMax', v)
+    self.assertIn('VReplicationSecondsBehindMaster', v)
+    self.assertIn('VReplicationSource', v)
+    shards = v['VReplicationSource'].values()
     self.assertEquals(sorted(shards), sorted(source_shards))
-    self.assertIn('BinlogPlayerSourceTabletAliasMap', v)
-    for i in xrange(len(source_shards)):
-      self.assertIn('%d' % i, v['BinlogPlayerSourceTabletAliasMap'])
+    self.assertIn('VReplicationSourceTablet', v)
+    for uid in v['VReplicationSource']:
+      self.assertIn(uid, v['VReplicationSourceTablet'])
     if seconds_behind_master_max != 0:
       self.assertTrue(
-          v['BinlogPlayerSecondsBehindMaster'] <
+          v['VReplicationSecondsBehindMasterMax'] <
           seconds_behind_master_max,
-          'BinlogPlayerSecondsBehindMaster is too high: %d > %d' % (
-              v['BinlogPlayerSecondsBehindMaster'],
+          'VReplicationSecondsBehindMasterMax is too high: %d > %d' % (
+              v['VReplicationSecondsBehindMasterMax'],
               seconds_behind_master_max))
-      for i in xrange(len(source_shards)):
+      for uid in v['VReplicationSource']:
         self.assertTrue(
-            v['BinlogPlayerSecondsBehindMasterMap']['%d' % i] <
+            v['VReplicationSecondsBehindMaster'][uid] <
             seconds_behind_master_max,
-            'BinlogPlayerSecondsBehindMasterMap is too high: %d > %d' % (
-                v['BinlogPlayerSecondsBehindMasterMap']['%d' % i],
+            'VReplicationSecondsBehindMaster is too high: %d > %d' % (
+                v['VReplicationSecondsBehindMaster'][uid],
                 seconds_behind_master_max))
 
   def check_binlog_server_vars(self, tablet_obj, horizontal=True,
@@ -245,7 +245,7 @@ class BaseShardingTest(object):
     """
 
     blp_stats = utils.get_vars(tablet_obj.port)
-    self.assertEqual(blp_stats['BinlogPlayerMapSize'], count)
+    self.assertEqual(blp_stats['VReplicationStreamCount'], count)
 
     # Enforce health check because it's not running by default as
     # tablets may not be started with it, or may not run it in time.
@@ -258,9 +258,9 @@ class BaseShardingTest(object):
     self.assertIn('realtime_stats', stream_health)
     self.assertNotIn('health_error', stream_health['realtime_stats'])
     self.assertIn('binlog_players_count', stream_health['realtime_stats'])
-    self.assertEqual(blp_stats['BinlogPlayerMapSize'],
+    self.assertEqual(blp_stats['VReplicationStreamCount'],
                      stream_health['realtime_stats']['binlog_players_count'])
-    self.assertEqual(blp_stats['BinlogPlayerSecondsBehindMaster'],
+    self.assertEqual(blp_stats['VReplicationSecondsBehindMasterMax'],
                      stream_health['realtime_stats'].get(
                          'seconds_behind_master_filtered_replication', 0))
 
@@ -292,7 +292,7 @@ class BaseShardingTest(object):
       extra_text: if present, look for it in status too.
     """
     status = tablet_obj.get_status()
-    self.assertIn('Binlog player state: Running', status)
+    self.assertIn('VReplication state: Open', status)
     self.assertIn(
         '<td><b>All</b>: %d<br><b>Query</b>: %d<br>'
         '<b>Transaction</b>: %d<br></td>' % (query+transaction, query,
@@ -310,10 +310,6 @@ class BaseShardingTest(object):
       tablet_obj: the tablet to check.
     """
     tablet_obj.wait_for_binlog_player_count(0)
-
-    status = tablet_obj.get_status()
-    self.assertIn('No binlog player is running', status)
-    self.assertIn('</html>', status)
 
   def check_throttler_service(self, throttler_server, names, rate):
     """Checks that the throttler responds to RPC requests.

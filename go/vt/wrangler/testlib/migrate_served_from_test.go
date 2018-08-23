@@ -24,8 +24,10 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -96,23 +98,25 @@ func TestMigrateServedFrom(t *testing.T) {
 	destReplica.StartActionLoop(t, wr)
 	defer destReplica.StopActionLoop(t)
 
-	// destMaster will see the refresh, and has to respond to it.
-	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
-	destMaster.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": {
-			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.NewVarBinary(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition)),
-					sqltypes.NewVarBinary(""),
-				},
-			},
-		},
-	}
 	destMaster.StartActionLoop(t, wr)
 	defer destMaster.StopActionLoop(t)
 
+	// Override with a fake VREngine after Agent is initialized in action loop.
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	destMaster.Agent.VREngine = vreplication.NewEngine(ts, "", destMaster.FakeMysqlDaemon, dbClientFactory)
+	dbClient.ExpectRequest("select * from _vt.vreplication", &sqltypes.Result{}, nil)
+	if err := destMaster.Agent.VREngine.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// select pos from _vt.vreplication
+	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/5-456-892"),
+	}}}, nil)
+	dbClient.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
+
 	// simulate the clone, by fixing the dest shard record
-	if err := vp.Run([]string{"SourceShardAdd", "--tables", "gone1,gone2", "dest/0", "0", "source/0"}); err != nil {
+	if err := vp.Run([]string{"SourceShardAdd", "--tables", "gone1,gone2", "dest/0", "1", "source/0"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
 

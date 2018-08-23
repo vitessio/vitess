@@ -103,26 +103,6 @@ func (cleaner *Cleaner) CleanUp(wr *Wrangler) error {
 	return rec.Error()
 }
 
-// RemoveActionByName removes an action from the cleaner list
-func (cleaner *Cleaner) RemoveActionByName(name, target string) error {
-	cleaner.mu.Lock()
-	defer cleaner.mu.Unlock()
-	for i, action := range cleaner.actions {
-		if action.name == name && action.target == target {
-			newActions := make([]cleanerActionReference, 0, len(cleaner.actions)-1)
-			if i > 0 {
-				newActions = append(newActions, cleaner.actions[0:i]...)
-			}
-			if i < len(cleaner.actions)-1 {
-				newActions = append(newActions, cleaner.actions[i+1:len(cleaner.actions)]...)
-			}
-			cleaner.actions = newActions
-			return nil
-		}
-	}
-	return topo.NewError(topo.NoNode, name+":"+target)
-}
-
 //
 // ChangeSlaveTypeAction CleanerFunction
 //
@@ -193,16 +173,17 @@ func RecordStartSlaveAction(cleaner *Cleaner, tablet *topodatapb.Tablet) {
 }
 
 //
-// StartBlpAction CleanerAction
+// VReplication CleanerAction
 //
 
-// StartBlpActionName is the name of the action to start binlog player
-const StartBlpActionName = "StartBlpAction"
+// VReplicationActionName is the name of the action to execute VReplication commands
+const VReplicationActionName = "VReplicationAction"
 
-// RecordStartBlpAction records an action to restart binlog replication on a server
+// RecordVReplicationAction records an action to restart binlog replication on a server
 // into the specified Cleaner
-func RecordStartBlpAction(cleaner *Cleaner, tablet *topodatapb.Tablet) {
-	cleaner.Record(StartBlpActionName, topoproto.TabletAliasString(tablet.Alias), func(ctx context.Context, wr *Wrangler) error {
-		return wr.TabletManagerClient().StartBlp(ctx, tablet)
+func RecordVReplicationAction(cleaner *Cleaner, tablet *topodatapb.Tablet, query string) {
+	cleaner.Record(VReplicationActionName, topoproto.TabletAliasString(tablet.Alias), func(ctx context.Context, wr *Wrangler) error {
+		_, err := wr.TabletManagerClient().VReplicationExec(ctx, tablet, query)
+		return err
 	})
 }

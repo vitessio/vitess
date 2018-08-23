@@ -17,6 +17,7 @@ limitations under the License.
 package pools
 
 import (
+	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -102,4 +103,36 @@ func TestNumbered(t *testing.T) {
 		p.Unregister(2, "test")
 	}()
 	p.WaitForEmpty()
+}
+
+/*
+go test --test.run=XXX --test.bench=. --test.benchtime=10s
+
+golang.org/x/tools/cmd/benchcmp /tmp/bad.out /tmp/good.out
+
+benchmark                                 old ns/op     new ns/op     delta
+BenchmarkRegisterUnregister-8             667           596           -10.64%
+BenchmarkRegisterUnregisterParallel-8     2430          1752          -27.90%
+*/
+func BenchmarkRegisterUnregister(b *testing.B) {
+	p := NewNumbered()
+	id := int64(1)
+	val := "foobarbazdummyval"
+	for i := 0; i < b.N; i++ {
+		p.Register(id, val, false)
+		p.Unregister(id, "some reason")
+	}
+}
+
+func BenchmarkRegisterUnregisterParallel(b *testing.B) {
+	p := NewNumbered()
+	val := "foobarbazdummyval"
+	b.SetParallelism(200)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			id := rand.Int63()
+			p.Register(id, val, false)
+			p.Unregister(id, "some reason")
+		}
+	})
 }

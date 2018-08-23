@@ -25,7 +25,6 @@ type SplitClone struct {
 
 	Keyspace, Shard, Cell string
 	ExcludeTables         []string
-	Strategy              string
 }
 
 // VerticalSplitClone is an event that describes a single step in a vertical
@@ -35,5 +34,4 @@ type VerticalSplitClone struct {
 
 	Keyspace, Shard, Cell string
 	Tables                []string
-	Strategy              string
 }

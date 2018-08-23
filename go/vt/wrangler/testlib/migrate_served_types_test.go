@@ -25,9 +25,11 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -131,20 +133,23 @@ func TestMigrateServedTypes(t *testing.T) {
 	dest1Replica.StartActionLoop(t, wr)
 	defer dest1Replica.StopActionLoop(t)
 
-	// dest1Master will see the refresh, and has to respond to it.
-	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
-	dest1Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": {
-			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.NewVarBinary(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition)),
-					sqltypes.NewVarBinary(""),
-				},
-			},
-		},
-	}
 	dest1Master.StartActionLoop(t, wr)
 	defer dest1Master.StopActionLoop(t)
+
+	// Override with a fake VREngine after Agent is initialized in action loop.
+	dbClient1 := binlogplayer.NewMockDBClient(t)
+	dbClientFactory1 := func() binlogplayer.DBClient { return dbClient1 }
+	dest1Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1)
+	// select * from _vt.vreplication during Open
+	dbClient1.ExpectRequest("select * from _vt.vreplication", &sqltypes.Result{}, nil)
+	if err := dest1Master.Agent.VREngine.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// select pos from _vt.vreplication
+	dbClient1.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/5-456-892"),
+	}}}, nil)
+	dbClient1.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
 
 	// dest2Rdonly will see the refresh
 	dest2Rdonly.StartActionLoop(t, wr)
@@ -154,20 +159,23 @@ func TestMigrateServedTypes(t *testing.T) {
 	dest2Replica.StartActionLoop(t, wr)
 	defer dest2Replica.StopActionLoop(t)
 
-	// dest2Master will see the refresh, and has to respond to it.
-	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
-	dest2Master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": {
-			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.NewVarBinary(mysql.EncodePosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition)),
-					sqltypes.NewVarBinary(""),
-				},
-			},
-		},
-	}
 	dest2Master.StartActionLoop(t, wr)
 	defer dest2Master.StopActionLoop(t)
+
+	// Override with a fake VREngine after Agent is initialized in action loop.
+	dbClient2 := binlogplayer.NewMockDBClient(t)
+	dbClientFactory2 := func() binlogplayer.DBClient { return dbClient2 }
+	dest2Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2)
+	// select * from _vt.vreplication during Open
+	dbClient2.ExpectRequest("select * from _vt.vreplication", &sqltypes.Result{}, nil)
+	if err := dest2Master.Agent.VREngine.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// select pos from _vt.vreplication
+	dbClient2.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/5-456-892"),
+	}}}, nil)
+	dbClient2.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
 
 	// migrate will error if the overlapping shards have no "SourceShard" entry
 	// and we cannot decide which shard is the source or the destination.
@@ -178,10 +186,10 @@ func TestMigrateServedTypes(t *testing.T) {
 	// simulate the clone, by fixing the dest shard record
 	checkShardSourceShards(t, ts, "-80", 0)
 	checkShardSourceShards(t, ts, "80-", 0)
-	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/-80", "0", "ks/0"}); err != nil {
+	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/-80", "1", "ks/0"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
-	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/80-", "0", "ks/0"}); err != nil {
+	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/80-", "1", "ks/0"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
 	checkShardSourceShards(t, ts, "-80", 1)

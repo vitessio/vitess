@@ -4,12 +4,11 @@ import (
 	"expvar"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // PromBackend implements PullBackend using Prometheus as the backing metrics storage.
@@ -18,15 +17,13 @@ type PromBackend struct {
 }
 
 var (
-	be             PromBackend
-	logUnsupported *logutil.ThrottledLogger
+	be PromBackend
 )
 
 // Init initializes the Prometheus be with the given namespace.
 func Init(namespace string) {
 	http.Handle("/metrics", promhttp.Handler())
 	be.namespace = namespace
-	logUnsupported = logutil.NewThrottledLogger("PrometheusUnsupportedMetricType", 1*time.Minute)
 	stats.Register(be.publishPrometheusMetric)
 }
 
@@ -41,6 +38,8 @@ func (be PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 		newMetricFuncCollector(st, be.buildPromName(name), prometheus.GaugeValue, func() float64 { return float64(st.Get()) })
 	case *stats.GaugeFunc:
 		newMetricFuncCollector(st, be.buildPromName(name), prometheus.GaugeValue, func() float64 { return float64(st.F()) })
+	case stats.FloatFunc:
+		newMetricFuncCollector(st, be.buildPromName(name), prometheus.GaugeValue, func() float64 { return (st)() })
 	case *stats.CountersWithSingleLabel:
 		newCountersWithSingleLabelCollector(st, be.buildPromName(name), st.Label(), prometheus.CounterValue)
 	case *stats.CountersWithMultiLabels:
@@ -67,8 +66,11 @@ func (be PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 		newMultiTimingsCollector(st, be.buildPromName(name))
 	case *stats.Histogram:
 		newHistogramCollector(st, be.buildPromName(name))
+	case *stats.String, stats.StringFunc, stats.StringMapFunc, *stats.Rates:
+		// Silently ignore these types since they don't make sense to
+		// export to Prometheus' data model.
 	default:
-		logUnsupported.Infof("Not exporting to Prometheus an unsupported metric type of %T: %s", st, name)
+		log.Fatalf("prometheus: Metric type %T (seen for variable: %s) is not covered by type switch. Add it there and to all other plugins which register a NewVarHook.", st, name)
 	}
 }
 

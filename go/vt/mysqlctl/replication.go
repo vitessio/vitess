@@ -300,43 +300,6 @@ func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 	return addrs, nil
 }
 
-// WaitBlpPosition will wait for the filtered replication to reach at least
-// the provided position.
-func WaitBlpPosition(ctx context.Context, mysqld MysqlDaemon, sql string, replicationPosition string) error {
-	position, err := mysql.DecodePosition(replicationPosition)
-	if err != nil {
-		return err
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		qr, err := mysqld.FetchSuperQuery(ctx, sql)
-		if err != nil {
-			return err
-		}
-		if len(qr.Rows) != 1 {
-			return fmt.Errorf("QueryBlpCheckpoint(%v) returned unexpected row count: %v", sql, len(qr.Rows))
-		}
-		var pos mysql.Position
-		if !qr.Rows[0][0].IsNull() {
-			pos, err = mysql.DecodePosition(qr.Rows[0][0].ToString())
-			if err != nil {
-				return err
-			}
-		}
-		if pos.AtLeast(position) {
-			return nil
-		}
-
-		log.Infof("Sleeping 1 second waiting for binlog replication(%v) to catch up: %v != %v", sql, pos, position)
-		time.Sleep(1 * time.Second)
-	}
-}
-
 // EnableBinlogPlayback prepares the server to play back events from a binlog stream.
 // Whatever it does for a given flavor, it must be idempotent.
 func (mysqld *Mysqld) EnableBinlogPlayback() error {

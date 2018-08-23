@@ -215,6 +215,9 @@ var commands = []commandGroup{
 			{"ExecuteFetchAsDba", commandExecuteFetchAsDba,
 				"[-max_rows=10000] [-disable_binlogs] [-json] <tablet alias> <sql command>",
 				"Runs the given SQL command as a DBA on the remote tablet."},
+			{"VReplicationExec", commandVReplicationExec,
+				"[-json] <tablet alias> <sql command>",
+				"Runs the given VReplication command on the remote tablet."},
 		},
 	},
 	{
@@ -1074,6 +1077,33 @@ func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFla
 	}
 	query := subFlags.Arg(1)
 	qrproto, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *disableBinlogs, *reloadSchema)
+	if err != nil {
+		return err
+	}
+	qr := sqltypes.Proto3ToResult(qrproto)
+	if *json {
+		return printJSON(wr.Logger(), qr)
+	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
+}
+
+func commandVReplicationExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("the <tablet alias> and <sql command> arguments are required for the VReplicationExec command")
+	}
+
+	alias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	query := subFlags.Arg(1)
+	qrproto, err := wr.VReplicationExec(ctx, alias, query)
 	if err != nil {
 		return err
 	}

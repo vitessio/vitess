@@ -181,8 +181,6 @@ func (dc *dataCollector) addFloat(metric string, val float64, tags map[string]st
 func (dc *dataCollector) addExpVar(kv expvar.KeyValue) {
 	k := kv.Key
 	switch v := kv.Value.(type) {
-	case *stats.Float:
-		dc.addFloat(k, v.Get(), nil)
 	case stats.FloatFunc:
 		dc.addFloat(k, v(), nil)
 	case *stats.Counter:
