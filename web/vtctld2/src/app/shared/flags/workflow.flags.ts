@@ -45,30 +45,64 @@ export class NewWorkflowFlags {
     this.flags['horizontal_resharding_min_healthy_rdonly_tablets'] = new HorizontalReshardingMinHealthyRdonlyTablets(11, 'horizontal_resharding_min_healthy_rdonly_tablets', 'horizontal_resharding');
     this.flags['horizontal_resharding_min_healthy_rdonly_tablets'].positional = true;
     this.flags['horizontal_resharding_min_healthy_rdonly_tablets'].namedPositional = 'min_healthy_rdonly_tablets';
-    this.flags['horizontal_resharding_enable_approvals'] = new HorizontalReshardingEnableApprovalsFlag(12, 'horizontal_resharding_enable_approvals', 'horizontal_resharding');
-    this.flags['horizontal_resharding_enable_approvals'].positional = true;
-    this.flags['horizontal_resharding_enable_approvals'].namedPositional = 'enable_approvals';
+    this.flags['horizontal_resharding_enable_approvals_copy_schema'] = new HorizontalReshardingEnableApprovalsFlag(12, 'horizontal_resharding_enable_approvals_copy_schema', 'Copy Schema enable approvals', 'horizontal_resharding');
+    this.flags['horizontal_resharding_enable_approvals_copy_schema'].positional = true;
+    this.flags['horizontal_resharding_enable_approvals_copy_schema'].namedPositional = 'copy_schema';
+    this.flags['horizontal_resharding_enable_approvals_clone'] = new HorizontalReshardingEnableApprovalsFlag(13, 'horizontal_resharding_enable_approvals_clone', 'Clone enable approvals', 'horizontal_resharding');
+    this.flags['horizontal_resharding_enable_approvals_clone'].positional = true;
+    this.flags['horizontal_resharding_enable_approvals_clone'].namedPositional = 'clone';
+    this.flags['horizontal_resharding_enable_approvals_wait_filtered_replication'] = new HorizontalReshardingEnableApprovalsFlag(14, 'horizontal_resharding_enable_approvals_wait_filtered_replication', 'Wait filtered replication enable approvals', 'horizontal_resharding');
+    this.flags['horizontal_resharding_enable_approvals_wait_filtered_replication'].positional = true;
+    this.flags['horizontal_resharding_enable_approvals_wait_filtered_replication'].namedPositional = 'wait_filtered_replication';
+    this.flags['horizontal_resharding_enable_approvals_diff'] = new HorizontalReshardingEnableApprovalsFlag(15, 'horizontal_resharding_enable_approvals_diff', 'Diff enable approvals', 'horizontal_resharding');
+    this.flags['horizontal_resharding_enable_approvals_diff'].positional = true;
+    this.flags['horizontal_resharding_enable_approvals_diff'].namedPositional = 'diff';
+    this.flags['horizontal_resharding_enable_approvals_migrate_serving_types'] = new HorizontalReshardingEnableApprovalsFlag(16, 'horizontal_resharding_enable_approvals_migrate_serving_types', 'Migrate serving types enable approvals', 'horizontal_resharding');
+    this.flags['horizontal_resharding_enable_approvals_migrate_serving_types'].positional = true;
+    this.flags['horizontal_resharding_enable_approvals_migrate_serving_types'].namedPositional = 'migrate_serving_types';
 
-    // Flags for keyspace resharding workflow.
-    this.flags['keyspace_resharding_keyspace'] = new HorizontalReshardingKeyspaceFlag(13, 'keyspace_resharding_keyspace', 'keyspace_resharding');
+
+    this.flags['horizontal_resharding_phase_enable_approvals'] = new HorizontalReshardingPhaseEnableApprovalFlag(17, 'horizontal_resharding_phase_enable_approvals', 'horizontal_resharding');
+    this.flags['horizontal_resharding_phase_enable_approvals'].positional = true;
+    this.flags['horizontal_resharding_phase_enable_approvals'].namedPositional = 'phase_enable_approvals';
+
+
+    // // Flags for keyspace resharding workflow.
+    this.flags['keyspace_resharding_keyspace'] = new HorizontalReshardingKeyspaceFlag(18, 'keyspace_resharding_keyspace', 'keyspace_resharding');
     this.flags['keyspace_resharding_keyspace'].positional = true;
     this.flags['keyspace_resharding_keyspace'].namedPositional = 'keyspace';
-    this.flags['keyspace_resharding_vtworkers'] = new HorizontalReshardingVtworkerFlag(14, 'keyspace_resharding_vtworkers', 'keyspace_resharding');
+    this.flags['keyspace_resharding_vtworkers'] = new HorizontalReshardingVtworkerFlag(19, 'keyspace_resharding_vtworkers', 'keyspace_resharding');
     this.flags['keyspace_resharding_vtworkers'].positional = true;
     this.flags['keyspace_resharding_vtworkers'].namedPositional = 'vtworkers';
-    this.flags['keyspace_resharding_split_cmd'] = new SplitCloneCommand(15, 'keyspace_resharding_split_cmd', 'keyspace_resharding');
+    this.flags['keyspace_resharding_split_cmd'] = new SplitCloneCommand(20, 'keyspace_resharding_split_cmd', 'keyspace_resharding');
     this.flags['keyspace_resharding_split_cmd'].positional = true;
     this.flags['keyspace_resharding_split_cmd'].namedPositional = 'split_cmd';
-    this.flags['keyspace_resharding_split_diff_dest_tablet_type'] = new SplitDiffTabletType(16, 'keyspace_resharding_split_diff_dest_tablet_type', 'keyspace_resharding');
+    this.flags['keyspace_resharding_split_diff_dest_tablet_type'] = new SplitDiffTabletType(21, 'keyspace_resharding_split_diff_dest_tablet_type', 'keyspace_resharding');
     this.flags['keyspace_resharding_split_diff_dest_tablet_type'].positional = true;
     this.flags['keyspace_resharding_split_diff_dest_tablet_type'].namedPositional = 'split_diff_dest_tablet_type';
-    this.flags['keyspace_resharding_min_healthy_rdonly_tablets'] = new HorizontalReshardingMinHealthyRdonlyTablets(17, 'keyspace_resharding_min_healthy_rdonly_tablets', 'keyspace_resharding');
+    this.flags['keyspace_resharding_min_healthy_rdonly_tablets'] = new HorizontalReshardingMinHealthyRdonlyTablets(22, 'keyspace_resharding_min_healthy_rdonly_tablets', 'keyspace_resharding');
     this.flags['keyspace_resharding_min_healthy_rdonly_tablets'].positional = true;
     this.flags['keyspace_resharding_min_healthy_rdonly_tablets'].namedPositional = 'min_healthy_rdonly_tablets';
-    this.flags['keyspace_resharding_enable_approvals'] = new HorizontalReshardingEnableApprovalsFlag(18, 'keyspace_resharding_enable_approvals', 'keyspace_resharding');
-    this.flags['keyspace_resharding_enable_approvals'].positional = true;
-    this.flags['keyspace_resharding_enable_approvals'].namedPositional = 'enable_approvals';
+    this.flags['keyspace_resharding_enable_approvals_copy_schema'] = new HorizontalReshardingEnableApprovalsFlag(23, 'keyspace_resharding_enable_approvals_copy_schema', 'Copy Schema enable approvals', 'keyspace_resharding');
+    this.flags['keyspace_resharding_enable_approvals_copy_schema'].positional = true;
+    this.flags['keyspace_resharding_enable_approvals_copy_schema'].namedPositional = 'copy_schema';
+    this.flags['keyspace_resharding_enable_approvals_clone'] = new HorizontalReshardingEnableApprovalsFlag(24, 'keyspace_resharding_enable_approvals_clone', 'Clone enable approvals', 'keyspace_resharding');
+    this.flags['keyspace_resharding_enable_approvals_clone'].positional = true;
+    this.flags['keyspace_resharding_enable_approvals_clone'].namedPositional = 'clone';
+    this.flags['keyspace_resharding_enable_approvals_wait_filtered_replication'] = new HorizontalReshardingEnableApprovalsFlag(25, 'keyspace_resharding_enable_approvals_wait_filtered_replication', 'Wait filtered replication enable approvals', 'keyspace_resharding');
+    this.flags['keyspace_resharding_enable_approvals_wait_filtered_replication'].positional = true;
+    this.flags['keyspace_resharding_enable_approvals_wait_filtered_replication'].namedPositional = 'wait_filtered_replication';
+    this.flags['keyspace_resharding_enable_approvals_diff'] = new HorizontalReshardingEnableApprovalsFlag(26, 'keyspace_resharding_enable_approvals_diff', 'Diff enable approvals', 'keyspace_resharding');
+    this.flags['keyspace_resharding_enable_approvals_diff'].positional = true;
+    this.flags['keyspace_resharding_enable_approvals_diff'].namedPositional = 'diff';
+    this.flags['keyspace_resharding_enable_approvals_migrate_serving_types'] = new HorizontalReshardingEnableApprovalsFlag(27, 'keyspace_resharding_enable_approvals_migrate_serving_types', 'Migrate serving types enable approvals', 'keyspace_resharding');
+    this.flags['keyspace_resharding_enable_approvals_migrate_serving_types'].positional = true;
+    this.flags['keyspace_resharding_enable_approvals_migrate_serving_types'].namedPositional = 'migrate_serving_types';
 
+
+    this.flags['keyspace_resharding_phase_enable_approvals'] = new HorizontalReshardingPhaseEnableApprovalFlag(28, 'keyspace_resharding_phase_enable_approvals', 'keyspace_resharding');
+    this.flags['keyspace_resharding_phase_enable_approvals'].positional = true;
+    this.flags['keyspace_resharding_phase_enable_approvals'].namedPositional = 'phase_enable_approvals';
   }
 }
 
@@ -203,6 +237,13 @@ export class HorizontalReshardingVtworkerFlag extends InputFlag {
   }
 }
 
+export class HorizontalReshardingPhaseEnableApprovalFlag extends InputFlag {
+  // This is a hidden flag
+  constructor(position: number, id: string, setDisplayOn: string, value= '') {
+    super(position, id, 'phase enable approval', '', value);
+    this.setDisplayOn('factory_name', setDisplayOn);
+  }
+}
 export class HorizontalReshardingMinHealthyRdonlyTablets extends InputFlag {
   constructor(position: number, id: string, setDisplayOn: string, value= '') {
     super(position, id, 'min healthy rdonly tablets', 'Minimum number of healthy RDONLY tablets required in source shards', value);
@@ -211,8 +252,8 @@ export class HorizontalReshardingMinHealthyRdonlyTablets extends InputFlag {
 }
 
 export class HorizontalReshardingEnableApprovalsFlag extends CheckBoxFlag {
-  constructor(position: number, id: string, setDisplayOn: string, value=true) {
-    super(position, id, 'enable approvals', 'Set true if use user approvals of task execution.', value);
+  constructor(position: number, id: string, name: string, setDisplayOn: string, value=true) {
+    super(position, id, name, 'Set true if use user approvals of task execution.', value);
     this.setDisplayOn('factory_name', setDisplayOn);
   }
 }
