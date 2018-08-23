@@ -21,6 +21,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
+import io.grpc.internal.WithLogId;
 import io.vitess.client.Context;
 import io.vitess.client.Proto;
 import io.vitess.client.RpcClient;
@@ -79,11 +80,17 @@ import org.joda.time.Duration;
  */
 public class GrpcClient implements RpcClient {
   private final ManagedChannel channel;
+  private final String channelId;
   private final VitessStub asyncStub;
   private final VitessFutureStub futureStub;
 
   public GrpcClient(ManagedChannel channel) {
     this.channel = channel;
+    if (channel instanceof WithLogId) {
+      channelId = ((WithLogId) channel).getLogId().toString();
+    } else {
+      channelId = channel.toString();
+    }
     asyncStub = VitessGrpc.newStub(channel);
     futureStub = VitessGrpc.newFutureStub(channel);
   }
@@ -295,5 +302,13 @@ public class GrpcClient implements RpcClient {
       return futureStub;
     }
     return futureStub.withDeadlineAfter(timeout.getMillis(), TimeUnit.MILLISECONDS);
+  }
+
+  @Override
+  public String toString() {
+      return String.format("[GrpcClient-%s channel=%s]",
+              Integer.toHexString(this.hashCode()),
+              channelId
+      );
   }
 }

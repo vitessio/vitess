@@ -67,8 +67,6 @@ const verticalSplitCloneHTML2 = `
         <INPUT type="checkbox" id="online" name="online" value="true"{{if .DefaultOnline}} checked{{end}}></BR>
       <LABEL for="offline">Do Offline Copy: (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)</LABEL>
         <INPUT type="checkbox" id="offline" name="offline" value="true"{{if .DefaultOnline}} checked{{end}}></BR>
-      <LABEL for="strategy">Strategy: </LABEL>
-        <INPUT type="text" id="strategy" name="strategy" value=""></BR>
       <LABEL for="chunkCount">Chunk Count: </LABEL>
         <INPUT type="text" id="chunkCount" name="chunkCount" value="{{.DefaultChunkCount}}"></BR>
       <LABEL for="minRowsPerChunk">Minimun Number of Rows per Chunk (may reduce the Chunk Count): </LABEL>
@@ -90,14 +88,6 @@ const verticalSplitCloneHTML2 = `
       <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
       <INPUT type="submit" value="Clone"/>
     </form>
-
-  <h1>Help</h1>
-    <p>Strategy can have the following values, comma separated:</p>
-    <ul>
-      <li><b>skipPopulateBlpCheckpoint</b>: skips creating (if necessary) and populating the blp_checkpoint table in the destination. Not skipped by default because it's required for filtered replication to start.</li>
-      <li><b>dontStartBinlogPlayer</b>: (requires skipPopulateBlpCheckpoint to be false) will setup, but not start binlog replication on the destination. The flag has to be manually cleared from the _vt.blp_checkpoint table.</li>
-      <li><b>skipSetSourceShards</b>: we won't set SourceShards on the destination shards, disabling filtered replication. Useful for worker tests.</li>
-    </ul>
   </body>
 `
 
@@ -108,7 +98,6 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 	online := subFlags.Bool("online", defaultOnline, "do online copy (optional approximate copy, source and destination tablets will not be put out of serving, minimizes downtime during offline copy)")
 	offline := subFlags.Bool("offline", defaultOffline, "do offline copy (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)")
 	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split). Each is either an exact match, or a regular expression of the form /regexp/")
-	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker VerticalSplitClone --strategy=-help k/s' for more info")
 	chunkCount := subFlags.Int("chunk_count", defaultChunkCount, "number of chunks per table")
 	minRowsPerChunk := subFlags.Int("min_rows_per_chunk", defaultMinRowsPerChunk, "minimum number of rows per chunk (may reduce --chunk_count)")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
@@ -136,7 +125,7 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 	if *tables != "" {
 		tableArray = strings.Split(*tables, ",")
 	}
-	worker, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, tableArray, *strategy, *chunkCount, *minRowsPerChunk, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS, *maxReplicationLag)
+	worker, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, tableArray, *chunkCount, *minRowsPerChunk, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS, *maxReplicationLag)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create worker: %v", err)
 	}
@@ -229,7 +218,6 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 	online := onlineStr == "true"
 	offlineStr := r.FormValue("offline")
 	offline := offlineStr == "true"
-	strategy := r.FormValue("strategy")
 	chunkCountStr := r.FormValue("chunkCount")
 	chunkCount, err := strconv.ParseInt(chunkCountStr, 0, 64)
 	if err != nil {
@@ -292,7 +280,7 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 	}
 
 	// start the clone job
-	wrk, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, online, offline, tableArray, strategy, int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS, maxReplicationLag)
+	wrk, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, online, offline, tableArray, int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS, maxReplicationLag)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}
@@ -302,6 +290,6 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 func init() {
 	AddCommand("Clones", Command{"VerticalSplitClone",
 		commandVerticalSplitClone, interactiveVerticalSplitClone,
-		"[--tables=''] [--strategy=''] <destination keyspace/shard>",
+		"[--tables=''] <destination keyspace/shard>",
 		"Replicates the data and creates configuration for a vertical split."})
 }

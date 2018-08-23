@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
@@ -87,13 +88,9 @@ type RPCAgent interface {
 
 	GetSlaves(ctx context.Context) ([]string, error)
 
-	WaitBlpPosition(ctx context.Context, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error
-
-	StopBlp(ctx context.Context) ([]*tabletmanagerdatapb.BlpPosition, error)
-
-	StartBlp(ctx context.Context) error
-
-	RunBlpUntil(ctx context.Context, bpl []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error)
+	// VReplication API
+	VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error)
+	VReplicationWaitForPos(ctx context.Context, id int, pos string) error
 
 	// Reparenting related functions
 

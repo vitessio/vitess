@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/worker/events"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -56,7 +57,6 @@ type LegacySplitCloneWorker struct {
 	keyspace                string
 	shard                   string
 	excludeTables           []string
-	strategy                *splitStrategy
 	sourceReaderCount       int
 	destinationPackCount    int
 	destinationWriterCount  int
@@ -92,20 +92,12 @@ type LegacySplitCloneWorker struct {
 	// populated during WorkerStateCopy
 	// tableStatusList holds the status for each table.
 	tableStatusList tableStatusList
-	// aliases of tablets that need to have their state refreshed.
-	// Only populated once, read-only after that.
-	refreshAliases [][]*topodatapb.TabletAlias
-	refreshTablets []map[string]*topo.TabletInfo
 
 	ev *events.SplitClone
 }
 
 // NewLegacySplitCloneWorker returns a new LegacySplitCloneWorker object.
-func NewLegacySplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
-	strategy, err := newSplitStrategy(wr.Logger(), strategyStr)
-	if err != nil {
-		return nil, err
-	}
+func NewLegacySplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, sourceReaderCount, destinationPackCount, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS int64) (Worker, error) {
 	if maxTPS != throttler.MaxRateModuleDisabled {
 		wr.Logger().Infof("throttling enabled and set to a max of %v transactions/second", maxTPS)
 	}
@@ -119,7 +111,6 @@ func NewLegacySplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard stri
 		keyspace:                keyspace,
 		shard:                   shard,
 		excludeTables:           excludeTables,
-		strategy:                strategy,
 		sourceReaderCount:       sourceReaderCount,
 		destinationPackCount:    destinationPackCount,
 		destinationWriterCount:  destinationWriterCount,
@@ -135,7 +126,6 @@ func NewLegacySplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard stri
 			Keyspace:      keyspace,
 			Shard:         shard,
 			ExcludeTables: excludeTables,
-			Strategy:      strategy.String(),
 		},
 	}, nil
 }
@@ -406,9 +396,6 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 		scw.destinationDbNames[keyspaceAndShard] = ti.DbName()
 
-		// TODO(mberlin): Verify on the destination master that the
-		// _vt.blp_checkpoint table has the latest schema.
-
 		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), si.Keyspace(), si.ShardName())
 	}
 	scw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
@@ -422,23 +409,6 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 			return fmt.Errorf("cannot instantiate throttler: %v", err)
 		}
 		scw.destinationThrottlers[keyspaceAndShard] = t
-	}
-
-	return nil
-}
-
-// Find all tablets on all destination shards. This should be done immediately before refreshing
-// state on these tablets, to minimize the chances of the topo changing in between.
-func (scw *LegacySplitCloneWorker) findRefreshTargets(ctx context.Context) error {
-	scw.refreshAliases = make([][]*topodatapb.TabletAlias, len(scw.destinationShards))
-	scw.refreshTablets = make([]map[string]*topo.TabletInfo, len(scw.destinationShards))
-
-	for shardIndex, si := range scw.destinationShards {
-		refreshAliases, refreshTablets, err := resolveRefreshTabletsForShard(ctx, si.Keyspace(), si.ShardName(), scw.wr)
-		if err != nil {
-			return err
-		}
-		scw.refreshAliases[shardIndex], scw.refreshTablets[shardIndex] = refreshAliases, refreshTablets
 	}
 
 	return nil
@@ -609,85 +579,47 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 		return firstError
 	}
 
-	// then create and populate the blp_checkpoint table
-	if scw.strategy.skipPopulateBlpCheckpoint {
-		scw.wr.Logger().Infof("Skipping populating the blp_checkpoint table")
-	} else {
-		queries := make([]string, 0, 4)
-		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
-		flags := ""
-		if scw.strategy.dontStartBinlogPlayer {
-			flags = binlogplayer.BlpFlagDontStart
+	sourcePositions := make([]string, len(scw.sourceShards))
+	// get the current position from the sources
+	for shardIndex := range scw.sourceShards {
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex])
+		cancel()
+		if err != nil {
+			return err
 		}
+		sourcePositions[shardIndex] = status.Position
+	}
 
-		// get the current position from the sources
-		for shardIndex := range scw.sourceShards {
-			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex])
-			cancel()
-			if err != nil {
-				return err
-			}
+	for _, si := range scw.destinationShards {
+		destinationWaitGroup.Add(1)
+		go func(keyspace, shard string, kr *topodatapb.KeyRange) {
+			defer destinationWaitGroup.Done()
+			scw.wr.Logger().Infof("Making and populating vreplication table")
 
-			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(shardIndex), status.Position, scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), flags))
-		}
-
-		for _, si := range scw.destinationShards {
-			destinationWaitGroup.Add(1)
-			go func(keyspace, shard string) {
-				defer destinationWaitGroup.Done()
-				scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-				keyspaceAndShard := topoproto.KeyspaceShardString(keyspace, shard)
-				if err := runSQLCommands(ctx, scw.wr, scw.tsc, keyspace, shard, scw.destinationDbNames[keyspaceAndShard], queries); err != nil {
-					processError("blp_checkpoint queries failed: %v", err)
+			exc := newExecutor(scw.wr, scw.tsc, nil, keyspace, shard, 0)
+			for shardIndex, src := range scw.sourceShards {
+				bls := &binlogdatapb.BinlogSource{
+					Keyspace: src.Keyspace(),
+					Shard:    src.ShardName(),
+					KeyRange: kr,
 				}
-			}(si.Keyspace(), si.ShardName())
-		}
-		destinationWaitGroup.Wait()
-		if firstError != nil {
-			return firstError
-		}
-	}
-
-	// Now we're done with data copy, update the shard's source info.
-	// TODO(alainjobart) this is a superset, some shards may not
-	// overlap, have to deal with this better (for N -> M splits
-	// where both N>1 and M>1)
-	if scw.strategy.skipSetSourceShards {
-		scw.wr.Logger().Infof("Skipping setting SourceShard on destination shards.")
-	} else {
-		for _, si := range scw.destinationShards {
-			scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
-			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
-			cancel()
-			if err != nil {
-				return fmt.Errorf("failed to set source shards: %v", err)
-			}
-		}
-	}
-
-	err = scw.findRefreshTargets(ctx)
-	if err != nil {
-		return fmt.Errorf("failed before refreshing state on destination tablets: %v", err)
-	}
-	// And force a state refresh (re-read topo) on all destination tablets.
-	// The master tablet will end up starting filtered replication
-	// at this point.
-	for shardIndex := range scw.destinationShards {
-		for _, tabletAlias := range scw.refreshAliases[shardIndex] {
-			destinationWaitGroup.Add(1)
-			go func(ti *topo.TabletInfo) {
-				defer destinationWaitGroup.Done()
-				scw.wr.Logger().Infof("Refreshing state on tablet %v", ti.AliasString())
-				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-				err := scw.wr.TabletManagerClient().RefreshState(shortCtx, ti.Tablet)
-				cancel()
+				qr, err := exc.vreplicationExec(ctx, binlogplayer.CreateVReplication("LegacySplitClone", bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix()))
 				if err != nil {
-					processError("RefreshState failed on tablet %v: %v", ti.AliasString(), err)
+					processError("vreplication queries failed: %v", err)
+					break
 				}
-			}(scw.refreshTablets[shardIndex][topoproto.TabletAliasString(tabletAlias)])
-		}
+				if err := scw.wr.SourceShardAdd(ctx, keyspace, shard, uint32(qr.InsertID), src.Keyspace(), src.ShardName(), src.Shard.KeyRange, nil); err != nil {
+					processError("could not add source shard: %v", err)
+					break
+				}
+			}
+			// refreshState will cause the destination to become non-serving because
+			// it's now participating in the resharding workflow.
+			if err := exc.refreshState(ctx); err != nil {
+				processError("RefreshState failed on tablet %v/%v: %v", keyspace, shard, err)
+			}
+		}(si.Keyspace(), si.ShardName(), si.KeyRange)
 	}
 	destinationWaitGroup.Wait()
 	return firstError

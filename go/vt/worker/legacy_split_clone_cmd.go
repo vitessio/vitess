@@ -65,8 +65,6 @@ const legacySplitCloneHTML2 = `
     <form action="/Clones/LegacySplitClone" method="post">
       <LABEL for="excludeTables">Exclude Tables: </LABEL>
         <INPUT type="text" id="excludeTables" name="excludeTables" value="/ignored/"></BR>
-      <LABEL for="strategy">Strategy: </LABEL>
-        <INPUT type="text" id="strategy" name="strategy" value=""></BR>
       <LABEL for="sourceReaderCount">Source Reader Count: </LABEL>
         <INPUT type="text" id="sourceReaderCount" name="sourceReaderCount" value="{{.DefaultSourceReaderCount}}"></BR>
       <LABEL for="destinationPackCount">Destination Pack Count: </LABEL>
@@ -81,14 +79,6 @@ const legacySplitCloneHTML2 = `
       <INPUT type="hidden" name="shard" value="{{.Shard}}"/>
       <INPUT type="submit" value="Clone"/>
     </form>
-
-  <h1>Help</h1>
-    <p>Strategy can have the following values, comma separated:</p>
-    <ul>
-      <li><b>skipPopulateBlpCheckpoint</b>: skips creating (if necessary) and populating the blp_checkpoint table in the destination. Not skipped by default because it's required for filtered replication to start.</li>
-      <li><b>dontStartBinlogPlayer</b>: (requires skipPopulateBlpCheckpoint to be false) will setup, but not start binlog replication on the destination. The flag has to be manually cleared from the _vt.blp_checkpoint table.</li>
-      <li><b>skipSetSourceShards</b>: we won't set SourceShards on the destination shards, disabling filtered replication. Useful for worker tests.</li>
-    </ul>
   </body>
 `
 
@@ -97,7 +87,6 @@ var legacySplitCloneTemplate2 = mustParseTemplate("splitClone2", legacySplitClon
 
 func commandLegacySplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
-	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker LegacySplitClone --strategy=-help k/s' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
 	destinationPackCount := subFlags.Int("destination_pack_count", defaultDestinationPackCount, "number of packets to pack in one destination insert")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
@@ -119,7 +108,7 @@ func commandLegacySplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	worker, err := NewLegacySplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, *destinationPackCount, *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS)
+	worker, err := NewLegacySplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, *sourceReaderCount, *destinationPackCount, *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create split clone worker: %v", err)
 	}
@@ -167,7 +156,6 @@ func interactiveLegacySplitClone(ctx context.Context, wi *Instance, wr *wrangler
 	if excludeTables != "" {
 		excludeTableArray = strings.Split(excludeTables, ",")
 	}
-	strategy := r.FormValue("strategy")
 	sourceReaderCount, err := strconv.ParseInt(sourceReaderCountStr, 0, 64)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse sourceReaderCount: %s", err)
@@ -193,7 +181,7 @@ func interactiveLegacySplitClone(ctx context.Context, wi *Instance, wr *wrangler
 	}
 
 	// start the clone job
-	wrk, err := NewLegacySplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), int(destinationPackCount), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS)
+	wrk, err := NewLegacySplitCloneWorker(wr, wi.cell, keyspace, shard, excludeTableArray, int(sourceReaderCount), int(destinationPackCount), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}
@@ -203,6 +191,6 @@ func interactiveLegacySplitClone(ctx context.Context, wi *Instance, wr *wrangler
 func init() {
 	AddCommand("Clones", Command{"LegacySplitClone",
 		commandLegacySplitClone, interactiveLegacySplitClone,
-		"[--exclude_tables=''] [--strategy=''] <keyspace/shard>",
+		"[--exclude_tables=''] <keyspace/shard>",
 		"Old SplitClone code which supports VARCHAR primary key columns. Use this ONLY if SplitClone failed for you."})
 }

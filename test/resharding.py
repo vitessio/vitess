@@ -179,7 +179,7 @@ class MonitorLagThread(threading.Thread):
           self.lag_sum_ms += lag_ms
           if lag_ms > self.max_lag_ms:
             self.max_lag_ms = lag_ms
-        time.sleep(1.0)
+        time.sleep(5.0)
     except Exception:  # pylint: disable=broad-except
       logging.exception('MonitorLagThread got exception.')
 
@@ -680,14 +680,26 @@ primary key (name)
     # Terminate worker daemon because it is no longer needed.
     utils.kill_sub_process(worker_proc, soft=True)
 
-    # TODO(alainjobart): experiment with the dontStartBinlogPlayer option
-
     # check the startup values are in the right place
     self._check_startup_values()
 
     # check the schema too
     utils.run_vtctl(['ValidateSchemaKeyspace', '--exclude_tables=unrelated',
                      'test_keyspace'], auto_log=True)
+
+    # Verify vreplication table entries
+    result = shard_2_master.mquery('_vt', 'select * from vreplication')
+    self.assertEqual(len(result), 1)
+    self.assertEqual(result[0][1], 'SplitClone')
+    self.assertEqual(result[0][2],
+      'keyspace:"test_keyspace" shard:"80-" '
+      'key_range:<start:"\\200" end:"\\300" > ')
+
+    result = shard_3_master.mquery('_vt', 'select * from vreplication')
+    self.assertEqual(len(result), 1)
+    self.assertEqual(result[0][1], 'SplitClone')
+    self.assertEqual(result[0][2],
+      'keyspace:"test_keyspace" shard:"80-" key_range:<start:"\\300" > ')
 
     # check the binlog players are running and exporting vars
     self.check_destination_master(shard_2_master, ['test_keyspace/80-'])
@@ -704,10 +716,12 @@ primary key (name)
     self.check_binlog_server_vars(shard_1_slave1, horizontal=True)
 
     # Check that the throttler was enabled.
+    # The stream id is hard-coded as 1, which is the first id generated
+    # through auto-inc.
     self.check_throttler_service(shard_2_master.rpc_endpoint(),
-                                 ['BinlogPlayer/0'], 9999)
+                                 ['BinlogPlayer/1'], 9999)
     self.check_throttler_service(shard_3_master.rpc_endpoint(),
-                                 ['BinlogPlayer/0'], 9999)
+                                 ['BinlogPlayer/1'], 9999)
 
     # testing filtered replication: insert a bunch of data on shard 1,
     # check we get most of it after a few seconds, wait for binlog server
@@ -943,10 +957,10 @@ primary key (name)
 
     # mock with the SourceShard records to test 'vtctl SourceShardDelete'
     # and 'vtctl SourceShardAdd'
-    utils.run_vtctl(['SourceShardDelete', 'test_keyspace/c0-', '0'],
+    utils.run_vtctl(['SourceShardDelete', 'test_keyspace/c0-', '1'],
                     auto_log=True)
     utils.run_vtctl(['SourceShardAdd', '--key_range=80-',
-                     'test_keyspace/c0-', '0', 'test_keyspace/80-'],
+                     'test_keyspace/c0-', '1', 'test_keyspace/80-'],
                     auto_log=True)
 
     # then serve master from the split shards, make sure the source master's

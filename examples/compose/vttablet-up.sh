@@ -16,6 +16,9 @@ fi
 
 init_db_sql_file="$VTROOT/init_db.sql"
 echo "GRANT ALL ON *.* TO 'root'@'%';" > $init_db_sql_file
+echo "GRANT ALL ON *.* TO 'vt_dba'@'%';" >> $init_db_sql_file
+echo "GRANT ALL ON *.* TO 'vt_app'@'%';" >> $init_db_sql_file
+echo "GRANT ALL ON *.* TO 'vt_repl'@'%';" >> $init_db_sql_file
 
 if [ "$tablet_role" = "master" ]; then
     echo "CREATE DATABASE vt_$keyspace;" >> $init_db_sql_file

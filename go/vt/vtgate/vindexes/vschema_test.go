@@ -237,6 +237,61 @@ func TestVSchemaColumnsFail(t *testing.T) {
 	}
 }
 
+func TestVSchemaPinned(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Pinned: "80",
+					},
+				},
+			},
+		},
+	}
+	got, err := BuildVSchema(&good)
+	if err != nil {
+		t.Error(err)
+	}
+	ks := &Keyspace{
+		Name:    "sharded",
+		Sharded: true,
+	}
+	t1 := &Table{
+		Name:     sqlparser.NewTableIdent("t1"),
+		Keyspace: ks,
+		Pinned:   []byte{0x80},
+	}
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+		Pinned:   []byte{0},
+	}
+	want := &VSchema{
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"dual": dual,
+		},
+		uniqueVindexes: map[string]Vindex{},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"sharded": {
+				Keyspace: ks,
+				Tables: map[string]*Table{
+					"t1":   t1,
+					"dual": dual,
+				},
+				Vindexes: map[string]Vindex{},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotjson, _ := json.Marshal(got)
+		wantjson, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
+	}
+}
+
 func TestShardedVSchemaOwned(t *testing.T) {
 	good := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{

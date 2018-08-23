@@ -283,6 +283,16 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 		agent.UpdateStream.Disable()
 	}
 
+	// All master tablets have to run the VReplication engine.
+	// There is no guarantee that VREngine was succesfully started when tabletmanager
+	// came up. This is because the mysql could have been in read-only mode, etc.
+	// So, start the engine if it's not already running.
+	if tablet.Type == topodatapb.TabletType_MASTER && !agent.VREngine.IsOpen() {
+		if err := agent.VREngine.Open(agent.batchCtx); err == nil {
+			log.Info("VReplication engine successfully started")
+		}
+	}
+
 	// save the health record
 	record.Time = time.Now()
 	record.Error = healthErr
