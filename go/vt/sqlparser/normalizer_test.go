@@ -204,3 +204,20 @@ func TestGetBindVars(t *testing.T) {
 		t.Errorf("GetBindVars: %v, want: %v", got, want)
 	}
 }
+
+/*
+Skipping ColName, TableName:
+BenchmarkNormalize-8     1000000              2205 ns/op             821 B/op         27 allocs/op
+Prior to skip:
+BenchmarkNormalize-8      500000              3620 ns/op            1461 B/op         55 allocs/op
+*/
+func BenchmarkNormalize(b *testing.B) {
+	sql := "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
+	ast, err := Parse(sql)
+	if err != nil {
+		b.Fatal(err)
+	}
+	for i := 0; i < b.N; i++ {
+		Normalize(ast, map[string]*querypb.BindVariable{}, "")
+	}
+}
