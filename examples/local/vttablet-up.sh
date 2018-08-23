@@ -95,6 +95,7 @@ for uid_index in $uids; do
   grpc_port=$[$grpc_port_base + $uid_index]
   printf -v alias '%s-%010d' $cell $uid
   printf -v tablet_dir 'vt_%010d' $uid
+  printf -v tablet_logfile 'vttablet_%010d_querylog.txt' $uid
   tablet_type=replica
   if [[ $uid_index -gt 2 ]]; then
     tablet_type=rdonly
@@ -105,6 +106,7 @@ for uid_index in $uids; do
   $VTROOT/bin/vttablet \
     $TOPOLOGY_FLAGS \
     -log_dir $VTDATAROOT/tmp \
+    -log_queries_to_file $VTDATAROOT/tmp/$tablet_logfile \
     -tablet-path $alias \
     -tablet_hostname "$tablet_hostname" \
     -init_keyspace $keyspace \
