@@ -69,6 +69,10 @@ func (nz *normalizer) WalkStatement(node SQLNode) (bool, error) {
 		nz.convertSQLVal(node)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
+	case *ColName, TableName:
+		// Common node types that never contain SQLVals or ListArgs but create a lot of object
+		// allocations.
+		return false, nil
 	}
 	return true, nil
 }
@@ -80,6 +84,10 @@ func (nz *normalizer) WalkSelect(node SQLNode) (bool, error) {
 		nz.convertSQLValDedup(node)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
+	case *ColName, TableName:
+		// Common node types that never contain SQLVals or ListArgs but create a lot of object
+		// allocations.
+		return false, nil
 	}
 	return true, nil
 }
@@ -211,6 +219,10 @@ func GetBindvars(stmt Statement) map[string]struct{} {
 	bindvars := make(map[string]struct{})
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
+		case *ColName, TableName:
+			// Common node types that never contain SQLVals or ListArgs but create a lot of object
+			// allocations.
+			return false, nil
 		case *SQLVal:
 			if node.Type == ValArg {
 				bindvars[string(node.Val[1:])] = struct{}{}
