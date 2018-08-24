@@ -241,7 +241,7 @@ export class WorkflowListComponent implements OnDestroy, OnInit {
 
   workflowPrepareReshardingFlags(newFlags) {
     let factoryName = newFlags['factory_name']['value']
-      if (factoryName === 'horizontal_resharding' || factoryName == 'keyspace_resharding') {
+      if (factoryName === 'horizontal_resharding' || factoryName == 'hr_workflow_gen') {
         let phaseEnableApprovalCheckBoxNames = [
             'enable_approvals_copy_schema',
             'enable_approvals_clone',
@@ -257,6 +257,8 @@ export class WorkflowListComponent implements OnDestroy, OnInit {
             if(newFlags[factoryName + '_' + phaseName]['value']) {
                 phaseEnableApprovals.push(...phaseEnableApprovalNames[i]);
             }
+            // We don't want this flag to show up in the getArgs
+            delete newFlags[factoryName + '_' + phaseName];
         }
         newFlags[factoryName + '_phase_enable_approvals']['value'] = phaseEnableApprovals.join(',');
     }
