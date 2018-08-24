@@ -1,24 +1,20 @@
 /*
-Copyright 2017 Google Inc.
-
-Licensed under the Apache License, Version 2.0 (the "License");
+Copyright 2018 The Vitess Authors
+ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreedto in writing, software
+     http://www.apache.org/licenses/LICENSE-2.0
+ Unless required by applicable law or agreedto in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package keyspaceresharding
+package reshardingworkflowgen
 
-// Package resharding contains a workflow for automatic horizontal resharding.
-// The workflow assumes that there are as many vtworker processes running as source shards.
-// Plus, these vtworker processes must be reachable via RPC.
+// This package contains a workflow to generate horizontal resharding workflows
+// that automatically discovers available overlapping shards to split/merge.
 
 import (
 	"flag"
@@ -44,7 +40,7 @@ import (
 const (
 	codeVersion = 1
 
-	keyspaceReshardingFactoryName = "keyspace_resharding"
+	keyspaceReshardingFactoryName = "hr_workflow_gen"
 	phaseName                     = "create_workflows"
 )
 
@@ -151,7 +147,7 @@ func (*Factory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNod
 		taskID := fmt.Sprintf("%s/%v", phaseName, i)
 		task := hw.checkpoint.Tasks[taskID]
 		taskUINode := &workflow.Node{
-			Name:     fmt.Sprintf("Create workflow to split shards %v to %v", task.Attributes["source_shards"], task.Attributes["destination_shards"]),
+			Name:     fmt.Sprintf("Split shards %v to %v workflow creation", task.Attributes["source_shards"], task.Attributes["destination_shards"]),
 			PathName: fmt.Sprintf("%v", i),
 		}
 		phaseNode.Children = append(phaseNode.Children, taskUINode)
@@ -307,7 +303,6 @@ func (hw *keyspaceResharding) runWorkflow() error {
 			"-destination_shards=" + task.Attributes["destination_shards"],
 			"-phase_enable_approvals=" + hw.phaseEnableApprovalsParam,
 		}
-		log.Infof("These are the params %v", horizontalReshardingParams)
 		phaseID := path.Dir(task.Id)
 		phaseUINode, err := hw.rootUINode.GetChildByPath(phaseID)
 		if err != nil {
@@ -320,6 +315,8 @@ func (hw *keyspaceResharding) runWorkflow() error {
 			return err
 		}
 		hw.setUIMessage(phaseUINode, fmt.Sprintf("Created shard split workflow: %v for source shards: %v.", uuid, task.Attributes["source_shards"]))
+		workflowCmd := "WorkflowCreate " + strings.Join(horizontalReshardingParams, " ")
+		hw.setUIMessage(phaseUINode, fmt.Sprintf("Created workflow with the following params: %v", workflowCmd))
 		if !skipStart {
 			err = hw.manager.Start(ctx, uuid)
 			if err != nil {
