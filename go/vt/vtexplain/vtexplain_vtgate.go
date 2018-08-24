@@ -46,7 +46,7 @@ var (
 	healthCheck    *discovery.FakeHealthCheck
 
 	vtgateSession = &vtgatepb.Session{
-		TargetString: "@master",
+		TargetString: "",
 		Autocommit:   true,
 	}
 )
@@ -61,6 +61,8 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 	if err != nil {
 		return err
 	}
+
+	vtgateSession.TargetString = opts.Target
 
 	streamSize := 10
 	queryPlanCacheSize := int64(10)
