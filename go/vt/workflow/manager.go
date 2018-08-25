@@ -260,6 +260,7 @@ func (m *Manager) Create(ctx context.Context, factoryName string, args []string)
 	// Create the initial workflowpb.Workflow object.
 	w := &workflowpb.Workflow{
 		Uuid:        gouuid.NewUUID().String(),
+		CreateTime:  time.Now().UnixNano(),
 		FactoryName: factoryName,
 		State:       workflowpb.WorkflowState_NotStarted,
 	}
@@ -295,6 +296,7 @@ func (m *Manager) instantiateWorkflow(w *workflowpb.Workflow) (*runningWorkflow,
 	}
 	rw.rootNode.Name = w.Name
 	rw.rootNode.PathName = w.Uuid
+	rw.rootNode.CreateTime = w.CreateTime
 	rw.rootNode.Path = "/" + rw.rootNode.PathName
 	rw.rootNode.State = w.State
 

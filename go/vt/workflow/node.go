@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -139,6 +140,7 @@ type Node struct {
 	Path            string                   `json:"path"`
 	Children        []*Node                  `json:"children,omitempty"`
 	LastChanged     int64                    `json:"lastChanged"`
+	CreateTime      int64                    `json:"createTime"`
 	Progress        int                      `json:"progress"`
 	ProgressMessage string                   `json:"progressMsg"`
 	State           workflowpb.WorkflowState `json:"state"`
@@ -333,6 +335,9 @@ func (m *NodeManager) toJSON(index int) ([]byte, error) {
 	for _, n := range m.roots {
 		u.Nodes = append(u.Nodes, n)
 	}
+	sort.Slice(u.Nodes, func(i, j int) bool {
+		return u.Nodes[i].CreateTime < u.Nodes[j].CreateTime
+	})
 	return json.Marshal(u)
 }
 
