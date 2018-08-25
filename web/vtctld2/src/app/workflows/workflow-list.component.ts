@@ -249,13 +249,12 @@ export class WorkflowListComponent implements OnDestroy, OnInit {
             'enable_approvals_diff',
             'enable_approvals_migrate_serving_types',
         ];
-        let phaseEnableApprovalNames = [['copy_schema'], ['clone'], ['wait_filtered_replication'], ['diff'], ['migrate_rdonly', 'migrate_replica', 'migrate_master']];
         let phaseEnableApprovals = [];
 
         for (let i=0; i<phaseEnableApprovalCheckBoxNames.length; i++) {
             let phaseName = phaseEnableApprovalCheckBoxNames[i];
             if(newFlags[factoryName + '_' + phaseName]['value']) {
-                phaseEnableApprovals.push(...phaseEnableApprovalNames[i]);
+                phaseEnableApprovals.push(newFlags[factoryName + '_' + phaseName]["namedPositional"]);
             }
             // We don't want this flag to show up in the getArgs
             delete newFlags[factoryName + '_' + phaseName];
