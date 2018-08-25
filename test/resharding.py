@@ -203,6 +203,14 @@ parent_id bigint not null,
 primary key (parent_id, id),
 index by_msg (msg)
 ) Engine=InnoDB'''
+    create_table_bindata_template = '''create table %s(
+custom_ksid_col ''' + t + ''' not null,
+id bigint not null,
+parent_id bigint not null,
+msg bit(8),
+primary key (parent_id, id),
+index by_msg (msg)
+) Engine=InnoDB'''
     create_view_template = (
         'create view %s'
         '(parent_id, id, msg, custom_ksid_col)'
@@ -237,6 +245,10 @@ primary key (name)
                      'test_keyspace'],
                     auto_log=True)
     utils.run_vtctl(['ApplySchema',
+                     '-sql=' + create_table_bindata_template % ('resharding3'),
+                     'test_keyspace'],
+                    auto_log=True)
+    utils.run_vtctl(['ApplySchema',
                      '-sql=' + create_view_template % ('view1', 'resharding1'),
                      'test_keyspace'],
                     auto_log=True)
@@ -259,6 +271,12 @@ primary key (name)
                        0x9000000000000000)
     self._insert_value(shard_1_master, 'resharding1', 3, 'msg3',
                        0xD000000000000000)
+    self._insert_value(shard_0_master, 'resharding3', 1, 'a',
+                       0x1000000000000000)
+    self._insert_value(shard_1_master, 'resharding3', 2, 'b',
+                       0x9000000000000000)
+    self._insert_value(shard_1_master, 'resharding3', 3, 'c',
+                       0xD000000000000000)
     if base_sharding.use_rbr:
       self._insert_value(shard_1_master, 'no_pk', 1, 'msg1',
                          0xA000000000000000)
@@ -270,16 +288,22 @@ primary key (name)
     # check first value is in the right shard
     for t in shard_2_tablets:
       self._check_value(t, 'resharding1', 2, 'msg2', 0x9000000000000000)
+      self._check_value(t, 'resharding3', 2, 'b', 0x9000000000000000)
     for t in shard_3_tablets:
       self._check_value(t, 'resharding1', 2, 'msg2', 0x9000000000000000,
+                        should_be_here=False)
+      self._check_value(t, 'resharding3', 2, 'b', 0x9000000000000000,
                         should_be_here=False)
 
     # check second value is in the right shard too
     for t in shard_2_tablets:
       self._check_value(t, 'resharding1', 3, 'msg3', 0xD000000000000000,
                         should_be_here=False)
+      self._check_value(t, 'resharding3', 3, 'c', 0xD000000000000000,
+                        should_be_here=False)
     for t in shard_3_tablets:
       self._check_value(t, 'resharding1', 3, 'msg3', 0xD000000000000000)
+      self._check_value(t, 'resharding3', 3, 'c', 0xD000000000000000)
 
     if base_sharding.use_rbr:
       for t in shard_2_tablets:
@@ -302,36 +326,57 @@ primary key (name)
                     0xE000000000000000]
     self._insert_multi_value(shard_1_master, 'resharding1', mids,
                              msg_ids, keyspace_ids)
+    self._insert_multi_value(shard_1_master, 'resharding3', mids,
+                             ['a','b','c'], keyspace_ids)
 
     mids = [10000004, 10000005]
     msg_ids = ['msg-id10000004', 'msg-id10000005']
     keyspace_ids = [0xD000000000000000, 0xE000000000000000]
     self._insert_multi_value(shard_1_master, 'resharding1', mids,
                              msg_ids, keyspace_ids)
+    self._insert_multi_value(shard_1_master, 'resharding3', mids,
+                            ['d', 'e'], keyspace_ids)
 
     mids = [10000011, 10000012, 10000013]
     msg_ids = ['msg-id10000011', 'msg-id10000012', 'msg-id10000013']
     keyspace_ids = [0x9000000000000000, 0xD000000000000000, 0xE000000000000000]
     self._insert_multi_value(shard_1_master, 'resharding1', mids,
                              msg_ids, keyspace_ids)
+
+    self._insert_multi_value(shard_1_master, 'resharding3', mids,
+                             ['k', 'l', 'm'], keyspace_ids)
+    
     # This update targets two shards.
     self._exec_non_annotated_update(shard_1_master, 'resharding1',
                                     [10000011, 10000012], 'update1')
+    self._exec_non_annotated_update(shard_1_master, 'resharding3',
+                                    [10000011, 10000012], 'g')
     # This update targets one shard.
     self._exec_non_annotated_update(shard_1_master, 'resharding1',
                                     [10000013], 'update2')
+
+    self._exec_non_annotated_update(shard_1_master, 'resharding3',
+                                    [10000013], 'h')
 
     mids = [10000014, 10000015, 10000016]
     msg_ids = ['msg-id10000014', 'msg-id10000015', 'msg-id10000016']
     keyspace_ids = [0x9000000000000000, 0xD000000000000000, 0xE000000000000000]
     self._insert_multi_value(shard_1_master, 'resharding1', mids,
                              msg_ids, keyspace_ids)
+    
+    self._insert_multi_value(shard_1_master, 'resharding3', mids,
+                             ['n', 'o', 'p'], keyspace_ids)
+
     # This delete targets two shards.
     self._exec_non_annotated_delete(shard_1_master, 'resharding1',
                                     [10000014, 10000015])
+    self._exec_non_annotated_delete(shard_1_master, 'resharding3',
+                                    [10000014, 10000015])
+
     # This delete targets one shard.
     self._exec_non_annotated_delete(shard_1_master, 'resharding1', [10000016])
-
+    self._exec_non_annotated_delete(shard_1_master, 'resharding3', [10000016])
+    
   def _check_multi_shard_values(self):
     self._check_multi_dbs(
         [shard_2_master, shard_2_replica1, shard_2_replica2],
@@ -396,6 +441,70 @@ primary key (name)
         'resharding1', 10000016, 'msg-id10000016', 0xF000000000000000,
         should_be_here=False)
 
+  # checks for bindata table
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2],
+        'resharding3', 10000001, 'a', 0x9000000000000000)
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2],
+        'resharding3', 10000002, 'b', 0xD000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2],
+        'resharding3', 10000003, 'c', 0xE000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding3', 10000001, 'a', 0x9000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding3', 10000002, 'b', 0xD000000000000000)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding3', 10000003, 'c', 0xE000000000000000)
+
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2],
+        'resharding3', 10000004, 'd', 0xD000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2],
+        'resharding3', 10000005, 'e', 0xE000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding3', 10000004, 'd', 0xD000000000000000)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding3', 10000005, 'e', 0xE000000000000000)
+
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2],
+        'resharding3', 10000011, 'g', 0x9000000000000000)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding3', 10000012, 'g', 0xD000000000000000)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding3', 10000013, 'h', 0xE000000000000000)
+
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2,
+         shard_3_master, shard_3_replica],
+        'resharding3', 10000014, 'n', 0x9000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2,
+         shard_3_master, shard_3_replica],
+        'resharding3', 10000015, 'o', 0xD000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2,
+         shard_3_master, shard_3_replica],
+        'resharding3', 10000016, 'p', 0xF000000000000000,
+        should_be_here=False)
+    
   # _check_multi_dbs checks the row in multiple dbs.
   def _check_multi_dbs(self, dblist, table, mid, msg, keyspace_id,
                        should_be_here=True):
@@ -774,11 +883,11 @@ primary key (name)
       # are smaller. In the second shard, we submitted statements
       # that affect more than one keyspace id. These will result
       # in two queries with RBR. So the count there is higher.
-      self.check_running_binlog_player(shard_2_master, 4018, 2008)
-      self.check_running_binlog_player(shard_3_master, 4028, 2008)
+      self.check_running_binlog_player(shard_2_master, 4036, 2016)
+      self.check_running_binlog_player(shard_3_master, 4046, 2016)
     else:
-      self.check_running_binlog_player(shard_2_master, 4022, 2008)
-      self.check_running_binlog_player(shard_3_master, 4024, 2008)
+      self.check_running_binlog_player(shard_2_master, 4044, 2016)
+      self.check_running_binlog_player(shard_3_master, 4048, 2016)
 
     # start a thread to insert data into shard_1 in the background
     # with current time, and monitor the delay

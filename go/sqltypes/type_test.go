@@ -192,7 +192,7 @@ func TestCategory(t *testing.T) {
 			}
 			matched = true
 		}
-		if typ == Null || typ == Decimal || typ == Expression {
+		if typ == Null || typ == Decimal || typ == Expression || typ == Bit {
 			if matched {
 				t.Errorf("%v matched more than one category", typ)
 			}
