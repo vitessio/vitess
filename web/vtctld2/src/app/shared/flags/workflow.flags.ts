@@ -53,13 +53,13 @@ export class NewWorkflowFlags {
     this.flags['horizontal_resharding_enable_approvals_clone'].namedPositional = 'clone';
     this.flags['horizontal_resharding_enable_approvals_wait_filtered_replication'] = new HorizontalReshardingEnableApprovalsFlag(14, 'horizontal_resharding_enable_approvals_wait_filtered_replication', 'Wait filtered replication enable approvals', 'horizontal_resharding');
     this.flags['horizontal_resharding_enable_approvals_wait_filtered_replication'].positional = true;
-    this.flags['horizontal_resharding_enable_approvals_wait_filtered_replication'].namedPositional = 'wait_filtered_replication';
+    this.flags['horizontal_resharding_enable_approvals_wait_filtered_replication'].namedPositional = 'wait_for_filtered_replication';
     this.flags['horizontal_resharding_enable_approvals_diff'] = new HorizontalReshardingEnableApprovalsFlag(15, 'horizontal_resharding_enable_approvals_diff', 'Diff enable approvals', 'horizontal_resharding');
     this.flags['horizontal_resharding_enable_approvals_diff'].positional = true;
     this.flags['horizontal_resharding_enable_approvals_diff'].namedPositional = 'diff';
     this.flags['horizontal_resharding_enable_approvals_migrate_serving_types'] = new HorizontalReshardingEnableApprovalsFlag(16, 'horizontal_resharding_enable_approvals_migrate_serving_types', 'Migrate serving types enable approvals', 'horizontal_resharding');
     this.flags['horizontal_resharding_enable_approvals_migrate_serving_types'].positional = true;
-    this.flags['horizontal_resharding_enable_approvals_migrate_serving_types'].namedPositional = 'migrate_serving_types';
+    this.flags['horizontal_resharding_enable_approvals_migrate_serving_types'].namedPositional = 'migrate_rdonly,migrate_replica,migrate_master';
 
 
     this.flags['horizontal_resharding_phase_enable_approvals'] = new HorizontalReshardingPhaseEnableApprovalFlag(17, 'horizontal_resharding_phase_enable_approvals');
@@ -91,13 +91,13 @@ export class NewWorkflowFlags {
     this.flags['hr_workflow_gen_enable_approvals_clone'].namedPositional = 'clone';
     this.flags['hr_workflow_gen_enable_approvals_wait_filtered_replication'] = new HorizontalReshardingEnableApprovalsFlag(25, 'hr_workflow_gen_enable_approvals_wait_filtered_replication', 'Wait filtered replication enable approvals', 'hr_workflow_gen');
     this.flags['hr_workflow_gen_enable_approvals_wait_filtered_replication'].positional = true;
-    this.flags['hr_workflow_gen_enable_approvals_wait_filtered_replication'].namedPositional = 'wait_filtered_replication';
+    this.flags['hr_workflow_gen_enable_approvals_wait_filtered_replication'].namedPositional = 'wait_for_filtered_replication';
     this.flags['hr_workflow_gen_enable_approvals_diff'] = new HorizontalReshardingEnableApprovalsFlag(26, 'hr_workflow_gen_enable_approvals_diff', 'Diff enable approvals', 'hr_workflow_gen');
     this.flags['hr_workflow_gen_enable_approvals_diff'].positional = true;
     this.flags['hr_workflow_gen_enable_approvals_diff'].namedPositional = 'diff';
     this.flags['hr_workflow_gen_enable_approvals_migrate_serving_types'] = new HorizontalReshardingEnableApprovalsFlag(27, 'hr_workflow_gen_enable_approvals_migrate_serving_types', 'Migrate serving types enable approvals', 'hr_workflow_gen');
     this.flags['hr_workflow_gen_enable_approvals_migrate_serving_types'].positional = true;
-    this.flags['hr_workflow_gen_enable_approvals_migrate_serving_types'].namedPositional = 'migrate_serving_types';
+    this.flags['hr_workflow_gen_enable_approvals_migrate_serving_types'].namedPositional = 'migrate_rdonly,migrate_replica,migrate_master';
 
 
     this.flags['hr_workflow_gen_phase_enable_approvals'] = new HorizontalReshardingPhaseEnableApprovalFlag(28, 'hr_workflow_gen_phase_enable_approvals');

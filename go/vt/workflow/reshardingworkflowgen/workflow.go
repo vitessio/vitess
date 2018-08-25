@@ -63,8 +63,8 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	splitCmd := subFlags.String("split_cmd", "SplitClone", "Split command to use to perform horizontal resharding (either SplitClone or LegacySplitClone)")
 	splitDiffDestTabletType := subFlags.String("split_diff_dest_tablet_type", "RDONLY", "Specifies tablet type to use in destination shards while performing SplitDiff operation")
 	skipStartWorkflows := subFlags.Bool("skip_start_workflows", true, "If true, newly created workflows will have skip_start set")
-	phaseEnaableApprovalsDesc := fmt.Sprintf("Comma separated phases that require explicit approval in the UI to execute. Phase names are: %v", strings.Join(resharding.WorkflowPhases(), ","))
-	phaseEnableApprovalsStr := subFlags.String("phase_enable_approvals", strings.Join(resharding.WorkflowPhases(), ","), phaseEnaableApprovalsDesc)
+	phaseEnableApprovalsDesc := fmt.Sprintf("Comma separated phases that require explicit approval in the UI to execute. Phase names are: %v", strings.Join(resharding.WorkflowPhases(), ","))
+	phaseEnableApprovalsStr := subFlags.String("phase_enable_approvals", strings.Join(resharding.WorkflowPhases(), ","), phaseEnableApprovalsDesc)
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
