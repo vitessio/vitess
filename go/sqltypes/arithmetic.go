@@ -248,7 +248,7 @@ func ToNative(v Value) (interface{}, error) {
 		return ToUint64(v)
 	case v.IsFloat():
 		return ToFloat64(v)
-	case v.IsQuoted() || v.Type() == Decimal:
+	case v.IsQuoted() || v.Type() == Bit || v.Type() == Decimal:
 		out = v.val
 	case v.Type() == Expression:
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v cannot be converted to a go type", v)

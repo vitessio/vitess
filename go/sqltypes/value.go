@@ -74,7 +74,7 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
-	case IsQuoted(typ) || typ == Null:
+	case IsQuoted(typ) || typ == Bit || typ == Null:
 		return MakeTrusted(typ, val), nil
 	}
 	// All other types are unsafe or invalid.
@@ -218,6 +218,8 @@ func (v Value) EncodeSQL(b BinWriter) {
 		b.Write(nullstr)
 	case v.IsQuoted():
 		encodeBytesSQL(v.val, b)
+	case v.typ == Bit:
+		encodeBytesSQLBits(v.val, b)
 	default:
 		b.Write(v.val)
 	}
@@ -327,6 +329,26 @@ func encodeBytesSQL(val []byte, b BinWriter) {
 		} else {
 			buf.WriteByte('\\')
 			buf.WriteByte(encodedChar)
+		}
+	}
+	buf.WriteByte('\'')
+	b.Write(buf.Bytes())
+}
+
+func encodeBytesSQLBits(val []byte, b BinWriter) {
+	buf := &bytes2.Buffer{}
+	buf.WriteByte('b')
+	buf.WriteByte('\'')
+	for _, ch := range val {
+		// for each byte, create a string representation of the bits
+		for j := 7; j >= 0; j-- {
+			c := ch & 128
+			ch = ch << 1
+			if c == 0 {
+				buf.WriteByte('0')
+			} else {
+				buf.WriteByte('1')
+			}
 		}
 	}
 	buf.WriteByte('\'')
