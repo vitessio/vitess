@@ -286,9 +286,7 @@ func (hw *keyspaceResharding) runWorkflow() error {
 	}
 
 	workflowsCreator := workflow.NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, tasks, hw.workflowCreator, workflow.Sequential, false /*phaseEnableApprovals  we don't require enable approvals in this workflow*/)
-	if err := workflowsCreator.Run(); err != nil {
-		return err
-	}
+	workflowsCreator.Run()
 	return nil
 }
 
@@ -317,7 +315,6 @@ func (hw *keyspaceResharding) workflowCreator(ctx context.Context, task *workflo
 
 	uuid, err := hw.manager.Create(ctx, "horizontal_resharding", horizontalReshardingParams)
 	if err != nil {
-		panic(err)
 		hw.setUIMessage(phaseUINode, fmt.Sprintf("Couldn't create shard split workflow for source shards: %v. Got error: %v", task.Attributes["source_shards"], err))
 		return err
 	}
