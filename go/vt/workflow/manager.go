@@ -590,3 +590,18 @@ func AvailableFactories() map[string]bool {
 	}
 	return result
 }
+
+// StartManager starts a manager. This function should only be used for tests purposes.
+func StartManager(m *Manager) (*sync.WaitGroup, context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		m.Run(ctx)
+		wg.Done()
+	}()
+
+	m.WaitUntilRunning()
+
+	return wg, ctx, cancel
+}

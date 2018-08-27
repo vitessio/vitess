@@ -25,19 +25,20 @@ import (
 
 	"vitess.io/vitess/go/vt/automation"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
 
-func createTaskID(phase PhaseType, shardName string) string {
+func createTaskID(phase workflow.PhaseType, shardName string) string {
 	return fmt.Sprintf("%s/%s", phase, shardName)
 }
 
 // GetTasks returns selected tasks for a phase from the checkpoint
 // with expected execution order.
-func (hw *horizontalReshardingWorkflow) GetTasks(phase PhaseType) []*workflowpb.Task {
+func (hw *horizontalReshardingWorkflow) GetTasks(phase workflow.PhaseType) []*workflowpb.Task {
 	var shards []string
 	switch phase {
 	case phaseCopySchema, phaseWaitForFilteredReplication, phaseDiff:

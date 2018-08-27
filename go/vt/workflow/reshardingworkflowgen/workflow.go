@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
-
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/workflow/resharding"
@@ -286,45 +285,51 @@ func (hw *keyspaceResharding) runWorkflow() error {
 		tasks = append(tasks, hw.checkpoint.Tasks[taskID])
 	}
 
-	ctx := context.Background()
+	workflowsCreator := workflow.NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, tasks, hw.workflowCreator, workflow.Sequential, false /*phaseEnableApprovals  we don't require enable approvals in this workflow*/)
+	if err := workflowsCreator.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (hw *keyspaceResharding) workflowCreator(ctx context.Context, task *workflowpb.Task) error {
+	horizontalReshardingParams := []string{
+		"-keyspace=" + hw.keyspaceParam,
+		"-vtworkers=" + task.Attributes["vtworkers"],
+		"-split_cmd=" + hw.splitCmdParam,
+		"-split_diff_dest_tablet_type=" + hw.splitDiffDestTabletTypeParam,
+		"-min_healthy_rdonly_tablets=" + hw.minHealthyRdonlyTabletsParam,
+		"-source_shards=" + task.Attributes["source_shards"],
+		"-destination_shards=" + task.Attributes["destination_shards"],
+		"-phase_enable_approvals=" + hw.phaseEnableApprovalsParam,
+	}
+
 	skipStart, err := strconv.ParseBool(hw.skipStartWorkflowParam)
 	if err != nil {
 		return err
 
 	}
-	for _, task := range tasks {
-		horizontalReshardingParams := []string{
-			"-keyspace=" + hw.keyspaceParam,
-			"-vtworkers=" + task.Attributes["vtworkers"],
-			"-split_cmd=" + hw.splitCmdParam,
-			"-split_diff_dest_tablet_type=" + hw.splitDiffDestTabletTypeParam,
-			"-min_healthy_rdonly_tablets=" + hw.minHealthyRdonlyTabletsParam,
-			"-source_shards=" + task.Attributes["source_shards"],
-			"-destination_shards=" + task.Attributes["destination_shards"],
-			"-phase_enable_approvals=" + hw.phaseEnableApprovalsParam,
-		}
-		phaseID := path.Dir(task.Id)
-		phaseUINode, err := hw.rootUINode.GetChildByPath(phaseID)
+	phaseID := path.Dir(task.Id)
+	phaseUINode, err := hw.rootUINode.GetChildByPath(phaseID)
+	if err != nil {
+		return err
+	}
+
+	uuid, err := hw.manager.Create(ctx, "horizontal_resharding", horizontalReshardingParams)
+	if err != nil {
+		panic(err)
+		hw.setUIMessage(phaseUINode, fmt.Sprintf("Couldn't create shard split workflow for source shards: %v. Got error: %v", task.Attributes["source_shards"], err))
+		return err
+	}
+	hw.setUIMessage(phaseUINode, fmt.Sprintf("Created shard split workflow: %v for source shards: %v.", uuid, task.Attributes["source_shards"]))
+	workflowCmd := "WorkflowCreate " + strings.Join(horizontalReshardingParams, " ")
+	hw.setUIMessage(phaseUINode, fmt.Sprintf("Created workflow with the following params: %v", workflowCmd))
+	if !skipStart {
+		err = hw.manager.Start(ctx, uuid)
 		if err != nil {
+			hw.setUIMessage(phaseUINode, fmt.Sprintf("Couldn't start shard split workflow: %v for source shards: %v. Got error: %v", uuid, task.Attributes["source_shards"], err))
 			return err
 		}
-
-		uuid, err := hw.manager.Create(ctx, "horizontal_resharding", horizontalReshardingParams)
-		if err != nil {
-			hw.setUIMessage(phaseUINode, fmt.Sprintf("Couldn't create shard split workflow for source shards: %v. Got error: %v", task.Attributes["source_shards"], err))
-			return err
-		}
-		hw.setUIMessage(phaseUINode, fmt.Sprintf("Created shard split workflow: %v for source shards: %v.", uuid, task.Attributes["source_shards"]))
-		workflowCmd := "WorkflowCreate " + strings.Join(horizontalReshardingParams, " ")
-		hw.setUIMessage(phaseUINode, fmt.Sprintf("Created workflow with the following params: %v", workflowCmd))
-		if !skipStart {
-			err = hw.manager.Start(ctx, uuid)
-			if err != nil {
-				hw.setUIMessage(phaseUINode, fmt.Sprintf("Couldn't start shard split workflow: %v for source shards: %v. Got error: %v", uuid, task.Attributes["source_shards"], err))
-				return err
-			}
-		}
-
 	}
 	return nil
 }
