@@ -67,21 +67,21 @@ func TestSourceDestShards(t *testing.T) {
 	// Create the workflow.
 	vtworkersParameter := testVtworkers + "," + testVtworkers
 	_, err := m.Create(ctx, horizontalReshardingFactoryName, []string{"-keyspace=" + testKeyspace, "-vtworkers=" + vtworkersParameter, "-phase_enable_approvals=", "-min_healthy_rdonly_tablets=2", "-source_shards=0", "-destination_shards=-40,40-"})
-	want := "the specified destination shard test_keyspace/-40 is not in any overlapping shard."
+	want := "the specified destination shard test_keyspace/-40 is not in any overlapping shard"
 	if err == nil || err.Error() != want {
 		t.Errorf("workflow error: %v, want %s", err, want)
 	}
 
 	_, err = m.Create(ctx, horizontalReshardingFactoryName, []string{"-keyspace=" + testKeyspace, "-vtworkers=" + vtworkersParameter, "-phase_enable_approvals=", "-min_healthy_rdonly_tablets=2", "-source_shards=0", "-destination_shards=-80,40-"})
 
-	want = "the specified destination shard test_keyspace/40- is not in any overlapping shard."
+	want = "the specified destination shard test_keyspace/40- is not in any overlapping shard"
 	if err == nil || err.Error() != want {
 		t.Errorf("workflow error: %v, want %s", err, want)
 	}
 
 	_, err = m.Create(ctx, horizontalReshardingFactoryName, []string{"-keyspace=" + testKeyspace, "-vtworkers=" + vtworkersParameter, "-phase_enable_approvals=", "-min_healthy_rdonly_tablets=2", "-source_shards=-20", "-destination_shards=-80,80-"})
 
-	want = "the specified source shard test_keyspace/-20 is not in any overlapping shard."
+	want = "the specified source shard test_keyspace/-20 is not in any overlapping shard"
 	if err == nil || err.Error() != want {
 		t.Errorf("workflow error: %v, want %s", err, want)
 	}
