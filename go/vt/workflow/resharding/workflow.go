@@ -252,16 +252,16 @@ func validateWorkflow(m *workflow.Manager, keyspace string, vtworkers, sourceSha
 	// find the shard we mentioned in there, if any
 	os := topotools.OverlappingShardsForShard(osList, sourceShards[0])
 	if os == nil {
-		return fmt.Errorf("The specified source shard %v/%v is not in any overlapping shard.", keyspace, sourceShards[0])
+		return fmt.Errorf("the specified source shard %v/%v is not in any overlapping shard", keyspace, sourceShards[0])
 	}
 	for _, sourceShard := range sourceShards {
 		if !os.ContainsShard(sourceShard) {
-			return fmt.Errorf("The specified source shard %v/%v is not in any overlapping shard.", keyspace, sourceShard)
+			return fmt.Errorf("the specified source shard %v/%v is not in any overlapping shard", keyspace, sourceShard)
 		}
 	}
 	for _, destinationShard := range destinationShards {
 		if !os.ContainsShard(destinationShard) {
-			return fmt.Errorf("The specified destination shard %v/%v is not in any overlapping shard.", keyspace, destinationShard)
+			return fmt.Errorf("the specified destination shard %v/%v is not in any overlapping shard", keyspace, destinationShard)
 		}
 	}
 	return nil
