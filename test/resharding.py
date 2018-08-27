@@ -884,7 +884,7 @@ primary key (name)
       # that affect more than one keyspace id. These will result
       # in two queries with RBR. So the count there is higher.
       self.check_running_binlog_player(shard_2_master, 4036, 2016)
-      self.check_running_binlog_player(shard_3_master, 4046, 2016)
+      self.check_running_binlog_player(shard_3_master, 4056, 2016)
     else:
       self.check_running_binlog_player(shard_2_master, 4044, 2016)
       self.check_running_binlog_player(shard_3_master, 4048, 2016)
