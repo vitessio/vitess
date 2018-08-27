@@ -244,7 +244,7 @@ func (m *Manager) loadAndStartJobsLocked() {
 }
 
 // Create creates a workflow from the given factory name with the
-// provided args.  Returns the unique UUID of the workflow. The
+// provided args. Returns the unique UUID of the workflow. The
 // workflowpb.Workflow object is saved in the topo server after
 // creation.
 func (m *Manager) Create(ctx context.Context, factoryName string, args []string) (string, error) {

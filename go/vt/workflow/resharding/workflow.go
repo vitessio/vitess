@@ -32,8 +32,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -104,6 +104,11 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 		if !validPhase {
 			return fmt.Errorf("Invalid phase in phase_enable_approvals: %v", phase)
 		}
+	}
+
+	err := validateWorkflow(m, *keyspace, vtworkers, sourceShards, destinationShards, *minHealthyRdonlyTablets)
+	if err != nil {
+		return err
 	}
 
 	w.Name = fmt.Sprintf("Reshard shards %v into shards %v of keyspace %v.", *keyspace, *sourceShardsStr, *destinationShardsStr)
@@ -227,20 +232,46 @@ func createUINodes(rootNode *workflow.Node, phaseName PhaseType, shards []string
 	return nil
 }
 
-// initCheckpoint initialize the checkpoint for the horizontal workflow.
-func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string) (*workflowpb.WorkflowCheckpoint, error) {
+// validateWorkflow validates that workflow has valid input parameters.
+func validateWorkflow(m *workflow.Manager, keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets string) error {
 	if len(sourceShards) == 0 || len(destinationShards) == 0 {
-		return nil, fmt.Errorf("invalid source or destination shards")
+		return fmt.Errorf("invalid source or destination shards")
 	}
 	if len(vtworkers) != len(destinationShards) {
-		return nil, fmt.Errorf("there are %v vtworkers, %v destination shards: the number should be same", len(vtworkers), len(destinationShards))
+		return fmt.Errorf("there are %v vtworkers, %v destination shards: the number should be same", len(vtworkers), len(destinationShards))
 	}
 
 	splitRatio := len(destinationShards) / len(sourceShards)
 	if minHealthyRdonlyTabletsVal, err := strconv.Atoi(minHealthyRdonlyTablets); err != nil || minHealthyRdonlyTabletsVal < splitRatio {
-		return nil, fmt.Errorf("there are not enough rdonly tablets in source shards. You need at least %v, it got: %v", splitRatio, minHealthyRdonlyTablets)
+		return fmt.Errorf("there are not enough rdonly tablets in source shards. You need at least %v, it got: %v", splitRatio, minHealthyRdonlyTablets)
 	}
 
+	// find the OverlappingShards in the keyspace
+	osList, err := topotools.FindOverlappingShards(context.Background(), m.TopoServer(), keyspace)
+	if err != nil {
+		return fmt.Errorf("cannot FindOverlappingShards in %v: %v", keyspace, err)
+	}
+
+	// find the shard we mentioned in there, if any
+	os := topotools.OverlappingShardsForShard(osList, sourceShards[0])
+	if os == nil {
+		return fmt.Errorf("the specified source shard %v/%v is not in any overlapping shard.", keyspace, sourceShards[0])
+	}
+	for _, sourceShard := range sourceShards {
+		if !os.ContainsShard(sourceShard) {
+			return fmt.Errorf("the specified source shard %v/%v is not in any overlapping shard.", keyspace, sourceShard)
+		}
+	}
+	for _, destinationShard := range destinationShards {
+		if !os.ContainsShard(destinationShard) {
+			return fmt.Errorf("the specified destination shard %v/%v is not in any overlapping shard.", keyspace, destinationShard)
+		}
+	}
+	return nil
+}
+
+// initCheckpoint initialize the checkpoint for the horizontal workflow.
+func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string) (*workflowpb.WorkflowCheckpoint, error) {
 	tasks := make(map[string]*workflowpb.Task)
 	initTasks(tasks, phaseCopySchema, destinationShards, func(i int, shard string) map[string]string {
 		return map[string]string{
