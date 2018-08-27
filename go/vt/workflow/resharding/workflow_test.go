@@ -63,7 +63,7 @@ func TestSourceDestShards(t *testing.T) {
 	ts := setupTopology(ctx, t, testKeyspace)
 	m := workflow.NewManager(ts)
 	// Run the manager in the background.
-	_, _, cancel := startManager(m)
+	_, _, cancel := workflow.StartManager(m)
 	// Create the workflow.
 	vtworkersParameter := testVtworkers + "," + testVtworkers
 	_, err := m.Create(ctx, horizontalReshardingFactoryName, []string{"-keyspace=" + testKeyspace, "-vtworkers=" + vtworkersParameter, "-phase_enable_approvals=", "-min_healthy_rdonly_tablets=2", "-source_shards=0", "-destination_shards=-40,40-"})
@@ -107,7 +107,7 @@ func TestHorizontalResharding(t *testing.T) {
 	ts := setupTopology(ctx, t, testKeyspace)
 	m := workflow.NewManager(ts)
 	// Run the manager in the background.
-	wg, _, cancel := startManager(m)
+	wg, _, cancel := workflow.StartManager(m)
 	// Create the workflow.
 	vtworkersParameter := testVtworkers + "," + testVtworkers
 	uuid, err := m.Create(ctx, horizontalReshardingFactoryName, []string{"-keyspace=" + testKeyspace, "-vtworkers=" + vtworkersParameter, "-phase_enable_approvals=", "-min_healthy_rdonly_tablets=2", "-source_shards=0", "-destination_shards=-80,80-"})
@@ -129,7 +129,7 @@ func TestHorizontalResharding(t *testing.T) {
 
 	// Wait for the workflow to end.
 	m.Wait(ctx, uuid)
-	if err := verifyAllTasksDone(ctx, ts, uuid); err != nil {
+	if err := workflow.VerifyAllTasksDone(ctx, ts, uuid); err != nil {
 		t.Fatal(err)
 	}
 

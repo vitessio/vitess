@@ -47,17 +47,14 @@ const (
 	horizontalReshardingFactoryName = "horizontal_resharding"
 )
 
-// PhaseType is used to store the phase name in a workflow.
-type PhaseType string
-
 const (
-	phaseCopySchema                 PhaseType = "copy_schema"
-	phaseClone                      PhaseType = "clone"
-	phaseWaitForFilteredReplication PhaseType = "wait_for_filtered_replication"
-	phaseDiff                       PhaseType = "diff"
-	phaseMigrateRdonly              PhaseType = "migrate_rdonly"
-	phaseMigrateReplica             PhaseType = "migrate_replica"
-	phaseMigrateMaster              PhaseType = "migrate_master"
+	phaseCopySchema                 workflow.PhaseType = "copy_schema"
+	phaseClone                      workflow.PhaseType = "clone"
+	phaseWaitForFilteredReplication workflow.PhaseType = "wait_for_filtered_replication"
+	phaseDiff                       workflow.PhaseType = "diff"
+	phaseMigrateRdonly              workflow.PhaseType = "migrate_rdonly"
+	phaseMigrateReplica             workflow.PhaseType = "migrate_replica"
+	phaseMigrateMaster              workflow.PhaseType = "migrate_master"
 )
 
 // Register registers the HorizontalReshardingWorkflowFactory as a factory
@@ -216,7 +213,7 @@ func (*Factory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNod
 	return hw, nil
 }
 
-func createUINodes(rootNode *workflow.Node, phaseName PhaseType, shards []string) error {
+func createUINodes(rootNode *workflow.Node, phaseName workflow.PhaseType, shards []string) error {
 	phaseNode, err := rootNode.GetChildByPath(string(phaseName))
 	if err != nil {
 		return fmt.Errorf("fails to find phase node for: %v", phaseName)
@@ -335,7 +332,7 @@ func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards 
 	}, nil
 }
 
-func initTasks(tasks map[string]*workflowpb.Task, phase PhaseType, shards []string, getAttributes func(int, string) map[string]string) {
+func initTasks(tasks map[string]*workflowpb.Task, phase workflow.PhaseType, shards []string, getAttributes func(int, string) map[string]string) {
 	for i, shard := range shards {
 		taskID := createTaskID(phase, shard)
 		tasks[taskID] = &workflowpb.Task{
@@ -384,43 +381,43 @@ func (hw *horizontalReshardingWorkflow) Run(ctx context.Context, manager *workfl
 
 func (hw *horizontalReshardingWorkflow) runWorkflow() error {
 	copySchemaTasks := hw.GetTasks(phaseCopySchema)
-	copySchemaRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, copySchemaTasks, hw.runCopySchema, Parallel, hw.phaseEnableApprovals[string(phaseCopySchema)])
+	copySchemaRunner := workflow.NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, copySchemaTasks, hw.runCopySchema, workflow.Parallel, hw.phaseEnableApprovals[string(phaseCopySchema)])
 	if err := copySchemaRunner.Run(); err != nil {
 		return err
 	}
 
 	cloneTasks := hw.GetTasks(phaseClone)
-	cloneRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, cloneTasks, hw.runSplitClone, Parallel, hw.phaseEnableApprovals[string(phaseClone)])
+	cloneRunner := workflow.NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, cloneTasks, hw.runSplitClone, workflow.Parallel, hw.phaseEnableApprovals[string(phaseClone)])
 	if err := cloneRunner.Run(); err != nil {
 		return err
 	}
 
 	waitForFilteredReplicationTasks := hw.GetTasks(phaseWaitForFilteredReplication)
-	waitForFilteredReplicationRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, waitForFilteredReplicationTasks, hw.runWaitForFilteredReplication, Parallel, hw.phaseEnableApprovals[string(phaseWaitForFilteredReplication)])
+	waitForFilteredReplicationRunner := workflow.NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, waitForFilteredReplicationTasks, hw.runWaitForFilteredReplication, workflow.Parallel, hw.phaseEnableApprovals[string(phaseWaitForFilteredReplication)])
 	if err := waitForFilteredReplicationRunner.Run(); err != nil {
 		return err
 	}
 
 	diffTasks := hw.GetTasks(phaseDiff)
-	diffRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, diffTasks, hw.runSplitDiff, Parallel, hw.phaseEnableApprovals[string(phaseWaitForFilteredReplication)])
+	diffRunner := workflow.NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, diffTasks, hw.runSplitDiff, workflow.Parallel, hw.phaseEnableApprovals[string(phaseWaitForFilteredReplication)])
 	if err := diffRunner.Run(); err != nil {
 		return err
 	}
 
 	migrateRdonlyTasks := hw.GetTasks(phaseMigrateRdonly)
-	migrateRdonlyRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateRdonlyTasks, hw.runMigrate, Sequential, hw.phaseEnableApprovals[string(phaseMigrateRdonly)])
+	migrateRdonlyRunner := workflow.NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateRdonlyTasks, hw.runMigrate, workflow.Sequential, hw.phaseEnableApprovals[string(phaseMigrateRdonly)])
 	if err := migrateRdonlyRunner.Run(); err != nil {
 		return err
 	}
 
 	migrateReplicaTasks := hw.GetTasks(phaseMigrateReplica)
-	migrateReplicaRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateReplicaTasks, hw.runMigrate, Sequential, hw.phaseEnableApprovals[string(phaseMigrateReplica)])
+	migrateReplicaRunner := workflow.NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateReplicaTasks, hw.runMigrate, workflow.Sequential, hw.phaseEnableApprovals[string(phaseMigrateReplica)])
 	if err := migrateReplicaRunner.Run(); err != nil {
 		return err
 	}
 
 	migrateMasterTasks := hw.GetTasks(phaseMigrateMaster)
-	migrateMasterRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateMasterTasks, hw.runMigrate, Sequential, hw.phaseEnableApprovals[string(phaseMigrateReplica)])
+	migrateMasterRunner := workflow.NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateMasterTasks, hw.runMigrate, workflow.Sequential, hw.phaseEnableApprovals[string(phaseMigrateReplica)])
 	if err := migrateMasterRunner.Run(); err != nil {
 		return err
 	}
@@ -436,8 +433,8 @@ func (hw *horizontalReshardingWorkflow) setUIMessage(message string) {
 	hw.rootUINode.BroadcastChanges(false /* updateChildren */)
 }
 
-func defaultPhaseDisableApprovals() map[PhaseType]bool {
-	return map[PhaseType]bool{
+func defaultPhaseDisableApprovals() map[workflow.PhaseType]bool {
+	return map[workflow.PhaseType]bool{
 		phaseCopySchema:                 false,
 		phaseClone:                      false,
 		phaseWaitForFilteredReplication: false,

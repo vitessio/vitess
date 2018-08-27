@@ -42,7 +42,7 @@ func TestLongPolling(t *testing.T) {
 	go http.Serve(listener, nil)
 
 	// Run the manager in the background.
-	wg, cancel := startManager(t, m)
+	wg, _, cancel := StartManager(m)
 
 	// Get the original tree with a 'create'.
 	u := url.URL{Scheme: "http", Host: listener.Addr().String(), Path: "/workflow/create"}
