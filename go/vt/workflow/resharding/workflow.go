@@ -418,11 +418,7 @@ func (hw *horizontalReshardingWorkflow) runWorkflow() error {
 
 	migrateMasterTasks := hw.GetTasks(phaseMigrateMaster)
 	migrateMasterRunner := workflow.NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateMasterTasks, hw.runMigrate, workflow.Sequential, hw.phaseEnableApprovals[string(phaseMigrateReplica)])
-	if err := migrateMasterRunner.Run(); err != nil {
-		return err
-	}
-
-	return nil
+	return migrateMasterRunner.Run()
 }
 
 func (hw *horizontalReshardingWorkflow) setUIMessage(message string) {
