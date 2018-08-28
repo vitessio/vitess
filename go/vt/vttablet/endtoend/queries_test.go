@@ -1679,7 +1679,7 @@ func TestQueries(t *testing.T) {
 					Query: "insert into vitess_misc(id, b, d, dt, t) select 2, b, d, dt, t from vitess_misc",
 					Rewritten: []string{
 						"select 2, b, d, dt, t from vitess_misc limit 10001",
-						"insert into vitess_misc(id, b, d, dt, t) values (2, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') /* _stream vitess_misc (id ) (2 )",
+						"insert into vitess_misc(id, b, d, dt, t) values (2, b'00000001', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') /* _stream vitess_misc (id ) (2 )",
 					},
 				},
 				framework.TestQuery("commit"),
