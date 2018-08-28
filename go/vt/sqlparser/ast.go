@@ -2399,6 +2399,8 @@ func ExprFromValue(value sqltypes.Value) (Expr, error) {
 		return NewFloatVal(value.ToBytes()), nil
 	case value.IsQuoted():
 		return NewStrVal(value.ToBytes()), nil
+	case value.Type() == sqltypes.Bit:
+		return NewBitVal(value.ToBytes()), nil
 	default:
 		// We cannot support sqltypes.Expression, or any other invalid type.
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot convert value %v to AST", value)
