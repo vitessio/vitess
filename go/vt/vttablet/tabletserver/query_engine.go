@@ -76,14 +76,6 @@ func (*TabletPlan) Size() int {
 	return 1
 }
 
-// buildAuthorized builds 'Authorized', which is the runtime part for 'Permissions'.
-func (ep *TabletPlan) buildAuthorized() {
-	ep.Authorized = make([]*tableacl.ACLResult, len(ep.Permissions))
-	for i, perm := range ep.Permissions {
-		ep.Authorized[i] = tableacl.Authorized(perm.TableName, perm.Role)
-	}
-}
-
 // AddStats updates the stats for the current TabletPlan.
 func (ep *TabletPlan) AddStats(queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
 	ep.mu.Lock()
@@ -105,6 +97,14 @@ func (ep *TabletPlan) Stats() (queryCount int64, duration, mysqlTime time.Durati
 	errorCount = ep.ErrorCount
 	ep.mu.Unlock()
 	return
+}
+
+// buildAuthorized builds 'Authorized', which is the runtime part for 'Permissions'.
+func (ep *TabletPlan) buildAuthorized() {
+	ep.Authorized = make([]*tableacl.ACLResult, len(ep.Permissions))
+	for i, perm := range ep.Permissions {
+		ep.Authorized[i] = tableacl.Authorized(perm.TableName, perm.Role)
+	}
 }
 
 //_______________________________________________
@@ -254,10 +254,10 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
 			return fmt.Sprintf("%v", qe.plans.Oldest())
 		}))
-		_ = stats.NewCountersFuncWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"}, qe.getQueryCountByTablePlan)
-		_ = stats.NewCountersFuncWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"}, qe.getQueryTimeByTablePlan)
-		_ = stats.NewCountersFuncWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"}, qe.getQueryRowCountByTablePlan)
-		_ = stats.NewCountersFuncWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"}, qe.getQueryErrorCountByTablePlan)
+		_ = stats.NewCountersFuncWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"}, qe.getQueryCount)
+		_ = stats.NewCountersFuncWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"}, qe.getQueryTime)
+		_ = stats.NewCountersFuncWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"}, qe.getQueryRowCount)
+		_ = stats.NewCountersFuncWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"}, qe.getQueryErrorCount)
 
 		http.Handle("/debug/hotrows", qe.txSerializer)
 
@@ -482,57 +482,6 @@ func (qe *QueryEngine) QueryPlanCacheCap() int {
 	return int(qe.plans.Capacity())
 }
 
-func (qe *QueryEngine) getQueryCount() map[string]int64 {
-	f := func(plan *TabletPlan) int64 {
-		queryCount, _, _, _, _ := plan.Stats()
-		return queryCount
-	}
-	return qe.getQueryStats(f)
-}
-
-func (qe *QueryEngine) getQueryTime() map[string]int64 {
-	f := func(plan *TabletPlan) int64 {
-		_, time, _, _, _ := plan.Stats()
-		return int64(time)
-	}
-	return qe.getQueryStats(f)
-}
-
-func (qe *QueryEngine) getQueryRowCount() map[string]int64 {
-	f := func(plan *TabletPlan) int64 {
-		_, _, _, rowCount, _ := plan.Stats()
-		return rowCount
-	}
-	return qe.getQueryStats(f)
-}
-
-func (qe *QueryEngine) getQueryErrorCount() map[string]int64 {
-	f := func(plan *TabletPlan) int64 {
-		_, _, _, _, errorCount := plan.Stats()
-		return errorCount
-	}
-	return qe.getQueryStats(f)
-}
-
-type queryStatsFunc func(*TabletPlan) int64
-
-func (qe *QueryEngine) getQueryStats(f queryStatsFunc) map[string]int64 {
-	keys := qe.plans.Keys()
-	qstats := make(map[string]int64)
-	for _, v := range keys {
-		if plan := qe.peekQuery(v); plan != nil {
-			table := plan.TableName()
-			if table.IsEmpty() {
-				table = sqlparser.NewTableIdent("Join")
-			}
-			planType := plan.PlanID.String()
-			data := f(plan)
-			qstats[table.String()+"."+planType] += data
-		}
-	}
-	return qstats
-}
-
 // QueryStats tracks query stats for export per planName/tableName
 type QueryStats struct {
 	mu         sync.Mutex
@@ -571,7 +520,7 @@ func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, du
 	stats.mu.Unlock()
 }
 
-func (qe *QueryEngine) getQueryCountByTablePlan() map[string]int64 {
+func (qe *QueryEngine) getQueryCount() map[string]int64 {
 	qstats := make(map[string]int64)
 	qe.queryStatsMu.RLock()
 	defer qe.queryStatsMu.RUnlock()
@@ -583,7 +532,7 @@ func (qe *QueryEngine) getQueryCountByTablePlan() map[string]int64 {
 	return qstats
 }
 
-func (qe *QueryEngine) getQueryTimeByTablePlan() map[string]int64 {
+func (qe *QueryEngine) getQueryTime() map[string]int64 {
 	qstats := make(map[string]int64)
 	qe.queryStatsMu.RLock()
 	defer qe.queryStatsMu.RUnlock()
@@ -595,7 +544,7 @@ func (qe *QueryEngine) getQueryTimeByTablePlan() map[string]int64 {
 	return qstats
 }
 
-func (qe *QueryEngine) getQueryRowCountByTablePlan() map[string]int64 {
+func (qe *QueryEngine) getQueryRowCount() map[string]int64 {
 	qstats := make(map[string]int64)
 	qe.queryStatsMu.RLock()
 	defer qe.queryStatsMu.RUnlock()
@@ -607,7 +556,7 @@ func (qe *QueryEngine) getQueryRowCountByTablePlan() map[string]int64 {
 	return qstats
 }
 
-func (qe *QueryEngine) getQueryErrorCountByTablePlan() map[string]int64 {
+func (qe *QueryEngine) getQueryErrorCount() map[string]int64 {
 	qstats := make(map[string]int64)
 	qe.queryStatsMu.RLock()
 	defer qe.queryStatsMu.RUnlock()
