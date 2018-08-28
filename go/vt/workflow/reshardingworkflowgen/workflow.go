@@ -115,7 +115,7 @@ func (*Factory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNod
 		return nil, err
 	}
 
-	hw := &keyspaceResharding{
+	hw := &reshardingWorkflowGen{
 		checkpoint:                   checkpoint,
 		rootUINode:                   rootNode,
 		logger:                       logutil.NewMemoryLogger(),
@@ -234,9 +234,9 @@ func initCheckpoint(keyspace string, vtworkers []string, shardsToSplit [][][]str
 	}, nil
 }
 
-// keyspaceResharding contains meta-information and methods to
-// control the horizontal resharding workflow.
-type keyspaceResharding struct {
+// reshardingWorkflowGen contains meta-information and methods to
+// control workflow.
+type reshardingWorkflowGen struct {
 	ctx        context.Context
 	manager    *workflow.Manager
 	topoServer *topo.Server
@@ -261,9 +261,8 @@ type keyspaceResharding struct {
 	skipStartWorkflowParam       string
 }
 
-// Run executes the keyspace resharding workflow
-// It implements the workflow.Workflow interface.
-func (hw *keyspaceResharding) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
+// Run implements workflow.Workflow interface. It creates one horizontal resharding workflow per shard to split
+func (hw *reshardingWorkflowGen) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
 	hw.ctx = ctx
 	hw.wi = wi
 	hw.checkpointWriter = workflow.NewCheckpointWriter(hw.topoServer, hw.checkpoint, hw.wi)
@@ -278,7 +277,7 @@ func (hw *keyspaceResharding) Run(ctx context.Context, manager *workflow.Manager
 	return nil
 }
 
-func (hw *keyspaceResharding) runWorkflow() error {
+func (hw *reshardingWorkflowGen) runWorkflow() error {
 	var tasks []*workflowpb.Task
 	for i := 0; i < hw.workflowsCount; i++ {
 		taskID := fmt.Sprintf("%s/%v", phaseName, i)
@@ -286,11 +285,10 @@ func (hw *keyspaceResharding) runWorkflow() error {
 	}
 
 	workflowsCreator := workflow.NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, tasks, hw.workflowCreator, workflow.Sequential, false /*phaseEnableApprovals  we don't require enable approvals in this workflow*/)
-	workflowsCreator.Run()
-	return nil
+	return workflowsCreator.Run()
 }
 
-func (hw *keyspaceResharding) workflowCreator(ctx context.Context, task *workflowpb.Task) error {
+func (hw *reshardingWorkflowGen) workflowCreator(ctx context.Context, task *workflowpb.Task) error {
 	horizontalReshardingParams := []string{
 		"-keyspace=" + hw.keyspaceParam,
 		"-vtworkers=" + task.Attributes["vtworkers"],
@@ -331,7 +329,7 @@ func (hw *keyspaceResharding) workflowCreator(ctx context.Context, task *workflo
 	return nil
 }
 
-func (hw *keyspaceResharding) setUIMessage(node *workflow.Node, message string) {
+func (hw *reshardingWorkflowGen) setUIMessage(node *workflow.Node, message string) {
 	log.Infof("Keyspace resharding : %v.", message)
 	hw.logger.Infof(message)
 	node.Log = hw.logger.String()
