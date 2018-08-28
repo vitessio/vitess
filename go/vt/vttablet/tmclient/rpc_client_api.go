@@ -177,6 +177,9 @@ type TabletManagerClient interface {
 	// PromoteSlaveWhenCaughtUp transforms the tablet from a slave to a master.
 	PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topodatapb.Tablet, pos string) (string, error)
 
+	// FlushBinaryLogs flushes binary log, so it rotates current binlog file
+	FlushBinaryLogs(ctx context.Context, tablet *topodatapb.Tablet) error
+
 	// SlaveWasPromoted tells the remote tablet it is now the master
 	SlaveWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error
 
