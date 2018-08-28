@@ -189,8 +189,7 @@ func (tw *TestWorkflow) Run(ctx context.Context, manager *Manager, wi *topo.Work
 		concurrencyLevel = Sequential
 	}
 	simpleRunner := NewParallelRunner(tw.ctx, tw.rootUINode, tw.checkpointWriter, simpleTasks, tw.runSimple, concurrencyLevel, tw.enableApprovals)
-	simpleRunner.Run()
-	return nil
+	return simpleRunner.Run()
 }
 
 func (tw *TestWorkflow) getTasks(phaseName PhaseType) []*workflowpb.Task {
