@@ -405,7 +405,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		return fmt.Errorf("old master tablet %v DemoteMaster failed: %v", topoproto.TabletAliasString(shardInfo.MasterAlias), err)
 	}
 
-	// When using RBR and semi-sync, new master can take a long time to find GTID set to send to replicas.
+	// When semi-sync AND GTID's, new master can take a long time to find GTID set to send to replicas.
 	// This causes slow writes when a master gets promoted. Full details in:
 	// https://github.com/vitessio/vitess/issues/4161
 	// Flushing binlogs before promoting a master fixes this problem.
@@ -413,8 +413,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	event.DispatchUpdate(ev, "flush binary logs")
 	err = wr.tmc.FlushBinaryLogs(ctx, masterElectTabletInfo.Tablet)
 	if err != nil {
-		wr.logger.Warningf("Could not flush binary logs in tablet: %v. New master could be slower to take writes", masterElectTabletAlias)
-
+		wr.logger.Warningf("Could not flush binary logs in tablet: %v. error: %v", masterElectTabletAlias, err)
 	}
 
 	// Wait on the master-elect tablet until it reaches that position,
