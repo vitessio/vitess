@@ -38,6 +38,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"golang.org/x/net/context"
 
+	"gopkg.in/djherbis/buffer.v1"
+	"gopkg.in/djherbis/nio.v2"
+
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 )
@@ -97,7 +100,8 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		}
 	}
 
-	reader, writer := io.Pipe()
+	buf := buffer.New(500 * 1024 * 1024) // 500 MB in memory buffer
+	reader, writer := nio.Pipe(buf)
 	bh.waitGroup.Add(1)
 
 	go func() {
