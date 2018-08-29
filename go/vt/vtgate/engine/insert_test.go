@@ -560,7 +560,7 @@ func TestInsertShardedOwned(t *testing.T) {
 	})
 }
 
-func TestInsertShardedOwnedFail(t *testing.T) {
+func TestInsertShardedOwnedWithNull(t *testing.T) {
 	invschema := &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"sharded": {
@@ -626,11 +626,20 @@ func TestInsertShardedOwnedFail(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{
-		shards: []string{"-20", "20-"},
+		shards:       []string{"-20", "20-"},
+		shardForKsid: []string{"20-", "-20", "20-"},
 	}
-	// No reverse map available for lookup. So, it will fail.
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: value must be supplied for column c3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: toc0: type:VARBINARY ` +
+			`value:"\026k@\264J\272K\326"  true`,
+		`ResolveDestinations sharded [value:"0" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ExecuteMultiShard sharded.20-: prefix mid1 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6 */ ` +
+			`{_c30: _id0: type:INT64 value:"1" } true true`,
+	})
 }
 
 func TestInsertShardedIgnoreOwned(t *testing.T) {
@@ -824,7 +833,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 	})
 }
 
-func TestInsertShardedIgnoreOwnedFail(t *testing.T) {
+func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 	invschema := &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"sharded": {
@@ -889,11 +898,35 @@ func TestInsertShardedIgnoreOwnedFail(t *testing.T) {
 		Suffix: " suffix",
 	}
 
+	ksid0 := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"to",
+			"varbinary",
+		),
+		"\x00",
+	)
+	//noresult := &sqltypes.Result{}
 	vc := &loggingVCursor{
-		shards: []string{"-20", "20-"},
+		shards:       []string{"-20", "20-"},
+		shardForKsid: []string{"-20", "20-"},
+		results: []*sqltypes.Result{
+			ksid0,
+			ksid0,
+			ksid0,
+		},
 	}
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: value must be supplied for column [c3]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		`Execute insert ignore into lkp1(from, toc) values(:from0, :toc0) from0: toc0: type:VARBINARY ` +
+			`value:"\026k@\264J\272K\326"  true`,
+		`Execute select from from lkp1 where from = :from and toc = :toc from: toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`ResolveDestinations sharded [value:"0" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ExecuteMultiShard sharded.-20: prefix mid1 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6 */ ` +
+			`{_c30: _id0: type:INT64 value:"1" } true true`,
+	})
 }
 
 func TestInsertShardedUnownedVerify(t *testing.T) {
