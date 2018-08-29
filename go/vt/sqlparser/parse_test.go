@@ -1842,6 +1842,7 @@ func TestCreateTable(t *testing.T) {
 			"	c int,\n" +
 			"	primary key (id, username),\n" +
 			"	unique key by_abc (a, b, c),\n" +
+			"	unique key (a, b, c),\n" +
 			"	key by_email (email(10), username)\n" +
 			")",
 

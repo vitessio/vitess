@@ -1220,7 +1220,10 @@ func (ii *IndexInfo) Format(buf *TrackedBuffer) {
 	if ii.Primary {
 		buf.Myprintf("%s", ii.Type)
 	} else {
-		buf.Myprintf("%s %v", ii.Type, ii.Name)
+		buf.Myprintf("%s", ii.Type)
+		if !ii.Name.IsEmpty() {
+			buf.Myprintf(" %v", ii.Name)
+		}
 	}
 }
 
