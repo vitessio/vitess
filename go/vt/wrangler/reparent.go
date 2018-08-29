@@ -405,10 +405,11 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		return fmt.Errorf("old master tablet %v DemoteMaster failed: %v", topoproto.TabletAliasString(shardInfo.MasterAlias), err)
 	}
 
-	// When semi-sync AND GTID's, new master can take a long time to find GTID set to send to replicas.
-	// This causes slow writes when a master gets promoted. Full details in:
-	// https://github.com/vitessio/vitess/issues/4161
-	// Flushing binlogs before promoting a master fixes this problem.
+	// When using semi-sync and GTID, a replica first connects to the new master with a given GTID set,
+	// it can take a long time to scan the current binlog file to find the corresponding position.
+	// This can cause commits that occur soon after the master is promoted to take a long time waiting
+	// for a semi-sync ACK, since replication is not fully set up.
+	// More details in: https://github.com/vitessio/vitess/issues/4161
 	wr.logger.Infof("flushing binary logs in target master %v", masterElectTabletAliasStr)
 	event.DispatchUpdate(ev, "flush binary logs")
 	err = wr.tmc.FlushBinaryLogs(ctx, masterElectTabletInfo.Tablet)
