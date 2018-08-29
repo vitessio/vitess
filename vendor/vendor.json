@@ -365,18 +365,6 @@
 			"revisionTime": "2015-11-05T21:09:06Z"
 		},
 		{
-			"checksumSHA1": "IBbdYHB32oPftUQwQCypCFzWbG4=",
-			"path": "github.com/djherbis/buffer/limio",
-			"revision": "9cb938231dfe1a4c407f48ccf24c0d5fd7723b18",
-			"revisionTime": "2018-06-23T16:40:14Z"
-		},
-		{
-			"checksumSHA1": "AB9CaOyWTRWtTsFy/BefZtFIzQI=",
-			"path": "github.com/djherbis/buffer/wrapio",
-			"revision": "9cb938231dfe1a4c407f48ccf24c0d5fd7723b18",
-			"revisionTime": "2018-06-23T16:40:14Z"
-		},
-		{
 			"checksumSHA1": "muGVyM8mY3/gcap6kr4Ib3F5Xn4=",
 			"path": "github.com/ghodss/yaml",
 			"revision": "04f313413ffd65ce25f2541bfd2b2ceec5c0908c",
@@ -1307,18 +1295,6 @@
 			"path": "gopkg.in/asn1-ber.v1",
 			"revision": "4e86f4367175e39f69d9358a5f17b4dda270378d",
 			"revisionTime": "2015-09-24T05:17:56Z"
-		},
-		{
-			"checksumSHA1": "NwR8Jfz6xyRq+6z/ZDOmqssnsq8=",
-			"path": "gopkg.in/djherbis/buffer.v1",
-			"revision": "c8b7051e392cf78efc6f82f20ff71e89f20e0ea3",
-			"revisionTime": "2016-02-03T04:16:34Z"
-		},
-		{
-			"checksumSHA1": "jGLm7Dl0BJENZ97wCn+nXwA9U+Y=",
-			"path": "gopkg.in/djherbis/nio.v2",
-			"revision": "824ca9017eeb2a422fdda7ae9dba05d3ab019dfa",
-			"revisionTime": "2017-01-25T04:38:21Z"
 		},
 		{
 			"checksumSHA1": "itYnRitfdzJjy2mZlvJ+hCJZvtY=",
