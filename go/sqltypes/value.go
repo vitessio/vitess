@@ -230,7 +230,7 @@ func (v Value) EncodeASCII(b BinWriter) {
 	switch {
 	case v.typ == Null:
 		b.Write(nullstr)
-	case v.IsQuoted():
+	case v.IsQuoted() || v.typ == Bit:
 		encodeBytesASCII(v.val, b)
 	default:
 		b.Write(v.val)
