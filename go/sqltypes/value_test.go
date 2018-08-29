@@ -385,7 +385,7 @@ func TestEncode(t *testing.T) {
 	}, {
 		in:       TestValue(Bit, "a"),
 		outSQL:   "b'01100001'",
-		outASCII: "a",
+		outASCII: "'YQ=='",
 	}}
 	for _, tcase := range testcases {
 		buf := &bytes.Buffer{}
