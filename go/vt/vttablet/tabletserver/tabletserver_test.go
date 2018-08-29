@@ -20,11 +20,14 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/rand"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -36,6 +39,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/tableacl"
+	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -2716,6 +2721,79 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	// errors during failover aren't logged at all
 	if len(testLogs) != 0 {
 		t.Errorf("unexpected error log during failover")
+	}
+}
+
+var aclJSON1 = `{
+  "table_groups": [
+    {
+      "name": "group01",
+      "table_names_or_prefixes": ["test_table1"],
+      "readers": ["vt1"],
+      "writers": ["vt1"]
+    }
+  ]
+}`
+var aclJSON2 = `{
+  "table_groups": [
+    {
+      "name": "group02",
+      "table_names_or_prefixes": ["test_table2"],
+      "readers": ["vt2"],
+      "admins": ["vt2"]
+    }
+  ]
+}`
+
+func TestACLHUP(t *testing.T) {
+	tableacl.Register("simpleacl", &simpleacl.Factory{})
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServerWithNilTopoServer(config)
+
+	f, err := ioutil.TempFile("", "tableacl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+
+	if _, err := io.WriteString(f, aclJSON1); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	tsv.InitACL(f.Name(), true)
+
+	groups1 := tableacl.GetCurrentConfig().TableGroups
+	if name1 := groups1[0].GetName(); name1 != "group01" {
+		t.Fatalf("Expected name 'group01', got '%s'", name1)
+	}
+
+	if f, err = os.Create(f.Name()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = io.WriteString(f, aclJSON2); err != nil {
+		t.Fatal(err)
+	}
+
+	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+	time.Sleep(25 * time.Millisecond) // wait for signal handler
+
+	groups2 := tableacl.GetCurrentConfig().TableGroups
+	if len(groups2) != 1 {
+		t.Fatalf("Expected only one table group")
+	}
+	group2 := groups2[0]
+	if name2 := group2.GetName(); name2 != "group02" {
+		t.Fatalf("Expected name 'group02', got '%s'", name2)
+	}
+	if group2.GetAdmins() == nil {
+		t.Fatalf("Expected 'admins' to exist, but it didn't")
+	}
+	if group2.GetWriters() != nil {
+		t.Fatalf("Expected 'writers' to not exist, got '%s'", group2.GetWriters())
 	}
 }
 
