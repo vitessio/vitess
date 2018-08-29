@@ -21,9 +21,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/signal"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/context"
@@ -43,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/heartbeat"
@@ -326,7 +330,7 @@ func (tsv *TabletServer) IsServing() bool {
 	return tsv.GetState() == "SERVING"
 }
 
-// InitDBConfig inititalizes the db config variables for TabletServer. You must call this function before
+// InitDBConfig initializes the db config variables for TabletServer. You must call this function before
 // calling SetServingType.
 func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) error {
 	tsv.mu.Lock()
@@ -345,6 +349,36 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.messager.InitDBConfig(tsv.dbconfigs)
 	tsv.watcher.InitDBConfig(tsv.dbconfigs)
 	return nil
+}
+
+func (tsv *TabletServer) initACL(tableACLConfigFile string, enforceTableACLConfig bool) {
+	// tabletacl.Init loads ACL from file if *tableACLConfig is not empty
+	err := tableacl.Init(
+		tableACLConfigFile,
+		func() {
+			tsv.ClearQueryPlanCache()
+		},
+	)
+	if err != nil {
+		log.Errorf("Fail to initialize Table ACL: %v", err)
+		if enforceTableACLConfig {
+			log.Exit("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
+		}
+	}
+}
+
+// InitACL loads the table ACL and sets up a SIGHUP handler for reloading it.
+func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfig bool) {
+	tsv.initACL(tableACLConfigFile, enforceTableACLConfig)
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGHUP)
+	go func() {
+		for {
+			<-sigChan
+			tsv.initACL(tableACLConfigFile, enforceTableACLConfig)
+		}
+	}()
 }
 
 // StartService is a convenience function for InitDBConfig->SetServingType
