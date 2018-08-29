@@ -175,7 +175,7 @@ func IsValue(node Expr) bool {
 	switch v := node.(type) {
 	case *SQLVal:
 		switch v.Type {
-		case StrVal, HexVal, IntVal, ValArg:
+		case StrVal, HexVal, IntVal, BitVal, ValArg:
 			return true
 		}
 	}
@@ -224,6 +224,8 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 			return sqltypes.PlanValue{Value: n}, nil
 		case StrVal:
 			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val)}, nil
+		case BitVal:
+			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Bit, node.Val)}, nil
 		case HexVal:
 			v, err := node.HexDecode()
 			if err != nil {
