@@ -69,11 +69,6 @@ var sequenceFields = []*querypb.Field{
 	},
 }
 
-func (qre *QueryExecutor) addStats(planName string, queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
-	qre.tsv.qe.AddStats(planName, qre.plan.TableName().String(), queryCount, duration, mysqlTime, rowCount, errorCount)
-	qre.plan.AddStats(queryCount, duration, mysqlTime, rowCount, errorCount)
-}
-
 // Execute performs a non-streaming query execution.
 func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	qre.logStats.TransactionID = qre.transactionID
@@ -84,11 +79,14 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		tabletenv.QueryStats.Add(planName, duration)
 		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "Execute", int64(duration))
 
+		mysqlTime := qre.logStats.MysqlResponseTime
 		if reply == nil {
-			qre.addStats(planName, 1, duration, qre.logStats.MysqlResponseTime, 0, 1)
+			qre.tsv.qe.AddStats(planName, qre.plan.TableName().String(), 1, duration, mysqlTime, 0, 1)
+			qre.plan.AddStats(1, duration, mysqlTime, 0, 1)
 			return
 		}
-		qre.addStats(planName, 1, duration, qre.logStats.MysqlResponseTime, int64(reply.RowsAffected), 0)
+		qre.tsv.qe.AddStats(planName, qre.plan.TableName().String(), 1, duration, mysqlTime, int64(reply.RowsAffected), 1)
+		qre.plan.AddStats(1, duration, mysqlTime, int64(reply.RowsAffected), 1)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
 		tabletenv.ResultStats.Add(int64(len(reply.Rows)))
