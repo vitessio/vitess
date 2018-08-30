@@ -207,6 +207,9 @@ func OpenServer(implementation, serverAddress, root string) (*Server, error) {
 // Open returns a Server using the command line parameter flags
 // for implementation, address and root. It log.Exits out if an error occurs.
 func Open() *Server {
+	if *topoGlobalServerAddress == "" {
+		log.Exitf("topo_global_server_address must be configured")
+	}
 	ts, err := OpenServer(*topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot)
 	if err != nil {
 		log.Exitf("Failed to open topo server (%v,%v,%v): %v", *topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot, err)
