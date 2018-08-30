@@ -317,7 +317,7 @@ func (hw *reshardingWorkflowGen) workflowCreator(ctx context.Context, task *work
 		return err
 	}
 	hw.setUIMessage(phaseUINode, fmt.Sprintf("Created shard split workflow: %v for source shards: %v.", uuid, task.Attributes["source_shards"]))
-	workflowCmd := "WorkflowCreate " + strings.Join(horizontalReshardingParams, " ")
+	workflowCmd := "WorkflowCreate horizontal_resharding" + strings.Join(horizontalReshardingParams, " ")
 	hw.setUIMessage(phaseUINode, fmt.Sprintf("Created workflow with the following params: %v", workflowCmd))
 	if !skipStart {
 		err = hw.manager.Start(ctx, uuid)
