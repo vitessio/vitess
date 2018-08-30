@@ -17,7 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"net"
@@ -136,8 +135,8 @@ type Conn struct {
 	ClientData interface{}
 
 	// Packet encoding variables.
-	reader   *bufio.Reader
-	writer   *bufio.Writer
+	reader   bufioReader
+	writer   bufioWriter
 	sequence uint8
 
 	// fields contains the fields definitions for an on-going
@@ -169,8 +168,8 @@ func newConn(conn net.Conn) *Conn {
 	return &Conn{
 		conn: conn,
 
-		reader:   bufio.NewReaderSize(conn, connBufferSize),
-		writer:   bufio.NewWriterSize(conn, connBufferSize),
+		reader:   newReader(conn),
+		writer:   newWriter(conn),
 		sequence: 0,
 	}
 }
