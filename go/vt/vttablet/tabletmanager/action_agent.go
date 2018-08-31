@@ -637,6 +637,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 		statsShard := stats.NewString("TabletShard")
 		statsKeyRangeStart := stats.NewString("TabletKeyRangeStart")
 		statsKeyRangeEnd := stats.NewString("TabletKeyRangeEnd")
+		statsAlias := stats.NewString("TabletAlias")
 
 		statsKeyspace.Set(agent.initialTablet.Keyspace)
 		statsShard.Set(agent.initialTablet.Shard)
@@ -644,6 +645,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 			statsKeyRangeStart.Set(hex.EncodeToString(agent.initialTablet.KeyRange.Start))
 			statsKeyRangeEnd.Set(hex.EncodeToString(agent.initialTablet.KeyRange.End))
 		}
+		statsAlias.Set(topoproto.TabletAliasString(agent.initialTablet.Alias))
 	}
 
 	// Initialize the current tablet to match our current running
