@@ -80,17 +80,17 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "Execute", int64(duration))
 
 		mysqlTime := qre.logStats.MysqlResponseTime
-		table := qre.plan.TableName().String()
-		if table == "" {
-			table = "Join"
+		tableName := qre.plan.TableName().String()
+		if tableName == "" {
+			tableName = "Join"
 		}
 
 		if reply == nil {
-			qre.tsv.qe.AddStats(planName, table, 1, duration, mysqlTime, 0, 1)
+			qre.tsv.qe.AddStats(planName, tableName, 1, duration, mysqlTime, 0, 1)
 			qre.plan.AddStats(1, duration, mysqlTime, 0, 1)
 			return
 		}
-		qre.tsv.qe.AddStats(planName, table, 1, duration, mysqlTime, int64(reply.RowsAffected), 0)
+		qre.tsv.qe.AddStats(planName, tableName, 1, duration, mysqlTime, int64(reply.RowsAffected), 0)
 		qre.plan.AddStats(1, duration, mysqlTime, int64(reply.RowsAffected), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
