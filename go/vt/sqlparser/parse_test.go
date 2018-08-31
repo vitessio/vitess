@@ -603,6 +603,9 @@ var (
 	}, {
 		input: "insert /* select */ into a select b, c from d",
 	}, {
+		input:  "insert /* it accepts columns with keyword action */ into a(action, b) values (1, 2)",
+		output: "insert /* it accepts columns with keyword action */ into a(`action`, b) values (1, 2)",
+	}, {
 		input:  "insert /* no cols & paren select */ into a(select * from t)",
 		output: "insert /* no cols & paren select */ into a select * from t",
 	}, {
