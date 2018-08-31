@@ -336,6 +336,15 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 	// Create reusable Reparent event with available info
 	ev := &events.Reparent{}
 
+	// Attempt to set avoidMasterAlias if not provided by parameters
+	if masterElectTabletAlias == nil && avoidMasterAlias == nil {
+		shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return err
+		}
+		avoidMasterAlias = shardInfo.MasterAlias
+	}
+
 	// do the work
 	err = wr.plannedReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, avoidMasterAlias, waitSlaveTimeout)
 	if err != nil {
@@ -360,11 +369,11 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	}
 
 	// Check corner cases we're going to depend on
-	if masterElectTabletAlias != nil && avoidMasterTabletAlias != nil && topoproto.TabletAliasEqual(masterElectTabletAlias, avoidMasterTabletAlias) {
+	if topoproto.TabletAliasEqual(masterElectTabletAlias, avoidMasterTabletAlias) {
 		return fmt.Errorf("master-elect tablet %v is the same as the tablet to avoid", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
 	if masterElectTabletAlias == nil {
-		if avoidMasterTabletAlias != nil && topoproto.TabletAliasEqual(masterElectTabletAlias, avoidMasterTabletAlias) {
+		if !topoproto.TabletAliasEqual(avoidMasterTabletAlias, shardInfo.MasterAlias) {
 			event.DispatchUpdate(ev, "current master is different than -avoid_master, nothing to do")
 			return nil
 		}
@@ -539,9 +548,9 @@ func (wr *Wrangler) chooseNewMaster(
 	avoidMasterTabletAlias *topodatapb.TabletAlias,
 	waitSlaveTimeout time.Duration) (*topodatapb.TabletAlias, error) {
 
-	// if avoidMasterTabletAlias == nil {
-	// 	return nil, fmt.Errorf("tablet to avoid for reparent is not provided, cannot choose new master")
-	// }
+	if avoidMasterTabletAlias == nil {
+		return nil, fmt.Errorf("tablet to avoid for reparent is not provided, cannot choose new master")
+	}
 	var masterCell string
 	if shardInfo.MasterAlias != nil {
 		masterCell = shardInfo.MasterAlias.Cell
