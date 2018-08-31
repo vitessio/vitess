@@ -51,6 +51,9 @@ var (
 	// BlplTransaction is the key for the stats map.
 	BlplTransaction = "Transaction"
 
+	// BlplReceive is the key for the stats map.
+	BlplReceive = "Receive"
+
 	// BlpRunning is for the Running state.
 	BlpRunning = "Running"
 	// BlpStopped is for the Stopped state.
@@ -63,7 +66,7 @@ var (
 // structure that is passed in so stats can be collected over the life
 // of multiple individual players.
 type Stats struct {
-	// Stats about the player, keys used are BlplQuery and BlplTransaction
+	// Stats about the player, keys used are BlplQuery, BlplTransaction, BlplReceive
 	Timings *stats.Timings
 	Rates   *stats.Rates
 
@@ -305,11 +308,15 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 			// We don't bother checking for context cancellation here because the
 			// sleep will block only up to 1 second. (Usually, backoff is 1s / rate
 			// e.g. a rate of 1000 TPS results into a backoff of 1 ms.)
+			log.Warningf("Binlog player being throttled")
 			time.Sleep(backoff)
 		}
 
 		// get the response
+		recvStartTime := time.Now()
 		response, err := stream.Recv()
+		// Records how long it took between stream messages
+		blp.blplStats.Timings.Record(BlplReceive, recvStartTime)
 		// Check context before checking error, because canceled
 		// contexts could be wrapped as regular errors.
 		select {
