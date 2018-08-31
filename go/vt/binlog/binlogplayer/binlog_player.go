@@ -315,7 +315,6 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		// get the response
 		recvStartTime := time.Now()
 		response, err := stream.Recv()
-		// Records how long it took between stream messages
 		blp.blplStats.Timings.Record(BlplReceive, recvStartTime)
 		// Check context before checking error, because canceled
 		// contexts could be wrapped as regular errors.
