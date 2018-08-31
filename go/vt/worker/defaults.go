@@ -49,6 +49,7 @@ const (
 	defaultDestinationPackCount    = 10
 	defaultDestinationWriterCount  = 20
 	defaultMinHealthyRdonlyTablets = 2
+	defaultDisableUniquenessChecks = false
 	defaultDestTabletType          = "RDONLY"
 	defaultParallelDiffsCount      = 8
 	defaultMaxTPS                  = throttler.MaxRateModuleDisabled
