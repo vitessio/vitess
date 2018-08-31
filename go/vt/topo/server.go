@@ -199,7 +199,7 @@ func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error
 func OpenServer(implementation, serverAddress, root string) (*Server, error) {
 	factory, ok := factories[implementation]
 	if !ok {
-		return nil, NewError(NoNode, implementation)
+		return nil, NewError(NoImplementation, implementation)
 	}
 	return NewWithFactory(factory, serverAddress, root)
 }

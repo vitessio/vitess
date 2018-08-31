@@ -31,6 +31,7 @@ const (
 	BadVersion
 	PartialResult
 	NoUpdateNeeded
+	NoImplementation
 )
 
 // Error represents a topo error.
@@ -59,6 +60,8 @@ func NewError(code ErrorCode, node string) error {
 		message = fmt.Sprintf("partial result: %s", node)
 	case NoUpdateNeeded:
 		message = fmt.Sprintf("no update needed: %s", node)
+	case NoImplementation:
+		message = fmt.Sprintf("no such topology implementation %s", node)
 	default:
 		message = fmt.Sprintf("unknown code: %s", node)
 	}
