@@ -3148,6 +3148,7 @@ reserved_keyword:
 */
 non_reserved_keyword:
   AGAINST
+| ACTION
 | BEGIN
 | BIGINT
 | BIT
