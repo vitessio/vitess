@@ -74,6 +74,9 @@ message Workflow {
   // end_time is set when the workflow is finished.
   // This field only makes sense if 'state' is Done.
   int64 end_time = 8;
+
+  // create_time is set when the workflow is created.
+  int64 create_time = 9;
 }
 
 message WorkflowCheckpoint {

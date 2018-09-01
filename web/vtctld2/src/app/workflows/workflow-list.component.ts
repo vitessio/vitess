@@ -236,6 +236,31 @@ export class WorkflowListComponent implements OnDestroy, OnInit {
     if (newFlags['factory_name'] === 'other') {
       newFlags['duration']['value'] = '';
     }
+    this.workflowPrepareReshardingFlags(newFlags);
+  }
+
+  workflowPrepareReshardingFlags(newFlags) {
+    let factoryName = newFlags['factory_name']['value']
+      if (factoryName === 'horizontal_resharding' || factoryName == 'hr_workflow_gen') {
+        let phaseEnableApprovalCheckBoxNames = [
+            'enable_approvals_copy_schema',
+            'enable_approvals_clone',
+            'enable_approvals_wait_filtered_replication',
+            'enable_approvals_diff',
+            'enable_approvals_migrate_serving_types',
+        ];
+        let phaseEnableApprovals = [];
+
+        for (let i=0; i<phaseEnableApprovalCheckBoxNames.length; i++) {
+            let phaseName = phaseEnableApprovalCheckBoxNames[i];
+            if(newFlags[factoryName + '_' + phaseName]['value']) {
+                phaseEnableApprovals.push(newFlags[factoryName + '_' + phaseName]["namedPositional"]);
+            }
+            // We don't want this flag to show up in the getArgs
+            delete newFlags[factoryName + '_' + phaseName];
+        }
+        newFlags[factoryName + '_phase_enable_approvals']['value'] = phaseEnableApprovals.join(',');
+    }
   }
 
   canDeactivate(): Observable<boolean> | boolean {

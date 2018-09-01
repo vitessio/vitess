@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package resharding
+package workflow
 
 import (
 	"errors"
@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/workflow"
 
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
@@ -47,14 +46,14 @@ func createTestTaskID(phase PhaseType, count int) string {
 }
 
 func init() {
-	workflow.Register(testWorkflowFactoryName, &TestWorkflowFactory{})
+	Register(testWorkflowFactoryName, &TestWorkflowFactory{})
 }
 
 // TestWorkflowFactory is the factory to create a test workflow.
 type TestWorkflowFactory struct{}
 
 // Init is part of the workflow.Factory interface.
-func (*TestWorkflowFactory) Init(_ *workflow.Manager, w *workflowpb.Workflow, args []string) error {
+func (*TestWorkflowFactory) Init(_ *Manager, w *workflowpb.Workflow, args []string) error {
 	subFlags := flag.NewFlagSet(testWorkflowFactoryName, flag.ContinueOnError)
 	retryFlag := subFlags.Bool("retry", false, "The retry flag should be true if the retry action should be tested")
 	count := subFlags.Int("count", 0, "The number of simple tasks")
@@ -88,7 +87,7 @@ func (*TestWorkflowFactory) Init(_ *workflow.Manager, w *workflowpb.Workflow, ar
 }
 
 // Instantiate is part the workflow.Factory interface.
-func (*TestWorkflowFactory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
+func (*TestWorkflowFactory) Instantiate(m *Manager, w *workflowpb.Workflow, rootNode *Node) (Workflow, error) {
 	checkpoint := &workflowpb.WorkflowCheckpoint{}
 	if err := proto.Unmarshal(w.Data, checkpoint); err != nil {
 		return nil, err
@@ -134,7 +133,7 @@ func (*TestWorkflowFactory) Instantiate(m *workflow.Manager, w *workflowpb.Workf
 		return nil, err
 	}
 
-	phaseNode := &workflow.Node{
+	phaseNode := &Node{
 		Name:     string(phaseSimple),
 		PathName: string(phaseSimple),
 	}
@@ -142,7 +141,7 @@ func (*TestWorkflowFactory) Instantiate(m *workflow.Manager, w *workflowpb.Workf
 
 	for i := 0; i < count; i++ {
 		taskName := fmt.Sprintf("%v", i)
-		taskUINode := &workflow.Node{
+		taskUINode := &Node{
 			Name:     taskName,
 			PathName: taskName,
 		}
@@ -157,7 +156,7 @@ func (*TestWorkflowFactory) Instantiate(m *workflow.Manager, w *workflowpb.Workf
 // after a retry.
 type TestWorkflow struct {
 	ctx        context.Context
-	manager    *workflow.Manager
+	manager    *Manager
 	topoServer *topo.Server
 	wi         *topo.WorkflowInfo
 	logger     *logutil.MemoryLogger
@@ -166,7 +165,7 @@ type TestWorkflow struct {
 	// retryFlags stores the retry flag for all tasks.
 	retryFlags map[string]bool
 
-	rootUINode *workflow.Node
+	rootUINode *Node
 
 	checkpoint       *workflowpb.WorkflowCheckpoint
 	checkpointWriter *CheckpointWriter
@@ -176,12 +175,12 @@ type TestWorkflow struct {
 }
 
 // Run implements the workflow.Workflow interface.
-func (tw *TestWorkflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
+func (tw *TestWorkflow) Run(ctx context.Context, manager *Manager, wi *topo.WorkflowInfo) error {
 	tw.ctx = ctx
 	tw.wi = wi
 	tw.checkpointWriter = NewCheckpointWriter(tw.topoServer, tw.checkpoint, tw.wi)
 
-	tw.rootUINode.Display = workflow.NodeDisplayDeterminate
+	tw.rootUINode.Display = NodeDisplayDeterminate
 	tw.rootUINode.BroadcastChanges(true /* updateChildren */)
 
 	simpleTasks := tw.getTasks(phaseSimple)
@@ -190,10 +189,7 @@ func (tw *TestWorkflow) Run(ctx context.Context, manager *workflow.Manager, wi *
 		concurrencyLevel = Sequential
 	}
 	simpleRunner := NewParallelRunner(tw.ctx, tw.rootUINode, tw.checkpointWriter, simpleTasks, tw.runSimple, concurrencyLevel, tw.enableApprovals)
-	if err := simpleRunner.Run(); err != nil {
-		return err
-	}
-	return nil
+	return simpleRunner.Run()
 }
 
 func (tw *TestWorkflow) getTasks(phaseName PhaseType) []*workflowpb.Task {

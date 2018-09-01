@@ -244,7 +244,7 @@ func (m *Manager) loadAndStartJobsLocked() {
 }
 
 // Create creates a workflow from the given factory name with the
-// provided args.  Returns the unique UUID of the workflow. The
+// provided args. Returns the unique UUID of the workflow. The
 // workflowpb.Workflow object is saved in the topo server after
 // creation.
 func (m *Manager) Create(ctx context.Context, factoryName string, args []string) (string, error) {
@@ -260,6 +260,7 @@ func (m *Manager) Create(ctx context.Context, factoryName string, args []string)
 	// Create the initial workflowpb.Workflow object.
 	w := &workflowpb.Workflow{
 		Uuid:        gouuid.NewUUID().String(),
+		CreateTime:  time.Now().UnixNano(),
 		FactoryName: factoryName,
 		State:       workflowpb.WorkflowState_NotStarted,
 	}
@@ -295,6 +296,7 @@ func (m *Manager) instantiateWorkflow(w *workflowpb.Workflow) (*runningWorkflow,
 	}
 	rw.rootNode.Name = w.Name
 	rw.rootNode.PathName = w.Uuid
+	rw.rootNode.CreateTime = w.CreateTime
 	rw.rootNode.Path = "/" + rw.rootNode.PathName
 	rw.rootNode.State = w.State
 
@@ -587,4 +589,19 @@ func AvailableFactories() map[string]bool {
 		result[n] = true
 	}
 	return result
+}
+
+// StartManager starts a manager. This function should only be used for tests purposes.
+func StartManager(m *Manager) (*sync.WaitGroup, context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		m.Run(ctx)
+		wg.Done()
+	}()
+
+	m.WaitUntilRunning()
+
+	return wg, ctx, cancel
 }
