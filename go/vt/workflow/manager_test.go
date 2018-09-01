@@ -18,7 +18,6 @@ package workflow
 
 import (
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -28,20 +27,6 @@ import (
 
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
-
-func startManager(t *testing.T, m *Manager) (*sync.WaitGroup, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		m.Run(ctx)
-		wg.Done()
-	}()
-
-	m.WaitUntilRunning()
-
-	return wg, cancel
-}
 
 // TestWaitUntilRunning verifies that WaitUntilRunning() works as expected
 // (blocking until Run() has advanced far enough), even across multiple Manager
@@ -53,7 +38,7 @@ func TestWaitUntilRunning(t *testing.T) {
 	// Start it 3 times i.e. restart it 2 times.
 	for i := 1; i <= 3; i++ {
 		// Run the manager in the background.
-		wg, cancel := startManager(t, m)
+		wg, _, cancel := StartManager(m)
 
 		// Shut it down and wait for the shutdown to complete.
 		cancel()
@@ -67,7 +52,7 @@ func TestManagerSimpleRun(t *testing.T) {
 	m := NewManager(ts)
 
 	// Run the manager in the background.
-	wg, cancel := startManager(t, m)
+	wg, _, cancel := StartManager(m)
 
 	// Create a Sleep job.
 	uuid, err := m.Create(context.Background(), sleepFactoryName, []string{"-duration", "60"})
@@ -96,7 +81,7 @@ func TestManagerRestart(t *testing.T) {
 	m := NewManager(ts)
 
 	// Run the manager in the background.
-	wg, cancel := startManager(t, m)
+	wg, _, cancel := StartManager(m)
 
 	// Create a Sleep job.
 	uuid, err := m.Create(context.Background(), sleepFactoryName, []string{"-duration", "60"})
@@ -127,7 +112,7 @@ func TestManagerRestart(t *testing.T) {
 	}
 
 	// Restart the manager.
-	wg, cancel = startManager(t, m)
+	wg, _, cancel = StartManager(m)
 
 	// Make sure the job is in there shortly.
 	timeout := 0

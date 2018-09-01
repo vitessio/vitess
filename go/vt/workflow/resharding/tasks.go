@@ -25,19 +25,20 @@ import (
 
 	"vitess.io/vitess/go/vt/automation"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
 
-func createTaskID(phase PhaseType, shardName string) string {
+func createTaskID(phase workflow.PhaseType, shardName string) string {
 	return fmt.Sprintf("%s/%s", phase, shardName)
 }
 
 // GetTasks returns selected tasks for a phase from the checkpoint
 // with expected execution order.
-func (hw *HorizontalReshardingWorkflow) GetTasks(phase PhaseType) []*workflowpb.Task {
+func (hw *horizontalReshardingWorkflow) GetTasks(phase workflow.PhaseType) []*workflowpb.Task {
 	var shards []string
 	switch phase {
 	case phaseCopySchema, phaseWaitForFilteredReplication, phaseDiff:
@@ -56,7 +57,7 @@ func (hw *HorizontalReshardingWorkflow) GetTasks(phase PhaseType) []*workflowpb.
 	return tasks
 }
 
-func (hw *HorizontalReshardingWorkflow) runCopySchema(ctx context.Context, t *workflowpb.Task) error {
+func (hw *horizontalReshardingWorkflow) runCopySchema(ctx context.Context, t *workflowpb.Task) error {
 	keyspace := t.Attributes["keyspace"]
 	sourceShard := t.Attributes["source_shard"]
 	destShard := t.Attributes["destination_shard"]
@@ -64,7 +65,7 @@ func (hw *HorizontalReshardingWorkflow) runCopySchema(ctx context.Context, t *wo
 		keyspace, sourceShard, keyspace, destShard, wrangler.DefaultWaitSlaveTimeout)
 }
 
-func (hw *HorizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *workflowpb.Task) error {
+func (hw *horizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *workflowpb.Task) error {
 	keyspace := t.Attributes["keyspace"]
 	sourceShard := t.Attributes["source_shard"]
 	worker := t.Attributes["vtworker"]
@@ -83,13 +84,13 @@ func (hw *HorizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *wo
 	return err
 }
 
-func (hw *HorizontalReshardingWorkflow) runWaitForFilteredReplication(ctx context.Context, t *workflowpb.Task) error {
+func (hw *horizontalReshardingWorkflow) runWaitForFilteredReplication(ctx context.Context, t *workflowpb.Task) error {
 	keyspace := t.Attributes["keyspace"]
 	destShard := t.Attributes["destination_shard"]
 	return hw.wr.WaitForFilteredReplication(ctx, keyspace, destShard, wrangler.DefaultWaitForFilteredReplicationMaxDelay)
 }
 
-func (hw *HorizontalReshardingWorkflow) runSplitDiff(ctx context.Context, t *workflowpb.Task) error {
+func (hw *horizontalReshardingWorkflow) runSplitDiff(ctx context.Context, t *workflowpb.Task) error {
 	keyspace := t.Attributes["keyspace"]
 	destShard := t.Attributes["destination_shard"]
 	destinationTabletType := t.Attributes["dest_tablet_type"]
@@ -103,7 +104,7 @@ func (hw *HorizontalReshardingWorkflow) runSplitDiff(ctx context.Context, t *wor
 	return err
 }
 
-func (hw *HorizontalReshardingWorkflow) runMigrate(ctx context.Context, t *workflowpb.Task) error {
+func (hw *horizontalReshardingWorkflow) runMigrate(ctx context.Context, t *workflowpb.Task) error {
 	keyspace := t.Attributes["keyspace"]
 	sourceShard := t.Attributes["source_shard"]
 	servedTypeStr := t.Attributes["served_type"]

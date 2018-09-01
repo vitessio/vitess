@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package resharding
+package workflow
 
 import (
 	"encoding/json"
@@ -26,10 +26,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/workflow"
 
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
@@ -51,7 +49,7 @@ func TestParallelRunner(t *testing.T) {
 	// Wait for the workflow to end.
 	m.Wait(ctx, uuid)
 
-	if err := verifyAllTasksDone(ctx, ts, uuid); err != nil {
+	if err := VerifyAllTasksDone(ctx, ts, uuid); err != nil {
 		t.Fatal(err)
 	}
 	// Stop the manager.
@@ -90,7 +88,7 @@ func TestParallelRunnerApproval(t *testing.T) {
 	// Wait for the workflow to end.
 	m.Wait(context.Background(), uuid)
 
-	if err := verifyAllTasksDone(ctx, ts, uuid); err != nil {
+	if err := VerifyAllTasksDone(ctx, ts, uuid); err != nil {
 		t.Fatal(err)
 	}
 	// Stop the manager.
@@ -192,7 +190,7 @@ func TestParallelRunnerApprovalFromFirstDone(t *testing.T) {
 	// Wait for the workflow to end.
 	m.Wait(ctx, uuid)
 
-	if err := verifyAllTasksDone(ctx, ts, uuid); err != nil {
+	if err := VerifyAllTasksDone(ctx, ts, uuid); err != nil {
 		t.Fatal(err)
 	}
 	// Stop the manager.
@@ -244,7 +242,7 @@ func TestParallelRunnerApprovalFromFirstRunning(t *testing.T) {
 	// Wait for the workflow to end.
 	m.Wait(ctx, uuid)
 
-	if err := verifyAllTasksDone(ctx, ts, uuid); err != nil {
+	if err := VerifyAllTasksDone(ctx, ts, uuid); err != nil {
 		t.Fatal(err)
 	}
 	// Stop the manager.
@@ -298,7 +296,7 @@ func TestParallelRunnerApprovalFromFirstDoneSecondRunning(t *testing.T) {
 	// Wait for the workflow to end.
 	m.Wait(ctx, uuid)
 
-	if err := verifyAllTasksDone(ctx, ts, uuid); err != nil {
+	if err := VerifyAllTasksDone(ctx, ts, uuid); err != nil {
 		t.Fatal(err)
 	}
 	// Stop the manager.
@@ -352,7 +350,7 @@ func TestParallelRunnerApprovalFirstRunningSecondRunning(t *testing.T) {
 	// Wait for the workflow to end.
 	m.Wait(ctx, uuid)
 
-	if err := verifyAllTasksDone(ctx, ts, uuid); err != nil {
+	if err := VerifyAllTasksDone(ctx, ts, uuid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -388,7 +386,7 @@ func TestParallelRunnerApprovalFromAllDone(t *testing.T) {
 	task2ID := createTestTaskID(phaseSimple, 1)
 	checkpointWriter.UpdateTask(task2ID, workflowpb.TaskState_TaskDone, nil)
 
-	if err := verifyAllTasksDone(ctx, ts, uuid); err != nil {
+	if err := VerifyAllTasksDone(ctx, ts, uuid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -412,7 +410,7 @@ func TestParallelRunnerApprovalFromAllDone(t *testing.T) {
 		t.Fatalf("there should be no actions for node %v: %v, %v", phaseSimple, message, err)
 	}
 
-	if err := verifyAllTasksDone(ctx, ts, uuid); err != nil {
+	if err := VerifyAllTasksDone(ctx, ts, uuid); err != nil {
 		t.Fatal(err)
 	}
 	// Stop the manager.
@@ -447,23 +445,23 @@ func TestParallelRunnerRetry(t *testing.T) {
 
 	task1ID := createTestTaskID(phaseSimple, 0)
 	task2ID := createTestTaskID(phaseSimple, 1)
-	task1Node := &workflow.Node{
+	task1Node := &Node{
 		PathName: "0",
-		Actions: []*workflow.Action{
+		Actions: []*Action{
 			{
 				Name:  actionNameRetry,
-				State: workflow.ActionStateEnabled,
-				Style: workflow.ActionStyleWaiting,
+				State: ActionStateEnabled,
+				Style: ActionStyleWaiting,
 			},
 		},
 	}
-	task2Node := &workflow.Node{
+	task2Node := &Node{
 		PathName: "1",
-		Actions: []*workflow.Action{
+		Actions: []*Action{
 			{
 				Name:  actionNameRetry,
-				State: workflow.ActionStateEnabled,
-				Style: workflow.ActionStyleWaiting,
+				State: ActionStateEnabled,
+				Style: ActionStyleWaiting,
 			},
 		},
 	}
@@ -484,7 +482,7 @@ func TestParallelRunnerRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Check the retry action is removed.
-	task1Node.Actions = []*workflow.Action{}
+	task1Node.Actions = []*Action{}
 	if err := consumeNotificationsUntil(notifications, task1Node); err != nil {
 		t.Fatalf("Should get expected update of nodes: %v", task1Node)
 	}
@@ -501,7 +499,7 @@ func TestParallelRunnerRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Check the retry action is removed. Task2 is launched after removing actions.
-	task2Node.Actions = []*workflow.Action{}
+	task2Node.Actions = []*Action{}
 	if err := consumeNotificationsUntil(notifications, task2Node); err != nil {
 		t.Fatalf("Should get expected update of nodes: %v", task2Node)
 	}
@@ -516,7 +514,7 @@ func TestParallelRunnerRetry(t *testing.T) {
 	// Wait for the workflow to end.
 	m.Wait(ctx, uuid)
 
-	if err := verifyAllTasksDone(ctx, ts, uuid); err != nil {
+	if err := VerifyAllTasksDone(ctx, ts, uuid); err != nil {
 		t.Fatal(err)
 	}
 	// Stop the manager.
@@ -527,10 +525,10 @@ func TestParallelRunnerRetry(t *testing.T) {
 	wg.Wait()
 }
 
-func setupTestWorkflow(ctx context.Context, ts *topo.Server, enableApprovals, retry, sequential bool) (*workflow.Manager, string, *sync.WaitGroup, context.CancelFunc, error) {
-	m := workflow.NewManager(ts)
+func setupTestWorkflow(ctx context.Context, ts *topo.Server, enableApprovals, retry, sequential bool) (*Manager, string, *sync.WaitGroup, context.CancelFunc, error) {
+	m := NewManager(ts)
 	// Run the manager in the background.
-	wg, _, cancel := startManager(m)
+	wg, _, cancel := StartManager(m)
 
 	// Create a testworkflow.
 	enableApprovalsFlag := fmt.Sprintf("-enable_approvals=%v", enableApprovals)
@@ -544,7 +542,7 @@ func setupTestWorkflow(ctx context.Context, ts *topo.Server, enableApprovals, re
 	return m, uuid, wg, cancel, nil
 }
 
-func testworkflow(m *workflow.Manager, uuid string) (*TestWorkflow, error) {
+func testworkflow(m *Manager, uuid string) (*TestWorkflow, error) {
 	w, err := m.WorkflowForTesting(uuid)
 	if err != nil {
 		return nil, fmt.Errorf("fail to get workflow from manager: %v", err)
@@ -553,28 +551,14 @@ func testworkflow(m *workflow.Manager, uuid string) (*TestWorkflow, error) {
 	return tw, nil
 }
 
-func startManager(m *workflow.Manager) (*sync.WaitGroup, context.Context, context.CancelFunc) {
-	// Run the manager in the background.
-	ctx, cancel := context.WithCancel(context.Background())
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		m.Run(ctx)
-	}()
-
-	m.WaitUntilRunning()
-	return wg, ctx, cancel
-}
-
-func triggerAction(ctx context.Context, m *workflow.Manager, nodePath, actionName string) error {
-	return m.NodeManager().Action(ctx, &workflow.ActionParameters{
+func triggerAction(ctx context.Context, m *Manager, nodePath, actionName string) error {
+	return m.NodeManager().Action(ctx, &ActionParameters{
 		Path: nodePath,
 		Name: actionName,
 	})
 }
 
-func setupNotifications(m *workflow.Manager) (chan []byte, int, error) {
+func setupNotifications(m *Manager) (chan []byte, int, error) {
 	// Set up notifications channel to monitor UI updates.
 	notifications := make(chan []byte, 10)
 	_, index, err := m.NodeManager().GetAndWatchFullTree(notifications)
@@ -584,19 +568,19 @@ func setupNotifications(m *workflow.Manager) (chan []byte, int, error) {
 	return notifications, index, nil
 }
 
-func checkUIChangeFromNoneStarted(m *workflow.Manager, uuid string, notifications chan []byte) error {
-	wantNode := &workflow.Node{
+func checkUIChangeFromNoneStarted(m *Manager, uuid string, notifications chan []byte) error {
+	wantNode := &Node{
 		PathName: string(phaseSimple),
-		Actions: []*workflow.Action{
+		Actions: []*Action{
 			{
 				Name:  actionNameApproveFirstTask,
-				State: workflow.ActionStateDisabled,
-				Style: workflow.ActionStyleTriggered,
+				State: ActionStateDisabled,
+				Style: ActionStyleTriggered,
 			},
 			{
 				Name:  actionNameApproveRemainingTasks,
-				State: workflow.ActionStateDisabled,
-				Style: workflow.ActionStyleTriggered,
+				State: ActionStateDisabled,
+				Style: ActionStyleTriggered,
 			},
 		},
 	}
@@ -607,8 +591,8 @@ func checkUIChangeFromNoneStarted(m *workflow.Manager, uuid string, notification
 	}
 
 	// First task is ready and approval button is enabled.
-	wantNode.Actions[0].State = workflow.ActionStateEnabled
-	wantNode.Actions[0].Style = workflow.ActionStyleWaiting
+	wantNode.Actions[0].State = ActionStateEnabled
+	wantNode.Actions[0].Style = ActionStyleWaiting
 	if err := consumeNotificationsUntil(notifications, wantNode); err != nil {
 		return fmt.Errorf("should get expected update of node: %v", wantNode)
 	}
@@ -630,18 +614,18 @@ func checkUIChangeFromNoneStarted(m *workflow.Manager, uuid string, notification
 // 2. the first and second tasks have succeeded, but remaining tasks haven't
 // succeeded yet.
 func checkUIChangeAllApproved(notifications chan []byte) error {
-	wantNode := &workflow.Node{
+	wantNode := &Node{
 		PathName: string(phaseSimple),
-		Actions: []*workflow.Action{
+		Actions: []*Action{
 			{
 				Name:  actionNameApproveFirstTaskDone,
-				State: workflow.ActionStateDisabled,
-				Style: workflow.ActionStyleTriggered,
+				State: ActionStateDisabled,
+				Style: ActionStyleTriggered,
 			},
 			{
 				Name:  actionNameApproveRemainingTasksDone,
-				State: workflow.ActionStateDisabled,
-				Style: workflow.ActionStyleTriggered,
+				State: ActionStateDisabled,
+				Style: ActionStyleTriggered,
 			},
 		},
 	}
@@ -652,7 +636,7 @@ func checkUIChangeAllApproved(notifications chan []byte) error {
 	}
 
 	// Approval buttons are cleared after the phase is finished.
-	wantNode.Actions = []*workflow.Action{}
+	wantNode.Actions = []*Action{}
 	if err := consumeNotificationsUntil(notifications, wantNode); err != nil {
 		return fmt.Errorf("should get expected update of node: %v", wantNode)
 	}
@@ -662,19 +646,19 @@ func checkUIChangeAllApproved(notifications chan []byte) error {
 // checkUIChangeFirstApproved observes the UI change for 2 scenarios:
 // 1. the first task is running and the second hasn't started.
 // 2. the first task is done and the second hasn't started.
-func checkUIChangeFirstApproved(m *workflow.Manager, uuid string, notifications chan []byte) error {
-	wantNode := &workflow.Node{
+func checkUIChangeFirstApproved(m *Manager, uuid string, notifications chan []byte) error {
+	wantNode := &Node{
 		PathName: string(phaseSimple),
-		Actions: []*workflow.Action{
+		Actions: []*Action{
 			{
 				Name:  actionNameApproveFirstTaskDone,
-				State: workflow.ActionStateDisabled,
-				Style: workflow.ActionStyleTriggered,
+				State: ActionStateDisabled,
+				Style: ActionStyleTriggered,
 			},
 			{
 				Name:  actionNameApproveRemainingTasks,
-				State: workflow.ActionStateDisabled,
-				Style: workflow.ActionStyleTriggered,
+				State: ActionStateDisabled,
+				Style: ActionStyleTriggered,
 			},
 		},
 	}
@@ -687,8 +671,8 @@ func checkUIChangeFirstApproved(m *workflow.Manager, uuid string, notifications 
 
 	// The second task is ready and approval button for remaining tasks is
 	// enabled.
-	wantNode.Actions[1].State = workflow.ActionStateEnabled
-	wantNode.Actions[1].Style = workflow.ActionStyleWaiting
+	wantNode.Actions[1].State = ActionStateEnabled
+	wantNode.Actions[1].Style = ActionStyleWaiting
 	if err := consumeNotificationsUntil(notifications, wantNode); err != nil {
 		return fmt.Errorf("should get expected update of node: %v", wantNode)
 	}
@@ -702,14 +686,14 @@ func checkUIChangeFirstApproved(m *workflow.Manager, uuid string, notifications 
 
 // consumeNotificationsUntil waits for all wantNodes to be seen from the
 // notifications of UI change.
-func consumeNotificationsUntil(notifications chan []byte, wantNodes ...*workflow.Node) error {
-	wantSet := make(map[*workflow.Node]bool)
+func consumeNotificationsUntil(notifications chan []byte, wantNodes ...*Node) error {
+	wantSet := make(map[*Node]bool)
 	for _, n := range wantNodes {
 		wantSet[n] = true
 	}
 
 	for monitor := range notifications {
-		update := &workflow.Update{}
+		update := &Update{}
 		if err := json.Unmarshal(monitor, update); err != nil {
 			return err
 		}
@@ -733,7 +717,7 @@ func consumeNotificationsUntil(notifications chan []byte, wantNodes ...*workflow
 	return fmt.Errorf("notifications channel is closed unexpectedly when waiting for expected nodes")
 }
 
-func checkNode(gotNode *workflow.Node, wantNode *workflow.Node) bool {
+func checkNode(gotNode *Node, wantNode *Node) bool {
 	if gotNode.PathName != wantNode.PathName || len(gotNode.Actions) != len(wantNode.Actions) {
 		return false
 	}
@@ -748,7 +732,7 @@ func checkNode(gotNode *workflow.Node, wantNode *workflow.Node) bool {
 
 func checkNoActions(notifications chan []byte, nodePath string) (string, error) {
 	for monitor := range notifications {
-		update := &workflow.Update{}
+		update := &Update{}
 		if err := json.Unmarshal(monitor, update); err != nil {
 			return "", err
 		}
@@ -768,7 +752,7 @@ func checkNoActions(notifications chan []byte, nodePath string) (string, error) 
 
 func waitForFinished(notifications chan []byte, path, message string) error {
 	for monitor := range notifications {
-		update := &workflow.Update{}
+		update := &Update{}
 		if err := json.Unmarshal(monitor, update); err != nil {
 			return err
 		}
@@ -784,47 +768,4 @@ func waitForFinished(notifications chan []byte, path, message string) error {
 		}
 	}
 	return fmt.Errorf("notifications channel is closed unexpectedly when waiting for expected nodes")
-}
-
-func verifyAllTasksState(ctx context.Context, ts *topo.Server, uuid string, taskState workflowpb.TaskState) error {
-	checkpoint, err := checkpoint(ctx, ts, uuid)
-	if err != nil {
-		return err
-	}
-
-	for _, task := range checkpoint.Tasks {
-		if task.State != taskState || task.Error != "" {
-			return fmt.Errorf("task: %v should succeed: task status: %v, %v", task.Id, task.State, task.Attributes)
-		}
-	}
-	return nil
-}
-
-func verifyAllTasksDone(ctx context.Context, ts *topo.Server, uuid string) error {
-	return verifyAllTasksState(ctx, ts, uuid, workflowpb.TaskState_TaskDone)
-}
-
-func verifyTask(ctx context.Context, ts *topo.Server, uuid, taskID string, taskState workflowpb.TaskState, taskError string) error {
-	checkpoint, err := checkpoint(ctx, ts, uuid)
-	if err != nil {
-		return err
-	}
-	task := checkpoint.Tasks[taskID]
-
-	if task.State != taskState || task.Error != taskError {
-		return fmt.Errorf("task status: %v, %v fails to match expected status: %v, %v", task.State, task.Error, taskState, taskError)
-	}
-	return nil
-}
-
-func checkpoint(ctx context.Context, ts *topo.Server, uuid string) (*workflowpb.WorkflowCheckpoint, error) {
-	wi, err := ts.GetWorkflow(ctx, uuid)
-	if err != nil {
-		return nil, fmt.Errorf("fail to get workflow for: %v", uuid)
-	}
-	checkpoint := &workflowpb.WorkflowCheckpoint{}
-	if err := proto.Unmarshal(wi.Workflow.Data, checkpoint); err != nil {
-		return nil, fmt.Errorf("fails to get checkpoint for the workflow: %v", err)
-	}
-	return checkpoint, nil
 }
