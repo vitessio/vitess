@@ -336,6 +336,15 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 	// Create reusable Reparent event with available info
 	ev := &events.Reparent{}
 
+	// Attempt to set avoidMasterAlias if not provided by parameters
+	if masterElectTabletAlias == nil && avoidMasterAlias == nil {
+		shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return err
+		}
+		avoidMasterAlias = shardInfo.MasterAlias
+	}
+
 	// do the work
 	err = wr.plannedReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, avoidMasterAlias, waitSlaveTimeout)
 	if err != nil {
