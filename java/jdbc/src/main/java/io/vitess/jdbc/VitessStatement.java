@@ -591,7 +591,7 @@ public class VitessStatement implements Statement {
     protected int[] generateBatchUpdateResult(List<CursorWithError> cursorWithErrorList, List<String> batchedArgs)
         throws BatchUpdateException {
         int[] updateCounts = new int[cursorWithErrorList.size()];
-        long[][] generatedKeys = new long[cursorWithErrorList.size()][2];
+        ArrayList<long[]> generatedKeys = new ArrayList<long[]>();
 
         Vtrpc.RPCError rpcError = null;
         String batchCommand = null;
@@ -603,6 +603,7 @@ public class VitessStatement implements Statement {
                 try {
                     long rowsAffected = cursorWithError.getCursor().getRowsAffected();
                     int truncatedUpdateCount;
+                    boolean queryBatchUpsert = false;
                     if (rowsAffected > Integer.MAX_VALUE) {
                         truncatedUpdateCount = Integer.MAX_VALUE;
                     } else {
@@ -610,13 +611,15 @@ public class VitessStatement implements Statement {
                             // mimicking mysql-connector-j here.
                             // but it would fail for: insert into t1 values ('a'), ('b') on duplicate key update ts = now();
                             truncatedUpdateCount = 1;
+                            queryBatchUpsert = true;
                         } else {
                             truncatedUpdateCount = (int) rowsAffected;
                         }
                     }
                     updateCounts[i] = truncatedUpdateCount;
-                    if (this.retrieveGeneratedKeys) {
-                        generatedKeys[i] = new long[]{cursorWithError.getCursor().getInsertId(), truncatedUpdateCount};
+                    long insertId = cursorWithError.getCursor().getInsertId();
+                    if (this.retrieveGeneratedKeys && (!queryBatchUpsert || insertId > 0)) {
+                        generatedKeys.add(new long[]{insertId, truncatedUpdateCount});
                     }
                 } catch (SQLException ex) {
                         /* This case should not happen as API has returned cursor and not error.
@@ -624,14 +627,14 @@ public class VitessStatement implements Statement {
                          */
                     updateCounts[i] = Statement.SUCCESS_NO_INFO;
                     if (this.retrieveGeneratedKeys) {
-                        generatedKeys[i] = new long[]{Statement.SUCCESS_NO_INFO, Statement.SUCCESS_NO_INFO};
+                        generatedKeys.add(new long[]{Statement.SUCCESS_NO_INFO, Statement.SUCCESS_NO_INFO});
                     }
                 }
             } else {
                 rpcError = cursorWithError.getError();
                 updateCounts[i] = Statement.EXECUTE_FAILED;
                 if (this.retrieveGeneratedKeys) {
-                    generatedKeys[i] = new long[]{Statement.EXECUTE_FAILED, Statement.EXECUTE_FAILED};
+                    generatedKeys.add(new long[]{Statement.EXECUTE_FAILED, Statement.EXECUTE_FAILED});
                 }
             }
         }
@@ -642,7 +645,7 @@ public class VitessStatement implements Statement {
             throw new BatchUpdateException(rpcError.toString(), sqlState, errno, updateCounts);
         }
         if (this.retrieveGeneratedKeys) {
-            this.batchGeneratedKeys = generatedKeys;
+            this.batchGeneratedKeys = generatedKeys.toArray(new long[generatedKeys.size()][2]);
         }
         return updateCounts;
     }
