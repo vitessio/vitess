@@ -1938,6 +1938,20 @@ func TestCreateTable(t *testing.T) {
 			"	unique key by_username2 (username) key_block_size 8,\n" +
 			"	unique by_username3 (username) key_block_size 4\n" +
 			")",
+	}, {
+		// test current_timestamp with and without ()
+		input: "create table t (\n" +
+			"	time1 timestamp default current_timestamp,\n" +
+			"	time2 timestamp default current_timestamp(),\n" +
+			"	time3 timestamp default current_timestamp on update current_timestamp,\n" +
+			"	time4 timestamp default current_timestamp() on update current_timestamp()\n" +
+			")",
+		output: "create table t (\n" +
+			"	time1 timestamp default current_timestamp,\n" +
+			"	time2 timestamp default current_timestamp,\n" +
+			"	time3 timestamp default current_timestamp on update current_timestamp,\n" +
+			"	time4 timestamp default current_timestamp on update current_timestamp\n" +
+			")",
 	},
 	}
 	for _, tcase := range testCases {
