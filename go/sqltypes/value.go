@@ -205,7 +205,7 @@ func (v Value) String() string {
 	if v.typ == Null {
 		return "NULL"
 	}
-	if v.IsQuoted() {
+	if v.IsQuoted() || v.typ == Bit {
 		return fmt.Sprintf("%v(%q)", v.typ, v.val)
 	}
 	return fmt.Sprintf("%v(%s)", v.typ, v.val)
@@ -281,7 +281,7 @@ func (v Value) IsBinary() bool {
 // It's not a complete implementation.
 func (v Value) MarshalJSON() ([]byte, error) {
 	switch {
-	case v.IsQuoted():
+	case v.IsQuoted() || v.typ == Bit:
 		return json.Marshal(v.ToString())
 	case v.typ == Null:
 		return nullstr, nil
@@ -336,23 +336,12 @@ func encodeBytesSQL(val []byte, b BinWriter) {
 }
 
 func encodeBytesSQLBits(val []byte, b BinWriter) {
-	buf := &bytes2.Buffer{}
-	buf.WriteByte('b')
-	buf.WriteByte('\'')
+	fmt.Fprintf(b, "%c", 'b')
+	fmt.Fprintf(b, "%c", '\'')
 	for _, ch := range val {
-		// for each byte, create a string representation of the bits
-		for j := 7; j >= 0; j-- {
-			c := ch & 128
-			ch = ch << 1
-			if c == 0 {
-				buf.WriteByte('0')
-			} else {
-				buf.WriteByte('1')
-			}
-		}
+		fmt.Fprintf(b, "%08b", ch)
 	}
-	buf.WriteByte('\'')
-	b.Write(buf.Bytes())
+	fmt.Fprintf(b, "%c", '\'')
 }
 
 func encodeBytesASCII(val []byte, b BinWriter) {

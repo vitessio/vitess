@@ -257,7 +257,7 @@ func TestIntegralValue(t *testing.T) {
 	}
 }
 
-func TestInerfaceValue(t *testing.T) {
+func TestInterfaceValue(t *testing.T) {
 	testcases := []struct {
 		in  interface{}
 		out Value
