@@ -45,13 +45,12 @@ func init() {
 		file.Close()
 	})
 
-	if !pidFileCreated {
-		return
-	}
-
 	// Remove pid file on graceful shutdown.
 	OnClose(func() {
 		if *pidFile == "" {
+			return
+		}
+		if !pidFileCreated {
 			return
 		}
 
