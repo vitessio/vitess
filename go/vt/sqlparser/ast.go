@@ -2397,7 +2397,7 @@ func ExprFromValue(value sqltypes.Value) (Expr, error) {
 		return NewIntVal(value.ToBytes()), nil
 	case value.IsFloat() || value.Type() == sqltypes.Decimal:
 		return NewFloatVal(value.ToBytes()), nil
-	case value.IsQuoted() || value.Type() == sqltypes.Bit:
+	case value.IsQuoted():
 		return NewStrVal(value.ToBytes()), nil
 	default:
 		// We cannot support sqltypes.Expression, or any other invalid type.

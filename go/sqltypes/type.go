@@ -95,7 +95,7 @@ func isNumber(t querypb.Type) bool {
 // instead.
 // The following conditions are non-overlapping
 // and cover all types: IsSigned(), IsUnsigned(),
-// IsFloat(), IsQuoted(), Null, Decimal, Expression.
+// IsFloat(), IsQuoted(), Null, Decimal, Expression, Bit
 // Also, IsIntegral() == (IsSigned()||IsUnsigned()).
 // TestCategory needs to be updated accordingly if
 // you add a new type.
