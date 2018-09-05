@@ -250,6 +250,11 @@ func (client *FakeTabletManagerClient) SlaveWasPromoted(ctx context.Context, tab
 	return nil
 }
 
+// FlushBinaryLogs is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) FlushBinaryLogs(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
+}
+
 // SetMaster is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	return nil
