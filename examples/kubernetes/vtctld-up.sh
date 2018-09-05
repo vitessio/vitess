@@ -47,5 +47,4 @@ cat vtctld-controller-template.yaml | sed -e "$sed_script" | $KUBECTL $KUBECTL_O
 echo
 echo "To access vtctld web UI, start kubectl proxy in another terminal:"
 echo "  kubectl proxy --port=8001"
-echo "Then visit http://localhost:8001/api/v1/proxy/namespaces/$VITESS_NAME/services/vtctld:web/"
-
+echo "Then visit http://localhost:8001/api/v1/namespaces/$VITESS_NAME/services/vtctld:web/proxy"
