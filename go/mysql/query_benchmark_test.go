@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"math/rand"
 	"net"
 	"strings"
 	"testing"
@@ -40,7 +41,9 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 	}()
 
 	b.SetParallelism(threads)
-	b.SetBytes(int64(len(query)))
+	if query != "" {
+		b.SetBytes(int64(len(query)))
+	}
 
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -65,7 +68,13 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 		}()
 
 		for pb.Next() {
-			if _, err := conn.ExecuteFetch(query, 1000, true); err != nil {
+			execQuery := query
+			if execQuery == "" {
+				// generate random query
+				n := rand.Intn(MaxPacketSize-2) + 1
+				execQuery = strings.Repeat("x", n)
+			}
+			if _, err := conn.ExecuteFetch(execQuery, 1000, true); err != nil {
 				b.Fatalf("ExecuteFetch failed: %v", err)
 			}
 		}
@@ -83,4 +92,8 @@ func BenchmarkParallelShortQueries(b *testing.B) {
 
 func BenchmarkParallelMediumQueries(b *testing.B) {
 	benchmarkQuery(b, 10, "select"+strings.Repeat("x", connBufferSize))
+}
+
+func BenchmarkParallelRandomQueries(b *testing.B) {
+	benchmarkQuery(b, 10, "")
 }
