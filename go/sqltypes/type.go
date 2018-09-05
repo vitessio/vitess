@@ -66,7 +66,7 @@ func IsFloat(t querypb.Type) bool {
 // IsQuoted returns true if querypb.Type is a quoted text or binary.
 // If you have a Value object, use its member function.
 func IsQuoted(t querypb.Type) bool {
-	return int(t)&flagIsQuoted == flagIsQuoted
+	return (int(t)&flagIsQuoted == flagIsQuoted) && t != Bit
 }
 
 // IsText returns true if querypb.Type is a text.
@@ -95,7 +95,7 @@ func isNumber(t querypb.Type) bool {
 // instead.
 // The following conditions are non-overlapping
 // and cover all types: IsSigned(), IsUnsigned(),
-// IsFloat(), IsQuoted(), Null, Decimal, Expression.
+// IsFloat(), IsQuoted(), Null, Decimal, Expression, Bit
 // Also, IsIntegral() == (IsSigned()||IsUnsigned()).
 // TestCategory needs to be updated accordingly if
 // you add a new type.
