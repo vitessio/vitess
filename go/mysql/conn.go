@@ -22,8 +22,8 @@ import (
 	"io"
 	"net"
 	"strings"
-	"sync"
 
+	"vitess.io/vitess/go/bucketpool"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -190,28 +190,7 @@ type Conn struct {
 }
 
 // bufPool is used to allocate and free buffers in an efficient way.
-var bufPool = sync.Pool{}
-
-// length is always > connBufferSize here, for smaller buffers static buffer field is used
-func getBuf(length int) *[]byte {
-	i := bufPool.Get()
-	if i == nil {
-		buf := make([]byte, length)
-		return &buf
-	}
-	// We got an array from the pool, see if it's
-	// big enough.
-	buf := i.(*[]byte)
-	if cap(*buf) >= length {
-		// big enough, shrink to length and use it.
-		*buf = (*buf)[:length]
-		return buf
-	}
-	// not big enough: allocate a new one, put smaller buffer back to the pool
-	bufPool.Put(buf)
-	data := make([]byte, length)
-	return &data
-}
+var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
 
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
@@ -337,7 +316,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	// Slightly slower path: single packet. Use the bufPool.
 	if length < MaxPacketSize {
 		c.currentEphemeralPolicy = ephemeralReadSingleBuffer
-		c.currentEphemeralReadBuffer = getBuf(length)
+		c.currentEphemeralReadBuffer = bufPool.Get(length)
 		if _, err := io.ReadFull(c.reader, *c.currentEphemeralReadBuffer); err != nil {
 			return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
 		}
@@ -553,7 +532,7 @@ func (c *Conn) startEphemeralPacket(length int) []byte {
 	if length < MaxPacketSize {
 		c.currentEphemeralPolicy = ephemeralWriteSingleBuffer
 
-		c.currentEphemeralWriteBuffer = getBuf(length + 4)
+		c.currentEphemeralWriteBuffer = bufPool.Get(length + 4)
 		(*c.currentEphemeralWriteBuffer)[0] = byte(length)
 		(*c.currentEphemeralWriteBuffer)[1] = byte(length >> 8)
 		(*c.currentEphemeralWriteBuffer)[2] = byte(length >> 16)
