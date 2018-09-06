@@ -336,12 +336,11 @@ func encodeBytesSQL(val []byte, b BinWriter) {
 }
 
 func encodeBytesSQLBits(val []byte, b BinWriter) {
-	fmt.Fprintf(b, "%c", 'b')
-	fmt.Fprintf(b, "%c", '\'')
+	fmt.Fprint(b, "b'")
 	for _, ch := range val {
 		fmt.Fprintf(b, "%08b", ch)
 	}
-	fmt.Fprintf(b, "%c", '\'')
+	fmt.Fprint(b, "'")
 }
 
 func encodeBytesASCII(val []byte, b BinWriter) {
