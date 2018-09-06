@@ -689,8 +689,8 @@ func (client *Client) FlushBinaryLogs(ctx context.Context, tablet *topodatapb.Ta
 		tablet,
 		true, /* usePool */
 		[]byte(flushBinaryLogsStmnt),
-		0,     /* maxRows */
-		false, /* disableBinlogs */
+		0,    /* maxRows */
+		true, /* disableBinlogs */
 		false /* reloadSchema */)
 	return err
 }
