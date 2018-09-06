@@ -25,6 +25,8 @@ import (
 	"golang.org/x/net/context"
 )
 
+const benchmarkQueryPrefix = "benchmark "
+
 func benchmarkQuery(b *testing.B, threads int, query string) {
 	th := &testHandler{}
 
@@ -71,8 +73,9 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 			execQuery := query
 			if execQuery == "" {
 				// generate random query
-				n := rand.Intn(MaxPacketSize-2) + 1
-				execQuery = strings.Repeat("x", n)
+				n := rand.Intn(MaxPacketSize-len(benchmarkQueryPrefix)) + 1
+				execQuery = benchmarkQueryPrefix + strings.Repeat("x", n)
+
 			}
 			if _, err := conn.ExecuteFetch(execQuery, 1000, true); err != nil {
 				b.Fatalf("ExecuteFetch failed: %v", err)
@@ -87,11 +90,11 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 // executes M queries on them, then closes them.
 // It is meant as a somewhat real load test.
 func BenchmarkParallelShortQueries(b *testing.B) {
-	benchmarkQuery(b, 10, "select rows")
+	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select rows")
 }
 
 func BenchmarkParallelMediumQueries(b *testing.B) {
-	benchmarkQuery(b, 10, "select"+strings.Repeat("x", connBufferSize))
+	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select"+strings.Repeat("x", connBufferSize))
 }
 
 func BenchmarkParallelRandomQueries(b *testing.B) {
