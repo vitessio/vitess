@@ -681,20 +681,6 @@ func (client *Client) SlaveWasPromoted(ctx context.Context, tablet *topodatapb.T
 	return err
 }
 
-// FlushBinaryLogs is part of the tmclient.TabletManagerClient interface.
-func (client *Client) FlushBinaryLogs(ctx context.Context, tablet *topodatapb.Tablet) error {
-	flushBinaryLogsStmnt := fmt.Sprintf("FLUSH BINARY LOGS")
-	_, err := client.ExecuteFetchAsDba(
-		ctx,
-		tablet,
-		true, /* usePool */
-		[]byte(flushBinaryLogsStmnt),
-		0,     /* maxRows */
-		false, /* disableBinlogs */
-		false /* reloadSchema */)
-	return err
-}
-
 // SetMaster is part of the tmclient.TabletManagerClient interface.
 func (client *Client) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	cc, c, err := client.dial(tablet)
