@@ -150,11 +150,14 @@ func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
 	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readEphemeralPacket)
 	sConn.recycleReadPacket()
 
-	// All three writes, with readPacketDirect, if size allows it.
+	// All three writes, with readEphemeralPacketDirect, if size allows it.
 	if len(data) < MaxPacketSize {
-		verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.readPacketDirect)
-		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacket, sConn.readPacketDirect)
-		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readPacketDirect)
+		verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.readEphemeralPacketDirect)
+		sConn.recycleReadPacket()
+		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacket, sConn.readEphemeralPacketDirect)
+		sConn.recycleReadPacket()
+		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readEphemeralPacketDirect)
+		sConn.recycleReadPacket()
 	}
 }
 
