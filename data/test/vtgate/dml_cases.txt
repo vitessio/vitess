@@ -1512,3 +1512,24 @@
     "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
   }
 }
+
+# update vindex value to null
+"update user set name = null where id = 1"
+{
+  "Original": "update user set name = null where id = 1",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set name = null where id = 1",
+    "Vindex": "user_index",
+    "Values": [1],
+    "ChangedVindexValues": {
+      "name_user_map": [null]
+    },
+    "Table": "user",
+    "OwnedVindexQuery": "select Name, Costly from user where id = 1 for update"
+  }
+}
