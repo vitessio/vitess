@@ -454,8 +454,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		logstream := logutil.NewMemoryLogger()
 
 		wr := wrangler.New(logstream, ts, tmClient)
-		// TODO(enisoc): Context for run command should be request-scoped.
-		err := vtctl.RunCommand(ctx, wr, args)
+		err := vtctl.RunCommand(r.Context(), wr, args)
 		if err != nil {
 			resp.Error = err.Error()
 		}
