@@ -137,7 +137,7 @@ type Conn struct {
 
 	// Packet encoding variables.
 	reader   *bufio.Reader
-	writer   *bufio.Writer
+	writer   bufioWriter
 	sequence uint8
 
 	// fields contains the fields definitions for an on-going
@@ -170,7 +170,7 @@ func newConn(conn net.Conn) *Conn {
 		conn: conn,
 
 		reader:   bufio.NewReaderSize(conn, connBufferSize),
-		writer:   bufio.NewWriterSize(conn, connBufferSize),
+		writer:   newWriter(conn),
 		sequence: 0,
 	}
 }
