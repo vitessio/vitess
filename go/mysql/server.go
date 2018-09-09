@@ -603,8 +603,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		// Need to switch to TLS, and then re-read the packet.
 		conn := tls.Server(c.conn, l.TLSConfig)
 		c.conn = conn
-		c.reader.Reset(conn)
-		c.writer.Reset(conn)
+		c.bufferedReader.Reset(conn)
 		c.Capabilities |= CapabilityClientSSL
 		return "", "", nil, nil
 	}
