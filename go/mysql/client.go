@@ -508,7 +508,7 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 	pos = writeByte(data, pos, characterSet)
 
 	// And send it as is.
-	if err := c.writeEphemeralPacket(true /* direct */); err != nil {
+	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send SSLRequest: %v", err)
 	}
 	return nil
@@ -600,7 +600,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "writeHandshakeResponse41: only packed %v bytes, out of %v allocated", pos, len(data))
 	}
 
-	if err := c.writeEphemeralPacket(true /* direct */); err != nil {
+	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send HandshakeResponse41: %v", err)
 	}
 	return nil
@@ -627,5 +627,5 @@ func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	if pos != len(data) {
 		return fmt.Errorf("error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
 	}
-	return c.writeEphemeralPacket(true)
+	return c.writeEphemeralPacket()
 }

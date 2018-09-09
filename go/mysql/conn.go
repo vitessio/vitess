@@ -22,6 +22,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/bucketpool"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -163,6 +164,8 @@ type Conn struct {
 // bufPool is used to allocate and free buffers in an efficient way.
 var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
 
+var writersPool = sync.Pool{New: func() interface{} { return bufio.NewWriterSize(nil, connBufferSize) }}
+
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
 func newConn(conn net.Conn) *Conn {
@@ -173,6 +176,11 @@ func newConn(conn net.Conn) *Conn {
 		writer:   bufio.NewWriterSize(conn, connBufferSize),
 		sequence: 0,
 	}
+}
+
+func (c *Conn) startBuffering() {
+	c.writer = writersPool.Get().(*bufio.Writer)
+	c.writer.Reset(c.conn)
 }
 
 func (c *Conn) readEphemeralPacketHelper(direct bool) ([]byte, error) {
@@ -383,7 +391,7 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 // Try to use startEphemeralPacket/writeEphemeralPacket instead.
 //
 // This method returns a generic error, not a SQLError.
-func (c *Conn) writePacket(data []byte) error {
+func (c *Conn) writePacket(w io.Writer, data []byte) error {
 	index := 0
 	length := len(data)
 
@@ -400,14 +408,14 @@ func (c *Conn) writePacket(data []byte) error {
 		header[1] = byte(packetLength >> 8)
 		header[2] = byte(packetLength >> 16)
 		header[3] = c.sequence
-		if n, err := c.writer.Write(header[:]); err != nil {
+		if n, err := w.Write(header[:]); err != nil {
 			return fmt.Errorf("Write(header) failed: %v", err)
 		} else if n != 4 {
 			return fmt.Errorf("Write(header) returned a short write: %v < 4", n)
 		}
 
 		// Write the body.
-		if n, err := c.writer.Write(data[index : index+packetLength]); err != nil {
+		if n, err := w.Write(data[index : index+packetLength]); err != nil {
 			return fmt.Errorf("Write(packet) failed: %v", err)
 		} else if n != packetLength {
 			return fmt.Errorf("Write(packet) returned a short write: %v < %v", n, packetLength)
@@ -425,7 +433,7 @@ func (c *Conn) writePacket(data []byte) error {
 				header[1] = 0
 				header[2] = 0
 				header[3] = c.sequence
-				if n, err := c.writer.Write(header[:]); err != nil {
+				if n, err := w.Write(header[:]); err != nil {
 					return fmt.Errorf("Write(empty header) failed: %v", err)
 				} else if n != 4 {
 					return fmt.Errorf("Write(empty header) returned a short write: %v < 4", n)
@@ -464,14 +472,13 @@ func (c *Conn) startEphemeralPacket(length int) []byte {
 }
 
 // writeEphemeralPacket writes the packet that was allocated by
-// startEphemeralPacket. If 'direct' is set, we write to the
-// underlying connection directly, by-passing the write buffer.
-func (c *Conn) writeEphemeralPacket(direct bool) error {
+// startEphemeralPacket.
+func (c *Conn) writeEphemeralPacket() error {
 	defer c.recycleWritePacket()
 
-	var w io.Writer = c.writer
-	if direct {
-		w = c.conn
+	var w io.Writer = c.conn
+	if c.writer != nil {
+		w = c.writer
 	}
 
 	switch c.currentEphemeralPolicy {
@@ -485,13 +492,8 @@ func (c *Conn) writeEphemeralPacket(direct bool) error {
 		}
 	case ephemeralWriteBigBuffer:
 		// This is the slower path for big data.
-		// With direct=true, the caller expects a flush, so we call it
-		// manually.
-		if err := c.writePacket(*c.currentEphemeralWriteBuffer); err != nil {
+		if err := c.writePacket(w, *c.currentEphemeralWriteBuffer); err != nil {
 			return fmt.Errorf("Conn %v: %v", c.ID(), err)
-		}
-		if direct {
-			return c.flush()
 		}
 	case ephemeralUnused, ephemeralReadSingleBuffer, ephemeralReadBigBuffer:
 		// Programming error.
@@ -524,6 +526,12 @@ func (c *Conn) recycleWritePacket() {
 // flush flushes the written data to the socket.
 // This method returns a generic error, not a SQLError.
 func (c *Conn) flush() error {
+	defer func() {
+		c.writer.Reset(nil)
+		writersPool.Put(c.writer)
+		c.writer = nil
+	}()
+
 	if err := c.writer.Flush(); err != nil {
 		return fmt.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
 	}
@@ -540,7 +548,7 @@ func (c *Conn) writeComQuit() error {
 
 	data := c.startEphemeralPacket(1)
 	data[0] = ComQuit
-	if err := c.writeEphemeralPacket(true); err != nil {
+	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -579,8 +587,7 @@ func (c *Conn) IsClosed() bool {
 // Packet writing methods, for generic packets.
 //
 
-// writeOKPacket writes an OK packet, directly. Do not use this if
-// there is already a packet in the buffer.
+// writeOKPacket writes an OK packet.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
 func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, warnings uint16) error {
@@ -597,7 +604,7 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint16(data, pos, warnings)
 
-	return c.writeEphemeralPacket(true)
+	return c.writeEphemeralPacket()
 }
 
 // writeOKPacketWithEOFHeader writes an OK packet with an EOF header.
@@ -619,15 +626,10 @@ func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, fla
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint16(data, pos, warnings)
 
-	if err := c.writeEphemeralPacket(false); err != nil {
-		return err
-	}
-	return c.flush()
+	return c.writeEphemeralPacket()
 }
 
 // writeErrorPacket writes an error packet.
-// It writes directly to the socket, so this cannot be called after other
-// packets have already been written.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
 func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string, args ...interface{}) error {
@@ -647,7 +649,7 @@ func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string
 	pos = writeEOFString(data, pos, sqlState)
 	pos = writeEOFString(data, pos, errorMessage)
 
-	return c.writeEphemeralPacket(true)
+	return c.writeEphemeralPacket()
 }
 
 // writeErrorPacketFromError writes an error packet, from a regular error.
@@ -670,7 +672,7 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 	pos = writeUint16(data, pos, warnings)
 	pos = writeUint16(data, pos, flags)
 
-	return c.writeEphemeralPacket(false)
+	return c.writeEphemeralPacket()
 }
 
 //
