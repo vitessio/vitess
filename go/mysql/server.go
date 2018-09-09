@@ -343,64 +343,73 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 				return
 			}
 		case ComQuery:
-			queryStart := time.Now()
-			query := c.parseComQuery(data)
-			c.recycleReadPacket()
-			fieldSent := false
-			// sendFinished is set if the response should just be an OK packet.
-			sendFinished := false
-			err := l.handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
-				if sendFinished {
-					// Failsafe: Unreachable if server is well-behaved.
-					return io.EOF
-				}
+			success := func() bool {
+				c.startBuffering()
+				defer c.flush()
 
+				queryStart := time.Now()
+				query := c.parseComQuery(data)
+				c.recycleReadPacket()
+				fieldSent := false
+				// sendFinished is set if the response should just be an OK packet.
+				sendFinished := false
+				err := l.handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
+					if sendFinished {
+						// Failsafe: Unreachable if server is well-behaved.
+						return io.EOF
+					}
+
+					if !fieldSent {
+						fieldSent = true
+
+						if len(qr.Fields) == 0 {
+							sendFinished = true
+							// We should not send any more packets after this.
+							return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+						}
+						if err := c.writeFields(qr); err != nil {
+							return err
+						}
+					}
+
+					return c.writeRows(qr)
+				})
+
+				// If no field was sent, we expect an error.
 				if !fieldSent {
-					fieldSent = true
-
-					if len(qr.Fields) == 0 {
-						sendFinished = true
-						// We should not send any more packets after this.
-						return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+					// This is just a failsafe. Should never happen.
+					if err == nil || err == io.EOF {
+						err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 					}
-					if err := c.writeFields(qr); err != nil {
-						return err
+					if werr := c.writeErrorPacketFromError(err); werr != nil {
+						// If we can't even write the error, we're done.
+						log.Errorf("Error writing query error to %s: %v", c, werr)
+						return false
+					}
+					return true
+				}
+
+				if err != nil {
+					// We can't send an error in the middle of a stream.
+					// All we can do is abort the send, which will cause a 2013.
+					log.Errorf("Error in the middle of a stream to %s: %v", c, err)
+					return false
+				}
+
+				// Send the end packet only sendFinished is false (results were streamed).
+				if !sendFinished {
+					if err := c.writeEndResult(false); err != nil {
+						log.Errorf("Error writing result to %s: %v", c, err)
+						return false
 					}
 				}
 
-				return c.writeRows(qr)
-			})
-
-			// If no field was sent, we expect an error.
-			if !fieldSent {
-				// This is just a failsafe. Should never happen.
-				if err == nil || err == io.EOF {
-					err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
-				}
-				if werr := c.writeErrorPacketFromError(err); werr != nil {
-					// If we can't even write the error, we're done.
-					log.Errorf("Error writing query error to %s: %v", c, werr)
-					return
-				}
-				continue
-			}
-
-			if err != nil {
-				// We can't send an error in the middle of a stream.
-				// All we can do is abort the send, which will cause a 2013.
-				log.Errorf("Error in the middle of a stream to %s: %v", c, err)
+				timings.Record(queryTimingKey, queryStart)
+				return true
+			}()
+			if !success {
 				return
 			}
-
-			// Send the end packet only sendFinished is false (results were streamed).
-			if !sendFinished {
-				if err := c.writeEndResult(false); err != nil {
-					log.Errorf("Error writing result to %s: %v", c, err)
-					return
-				}
-			}
-
-			timings.Record(queryTimingKey, queryStart)
 
 		case ComPing:
 			// No payload to that one, just return OKPacket.
@@ -441,7 +450,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 				log.Errorf("Error writing error packet to %s: %s", c, err)
 				return
 			}
-
 		}
 	}
 }
@@ -539,7 +547,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 		return nil, fmt.Errorf("error building Handshake packet: got %v bytes expected %v", pos, len(data))
 	}
 
-	if err := c.writeEphemeralPacket(true); err != nil {
+	if err := c.writeEphemeralPacket(); err != nil {
 		return nil, err
 	}
 
@@ -691,5 +699,5 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 	if pos != len(data) {
 		return fmt.Errorf("error building AuthSwitchRequestPacket packet: got %v bytes expected %v", pos, len(data))
 	}
-	return c.writeEphemeralPacket(true)
+	return c.writeEphemeralPacket()
 }
