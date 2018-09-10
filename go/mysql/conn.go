@@ -25,7 +25,6 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/bucketpool"
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -178,18 +177,18 @@ func newConn(conn net.Conn) *Conn {
 	}
 }
 
-// startBuffering starts using buffered writes. This should
+// startWriterBuffering starts using buffered writes. This should
 // be terminated by a call to flush.
-func (c *Conn) startBuffering() {
+func (c *Conn) startWriterBuffering() {
 	c.bufferedWriter = writersPool.Get().(*bufio.Writer)
 	c.bufferedWriter.Reset(c.conn)
 }
 
 // flush flushes the written data to the socket.
 // This must be called to terminate startBuffering.
-func (c *Conn) flush() {
+func (c *Conn) flush() error {
 	if c.bufferedWriter == nil {
-		return
+		return nil
 	}
 
 	defer func() {
@@ -198,9 +197,7 @@ func (c *Conn) flush() {
 		c.bufferedWriter = nil
 	}()
 
-	if err := c.bufferedWriter.Flush(); err != nil {
-		log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
-	}
+	return c.bufferedWriter.Flush()
 }
 
 // getWriter returns the current writer. It may be either

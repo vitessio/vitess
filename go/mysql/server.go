@@ -343,71 +343,71 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 				return
 			}
 		case ComQuery:
-			success := func() bool {
-				c.startBuffering()
-				defer c.flush()
+			// flush is called at the end of this block.
+			// We cannot encapsulate it with a defer inside a func because
+			// we have to return from this func if it fails.
+			c.startWriterBuffering()
 
-				queryStart := time.Now()
-				query := c.parseComQuery(data)
-				c.recycleReadPacket()
-				fieldSent := false
-				// sendFinished is set if the response should just be an OK packet.
-				sendFinished := false
-				err := l.handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
-					if sendFinished {
-						// Failsafe: Unreachable if server is well-behaved.
-						return io.EOF
-					}
-
-					if !fieldSent {
-						fieldSent = true
-
-						if len(qr.Fields) == 0 {
-							sendFinished = true
-							// We should not send any more packets after this.
-							return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
-						}
-						if err := c.writeFields(qr); err != nil {
-							return err
-						}
-					}
-
-					return c.writeRows(qr)
-				})
-
-				// If no field was sent, we expect an error.
-				if !fieldSent {
-					// This is just a failsafe. Should never happen.
-					if err == nil || err == io.EOF {
-						err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
-					}
-					if werr := c.writeErrorPacketFromError(err); werr != nil {
-						// If we can't even write the error, we're done.
-						log.Errorf("Error writing query error to %s: %v", c, werr)
-						return false
-					}
-					return true
+			queryStart := time.Now()
+			query := c.parseComQuery(data)
+			c.recycleReadPacket()
+			fieldSent := false
+			// sendFinished is set if the response should just be an OK packet.
+			sendFinished := false
+			err := l.handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
+				if sendFinished {
+					// Failsafe: Unreachable if server is well-behaved.
+					return io.EOF
 				}
 
+				if !fieldSent {
+					fieldSent = true
+
+					if len(qr.Fields) == 0 {
+						sendFinished = true
+						// We should not send any more packets after this.
+						return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+					}
+					if err := c.writeFields(qr); err != nil {
+						return err
+					}
+				}
+
+				return c.writeRows(qr)
+			})
+
+			// If no field was sent, we expect an error.
+			if !fieldSent {
+				// This is just a failsafe. Should never happen.
+				if err == nil || err == io.EOF {
+					err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+				}
+				if werr := c.writeErrorPacketFromError(err); werr != nil {
+					// If we can't even write the error, we're done.
+					log.Errorf("Error writing query error to %s: %v", c, werr)
+					return
+				}
+			} else {
 				if err != nil {
 					// We can't send an error in the middle of a stream.
 					// All we can do is abort the send, which will cause a 2013.
 					log.Errorf("Error in the middle of a stream to %s: %v", c, err)
-					return false
+					return
 				}
 
 				// Send the end packet only sendFinished is false (results were streamed).
 				if !sendFinished {
 					if err := c.writeEndResult(false); err != nil {
 						log.Errorf("Error writing result to %s: %v", c, err)
-						return false
+						return
 					}
 				}
+			}
 
-				timings.Record(queryTimingKey, queryStart)
-				return true
-			}()
-			if !success {
+			timings.Record(queryTimingKey, queryStart)
+
+			if err := c.flush(); err != nil {
+				log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
 				return
 			}
 
