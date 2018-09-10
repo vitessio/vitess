@@ -230,4 +230,5 @@ def register_flavor(flavor, cls, env):
   flavor_map[flavor] = {"cls": cls, "env": env}
 
 register_flavor("MariaDB", MariaDB, "MariaDB")
+register_flavor("MariaDB103", MariaDB, "MariaDB103")
 register_flavor("MySQL56", MySQL56, "MySQL56")
