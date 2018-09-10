@@ -11,6 +11,9 @@
 *.swp
 tags
 
+# emacs
+*~
+
 # Eclipse files
 .classpath
 .project
