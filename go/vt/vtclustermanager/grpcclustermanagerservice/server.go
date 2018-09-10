@@ -38,12 +38,34 @@ func (s *Server) SetShardConfig(ctx context.Context, shardClusterConfig *cluster
 		shardClusterConfig.TabletType,
 		shardClusterConfig.Nodes,
 	)
+	if err != nil {
+		return nil, err
+	}
+	tabletType := &clustermanagerdatapb.TabletTypeConfig{Nodes: shardClusterConfig.Nodes}
+	shard := &clustermanagerdatapb.ShardConfig{
+		TabletTypes: map[string]*clustermanagerdatapb.TabletTypeConfig{shardClusterConfig.TabletType.String(): tabletType},
+	}
+	keyspace := &clustermanagerdatapb.KeyspaceConfig{
+		Shards: map[string]*clustermanagerdatapb.ShardConfig{shardClusterConfig.Shard: shard},
+	}
+	cells := &clustermanagerdatapb.CellConfig{
+		Keyspaces: map[string]*clustermanagerdatapb.KeyspaceConfig{shardClusterConfig.Keyspace: keyspace},
+	}
+	resp = &clustermanagerdatapb.ClusterConfig{
+		Cells: map[string]*clustermanagerdatapb.CellConfig{shardClusterConfig.Cell: cells},
+	}
 	return resp, nil
 }
 
 // GetClusterConfig ...
 func (s *Server) GetClusterConfig(ctx context.Context, request *clustermanagerdatapb.GetClusterConfigRequest) (shardClusterConfig *clustermanagerdatapb.ClusterConfig, err error) {
-	return shardClusterConfig, nil
+	return s.cm.GetClusterConfig(
+		ctx,
+		request.Cell,
+		request.Keyspace,
+		request.Shard,
+		request.TabletType,
+	)
 }
 
 // DeleteShardConfig ...
@@ -51,7 +73,7 @@ func (s *Server) DeleteShardConfig(ctx context.Context, request *clustermanagerd
 	return deleteShardClusterConfigResponse, nil
 }
 
-// StartServer
+// StartServer ...
 func StartServer(server *grpc.Server, cm *topo.ClusterManager) {
 	clustermanagerservicepb.RegisterVtClusterManagerServer(server, &Server{cm: cm})
 }

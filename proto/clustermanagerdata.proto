@@ -24,19 +24,19 @@ package clustermanagerdata;
 
 
 message SetShardConfigRequest {
-  required string cell = 1;
-  required string keyspace = 2;
-  required string shard = 3;
-  required topodata.TabletType tablet_type = 4;
+  string cell = 1;
+  string keyspace = 2;
+  string shard = 3;
+  topodata.TabletType tablet_type = 4;
   // number of nodes desired for (keyspace/shard/cell/tablet_type)
-  required int32 nodes = 5;
+  int32 nodes = 5;
 }
 
 message DeleteShardConfigRequest{
-  required string cell = 1;
-  required string keyspace = 2;
-  required string shard = 3;
-  required string tablet_type = 4;
+  string cell = 1;
+  string keyspace = 2;
+  string shard = 3;
+  string tablet_type = 4;
 }
 
 message DeleteShardConfigResponse{}
@@ -66,12 +66,3 @@ message GetClusterConfigRequest{
   string shard = 3;
   string tablet_type = 4;
 }
-
-message ShardProvisionRequest {
-  required string id
-  required string cell = 1;
-  required string keyspace = 2;
-  required string shard = 3;
-  required topodata.TabletType tablet_type = 4;
-}
-
