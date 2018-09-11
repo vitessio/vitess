@@ -209,11 +209,24 @@ export class WorkflowListComponent implements OnDestroy, OnInit {
 
   prepareNew(flags) {
     let newFlags = new NewWorkflowFlags(this.featuresService.workflows).flags;
+    // update flags
     for (let key of Object.keys(flags)) {
       newFlags[key].value = flags[key].value;
     }
-    this.workflowParametersSanitize(newFlags);
-    return new PrepareResponse(true, newFlags);
+    // make sure that we only include flags pertinent to current workflow
+    let filteredFlags = {};
+    let factory_name = newFlags['factory_name'].value;
+    // all workflows include factory name and skip start
+    filteredFlags['factory_name'] = newFlags['factory_name'];
+    filteredFlags['skip_start']= newFlags['skip_start'];
+    for (let key of Object.keys(newFlags)) {
+        if (key.startsWith(factory_name)) {
+            filteredFlags[key]= newFlags[key];
+        }
+    }
+
+    this.workflowParametersSanitize(filteredFlags);
+    return new PrepareResponse(true, filteredFlags);
   }
 
   workflowParametersSanitize(newFlags) {
@@ -222,6 +235,31 @@ export class WorkflowListComponent implements OnDestroy, OnInit {
     }
     if (newFlags['factory_name'] === 'other') {
       newFlags['duration']['value'] = '';
+    }
+    this.workflowPrepareReshardingFlags(newFlags);
+  }
+
+  workflowPrepareReshardingFlags(newFlags) {
+    let factoryName = newFlags['factory_name']['value']
+      if (factoryName === 'horizontal_resharding' || factoryName == 'hr_workflow_gen') {
+        let phaseEnableApprovalCheckBoxNames = [
+            'enable_approvals_copy_schema',
+            'enable_approvals_clone',
+            'enable_approvals_wait_filtered_replication',
+            'enable_approvals_diff',
+            'enable_approvals_migrate_serving_types',
+        ];
+        let phaseEnableApprovals = [];
+
+        for (let i=0; i<phaseEnableApprovalCheckBoxNames.length; i++) {
+            let phaseName = phaseEnableApprovalCheckBoxNames[i];
+            if(newFlags[factoryName + '_' + phaseName]['value']) {
+                phaseEnableApprovals.push(newFlags[factoryName + '_' + phaseName]["namedPositional"]);
+            }
+            // We don't want this flag to show up in the getArgs
+            delete newFlags[factoryName + '_' + phaseName];
+        }
+        newFlags[factoryName + '_phase_enable_approvals']['value'] = phaseEnableApprovals.join(',');
     }
   }
 

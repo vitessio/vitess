@@ -27,6 +27,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
@@ -195,32 +196,19 @@ func (client *FakeTabletManagerClient) GetSlaves(ctx context.Context, tablet *to
 	return nil, nil
 }
 
-// WaitBlpPosition is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) WaitBlpPosition(ctx context.Context, tablet *topodatapb.Tablet, blpPosition *tabletmanagerdatapb.BlpPosition, waitTime time.Duration) error {
+// VReplicationExec is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	// This result satisfies 'select pos from _vt.vreplication...' called from split clone unit tests in go/vt/worker.
+	result := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("pos", "varchar"),
+		"MariaDB/1-1-1",
+	)
+	return sqltypes.ResultToProto3(result), nil
+}
+
+// VReplicationWaitForPos is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error {
 	return nil
-}
-
-// StopBlp is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) StopBlp(ctx context.Context, tablet *topodatapb.Tablet) ([]*tabletmanagerdatapb.BlpPosition, error) {
-	// TODO(aaijazi): this works because all tests so far only need to rely on Uid 0.
-	// Ideally, this should turn into a full mock, where the caller can configure the exact
-	// return value.
-	bpl := []*tabletmanagerdatapb.BlpPosition{
-		{
-			Uid: uint32(0),
-		},
-	}
-	return bpl, nil
-}
-
-// StartBlp is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) StartBlp(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return nil
-}
-
-// RunBlpUntil is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *topodatapb.Tablet, positions []*tabletmanagerdatapb.BlpPosition, waitTime time.Duration) (string, error) {
-	return "", nil
 }
 
 //

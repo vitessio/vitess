@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -32,6 +33,41 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// parserPool is a pool for parser objects.
+var parserPool = sync.Pool{}
+
+// zeroParser is a zero-initialized parser to help reinitialize the parser for pooling.
+var zeroParser = *(yyNewParser().(*yyParserImpl))
+
+// yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
+// particularly good reason to use yyParse directly, since it immediately discards its parser.  What
+// would be ideal down the line is to actually pool the stacks themselves rather than the parser
+// objects, as per https://github.com/cznic/goyacc/blob/master/main.go. However, absent an upstream
+// change to goyacc, this is the next best option.
+//
+// N.B: Parser pooling means that you CANNOT take references directly to parse stack variables (e.g.
+// $$ = &$4) in sql.y rules. You must instead add an intermediate reference like so:
+//    showCollationFilterOpt := $4
+//    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
+func yyParsePooled(yylex yyLexer) int {
+	// Being very particular about using the base type and not an interface type b/c we depend on
+	// the implementation to know how to reinitialize the parser.
+	var parser *yyParserImpl
+
+	i := parserPool.Get()
+	if i != nil {
+		parser = i.(*yyParserImpl)
+	} else {
+		parser = yyNewParser().(*yyParserImpl)
+	}
+
+	defer func() {
+		*parser = zeroParser
+		parserPool.Put(parser)
+	}()
+	return parser.Parse(yylex)
+}
 
 // Instructions for creating new types: If a type
 // needs to satisfy an interface, declare that function
@@ -51,7 +87,7 @@ import (
 // error is ignored and the DDL is returned anyway.
 func Parse(sql string) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
-	if yyParse(tokenizer) != 0 {
+	if yyParsePooled(tokenizer) != 0 {
 		if tokenizer.partialDDL != nil {
 			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
 			tokenizer.ParseTree = tokenizer.partialDDL
@@ -69,7 +105,7 @@ func Parse(sql string) (Statement, error) {
 // partially parsed DDL statements.
 func ParseStrictDDL(sql string) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
-	if yyParse(tokenizer) != 0 {
+	if yyParsePooled(tokenizer) != 0 {
 		return nil, tokenizer.LastError
 	}
 	if tokenizer.ParseTree == nil {
@@ -104,7 +140,7 @@ func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 
 	tokenizer.reset()
 	tokenizer.multi = true
-	if yyParse(tokenizer) != 0 {
+	if yyParsePooled(tokenizer) != 0 {
 		if tokenizer.partialDDL != nil && !strict {
 			tokenizer.ParseTree = tokenizer.partialDDL
 			return tokenizer.ParseTree, nil
@@ -619,8 +655,9 @@ type Set struct {
 
 // Set.Scope or Show.Scope
 const (
-	SessionStr = "session"
-	GlobalStr  = "global"
+	SessionStr  = "session"
+	GlobalStr   = "global"
+	ImplicitStr = ""
 )
 
 // Format formats the node.
@@ -1219,7 +1256,10 @@ func (ii *IndexInfo) Format(buf *TrackedBuffer) {
 	if ii.Primary {
 		buf.Myprintf("%s", ii.Type)
 	} else {
-		buf.Myprintf("%s %v", ii.Type, ii.Name)
+		buf.Myprintf("%s", ii.Type)
+		if !ii.Name.IsEmpty() {
+			buf.Myprintf(" %v", ii.Name)
+		}
 	}
 }
 
@@ -1360,11 +1400,47 @@ func (c *ConstraintDefinition) walkSubtree(visit Visit) error {
 	return Walk(visit, c.Details)
 }
 
+// ReferenceAction indicates the action takes by a referential constraint e.g.
+// the `CASCADE` in a `FOREIGN KEY .. ON DELETE CASCADE` table definition.
+type ReferenceAction int
+
+// These map to the SQL-defined reference actions.
+// See https://dev.mysql.com/doc/refman/8.0/en/create-table-foreign-keys.html#foreign-keys-referential-actions
+const (
+	// DefaultAction indicates no action was explicitly specified.
+	DefaultAction ReferenceAction = iota
+	Restrict
+	Cascade
+	NoAction
+	SetNull
+	SetDefault
+)
+
+func (a ReferenceAction) walkSubtree(visit Visit) error { return nil }
+
+// Format formats the node.
+func (a ReferenceAction) Format(buf *TrackedBuffer) {
+	switch a {
+	case Restrict:
+		buf.WriteString("restrict")
+	case Cascade:
+		buf.WriteString("cascade")
+	case NoAction:
+		buf.WriteString("no action")
+	case SetNull:
+		buf.WriteString("set null")
+	case SetDefault:
+		buf.WriteString("set default")
+	}
+}
+
 // ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
 type ForeignKeyDefinition struct {
 	Source            Columns
 	ReferencedTable   TableName
 	ReferencedColumns Columns
+	OnDelete          ReferenceAction
+	OnUpdate          ReferenceAction
 }
 
 var _ ConstraintInfo = &ForeignKeyDefinition{}
@@ -1372,6 +1448,12 @@ var _ ConstraintInfo = &ForeignKeyDefinition{}
 // Format formats the node.
 func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 	buf.Myprintf("foreign key %v references %v %v", f.Source, f.ReferencedTable, f.ReferencedColumns)
+	if f.OnDelete != DefaultAction {
+		buf.Myprintf(" on delete %v", f.OnDelete)
+	}
+	if f.OnUpdate != DefaultAction {
+		buf.Myprintf(" on update %v", f.OnUpdate)
+	}
 }
 
 func (f *ForeignKeyDefinition) constraintInfo() {}
@@ -3329,11 +3411,28 @@ type SetExpr struct {
 	Expr Expr
 }
 
+// SetExpr.Expr, for SET TRANSACTION ... or START TRANSACTION
+const (
+	// TransactionStr is the Name for a SET TRANSACTION statement
+	TransactionStr = "transaction"
+
+	IsolationLevelReadUncommitted = "isolation level read uncommitted"
+	IsolationLevelReadCommitted   = "isolation level read committed"
+	IsolationLevelRepeatableRead  = "isolation level repeatable read"
+	IsolationLevelSerializable    = "isolation level serializable"
+
+	TxReadOnly  = "read only"
+	TxReadWrite = "read write"
+)
+
 // Format formats the node.
 func (node *SetExpr) Format(buf *TrackedBuffer) {
 	// We don't have to backtick set variable names.
 	if node.Name.EqualString("charset") || node.Name.EqualString("names") {
 		buf.Myprintf("%s %v", node.Name.String(), node.Expr)
+	} else if node.Name.EqualString(TransactionStr) {
+		sqlVal := node.Expr.(*SQLVal)
+		buf.Myprintf("%s %s", node.Name.String(), strings.ToLower(string(sqlVal.Val)))
 	} else {
 		buf.Myprintf("%s = %v", node.Name.String(), node.Expr)
 	}

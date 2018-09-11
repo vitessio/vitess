@@ -465,9 +465,9 @@ class Tablet(object):
     args.extend(['-tablet_manager_protocol',
                  protocols_flavor().tablet_manager_protocol()])
     args.extend(['-tablet_protocol', protocols_flavor().tabletconn_protocol()])
-    args.extend(['-binlog_player_healthcheck_topology_refresh', '1s'])
-    args.extend(['-binlog_player_healthcheck_retry_delay', '1s'])
-    args.extend(['-binlog_player_retry_delay', '1s'])
+    args.extend(['-vreplication_healthcheck_topology_refresh', '1s'])
+    args.extend(['-vreplication_healthcheck_retry_delay', '1s'])
+    args.extend(['-vreplication_retry_delay', '1s'])
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
     # always enable_replication_reporter with somewhat short values for tests
     args.extend(['-health_check_interval', '2s'])
@@ -739,11 +739,11 @@ class Tablet(object):
               expected)
         logging.debug('  vttablet not answering at /debug/vars, waiting...')
       else:
-        if 'BinlogPlayerMapSize' not in v:
+        if 'VReplicationStreamCount' not in v:
           logging.debug(
-              '  vttablet not exporting BinlogPlayerMapSize, waiting...')
+              '  vttablet not exporting VReplicationStreamCount, waiting...')
         else:
-          s = v['BinlogPlayerMapSize']
+          s = v['VReplicationStreamCount']
           if s != expected:
             logging.debug("  vttablet's binlog player map has count %d != %d",
                           s, expected)

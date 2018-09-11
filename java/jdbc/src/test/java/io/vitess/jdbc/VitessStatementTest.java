@@ -742,5 +742,15 @@ import io.vitess.util.Constants;
             Assert.assertEquals(i, 0); // we should only have one
             i++;
         }
+
+        VitessStatement noUpdate = new VitessStatement(mockConn);
+        PowerMockito.when(mockCursor.getInsertId()).thenReturn(0L);
+        PowerMockito.when(mockCursor.getRowsAffected()).thenReturn(1L);
+
+        noUpdate.addBatch(sqlUpsert);
+        noUpdate.executeBatch();
+
+        ResultSet empty = noUpdate.getGeneratedKeys();
+        Assert.assertFalse(empty.next());
     }
 }

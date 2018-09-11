@@ -113,3 +113,23 @@ message StreamTablesRequest {
 message StreamTablesResponse {
   BinlogTransaction binlog_transaction = 1;
 }
+
+// BinlogSource specifies the source  and filter parameters for
+// Filtered Replication. It currently supports a keyrange
+// or a list of tables.
+message BinlogSource {
+  // the source keyspace
+  string keyspace = 1;
+
+  // the source shard
+  string shard = 2;
+
+  // the source tablet type
+  topodata.TabletType tablet_type = 3;
+
+  // key_range is set if the request is for a keyrange
+  topodata.KeyRange key_range = 4;
+
+  // tables is set if the request is for a list of tables
+  repeated string tables = 5;
+}

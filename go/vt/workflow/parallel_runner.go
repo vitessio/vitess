@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package resharding
+package workflow
 
 import (
 	"fmt"
@@ -24,9 +24,11 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/workflow"
+	"vitess.io/vitess/go/vt/topo"
 
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
@@ -50,13 +52,16 @@ const (
 
 const taskFinishedMessage = "task finished"
 
+// PhaseType is used to store the phase name in a workflow.
+type PhaseType string
+
 // ParallelRunner is used to control executing tasks concurrently.
 // Each phase has its own ParallelRunner object.
 type ParallelRunner struct {
 	ctx              context.Context
 	uiLogger         *logutil.MemoryLogger
-	rootUINode       *workflow.Node
-	phaseUINode      *workflow.Node
+	rootUINode       *Node
+	phaseUINode      *Node
 	checkpointWriter *CheckpointWriter
 	// tasks stores selected tasks for the phase with expected execution order.
 	tasks            []*workflowpb.Task
@@ -76,7 +81,7 @@ type ParallelRunner struct {
 }
 
 // NewParallelRunner returns a new ParallelRunner.
-func NewParallelRunner(ctx context.Context, rootUINode *workflow.Node, cp *CheckpointWriter, tasks []*workflowpb.Task, executeFunc func(context.Context, *workflowpb.Task) error, concurrencyLevel level, enableApprovals bool) *ParallelRunner {
+func NewParallelRunner(ctx context.Context, rootUINode *Node, cp *CheckpointWriter, tasks []*workflowpb.Task, executeFunc func(context.Context, *workflowpb.Task) error, concurrencyLevel level, enableApprovals bool) *ParallelRunner {
 	if len(tasks) < 1 {
 		log.Fatal("BUG: No tasks passed into ParallelRunner")
 	}
@@ -251,7 +256,7 @@ func (p *ParallelRunner) triggerRetry(taskID string) error {
 	if len(node.Actions) == 0 {
 		log.Fatal("BUG: node actions should not be empty")
 	}
-	node.Actions = []*workflow.Action{}
+	node.Actions = []*Action{}
 	node.BroadcastChanges(false /* updateChildren */)
 	close(retryChannel)
 	return nil
@@ -274,12 +279,12 @@ func (p *ParallelRunner) addRetryAction(taskID string) chan struct{} {
 	p.retryActionRegistry[taskID] = retryChannel
 
 	// Enable retry action on the node.
-	retryAction := &workflow.Action{
+	retryAction := &Action{
 		Name:  actionNameRetry,
-		State: workflow.ActionStateEnabled,
-		Style: workflow.ActionStyleWaiting,
+		State: ActionStateEnabled,
+		Style: ActionStyleWaiting,
 	}
-	node.Actions = []*workflow.Action{retryAction}
+	node.Actions = []*Action{retryAction}
 	node.Listener = p
 	node.BroadcastChanges(false /* updateChildren */)
 	return retryChannel
@@ -298,10 +303,10 @@ func (p *ParallelRunner) initApprovalActions() {
 		return
 	}
 
-	actionFirstApproval := &workflow.Action{
+	actionFirstApproval := &Action{
 		Name:  actionNameApproveFirstTask,
-		State: workflow.ActionStateDisabled,
-		Style: workflow.ActionStyleTriggered,
+		State: ActionStateDisabled,
+		Style: ActionStyleTriggered,
 	}
 	if isTaskSucceeded(p.tasks[0]) || isTaskRunning(p.tasks[0]) {
 		// Reset the action name if the first task is running or has succeeded.
@@ -311,14 +316,14 @@ func (p *ParallelRunner) initApprovalActions() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.phaseUINode.Actions = []*workflow.Action{actionFirstApproval}
+	p.phaseUINode.Actions = []*Action{actionFirstApproval}
 	// Add the approval action for the remaining tasks,
 	// if there are more than one tasks.
 	if len(p.tasks) > 1 {
-		actionRemainingTasksApproval := &workflow.Action{
+		actionRemainingTasksApproval := &Action{
 			Name:  actionNameApproveRemainingTasks,
-			State: workflow.ActionStateDisabled,
-			Style: workflow.ActionStyleTriggered,
+			State: ActionStateDisabled,
+			Style: ActionStyleTriggered,
 		}
 		if isTaskSucceeded(p.tasks[1]) || isTaskRunning(p.tasks[1]) {
 			// Reset the action name if the second task is running or has succeeded.
@@ -349,7 +354,7 @@ func (p *ParallelRunner) waitForApproval(taskIndex int) {
 		p.mu.Lock()
 		p.firstTaskApproved = make(chan struct{})
 		firstTaskApproved := p.firstTaskApproved
-		p.updateApprovalActionLocked(0, actionNameApproveFirstTask, workflow.ActionStateEnabled, workflow.ActionStyleWaiting)
+		p.updateApprovalActionLocked(0, actionNameApproveFirstTask, ActionStateEnabled, ActionStyleWaiting)
 		p.mu.Unlock()
 
 		p.setUIMessage(fmt.Sprintf("approve first task enabled: %v", taskIndex))
@@ -358,7 +363,7 @@ func (p *ParallelRunner) waitForApproval(taskIndex int) {
 		case <-firstTaskApproved:
 			p.mu.Lock()
 			defer p.mu.Unlock()
-			p.updateApprovalActionLocked(0, actionNameApproveFirstTaskDone, workflow.ActionStateDisabled, workflow.ActionStyleTriggered)
+			p.updateApprovalActionLocked(0, actionNameApproveFirstTaskDone, ActionStateDisabled, ActionStyleTriggered)
 		case <-p.ctx.Done():
 			return
 		}
@@ -367,7 +372,7 @@ func (p *ParallelRunner) waitForApproval(taskIndex int) {
 		p.remainingTasksApproved = make(chan struct{})
 
 		remainingTasksApproved := p.remainingTasksApproved
-		p.updateApprovalActionLocked(1, actionNameApproveRemainingTasks, workflow.ActionStateEnabled, workflow.ActionStyleWaiting)
+		p.updateApprovalActionLocked(1, actionNameApproveRemainingTasks, ActionStateEnabled, ActionStyleWaiting)
 		p.mu.Unlock()
 
 		p.setUIMessage(fmt.Sprintf("approve remaining task enabled: %v", taskIndex))
@@ -376,14 +381,14 @@ func (p *ParallelRunner) waitForApproval(taskIndex int) {
 		case <-remainingTasksApproved:
 			p.mu.Lock()
 			defer p.mu.Unlock()
-			p.updateApprovalActionLocked(1, actionNameApproveRemainingTasksDone, workflow.ActionStateDisabled, workflow.ActionStyleTriggered)
+			p.updateApprovalActionLocked(1, actionNameApproveRemainingTasksDone, ActionStateDisabled, ActionStyleTriggered)
 		case <-p.ctx.Done():
 			return
 		}
 	}
 }
 
-func (p *ParallelRunner) updateApprovalActionLocked(index int, name string, state workflow.ActionState, style workflow.ActionStyle) {
+func (p *ParallelRunner) updateApprovalActionLocked(index int, name string, state ActionState, style ActionStyle) {
 	action := p.phaseUINode.Actions[index]
 	action.Name = name
 	action.State = state
@@ -396,7 +401,7 @@ func (p *ParallelRunner) clearPhaseActions() {
 	defer p.mu.Unlock()
 
 	if len(p.phaseUINode.Actions) != 0 {
-		p.phaseUINode.Actions = []*workflow.Action{}
+		p.phaseUINode.Actions = []*Action{}
 		p.phaseUINode.BroadcastChanges(false /* updateChildren */)
 	}
 }
@@ -421,4 +426,51 @@ func (p *ParallelRunner) setUIMessage(message string) {
 	p.phaseUINode.Log = p.uiLogger.String()
 	p.phaseUINode.Message = message
 	p.phaseUINode.BroadcastChanges(false /* updateChildren */)
+}
+
+// VerifyAllTasksDone checks that all tasks are done in a workflow. This should only be used for test purposes.
+func VerifyAllTasksDone(ctx context.Context, ts *topo.Server, uuid string) error {
+	return verifyAllTasksState(ctx, ts, uuid, workflowpb.TaskState_TaskDone)
+}
+
+//verifyAllTasksState verifies that all tasks are in taskState. Only for tests purposes.
+func verifyAllTasksState(ctx context.Context, ts *topo.Server, uuid string, taskState workflowpb.TaskState) error {
+	checkpoint, err := checkpoint(ctx, ts, uuid)
+	if err != nil {
+		return err
+	}
+
+	for _, task := range checkpoint.Tasks {
+		if task.State != taskState || task.Error != "" {
+			return fmt.Errorf("task: %v should succeed: task status: %v, %v", task.Id, task.State, task.Attributes)
+		}
+	}
+	return nil
+}
+
+// verifyTask verifies that a task is in taskState. Only for test purposes.
+func verifyTask(ctx context.Context, ts *topo.Server, uuid, taskID string, taskState workflowpb.TaskState, taskError string) error {
+	checkpoint, err := checkpoint(ctx, ts, uuid)
+	if err != nil {
+		return err
+	}
+	task := checkpoint.Tasks[taskID]
+
+	if task.State != taskState || task.Error != taskError {
+		return fmt.Errorf("task status: %v, %v fails to match expected status: %v, %v", task.State, task.Error, taskState, taskError)
+	}
+	return nil
+}
+
+// checkpoint gets Worfklow from topo server. Only for test purposes.
+func checkpoint(ctx context.Context, ts *topo.Server, uuid string) (*workflowpb.WorkflowCheckpoint, error) {
+	wi, err := ts.GetWorkflow(ctx, uuid)
+	if err != nil {
+		return nil, fmt.Errorf("fail to get workflow for: %v", uuid)
+	}
+	checkpoint := &workflowpb.WorkflowCheckpoint{}
+	if err := proto.Unmarshal(wi.Data, checkpoint); err != nil {
+		return nil, fmt.Errorf("fails to get checkpoint for the workflow: %v", err)
+	}
+	return checkpoint, nil
 }

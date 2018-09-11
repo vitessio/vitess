@@ -31,6 +31,107 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
+	ts := memorytopo.NewServer("cell1", "cell2")
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	vp := NewVtctlPipe(t, ts)
+	defer vp.Close()
+
+	// Create a master, a couple good slaves
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
+	goodSlave1 := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, nil)
+
+	// new master
+	newMaster.FakeMysqlDaemon.ReadOnly = true
+	newMaster.FakeMysqlDaemon.Replicating = true
+	newMaster.FakeMysqlDaemon.WaitMasterPosition = mysql.Position{
+		GTIDSet: mysql.MariadbGTID{
+			Domain:   7,
+			Server:   123,
+			Sequence: 990,
+		},
+	}
+	newMaster.FakeMysqlDaemon.PromoteSlaveResult = mysql.Position{
+		GTIDSet: mysql.MariadbGTID{
+			Domain:   7,
+			Server:   456,
+			Sequence: 991,
+		},
+	}
+	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"CREATE DATABASE IF NOT EXISTS _vt",
+		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
+		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
+	}
+	newMaster.StartActionLoop(t, wr)
+	defer newMaster.StopActionLoop(t)
+
+	// old master
+	oldMaster.FakeMysqlDaemon.ReadOnly = false
+	oldMaster.FakeMysqlDaemon.Replicating = false
+	oldMaster.FakeMysqlDaemon.DemoteMasterPosition = newMaster.FakeMysqlDaemon.WaitMasterPosition
+	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
+	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
+	oldMaster.StartActionLoop(t, wr)
+	defer oldMaster.StopActionLoop(t)
+	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+
+	// good slave 1 is replicating
+	goodSlave1.FakeMysqlDaemon.ReadOnly = true
+	goodSlave1.FakeMysqlDaemon.Replicating = true
+	goodSlave1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
+	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
+	goodSlave1.StartActionLoop(t, wr)
+	defer goodSlave1.StopActionLoop(t)
+
+	// run PlannedReparentShard
+	if err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard}); err != nil {
+		t.Fatalf("PlannedReparentShard failed: %v", err)
+	}
+
+	// // check what was run
+	if err := newMaster.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
+		t.Errorf("newMaster.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+	}
+	if err := oldMaster.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
+		t.Errorf("oldMaster.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+	}
+	if err := goodSlave1.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
+		t.Errorf("goodSlave1.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+	}
+	if newMaster.FakeMysqlDaemon.ReadOnly {
+		t.Errorf("newMaster.FakeMysqlDaemon.ReadOnly set")
+	}
+	if !oldMaster.FakeMysqlDaemon.ReadOnly {
+		t.Errorf("oldMaster.FakeMysqlDaemon.ReadOnly not set")
+	}
+	if !goodSlave1.FakeMysqlDaemon.ReadOnly {
+		t.Errorf("goodSlave1.FakeMysqlDaemon.ReadOnly not set")
+	}
+	if !oldMaster.Agent.QueryServiceControl.IsServing() {
+		t.Errorf("oldMaster...QueryServiceControl not serving")
+	}
+
+	// // verify the old master was told to start replicating (and not
+	// // the slave that wasn't replicating in the first place)
+	if !oldMaster.FakeMysqlDaemon.Replicating {
+		t.Errorf("oldMaster.FakeMysqlDaemon.Replicating not set")
+	}
+	if !goodSlave1.FakeMysqlDaemon.Replicating {
+		t.Errorf("goodSlave1.FakeMysqlDaemon.Replicating not set")
+	}
+	checkSemiSyncEnabled(t, true, true, newMaster)
+	checkSemiSyncEnabled(t, false, true, goodSlave1, oldMaster)
+}
+
 func TestPlannedReparentShard(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())

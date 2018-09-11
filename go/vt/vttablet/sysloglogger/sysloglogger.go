@@ -18,6 +18,7 @@ limitations under the License.
 package sysloglogger
 
 import (
+	"bytes"
 	"flag"
 	"log/syslog"
 
@@ -73,7 +74,12 @@ func run() {
 			log.Errorf("Unexpected value in query logs: %#v (expecting value of type %T)", out, &tabletenv.LogStats{})
 			continue
 		}
-		if err := writer.Info(stats.Format(formatParams)); err != nil {
+		var b bytes.Buffer
+		if err := stats.Logf(&b, formatParams); err != nil {
+			log.Errorf("Error formatting logStats: %v", err)
+			continue
+		}
+		if err := writer.Info(b.String()); err != nil {
 			log.Errorf("Error writing to syslog: %v", err)
 			continue
 		}

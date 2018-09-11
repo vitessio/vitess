@@ -172,19 +172,13 @@ class TestBinlog(unittest.TestCase):
     # Vitess tablets default to using utf8, so we insert something crazy and
     # pretend it's latin1. If the binlog player doesn't also pretend it's
     # latin1, it will be inserted as utf8, which will change its value.
+    sql = ("INSERT INTO test_table (id, keyspace_id, msg) "
+           "VALUES (41523, 1, 'Šṛ́rỏé') /* vtgate:: keyspace_id:00000001 */")
     src_master.mquery(
         'vt_test_keyspace',
-        "INSERT INTO test_table (id, keyspace_id, msg) "
-        "VALUES (41523, 1, 'Šṛ́rỏé') /* vtgate:: keyspace_id:00000001 */",
+        sql,
         conn_params={'charset': 'latin1'}, write=True)
-
-    # Wait for it to replicate.
-    event = utils.run_vtctl_json(['VtTabletUpdateStream',
-                                  '-position', start_position,
-                                  '-count', '1',
-                                  dst_replica.tablet_alias])
-    self.assertIn('event_token', event)
-    self.assertIn('timestamp', event['event_token'])
+    self._wait_for_replica_event(start_position, sql)
 
     # Check the value.
     data = dst_master.mquery(

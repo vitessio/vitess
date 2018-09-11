@@ -31,7 +31,6 @@ import io.vitess.proto.Query;
 import io.vitess.proto.Topodata;
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;
-import java.util.function.Function;
 
 public class ConnectionProperties {
 
@@ -194,6 +193,14 @@ public class ConnectionProperties {
         "refreshSeconds",
         "How often in seconds the driver will monitor for changes to the keystore and truststore files, when refreshConnection is enabled.",
         60);
+    private BooleanConnectionProperty refreshClosureDelayed = new BooleanConnectionProperty(
+            "refreshClosureDelayed",
+            "When enabled, the closing of the old connections will be delayed instead of happening instantly.",
+            false);
+    private LongConnectionProperty refreshClosureDelaySeconds = new LongConnectionProperty(
+            "refreshClosureDelaySeconds",
+            "How often in seconds the grace period before closing the old connections that had been recreated.",
+            300);
     private StringConnectionProperty keyStore = new StringConnectionProperty(
         Constants.Property.KEYSTORE,
         "The Java .JKS keystore file to use when TLS is enabled",
@@ -515,6 +522,22 @@ public class ConnectionProperties {
 
     public void setRefreshSeconds(long refreshSeconds) {
         this.refreshSeconds.setValue(refreshSeconds);
+    }
+
+    public boolean getRefreshClosureDelayed() {
+        return refreshClosureDelayed.getValueAsBoolean();
+    }
+
+    public void setRefreshClosureDelayed(boolean refreshClosureDelayed) {
+        this.refreshClosureDelayed.setValue(refreshClosureDelayed);
+    }
+
+    public long getRefreshClosureDelaySeconds() {
+        return refreshClosureDelaySeconds.getValueAsLong();
+    }
+
+    public void setRefreshClosureDelaySeconds(long refreshClosureDelaySeconds) {
+        this.refreshClosureDelaySeconds.setValue(refreshClosureDelaySeconds);
     }
 
     public String getKeyStore() {

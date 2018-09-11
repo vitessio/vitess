@@ -10,11 +10,18 @@ To start Consul(which saves the topology config), vtctld, vtgate and a few vttab
 ```
 vitess/examples/compose$ docker-compose up -d
 ```
+Note that the vtgate container will likely fail to start.
 
 ### Load the schema
 We need to create a few tables into our new cluster. To do that, we can run the `ApplySchema` command.
 ```
 vitess/examples/compose$ ./lvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
+```
+
+### Complete starting the cluster
+Now that schema has been loaded a second start will bring vtgate up as well.
+```
+vitess/examples/compose$ docker-compose up -d
 ```
 
 ### Run the client to insert and read some data

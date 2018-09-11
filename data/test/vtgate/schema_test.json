@@ -12,7 +12,7 @@
           "owner": "multicolvin"
         },
         "user_md5_index": {
-          "type": "hash_test"
+          "type": "unicode_loose_md5"
         },
         "music_user_map": {
           "type": "lookup_test",
@@ -155,6 +155,9 @@
               "name": "music_user_map"
             }
           ]
+        },
+        "pin_test": {
+          "pinned": "80"
         },
         "weird`name": {
           "column_vindexes": [

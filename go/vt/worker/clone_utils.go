@@ -18,78 +18,19 @@ package worker
 
 import (
 	"bytes"
-	"fmt"
 	"regexp"
-	"text/template"
-	"time"
-
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/wrangler"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 //
 // This file contains utility functions for clone workers.
 //
 
-// Does a topo lookup for a single shard, and returns:
-//	1. Slice of all tablet aliases for the shard.
-//	2. Map of tablet alias : tablet record for all tablets.
-func resolveRefreshTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (refreshAliases []*topodatapb.TabletAlias, refreshTablets map[string]*topo.TabletInfo, err error) {
-	// Keep a long timeout, because we really don't want the copying to succeed, and then the worker to fail at the end.
-	shortCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	refreshAliases, err = wr.TopoServer().FindAllTabletAliasesInShard(shortCtx, keyspace, shard)
-	cancel()
-	if err != nil {
-		return nil, nil, fmt.Errorf("cannot find all refresh target tablets in %v/%v: %v", keyspace, shard, err)
-	}
-	wr.Logger().Infof("Found %v refresh target aliases in shard %v/%v", len(refreshAliases), keyspace, shard)
-
-	shortCtx, cancel = context.WithTimeout(ctx, 5*time.Minute)
-	refreshTablets, err = wr.TopoServer().GetTabletMap(shortCtx, refreshAliases)
-	cancel()
-	if err != nil {
-		return nil, nil, fmt.Errorf("cannot read all refresh target tablets in %v/%v: %v",
-			keyspace, shard, err)
-	}
-	return refreshAliases, refreshTablets, nil
-}
-
 var errExtract = regexp.MustCompile(`\(errno (\d+)\)`)
-
-// fillStringTemplate returns the string template filled
-func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
-	myTemplate := template.Must(template.New("").Parse(tmpl))
-	data := new(bytes.Buffer)
-	if err := myTemplate.Execute(data, vars); err != nil {
-		return "", err
-	}
-	return data.String(), nil
-}
-
-// runSQLCommands will send the sql commands to the remote tablet.
-func runSQLCommands(ctx context.Context, wr *wrangler.Wrangler, tsc *discovery.TabletStatsCache, keyspace, shard, dbName string, commands []string) error {
-	for _, command := range commands {
-		command, err := fillStringTemplate(command, map[string]string{"DatabaseName": dbName})
-		if err != nil {
-			return fmt.Errorf("fillStringTemplate failed: %v", err)
-		}
-
-		executor := newExecutor(wr, tsc, nil /* throttler */, keyspace, shard, 0 /* threadID */)
-		if err := executor.fetchWithRetries(ctx, command); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
 
 // makeValueString returns a string that contains all the passed-in rows
 // as an insert SQL command's parameters.

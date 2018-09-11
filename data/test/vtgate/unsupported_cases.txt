@@ -1,6 +1,6 @@
 # Unions
 "select * from user union select * from user_extra"
-"unsupported: UNION on multi-shard queries"
+"unsupported: UNION or subquery containing multi-shard queries"
 
 # SET
 "set a=1"
@@ -29,11 +29,11 @@
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
-"unsupported: UNION on multi-shard queries"
+"unsupported: UNION or subquery containing multi-shard queries"
 
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
-"unsupported: UNION on multi-shard queries"
+"unsupported: UNION or subquery containing multi-shard queries"
 
 # subquery with join primitive (expressions)
 "select * from user where id in (select user.id from user join user_extra)"
@@ -77,11 +77,11 @@
 
 # subquery does not depend on unique vindex of outer query
 "select id from user where id in (select user_id from user_extra where user_extra.user_id = user.col)"
-"unsupported: subquery does not depend on scatter outer query"
+"unsupported: UNION or subquery containing multi-shard queries"
 
 # subquery does not depend on scatter outer query
 "select id from user where id in (select user_id from user_extra where user_extra.user_id = 4)"
-"unsupported: subquery does not depend on scatter outer query"
+"unsupported: UNION or subquery containing multi-shard queries"
 
 # subquery depends on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t where id in (select t.col from user)"
@@ -105,7 +105,7 @@
 
 # subquery and outer query route to different shards
 "select id from user where id = 5 and id in (select user_id from user_extra where user_extra.user_id = 4)"
-"unsupported: subquery and parent route to different shards"
+"unsupported: UNION or subquery on different shards: vindex values are different"
 
 # last_insert_id for sharded keyspace
 "select last_insert_id() from user"
@@ -433,7 +433,7 @@
 
 # multi-shard union
 "(select id from user union select id from music) union select 1 from dual"
-"unsupported: UNION on multi-shard queries"
+"unsupported: UNION or subquery containing multi-shard queries"
 
 # multi-shard union
 "select 1 from music union (select id from user union all select name from unsharded)"
@@ -445,15 +445,19 @@
 
 # multi-shard union
 "select id from user union all select id from music"
-"unsupported: UNION on multi-shard queries"
+"unsupported: UNION or subquery containing multi-shard queries"
+
+# union with the same target shard because of vindex
+"select * from music where id = 1 union select * from user where id = 1"
+"unsupported: UNION or subquery on different shards: vindexes are different"
 
 # union with different target shards
 "select 1 from music where id = 1 union select 1 from music where id = 2"
-"unsupported: UNION queries with different target shards"
+"unsupported: UNION or subquery on different shards: vindex values are different"
 
 # Union all
 "select col1, col2 from user union all select col1, col2 from user_extra"
-"unsupported: UNION on multi-shard queries"
+"unsupported: UNION or subquery containing multi-shard queries"
 
 "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user"
 "unsupported construct: SELECT of UNION is non-trivial"

@@ -74,7 +74,7 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
-	case IsQuoted(typ) || typ == Null:
+	case IsQuoted(typ) || typ == Bit || typ == Null:
 		return MakeTrusted(typ, val), nil
 	}
 	// All other types are unsafe or invalid.
@@ -205,7 +205,7 @@ func (v Value) String() string {
 	if v.typ == Null {
 		return "NULL"
 	}
-	if v.IsQuoted() {
+	if v.IsQuoted() || v.typ == Bit {
 		return fmt.Sprintf("%v(%q)", v.typ, v.val)
 	}
 	return fmt.Sprintf("%v(%s)", v.typ, v.val)
@@ -218,6 +218,8 @@ func (v Value) EncodeSQL(b BinWriter) {
 		b.Write(nullstr)
 	case v.IsQuoted():
 		encodeBytesSQL(v.val, b)
+	case v.typ == Bit:
+		encodeBytesSQLBits(v.val, b)
 	default:
 		b.Write(v.val)
 	}
@@ -228,7 +230,7 @@ func (v Value) EncodeASCII(b BinWriter) {
 	switch {
 	case v.typ == Null:
 		b.Write(nullstr)
-	case v.IsQuoted():
+	case v.IsQuoted() || v.typ == Bit:
 		encodeBytesASCII(v.val, b)
 	default:
 		b.Write(v.val)
@@ -279,7 +281,7 @@ func (v Value) IsBinary() bool {
 // It's not a complete implementation.
 func (v Value) MarshalJSON() ([]byte, error) {
 	switch {
-	case v.IsQuoted():
+	case v.IsQuoted() || v.typ == Bit:
 		return json.Marshal(v.ToString())
 	case v.typ == Null:
 		return nullstr, nil
@@ -331,6 +333,14 @@ func encodeBytesSQL(val []byte, b BinWriter) {
 	}
 	buf.WriteByte('\'')
 	b.Write(buf.Bytes())
+}
+
+func encodeBytesSQLBits(val []byte, b BinWriter) {
+	fmt.Fprint(b, "b'")
+	for _, ch := range val {
+		fmt.Fprintf(b, "%08b", ch)
+	}
+	fmt.Fprint(b, "'")
 }
 
 func encodeBytesASCII(val []byte, b BinWriter) {

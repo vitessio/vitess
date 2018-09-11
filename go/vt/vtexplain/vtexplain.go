@@ -63,6 +63,10 @@ type Options struct {
 	// StrictDDL is used in unit tests only to verify that the schema
 	// is parsed properly.
 	StrictDDL bool
+
+	// Target is used to override the "database" target in the
+	// vtgate session to simulate `USE <target>`
+	Target string
 }
 
 // TabletQuery defines a query that was sent to a given tablet and how it was

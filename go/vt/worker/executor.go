@@ -21,11 +21,13 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -34,6 +36,7 @@ import (
 // To-be-written data will be passed in through a channel.
 // The main purpose of this struct is to aggregate the objects which won't
 // change during the execution and remove them from method signatures.
+// executor is also used for executing vreplication and RefreshState commands.
 type executor struct {
 	wr        *wrangler.Wrangler
 	tsc       *discovery.TabletStatsCache
@@ -68,7 +71,10 @@ func (e *executor) fetchLoop(ctx context.Context, insertChannel chan string) err
 				// no more to read, we're done
 				return nil
 			}
-			if err := e.fetchWithRetries(ctx, cmd); err != nil {
+			if err := e.fetchWithRetries(ctx, func(ctx context.Context, tablet *topodatapb.Tablet) error {
+				_, err := e.wr.TabletManagerClient().ExecuteFetchAsApp(ctx, tablet, true, []byte(cmd), 0)
+				return err
+			}); err != nil {
 				return fmt.Errorf("ExecuteFetch failed: %v", err)
 			}
 		case <-ctx.Done():
@@ -80,6 +86,25 @@ func (e *executor) fetchLoop(ctx context.Context, insertChannel chan string) err
 	}
 }
 
+func (e *executor) vreplicationExec(ctx context.Context, cmd string) (qr *sqltypes.Result, err error) {
+	var result *querypb.QueryResult
+	err = e.fetchWithRetries(ctx, func(ctx context.Context, tablet *topodatapb.Tablet) error {
+		var err error
+		result, err = e.wr.TabletManagerClient().VReplicationExec(ctx, tablet, cmd)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return sqltypes.Proto3ToResult(result), err
+}
+
+func (e *executor) refreshState(ctx context.Context) error {
+	return e.fetchWithRetries(ctx, func(ctx context.Context, tablet *topodatapb.Tablet) error {
+		return e.wr.TabletManagerClient().RefreshState(ctx, tablet)
+	})
+}
+
 // fetchWithRetries will attempt to run ExecuteFetch for a single command, with
 // a reasonably small timeout.
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if
@@ -87,7 +112,7 @@ func (e *executor) fetchLoop(ctx context.Context, insertChannel chan string) err
 //
 // executeFetchWithRetries will always get the current MASTER tablet from the
 // TabletStatsCache instance. If no MASTER is available, it will keep retrying.
-func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
+func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context.Context, tablet *topodatapb.Tablet) error) error {
 	retryDuration := *retryDuration
 	// We should keep retrying up until the retryCtx runs out.
 	retryCtx, retryCancel := context.WithTimeout(ctx, retryDuration)
@@ -124,7 +149,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 		// new variables until the label is reached.)
 		{
 			tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
-			_, err = e.wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, master.Tablet, true, []byte(command), 0)
+			err = action(tryCtx, master.Tablet)
 			cancel()
 
 			if err == nil {
@@ -155,7 +180,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, command string) error {
 			if retryCtx.Err() == context.DeadlineExceeded {
 				return fmt.Errorf("failed to connect to destination tablet %v after retrying for %v", tabletString, retryDuration)
 			}
-			return fmt.Errorf("interrupted (context error: %v) while trying to run %v on tablet %v", retryCtx.Err(), command, tabletString)
+			return fmt.Errorf("interrupted (context error: %v) while trying to run a command on tablet %v", retryCtx.Err(), tabletString)
 		case <-time.After(*executeFetchRetryTime):
 			// Retry 30s after the failure using the current master seen by the HealthCheck.
 		}
