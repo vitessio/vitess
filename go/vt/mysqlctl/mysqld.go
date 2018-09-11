@@ -638,20 +638,20 @@ func getMycnfTemplates(root string) []string {
 
 	switch mysqlFlavor := os.Getenv("MYSQL_FLAVOR"); mysqlFlavor {
 	case "MariaDB":
-		path := "config/mycnf/master_mariadb.cnf"
+		path := path.Join(root, "config/mycnf/master_mariadb.cnf")
 		if !contains(cnfTemplatePaths, path) {
-			cnfTemplatePaths = append(cnfTemplatePaths, "config/mycnf/master_mariadb.cnf")
+			cnfTemplatePaths = append(cnfTemplatePaths, path)
 		}
 	case "MariaDB103":
-		path := "config/mycnf/master_mariadb103.cnf"
+		path := path.Join(root, "config/mycnf/master_mariadb103.cnf")
 		if !contains(cnfTemplatePaths, path) {
-			cnfTemplatePaths = append(cnfTemplatePaths, "config/mycnf/master_mariadb103.cnf")
+			cnfTemplatePaths = append(cnfTemplatePaths, path)
 		}
 	default:
-		path := "config/mycnf/master_mysql56.cnf"
+		path := path.Join(root, "config/mycnf/master_mysql56.cnf")
 		// By default we assume Mysql56 compatable
 		if !contains(cnfTemplatePaths, path) {
-			cnfTemplatePaths = append(cnfTemplatePaths, "config/mycnf/master_mysql56.cnf")
+			cnfTemplatePaths = append(cnfTemplatePaths, path)
 		}
 	}
 
