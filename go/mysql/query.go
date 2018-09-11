@@ -40,7 +40,7 @@ func (c *Conn) WriteComQuery(query string) error {
 	data := c.startEphemeralPacket(len(query) + 1)
 	data[0] = ComQuery
 	copy(data[1:], query)
-	if err := c.writeEphemeralPacket(true); err != nil {
+	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -53,7 +53,7 @@ func (c *Conn) writeComInitDB(db string) error {
 	data := c.startEphemeralPacket(len(db) + 1)
 	data[0] = ComInitDB
 	copy(data[1:], db)
-	if err := c.writeEphemeralPacket(true); err != nil {
+	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -65,7 +65,7 @@ func (c *Conn) writeComSetOption(operation uint16) error {
 	data := c.startEphemeralPacket(16 + 1)
 	data[0] = ComSetOption
 	writeUint16(data, 1, operation)
-	if err := c.writeEphemeralPacket(true); err != nil {
+	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -481,7 +481,7 @@ func (c *Conn) sendColumnCount(count uint64) error {
 	length := lenEncIntSize(count)
 	data := c.startEphemeralPacket(length)
 	writeLenEncInt(data, 0, count)
-	return c.writeEphemeralPacket(false)
+	return c.writeEphemeralPacket()
 }
 
 func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
@@ -528,7 +528,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 		return fmt.Errorf("internal error: packing of column definition used %v bytes instead of %v", pos, len(data))
 	}
 
-	return c.writeEphemeralPacket(false)
+	return c.writeEphemeralPacket()
 }
 
 func (c *Conn) writeRow(row []sqltypes.Value) error {
@@ -558,7 +558,7 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 		return fmt.Errorf("internal error packet row: got %v bytes but expected %v", pos, length)
 	}
 
-	return c.writeEphemeralPacket(false)
+	return c.writeEphemeralPacket()
 }
 
 // writeFields writes the fields of a Result. It should be called only
@@ -607,9 +607,6 @@ func (c *Conn) writeEndResult(more bool) error {
 	}
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		if err := c.writeEOFPacket(flag, 0); err != nil {
-			return err
-		}
-		if err := c.flush(); err != nil {
 			return err
 		}
 	} else {
