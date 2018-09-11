@@ -28,7 +28,7 @@ import (
 // Path for all object types.
 const (
 	ClusterManagerPath = "cluster_manager"
-	TabletTypesPath    = "tablets_types"
+	TabletTypesPath    = "tablet_types"
 )
 
 // ClusterManager ...

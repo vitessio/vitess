@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='clustermanagerdata.proto',
   package='clustermanagerdata',
   syntax='proto3',
-  serialized_pb=_b('\n\x18\x63lustermanagerdata.proto\x12\x12\x63lustermanagerdata\x1a\x0etopodata.proto\"\x80\x01\n\x15SetShardConfigRequest\x12\x0c\n\x04\x63\x65ll\x18\x01 \x01(\t\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12\r\n\x05shard\x18\x03 \x01(\t\x12)\n\x0btablet_type\x18\x04 \x01(\x0e\x32\x14.topodata.TabletType\x12\r\n\x05nodes\x18\x05 \x01(\x05\"^\n\x18\x44\x65leteShardConfigRequest\x12\x0c\n\x04\x63\x65ll\x18\x01 \x01(\t\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12\r\n\x05shard\x18\x03 \x01(\t\x12\x13\n\x0btablet_type\x18\x04 \x01(\t\"\x1b\n\x19\x44\x65leteShardConfigResponse\"!\n\x10TabletTypeConfig\x12\r\n\x05nodes\x18\x01 \x01(\x05\"\xaf\x01\n\x0bShardConfig\x12\x46\n\x0ctablet_types\x18\x01 \x03(\x0b\x32\x30.clustermanagerdata.ShardConfig.TabletTypesEntry\x1aX\n\x10TabletTypesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x33\n\x05value\x18\x02 \x01(\x0b\x32$.clustermanagerdata.TabletTypeConfig:\x02\x38\x01\"\xa0\x01\n\x0eKeyspaceConfig\x12>\n\x06shards\x18\x01 \x03(\x0b\x32..clustermanagerdata.KeyspaceConfig.ShardsEntry\x1aN\n\x0bShardsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12.\n\x05value\x18\x02 \x01(\x0b\x32\x1f.clustermanagerdata.ShardConfig:\x02\x38\x01\"\xa4\x01\n\nCellConfig\x12@\n\tkeyspaces\x18\x01 \x03(\x0b\x32-.clustermanagerdata.CellConfig.KeyspacesEntry\x1aT\n\x0eKeyspacesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x31\n\x05value\x18\x02 \x01(\x0b\x32\".clustermanagerdata.KeyspaceConfig:\x02\x38\x01\"\x9a\x01\n\rClusterConfig\x12;\n\x05\x63\x65lls\x18\x01 \x03(\x0b\x32,.clustermanagerdata.ClusterConfig.CellsEntry\x1aL\n\nCellsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12-\n\x05value\x18\x02 \x01(\x0b\x32\x1e.clustermanagerdata.CellConfig:\x02\x38\x01\"]\n\x17GetClusterConfigRequest\x12\x0c\n\x04\x63\x65ll\x18\x01 \x01(\t\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12\r\n\x05shard\x18\x03 \x01(\t\x12\x13\n\x0btablet_type\x18\x04 \x01(\tBB\n\x0fio.vitess.protoZ/vitess.io/vitess/go/vt/proto/clustermanagerdatab\x06proto3')
+  serialized_pb=_b('\n\x18\x63lustermanagerdata.proto\x12\x12\x63lustermanagerdata\x1a\x0etopodata.proto\"\x80\x01\n\x15SetShardConfigRequest\x12\x0c\n\x04\x63\x65ll\x18\x01 \x01(\t\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12\r\n\x05shard\x18\x03 \x01(\t\x12)\n\x0btablet_type\x18\x04 \x01(\x0e\x32\x14.topodata.TabletType\x12\r\n\x05nodes\x18\x05 \x01(\x05\"^\n\x18\x44\x65leteShardConfigRequest\x12\x0c\n\x04\x63\x65ll\x18\x01 \x01(\t\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12\r\n\x05shard\x18\x03 \x01(\t\x12\x13\n\x0btablet_type\x18\x04 \x01(\t\"\x1b\n\x19\x44\x65leteShardConfigResponse\"]\n\x17GetClusterConfigRequest\x12\x0c\n\x04\x63\x65ll\x18\x01 \x01(\t\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12\r\n\x05shard\x18\x03 \x01(\t\x12\x13\n\x0btablet_type\x18\x04 \x01(\t\"\x9a\x01\n\rClusterConfig\x12;\n\x05\x63\x65lls\x18\x01 \x03(\x0b\x32,.clustermanagerdata.ClusterConfig.CellsEntry\x1aL\n\nCellsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12-\n\x05value\x18\x02 \x01(\x0b\x32\x1e.clustermanagerdata.CellConfig:\x02\x38\x01\"\xa4\x01\n\nCellConfig\x12@\n\tkeyspaces\x18\x01 \x03(\x0b\x32-.clustermanagerdata.CellConfig.KeyspacesEntry\x1aT\n\x0eKeyspacesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x31\n\x05value\x18\x02 \x01(\x0b\x32\".clustermanagerdata.KeyspaceConfig:\x02\x38\x01\"\xa0\x01\n\x0eKeyspaceConfig\x12>\n\x06shards\x18\x01 \x03(\x0b\x32..clustermanagerdata.KeyspaceConfig.ShardsEntry\x1aN\n\x0bShardsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12.\n\x05value\x18\x02 \x01(\x0b\x32\x1f.clustermanagerdata.ShardConfig:\x02\x38\x01\"\xaf\x01\n\x0bShardConfig\x12\x46\n\x0ctablet_types\x18\x01 \x03(\x0b\x32\x30.clustermanagerdata.ShardConfig.TabletTypesEntry\x1aX\n\x10TabletTypesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x33\n\x05value\x18\x02 \x01(\x0b\x32$.clustermanagerdata.TabletTypeConfig:\x02\x38\x01\"!\n\x10TabletTypeConfig\x12\r\n\x05nodes\x18\x01 \x01(\x05\x42\x42\n\x0fio.vitess.protoZ/vitess.io/vitess/go/vt/proto/clustermanagerdatab\x06proto3')
   ,
   dependencies=[topodata__pb2.DESCRIPTOR,])
 
@@ -162,309 +162,6 @@ _DELETESHARDCONFIGRESPONSE = _descriptor.Descriptor(
 )
 
 
-_TABLETTYPECONFIG = _descriptor.Descriptor(
-  name='TabletTypeConfig',
-  full_name='clustermanagerdata.TabletTypeConfig',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='nodes', full_name='clustermanagerdata.TabletTypeConfig.nodes', index=0,
-      number=1, type=5, cpp_type=1, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=320,
-  serialized_end=353,
-)
-
-
-_SHARDCONFIG_TABLETTYPESENTRY = _descriptor.Descriptor(
-  name='TabletTypesEntry',
-  full_name='clustermanagerdata.ShardConfig.TabletTypesEntry',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='key', full_name='clustermanagerdata.ShardConfig.TabletTypesEntry.key', index=0,
-      number=1, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='value', full_name='clustermanagerdata.ShardConfig.TabletTypesEntry.value', index=1,
-      number=2, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=443,
-  serialized_end=531,
-)
-
-_SHARDCONFIG = _descriptor.Descriptor(
-  name='ShardConfig',
-  full_name='clustermanagerdata.ShardConfig',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='tablet_types', full_name='clustermanagerdata.ShardConfig.tablet_types', index=0,
-      number=1, type=11, cpp_type=10, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[_SHARDCONFIG_TABLETTYPESENTRY, ],
-  enum_types=[
-  ],
-  options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=356,
-  serialized_end=531,
-)
-
-
-_KEYSPACECONFIG_SHARDSENTRY = _descriptor.Descriptor(
-  name='ShardsEntry',
-  full_name='clustermanagerdata.KeyspaceConfig.ShardsEntry',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='key', full_name='clustermanagerdata.KeyspaceConfig.ShardsEntry.key', index=0,
-      number=1, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='value', full_name='clustermanagerdata.KeyspaceConfig.ShardsEntry.value', index=1,
-      number=2, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=616,
-  serialized_end=694,
-)
-
-_KEYSPACECONFIG = _descriptor.Descriptor(
-  name='KeyspaceConfig',
-  full_name='clustermanagerdata.KeyspaceConfig',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='shards', full_name='clustermanagerdata.KeyspaceConfig.shards', index=0,
-      number=1, type=11, cpp_type=10, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[_KEYSPACECONFIG_SHARDSENTRY, ],
-  enum_types=[
-  ],
-  options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=534,
-  serialized_end=694,
-)
-
-
-_CELLCONFIG_KEYSPACESENTRY = _descriptor.Descriptor(
-  name='KeyspacesEntry',
-  full_name='clustermanagerdata.CellConfig.KeyspacesEntry',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='key', full_name='clustermanagerdata.CellConfig.KeyspacesEntry.key', index=0,
-      number=1, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='value', full_name='clustermanagerdata.CellConfig.KeyspacesEntry.value', index=1,
-      number=2, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=777,
-  serialized_end=861,
-)
-
-_CELLCONFIG = _descriptor.Descriptor(
-  name='CellConfig',
-  full_name='clustermanagerdata.CellConfig',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='keyspaces', full_name='clustermanagerdata.CellConfig.keyspaces', index=0,
-      number=1, type=11, cpp_type=10, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[_CELLCONFIG_KEYSPACESENTRY, ],
-  enum_types=[
-  ],
-  options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=697,
-  serialized_end=861,
-)
-
-
-_CLUSTERCONFIG_CELLSENTRY = _descriptor.Descriptor(
-  name='CellsEntry',
-  full_name='clustermanagerdata.ClusterConfig.CellsEntry',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='key', full_name='clustermanagerdata.ClusterConfig.CellsEntry.key', index=0,
-      number=1, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='value', full_name='clustermanagerdata.ClusterConfig.CellsEntry.value', index=1,
-      number=2, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=942,
-  serialized_end=1018,
-)
-
-_CLUSTERCONFIG = _descriptor.Descriptor(
-  name='ClusterConfig',
-  full_name='clustermanagerdata.ClusterConfig',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='cells', full_name='clustermanagerdata.ClusterConfig.cells', index=0,
-      number=1, type=11, cpp_type=10, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[_CLUSTERCONFIG_CELLSENTRY, ],
-  enum_types=[
-  ],
-  options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=864,
-  serialized_end=1018,
-)
-
-
 _GETCLUSTERCONFIGREQUEST = _descriptor.Descriptor(
   name='GetClusterConfigRequest',
   full_name='clustermanagerdata.GetClusterConfigRequest',
@@ -512,32 +209,335 @@ _GETCLUSTERCONFIGREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1020,
+  serialized_start=320,
+  serialized_end=413,
+)
+
+
+_CLUSTERCONFIG_CELLSENTRY = _descriptor.Descriptor(
+  name='CellsEntry',
+  full_name='clustermanagerdata.ClusterConfig.CellsEntry',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='key', full_name='clustermanagerdata.ClusterConfig.CellsEntry.key', index=0,
+      number=1, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='value', full_name='clustermanagerdata.ClusterConfig.CellsEntry.value', index=1,
+      number=2, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=494,
+  serialized_end=570,
+)
+
+_CLUSTERCONFIG = _descriptor.Descriptor(
+  name='ClusterConfig',
+  full_name='clustermanagerdata.ClusterConfig',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='cells', full_name='clustermanagerdata.ClusterConfig.cells', index=0,
+      number=1, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[_CLUSTERCONFIG_CELLSENTRY, ],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=416,
+  serialized_end=570,
+)
+
+
+_CELLCONFIG_KEYSPACESENTRY = _descriptor.Descriptor(
+  name='KeyspacesEntry',
+  full_name='clustermanagerdata.CellConfig.KeyspacesEntry',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='key', full_name='clustermanagerdata.CellConfig.KeyspacesEntry.key', index=0,
+      number=1, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='value', full_name='clustermanagerdata.CellConfig.KeyspacesEntry.value', index=1,
+      number=2, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=653,
+  serialized_end=737,
+)
+
+_CELLCONFIG = _descriptor.Descriptor(
+  name='CellConfig',
+  full_name='clustermanagerdata.CellConfig',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='keyspaces', full_name='clustermanagerdata.CellConfig.keyspaces', index=0,
+      number=1, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[_CELLCONFIG_KEYSPACESENTRY, ],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=573,
+  serialized_end=737,
+)
+
+
+_KEYSPACECONFIG_SHARDSENTRY = _descriptor.Descriptor(
+  name='ShardsEntry',
+  full_name='clustermanagerdata.KeyspaceConfig.ShardsEntry',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='key', full_name='clustermanagerdata.KeyspaceConfig.ShardsEntry.key', index=0,
+      number=1, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='value', full_name='clustermanagerdata.KeyspaceConfig.ShardsEntry.value', index=1,
+      number=2, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=822,
+  serialized_end=900,
+)
+
+_KEYSPACECONFIG = _descriptor.Descriptor(
+  name='KeyspaceConfig',
+  full_name='clustermanagerdata.KeyspaceConfig',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='shards', full_name='clustermanagerdata.KeyspaceConfig.shards', index=0,
+      number=1, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[_KEYSPACECONFIG_SHARDSENTRY, ],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=740,
+  serialized_end=900,
+)
+
+
+_SHARDCONFIG_TABLETTYPESENTRY = _descriptor.Descriptor(
+  name='TabletTypesEntry',
+  full_name='clustermanagerdata.ShardConfig.TabletTypesEntry',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='key', full_name='clustermanagerdata.ShardConfig.TabletTypesEntry.key', index=0,
+      number=1, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='value', full_name='clustermanagerdata.ShardConfig.TabletTypesEntry.value', index=1,
+      number=2, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=990,
+  serialized_end=1078,
+)
+
+_SHARDCONFIG = _descriptor.Descriptor(
+  name='ShardConfig',
+  full_name='clustermanagerdata.ShardConfig',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='tablet_types', full_name='clustermanagerdata.ShardConfig.tablet_types', index=0,
+      number=1, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[_SHARDCONFIG_TABLETTYPESENTRY, ],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=903,
+  serialized_end=1078,
+)
+
+
+_TABLETTYPECONFIG = _descriptor.Descriptor(
+  name='TabletTypeConfig',
+  full_name='clustermanagerdata.TabletTypeConfig',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='nodes', full_name='clustermanagerdata.TabletTypeConfig.nodes', index=0,
+      number=1, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=1080,
   serialized_end=1113,
 )
 
 _SETSHARDCONFIGREQUEST.fields_by_name['tablet_type'].enum_type = topodata__pb2._TABLETTYPE
-_SHARDCONFIG_TABLETTYPESENTRY.fields_by_name['value'].message_type = _TABLETTYPECONFIG
-_SHARDCONFIG_TABLETTYPESENTRY.containing_type = _SHARDCONFIG
-_SHARDCONFIG.fields_by_name['tablet_types'].message_type = _SHARDCONFIG_TABLETTYPESENTRY
-_KEYSPACECONFIG_SHARDSENTRY.fields_by_name['value'].message_type = _SHARDCONFIG
-_KEYSPACECONFIG_SHARDSENTRY.containing_type = _KEYSPACECONFIG
-_KEYSPACECONFIG.fields_by_name['shards'].message_type = _KEYSPACECONFIG_SHARDSENTRY
-_CELLCONFIG_KEYSPACESENTRY.fields_by_name['value'].message_type = _KEYSPACECONFIG
-_CELLCONFIG_KEYSPACESENTRY.containing_type = _CELLCONFIG
-_CELLCONFIG.fields_by_name['keyspaces'].message_type = _CELLCONFIG_KEYSPACESENTRY
 _CLUSTERCONFIG_CELLSENTRY.fields_by_name['value'].message_type = _CELLCONFIG
 _CLUSTERCONFIG_CELLSENTRY.containing_type = _CLUSTERCONFIG
 _CLUSTERCONFIG.fields_by_name['cells'].message_type = _CLUSTERCONFIG_CELLSENTRY
+_CELLCONFIG_KEYSPACESENTRY.fields_by_name['value'].message_type = _KEYSPACECONFIG
+_CELLCONFIG_KEYSPACESENTRY.containing_type = _CELLCONFIG
+_CELLCONFIG.fields_by_name['keyspaces'].message_type = _CELLCONFIG_KEYSPACESENTRY
+_KEYSPACECONFIG_SHARDSENTRY.fields_by_name['value'].message_type = _SHARDCONFIG
+_KEYSPACECONFIG_SHARDSENTRY.containing_type = _KEYSPACECONFIG
+_KEYSPACECONFIG.fields_by_name['shards'].message_type = _KEYSPACECONFIG_SHARDSENTRY
+_SHARDCONFIG_TABLETTYPESENTRY.fields_by_name['value'].message_type = _TABLETTYPECONFIG
+_SHARDCONFIG_TABLETTYPESENTRY.containing_type = _SHARDCONFIG
+_SHARDCONFIG.fields_by_name['tablet_types'].message_type = _SHARDCONFIG_TABLETTYPESENTRY
 DESCRIPTOR.message_types_by_name['SetShardConfigRequest'] = _SETSHARDCONFIGREQUEST
 DESCRIPTOR.message_types_by_name['DeleteShardConfigRequest'] = _DELETESHARDCONFIGREQUEST
 DESCRIPTOR.message_types_by_name['DeleteShardConfigResponse'] = _DELETESHARDCONFIGRESPONSE
-DESCRIPTOR.message_types_by_name['TabletTypeConfig'] = _TABLETTYPECONFIG
-DESCRIPTOR.message_types_by_name['ShardConfig'] = _SHARDCONFIG
-DESCRIPTOR.message_types_by_name['KeyspaceConfig'] = _KEYSPACECONFIG
-DESCRIPTOR.message_types_by_name['CellConfig'] = _CELLCONFIG
-DESCRIPTOR.message_types_by_name['ClusterConfig'] = _CLUSTERCONFIG
 DESCRIPTOR.message_types_by_name['GetClusterConfigRequest'] = _GETCLUSTERCONFIGREQUEST
+DESCRIPTOR.message_types_by_name['ClusterConfig'] = _CLUSTERCONFIG
+DESCRIPTOR.message_types_by_name['CellConfig'] = _CELLCONFIG
+DESCRIPTOR.message_types_by_name['KeyspaceConfig'] = _KEYSPACECONFIG
+DESCRIPTOR.message_types_by_name['ShardConfig'] = _SHARDCONFIG
+DESCRIPTOR.message_types_by_name['TabletTypeConfig'] = _TABLETTYPECONFIG
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 SetShardConfigRequest = _reflection.GeneratedProtocolMessageType('SetShardConfigRequest', (_message.Message,), dict(
@@ -561,57 +561,12 @@ DeleteShardConfigResponse = _reflection.GeneratedProtocolMessageType('DeleteShar
   ))
 _sym_db.RegisterMessage(DeleteShardConfigResponse)
 
-TabletTypeConfig = _reflection.GeneratedProtocolMessageType('TabletTypeConfig', (_message.Message,), dict(
-  DESCRIPTOR = _TABLETTYPECONFIG,
+GetClusterConfigRequest = _reflection.GeneratedProtocolMessageType('GetClusterConfigRequest', (_message.Message,), dict(
+  DESCRIPTOR = _GETCLUSTERCONFIGREQUEST,
   __module__ = 'clustermanagerdata_pb2'
-  # @@protoc_insertion_point(class_scope:clustermanagerdata.TabletTypeConfig)
+  # @@protoc_insertion_point(class_scope:clustermanagerdata.GetClusterConfigRequest)
   ))
-_sym_db.RegisterMessage(TabletTypeConfig)
-
-ShardConfig = _reflection.GeneratedProtocolMessageType('ShardConfig', (_message.Message,), dict(
-
-  TabletTypesEntry = _reflection.GeneratedProtocolMessageType('TabletTypesEntry', (_message.Message,), dict(
-    DESCRIPTOR = _SHARDCONFIG_TABLETTYPESENTRY,
-    __module__ = 'clustermanagerdata_pb2'
-    # @@protoc_insertion_point(class_scope:clustermanagerdata.ShardConfig.TabletTypesEntry)
-    ))
-  ,
-  DESCRIPTOR = _SHARDCONFIG,
-  __module__ = 'clustermanagerdata_pb2'
-  # @@protoc_insertion_point(class_scope:clustermanagerdata.ShardConfig)
-  ))
-_sym_db.RegisterMessage(ShardConfig)
-_sym_db.RegisterMessage(ShardConfig.TabletTypesEntry)
-
-KeyspaceConfig = _reflection.GeneratedProtocolMessageType('KeyspaceConfig', (_message.Message,), dict(
-
-  ShardsEntry = _reflection.GeneratedProtocolMessageType('ShardsEntry', (_message.Message,), dict(
-    DESCRIPTOR = _KEYSPACECONFIG_SHARDSENTRY,
-    __module__ = 'clustermanagerdata_pb2'
-    # @@protoc_insertion_point(class_scope:clustermanagerdata.KeyspaceConfig.ShardsEntry)
-    ))
-  ,
-  DESCRIPTOR = _KEYSPACECONFIG,
-  __module__ = 'clustermanagerdata_pb2'
-  # @@protoc_insertion_point(class_scope:clustermanagerdata.KeyspaceConfig)
-  ))
-_sym_db.RegisterMessage(KeyspaceConfig)
-_sym_db.RegisterMessage(KeyspaceConfig.ShardsEntry)
-
-CellConfig = _reflection.GeneratedProtocolMessageType('CellConfig', (_message.Message,), dict(
-
-  KeyspacesEntry = _reflection.GeneratedProtocolMessageType('KeyspacesEntry', (_message.Message,), dict(
-    DESCRIPTOR = _CELLCONFIG_KEYSPACESENTRY,
-    __module__ = 'clustermanagerdata_pb2'
-    # @@protoc_insertion_point(class_scope:clustermanagerdata.CellConfig.KeyspacesEntry)
-    ))
-  ,
-  DESCRIPTOR = _CELLCONFIG,
-  __module__ = 'clustermanagerdata_pb2'
-  # @@protoc_insertion_point(class_scope:clustermanagerdata.CellConfig)
-  ))
-_sym_db.RegisterMessage(CellConfig)
-_sym_db.RegisterMessage(CellConfig.KeyspacesEntry)
+_sym_db.RegisterMessage(GetClusterConfigRequest)
 
 ClusterConfig = _reflection.GeneratedProtocolMessageType('ClusterConfig', (_message.Message,), dict(
 
@@ -628,22 +583,67 @@ ClusterConfig = _reflection.GeneratedProtocolMessageType('ClusterConfig', (_mess
 _sym_db.RegisterMessage(ClusterConfig)
 _sym_db.RegisterMessage(ClusterConfig.CellsEntry)
 
-GetClusterConfigRequest = _reflection.GeneratedProtocolMessageType('GetClusterConfigRequest', (_message.Message,), dict(
-  DESCRIPTOR = _GETCLUSTERCONFIGREQUEST,
+CellConfig = _reflection.GeneratedProtocolMessageType('CellConfig', (_message.Message,), dict(
+
+  KeyspacesEntry = _reflection.GeneratedProtocolMessageType('KeyspacesEntry', (_message.Message,), dict(
+    DESCRIPTOR = _CELLCONFIG_KEYSPACESENTRY,
+    __module__ = 'clustermanagerdata_pb2'
+    # @@protoc_insertion_point(class_scope:clustermanagerdata.CellConfig.KeyspacesEntry)
+    ))
+  ,
+  DESCRIPTOR = _CELLCONFIG,
   __module__ = 'clustermanagerdata_pb2'
-  # @@protoc_insertion_point(class_scope:clustermanagerdata.GetClusterConfigRequest)
+  # @@protoc_insertion_point(class_scope:clustermanagerdata.CellConfig)
   ))
-_sym_db.RegisterMessage(GetClusterConfigRequest)
+_sym_db.RegisterMessage(CellConfig)
+_sym_db.RegisterMessage(CellConfig.KeyspacesEntry)
+
+KeyspaceConfig = _reflection.GeneratedProtocolMessageType('KeyspaceConfig', (_message.Message,), dict(
+
+  ShardsEntry = _reflection.GeneratedProtocolMessageType('ShardsEntry', (_message.Message,), dict(
+    DESCRIPTOR = _KEYSPACECONFIG_SHARDSENTRY,
+    __module__ = 'clustermanagerdata_pb2'
+    # @@protoc_insertion_point(class_scope:clustermanagerdata.KeyspaceConfig.ShardsEntry)
+    ))
+  ,
+  DESCRIPTOR = _KEYSPACECONFIG,
+  __module__ = 'clustermanagerdata_pb2'
+  # @@protoc_insertion_point(class_scope:clustermanagerdata.KeyspaceConfig)
+  ))
+_sym_db.RegisterMessage(KeyspaceConfig)
+_sym_db.RegisterMessage(KeyspaceConfig.ShardsEntry)
+
+ShardConfig = _reflection.GeneratedProtocolMessageType('ShardConfig', (_message.Message,), dict(
+
+  TabletTypesEntry = _reflection.GeneratedProtocolMessageType('TabletTypesEntry', (_message.Message,), dict(
+    DESCRIPTOR = _SHARDCONFIG_TABLETTYPESENTRY,
+    __module__ = 'clustermanagerdata_pb2'
+    # @@protoc_insertion_point(class_scope:clustermanagerdata.ShardConfig.TabletTypesEntry)
+    ))
+  ,
+  DESCRIPTOR = _SHARDCONFIG,
+  __module__ = 'clustermanagerdata_pb2'
+  # @@protoc_insertion_point(class_scope:clustermanagerdata.ShardConfig)
+  ))
+_sym_db.RegisterMessage(ShardConfig)
+_sym_db.RegisterMessage(ShardConfig.TabletTypesEntry)
+
+TabletTypeConfig = _reflection.GeneratedProtocolMessageType('TabletTypeConfig', (_message.Message,), dict(
+  DESCRIPTOR = _TABLETTYPECONFIG,
+  __module__ = 'clustermanagerdata_pb2'
+  # @@protoc_insertion_point(class_scope:clustermanagerdata.TabletTypeConfig)
+  ))
+_sym_db.RegisterMessage(TabletTypeConfig)
 
 
 DESCRIPTOR.has_options = True
 DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('\n\017io.vitess.protoZ/vitess.io/vitess/go/vt/proto/clustermanagerdata'))
-_SHARDCONFIG_TABLETTYPESENTRY.has_options = True
-_SHARDCONFIG_TABLETTYPESENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
-_KEYSPACECONFIG_SHARDSENTRY.has_options = True
-_KEYSPACECONFIG_SHARDSENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
-_CELLCONFIG_KEYSPACESENTRY.has_options = True
-_CELLCONFIG_KEYSPACESENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
 _CLUSTERCONFIG_CELLSENTRY.has_options = True
 _CLUSTERCONFIG_CELLSENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
+_CELLCONFIG_KEYSPACESENTRY.has_options = True
+_CELLCONFIG_KEYSPACESENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
+_KEYSPACECONFIG_SHARDSENTRY.has_options = True
+_KEYSPACECONFIG_SHARDSENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
+_SHARDCONFIG_TABLETTYPESENTRY.has_options = True
+_SHARDCONFIG_TABLETTYPESENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
 # @@protoc_insertion_point(module_scope)

@@ -11,7 +11,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// This file contains the Vitess Scaling Groups related data structures.
+// This file contains vitess cluster manager related data structures.
 
 syntax = "proto3";
 option go_package = "vitess.io/vitess/go/vt/proto/clustermanagerdata";
@@ -22,7 +22,7 @@ import "topodata.proto";
 
 package clustermanagerdata;
 
-
+// SetShardConfigRequest is the payload for SetShardConfigRequest
 message SetShardConfigRequest {
   string cell = 1;
   string keyspace = 2;
@@ -32,6 +32,7 @@ message SetShardConfigRequest {
   int32 nodes = 5;
 }
 
+// DeleteShardConfigRequest is the payload for DeleteShardConfig
 message DeleteShardConfigRequest{
   string cell = 1;
   string keyspace = 2;
@@ -39,30 +40,43 @@ message DeleteShardConfigRequest{
   string tablet_type = 4;
 }
 
+// DeleteShardConfigResponse is the returned value for DeleteShardConfigRequest.
 message DeleteShardConfigResponse{}
 
-message TabletTypeConfig {
-  int32 nodes = 1;
+// GetClustrConfigRequest is the paylaod for GetClusterConfig.
+message GetClusterConfigRequest{
+  // cell is optional
+  string cell = 1;
+  // keyspace is optional, if cell is provided
+  string keyspace = 2;
+  // shard is optional, if cell/keyspace is provided
+  string shard = 3;
+  // tablet_type is optional, if cell/keyspace/shard are provided
+  string tablet_type = 4;
 }
 
-message ShardConfig {
-  map <string, TabletTypeConfig> tablet_types = 1;
-}
-message KeyspaceConfig {
-  map <string, ShardConfig> shards = 1;
-}
-message CellConfig {
-  map<string, KeyspaceConfig> keyspaces = 1;
-}
-
-// ShardConfig defines a desired state for a given cell/keyspace/shard/tablet_type in a Vitess Cluster.
+// ClusterConfig defines the configuration for a vitess cluster.
 message ClusterConfig{
   map<string, CellConfig> cells = 1;
 }
 
-message GetClusterConfigRequest{
-  string cell = 1;
-  string keyspace = 2;
-  string shard = 3;
-  string tablet_type = 4;
+// CellConfig defines cluster configuration for cells.
+message CellConfig {
+  map<string, KeyspaceConfig> keyspaces = 1;
 }
+
+// KeyspaceConfig defines cluster configuration for keyspaces.
+message KeyspaceConfig {
+  map <string, ShardConfig> shards = 1;
+}
+
+// ShardConfig defines cluster configuration for a shard.
+message ShardConfig {
+  map <string, TabletTypeConfig> tablet_types = 1;
+}
+
+// TabletTypeConfig defines how many nodes are desired for a tablet a type.
+message TabletTypeConfig {
+  int32 nodes = 1;
+}
+

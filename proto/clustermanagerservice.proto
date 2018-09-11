@@ -11,7 +11,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// This file contains the Vitess Scaling Groups related data structures.
+// This file contains vitess cluster manager service definition
 
 syntax = "proto3";
 option go_package = "vitess.io/vitess/go/vt/proto/clustermanagerservice";
@@ -22,9 +22,14 @@ import "clustermanagerdata.proto";
 
 package clustermanagerservice;
 
-// ClusterManagerService service definition
+// VtClusterManager service definition
 service VtClusterManager {
   rpc SetShardConfig(clustermanagerdata.SetShardConfigRequest) returns (clustermanagerdata.ClusterConfig) {};
+
+  // GetClusterConfig defines api to get configuration about
+  // cell / keyspace / shard / tablet_type.
   rpc GetClusterConfig(clustermanagerdata.GetClusterConfigRequest) returns (clustermanagerdata.ClusterConfig) {};
+
+  // DeleteShardConfig removes configuration from clusterm manager
   rpc DeleteShardConfig(clustermanagerdata.DeleteShardConfigRequest) returns (clustermanagerdata.DeleteShardConfigResponse) {};
 }

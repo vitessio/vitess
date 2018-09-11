@@ -5,7 +5,7 @@ import clustermanagerdata_pb2 as clustermanagerdata__pb2
 
 
 class VtClusterManagerStub(object):
-  """ClusterManagerService service definition
+  """VtClusterManager service definition
   """
 
   def __init__(self, channel):
@@ -32,7 +32,7 @@ class VtClusterManagerStub(object):
 
 
 class VtClusterManagerServicer(object):
-  """ClusterManagerService service definition
+  """VtClusterManager service definition
   """
 
   def SetShardConfig(self, request, context):
@@ -43,15 +43,16 @@ class VtClusterManagerServicer(object):
     raise NotImplementedError('Method not implemented!')
 
   def GetClusterConfig(self, request, context):
-    # missing associated documentation comment in .proto file
-    pass
+    """GetClusterConfig defines api to get configuration about
+    cell / keyspace / shard / tablet_type.
+    """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
   def DeleteShardConfig(self, request, context):
-    # missing associated documentation comment in .proto file
-    pass
+    """DeleteShardConfig removes configuration from clusterm manager
+    """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')

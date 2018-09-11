@@ -36,7 +36,10 @@ const _ = grpc.SupportPackageIsVersion4
 
 type VtClusterManagerClient interface {
 	SetShardConfig(ctx context.Context, in *clustermanagerdata.SetShardConfigRequest, opts ...grpc.CallOption) (*clustermanagerdata.ClusterConfig, error)
+	// GetClusterConfig defines api to get configuration about
+	// cell / keyspace / shard / tablet_type.
 	GetClusterConfig(ctx context.Context, in *clustermanagerdata.GetClusterConfigRequest, opts ...grpc.CallOption) (*clustermanagerdata.ClusterConfig, error)
+	// DeleteShardConfig removes configuration from clusterm manager
 	DeleteShardConfig(ctx context.Context, in *clustermanagerdata.DeleteShardConfigRequest, opts ...grpc.CallOption) (*clustermanagerdata.DeleteShardConfigResponse, error)
 }
 
@@ -79,7 +82,10 @@ func (c *vtClusterManagerClient) DeleteShardConfig(ctx context.Context, in *clus
 
 type VtClusterManagerServer interface {
 	SetShardConfig(context.Context, *clustermanagerdata.SetShardConfigRequest) (*clustermanagerdata.ClusterConfig, error)
+	// GetClusterConfig defines api to get configuration about
+	// cell / keyspace / shard / tablet_type.
 	GetClusterConfig(context.Context, *clustermanagerdata.GetClusterConfigRequest) (*clustermanagerdata.ClusterConfig, error)
+	// DeleteShardConfig removes configuration from clusterm manager
 	DeleteShardConfig(context.Context, *clustermanagerdata.DeleteShardConfigRequest) (*clustermanagerdata.DeleteShardConfigResponse, error)
 }
 
@@ -163,10 +169,10 @@ var _VtClusterManager_serviceDesc = grpc.ServiceDesc{
 }
 
 func init() {
-	proto.RegisterFile("clustermanagerservice.proto", fileDescriptor_clustermanagerservice_534042c602ba09cd)
+	proto.RegisterFile("clustermanagerservice.proto", fileDescriptor_clustermanagerservice_e84dd4a58b2ab943)
 }
 
-var fileDescriptor_clustermanagerservice_534042c602ba09cd = []byte{
+var fileDescriptor_clustermanagerservice_e84dd4a58b2ab943 = []byte{
 	// 212 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x92, 0x4e, 0xce, 0x29, 0x2d,
 	0x2e, 0x49, 0x2d, 0xca, 0x4d, 0xcc, 0x4b, 0x4c, 0x4f, 0x2d, 0x2a, 0x4e, 0x2d, 0x2a, 0xcb, 0x4c,

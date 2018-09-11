@@ -19,6 +19,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
+// SetShardConfigRequest is the payload for SetShardConfigRequest
 type SetShardConfigRequest struct {
 	Cell       string              `protobuf:"bytes,1,opt,name=cell" json:"cell,omitempty"`
 	Keyspace   string              `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
@@ -35,7 +36,7 @@ func (m *SetShardConfigRequest) Reset()         { *m = SetShardConfigRequest{} }
 func (m *SetShardConfigRequest) String() string { return proto.CompactTextString(m) }
 func (*SetShardConfigRequest) ProtoMessage()    {}
 func (*SetShardConfigRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_2dec9d39af74c4c6, []int{0}
+	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{0}
 }
 func (m *SetShardConfigRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetShardConfigRequest.Unmarshal(m, b)
@@ -90,6 +91,7 @@ func (m *SetShardConfigRequest) GetNodes() int32 {
 	return 0
 }
 
+// DeleteShardConfigRequest is the payload for DeleteShardConfig
 type DeleteShardConfigRequest struct {
 	Cell                 string   `protobuf:"bytes,1,opt,name=cell" json:"cell,omitempty"`
 	Keyspace             string   `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
@@ -104,7 +106,7 @@ func (m *DeleteShardConfigRequest) Reset()         { *m = DeleteShardConfigReque
 func (m *DeleteShardConfigRequest) String() string { return proto.CompactTextString(m) }
 func (*DeleteShardConfigRequest) ProtoMessage()    {}
 func (*DeleteShardConfigRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_2dec9d39af74c4c6, []int{1}
+	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{1}
 }
 func (m *DeleteShardConfigRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DeleteShardConfigRequest.Unmarshal(m, b)
@@ -152,6 +154,7 @@ func (m *DeleteShardConfigRequest) GetTabletType() string {
 	return ""
 }
 
+// DeleteShardConfigResponse is the returned value for DeleteShardConfigRequest.
 type DeleteShardConfigResponse struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -162,7 +165,7 @@ func (m *DeleteShardConfigResponse) Reset()         { *m = DeleteShardConfigResp
 func (m *DeleteShardConfigResponse) String() string { return proto.CompactTextString(m) }
 func (*DeleteShardConfigResponse) ProtoMessage()    {}
 func (*DeleteShardConfigResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_2dec9d39af74c4c6, []int{2}
+	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{2}
 }
 func (m *DeleteShardConfigResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DeleteShardConfigResponse.Unmarshal(m, b)
@@ -182,201 +185,15 @@ func (m *DeleteShardConfigResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_DeleteShardConfigResponse proto.InternalMessageInfo
 
-type TabletTypeConfig struct {
-	Nodes                int32    `protobuf:"varint,1,opt,name=nodes" json:"nodes,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *TabletTypeConfig) Reset()         { *m = TabletTypeConfig{} }
-func (m *TabletTypeConfig) String() string { return proto.CompactTextString(m) }
-func (*TabletTypeConfig) ProtoMessage()    {}
-func (*TabletTypeConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_2dec9d39af74c4c6, []int{3}
-}
-func (m *TabletTypeConfig) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_TabletTypeConfig.Unmarshal(m, b)
-}
-func (m *TabletTypeConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_TabletTypeConfig.Marshal(b, m, deterministic)
-}
-func (dst *TabletTypeConfig) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TabletTypeConfig.Merge(dst, src)
-}
-func (m *TabletTypeConfig) XXX_Size() int {
-	return xxx_messageInfo_TabletTypeConfig.Size(m)
-}
-func (m *TabletTypeConfig) XXX_DiscardUnknown() {
-	xxx_messageInfo_TabletTypeConfig.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TabletTypeConfig proto.InternalMessageInfo
-
-func (m *TabletTypeConfig) GetNodes() int32 {
-	if m != nil {
-		return m.Nodes
-	}
-	return 0
-}
-
-type ShardConfig struct {
-	TabletTypes          map[string]*TabletTypeConfig `protobuf:"bytes,1,rep,name=tablet_types,json=tabletTypes" json:"tablet_types,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	XXX_NoUnkeyedLiteral struct{}                     `json:"-"`
-	XXX_unrecognized     []byte                       `json:"-"`
-	XXX_sizecache        int32                        `json:"-"`
-}
-
-func (m *ShardConfig) Reset()         { *m = ShardConfig{} }
-func (m *ShardConfig) String() string { return proto.CompactTextString(m) }
-func (*ShardConfig) ProtoMessage()    {}
-func (*ShardConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_2dec9d39af74c4c6, []int{4}
-}
-func (m *ShardConfig) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_ShardConfig.Unmarshal(m, b)
-}
-func (m *ShardConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_ShardConfig.Marshal(b, m, deterministic)
-}
-func (dst *ShardConfig) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ShardConfig.Merge(dst, src)
-}
-func (m *ShardConfig) XXX_Size() int {
-	return xxx_messageInfo_ShardConfig.Size(m)
-}
-func (m *ShardConfig) XXX_DiscardUnknown() {
-	xxx_messageInfo_ShardConfig.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_ShardConfig proto.InternalMessageInfo
-
-func (m *ShardConfig) GetTabletTypes() map[string]*TabletTypeConfig {
-	if m != nil {
-		return m.TabletTypes
-	}
-	return nil
-}
-
-type KeyspaceConfig struct {
-	Shards               map[string]*ShardConfig `protobuf:"bytes,1,rep,name=shards" json:"shards,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
-	XXX_unrecognized     []byte                  `json:"-"`
-	XXX_sizecache        int32                   `json:"-"`
-}
-
-func (m *KeyspaceConfig) Reset()         { *m = KeyspaceConfig{} }
-func (m *KeyspaceConfig) String() string { return proto.CompactTextString(m) }
-func (*KeyspaceConfig) ProtoMessage()    {}
-func (*KeyspaceConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_2dec9d39af74c4c6, []int{5}
-}
-func (m *KeyspaceConfig) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_KeyspaceConfig.Unmarshal(m, b)
-}
-func (m *KeyspaceConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_KeyspaceConfig.Marshal(b, m, deterministic)
-}
-func (dst *KeyspaceConfig) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_KeyspaceConfig.Merge(dst, src)
-}
-func (m *KeyspaceConfig) XXX_Size() int {
-	return xxx_messageInfo_KeyspaceConfig.Size(m)
-}
-func (m *KeyspaceConfig) XXX_DiscardUnknown() {
-	xxx_messageInfo_KeyspaceConfig.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_KeyspaceConfig proto.InternalMessageInfo
-
-func (m *KeyspaceConfig) GetShards() map[string]*ShardConfig {
-	if m != nil {
-		return m.Shards
-	}
-	return nil
-}
-
-type CellConfig struct {
-	Keyspaces            map[string]*KeyspaceConfig `protobuf:"bytes,1,rep,name=keyspaces" json:"keyspaces,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	XXX_NoUnkeyedLiteral struct{}                   `json:"-"`
-	XXX_unrecognized     []byte                     `json:"-"`
-	XXX_sizecache        int32                      `json:"-"`
-}
-
-func (m *CellConfig) Reset()         { *m = CellConfig{} }
-func (m *CellConfig) String() string { return proto.CompactTextString(m) }
-func (*CellConfig) ProtoMessage()    {}
-func (*CellConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_2dec9d39af74c4c6, []int{6}
-}
-func (m *CellConfig) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_CellConfig.Unmarshal(m, b)
-}
-func (m *CellConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_CellConfig.Marshal(b, m, deterministic)
-}
-func (dst *CellConfig) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CellConfig.Merge(dst, src)
-}
-func (m *CellConfig) XXX_Size() int {
-	return xxx_messageInfo_CellConfig.Size(m)
-}
-func (m *CellConfig) XXX_DiscardUnknown() {
-	xxx_messageInfo_CellConfig.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_CellConfig proto.InternalMessageInfo
-
-func (m *CellConfig) GetKeyspaces() map[string]*KeyspaceConfig {
-	if m != nil {
-		return m.Keyspaces
-	}
-	return nil
-}
-
-// ShardConfig defines a desired state for a given cell/keyspace/shard/tablet_type in a Vitess Cluster.
-type ClusterConfig struct {
-	Cells                map[string]*CellConfig `protobuf:"bytes,1,rep,name=cells" json:"cells,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
-	XXX_unrecognized     []byte                 `json:"-"`
-	XXX_sizecache        int32                  `json:"-"`
-}
-
-func (m *ClusterConfig) Reset()         { *m = ClusterConfig{} }
-func (m *ClusterConfig) String() string { return proto.CompactTextString(m) }
-func (*ClusterConfig) ProtoMessage()    {}
-func (*ClusterConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_2dec9d39af74c4c6, []int{7}
-}
-func (m *ClusterConfig) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_ClusterConfig.Unmarshal(m, b)
-}
-func (m *ClusterConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_ClusterConfig.Marshal(b, m, deterministic)
-}
-func (dst *ClusterConfig) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ClusterConfig.Merge(dst, src)
-}
-func (m *ClusterConfig) XXX_Size() int {
-	return xxx_messageInfo_ClusterConfig.Size(m)
-}
-func (m *ClusterConfig) XXX_DiscardUnknown() {
-	xxx_messageInfo_ClusterConfig.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_ClusterConfig proto.InternalMessageInfo
-
-func (m *ClusterConfig) GetCells() map[string]*CellConfig {
-	if m != nil {
-		return m.Cells
-	}
-	return nil
-}
-
+// GetClustrConfigRequest is the paylaod for GetClusterConfig.
 type GetClusterConfigRequest struct {
-	Cell                 string   `protobuf:"bytes,1,opt,name=cell" json:"cell,omitempty"`
-	Keyspace             string   `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
-	Shard                string   `protobuf:"bytes,3,opt,name=shard" json:"shard,omitempty"`
+	// cell is optional
+	Cell string `protobuf:"bytes,1,opt,name=cell" json:"cell,omitempty"`
+	// keyspace is optional, if cell is provided
+	Keyspace string `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	// shard is optional, if cell/keyspace is provided
+	Shard string `protobuf:"bytes,3,opt,name=shard" json:"shard,omitempty"`
+	// tablet_type is optional, if cell/keyspace/shard are provided
 	TabletType           string   `protobuf:"bytes,4,opt,name=tablet_type,json=tabletType" json:"tablet_type,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -387,7 +204,7 @@ func (m *GetClusterConfigRequest) Reset()         { *m = GetClusterConfigRequest
 func (m *GetClusterConfigRequest) String() string { return proto.CompactTextString(m) }
 func (*GetClusterConfigRequest) ProtoMessage()    {}
 func (*GetClusterConfigRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_2dec9d39af74c4c6, []int{8}
+	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{3}
 }
 func (m *GetClusterConfigRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetClusterConfigRequest.Unmarshal(m, b)
@@ -435,57 +252,252 @@ func (m *GetClusterConfigRequest) GetTabletType() string {
 	return ""
 }
 
+// ClusterConfig defines the configuration for a vitess cluster.
+type ClusterConfig struct {
+	Cells                map[string]*CellConfig `protobuf:"bytes,1,rep,name=cells" json:"cells,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
+	XXX_unrecognized     []byte                 `json:"-"`
+	XXX_sizecache        int32                  `json:"-"`
+}
+
+func (m *ClusterConfig) Reset()         { *m = ClusterConfig{} }
+func (m *ClusterConfig) String() string { return proto.CompactTextString(m) }
+func (*ClusterConfig) ProtoMessage()    {}
+func (*ClusterConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{4}
+}
+func (m *ClusterConfig) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ClusterConfig.Unmarshal(m, b)
+}
+func (m *ClusterConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ClusterConfig.Marshal(b, m, deterministic)
+}
+func (dst *ClusterConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ClusterConfig.Merge(dst, src)
+}
+func (m *ClusterConfig) XXX_Size() int {
+	return xxx_messageInfo_ClusterConfig.Size(m)
+}
+func (m *ClusterConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ClusterConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ClusterConfig proto.InternalMessageInfo
+
+func (m *ClusterConfig) GetCells() map[string]*CellConfig {
+	if m != nil {
+		return m.Cells
+	}
+	return nil
+}
+
+// CellConfig defines cluster configuration for cells.
+type CellConfig struct {
+	Keyspaces            map[string]*KeyspaceConfig `protobuf:"bytes,1,rep,name=keyspaces" json:"keyspaces,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	XXX_NoUnkeyedLiteral struct{}                   `json:"-"`
+	XXX_unrecognized     []byte                     `json:"-"`
+	XXX_sizecache        int32                      `json:"-"`
+}
+
+func (m *CellConfig) Reset()         { *m = CellConfig{} }
+func (m *CellConfig) String() string { return proto.CompactTextString(m) }
+func (*CellConfig) ProtoMessage()    {}
+func (*CellConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{5}
+}
+func (m *CellConfig) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_CellConfig.Unmarshal(m, b)
+}
+func (m *CellConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_CellConfig.Marshal(b, m, deterministic)
+}
+func (dst *CellConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CellConfig.Merge(dst, src)
+}
+func (m *CellConfig) XXX_Size() int {
+	return xxx_messageInfo_CellConfig.Size(m)
+}
+func (m *CellConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_CellConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_CellConfig proto.InternalMessageInfo
+
+func (m *CellConfig) GetKeyspaces() map[string]*KeyspaceConfig {
+	if m != nil {
+		return m.Keyspaces
+	}
+	return nil
+}
+
+// KeyspaceConfig defines cluster configuration for keyspaces.
+type KeyspaceConfig struct {
+	Shards               map[string]*ShardConfig `protobuf:"bytes,1,rep,name=shards" json:"shards,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
+	XXX_unrecognized     []byte                  `json:"-"`
+	XXX_sizecache        int32                   `json:"-"`
+}
+
+func (m *KeyspaceConfig) Reset()         { *m = KeyspaceConfig{} }
+func (m *KeyspaceConfig) String() string { return proto.CompactTextString(m) }
+func (*KeyspaceConfig) ProtoMessage()    {}
+func (*KeyspaceConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{6}
+}
+func (m *KeyspaceConfig) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_KeyspaceConfig.Unmarshal(m, b)
+}
+func (m *KeyspaceConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_KeyspaceConfig.Marshal(b, m, deterministic)
+}
+func (dst *KeyspaceConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_KeyspaceConfig.Merge(dst, src)
+}
+func (m *KeyspaceConfig) XXX_Size() int {
+	return xxx_messageInfo_KeyspaceConfig.Size(m)
+}
+func (m *KeyspaceConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_KeyspaceConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_KeyspaceConfig proto.InternalMessageInfo
+
+func (m *KeyspaceConfig) GetShards() map[string]*ShardConfig {
+	if m != nil {
+		return m.Shards
+	}
+	return nil
+}
+
+// ShardConfig defines cluster configuration for a shard.
+type ShardConfig struct {
+	TabletTypes          map[string]*TabletTypeConfig `protobuf:"bytes,1,rep,name=tablet_types,json=tabletTypes" json:"tablet_types,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	XXX_NoUnkeyedLiteral struct{}                     `json:"-"`
+	XXX_unrecognized     []byte                       `json:"-"`
+	XXX_sizecache        int32                        `json:"-"`
+}
+
+func (m *ShardConfig) Reset()         { *m = ShardConfig{} }
+func (m *ShardConfig) String() string { return proto.CompactTextString(m) }
+func (*ShardConfig) ProtoMessage()    {}
+func (*ShardConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{7}
+}
+func (m *ShardConfig) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ShardConfig.Unmarshal(m, b)
+}
+func (m *ShardConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ShardConfig.Marshal(b, m, deterministic)
+}
+func (dst *ShardConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ShardConfig.Merge(dst, src)
+}
+func (m *ShardConfig) XXX_Size() int {
+	return xxx_messageInfo_ShardConfig.Size(m)
+}
+func (m *ShardConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_ShardConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ShardConfig proto.InternalMessageInfo
+
+func (m *ShardConfig) GetTabletTypes() map[string]*TabletTypeConfig {
+	if m != nil {
+		return m.TabletTypes
+	}
+	return nil
+}
+
+// TabletTypeConfig defines how many nodes are desired for a tablet a type.
+type TabletTypeConfig struct {
+	Nodes                int32    `protobuf:"varint,1,opt,name=nodes" json:"nodes,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *TabletTypeConfig) Reset()         { *m = TabletTypeConfig{} }
+func (m *TabletTypeConfig) String() string { return proto.CompactTextString(m) }
+func (*TabletTypeConfig) ProtoMessage()    {}
+func (*TabletTypeConfig) Descriptor() ([]byte, []int) {
+	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{8}
+}
+func (m *TabletTypeConfig) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_TabletTypeConfig.Unmarshal(m, b)
+}
+func (m *TabletTypeConfig) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_TabletTypeConfig.Marshal(b, m, deterministic)
+}
+func (dst *TabletTypeConfig) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TabletTypeConfig.Merge(dst, src)
+}
+func (m *TabletTypeConfig) XXX_Size() int {
+	return xxx_messageInfo_TabletTypeConfig.Size(m)
+}
+func (m *TabletTypeConfig) XXX_DiscardUnknown() {
+	xxx_messageInfo_TabletTypeConfig.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_TabletTypeConfig proto.InternalMessageInfo
+
+func (m *TabletTypeConfig) GetNodes() int32 {
+	if m != nil {
+		return m.Nodes
+	}
+	return 0
+}
+
 func init() {
 	proto.RegisterType((*SetShardConfigRequest)(nil), "clustermanagerdata.SetShardConfigRequest")
 	proto.RegisterType((*DeleteShardConfigRequest)(nil), "clustermanagerdata.DeleteShardConfigRequest")
 	proto.RegisterType((*DeleteShardConfigResponse)(nil), "clustermanagerdata.DeleteShardConfigResponse")
-	proto.RegisterType((*TabletTypeConfig)(nil), "clustermanagerdata.TabletTypeConfig")
-	proto.RegisterType((*ShardConfig)(nil), "clustermanagerdata.ShardConfig")
-	proto.RegisterMapType((map[string]*TabletTypeConfig)(nil), "clustermanagerdata.ShardConfig.TabletTypesEntry")
-	proto.RegisterType((*KeyspaceConfig)(nil), "clustermanagerdata.KeyspaceConfig")
-	proto.RegisterMapType((map[string]*ShardConfig)(nil), "clustermanagerdata.KeyspaceConfig.ShardsEntry")
-	proto.RegisterType((*CellConfig)(nil), "clustermanagerdata.CellConfig")
-	proto.RegisterMapType((map[string]*KeyspaceConfig)(nil), "clustermanagerdata.CellConfig.KeyspacesEntry")
+	proto.RegisterType((*GetClusterConfigRequest)(nil), "clustermanagerdata.GetClusterConfigRequest")
 	proto.RegisterType((*ClusterConfig)(nil), "clustermanagerdata.ClusterConfig")
 	proto.RegisterMapType((map[string]*CellConfig)(nil), "clustermanagerdata.ClusterConfig.CellsEntry")
-	proto.RegisterType((*GetClusterConfigRequest)(nil), "clustermanagerdata.GetClusterConfigRequest")
+	proto.RegisterType((*CellConfig)(nil), "clustermanagerdata.CellConfig")
+	proto.RegisterMapType((map[string]*KeyspaceConfig)(nil), "clustermanagerdata.CellConfig.KeyspacesEntry")
+	proto.RegisterType((*KeyspaceConfig)(nil), "clustermanagerdata.KeyspaceConfig")
+	proto.RegisterMapType((map[string]*ShardConfig)(nil), "clustermanagerdata.KeyspaceConfig.ShardsEntry")
+	proto.RegisterType((*ShardConfig)(nil), "clustermanagerdata.ShardConfig")
+	proto.RegisterMapType((map[string]*TabletTypeConfig)(nil), "clustermanagerdata.ShardConfig.TabletTypesEntry")
+	proto.RegisterType((*TabletTypeConfig)(nil), "clustermanagerdata.TabletTypeConfig")
 }
 
 func init() {
-	proto.RegisterFile("clustermanagerdata.proto", fileDescriptor_clustermanagerdata_2dec9d39af74c4c6)
+	proto.RegisterFile("clustermanagerdata.proto", fileDescriptor_clustermanagerdata_a87807431c5e03c6)
 }
 
-var fileDescriptor_clustermanagerdata_2dec9d39af74c4c6 = []byte{
-	// 483 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xbc, 0x94, 0xcf, 0x6e, 0xd3, 0x40,
-	0x10, 0xc6, 0xb5, 0x4d, 0x5d, 0x91, 0x31, 0x84, 0x6a, 0x55, 0x84, 0x31, 0x12, 0x8d, 0x2c, 0x0e,
-	0x3e, 0x80, 0x8d, 0x02, 0x95, 0xaa, 0x1e, 0x13, 0xfe, 0x1c, 0x7a, 0x73, 0x7a, 0x40, 0xbd, 0x80,
-	0x9b, 0x0c, 0x21, 0xea, 0xe2, 0x35, 0xde, 0x4d, 0x24, 0xdf, 0xe0, 0x75, 0x90, 0xb8, 0x71, 0xe3,
-	0x05, 0x78, 0x2c, 0xe4, 0xdd, 0x8d, 0xbd, 0x26, 0x0e, 0x3d, 0xc1, 0x6d, 0x26, 0xb3, 0xdf, 0xec,
-	0xef, 0xfb, 0xb2, 0x09, 0x78, 0x33, 0xb6, 0x12, 0x12, 0x8b, 0x4f, 0x69, 0x96, 0x2e, 0xb0, 0x98,
-	0xa7, 0x32, 0x8d, 0xf2, 0x82, 0x4b, 0x4e, 0xe9, 0xf6, 0xc4, 0x1f, 0x48, 0x9e, 0xf3, 0xe6, 0x4c,
-	0xf0, 0x8d, 0xc0, 0xbd, 0x29, 0xca, 0xe9, 0xc7, 0xb4, 0x98, 0x4f, 0x78, 0xf6, 0x61, 0xb9, 0x48,
-	0xf0, 0xf3, 0x0a, 0x85, 0xa4, 0x14, 0xf6, 0x67, 0xc8, 0x98, 0x47, 0x86, 0x24, 0xec, 0x27, 0xaa,
-	0xa6, 0x3e, 0xdc, 0xba, 0xc6, 0x52, 0xe4, 0xe9, 0x0c, 0xbd, 0x3d, 0xf5, 0x79, 0xdd, 0xd3, 0x23,
-	0x70, 0x44, 0xb5, 0xc5, 0xeb, 0xa9, 0x81, 0x6e, 0xe8, 0x09, 0xb8, 0x32, 0xbd, 0x62, 0x28, 0xdf,
-	0xc9, 0x32, 0x47, 0x6f, 0x7f, 0x48, 0xc2, 0xc1, 0xe8, 0x28, 0xaa, 0x29, 0x2e, 0xd4, 0xf0, 0xa2,
-	0xcc, 0x31, 0x01, 0x59, 0xd7, 0xd5, 0xb2, 0x8c, 0xcf, 0x51, 0x78, 0xce, 0x90, 0x84, 0x4e, 0xa2,
-	0x9b, 0xe0, 0x2b, 0x01, 0xef, 0x25, 0x32, 0x94, 0xf8, 0xcf, 0x78, 0x8f, 0xb7, 0x79, 0xfb, 0x36,
-	0x59, 0xf0, 0x10, 0x1e, 0x74, 0x20, 0x88, 0x9c, 0x67, 0x02, 0x83, 0x10, 0x0e, 0x1b, 0x43, 0x7a,
-	0xd6, 0x58, 0x21, 0xb6, 0x95, 0x5f, 0x04, 0x5c, 0x6b, 0x03, 0x9d, 0xc2, 0x6d, 0xeb, 0xde, 0xea,
-	0x70, 0x2f, 0x74, 0x47, 0xcf, 0xa2, 0x8e, 0x2f, 0xd7, 0x92, 0x59, 0xf1, 0x89, 0x57, 0x99, 0x2c,
-	0xca, 0xc4, 0x6d, 0x50, 0x85, 0x3f, 0xb7, 0x71, 0xf4, 0x01, 0x7a, 0x08, 0xbd, 0x6b, 0x2c, 0x4d,
-	0x4a, 0x55, 0x49, 0xcf, 0xc0, 0x59, 0xa7, 0x6c, 0xa5, 0x13, 0x72, 0x47, 0x8f, 0xbb, 0xee, 0xfc,
-	0xd3, 0x55, 0xa2, 0x25, 0x67, 0x7b, 0xa7, 0x24, 0xf8, 0x41, 0x60, 0x70, 0x6e, 0x52, 0x35, 0x6e,
-	0x5e, 0xc3, 0x81, 0x8a, 0x73, 0xe3, 0x23, 0xea, 0xda, 0xd9, 0xd6, 0x68, 0x5b, 0xc6, 0x85, 0x51,
-	0xfb, 0x97, 0x26, 0xa4, 0x9d, 0xec, 0x27, 0x6d, 0xf6, 0xe3, 0x1b, 0xf2, 0xb2, 0xb1, 0x7f, 0x12,
-	0x80, 0x09, 0x32, 0x66, 0x90, 0xcf, 0xa1, 0xbf, 0x79, 0x1a, 0x1b, 0xea, 0xa7, 0x5d, 0xdb, 0x1a,
-	0x49, 0x6d, 0xc0, 0x40, 0x37, 0x7a, 0xff, 0x7d, 0x93, 0xc8, 0x4e, 0xf4, 0xd3, 0x36, 0x7a, 0x70,
-	0x73, 0x44, 0x36, 0xfd, 0x77, 0x02, 0x77, 0x26, 0x5a, 0x60, 0x0c, 0x8c, 0xc1, 0xa9, 0xde, 0xfc,
-	0x06, 0xfe, 0x49, 0x27, 0xbc, 0xad, 0x50, 0x56, 0x0c, 0xbb, 0x96, 0xfa, 0x6f, 0x75, 0x24, 0x3b,
-	0x99, 0x5f, 0xb4, 0x99, 0x1f, 0xfd, 0x3d, 0x20, 0x9b, 0xf7, 0x0b, 0x81, 0xfb, 0x6f, 0x50, 0xb6,
-	0x00, 0xfe, 0xef, 0x2f, 0x77, 0x3c, 0x86, 0xbb, 0x4b, 0x1e, 0xad, 0x97, 0x12, 0x85, 0xd0, 0xff,
-	0x7e, 0x97, 0xb1, 0xe9, 0x96, 0xdc, 0x54, 0xf1, 0x82, 0xc7, 0x6b, 0x19, 0xab, 0x69, 0xbc, 0x6d,
-	0xee, 0xea, 0x40, 0x4d, 0x9e, 0xff, 0x0e, 0x00, 0x00, 0xff, 0xff, 0x49, 0x3b, 0x20, 0x8e, 0x75,
-	0x05, 0x00, 0x00,
+var fileDescriptor_clustermanagerdata_a87807431c5e03c6 = []byte{
+	// 487 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xc4, 0x94, 0xcf, 0x6f, 0xd3, 0x30,
+	0x14, 0xc7, 0xe5, 0x75, 0x99, 0xe8, 0x0b, 0x94, 0xc9, 0x1a, 0x22, 0x04, 0x89, 0x55, 0x11, 0x87,
+	0x1c, 0x20, 0x41, 0x85, 0x49, 0xd3, 0x8e, 0x2d, 0x3f, 0x0e, 0xbb, 0xa5, 0x3b, 0xa0, 0x5d, 0x20,
+	0x6b, 0x1f, 0xa5, 0x5a, 0x88, 0x43, 0xec, 0x56, 0xca, 0x0d, 0xfe, 0x1d, 0x24, 0x6e, 0xdc, 0xf8,
+	0x07, 0xf8, 0xb3, 0x50, 0x6c, 0xa7, 0x71, 0x88, 0xc5, 0x4e, 0x88, 0x9b, 0xed, 0xf7, 0xde, 0xf7,
+	0xfb, 0x79, 0xce, 0x8b, 0xc1, 0x5b, 0x64, 0x1b, 0x2e, 0xb0, 0xfc, 0x94, 0xe6, 0xe9, 0x0a, 0xcb,
+	0x65, 0x2a, 0xd2, 0xa8, 0x28, 0x99, 0x60, 0x94, 0xf6, 0x23, 0xfe, 0x48, 0xb0, 0x82, 0xb5, 0x39,
+	0xc1, 0x37, 0x02, 0xf7, 0xe6, 0x28, 0xe6, 0x1f, 0xd3, 0x72, 0x39, 0x63, 0xf9, 0x87, 0xf5, 0x2a,
+	0xc1, 0xcf, 0x1b, 0xe4, 0x82, 0x52, 0xd8, 0x5f, 0x60, 0x96, 0x79, 0x64, 0x4c, 0xc2, 0x61, 0x22,
+	0xd7, 0xd4, 0x87, 0x5b, 0xd7, 0x58, 0xf1, 0x22, 0x5d, 0xa0, 0xb7, 0x27, 0xcf, 0x77, 0x7b, 0x7a,
+	0x04, 0x0e, 0xaf, 0x55, 0xbc, 0x81, 0x0c, 0xa8, 0x0d, 0x3d, 0x01, 0x57, 0xa4, 0x57, 0x19, 0x8a,
+	0x77, 0xa2, 0x2a, 0xd0, 0xdb, 0x1f, 0x93, 0x70, 0x34, 0x39, 0x8a, 0x76, 0x14, 0x17, 0x32, 0x78,
+	0x51, 0x15, 0x98, 0x80, 0xd8, 0xad, 0x6b, 0xb1, 0x9c, 0x2d, 0x91, 0x7b, 0xce, 0x98, 0x84, 0x4e,
+	0xa2, 0x36, 0xc1, 0x57, 0x02, 0xde, 0x4b, 0xcc, 0x50, 0xe0, 0x3f, 0xe3, 0x3d, 0xee, 0xf3, 0x0e,
+	0x4d, 0xb2, 0xe0, 0x21, 0x3c, 0xb0, 0x20, 0xf0, 0x82, 0xe5, 0x1c, 0x83, 0x2f, 0x04, 0xee, 0xbf,
+	0x41, 0x31, 0x53, 0xf7, 0xfe, 0x5f, 0xf8, 0xbe, 0x13, 0xb8, 0xd3, 0xf1, 0xa7, 0x53, 0x70, 0x6a,
+	0x33, 0xee, 0x91, 0xf1, 0x20, 0x74, 0x27, 0x4f, 0x22, 0xcb, 0xc0, 0x74, 0x2a, 0xa2, 0x59, 0x9d,
+	0xfe, 0x2a, 0x17, 0x65, 0x95, 0xa8, 0x52, 0xff, 0x2d, 0x40, 0x7b, 0x48, 0x0f, 0x61, 0x70, 0x8d,
+	0x95, 0xee, 0xa4, 0x5e, 0xd2, 0x17, 0xe0, 0x6c, 0xd3, 0x6c, 0xa3, 0xba, 0x70, 0x27, 0x8f, 0xac,
+	0x1e, 0x98, 0x65, 0xfa, 0x4a, 0x54, 0xf2, 0xd9, 0xde, 0x29, 0x09, 0x7e, 0x12, 0x25, 0xad, 0x61,
+	0xcf, 0x61, 0xd8, 0xdc, 0x40, 0x03, 0xfc, 0xf4, 0xef, 0x62, 0xd1, 0x79, 0x93, 0xaf, 0x88, 0xdb,
+	0x7a, 0xff, 0x3d, 0x8c, 0xba, 0x41, 0x0b, 0xf9, 0x69, 0x97, 0x3c, 0xb0, 0x99, 0x35, 0x22, 0x7d,
+	0xfa, 0x1f, 0xa4, 0xb5, 0xd0, 0x1d, 0xbc, 0x86, 0x03, 0xf9, 0xa9, 0x1a, 0xfc, 0xe8, 0x66, 0xc5,
+	0x48, 0xce, 0x92, 0xe6, 0xd7, 0xd5, 0xfe, 0x25, 0xb8, 0xc6, 0xb1, 0x85, 0xfc, 0xa4, 0x4b, 0x7e,
+	0x6c, 0xf3, 0x31, 0x87, 0xd4, 0xc0, 0xfe, 0x45, 0xb4, 0xb8, 0x66, 0x9e, 0xc3, 0x6d, 0x63, 0xaa,
+	0x1a, 0xf2, 0x67, 0x37, 0x28, 0x1a, 0x3f, 0xaf, 0x66, 0x77, 0xdb, 0x41, 0xe4, 0xfe, 0x12, 0x0e,
+	0xff, 0x4c, 0xb0, 0x74, 0x71, 0xd6, 0xed, 0xe2, 0xb1, 0xcd, 0xb3, 0x95, 0xe9, 0xb7, 0x12, 0x9a,
+	0x2e, 0xba, 0x9d, 0xdd, 0xeb, 0x41, 0x8c, 0xd7, 0x63, 0x3a, 0x85, 0xbb, 0x6b, 0x16, 0x6d, 0xd7,
+	0x02, 0x39, 0x57, 0xaf, 0xdf, 0x65, 0xac, 0x77, 0x6b, 0xa6, 0x57, 0xf1, 0x8a, 0xc5, 0x5b, 0x11,
+	0xcb, 0x68, 0xdc, 0x27, 0xb9, 0x3a, 0x90, 0x91, 0xe7, 0xbf, 0x03, 0x00, 0x00, 0xff, 0xff, 0xf9,
+	0x46, 0x14, 0x72, 0x75, 0x05, 0x00, 0x00,
 }
