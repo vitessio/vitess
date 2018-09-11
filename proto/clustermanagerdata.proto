@@ -43,7 +43,7 @@ message DeleteShardConfigRequest{
 // DeleteShardConfigResponse is the returned value for DeleteShardConfigRequest.
 message DeleteShardConfigResponse{}
 
-// GetClustrConfigRequest is the paylaod for GetClusterConfig.
+// GetClustrConfigRequest is the payload for GetClusterConfig.
 message GetClusterConfigRequest{
   // cell is optional
   string cell = 1;

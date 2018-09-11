@@ -36,7 +36,7 @@ func (m *SetShardConfigRequest) Reset()         { *m = SetShardConfigRequest{} }
 func (m *SetShardConfigRequest) String() string { return proto.CompactTextString(m) }
 func (*SetShardConfigRequest) ProtoMessage()    {}
 func (*SetShardConfigRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{0}
+	return fileDescriptor_clustermanagerdata_93b3f31faacd98a4, []int{0}
 }
 func (m *SetShardConfigRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetShardConfigRequest.Unmarshal(m, b)
@@ -106,7 +106,7 @@ func (m *DeleteShardConfigRequest) Reset()         { *m = DeleteShardConfigReque
 func (m *DeleteShardConfigRequest) String() string { return proto.CompactTextString(m) }
 func (*DeleteShardConfigRequest) ProtoMessage()    {}
 func (*DeleteShardConfigRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{1}
+	return fileDescriptor_clustermanagerdata_93b3f31faacd98a4, []int{1}
 }
 func (m *DeleteShardConfigRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DeleteShardConfigRequest.Unmarshal(m, b)
@@ -165,7 +165,7 @@ func (m *DeleteShardConfigResponse) Reset()         { *m = DeleteShardConfigResp
 func (m *DeleteShardConfigResponse) String() string { return proto.CompactTextString(m) }
 func (*DeleteShardConfigResponse) ProtoMessage()    {}
 func (*DeleteShardConfigResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{2}
+	return fileDescriptor_clustermanagerdata_93b3f31faacd98a4, []int{2}
 }
 func (m *DeleteShardConfigResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DeleteShardConfigResponse.Unmarshal(m, b)
@@ -185,7 +185,7 @@ func (m *DeleteShardConfigResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_DeleteShardConfigResponse proto.InternalMessageInfo
 
-// GetClustrConfigRequest is the paylaod for GetClusterConfig.
+// GetClustrConfigRequest is the payload for GetClusterConfig.
 type GetClusterConfigRequest struct {
 	// cell is optional
 	Cell string `protobuf:"bytes,1,opt,name=cell" json:"cell,omitempty"`
@@ -204,7 +204,7 @@ func (m *GetClusterConfigRequest) Reset()         { *m = GetClusterConfigRequest
 func (m *GetClusterConfigRequest) String() string { return proto.CompactTextString(m) }
 func (*GetClusterConfigRequest) ProtoMessage()    {}
 func (*GetClusterConfigRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{3}
+	return fileDescriptor_clustermanagerdata_93b3f31faacd98a4, []int{3}
 }
 func (m *GetClusterConfigRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetClusterConfigRequest.Unmarshal(m, b)
@@ -264,7 +264,7 @@ func (m *ClusterConfig) Reset()         { *m = ClusterConfig{} }
 func (m *ClusterConfig) String() string { return proto.CompactTextString(m) }
 func (*ClusterConfig) ProtoMessage()    {}
 func (*ClusterConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{4}
+	return fileDescriptor_clustermanagerdata_93b3f31faacd98a4, []int{4}
 }
 func (m *ClusterConfig) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClusterConfig.Unmarshal(m, b)
@@ -303,7 +303,7 @@ func (m *CellConfig) Reset()         { *m = CellConfig{} }
 func (m *CellConfig) String() string { return proto.CompactTextString(m) }
 func (*CellConfig) ProtoMessage()    {}
 func (*CellConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{5}
+	return fileDescriptor_clustermanagerdata_93b3f31faacd98a4, []int{5}
 }
 func (m *CellConfig) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CellConfig.Unmarshal(m, b)
@@ -342,7 +342,7 @@ func (m *KeyspaceConfig) Reset()         { *m = KeyspaceConfig{} }
 func (m *KeyspaceConfig) String() string { return proto.CompactTextString(m) }
 func (*KeyspaceConfig) ProtoMessage()    {}
 func (*KeyspaceConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{6}
+	return fileDescriptor_clustermanagerdata_93b3f31faacd98a4, []int{6}
 }
 func (m *KeyspaceConfig) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_KeyspaceConfig.Unmarshal(m, b)
@@ -381,7 +381,7 @@ func (m *ShardConfig) Reset()         { *m = ShardConfig{} }
 func (m *ShardConfig) String() string { return proto.CompactTextString(m) }
 func (*ShardConfig) ProtoMessage()    {}
 func (*ShardConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{7}
+	return fileDescriptor_clustermanagerdata_93b3f31faacd98a4, []int{7}
 }
 func (m *ShardConfig) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ShardConfig.Unmarshal(m, b)
@@ -420,7 +420,7 @@ func (m *TabletTypeConfig) Reset()         { *m = TabletTypeConfig{} }
 func (m *TabletTypeConfig) String() string { return proto.CompactTextString(m) }
 func (*TabletTypeConfig) ProtoMessage()    {}
 func (*TabletTypeConfig) Descriptor() ([]byte, []int) {
-	return fileDescriptor_clustermanagerdata_a87807431c5e03c6, []int{8}
+	return fileDescriptor_clustermanagerdata_93b3f31faacd98a4, []int{8}
 }
 func (m *TabletTypeConfig) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TabletTypeConfig.Unmarshal(m, b)
@@ -464,10 +464,10 @@ func init() {
 }
 
 func init() {
-	proto.RegisterFile("clustermanagerdata.proto", fileDescriptor_clustermanagerdata_a87807431c5e03c6)
+	proto.RegisterFile("clustermanagerdata.proto", fileDescriptor_clustermanagerdata_93b3f31faacd98a4)
 }
 
-var fileDescriptor_clustermanagerdata_a87807431c5e03c6 = []byte{
+var fileDescriptor_clustermanagerdata_93b3f31faacd98a4 = []byte{
 	// 487 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xc4, 0x94, 0xcf, 0x6f, 0xd3, 0x30,
 	0x14, 0xc7, 0xe5, 0x75, 0x99, 0xe8, 0x0b, 0x94, 0xc9, 0x1a, 0x22, 0x04, 0x89, 0x55, 0x11, 0x87,

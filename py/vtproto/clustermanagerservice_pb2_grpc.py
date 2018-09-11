@@ -51,7 +51,7 @@ class VtClusterManagerServicer(object):
     raise NotImplementedError('Method not implemented!')
 
   def DeleteShardConfig(self, request, context):
-    """DeleteShardConfig removes configuration from clusterm manager
+    """DeleteShardConfig removes configuration from cluster manager
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
     context.set_details('Method not implemented!')
