@@ -118,6 +118,16 @@ func TestNormalize(t *testing.T) {
 		outstmt: "update a set v1 = 0x1234",
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
+		// Bin value does not convert
+		in:      "select * from t where v1 = b'11'",
+		outstmt: "select * from t where v1 = B'11'",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
+		// Bin value does not convert for DMLs
+		in:      "update a set v1 = b'11'",
+		outstmt: "update a set v1 = B'11'",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
 		// Values up to len 256 will reuse.
 		in:      fmt.Sprintf("select * from t where v1 = '%256s' and v2 = '%256s'", "a", "a"),
 		outstmt: "select * from t where v1 = :bv1 and v2 = :bv1",

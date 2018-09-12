@@ -17,12 +17,15 @@ limitations under the License.
 package mysql
 
 import (
+	"math/rand"
 	"net"
 	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
 )
+
+const benchmarkQueryPrefix = "benchmark "
 
 func benchmarkQuery(b *testing.B, threads int, query string) {
 	th := &testHandler{}
@@ -40,7 +43,9 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 	}()
 
 	b.SetParallelism(threads)
-	b.SetBytes(int64(len(query)))
+	if query != "" {
+		b.SetBytes(int64(len(query)))
+	}
 
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -65,7 +70,14 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 		}()
 
 		for pb.Next() {
-			if _, err := conn.ExecuteFetch(query, 1000, true); err != nil {
+			execQuery := query
+			if execQuery == "" {
+				// generate random query
+				n := rand.Intn(MaxPacketSize-len(benchmarkQueryPrefix)) + 1
+				execQuery = benchmarkQueryPrefix + strings.Repeat("x", n)
+
+			}
+			if _, err := conn.ExecuteFetch(execQuery, 1000, true); err != nil {
 				b.Fatalf("ExecuteFetch failed: %v", err)
 			}
 		}
@@ -78,9 +90,13 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 // executes M queries on them, then closes them.
 // It is meant as a somewhat real load test.
 func BenchmarkParallelShortQueries(b *testing.B) {
-	benchmarkQuery(b, 10, "select rows")
+	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select rows")
 }
 
 func BenchmarkParallelMediumQueries(b *testing.B) {
-	benchmarkQuery(b, 10, "select"+strings.Repeat("x", connBufferSize))
+	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select"+strings.Repeat("x", connBufferSize))
+}
+
+func BenchmarkParallelRandomQueries(b *testing.B) {
+	benchmarkQuery(b, 10, "")
 }

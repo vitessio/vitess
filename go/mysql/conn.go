@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/bucketpool"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -40,24 +41,16 @@ const (
 	// read or write a packet while one is already used.
 	ephemeralUnused = iota
 
-	// ephemeralWriteGlobalBuffer means conn.buffer was used to write
-	// a packet. The first four bytes contain size and sequence.
-	ephemeralWriteGlobalBuffer
-
 	// ephemeralWriteSingleBuffer means a single buffer was
 	// allocated to write a packet.  It is in
-	// c.currentEphemeralPacket. The first four bytes contain size
+	// c.currentEphemeralWriteBuffer. The first four bytes contain size
 	// and sequence.
 	ephemeralWriteSingleBuffer
 
 	// ephemeralWriteBigBuffer means a big buffer was allocated to
 	// write a packet, and will need to be split when sending.
-	// The allocated buffer is in c.currentEphemeralPacket.
+	// The allocated buffer is in c.currentEphemeralWriteBuffer.
 	ephemeralWriteBigBuffer
-
-	// ephemeralReadGlobalBuffer means conn.buffer was used for reading
-	// an ephemeral packet.
-	ephemeralReadGlobalBuffer
 
 	// ephemeralReadSingleBuffer means we are using a pool of buffers
 	// for reading.
@@ -144,9 +137,9 @@ type Conn struct {
 	ClientData interface{}
 
 	// Packet encoding variables.
-	reader   *bufio.Reader
-	writer   *bufio.Writer
-	sequence uint8
+	bufferedReader *bufio.Reader
+	bufferedWriter *bufio.Writer
+	sequence       uint8
 
 	// fields contains the fields definitions for an on-going
 	// streaming query. It is set by ExecuteStreamFetch, and
@@ -155,27 +148,6 @@ type Conn struct {
 	// fields, this is set to an empty array (but not nil).
 	fields []*querypb.Field
 
-	// Internal buffer for zero-allocation reads and writes.  This
-	// uses the fact that both sides of a connection either read
-	// packets, or write packets, but never do both, and both
-	// sides know who is expected to read or write a packet next.
-	//
-	// Reading side: if the next expected packet will most likely be
-	// small, and we don't need to hand on to the memory after reading
-	// the packet, use readEphemeralPacket instead of readPacket.
-	// If the packet is too big, it will revert to the usual read.
-	// But if the packet is smaller than connBufferSize, this buffer
-	// will be used instead.
-	//
-	// Writing side: if the next packet to write is smaller than
-	// connBufferSize-4, this buffer can be used to create a
-	// packet. It will contain both the size and sequence header,
-	// and the contents of the packet.
-	// Call startEphemeralPacket(length) to get a buffer. If length
-	// is smaller or equal than connBufferSize-4, this buffer will be used.
-	// Otherwise memory will be allocated for it.
-	buffer []byte
-
 	// Keep track of how and of the buffer we allocated for an
 	// ephemeral packet on the read and write sides.
 	// These fields are used by:
@@ -183,89 +155,68 @@ type Conn struct {
 	// - readEphemeralPacket / recycleReadPacket methods for reads.
 	currentEphemeralPolicy int
 	// TODO (danieltahara): Ultimately get rid of this delineation.
-	currentEphemeralPacket []byte
-	currentEphemeralBuffer *[]byte
+	// currentEphemeralWriteBuffer and currentEphemeralReadBuffer used for tracking
+	// allocated temporary buffers for writes and reads respectively.
+	currentEphemeralWriteBuffer *[]byte
+	currentEphemeralReadBuffer  *[]byte
 }
 
 // bufPool is used to allocate and free buffers in an efficient way.
-var bufPool = sync.Pool{}
+var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
+
+// writersPool is used for pooling bufio.Writer objects.
+var writersPool = sync.Pool{New: func() interface{} { return bufio.NewWriterSize(nil, connBufferSize) }}
 
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
 func newConn(conn net.Conn) *Conn {
 	return &Conn{
-		conn: conn,
-
-		reader:   bufio.NewReaderSize(conn, connBufferSize),
-		writer:   bufio.NewWriterSize(conn, connBufferSize),
-		sequence: 0,
-		buffer:   make([]byte, connBufferSize),
+		conn:           conn,
+		bufferedReader: bufio.NewReaderSize(conn, connBufferSize),
+		sequence:       0,
 	}
 }
 
-// readPacketDirect attempts to read a packet from the socket directly.
-// It needs to be used for the first handshake packet the server receives,
-// so we do't buffer the SSL negotiation packet. As a shortcut, only
-// packets smaller than MaxPacketSize can be read here.
-func (c *Conn) readPacketDirect() ([]byte, error) {
-	var header [4]byte
-	if _, err := io.ReadFull(c.conn, header[:]); err != nil {
-		// Propagate as is so server can ignore this kind of error
-		// Same as readEphemeralPacket()
-		if err == io.EOF {
-			return nil, err
-		}
-		// Treat connection reset by peer as io.EOF, otherwise is too spammy.
-		if strings.HasSuffix(err.Error(), "read: connection reset by peer") {
-			return nil, io.EOF
-		}
-		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
-	}
-
-	sequence := uint8(header[3])
-	if sequence != c.sequence {
-		return nil, fmt.Errorf("invalid sequence, expected %v got %v", c.sequence, sequence)
-	}
-
-	c.sequence++
-
-	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
-	if length <= cap(c.buffer) {
-		// Fast path: read into buffer, we're good.
-		c.buffer = c.buffer[:length]
-		if _, err := io.ReadFull(c.conn, c.buffer); err != nil {
-			return nil, fmt.Errorf("io.ReadFull(direct packet body of length %v) failed: %v", length, err)
-		}
-		return c.buffer, nil
-	}
-
-	// Sanity check
-	if length == MaxPacketSize {
-		return nil, fmt.Errorf("readPacketDirect doesn't support more than one packet")
-	}
-
-	// Slow path, revert to allocating.
-	data := make([]byte, length)
-	if _, err := io.ReadFull(c.conn, data); err != nil {
-		return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
-	}
-	return data, nil
+// startWriterBuffering starts using buffered writes. This should
+// be terminated by a call to flush.
+func (c *Conn) startWriterBuffering() {
+	c.bufferedWriter = writersPool.Get().(*bufio.Writer)
+	c.bufferedWriter.Reset(c.conn)
 }
 
-// readEphemeralPacket attempts to read a packet into c.buffer.  Do
-// not use this method if the contents of the packet needs to be kept
-// after the next readEphemeralPacket.  If the packet is bigger than
-// connBufferSize, we revert to using the same behavior as a regular
-// readPacket.  recycleReadPacket() has to be called after this method
-// is used, and before we read or write any other packet on the connection.
-//
-// Note if the connection is closed already, an error will be
-// returned, and it may not be io.EOF. If the connection closes while
-// we are stuck waiting for data, an error will also be returned, and
-// it most likely will be io.EOF.
-func (c *Conn) readEphemeralPacket() ([]byte, error) {
+// flush flushes the written data to the socket.
+// This must be called to terminate startBuffering.
+func (c *Conn) flush() error {
+	if c.bufferedWriter == nil {
+		return nil
+	}
+
+	defer func() {
+		c.bufferedWriter.Reset(nil)
+		writersPool.Put(c.bufferedWriter)
+		c.bufferedWriter = nil
+	}()
+
+	return c.bufferedWriter.Flush()
+}
+
+// getWriter returns the current writer. It may be either
+// the original connection or a wrapper.
+func (c *Conn) getWriter() io.Writer {
+	if c.bufferedWriter != nil {
+		return c.bufferedWriter
+	}
+	return c.conn
+}
+
+func (c *Conn) readEphemeralPacketHelper(direct bool) ([]byte, error) {
 	if c.currentEphemeralPolicy != ephemeralUnused {
 		panic(fmt.Errorf("readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
+	}
+
+	var r io.Reader = c.bufferedReader
+	if direct {
+		r = c.conn
 	}
 
 	// Note io.ReadFull will return two different types of errors:
@@ -275,7 +226,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	// 2. if the socket is not closed while we start the read,
 	//   but gets closed after the read is started, we'll get io.EOF.
 	var header [4]byte
-	if _, err := io.ReadFull(c.reader, header[:]); err != nil {
+	if _, err := io.ReadFull(r, header[:]); err != nil {
 		// The special casing of propagating io.EOF up
 		// is used by the server side only, to suppress an error
 		// message if a client just disconnects.
@@ -301,43 +252,19 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 		// exactly size MaxPacketSize.
 		return nil, nil
 	}
-	if length <= cap(c.buffer) {
-		// Fast path: read into buffer, we're good.
-		c.currentEphemeralPolicy = ephemeralReadGlobalBuffer
-		c.buffer = c.buffer[:length]
-		if _, err := io.ReadFull(c.reader, c.buffer); err != nil {
-			return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
-		}
-		return c.buffer, nil
-	}
 
-	// Slightly slower path: single packet. Use the bufPool.
+	// Use the bufPool.
 	if length < MaxPacketSize {
 		c.currentEphemeralPolicy = ephemeralReadSingleBuffer
-		i := bufPool.Get()
-		if i == nil {
-			// We couldn't get an array from the pool, allocate one.
-			data := make([]byte, length)
-			c.currentEphemeralBuffer = &data
-		} else {
-			// We got an array from the pool, see if it's
-			// big enough.
-			data := i.(*[]byte)
-			if cap(*data) >= length {
-				// big enough, just use it.
-				*data = (*data)[:length]
-				c.currentEphemeralBuffer = data
-			} else {
-				// not big enough: allocate a new one, discard
-				// the smaller buffer.
-				data := make([]byte, length)
-				c.currentEphemeralBuffer = &data
-			}
-		}
-		if _, err := io.ReadFull(c.reader, *c.currentEphemeralBuffer); err != nil {
+		c.currentEphemeralReadBuffer = bufPool.Get(length)
+		if _, err := io.ReadFull(r, *c.currentEphemeralReadBuffer); err != nil {
 			return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
 		}
-		return *c.currentEphemeralBuffer, nil
+		return *c.currentEphemeralReadBuffer, nil
+	}
+
+	if direct {
+		return nil, fmt.Errorf("readEphemeralPacketDirect doesn't support more than one packet")
 	}
 
 	// Much slower path, revert to allocating everything from scratch.
@@ -345,7 +272,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	// optimize this code path easily.
 	c.currentEphemeralPolicy = ephemeralReadBigBuffer
 	data := make([]byte, length)
-	if _, err := io.ReadFull(c.reader, data); err != nil {
+	if _, err := io.ReadFull(c.bufferedReader, data); err != nil {
 		return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
 	}
 	for {
@@ -368,21 +295,39 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	return data, nil
 }
 
+// readEphemeralPacketDirect attempts to read a packet from the socket directly.
+// It needs to be used for the first handshake packet the server receives,
+// so we do't buffer the SSL negotiation packet. As a shortcut, only
+// packets smaller than MaxPacketSize can be read here.
+func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
+	return c.readEphemeralPacketHelper(true)
+}
+
+// readEphemeralPacket attempts to read a packet into buffer from sync.Pool.  Do
+// not use this method if the contents of the packet needs to be kept
+// after the next readEphemeralPacket.
+//
+// Note if the connection is closed already, an error will be
+// returned, and it may not be io.EOF. If the connection closes while
+// we are stuck waiting for data, an error will also be returned, and
+// it most likely will be io.EOF.
+func (c *Conn) readEphemeralPacket() ([]byte, error) {
+	return c.readEphemeralPacketHelper(false)
+}
+
 // recycleReadPacket recycles the read packet. It needs to be called
 // after readEphemeralPacket was called.
 func (c *Conn) recycleReadPacket() {
 	switch c.currentEphemeralPolicy {
-	case ephemeralReadGlobalBuffer:
-		// We used small built-in buffer, nothing to do.
 	case ephemeralReadSingleBuffer:
 		// We are using the pool, put the buffer back in.
-		bufPool.Put(c.currentEphemeralBuffer)
-		c.currentEphemeralBuffer = nil
+		bufPool.Put(c.currentEphemeralReadBuffer)
+		c.currentEphemeralReadBuffer = nil
 	case ephemeralReadBigBuffer:
 		// We allocated a one-time buffer we can't re-use.
 		// Nothing to do. Nil out for safety.
-		c.currentEphemeralBuffer = nil
-	case ephemeralUnused, ephemeralWriteGlobalBuffer, ephemeralWriteSingleBuffer, ephemeralWriteBigBuffer:
+		c.currentEphemeralReadBuffer = nil
+	case ephemeralUnused, ephemeralWriteSingleBuffer, ephemeralWriteBigBuffer:
 		// Programming error.
 		panic(fmt.Errorf("trying to call recycleReadPacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
 	}
@@ -393,7 +338,7 @@ func (c *Conn) recycleReadPacket() {
 func (c *Conn) readOnePacket() ([]byte, error) {
 	var header [4]byte
 
-	if _, err := io.ReadFull(c.reader, header[:]); err != nil {
+	if _, err := io.ReadFull(c.bufferedReader, header[:]); err != nil {
 		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
 	}
 
@@ -412,7 +357,7 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 	}
 
 	data := make([]byte, length)
-	if _, err := io.ReadFull(c.reader, data); err != nil {
+	if _, err := io.ReadFull(c.bufferedReader, data); err != nil {
 		return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
 	}
 	return data, nil
@@ -476,6 +421,8 @@ func (c *Conn) writePacket(data []byte) error {
 	index := 0
 	length := len(data)
 
+	w := c.getWriter()
+
 	for {
 		// Packet length is capped to MaxPacketSize.
 		packetLength := length
@@ -489,14 +436,14 @@ func (c *Conn) writePacket(data []byte) error {
 		header[1] = byte(packetLength >> 8)
 		header[2] = byte(packetLength >> 16)
 		header[3] = c.sequence
-		if n, err := c.writer.Write(header[:]); err != nil {
+		if n, err := w.Write(header[:]); err != nil {
 			return fmt.Errorf("Write(header) failed: %v", err)
 		} else if n != 4 {
 			return fmt.Errorf("Write(header) returned a short write: %v < 4", n)
 		}
 
 		// Write the body.
-		if n, err := c.writer.Write(data[index : index+packetLength]); err != nil {
+		if n, err := w.Write(data[index : index+packetLength]); err != nil {
 			return fmt.Errorf("Write(packet) failed: %v", err)
 		} else if n != packetLength {
 			return fmt.Errorf("Write(packet) returned a short write: %v < %v", n, packetLength)
@@ -514,7 +461,7 @@ func (c *Conn) writePacket(data []byte) error {
 				header[1] = 0
 				header[2] = 0
 				header[3] = c.sequence
-				if n, err := c.writer.Write(header[:]); err != nil {
+				if n, err := w.Write(header[:]); err != nil {
 					return fmt.Errorf("Write(empty header) failed: %v", err)
 				} else if n != 4 {
 					return fmt.Errorf("Write(empty header) returned a short write: %v < 4", n)
@@ -532,76 +479,46 @@ func (c *Conn) startEphemeralPacket(length int) []byte {
 		panic("startEphemeralPacket cannot be used while a packet is already started.")
 	}
 
-	// Fast path: we can reuse a single memory buffer for
-	// both the header and the data.
-	if length <= cap(c.buffer)-4 {
-		c.currentEphemeralPolicy = ephemeralWriteGlobalBuffer
-		c.buffer = c.buffer[:length+4]
-		c.buffer[0] = byte(length)
-		c.buffer[1] = byte(length >> 8)
-		c.buffer[2] = byte(length >> 16)
-		c.buffer[3] = c.sequence
-		c.sequence++
-		return c.buffer[4:]
-	}
-
-	// Slower path: we can use a single buffer for both the header and the data, but it has to be allocated.
+	// get buffer from pool
 	if length < MaxPacketSize {
 		c.currentEphemeralPolicy = ephemeralWriteSingleBuffer
-		c.currentEphemeralPacket = make([]byte, length+4)
-		c.currentEphemeralPacket[0] = byte(length)
-		c.currentEphemeralPacket[1] = byte(length >> 8)
-		c.currentEphemeralPacket[2] = byte(length >> 16)
-		c.currentEphemeralPacket[3] = c.sequence
+
+		c.currentEphemeralWriteBuffer = bufPool.Get(length + 4)
+		(*c.currentEphemeralWriteBuffer)[0] = byte(length)
+		(*c.currentEphemeralWriteBuffer)[1] = byte(length >> 8)
+		(*c.currentEphemeralWriteBuffer)[2] = byte(length >> 16)
+		(*c.currentEphemeralWriteBuffer)[3] = c.sequence
 		c.sequence++
-		return c.currentEphemeralPacket[4:]
+		return (*c.currentEphemeralWriteBuffer)[4:]
 	}
 
 	// Even slower path: create a full size buffer and return it.
 	c.currentEphemeralPolicy = ephemeralWriteBigBuffer
-	c.currentEphemeralPacket = make([]byte, length)
-	return c.currentEphemeralPacket
+	data := make([]byte, length)
+	c.currentEphemeralWriteBuffer = &data
+	return *c.currentEphemeralWriteBuffer
 }
 
 // writeEphemeralPacket writes the packet that was allocated by
-// startEphemeralPacket. If 'direct' is set, we write to the
-// underlying connection directly, by-passing the write buffer.
-func (c *Conn) writeEphemeralPacket(direct bool) error {
+// startEphemeralPacket.
+func (c *Conn) writeEphemeralPacket() error {
 	defer c.recycleWritePacket()
 
-	var w io.Writer = c.writer
-	if direct {
-		w = c.conn
-	}
-
 	switch c.currentEphemeralPolicy {
-	case ephemeralWriteGlobalBuffer:
-		// Just write c.buffer as a single buffer.
-		// It has both header and data.
-		if n, err := w.Write(c.buffer); err != nil {
-			return fmt.Errorf("Conn %v: Write(c.buffer) failed: %v", c.ID(), err)
-		} else if n != len(c.buffer) {
-			return fmt.Errorf("Conn %v: Write(c.buffer) returned a short write: %v < %v", c.ID(), n, len(c.buffer))
-		}
 	case ephemeralWriteSingleBuffer:
 		// Write the allocated buffer as a single buffer.
 		// It has both header and data.
-		if n, err := w.Write(c.currentEphemeralPacket); err != nil {
-			return fmt.Errorf("Conn %v: Write(c.currentEphemeralPacket) failed: %v", c.ID(), err)
-		} else if n != len(c.currentEphemeralPacket) {
-			return fmt.Errorf("Conn %v: Write(c.currentEphemeralPacket) returned a short write: %v < %v", c.ID(), n, len(c.currentEphemeralPacket))
+		if n, err := c.getWriter().Write(*c.currentEphemeralWriteBuffer); err != nil {
+			return fmt.Errorf("Conn %v: Write(*c.currentEphemeralWriteBuffer) failed: %v", c.ID(), err)
+		} else if n != len(*c.currentEphemeralWriteBuffer) {
+			return fmt.Errorf("Conn %v: Write(*c.currentEphemeralWriteBuffer) returned a short write: %v < %v", c.ID(), n, len(*c.currentEphemeralWriteBuffer))
 		}
 	case ephemeralWriteBigBuffer:
 		// This is the slower path for big data.
-		// With direct=true, the caller expects a flush, so we call it
-		// manually.
-		if err := c.writePacket(c.currentEphemeralPacket); err != nil {
+		if err := c.writePacket(*c.currentEphemeralWriteBuffer); err != nil {
 			return fmt.Errorf("Conn %v: %v", c.ID(), err)
 		}
-		if direct {
-			return c.flush()
-		}
-	case ephemeralUnused, ephemeralReadGlobalBuffer, ephemeralReadSingleBuffer, ephemeralReadBigBuffer:
+	case ephemeralUnused, ephemeralReadSingleBuffer, ephemeralReadBigBuffer:
 		// Programming error.
 		panic(fmt.Errorf("Conn %v: trying to call writeEphemeralPacket while currentEphemeralPolicy is %v", c.ID(), c.currentEphemeralPolicy))
 	}
@@ -613,31 +530,20 @@ func (c *Conn) writeEphemeralPacket(direct bool) error {
 // after writeEphemeralPacket was called.
 func (c *Conn) recycleWritePacket() {
 	switch c.currentEphemeralPolicy {
-	case ephemeralWriteGlobalBuffer:
-		// We used small built-in buffer, nothing to do.
 	case ephemeralWriteSingleBuffer:
 		// Release our reference so the buffer can be gced
-		c.currentEphemeralPacket = nil
+		bufPool.Put(c.currentEphemeralWriteBuffer)
+		c.currentEphemeralWriteBuffer = nil
 	case ephemeralWriteBigBuffer:
 		// We allocated a one-time buffer we can't re-use.
-		// N.B. Unlike the read packet, we actually assign the big buffer to currentEphemeralBuffer,
+		// N.B. Unlike the read packet, we actually assign the big buffer to currentEphemeralReadBuffer,
 		// so we should remove our reference to it.
-		c.currentEphemeralPacket = nil
-	case ephemeralUnused, ephemeralReadGlobalBuffer,
-		ephemeralReadSingleBuffer, ephemeralReadBigBuffer:
+		c.currentEphemeralWriteBuffer = nil
+	case ephemeralUnused, ephemeralReadSingleBuffer, ephemeralReadBigBuffer:
 		// Programming error.
 		panic(fmt.Errorf("trying to call recycleWritePacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
 	}
 	c.currentEphemeralPolicy = ephemeralUnused
-}
-
-// flush flushes the written data to the socket.
-// This method returns a generic error, not a SQLError.
-func (c *Conn) flush() error {
-	if err := c.writer.Flush(); err != nil {
-		return fmt.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
-	}
-	return nil
 }
 
 // writeComQuit writes a Quit message for the server, to indicate we
@@ -650,7 +556,7 @@ func (c *Conn) writeComQuit() error {
 
 	data := c.startEphemeralPacket(1)
 	data[0] = ComQuit
-	if err := c.writeEphemeralPacket(true); err != nil {
+	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -689,8 +595,7 @@ func (c *Conn) IsClosed() bool {
 // Packet writing methods, for generic packets.
 //
 
-// writeOKPacket writes an OK packet, directly. Do not use this if
-// there is already a packet in the buffer.
+// writeOKPacket writes an OK packet.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
 func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, warnings uint16) error {
@@ -707,7 +612,7 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint16(data, pos, warnings)
 
-	return c.writeEphemeralPacket(true)
+	return c.writeEphemeralPacket()
 }
 
 // writeOKPacketWithEOFHeader writes an OK packet with an EOF header.
@@ -729,15 +634,10 @@ func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, fla
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint16(data, pos, warnings)
 
-	if err := c.writeEphemeralPacket(false); err != nil {
-		return err
-	}
-	return c.flush()
+	return c.writeEphemeralPacket()
 }
 
 // writeErrorPacket writes an error packet.
-// It writes directly to the socket, so this cannot be called after other
-// packets have already been written.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
 func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string, args ...interface{}) error {
@@ -757,7 +657,7 @@ func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string
 	pos = writeEOFString(data, pos, sqlState)
 	pos = writeEOFString(data, pos, errorMessage)
 
-	return c.writeEphemeralPacket(true)
+	return c.writeEphemeralPacket()
 }
 
 // writeErrorPacketFromError writes an error packet, from a regular error.
@@ -780,7 +680,7 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 	pos = writeUint16(data, pos, warnings)
 	pos = writeUint16(data, pos, flags)
 
-	return c.writeEphemeralPacket(false)
+	return c.writeEphemeralPacket()
 }
 
 //

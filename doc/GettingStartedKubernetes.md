@@ -278,7 +278,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 1.  **Access vtctld web UI**
 
     To access vtctld from outside Kubernetes, use [kubectl proxy]
-    (http://kubernetes.io/v1.1/docs/user-guide/kubectl/kubectl_proxy.html)
+    (https://kubernetes.io/docs/tasks/access-kubernetes-api/http-proxy-access-api/)
     to create an authenticated tunnel on your workstation:
 
     **Note:** The proxy command runs in the foreground,
@@ -292,13 +292,13 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 
     You can then load the vtctld web UI on `localhost`:
 
-    http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web/
+    http://localhost:8001/api/v1/namespaces/default/services/vtctld:web/proxy
 
     You can also use this proxy to access the [Kubernetes Dashboard]
-    (http://kubernetes.io/v1.1/docs/user-guide/ui.html),
+    (https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/),
     where you can monitor nodes, pods, and services:
 
-    http://localhost:8001/ui
+    http://localhost:8001/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/.
 
 1.  **Use vtctlclient to send commands to vtctld**
 
