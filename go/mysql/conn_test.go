@@ -77,25 +77,21 @@ func useWritePacket(t *testing.T, cConn *Conn, data []byte) {
 	if err := cConn.writePacket(data); err != nil {
 		t.Fatalf("writePacket failed: %v", err)
 	}
-	if err := cConn.flush(); err != nil {
-		t.Fatalf("flush failed: %v", err)
-	}
 }
 
-func useWriteEphemeralPacket(t *testing.T, cConn *Conn, data []byte) {
+func useWriteEphemeralPacketBuffered(t *testing.T, cConn *Conn, data []byte) {
 	defer func() {
 		if x := recover(); x != nil {
 			t.Fatalf("%v", x)
 		}
 	}()
+	cConn.startWriterBuffering()
+	defer cConn.flush()
 
 	buf := cConn.startEphemeralPacket(len(data))
 	copy(buf, data)
-	if err := cConn.writeEphemeralPacket(false); err != nil {
+	if err := cConn.writeEphemeralPacket(); err != nil {
 		t.Fatalf("writeEphemeralPacket(false) failed: %v", err)
-	}
-	if err := cConn.flush(); err != nil {
-		t.Fatalf("flush failed: %v", err)
 	}
 }
 
@@ -108,7 +104,7 @@ func useWriteEphemeralPacketDirect(t *testing.T, cConn *Conn, data []byte) {
 
 	buf := cConn.startEphemeralPacket(len(data))
 	copy(buf, data)
-	if err := cConn.writeEphemeralPacket(true); err != nil {
+	if err := cConn.writeEphemeralPacket(); err != nil {
 		t.Fatalf("writeEphemeralPacket(true) failed: %v", err)
 	}
 }
@@ -139,22 +135,25 @@ func verifyPacketCommsSpecific(t *testing.T, cConn *Conn, data []byte,
 func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
 	// All three writes, with ReadPacket.
 	verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.ReadPacket)
-	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacket, sConn.ReadPacket)
+	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.ReadPacket)
 	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.ReadPacket)
 
 	// All three writes, with readEphemeralPacket.
 	verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.readEphemeralPacket)
 	sConn.recycleReadPacket()
-	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacket, sConn.readEphemeralPacket)
+	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.readEphemeralPacket)
 	sConn.recycleReadPacket()
 	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readEphemeralPacket)
 	sConn.recycleReadPacket()
 
-	// All three writes, with readPacketDirect, if size allows it.
+	// All three writes, with readEphemeralPacketDirect, if size allows it.
 	if len(data) < MaxPacketSize {
-		verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.readPacketDirect)
-		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacket, sConn.readPacketDirect)
-		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readPacketDirect)
+		verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.readEphemeralPacketDirect)
+		sConn.recycleReadPacket()
+		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.readEphemeralPacketDirect)
+		sConn.recycleReadPacket()
+		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readEphemeralPacketDirect)
+		sConn.recycleReadPacket()
 	}
 }
 
@@ -253,9 +252,6 @@ func TestBasicPackets(t *testing.T) {
 	// Write EOF packet, read it, compare first byte. Payload is always ignored.
 	if err := sConn.writeEOFPacket(0x8912, 0xabba); err != nil {
 		t.Fatalf("writeEOFPacket failed: %v", err)
-	}
-	if err := sConn.flush(); err != nil {
-		t.Fatalf("flush failed: %v", err)
 	}
 	data, err = cConn.ReadPacket()
 	if err != nil || len(data) == 0 || !isEOFPacket(data) {

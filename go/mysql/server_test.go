@@ -143,6 +143,22 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 			},
 		})
 	default:
+		if strings.HasPrefix(query, benchmarkQueryPrefix) {
+			callback(&sqltypes.Result{
+				Fields: []*querypb.Field{
+					{
+						Name: "result",
+						Type: querypb.Type_VARCHAR,
+					},
+				},
+				Rows: [][]sqltypes.Value{
+					{
+						sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(query)),
+					},
+				},
+			})
+		}
+
 		callback(&sqltypes.Result{})
 	}
 	return nil

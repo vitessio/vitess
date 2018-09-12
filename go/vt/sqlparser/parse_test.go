@@ -19,7 +19,9 @@ package sqlparser
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -1356,6 +1358,36 @@ func TestValid(t *testing.T) {
 	}
 }
 
+// Ensure there is no corruption from using a pooled yyParserImpl in Parse.
+func TestValidParallel(t *testing.T) {
+	parallelism := 100
+	numIters := 1000
+
+	wg := sync.WaitGroup{}
+	wg.Add(parallelism)
+	for i := 0; i < parallelism; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < numIters; j++ {
+				tcase := validSQL[rand.Intn(len(validSQL))]
+				if tcase.output == "" {
+					tcase.output = tcase.input
+				}
+				tree, err := Parse(tcase.input)
+				if err != nil {
+					t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
+					continue
+				}
+				out := String(tree)
+				if out != tcase.output {
+					t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
 func TestCaseSensitivity(t *testing.T) {
 	validSQL := []struct {
 		input  string
@@ -2162,8 +2194,36 @@ func TestErrors(t *testing.T) {
 // BenchmarkParse1-4         100000             16334 ns/op
 // BenchmarkParse2-4          30000             44121 ns/op
 
+// Benchmark run on 9/3/18, comparing pooled parser performance.
+//
+// benchmark                     old ns/op     new ns/op     delta
+// BenchmarkNormalize-4          2540          2533          -0.28%
+// BenchmarkParse1-4             18269         13330         -27.03%
+// BenchmarkParse2-4             46703         41255         -11.67%
+// BenchmarkParse2Parallel-4     22246         20707         -6.92%
+// BenchmarkParse3-4             4064743       4083135       +0.45%
+//
+// benchmark                     old allocs     new allocs     delta
+// BenchmarkNormalize-4          27             27             +0.00%
+// BenchmarkParse1-4             75             74             -1.33%
+// BenchmarkParse2-4             264            263            -0.38%
+// BenchmarkParse2Parallel-4     176            175            -0.57%
+// BenchmarkParse3-4             360            361            +0.28%
+//
+// benchmark                     old bytes     new bytes     delta
+// BenchmarkNormalize-4          821           821           +0.00%
+// BenchmarkParse1-4             22776         2307          -89.87%
+// BenchmarkParse2-4             28352         7881          -72.20%
+// BenchmarkParse2Parallel-4     25712         5235          -79.64%
+// BenchmarkParse3-4             6352082       6336307       -0.25%
+
+const (
+	sql1 = "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
+	sql2 = "select aaaa, bbb, ccc, ddd, eeee, ffff, gggg, hhhh, iiii from tttt, ttt1, ttt3 where aaaa = bbbb and bbbb = cccc and dddd+1 = eeee group by fff, gggg having hhhh = iiii and iiii = jjjj order by kkkk, llll limit 3, 4"
+)
+
 func BenchmarkParse1(b *testing.B) {
-	sql := "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
+	sql := sql1
 	for i := 0; i < b.N; i++ {
 		ast, err := Parse(sql)
 		if err != nil {
@@ -2174,7 +2234,7 @@ func BenchmarkParse1(b *testing.B) {
 }
 
 func BenchmarkParse2(b *testing.B) {
-	sql := "select aaaa, bbb, ccc, ddd, eeee, ffff, gggg, hhhh, iiii from tttt, ttt1, ttt3 where aaaa = bbbb and bbbb = cccc and dddd+1 = eeee group by fff, gggg having hhhh = iiii and iiii = jjjj order by kkkk, llll limit 3, 4"
+	sql := sql2
 	for i := 0; i < b.N; i++ {
 		ast, err := Parse(sql)
 		if err != nil {
@@ -2182,6 +2242,19 @@ func BenchmarkParse2(b *testing.B) {
 		}
 		_ = String(ast)
 	}
+}
+
+func BenchmarkParse2Parallel(b *testing.B) {
+	sql := sql2
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			ast, err := Parse(sql)
+			if err != nil {
+				b.Fatal(err)
+			}
+			_ = ast
+		}
+	})
 }
 
 var benchQuery string

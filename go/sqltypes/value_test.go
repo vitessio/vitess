@@ -257,7 +257,7 @@ func TestIntegralValue(t *testing.T) {
 	}
 }
 
-func TestInerfaceValue(t *testing.T) {
+func TestInterfaceValue(t *testing.T) {
 	testcases := []struct {
 		in  interface{}
 		out Value
@@ -382,6 +382,10 @@ func TestEncode(t *testing.T) {
 		in:       TestValue(VarChar, "\x00'\"\b\n\r\t\x1A\\"),
 		outSQL:   "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
 		outASCII: "'ACciCAoNCRpc'",
+	}, {
+		in:       TestValue(Bit, "a"),
+		outSQL:   "b'01100001'",
+		outASCII: "'YQ=='",
 	}}
 	for _, tcase := range testcases {
 		buf := &bytes.Buffer{}
