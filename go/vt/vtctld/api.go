@@ -169,13 +169,20 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		}
 	})
 
-	handleConnection("ks-tablets", func(r *http.Request) (interface{}, error) {
+	handleCollection("ks-tablets", func(r *http.Request) (interface{}, error) {
 		hostnames := []string{}
+
+		keyspace := getItemPath(r.URL.Path)
+		if keyspace == "" {
+			return nil, errors.New("keyspace is required")
+		}
 		shardNames, err := ts.GetShardNames(ctx, keyspace)
 		if err != nil {
 			return hostnames, err
 		}
-
+		for _, shard := range shardNames {
+			// Get tables for this shard.
+		}
 	})
 
 	// Shards
