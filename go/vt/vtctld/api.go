@@ -169,8 +169,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		}
 	})
 
-	handleCollection("ks-tablets", func(r *http.Request) (interface{}, error) {
-		hostnames := []string{}
+	handleCollection("ks_tablets", func(r *http.Request) (interface{}, error) {
 
 		keyspace := getItemPath(r.URL.Path)
 		if keyspace == "" {
@@ -178,11 +177,27 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		}
 		shardNames, err := ts.GetShardNames(ctx, keyspace)
 		if err != nil {
-			return hostnames, err
+			return nil, err
 		}
+
+		tablets := [](*topodatapb.Tablet){}
+
 		for _, shard := range shardNames {
 			// Get tables for this shard.
+			tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+			if err != nil && !topo.IsErrType(err, topo.PartialResult) {
+				return result, err
+			}
+			for _, tabletAlias := range tabletAliases {
+				t, err := ts.GetTablet(ctx, tabletAlias)
+				if err != nil {
+					return nil, err
+				}
+				tablets = append(tablets, t.Tablet)
+			}
 		}
+
+		return tablets, nil
 	})
 
 	// Shards
