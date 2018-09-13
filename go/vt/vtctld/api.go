@@ -170,9 +170,10 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 	})
 
 	handleConnection("ks-tablets", func(r *http.Request) (interface{}, error) {
+		hostnames := []string{}
 		shardNames, err := ts.GetShardNames(ctx, keyspace)
 		if err != nil {
-			return err
+			return hostnames, err
 		}
 
 	})
