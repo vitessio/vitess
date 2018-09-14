@@ -120,19 +120,22 @@ type Listener struct {
 	connReadTimeout time.Duration
 	// Write timeout on a given connection
 	connWriteTimeout time.Duration
+	// connReadBufferSize is size of buffer for reads from underlying connection.
+	// Reads are unbuffered if it's <=0.
+	connReadBufferSize int
 }
 
 // NewFromListener creares a new mysql listener from an existing net.Listener
 func NewFromListener(l net.Listener, authServer AuthServer, handler Handler, connReadTimeout time.Duration, connWriteTimeout time.Duration) (*Listener, error) {
-	return &Listener{
-		authServer:       authServer,
-		handler:          handler,
-		listener:         l,
-		ServerVersion:    DefaultServerVersion,
-		connectionID:     1,
-		connReadTimeout:  connReadTimeout,
-		connWriteTimeout: connWriteTimeout,
-	}, nil
+	cfg := ListenerConfig{
+		Listener:           l,
+		AuthServer:         authServer,
+		Handler:            handler,
+		ConnReadTimeout:    connReadTimeout,
+		ConnWriteTimeout:   connWriteTimeout,
+		ConnReadBufferSize: connBufferSize,
+	}
+	return NewListenerWithConfig(cfg)
 }
 
 // NewListener creates a new Listener.
@@ -143,6 +146,45 @@ func NewListener(protocol, address string, authServer AuthServer, handler Handle
 	}
 
 	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout)
+}
+
+// ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
+type ListenerConfig struct {
+	// Protocol-Address pair and Listener are mutually exclusive parameters
+	Protocol           string
+	Address            string
+	Listener           net.Listener
+	AuthServer         AuthServer
+	Handler            Handler
+	ConnReadTimeout    time.Duration
+	ConnWriteTimeout   time.Duration
+	ConnReadBufferSize int
+}
+
+// NewListenerWithConfig creates new listener using provided config. There are
+// no default values for config, so caller should ensure its correctness.
+func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
+	var l net.Listener
+	if cfg.Listener != nil {
+		l = cfg.Listener
+	} else {
+		listener, err := net.Listen(cfg.Protocol, cfg.Address)
+		if err != nil {
+			return nil, err
+		}
+		l = listener
+	}
+
+	return &Listener{
+		authServer:         cfg.AuthServer,
+		handler:            cfg.Handler,
+		listener:           l,
+		ServerVersion:      DefaultServerVersion,
+		connectionID:       1,
+		connReadTimeout:    cfg.ConnReadTimeout,
+		connWriteTimeout:   cfg.ConnWriteTimeout,
+		connReadBufferSize: cfg.ConnReadBufferSize,
+	}, nil
 }
 
 // Addr returns the listener address.
@@ -177,7 +219,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	if l.connReadTimeout != 0 || l.connWriteTimeout != 0 {
 		conn = netutil.NewConnWithTimeouts(conn, l.connReadTimeout, l.connWriteTimeout)
 	}
-	c := newConn(conn)
+	c := newServerConn(conn, l.connReadBufferSize)
 	c.ConnectionID = connectionID
 
 	// Catch panics, and close the connection in any case.

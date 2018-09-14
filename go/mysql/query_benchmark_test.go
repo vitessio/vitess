@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"flag"
 	"math/rand"
 	"net"
 	"strings"
@@ -25,6 +26,12 @@ import (
 	"golang.org/x/net/context"
 )
 
+var testReadConnBufferSize = connBufferSize
+
+func init() {
+	flag.IntVar(&testReadConnBufferSize, "test.read_conn_buffer_size", connBufferSize, "buffer size for reads from connections in tests")
+}
+
 const benchmarkQueryPrefix = "benchmark "
 
 func benchmarkQuery(b *testing.B, threads int, query string) {
@@ -32,7 +39,14 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 
 	authServer := &AuthServerNone{}
 
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	lCfg := ListenerConfig{
+		Protocol:           "tcp",
+		Address:            ":0",
+		AuthServer:         authServer,
+		Handler:            th,
+		ConnReadBufferSize: testReadConnBufferSize,
+	}
+	l, err := NewListenerWithConfig(lCfg)
 	if err != nil {
 		b.Fatalf("NewListener failed: %v", err)
 	}
@@ -59,6 +73,9 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 
 	b.ResetTimer()
 
+	// MaxPacketSize is too big for benchmarks, so choose something smaller
+	maxPacketSize := connBufferSize * 4
+
 	b.RunParallel(func(pb *testing.PB) {
 		conn, err := Connect(ctx, params)
 		if err != nil {
@@ -73,7 +90,7 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 			execQuery := query
 			if execQuery == "" {
 				// generate random query
-				n := rand.Intn(MaxPacketSize-len(benchmarkQueryPrefix)) + 1
+				n := rand.Intn(maxPacketSize-len(benchmarkQueryPrefix)) + 1
 				execQuery = benchmarkQueryPrefix + strings.Repeat("x", n)
 
 			}
