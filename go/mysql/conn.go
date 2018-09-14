@@ -173,8 +173,20 @@ func newConn(conn net.Conn) *Conn {
 	return &Conn{
 		conn:           conn,
 		bufferedReader: bufio.NewReaderSize(conn, connBufferSize),
-		sequence:       0,
 	}
+}
+
+// newServerConn should be used to create server connections.
+// The only difference from "client" newConn is ability to control buffer size
+// for reads.
+func newServerConn(conn net.Conn, connReadBufferSize int) *Conn {
+	c := &Conn{
+		conn: conn,
+	}
+	if connReadBufferSize > 0 {
+		c.bufferedReader = bufio.NewReaderSize(conn, connReadBufferSize)
+	}
+	return c
 }
 
 // startWriterBuffering starts using buffered writes. This should
@@ -209,44 +221,66 @@ func (c *Conn) getWriter() io.Writer {
 	return c.conn
 }
 
-func (c *Conn) readEphemeralPacketHelper(direct bool) ([]byte, error) {
-	if c.currentEphemeralPolicy != ephemeralUnused {
-		panic(fmt.Errorf("readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
+// getReader returns reader for connection. It can be *bufio.Reader or net.Conn
+// depending on which buffer size was passed to newServerConn.
+func (c *Conn) getReader() io.Reader {
+	if c.bufferedReader != nil {
+		return c.bufferedReader
 	}
+	return c.conn
+}
 
-	var r io.Reader = c.bufferedReader
-	if direct {
-		r = c.conn
-	}
-
+func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
+	var header [4]byte
 	// Note io.ReadFull will return two different types of errors:
 	// 1. if the socket is already closed, and the go runtime knows it,
 	//   then ReadFull will return an error (different than EOF),
 	//   someting like 'read: connection reset by peer'.
 	// 2. if the socket is not closed while we start the read,
 	//   but gets closed after the read is started, we'll get io.EOF.
-	var header [4]byte
 	if _, err := io.ReadFull(r, header[:]); err != nil {
 		// The special casing of propagating io.EOF up
 		// is used by the server side only, to suppress an error
 		// message if a client just disconnects.
 		if err == io.EOF {
-			return nil, err
+			return 0, err
 		}
 		if strings.HasSuffix(err.Error(), "read: connection reset by peer") {
-			return nil, io.EOF
+			return 0, io.EOF
 		}
-		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
+		return 0, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
 	}
 
 	sequence := uint8(header[3])
 	if sequence != c.sequence {
-		return nil, fmt.Errorf("invalid sequence, expected %v got %v", c.sequence, sequence)
+		return 0, fmt.Errorf("invalid sequence, expected %v got %v", c.sequence, sequence)
 	}
 
 	c.sequence++
 
-	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
+	return int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16), nil
+}
+
+// readEphemeralPacket attempts to read a packet into buffer from sync.Pool.  Do
+// not use this method if the contents of the packet needs to be kept
+// after the next readEphemeralPacket.
+//
+// Note if the connection is closed already, an error will be
+// returned, and it may not be io.EOF. If the connection closes while
+// we are stuck waiting for data, an error will also be returned, and
+// it most likely will be io.EOF.
+func (c *Conn) readEphemeralPacket() ([]byte, error) {
+	if c.currentEphemeralPolicy != ephemeralUnused {
+		panic(fmt.Errorf("readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
+	}
+
+	r := c.getReader()
+
+	length, err := c.readHeaderFrom(r)
+	if err != nil {
+		return nil, err
+	}
+
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
@@ -263,16 +297,12 @@ func (c *Conn) readEphemeralPacketHelper(direct bool) ([]byte, error) {
 		return *c.currentEphemeralReadBuffer, nil
 	}
 
-	if direct {
-		return nil, fmt.Errorf("readEphemeralPacketDirect doesn't support more than one packet")
-	}
-
 	// Much slower path, revert to allocating everything from scratch.
 	// We're going to concatenate a lot of data anyway, can't really
 	// optimize this code path easily.
 	c.currentEphemeralPolicy = ephemeralReadBigBuffer
 	data := make([]byte, length)
-	if _, err := io.ReadFull(c.bufferedReader, data); err != nil {
+	if _, err := io.ReadFull(r, data); err != nil {
 		return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
 	}
 	for {
@@ -299,20 +329,35 @@ func (c *Conn) readEphemeralPacketHelper(direct bool) ([]byte, error) {
 // It needs to be used for the first handshake packet the server receives,
 // so we do't buffer the SSL negotiation packet. As a shortcut, only
 // packets smaller than MaxPacketSize can be read here.
+// This function usually shouldn't be used - use readEphemeralPacket.
 func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
-	return c.readEphemeralPacketHelper(true)
-}
+	if c.currentEphemeralPolicy != ephemeralUnused {
+		panic(fmt.Errorf("readEphemeralPacketDirect: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
+	}
 
-// readEphemeralPacket attempts to read a packet into buffer from sync.Pool.  Do
-// not use this method if the contents of the packet needs to be kept
-// after the next readEphemeralPacket.
-//
-// Note if the connection is closed already, an error will be
-// returned, and it may not be io.EOF. If the connection closes while
-// we are stuck waiting for data, an error will also be returned, and
-// it most likely will be io.EOF.
-func (c *Conn) readEphemeralPacket() ([]byte, error) {
-	return c.readEphemeralPacketHelper(false)
+	var r io.Reader = c.conn
+
+	length, err := c.readHeaderFrom(r)
+	if err != nil {
+		return nil, err
+	}
+
+	if length == 0 {
+		// This can be caused by the packet after a packet of
+		// exactly size MaxPacketSize.
+		return nil, nil
+	}
+
+	if length < MaxPacketSize {
+		c.currentEphemeralPolicy = ephemeralReadSingleBuffer
+		c.currentEphemeralReadBuffer = bufPool.Get(length)
+		if _, err := io.ReadFull(r, *c.currentEphemeralReadBuffer); err != nil {
+			return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
+		}
+		return *c.currentEphemeralReadBuffer, nil
+	}
+
+	return nil, fmt.Errorf("readEphemeralPacketDirect doesn't support more than one packet")
 }
 
 // recycleReadPacket recycles the read packet. It needs to be called
@@ -336,20 +381,11 @@ func (c *Conn) recycleReadPacket() {
 
 // readOnePacket reads a single packet into a newly allocated buffer.
 func (c *Conn) readOnePacket() ([]byte, error) {
-	var header [4]byte
-
-	if _, err := io.ReadFull(c.bufferedReader, header[:]); err != nil {
-		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
+	r := c.getReader()
+	length, err := c.readHeaderFrom(r)
+	if err != nil {
+		return nil, err
 	}
-
-	sequence := uint8(header[3])
-	if sequence != c.sequence {
-		return nil, fmt.Errorf("invalid sequence, expected %v got %v", c.sequence, sequence)
-	}
-
-	c.sequence++
-
-	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
@@ -357,7 +393,7 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 	}
 
 	data := make([]byte, length)
-	if _, err := io.ReadFull(c.bufferedReader, data); err != nil {
+	if _, err := io.ReadFull(r, data); err != nil {
 		return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
 	}
 	return data, nil
