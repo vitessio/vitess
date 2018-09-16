@@ -181,7 +181,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		}
 
 		var shardNames []string
-		if len(parts) > 1 {
+		if len(parts) > 1 && parts[1] != "" {
 			shardNames = []string{parts[1]}
 		} else {
 			var err error
