@@ -173,7 +173,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		// Valid requests: api/ks_tables/my_ks (all shards)
 		// Valid requests: api/ks_tables/my_ks/-80 (specific shard)
 		itemPath := getItemPath(r.URL.Path)
-		parts := strings.SplitN(shardPath, "/", 2)
+		parts := strings.SplitN(itemPath, "/", 2)
 
 		keyspace := parts[0]
 		if keyspace == "" {
