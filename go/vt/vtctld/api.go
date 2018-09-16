@@ -170,14 +170,25 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 	})
 
 	handleCollection("ks_tablets", func(r *http.Request) (interface{}, error) {
+		// Valid requests: api/ks_tables/my_ks (all shards)
+		// Valid requests: api/ks_tables/my_ks/-80 (specific shard)
+		itemPath := getItemPath(r.URL.Path)
+		parts := strings.SplitN(shardPath, "/", 2)
 
-		keyspace := getItemPath(r.URL.Path)
+		keyspace := parts[0]
 		if keyspace == "" {
 			return nil, errors.New("keyspace is required")
 		}
-		shardNames, err := ts.GetShardNames(ctx, keyspace)
-		if err != nil {
-			return nil, err
+
+		var shardNames []string
+		if len(parts) > 1 {
+			shardNames = []string{parts[1]}
+		} else {
+			var err error
+			shardNames, err = ts.GetShardNames(ctx, keyspace)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		tablets := [](*topodatapb.Tablet){}
