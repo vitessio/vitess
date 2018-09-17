@@ -59,7 +59,7 @@ func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
 
 func TestDiscoveryGatewayExecuteStream(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, true, func(dg Gateway, target *querypb.Target) error {
-		err := dg.StreamExecute(context.Background(), target, "query", nil, nil, func(qr *sqltypes.Result) error {
+		err := dg.StreamExecute(context.Background(), target, "query", nil, 0, nil, func(qr *sqltypes.Result) error {
 			return nil
 		})
 		return err

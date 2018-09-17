@@ -22,8 +22,8 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 // ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
 // timeouts are in nanoseconds.
 type ExecuteVtctlCommandRequest struct {
-	Args                 []string `protobuf:"bytes,1,rep,name=args,proto3" json:"args,omitempty"`
-	ActionTimeout        int64    `protobuf:"varint,2,opt,name=action_timeout,json=actionTimeout,proto3" json:"action_timeout,omitempty"`
+	Args                 []string `protobuf:"bytes,1,rep,name=args" json:"args,omitempty"`
+	ActionTimeout        int64    `protobuf:"varint,2,opt,name=action_timeout,json=actionTimeout" json:"action_timeout,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -33,7 +33,7 @@ func (m *ExecuteVtctlCommandRequest) Reset()         { *m = ExecuteVtctlCommandR
 func (m *ExecuteVtctlCommandRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteVtctlCommandRequest) ProtoMessage()    {}
 func (*ExecuteVtctlCommandRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vtctldata_116d6c451a061272, []int{0}
+	return fileDescriptor_vtctldata_1ba3ba7c409e0e97, []int{0}
 }
 func (m *ExecuteVtctlCommandRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteVtctlCommandRequest.Unmarshal(m, b)
@@ -69,7 +69,7 @@ func (m *ExecuteVtctlCommandRequest) GetActionTimeout() int64 {
 
 // ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.
 type ExecuteVtctlCommandResponse struct {
-	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
 	XXX_unrecognized     []byte         `json:"-"`
 	XXX_sizecache        int32          `json:"-"`
@@ -79,7 +79,7 @@ func (m *ExecuteVtctlCommandResponse) Reset()         { *m = ExecuteVtctlCommand
 func (m *ExecuteVtctlCommandResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteVtctlCommandResponse) ProtoMessage()    {}
 func (*ExecuteVtctlCommandResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vtctldata_116d6c451a061272, []int{1}
+	return fileDescriptor_vtctldata_1ba3ba7c409e0e97, []int{1}
 }
 func (m *ExecuteVtctlCommandResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteVtctlCommandResponse.Unmarshal(m, b)
@@ -111,9 +111,9 @@ func init() {
 	proto.RegisterType((*ExecuteVtctlCommandResponse)(nil), "vtctldata.ExecuteVtctlCommandResponse")
 }
 
-func init() { proto.RegisterFile("vtctldata.proto", fileDescriptor_vtctldata_116d6c451a061272) }
+func init() { proto.RegisterFile("vtctldata.proto", fileDescriptor_vtctldata_1ba3ba7c409e0e97) }
 
-var fileDescriptor_vtctldata_116d6c451a061272 = []byte{
+var fileDescriptor_vtctldata_1ba3ba7c409e0e97 = []byte{
 	// 200 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0xcf, 0xd1, 0x4a, 0x87, 0x30,
 	0x14, 0x06, 0x70, 0xd6, 0xbf, 0x82, 0xff, 0x42, 0x83, 0x5d, 0x89, 0xdd, 0x88, 0x54, 0xec, 0xca,

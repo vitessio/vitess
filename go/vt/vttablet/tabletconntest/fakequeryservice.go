@@ -457,7 +457,7 @@ var StreamExecuteQueryResult2 = sqltypes.Result{
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.Panics && f.StreamExecutePanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}

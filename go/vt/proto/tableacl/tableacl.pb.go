@@ -20,12 +20,12 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 // TableGroupSpec defines ACLs for a group of tables.
 type TableGroupSpec struct {
-	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
 	// either tables or a table name prefixes (if it ends in a %)
-	TableNamesOrPrefixes []string `protobuf:"bytes,2,rep,name=table_names_or_prefixes,json=tableNamesOrPrefixes,proto3" json:"table_names_or_prefixes,omitempty"`
-	Readers              []string `protobuf:"bytes,3,rep,name=readers,proto3" json:"readers,omitempty"`
-	Writers              []string `protobuf:"bytes,4,rep,name=writers,proto3" json:"writers,omitempty"`
-	Admins               []string `protobuf:"bytes,5,rep,name=admins,proto3" json:"admins,omitempty"`
+	TableNamesOrPrefixes []string `protobuf:"bytes,2,rep,name=table_names_or_prefixes,json=tableNamesOrPrefixes" json:"table_names_or_prefixes,omitempty"`
+	Readers              []string `protobuf:"bytes,3,rep,name=readers" json:"readers,omitempty"`
+	Writers              []string `protobuf:"bytes,4,rep,name=writers" json:"writers,omitempty"`
+	Admins               []string `protobuf:"bytes,5,rep,name=admins" json:"admins,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -35,7 +35,7 @@ func (m *TableGroupSpec) Reset()         { *m = TableGroupSpec{} }
 func (m *TableGroupSpec) String() string { return proto.CompactTextString(m) }
 func (*TableGroupSpec) ProtoMessage()    {}
 func (*TableGroupSpec) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tableacl_82b5f1376534b35e, []int{0}
+	return fileDescriptor_tableacl_38276fd243b9c307, []int{0}
 }
 func (m *TableGroupSpec) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TableGroupSpec.Unmarshal(m, b)
@@ -91,7 +91,7 @@ func (m *TableGroupSpec) GetAdmins() []string {
 }
 
 type Config struct {
-	TableGroups          []*TableGroupSpec `protobuf:"bytes,1,rep,name=table_groups,json=tableGroups,proto3" json:"table_groups,omitempty"`
+	TableGroups          []*TableGroupSpec `protobuf:"bytes,1,rep,name=table_groups,json=tableGroups" json:"table_groups,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -101,7 +101,7 @@ func (m *Config) Reset()         { *m = Config{} }
 func (m *Config) String() string { return proto.CompactTextString(m) }
 func (*Config) ProtoMessage()    {}
 func (*Config) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tableacl_82b5f1376534b35e, []int{1}
+	return fileDescriptor_tableacl_38276fd243b9c307, []int{1}
 }
 func (m *Config) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Config.Unmarshal(m, b)
@@ -133,9 +133,9 @@ func init() {
 	proto.RegisterType((*Config)(nil), "tableacl.Config")
 }
 
-func init() { proto.RegisterFile("tableacl.proto", fileDescriptor_tableacl_82b5f1376534b35e) }
+func init() { proto.RegisterFile("tableacl.proto", fileDescriptor_tableacl_38276fd243b9c307) }
 
-var fileDescriptor_tableacl_82b5f1376534b35e = []byte{
+var fileDescriptor_tableacl_38276fd243b9c307 = []byte{
 	// 232 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x54, 0x90, 0xc1, 0x4b, 0xc3, 0x30,
 	0x14, 0xc6, 0x89, 0x9d, 0xd5, 0xbd, 0xc9, 0x0e, 0x41, 0x34, 0xc7, 0x32, 0x10, 0x7b, 0x6a, 0x40,

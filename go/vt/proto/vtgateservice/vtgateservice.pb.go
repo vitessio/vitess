@@ -33,9 +33,8 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// VitessClient is the client API for Vitess service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+// Client API for Vitess service
+
 type VitessClient interface {
 	// Execute tries to route the query to the right shard.
 	// It depends on the query and bind variables to provide enough
@@ -129,7 +128,7 @@ func NewVitessClient(cc *grpc.ClientConn) VitessClient {
 
 func (c *vitessClient) Execute(ctx context.Context, in *vtgate.ExecuteRequest, opts ...grpc.CallOption) (*vtgate.ExecuteResponse, error) {
 	out := new(vtgate.ExecuteResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/Execute", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/Execute", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +137,7 @@ func (c *vitessClient) Execute(ctx context.Context, in *vtgate.ExecuteRequest, o
 
 func (c *vitessClient) ExecuteBatch(ctx context.Context, in *vtgate.ExecuteBatchRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchResponse, error) {
 	out := new(vtgate.ExecuteBatchResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteBatch", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteBatch", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +145,7 @@ func (c *vitessClient) ExecuteBatch(ctx context.Context, in *vtgate.ExecuteBatch
 }
 
 func (c *vitessClient) StreamExecute(ctx context.Context, in *vtgate.StreamExecuteRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Vitess_serviceDesc.Streams[0], "/vtgateservice.Vitess/StreamExecute", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_Vitess_serviceDesc.Streams[0], c.cc, "/vtgateservice.Vitess/StreamExecute", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +178,7 @@ func (x *vitessStreamExecuteClient) Recv() (*vtgate.StreamExecuteResponse, error
 
 func (c *vitessClient) ExecuteShards(ctx context.Context, in *vtgate.ExecuteShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteShardsResponse, error) {
 	out := new(vtgate.ExecuteShardsResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteShards", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteShards", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +187,7 @@ func (c *vitessClient) ExecuteShards(ctx context.Context, in *vtgate.ExecuteShar
 
 func (c *vitessClient) ExecuteKeyspaceIds(ctx context.Context, in *vtgate.ExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyspaceIdsResponse, error) {
 	out := new(vtgate.ExecuteKeyspaceIdsResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteKeyspaceIds", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteKeyspaceIds", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +196,7 @@ func (c *vitessClient) ExecuteKeyspaceIds(ctx context.Context, in *vtgate.Execut
 
 func (c *vitessClient) ExecuteKeyRanges(ctx context.Context, in *vtgate.ExecuteKeyRangesRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyRangesResponse, error) {
 	out := new(vtgate.ExecuteKeyRangesResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteKeyRanges", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteKeyRanges", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +205,7 @@ func (c *vitessClient) ExecuteKeyRanges(ctx context.Context, in *vtgate.ExecuteK
 
 func (c *vitessClient) ExecuteEntityIds(ctx context.Context, in *vtgate.ExecuteEntityIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteEntityIdsResponse, error) {
 	out := new(vtgate.ExecuteEntityIdsResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteEntityIds", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteEntityIds", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +214,7 @@ func (c *vitessClient) ExecuteEntityIds(ctx context.Context, in *vtgate.ExecuteE
 
 func (c *vitessClient) ExecuteBatchShards(ctx context.Context, in *vtgate.ExecuteBatchShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchShardsResponse, error) {
 	out := new(vtgate.ExecuteBatchShardsResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteBatchShards", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteBatchShards", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +223,7 @@ func (c *vitessClient) ExecuteBatchShards(ctx context.Context, in *vtgate.Execut
 
 func (c *vitessClient) ExecuteBatchKeyspaceIds(ctx context.Context, in *vtgate.ExecuteBatchKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error) {
 	out := new(vtgate.ExecuteBatchKeyspaceIdsResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteBatchKeyspaceIds", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteBatchKeyspaceIds", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +231,7 @@ func (c *vitessClient) ExecuteBatchKeyspaceIds(ctx context.Context, in *vtgate.E
 }
 
 func (c *vitessClient) StreamExecuteShards(ctx context.Context, in *vtgate.StreamExecuteShardsRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteShardsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Vitess_serviceDesc.Streams[1], "/vtgateservice.Vitess/StreamExecuteShards", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_Vitess_serviceDesc.Streams[1], c.cc, "/vtgateservice.Vitess/StreamExecuteShards", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +263,7 @@ func (x *vitessStreamExecuteShardsClient) Recv() (*vtgate.StreamExecuteShardsRes
 }
 
 func (c *vitessClient) StreamExecuteKeyspaceIds(ctx context.Context, in *vtgate.StreamExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteKeyspaceIdsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Vitess_serviceDesc.Streams[2], "/vtgateservice.Vitess/StreamExecuteKeyspaceIds", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_Vitess_serviceDesc.Streams[2], c.cc, "/vtgateservice.Vitess/StreamExecuteKeyspaceIds", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +295,7 @@ func (x *vitessStreamExecuteKeyspaceIdsClient) Recv() (*vtgate.StreamExecuteKeys
 }
 
 func (c *vitessClient) StreamExecuteKeyRanges(ctx context.Context, in *vtgate.StreamExecuteKeyRangesRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteKeyRangesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Vitess_serviceDesc.Streams[3], "/vtgateservice.Vitess/StreamExecuteKeyRanges", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_Vitess_serviceDesc.Streams[3], c.cc, "/vtgateservice.Vitess/StreamExecuteKeyRanges", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +328,7 @@ func (x *vitessStreamExecuteKeyRangesClient) Recv() (*vtgate.StreamExecuteKeyRan
 
 func (c *vitessClient) Begin(ctx context.Context, in *vtgate.BeginRequest, opts ...grpc.CallOption) (*vtgate.BeginResponse, error) {
 	out := new(vtgate.BeginResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/Begin", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/Begin", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +337,7 @@ func (c *vitessClient) Begin(ctx context.Context, in *vtgate.BeginRequest, opts 
 
 func (c *vitessClient) Commit(ctx context.Context, in *vtgate.CommitRequest, opts ...grpc.CallOption) (*vtgate.CommitResponse, error) {
 	out := new(vtgate.CommitResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/Commit", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/Commit", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +346,7 @@ func (c *vitessClient) Commit(ctx context.Context, in *vtgate.CommitRequest, opt
 
 func (c *vitessClient) Rollback(ctx context.Context, in *vtgate.RollbackRequest, opts ...grpc.CallOption) (*vtgate.RollbackResponse, error) {
 	out := new(vtgate.RollbackResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/Rollback", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/Rollback", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +355,7 @@ func (c *vitessClient) Rollback(ctx context.Context, in *vtgate.RollbackRequest,
 
 func (c *vitessClient) ResolveTransaction(ctx context.Context, in *vtgate.ResolveTransactionRequest, opts ...grpc.CallOption) (*vtgate.ResolveTransactionResponse, error) {
 	out := new(vtgate.ResolveTransactionResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ResolveTransaction", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/ResolveTransaction", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +363,7 @@ func (c *vitessClient) ResolveTransaction(ctx context.Context, in *vtgate.Resolv
 }
 
 func (c *vitessClient) MessageStream(ctx context.Context, in *vtgate.MessageStreamRequest, opts ...grpc.CallOption) (Vitess_MessageStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Vitess_serviceDesc.Streams[4], "/vtgateservice.Vitess/MessageStream", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_Vitess_serviceDesc.Streams[4], c.cc, "/vtgateservice.Vitess/MessageStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +396,7 @@ func (x *vitessMessageStreamClient) Recv() (*query.MessageStreamResponse, error)
 
 func (c *vitessClient) MessageAck(ctx context.Context, in *vtgate.MessageAckRequest, opts ...grpc.CallOption) (*query.MessageAckResponse, error) {
 	out := new(query.MessageAckResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/MessageAck", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/MessageAck", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -406,7 +405,7 @@ func (c *vitessClient) MessageAck(ctx context.Context, in *vtgate.MessageAckRequ
 
 func (c *vitessClient) MessageAckKeyspaceIds(ctx context.Context, in *vtgate.MessageAckKeyspaceIdsRequest, opts ...grpc.CallOption) (*query.MessageAckResponse, error) {
 	out := new(query.MessageAckResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/MessageAckKeyspaceIds", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/MessageAckKeyspaceIds", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +414,7 @@ func (c *vitessClient) MessageAckKeyspaceIds(ctx context.Context, in *vtgate.Mes
 
 func (c *vitessClient) SplitQuery(ctx context.Context, in *vtgate.SplitQueryRequest, opts ...grpc.CallOption) (*vtgate.SplitQueryResponse, error) {
 	out := new(vtgate.SplitQueryResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/SplitQuery", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/SplitQuery", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -424,7 +423,7 @@ func (c *vitessClient) SplitQuery(ctx context.Context, in *vtgate.SplitQueryRequ
 
 func (c *vitessClient) GetSrvKeyspace(ctx context.Context, in *vtgate.GetSrvKeyspaceRequest, opts ...grpc.CallOption) (*vtgate.GetSrvKeyspaceResponse, error) {
 	out := new(vtgate.GetSrvKeyspaceResponse)
-	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/GetSrvKeyspace", in, out, opts...)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/GetSrvKeyspace", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -432,7 +431,7 @@ func (c *vitessClient) GetSrvKeyspace(ctx context.Context, in *vtgate.GetSrvKeys
 }
 
 func (c *vitessClient) UpdateStream(ctx context.Context, in *vtgate.UpdateStreamRequest, opts ...grpc.CallOption) (Vitess_UpdateStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Vitess_serviceDesc.Streams[5], "/vtgateservice.Vitess/UpdateStream", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_Vitess_serviceDesc.Streams[5], c.cc, "/vtgateservice.Vitess/UpdateStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -463,7 +462,8 @@ func (x *vitessUpdateStreamClient) Recv() (*vtgate.UpdateStreamResponse, error) 
 	return m, nil
 }
 
-// VitessServer is the server API for Vitess service.
+// Server API for Vitess service
+
 type VitessServer interface {
 	// Execute tries to route the query to the right shard.
 	// It depends on the query and bind variables to provide enough
@@ -1069,9 +1069,9 @@ var _Vitess_serviceDesc = grpc.ServiceDesc{
 	Metadata: "vtgateservice.proto",
 }
 
-func init() { proto.RegisterFile("vtgateservice.proto", fileDescriptor_vtgateservice_6694e3d05903167c) }
+func init() { proto.RegisterFile("vtgateservice.proto", fileDescriptor_vtgateservice_7815d679f21c0eb2) }
 
-var fileDescriptor_vtgateservice_6694e3d05903167c = []byte{
+var fileDescriptor_vtgateservice_7815d679f21c0eb2 = []byte{
 	// 579 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x95, 0xdb, 0x6f, 0xd3, 0x30,
 	0x14, 0xc6, 0xe1, 0x81, 0x82, 0x0e, 0xed, 0x84, 0xbc, 0xad, 0xdb, 0xca, 0x75, 0x05, 0x36, 0xc4,

@@ -17,14 +17,11 @@ limitations under the License.
 package tabletserver
 
 import (
-	"expvar"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"os"
-	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -429,29 +426,6 @@ func TestTabletServerCheckMysqlFailInvalidConn(t *testing.T) {
 	}
 }
 
-func TestTabletServerCheckMysqlInUnintialized(t *testing.T) {
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServerWithNilTopoServer(config)
-	// TabletServer start request fail because we are in StateNotConnected;
-	// however, isMySQLReachable should return true. Here, we always assume
-	// MySQL is healthy unless we've verified it is not.
-	if !tsv.isMySQLReachable() {
-		t.Fatalf("isMySQLReachable should return true")
-	}
-	tabletState := expvar.Get("TabletState")
-	if tabletState == nil {
-		t.Fatal("TabletState should be exposed")
-	}
-	varzState, err := strconv.Atoi(tabletState.String())
-	if err != nil {
-		t.Fatalf("invalid state reported by expvar, should be a valid state code, but got: %s", tabletState.String())
-	}
-	if varzState != StateNotConnected {
-		t.Fatalf("queryservice should be in %d state, but exposed varz reports: %d", StateNotConnected, varzState)
-	}
-}
-
 func TestTabletServerReconnect(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()
@@ -575,25 +549,44 @@ func TestTabletServerTarget(t *testing.T) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
 
-	// Disallow tx statements if non-master.
-	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
-	_, err = tsv.Begin(ctx, &target1, nil)
-	want = "transactional statement disallowed on non-master tablet"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
-	err = tsv.Commit(ctx, &target1, 1)
-	want = "invalid tablet type: MASTER"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
-
 	// Disallow all if service is stopped.
 	tsv.StopService()
 	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, nil)
 	want = "operation not allowed in state NOT_SERVING"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
+	}
+}
+
+func TestBeginOnReplica(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServerWithNilTopoServer(config)
+	dbcfgs := testUtils.newDBConfigs(db)
+	target1 := querypb.Target{
+		Keyspace:   "test_keyspace",
+		Shard:      "test_shard",
+		TabletType: topodatapb.TabletType_REPLICA,
+	}
+	err := tsv.StartService(target1, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	ctx := context.Background()
+	txID, err := tsv.Begin(ctx, &target1, nil)
+
+	if err != nil {
+		t.Errorf("err: %v, failed to create read only tx on replica", err)
+	}
+
+	err = tsv.Rollback(ctx, &target1, txID)
+	if err != nil {
+		t.Errorf("err: %v, failed to rollback read only tx", err)
 	}
 }
 
@@ -640,53 +633,6 @@ func TestTabletServerStopWithPrepare(t *testing.T) {
 	}
 }
 
-func TestTabletServerMasterToReplica(t *testing.T) {
-	// Reuse code from tx_executor_test.
-	_, tsv, db := newTestTxExecutor(t)
-	defer db.Close()
-	ctx := context.Background()
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	txid1, err := tsv.Begin(ctx, &target, nil)
-	if err != nil {
-		t.Error(err)
-	}
-	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, nil); err != nil {
-		t.Error(err)
-	}
-	if err = tsv.Prepare(ctx, &target, txid1, "aa"); err != nil {
-		t.Error(err)
-	}
-	txid2, err := tsv.Begin(ctx, &target, nil)
-	if err != nil {
-		t.Error(err)
-	}
-	// This makes txid2 busy
-	conn2, err := tsv.te.txPool.Get(txid2, "for query")
-	if err != nil {
-		t.Error(err)
-	}
-	ch := make(chan bool)
-	go func() {
-		tsv.SetServingType(topodatapb.TabletType_REPLICA, true, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
-		ch <- true
-	}()
-
-	// SetServingType must rollback the prepared transaction,
-	// but it must wait for the unprepared (txid2) to become non-busy.
-	select {
-	case <-ch:
-		t.Fatal("ch should not fire")
-	case <-time.After(10 * time.Millisecond):
-	}
-	if tsv.te.txPool.activePool.Size() != 1 {
-		t.Errorf("len(tsv.te.txPool.activePool.Size()): %d, want 1", len(tsv.te.preparedPool.conns))
-	}
-
-	// Concluding conn2 will allow the transition to go through.
-	tsv.te.txPool.LocalConclude(ctx, conn2)
-	<-ch
-}
-
 func TestTabletServerReplicaToMaster(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t)
@@ -700,77 +646,7 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 	if len(tsv.te.preparedPool.conns) != 0 {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", len(tsv.te.preparedPool.conns))
 	}
-	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
-
-	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Type: sqltypes.VarBinary},
-			{Type: sqltypes.Uint64},
-			{Type: sqltypes.Uint64},
-			{Type: sqltypes.VarBinary},
-		},
-		Rows: [][]sqltypes.Value{{
-			sqltypes.NewVarBinary("dtid0"),
-			sqltypes.NewInt64(RedoStatePrepared),
-			sqltypes.NewVarBinary(""),
-			sqltypes.NewVarBinary("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"),
-		}},
-	})
-	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
-	if len(tsv.te.preparedPool.conns) != 1 {
-		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
-	}
-	got := tsv.te.preparedPool.conns["dtid0"].Queries
-	want := []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Prepared queries: %v, want %v", got, want)
-	}
-	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
-
-	tsv.te.txPool.lastID.Set(1)
-	// Ensure we continue past errors.
-	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Type: sqltypes.VarBinary},
-			{Type: sqltypes.Uint64},
-			{Type: sqltypes.Uint64},
-			{Type: sqltypes.VarBinary},
-		},
-		Rows: [][]sqltypes.Value{{
-			sqltypes.NewVarBinary("bogus"),
-			sqltypes.NewInt64(RedoStatePrepared),
-			sqltypes.NewVarBinary(""),
-			sqltypes.NewVarBinary("bogus"),
-		}, {
-			sqltypes.NewVarBinary("a:b:10"),
-			sqltypes.NewInt64(RedoStatePrepared),
-			sqltypes.NewVarBinary(""),
-			sqltypes.NewVarBinary("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"),
-		}, {
-			sqltypes.NewVarBinary("a:b:20"),
-			sqltypes.NewInt64(RedoStateFailed),
-			sqltypes.NewVarBinary(""),
-			sqltypes.NewVarBinary("unused"),
-		}},
-	})
-	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
-	if len(tsv.te.preparedPool.conns) != 1 {
-		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
-	}
-	got = tsv.te.preparedPool.conns["a:b:10"].Queries
-	want = []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Prepared queries: %v, want %v", got, want)
-	}
-	wantFailed := map[string]error{"a:b:20": errPrepFailed}
-	if !reflect.DeepEqual(tsv.te.preparedPool.reserved, wantFailed) {
-		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
-	}
-	// Verify last id got adjusted.
-	if v := tsv.te.txPool.lastID.Get(); v != 20 {
-		t.Errorf("tsv.te.txPool.lastID.Get(): %d, want 20", v)
-	}
-	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, false, nil)
 }
 
 func TestTabletServerCreateTransaction(t *testing.T) {
@@ -1182,7 +1058,7 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	callback := func(*sqltypes.Result) error { return nil }
-	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, nil, callback); err != nil {
+	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, 0, nil, callback); err != nil {
 		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
 			executeSQL, err)
 	}

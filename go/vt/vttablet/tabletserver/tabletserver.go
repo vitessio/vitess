@@ -513,16 +513,20 @@ func (tsv *TabletServer) fullStart() (err error) {
 	}
 	tsv.hr.Init(tsv.target)
 	tsv.updateStreamList.Init()
+	tsv.te.Open()
 	return tsv.serveNewType()
 }
 
 func (tsv *TabletServer) serveNewType() (err error) {
+	if !tsv.te.isOpen {
+		tsv.te.Open()
+	}
+
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
 			return err
 		}
 		tsv.watcher.Close()
-		tsv.te.Open()
 		tsv.messager.Open()
 		tsv.hr.Close()
 		tsv.hw.Open()
@@ -530,15 +534,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.messager.Close()
 		tsv.hr.Open()
 		tsv.hw.Close()
-
-		// Wait for in-flight transactional requests to complete
-		// before rolling back everything. In this state new
-		// transactional requests are not allowed. So, we can
-		// be sure that the tx pool won't change after the wait.
-		tsv.beginRequests.Wait()
-		tsv.te.Close(true)
 		tsv.watcher.Open()
-		tsv.txThrottler.Close()
 
 		// Reset the sequences.
 		tsv.se.MakeNonMaster()
@@ -963,7 +959,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 // StreamExecute executes the query and streams the result.
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
-func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (err error) {
+func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (err error) {
 	return tsv.execRequest(
 		ctx, 0,
 		"StreamExecute", sql, bindVariables,
@@ -981,6 +977,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				query:          query,
 				marginComments: comments,
 				bindVars:       bindVariables,
+				transactionID:  transactionID,
 				options:        options,
 				plan:           plan,
 				ctx:            ctx,
@@ -1327,7 +1324,7 @@ func (tsv *TabletServer) SplitQuery(
 	return splits, err
 }
 
-// execRequest performs verfications, sets up the necessary environments
+// execRequest performs verifications, sets up the necessary environments
 // and calls the supplied function for executing the request.
 func (tsv *TabletServer) execRequest(
 	ctx context.Context, timeout time.Duration,
@@ -1880,8 +1877,6 @@ verifyTarget:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
 		case target.Shard != tsv.target.Shard:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
-		case isBegin && tsv.target.TabletType != topodatapb.TabletType_MASTER:
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "transactional statement disallowed on non-master tablet: %v", tsv.target.TabletType)
 		case target.TabletType != tsv.target.TabletType:
 			for _, otherType := range tsv.alsoAllow {
 				if target.TabletType == otherType {

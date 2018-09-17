@@ -32,9 +32,8 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// QueryClient is the client API for Query service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+// Client API for Query service
+
 type QueryClient interface {
 	// Execute executes the specified SQL query (might be in a
 	// transaction context, if Query.transaction_id is set).
@@ -97,7 +96,7 @@ func NewQueryClient(cc *grpc.ClientConn) QueryClient {
 
 func (c *queryClient) Execute(ctx context.Context, in *query.ExecuteRequest, opts ...grpc.CallOption) (*query.ExecuteResponse, error) {
 	out := new(query.ExecuteResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/Execute", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/Execute", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +105,7 @@ func (c *queryClient) Execute(ctx context.Context, in *query.ExecuteRequest, opt
 
 func (c *queryClient) ExecuteBatch(ctx context.Context, in *query.ExecuteBatchRequest, opts ...grpc.CallOption) (*query.ExecuteBatchResponse, error) {
 	out := new(query.ExecuteBatchResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/ExecuteBatch", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/ExecuteBatch", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +113,7 @@ func (c *queryClient) ExecuteBatch(ctx context.Context, in *query.ExecuteBatchRe
 }
 
 func (c *queryClient) StreamExecute(ctx context.Context, in *query.StreamExecuteRequest, opts ...grpc.CallOption) (Query_StreamExecuteClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Query_serviceDesc.Streams[0], "/queryservice.Query/StreamExecute", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_Query_serviceDesc.Streams[0], c.cc, "/queryservice.Query/StreamExecute", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +146,7 @@ func (x *queryStreamExecuteClient) Recv() (*query.StreamExecuteResponse, error) 
 
 func (c *queryClient) Begin(ctx context.Context, in *query.BeginRequest, opts ...grpc.CallOption) (*query.BeginResponse, error) {
 	out := new(query.BeginResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/Begin", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/Begin", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +155,7 @@ func (c *queryClient) Begin(ctx context.Context, in *query.BeginRequest, opts ..
 
 func (c *queryClient) Commit(ctx context.Context, in *query.CommitRequest, opts ...grpc.CallOption) (*query.CommitResponse, error) {
 	out := new(query.CommitResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/Commit", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/Commit", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +164,7 @@ func (c *queryClient) Commit(ctx context.Context, in *query.CommitRequest, opts 
 
 func (c *queryClient) Rollback(ctx context.Context, in *query.RollbackRequest, opts ...grpc.CallOption) (*query.RollbackResponse, error) {
 	out := new(query.RollbackResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/Rollback", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/Rollback", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +173,7 @@ func (c *queryClient) Rollback(ctx context.Context, in *query.RollbackRequest, o
 
 func (c *queryClient) Prepare(ctx context.Context, in *query.PrepareRequest, opts ...grpc.CallOption) (*query.PrepareResponse, error) {
 	out := new(query.PrepareResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/Prepare", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/Prepare", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +182,7 @@ func (c *queryClient) Prepare(ctx context.Context, in *query.PrepareRequest, opt
 
 func (c *queryClient) CommitPrepared(ctx context.Context, in *query.CommitPreparedRequest, opts ...grpc.CallOption) (*query.CommitPreparedResponse, error) {
 	out := new(query.CommitPreparedResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/CommitPrepared", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/CommitPrepared", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +191,7 @@ func (c *queryClient) CommitPrepared(ctx context.Context, in *query.CommitPrepar
 
 func (c *queryClient) RollbackPrepared(ctx context.Context, in *query.RollbackPreparedRequest, opts ...grpc.CallOption) (*query.RollbackPreparedResponse, error) {
 	out := new(query.RollbackPreparedResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/RollbackPrepared", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/RollbackPrepared", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +200,7 @@ func (c *queryClient) RollbackPrepared(ctx context.Context, in *query.RollbackPr
 
 func (c *queryClient) CreateTransaction(ctx context.Context, in *query.CreateTransactionRequest, opts ...grpc.CallOption) (*query.CreateTransactionResponse, error) {
 	out := new(query.CreateTransactionResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/CreateTransaction", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/CreateTransaction", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +209,7 @@ func (c *queryClient) CreateTransaction(ctx context.Context, in *query.CreateTra
 
 func (c *queryClient) StartCommit(ctx context.Context, in *query.StartCommitRequest, opts ...grpc.CallOption) (*query.StartCommitResponse, error) {
 	out := new(query.StartCommitResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/StartCommit", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/StartCommit", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +218,7 @@ func (c *queryClient) StartCommit(ctx context.Context, in *query.StartCommitRequ
 
 func (c *queryClient) SetRollback(ctx context.Context, in *query.SetRollbackRequest, opts ...grpc.CallOption) (*query.SetRollbackResponse, error) {
 	out := new(query.SetRollbackResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/SetRollback", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/SetRollback", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +227,7 @@ func (c *queryClient) SetRollback(ctx context.Context, in *query.SetRollbackRequ
 
 func (c *queryClient) ConcludeTransaction(ctx context.Context, in *query.ConcludeTransactionRequest, opts ...grpc.CallOption) (*query.ConcludeTransactionResponse, error) {
 	out := new(query.ConcludeTransactionResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/ConcludeTransaction", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/ConcludeTransaction", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +236,7 @@ func (c *queryClient) ConcludeTransaction(ctx context.Context, in *query.Conclud
 
 func (c *queryClient) ReadTransaction(ctx context.Context, in *query.ReadTransactionRequest, opts ...grpc.CallOption) (*query.ReadTransactionResponse, error) {
 	out := new(query.ReadTransactionResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/ReadTransaction", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/ReadTransaction", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +245,7 @@ func (c *queryClient) ReadTransaction(ctx context.Context, in *query.ReadTransac
 
 func (c *queryClient) BeginExecute(ctx context.Context, in *query.BeginExecuteRequest, opts ...grpc.CallOption) (*query.BeginExecuteResponse, error) {
 	out := new(query.BeginExecuteResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/BeginExecute", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/BeginExecute", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +254,7 @@ func (c *queryClient) BeginExecute(ctx context.Context, in *query.BeginExecuteRe
 
 func (c *queryClient) BeginExecuteBatch(ctx context.Context, in *query.BeginExecuteBatchRequest, opts ...grpc.CallOption) (*query.BeginExecuteBatchResponse, error) {
 	out := new(query.BeginExecuteBatchResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/BeginExecuteBatch", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/BeginExecuteBatch", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +262,7 @@ func (c *queryClient) BeginExecuteBatch(ctx context.Context, in *query.BeginExec
 }
 
 func (c *queryClient) MessageStream(ctx context.Context, in *query.MessageStreamRequest, opts ...grpc.CallOption) (Query_MessageStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Query_serviceDesc.Streams[1], "/queryservice.Query/MessageStream", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_Query_serviceDesc.Streams[1], c.cc, "/queryservice.Query/MessageStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +295,7 @@ func (x *queryMessageStreamClient) Recv() (*query.MessageStreamResponse, error) 
 
 func (c *queryClient) MessageAck(ctx context.Context, in *query.MessageAckRequest, opts ...grpc.CallOption) (*query.MessageAckResponse, error) {
 	out := new(query.MessageAckResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/MessageAck", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/MessageAck", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +304,7 @@ func (c *queryClient) MessageAck(ctx context.Context, in *query.MessageAckReques
 
 func (c *queryClient) SplitQuery(ctx context.Context, in *query.SplitQueryRequest, opts ...grpc.CallOption) (*query.SplitQueryResponse, error) {
 	out := new(query.SplitQueryResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/SplitQuery", in, out, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/SplitQuery", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +312,7 @@ func (c *queryClient) SplitQuery(ctx context.Context, in *query.SplitQueryReques
 }
 
 func (c *queryClient) StreamHealth(ctx context.Context, in *query.StreamHealthRequest, opts ...grpc.CallOption) (Query_StreamHealthClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Query_serviceDesc.Streams[2], "/queryservice.Query/StreamHealth", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_Query_serviceDesc.Streams[2], c.cc, "/queryservice.Query/StreamHealth", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +344,7 @@ func (x *queryStreamHealthClient) Recv() (*query.StreamHealthResponse, error) {
 }
 
 func (c *queryClient) UpdateStream(ctx context.Context, in *query.UpdateStreamRequest, opts ...grpc.CallOption) (Query_UpdateStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Query_serviceDesc.Streams[3], "/queryservice.Query/UpdateStream", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_Query_serviceDesc.Streams[3], c.cc, "/queryservice.Query/UpdateStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +375,8 @@ func (x *queryUpdateStreamClient) Recv() (*query.UpdateStreamResponse, error) {
 	return m, nil
 }
 
-// QueryServer is the server API for Query service.
+// Server API for Query service
+
 type QueryServer interface {
 	// Execute executes the specified SQL query (might be in a
 	// transaction context, if Query.transaction_id is set).
@@ -921,9 +921,9 @@ var _Query_serviceDesc = grpc.ServiceDesc{
 	Metadata: "queryservice.proto",
 }
 
-func init() { proto.RegisterFile("queryservice.proto", fileDescriptor_queryservice_bb9da33c43234b51) }
+func init() { proto.RegisterFile("queryservice.proto", fileDescriptor_queryservice_81e549fbfb878a8d) }
 
-var fileDescriptor_queryservice_bb9da33c43234b51 = []byte{
+var fileDescriptor_queryservice_81e549fbfb878a8d = []byte{
 	// 519 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x95, 0xdf, 0x6b, 0xd4, 0x40,
 	0x10, 0xc7, 0xf5, 0xa1, 0xad, 0x4c, 0xe3, 0xaf, 0xad, 0x55, 0x9b, 0xd6, 0xb6, 0xf6, 0x4d, 0x84,

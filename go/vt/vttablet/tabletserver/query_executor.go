@@ -209,11 +209,23 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 		return err
 	}
 
-	conn, err := qre.getStreamConn()
-	if err != nil {
-		return err
+	// if we have a transaction id, let's use the txPool for this query
+	var conn *connpool.DBConn
+	if qre.transactionID != 0 {
+		txConn, err := qre.tsv.te.txPool.Get(qre.transactionID, "for streaming query")
+		if err != nil {
+			return err
+		}
+		defer txConn.Recycle()
+		conn = txConn.DBConn
+	} else {
+		dbConn, err := qre.getStreamConn()
+		if err != nil {
+			return err
+		}
+		defer dbConn.Recycle()
+		conn = dbConn
 	}
-	defer conn.Recycle()
 
 	qd := NewQueryDetail(qre.logStats.Ctx, conn)
 	qre.tsv.qe.streamQList.Add(qd)

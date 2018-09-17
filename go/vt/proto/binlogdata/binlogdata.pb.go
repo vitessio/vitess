@@ -65,17 +65,17 @@ func (x BinlogTransaction_Statement_Category) String() string {
 	return proto.EnumName(BinlogTransaction_Statement_Category_name, int32(x))
 }
 func (BinlogTransaction_Statement_Category) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{1, 0, 0}
+	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{1, 0, 0}
 }
 
 // Charset is the per-statement charset info from a QUERY_EVENT binlog entry.
 type Charset struct {
 	// @@session.character_set_client
-	Client int32 `protobuf:"varint,1,opt,name=client,proto3" json:"client,omitempty"`
+	Client int32 `protobuf:"varint,1,opt,name=client" json:"client,omitempty"`
 	// @@session.collation_connection
-	Conn int32 `protobuf:"varint,2,opt,name=conn,proto3" json:"conn,omitempty"`
+	Conn int32 `protobuf:"varint,2,opt,name=conn" json:"conn,omitempty"`
 	// @@session.collation_server
-	Server               int32    `protobuf:"varint,3,opt,name=server,proto3" json:"server,omitempty"`
+	Server               int32    `protobuf:"varint,3,opt,name=server" json:"server,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -85,7 +85,7 @@ func (m *Charset) Reset()         { *m = Charset{} }
 func (m *Charset) String() string { return proto.CompactTextString(m) }
 func (*Charset) ProtoMessage()    {}
 func (*Charset) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{0}
+	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{0}
 }
 func (m *Charset) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Charset.Unmarshal(m, b)
@@ -130,9 +130,9 @@ func (m *Charset) GetServer() int32 {
 // It is streamed by vttablet for filtered replication, used during resharding.
 type BinlogTransaction struct {
 	// the statements in this transaction
-	Statements []*BinlogTransaction_Statement `protobuf:"bytes,1,rep,name=statements,proto3" json:"statements,omitempty"`
+	Statements []*BinlogTransaction_Statement `protobuf:"bytes,1,rep,name=statements" json:"statements,omitempty"`
 	// The Event Token for this event.
-	EventToken           *query.EventToken `protobuf:"bytes,4,opt,name=event_token,json=eventToken,proto3" json:"event_token,omitempty"`
+	EventToken           *query.EventToken `protobuf:"bytes,4,opt,name=event_token,json=eventToken" json:"event_token,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -142,7 +142,7 @@ func (m *BinlogTransaction) Reset()         { *m = BinlogTransaction{} }
 func (m *BinlogTransaction) String() string { return proto.CompactTextString(m) }
 func (*BinlogTransaction) ProtoMessage()    {}
 func (*BinlogTransaction) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{1}
+	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{1}
 }
 func (m *BinlogTransaction) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BinlogTransaction.Unmarshal(m, b)
@@ -178,9 +178,9 @@ func (m *BinlogTransaction) GetEventToken() *query.EventToken {
 
 type BinlogTransaction_Statement struct {
 	// what type of statement is this?
-	Category BinlogTransaction_Statement_Category `protobuf:"varint,1,opt,name=category,proto3,enum=binlogdata.BinlogTransaction_Statement_Category" json:"category,omitempty"`
+	Category BinlogTransaction_Statement_Category `protobuf:"varint,1,opt,name=category,enum=binlogdata.BinlogTransaction_Statement_Category" json:"category,omitempty"`
 	// charset of this statement, if different from pre-negotiated default.
-	Charset *Charset `protobuf:"bytes,2,opt,name=charset,proto3" json:"charset,omitempty"`
+	Charset *Charset `protobuf:"bytes,2,opt,name=charset" json:"charset,omitempty"`
 	// the sql
 	Sql                  []byte   `protobuf:"bytes,3,opt,name=sql,proto3" json:"sql,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -192,7 +192,7 @@ func (m *BinlogTransaction_Statement) Reset()         { *m = BinlogTransaction_S
 func (m *BinlogTransaction_Statement) String() string { return proto.CompactTextString(m) }
 func (*BinlogTransaction_Statement) ProtoMessage()    {}
 func (*BinlogTransaction_Statement) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{1, 0}
+	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{1, 0}
 }
 func (m *BinlogTransaction_Statement) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BinlogTransaction_Statement.Unmarshal(m, b)
@@ -236,11 +236,11 @@ func (m *BinlogTransaction_Statement) GetSql() []byte {
 // StreamKeyRangeRequest is the payload to StreamKeyRange
 type StreamKeyRangeRequest struct {
 	// where to start
-	Position string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 	// what to get
-	KeyRange *topodata.KeyRange `protobuf:"bytes,2,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
+	KeyRange *topodata.KeyRange `protobuf:"bytes,2,opt,name=key_range,json=keyRange" json:"key_range,omitempty"`
 	// default charset on the player side
-	Charset              *Charset `protobuf:"bytes,3,opt,name=charset,proto3" json:"charset,omitempty"`
+	Charset              *Charset `protobuf:"bytes,3,opt,name=charset" json:"charset,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -250,7 +250,7 @@ func (m *StreamKeyRangeRequest) Reset()         { *m = StreamKeyRangeRequest{} }
 func (m *StreamKeyRangeRequest) String() string { return proto.CompactTextString(m) }
 func (*StreamKeyRangeRequest) ProtoMessage()    {}
 func (*StreamKeyRangeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{2}
+	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{2}
 }
 func (m *StreamKeyRangeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamKeyRangeRequest.Unmarshal(m, b)
@@ -293,7 +293,7 @@ func (m *StreamKeyRangeRequest) GetCharset() *Charset {
 
 // StreamKeyRangeResponse is the response from StreamKeyRange
 type StreamKeyRangeResponse struct {
-	BinlogTransaction    *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction,json=binlogTransaction,proto3" json:"binlog_transaction,omitempty"`
+	BinlogTransaction    *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction,json=binlogTransaction" json:"binlog_transaction,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -303,7 +303,7 @@ func (m *StreamKeyRangeResponse) Reset()         { *m = StreamKeyRangeResponse{}
 func (m *StreamKeyRangeResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamKeyRangeResponse) ProtoMessage()    {}
 func (*StreamKeyRangeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{3}
+	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{3}
 }
 func (m *StreamKeyRangeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamKeyRangeResponse.Unmarshal(m, b)
@@ -333,11 +333,11 @@ func (m *StreamKeyRangeResponse) GetBinlogTransaction() *BinlogTransaction {
 // StreamTablesRequest is the payload to StreamTables
 type StreamTablesRequest struct {
 	// where to start
-	Position string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 	// what to get
-	Tables []string `protobuf:"bytes,2,rep,name=tables,proto3" json:"tables,omitempty"`
+	Tables []string `protobuf:"bytes,2,rep,name=tables" json:"tables,omitempty"`
 	// default charset on the player side
-	Charset              *Charset `protobuf:"bytes,3,opt,name=charset,proto3" json:"charset,omitempty"`
+	Charset              *Charset `protobuf:"bytes,3,opt,name=charset" json:"charset,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -347,7 +347,7 @@ func (m *StreamTablesRequest) Reset()         { *m = StreamTablesRequest{} }
 func (m *StreamTablesRequest) String() string { return proto.CompactTextString(m) }
 func (*StreamTablesRequest) ProtoMessage()    {}
 func (*StreamTablesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{4}
+	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{4}
 }
 func (m *StreamTablesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamTablesRequest.Unmarshal(m, b)
@@ -390,7 +390,7 @@ func (m *StreamTablesRequest) GetCharset() *Charset {
 
 // StreamTablesResponse is the response from StreamTables
 type StreamTablesResponse struct {
-	BinlogTransaction    *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction,json=binlogTransaction,proto3" json:"binlog_transaction,omitempty"`
+	BinlogTransaction    *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction,json=binlogTransaction" json:"binlog_transaction,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -400,7 +400,7 @@ func (m *StreamTablesResponse) Reset()         { *m = StreamTablesResponse{} }
 func (m *StreamTablesResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamTablesResponse) ProtoMessage()    {}
 func (*StreamTablesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{5}
+	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{5}
 }
 func (m *StreamTablesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamTablesResponse.Unmarshal(m, b)
@@ -432,15 +432,15 @@ func (m *StreamTablesResponse) GetBinlogTransaction() *BinlogTransaction {
 // or a list of tables.
 type BinlogSource struct {
 	// the source keyspace
-	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
 	// the source shard
-	Shard string `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
+	Shard string `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
 	// the source tablet type
-	TabletType topodata.TabletType `protobuf:"varint,3,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,3,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// key_range is set if the request is for a keyrange
-	KeyRange *topodata.KeyRange `protobuf:"bytes,4,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
+	KeyRange *topodata.KeyRange `protobuf:"bytes,4,opt,name=key_range,json=keyRange" json:"key_range,omitempty"`
 	// tables is set if the request is for a list of tables
-	Tables               []string `protobuf:"bytes,5,rep,name=tables,proto3" json:"tables,omitempty"`
+	Tables               []string `protobuf:"bytes,5,rep,name=tables" json:"tables,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -450,7 +450,7 @@ func (m *BinlogSource) Reset()         { *m = BinlogSource{} }
 func (m *BinlogSource) String() string { return proto.CompactTextString(m) }
 func (*BinlogSource) ProtoMessage()    {}
 func (*BinlogSource) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{6}
+	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{6}
 }
 func (m *BinlogSource) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BinlogSource.Unmarshal(m, b)
@@ -517,9 +517,9 @@ func init() {
 	proto.RegisterEnum("binlogdata.BinlogTransaction_Statement_Category", BinlogTransaction_Statement_Category_name, BinlogTransaction_Statement_Category_value)
 }
 
-func init() { proto.RegisterFile("binlogdata.proto", fileDescriptor_binlogdata_599cd600856cd9fe) }
+func init() { proto.RegisterFile("binlogdata.proto", fileDescriptor_binlogdata_ac14f15f6b19a931) }
 
-var fileDescriptor_binlogdata_599cd600856cd9fe = []byte{
+var fileDescriptor_binlogdata_ac14f15f6b19a931 = []byte{
 	// 640 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x54, 0xcd, 0x6e, 0xda, 0x4a,
 	0x14, 0xbe, 0xc6, 0x40, 0xec, 0xe3, 0xdc, 0x64, 0x98, 0xfc, 0x08, 0x21, 0x5d, 0x09, 0xb1, 0x09,

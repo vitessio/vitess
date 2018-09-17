@@ -44,7 +44,7 @@ func (x ClusterOperationState) String() string {
 	return proto.EnumName(ClusterOperationState_name, int32(x))
 }
 func (ClusterOperationState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_automation_4d7d55680fa173cc, []int{0}
+	return fileDescriptor_automation_7092712054bc689e, []int{0}
 }
 
 type TaskState int32
@@ -73,17 +73,17 @@ func (x TaskState) String() string {
 	return proto.EnumName(TaskState_name, int32(x))
 }
 func (TaskState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_automation_4d7d55680fa173cc, []int{1}
+	return fileDescriptor_automation_7092712054bc689e, []int{1}
 }
 
 type ClusterOperation struct {
-	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Id string `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
 	// TaskContainer are processed sequentially, one at a time.
-	SerialTasks []*TaskContainer `protobuf:"bytes,2,rep,name=serial_tasks,json=serialTasks,proto3" json:"serial_tasks,omitempty"`
+	SerialTasks []*TaskContainer `protobuf:"bytes,2,rep,name=serial_tasks,json=serialTasks" json:"serial_tasks,omitempty"`
 	// Cached value. This has to be re-evaluated e.g. after a checkpoint load because running tasks may have already finished.
-	State ClusterOperationState `protobuf:"varint,3,opt,name=state,proto3,enum=automation.ClusterOperationState" json:"state,omitempty"`
+	State ClusterOperationState `protobuf:"varint,3,opt,name=state,enum=automation.ClusterOperationState" json:"state,omitempty"`
 	// Error of the first task which failed. Set after state advanced to CLUSTER_OPERATION_DONE. If empty, all tasks succeeded. Cached value, see state above.
-	Error                string   `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	Error                string   `protobuf:"bytes,4,opt,name=error" json:"error,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -93,7 +93,7 @@ func (m *ClusterOperation) Reset()         { *m = ClusterOperation{} }
 func (m *ClusterOperation) String() string { return proto.CompactTextString(m) }
 func (*ClusterOperation) ProtoMessage()    {}
 func (*ClusterOperation) Descriptor() ([]byte, []int) {
-	return fileDescriptor_automation_4d7d55680fa173cc, []int{0}
+	return fileDescriptor_automation_7092712054bc689e, []int{0}
 }
 func (m *ClusterOperation) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClusterOperation.Unmarshal(m, b)
@@ -144,8 +144,8 @@ func (m *ClusterOperation) GetError() string {
 // TaskContainer holds one or more task which may be executed in parallel.
 // "concurrency", if > 0, limits the amount of concurrently executed tasks.
 type TaskContainer struct {
-	ParallelTasks        []*Task  `protobuf:"bytes,1,rep,name=parallel_tasks,json=parallelTasks,proto3" json:"parallel_tasks,omitempty"`
-	Concurrency          int32    `protobuf:"varint,2,opt,name=concurrency,proto3" json:"concurrency,omitempty"`
+	ParallelTasks        []*Task  `protobuf:"bytes,1,rep,name=parallel_tasks,json=parallelTasks" json:"parallel_tasks,omitempty"`
+	Concurrency          int32    `protobuf:"varint,2,opt,name=concurrency" json:"concurrency,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -155,7 +155,7 @@ func (m *TaskContainer) Reset()         { *m = TaskContainer{} }
 func (m *TaskContainer) String() string { return proto.CompactTextString(m) }
 func (*TaskContainer) ProtoMessage()    {}
 func (*TaskContainer) Descriptor() ([]byte, []int) {
-	return fileDescriptor_automation_4d7d55680fa173cc, []int{1}
+	return fileDescriptor_automation_7092712054bc689e, []int{1}
 }
 func (m *TaskContainer) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TaskContainer.Unmarshal(m, b)
@@ -192,15 +192,15 @@ func (m *TaskContainer) GetConcurrency() int32 {
 // Task represents a specific task which should be automatically executed.
 type Task struct {
 	// Task specification.
-	Name       string            `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Parameters map[string]string `protobuf:"bytes,2,rep,name=parameters,proto3" json:"parameters,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Name       string            `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Parameters map[string]string `protobuf:"bytes,2,rep,name=parameters" json:"parameters,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Runtime data.
-	Id    string    `protobuf:"bytes,3,opt,name=id,proto3" json:"id,omitempty"`
-	State TaskState `protobuf:"varint,4,opt,name=state,proto3,enum=automation.TaskState" json:"state,omitempty"`
+	Id    string    `protobuf:"bytes,3,opt,name=id" json:"id,omitempty"`
+	State TaskState `protobuf:"varint,4,opt,name=state,enum=automation.TaskState" json:"state,omitempty"`
 	// Set after state advanced to DONE.
-	Output string `protobuf:"bytes,5,opt,name=output,proto3" json:"output,omitempty"`
+	Output string `protobuf:"bytes,5,opt,name=output" json:"output,omitempty"`
 	// Set after state advanced to DONE. If empty, the task did succeed.
-	Error                string   `protobuf:"bytes,6,opt,name=error,proto3" json:"error,omitempty"`
+	Error                string   `protobuf:"bytes,6,opt,name=error" json:"error,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -210,7 +210,7 @@ func (m *Task) Reset()         { *m = Task{} }
 func (m *Task) String() string { return proto.CompactTextString(m) }
 func (*Task) ProtoMessage()    {}
 func (*Task) Descriptor() ([]byte, []int) {
-	return fileDescriptor_automation_4d7d55680fa173cc, []int{2}
+	return fileDescriptor_automation_7092712054bc689e, []int{2}
 }
 func (m *Task) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Task.Unmarshal(m, b)
@@ -273,8 +273,8 @@ func (m *Task) GetError() string {
 }
 
 type EnqueueClusterOperationRequest struct {
-	Name                 string            `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Parameters           map[string]string `protobuf:"bytes,2,rep,name=parameters,proto3" json:"parameters,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Name                 string            `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Parameters           map[string]string `protobuf:"bytes,2,rep,name=parameters" json:"parameters,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -284,7 +284,7 @@ func (m *EnqueueClusterOperationRequest) Reset()         { *m = EnqueueClusterOp
 func (m *EnqueueClusterOperationRequest) String() string { return proto.CompactTextString(m) }
 func (*EnqueueClusterOperationRequest) ProtoMessage()    {}
 func (*EnqueueClusterOperationRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_automation_4d7d55680fa173cc, []int{3}
+	return fileDescriptor_automation_7092712054bc689e, []int{3}
 }
 func (m *EnqueueClusterOperationRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EnqueueClusterOperationRequest.Unmarshal(m, b)
@@ -319,7 +319,7 @@ func (m *EnqueueClusterOperationRequest) GetParameters() map[string]string {
 }
 
 type EnqueueClusterOperationResponse struct {
-	Id                   string   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Id                   string   `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -329,7 +329,7 @@ func (m *EnqueueClusterOperationResponse) Reset()         { *m = EnqueueClusterO
 func (m *EnqueueClusterOperationResponse) String() string { return proto.CompactTextString(m) }
 func (*EnqueueClusterOperationResponse) ProtoMessage()    {}
 func (*EnqueueClusterOperationResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_automation_4d7d55680fa173cc, []int{4}
+	return fileDescriptor_automation_7092712054bc689e, []int{4}
 }
 func (m *EnqueueClusterOperationResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EnqueueClusterOperationResponse.Unmarshal(m, b)
@@ -357,7 +357,7 @@ func (m *EnqueueClusterOperationResponse) GetId() string {
 }
 
 type GetClusterOperationStateRequest struct {
-	Id                   string   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Id                   string   `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -367,7 +367,7 @@ func (m *GetClusterOperationStateRequest) Reset()         { *m = GetClusterOpera
 func (m *GetClusterOperationStateRequest) String() string { return proto.CompactTextString(m) }
 func (*GetClusterOperationStateRequest) ProtoMessage()    {}
 func (*GetClusterOperationStateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_automation_4d7d55680fa173cc, []int{5}
+	return fileDescriptor_automation_7092712054bc689e, []int{5}
 }
 func (m *GetClusterOperationStateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetClusterOperationStateRequest.Unmarshal(m, b)
@@ -395,7 +395,7 @@ func (m *GetClusterOperationStateRequest) GetId() string {
 }
 
 type GetClusterOperationStateResponse struct {
-	State                ClusterOperationState `protobuf:"varint,1,opt,name=state,proto3,enum=automation.ClusterOperationState" json:"state,omitempty"`
+	State                ClusterOperationState `protobuf:"varint,1,opt,name=state,enum=automation.ClusterOperationState" json:"state,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -405,7 +405,7 @@ func (m *GetClusterOperationStateResponse) Reset()         { *m = GetClusterOper
 func (m *GetClusterOperationStateResponse) String() string { return proto.CompactTextString(m) }
 func (*GetClusterOperationStateResponse) ProtoMessage()    {}
 func (*GetClusterOperationStateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_automation_4d7d55680fa173cc, []int{6}
+	return fileDescriptor_automation_7092712054bc689e, []int{6}
 }
 func (m *GetClusterOperationStateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetClusterOperationStateResponse.Unmarshal(m, b)
@@ -433,7 +433,7 @@ func (m *GetClusterOperationStateResponse) GetState() ClusterOperationState {
 }
 
 type GetClusterOperationDetailsRequest struct {
-	Id                   string   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Id                   string   `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -443,7 +443,7 @@ func (m *GetClusterOperationDetailsRequest) Reset()         { *m = GetClusterOpe
 func (m *GetClusterOperationDetailsRequest) String() string { return proto.CompactTextString(m) }
 func (*GetClusterOperationDetailsRequest) ProtoMessage()    {}
 func (*GetClusterOperationDetailsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_automation_4d7d55680fa173cc, []int{7}
+	return fileDescriptor_automation_7092712054bc689e, []int{7}
 }
 func (m *GetClusterOperationDetailsRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetClusterOperationDetailsRequest.Unmarshal(m, b)
@@ -472,7 +472,7 @@ func (m *GetClusterOperationDetailsRequest) GetId() string {
 
 type GetClusterOperationDetailsResponse struct {
 	// Full snapshot of the execution e.g. including output of each task.
-	ClusterOp            *ClusterOperation `protobuf:"bytes,2,opt,name=cluster_op,json=clusterOp,proto3" json:"cluster_op,omitempty"`
+	ClusterOp            *ClusterOperation `protobuf:"bytes,2,opt,name=cluster_op,json=clusterOp" json:"cluster_op,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -482,7 +482,7 @@ func (m *GetClusterOperationDetailsResponse) Reset()         { *m = GetClusterOp
 func (m *GetClusterOperationDetailsResponse) String() string { return proto.CompactTextString(m) }
 func (*GetClusterOperationDetailsResponse) ProtoMessage()    {}
 func (*GetClusterOperationDetailsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_automation_4d7d55680fa173cc, []int{8}
+	return fileDescriptor_automation_7092712054bc689e, []int{8}
 }
 func (m *GetClusterOperationDetailsResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetClusterOperationDetailsResponse.Unmarshal(m, b)
@@ -525,9 +525,9 @@ func init() {
 	proto.RegisterEnum("automation.TaskState", TaskState_name, TaskState_value)
 }
 
-func init() { proto.RegisterFile("automation.proto", fileDescriptor_automation_4d7d55680fa173cc) }
+func init() { proto.RegisterFile("automation.proto", fileDescriptor_automation_7092712054bc689e) }
 
-var fileDescriptor_automation_4d7d55680fa173cc = []byte{
+var fileDescriptor_automation_7092712054bc689e = []byte{
 	// 588 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x94, 0xdd, 0x6e, 0xd3, 0x3e,
 	0x18, 0xc6, 0xff, 0x49, 0xdb, 0xfd, 0xe9, 0x1b, 0xb6, 0x45, 0x16, 0x9b, 0xb2, 0x89, 0xb1, 0x2c,

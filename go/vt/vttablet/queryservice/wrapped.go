@@ -175,10 +175,10 @@ func (ws *wrappedService) Execute(ctx context.Context, target *querypb.Target, q
 	return qr, err
 }
 
-func (ws *wrappedService) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (ws *wrappedService) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	return ws.wrapper(ctx, target, ws.impl, "StreamExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (error, bool) {
 		streamingStarted := false
-		innerErr := conn.StreamExecute(ctx, target, query, bindVars, options, func(qr *sqltypes.Result) error {
+		innerErr := conn.StreamExecute(ctx, target, query, bindVars, transactionID, options, func(qr *sqltypes.Result) error {
 			streamingStarted = true
 			return callback(qr)
 		})

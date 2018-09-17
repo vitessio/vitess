@@ -91,6 +91,61 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts *topo.Server, tabletA
 	}, nil
 }
 
+// NewTransactionalQueryResultReaderForTablet creates a new QueryResultReader for
+// the provided tablet / sql query, and runs it in an existing transaction
+func NewTransactionalQueryResultReaderForTablet(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, sql string, txID int64) (*QueryResultReader, error) {
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	tablet, err := ts.GetTablet(shortCtx, tabletAlias)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := tabletconn.GetDialer()(tablet.Tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return nil, err
+	}
+
+	stream := queryservice.ExecuteWithTransactionalStreamer(ctx, conn, &querypb.Target{
+		Keyspace:   tablet.Tablet.Keyspace,
+		Shard:      tablet.Tablet.Shard,
+		TabletType: tablet.Tablet.Type,
+	}, sql, make(map[string]*querypb.BindVariable), txID, nil)
+
+	// read the columns, or grab the error
+	cols, err := stream.Recv()
+	if err != nil {
+		return nil, fmt.Errorf("Cannot read Fields for query '%v': %v", sql, err)
+	}
+
+	return &QueryResultReader{
+		output: stream,
+		fields: cols.Fields,
+		conn:   conn,
+	}, nil
+}
+
+// RollbackTransaction rolls back the transaction
+func RollbackTransaction(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, txID int64) error {
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	tablet, err := ts.GetTablet(shortCtx, tabletAlias)
+	cancel()
+	if err != nil {
+		return err
+	}
+
+	conn, err := tabletconn.GetDialer()(tablet.Tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return err
+	}
+
+	return conn.Rollback(ctx, &querypb.Target{
+		Keyspace:   tablet.Tablet.Keyspace,
+		Shard:      tablet.Tablet.Shard,
+		TabletType: tablet.Tablet.Type,
+	}, txID)
+}
+
 // Next returns the next result on the stream. It implements ResultReader.
 func (qrr *QueryResultReader) Next() (*sqltypes.Result, error) {
 	return qrr.output.Recv()
@@ -199,6 +254,16 @@ func TableScan(ctx context.Context, log logutil.Logger, ts *topo.Server, tabletA
 	}
 	log.Infof("SQL query for %v/%v: %v", topoproto.TabletAliasString(tabletAlias), td.Name, sql)
 	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
+}
+
+// TransactionalTableScan does the same thing as TableScan, but runs inside a transaction
+func TransactionalTableScan(ctx context.Context, log logutil.Logger, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, txID int64, td *tabletmanagerdatapb.TableDefinition) (*QueryResultReader, error) {
+	sql := fmt.Sprintf("SELECT %v FROM %v", strings.Join(escapeAll(orderedColumns(td)), ", "), sqlescape.EscapeID(td.Name))
+	if len(td.PrimaryKeyColumns) > 0 {
+		sql += fmt.Sprintf(" ORDER BY %v", strings.Join(escapeAll(td.PrimaryKeyColumns), ", "))
+	}
+	log.Infof("SQL query for %v/%v: %v", topoproto.TabletAliasString(tabletAlias), td.Name, sql)
+	return NewTransactionalQueryResultReaderForTablet(ctx, ts, tabletAlias, sql, txID)
 }
 
 // TableScanByKeyRange returns a QueryResultReader that gets all the

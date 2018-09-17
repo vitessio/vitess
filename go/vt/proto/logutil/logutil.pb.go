@@ -49,14 +49,14 @@ func (x Level) String() string {
 	return proto.EnumName(Level_name, int32(x))
 }
 func (Level) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_logutil_1922c06158165cc5, []int{0}
+	return fileDescriptor_logutil_39c26af5691dd7cd, []int{0}
 }
 
 // Time represents a time stamp in nanoseconds. In go, use logutil library
 // to convert times.
 type Time struct {
-	Seconds              int64    `protobuf:"varint,1,opt,name=seconds,proto3" json:"seconds,omitempty"`
-	Nanoseconds          int32    `protobuf:"varint,2,opt,name=nanoseconds,proto3" json:"nanoseconds,omitempty"`
+	Seconds              int64    `protobuf:"varint,1,opt,name=seconds" json:"seconds,omitempty"`
+	Nanoseconds          int32    `protobuf:"varint,2,opt,name=nanoseconds" json:"nanoseconds,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -66,7 +66,7 @@ func (m *Time) Reset()         { *m = Time{} }
 func (m *Time) String() string { return proto.CompactTextString(m) }
 func (*Time) ProtoMessage()    {}
 func (*Time) Descriptor() ([]byte, []int) {
-	return fileDescriptor_logutil_1922c06158165cc5, []int{0}
+	return fileDescriptor_logutil_39c26af5691dd7cd, []int{0}
 }
 func (m *Time) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Time.Unmarshal(m, b)
@@ -102,11 +102,11 @@ func (m *Time) GetNanoseconds() int32 {
 
 // Event is a single logging event
 type Event struct {
-	Time                 *Time    `protobuf:"bytes,1,opt,name=time,proto3" json:"time,omitempty"`
-	Level                Level    `protobuf:"varint,2,opt,name=level,proto3,enum=logutil.Level" json:"level,omitempty"`
-	File                 string   `protobuf:"bytes,3,opt,name=file,proto3" json:"file,omitempty"`
-	Line                 int64    `protobuf:"varint,4,opt,name=line,proto3" json:"line,omitempty"`
-	Value                string   `protobuf:"bytes,5,opt,name=value,proto3" json:"value,omitempty"`
+	Time                 *Time    `protobuf:"bytes,1,opt,name=time" json:"time,omitempty"`
+	Level                Level    `protobuf:"varint,2,opt,name=level,enum=logutil.Level" json:"level,omitempty"`
+	File                 string   `protobuf:"bytes,3,opt,name=file" json:"file,omitempty"`
+	Line                 int64    `protobuf:"varint,4,opt,name=line" json:"line,omitempty"`
+	Value                string   `protobuf:"bytes,5,opt,name=value" json:"value,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -116,7 +116,7 @@ func (m *Event) Reset()         { *m = Event{} }
 func (m *Event) String() string { return proto.CompactTextString(m) }
 func (*Event) ProtoMessage()    {}
 func (*Event) Descriptor() ([]byte, []int) {
-	return fileDescriptor_logutil_1922c06158165cc5, []int{1}
+	return fileDescriptor_logutil_39c26af5691dd7cd, []int{1}
 }
 func (m *Event) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Event.Unmarshal(m, b)
@@ -177,9 +177,9 @@ func init() {
 	proto.RegisterEnum("logutil.Level", Level_name, Level_value)
 }
 
-func init() { proto.RegisterFile("logutil.proto", fileDescriptor_logutil_1922c06158165cc5) }
+func init() { proto.RegisterFile("logutil.proto", fileDescriptor_logutil_39c26af5691dd7cd) }
 
-var fileDescriptor_logutil_1922c06158165cc5 = []byte{
+var fileDescriptor_logutil_39c26af5691dd7cd = []byte{
 	// 260 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x4c, 0x90, 0x41, 0x4b, 0xfb, 0x40,
 	0x10, 0xc5, 0xff, 0xdb, 0x64, 0xff, 0xb1, 0x13, 0x5a, 0xc2, 0xe0, 0x21, 0xc7, 0x58, 0x8a, 0x04,

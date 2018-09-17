@@ -24,7 +24,7 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type StartRequest struct {
-	MysqldArgs           []string `protobuf:"bytes,1,rep,name=mysqld_args,json=mysqldArgs,proto3" json:"mysqld_args,omitempty"`
+	MysqldArgs           []string `protobuf:"bytes,1,rep,name=mysqld_args,json=mysqldArgs" json:"mysqld_args,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -34,7 +34,7 @@ func (m *StartRequest) Reset()         { *m = StartRequest{} }
 func (m *StartRequest) String() string { return proto.CompactTextString(m) }
 func (*StartRequest) ProtoMessage()    {}
 func (*StartRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mysqlctl_6cf72a3618d6fe7c, []int{0}
+	return fileDescriptor_mysqlctl_dc3430948664e7fa, []int{0}
 }
 func (m *StartRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StartRequest.Unmarshal(m, b)
@@ -71,7 +71,7 @@ func (m *StartResponse) Reset()         { *m = StartResponse{} }
 func (m *StartResponse) String() string { return proto.CompactTextString(m) }
 func (*StartResponse) ProtoMessage()    {}
 func (*StartResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mysqlctl_6cf72a3618d6fe7c, []int{1}
+	return fileDescriptor_mysqlctl_dc3430948664e7fa, []int{1}
 }
 func (m *StartResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StartResponse.Unmarshal(m, b)
@@ -92,7 +92,7 @@ func (m *StartResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_StartResponse proto.InternalMessageInfo
 
 type ShutdownRequest struct {
-	WaitForMysqld        bool     `protobuf:"varint,1,opt,name=wait_for_mysqld,json=waitForMysqld,proto3" json:"wait_for_mysqld,omitempty"`
+	WaitForMysqld        bool     `protobuf:"varint,1,opt,name=wait_for_mysqld,json=waitForMysqld" json:"wait_for_mysqld,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -102,7 +102,7 @@ func (m *ShutdownRequest) Reset()         { *m = ShutdownRequest{} }
 func (m *ShutdownRequest) String() string { return proto.CompactTextString(m) }
 func (*ShutdownRequest) ProtoMessage()    {}
 func (*ShutdownRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mysqlctl_6cf72a3618d6fe7c, []int{2}
+	return fileDescriptor_mysqlctl_dc3430948664e7fa, []int{2}
 }
 func (m *ShutdownRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ShutdownRequest.Unmarshal(m, b)
@@ -139,7 +139,7 @@ func (m *ShutdownResponse) Reset()         { *m = ShutdownResponse{} }
 func (m *ShutdownResponse) String() string { return proto.CompactTextString(m) }
 func (*ShutdownResponse) ProtoMessage()    {}
 func (*ShutdownResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mysqlctl_6cf72a3618d6fe7c, []int{3}
+	return fileDescriptor_mysqlctl_dc3430948664e7fa, []int{3}
 }
 func (m *ShutdownResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ShutdownResponse.Unmarshal(m, b)
@@ -169,7 +169,7 @@ func (m *RunMysqlUpgradeRequest) Reset()         { *m = RunMysqlUpgradeRequest{}
 func (m *RunMysqlUpgradeRequest) String() string { return proto.CompactTextString(m) }
 func (*RunMysqlUpgradeRequest) ProtoMessage()    {}
 func (*RunMysqlUpgradeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mysqlctl_6cf72a3618d6fe7c, []int{4}
+	return fileDescriptor_mysqlctl_dc3430948664e7fa, []int{4}
 }
 func (m *RunMysqlUpgradeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RunMysqlUpgradeRequest.Unmarshal(m, b)
@@ -199,7 +199,7 @@ func (m *RunMysqlUpgradeResponse) Reset()         { *m = RunMysqlUpgradeResponse
 func (m *RunMysqlUpgradeResponse) String() string { return proto.CompactTextString(m) }
 func (*RunMysqlUpgradeResponse) ProtoMessage()    {}
 func (*RunMysqlUpgradeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mysqlctl_6cf72a3618d6fe7c, []int{5}
+	return fileDescriptor_mysqlctl_dc3430948664e7fa, []int{5}
 }
 func (m *RunMysqlUpgradeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RunMysqlUpgradeResponse.Unmarshal(m, b)
@@ -229,7 +229,7 @@ func (m *ReinitConfigRequest) Reset()         { *m = ReinitConfigRequest{} }
 func (m *ReinitConfigRequest) String() string { return proto.CompactTextString(m) }
 func (*ReinitConfigRequest) ProtoMessage()    {}
 func (*ReinitConfigRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mysqlctl_6cf72a3618d6fe7c, []int{6}
+	return fileDescriptor_mysqlctl_dc3430948664e7fa, []int{6}
 }
 func (m *ReinitConfigRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ReinitConfigRequest.Unmarshal(m, b)
@@ -259,7 +259,7 @@ func (m *ReinitConfigResponse) Reset()         { *m = ReinitConfigResponse{} }
 func (m *ReinitConfigResponse) String() string { return proto.CompactTextString(m) }
 func (*ReinitConfigResponse) ProtoMessage()    {}
 func (*ReinitConfigResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mysqlctl_6cf72a3618d6fe7c, []int{7}
+	return fileDescriptor_mysqlctl_dc3430948664e7fa, []int{7}
 }
 func (m *ReinitConfigResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ReinitConfigResponse.Unmarshal(m, b)
@@ -289,7 +289,7 @@ func (m *RefreshConfigRequest) Reset()         { *m = RefreshConfigRequest{} }
 func (m *RefreshConfigRequest) String() string { return proto.CompactTextString(m) }
 func (*RefreshConfigRequest) ProtoMessage()    {}
 func (*RefreshConfigRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mysqlctl_6cf72a3618d6fe7c, []int{8}
+	return fileDescriptor_mysqlctl_dc3430948664e7fa, []int{8}
 }
 func (m *RefreshConfigRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RefreshConfigRequest.Unmarshal(m, b)
@@ -319,7 +319,7 @@ func (m *RefreshConfigResponse) Reset()         { *m = RefreshConfigResponse{} }
 func (m *RefreshConfigResponse) String() string { return proto.CompactTextString(m) }
 func (*RefreshConfigResponse) ProtoMessage()    {}
 func (*RefreshConfigResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mysqlctl_6cf72a3618d6fe7c, []int{9}
+	return fileDescriptor_mysqlctl_dc3430948664e7fa, []int{9}
 }
 func (m *RefreshConfigResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RefreshConfigResponse.Unmarshal(m, b)
@@ -360,9 +360,8 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// MysqlCtlClient is the client API for MysqlCtl service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+// Client API for MysqlCtl service
+
 type MysqlCtlClient interface {
 	Start(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error)
 	Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
@@ -381,7 +380,7 @@ func NewMysqlCtlClient(cc *grpc.ClientConn) MysqlCtlClient {
 
 func (c *mysqlCtlClient) Start(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error) {
 	out := new(StartResponse)
-	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/Start", in, out, opts...)
+	err := grpc.Invoke(ctx, "/mysqlctl.MysqlCtl/Start", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +389,7 @@ func (c *mysqlCtlClient) Start(ctx context.Context, in *StartRequest, opts ...gr
 
 func (c *mysqlCtlClient) Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error) {
 	out := new(ShutdownResponse)
-	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/Shutdown", in, out, opts...)
+	err := grpc.Invoke(ctx, "/mysqlctl.MysqlCtl/Shutdown", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +398,7 @@ func (c *mysqlCtlClient) Shutdown(ctx context.Context, in *ShutdownRequest, opts
 
 func (c *mysqlCtlClient) RunMysqlUpgrade(ctx context.Context, in *RunMysqlUpgradeRequest, opts ...grpc.CallOption) (*RunMysqlUpgradeResponse, error) {
 	out := new(RunMysqlUpgradeResponse)
-	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/RunMysqlUpgrade", in, out, opts...)
+	err := grpc.Invoke(ctx, "/mysqlctl.MysqlCtl/RunMysqlUpgrade", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -408,7 +407,7 @@ func (c *mysqlCtlClient) RunMysqlUpgrade(ctx context.Context, in *RunMysqlUpgrad
 
 func (c *mysqlCtlClient) ReinitConfig(ctx context.Context, in *ReinitConfigRequest, opts ...grpc.CallOption) (*ReinitConfigResponse, error) {
 	out := new(ReinitConfigResponse)
-	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/ReinitConfig", in, out, opts...)
+	err := grpc.Invoke(ctx, "/mysqlctl.MysqlCtl/ReinitConfig", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -417,14 +416,15 @@ func (c *mysqlCtlClient) ReinitConfig(ctx context.Context, in *ReinitConfigReque
 
 func (c *mysqlCtlClient) RefreshConfig(ctx context.Context, in *RefreshConfigRequest, opts ...grpc.CallOption) (*RefreshConfigResponse, error) {
 	out := new(RefreshConfigResponse)
-	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/RefreshConfig", in, out, opts...)
+	err := grpc.Invoke(ctx, "/mysqlctl.MysqlCtl/RefreshConfig", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// MysqlCtlServer is the server API for MysqlCtl service.
+// Server API for MysqlCtl service
+
 type MysqlCtlServer interface {
 	Start(context.Context, *StartRequest) (*StartResponse, error)
 	Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)
@@ -556,9 +556,9 @@ var _MysqlCtl_serviceDesc = grpc.ServiceDesc{
 	Metadata: "mysqlctl.proto",
 }
 
-func init() { proto.RegisterFile("mysqlctl.proto", fileDescriptor_mysqlctl_6cf72a3618d6fe7c) }
+func init() { proto.RegisterFile("mysqlctl.proto", fileDescriptor_mysqlctl_dc3430948664e7fa) }
 
-var fileDescriptor_mysqlctl_6cf72a3618d6fe7c = []byte{
+var fileDescriptor_mysqlctl_dc3430948664e7fa = []byte{
 	// 339 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x92, 0x4d, 0x4f, 0xfa, 0x30,
 	0x1c, 0xc7, 0xff, 0x84, 0xfc, 0xcd, 0xfc, 0x09, 0xce, 0x54, 0x79, 0x6a, 0xa2, 0xe0, 0x12, 0x95,

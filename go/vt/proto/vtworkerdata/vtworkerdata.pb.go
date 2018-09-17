@@ -21,7 +21,7 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 // ExecuteVtworkerCommandRequest is the payload for ExecuteVtworkerCommand.
 type ExecuteVtworkerCommandRequest struct {
-	Args                 []string `protobuf:"bytes,1,rep,name=args,proto3" json:"args,omitempty"`
+	Args                 []string `protobuf:"bytes,1,rep,name=args" json:"args,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -31,7 +31,7 @@ func (m *ExecuteVtworkerCommandRequest) Reset()         { *m = ExecuteVtworkerCo
 func (m *ExecuteVtworkerCommandRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteVtworkerCommandRequest) ProtoMessage()    {}
 func (*ExecuteVtworkerCommandRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vtworkerdata_cae0940479e6aeb1, []int{0}
+	return fileDescriptor_vtworkerdata_9c94bc714251542b, []int{0}
 }
 func (m *ExecuteVtworkerCommandRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteVtworkerCommandRequest.Unmarshal(m, b)
@@ -60,7 +60,7 @@ func (m *ExecuteVtworkerCommandRequest) GetArgs() []string {
 
 // ExecuteVtworkerCommandResponse is streamed back by ExecuteVtworkerCommand.
 type ExecuteVtworkerCommandResponse struct {
-	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
 	XXX_unrecognized     []byte         `json:"-"`
 	XXX_sizecache        int32          `json:"-"`
@@ -70,7 +70,7 @@ func (m *ExecuteVtworkerCommandResponse) Reset()         { *m = ExecuteVtworkerC
 func (m *ExecuteVtworkerCommandResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteVtworkerCommandResponse) ProtoMessage()    {}
 func (*ExecuteVtworkerCommandResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vtworkerdata_cae0940479e6aeb1, []int{1}
+	return fileDescriptor_vtworkerdata_9c94bc714251542b, []int{1}
 }
 func (m *ExecuteVtworkerCommandResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteVtworkerCommandResponse.Unmarshal(m, b)
@@ -102,9 +102,9 @@ func init() {
 	proto.RegisterType((*ExecuteVtworkerCommandResponse)(nil), "vtworkerdata.ExecuteVtworkerCommandResponse")
 }
 
-func init() { proto.RegisterFile("vtworkerdata.proto", fileDescriptor_vtworkerdata_cae0940479e6aeb1) }
+func init() { proto.RegisterFile("vtworkerdata.proto", fileDescriptor_vtworkerdata_9c94bc714251542b) }
 
-var fileDescriptor_vtworkerdata_cae0940479e6aeb1 = []byte{
+var fileDescriptor_vtworkerdata_9c94bc714251542b = []byte{
 	// 175 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x2a, 0x2b, 0x29, 0xcf,
 	0x2f, 0xca, 0x4e, 0x2d, 0x4a, 0x49, 0x2c, 0x49, 0xd4, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2,
