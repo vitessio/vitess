@@ -117,6 +117,12 @@ func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (mysql.Positi
 	cmds := []string{
 		conn.StopSlaveCommand(),
 		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
+		// When using semi-sync and GTID, a replica first connects to the new master with a given GTID set,
+		// it can take a long time to scan the current binlog file to find the corresponding position.
+		// This can cause commits that occur soon after the master is promoted to take a long time waiting
+		// for a semi-sync ACK, since replication is not fully set up.
+		// More details in: https://github.com/vitessio/vitess/issues/4161
+		"FLUSH BINARY LOGS",
 	}
 
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, cmds); err != nil {

@@ -1679,7 +1679,7 @@ func TestQueries(t *testing.T) {
 					Query: "insert into vitess_misc(id, b, d, dt, t) select 2, b, d, dt, t from vitess_misc",
 					Rewritten: []string{
 						"select 2, b, d, dt, t from vitess_misc limit 10001",
-						"insert into vitess_misc(id, b, d, dt, t) values (2, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') /* _stream vitess_misc (id ) (2 )",
+						"insert into vitess_misc(id, b, d, dt, t) values (2, b'00000001', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') /* _stream vitess_misc (id ) (2 )",
 					},
 				},
 				framework.TestQuery("commit"),
@@ -1798,8 +1798,11 @@ func TestQueries(t *testing.T) {
 }
 
 func TestBitDefault(t *testing.T) {
+	// Default values for bit fields that are PKs are not supported
+	// Does not make sense to use a bit field as PK
 	client := framework.NewClient()
 
+	expectedError := "bit default value: Execute failed: could not create default row for insert without row values: cannot convert value BIT(\"\\x05\") to AST (CallerID: dev)"
 	testCases := []framework.Testable{
 		&framework.MultiCase{
 			Name: "bit default value",
@@ -1824,8 +1827,9 @@ func TestBitDefault(t *testing.T) {
 		},
 	}
 	for _, tcase := range testCases {
-		if err := tcase.Test("", client); err != nil {
-			t.Error(err)
+		err := tcase.Test("", client)
+		if err == nil || err.Error() != expectedError {
+			t.Errorf("TestBitDefault result: \n%q\nexpecting\n%q", err.Error(), expectedError)
 		}
 	}
 }
