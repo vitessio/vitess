@@ -451,9 +451,6 @@ func (ins *Insert) processPrimary(vcursor VCursor, vindexKeys [][]sqltypes.Value
 func (ins *Insert) processOwned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, bv map[string]*querypb.BindVariable, ksids [][]byte) error {
 	for rowNum, rowColumnKeys := range vindexColumnsKeys {
 		for colIdx, vindexKey := range rowColumnKeys {
-			if vindexKey.IsNull() {
-				return fmt.Errorf("value must be supplied for column %v", colVindex.Columns[colIdx])
-			}
 			col := colVindex.Columns[colIdx]
 			bv[insertVarName(col, rowNum)] = sqltypes.ValueBindVariable(vindexKey)
 		}
@@ -476,9 +473,6 @@ func (ins *Insert) processOwnedIgnore(vcursor VCursor, vindexColumnsKeys [][]sql
 		createKsids = append(createKsids, ksids[rowNum])
 
 		for colIdx, vindexKey := range rowColumnKeys {
-			if vindexKey.IsNull() {
-				return fmt.Errorf("value must be supplied for column %v", colVindex.Columns)
-			}
 			rowKeys = append(rowKeys, vindexKey)
 			col := colVindex.Columns[colIdx]
 			bv[insertVarName(col, rowNum)] = sqltypes.ValueBindVariable(vindexKey)

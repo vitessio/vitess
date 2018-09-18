@@ -1519,7 +1519,9 @@ show_statement:
   }
 | SHOW COLLATION WHERE expression
   {
-    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &$4}
+    // Cannot dereference $4 directly, or else the parser stackcannot be pooled. See yyParsePooled
+    showCollationFilterOpt := $4
+    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
   }
 | SHOW VINDEXES ON table_name
   {

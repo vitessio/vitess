@@ -267,6 +267,12 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &SQLVal{
+			Type: BitVal,
+			Val:  []byte("01100001"),
+		},
+		err: "expression is too complex",
+	}, {
+		in: &SQLVal{
 			Type: HexVal,
 			Val:  []byte("3131"),
 		},
@@ -323,14 +329,14 @@ func TestNewPlanValue(t *testing.T) {
 	}}
 	for _, tc := range tcases {
 		got, err := NewPlanValue(tc.in)
-		if err != nil {
+		if tc.err != "" {
 			if !strings.Contains(err.Error(), tc.err) {
 				t.Errorf("NewPlanValue(%s) error: %v, want '%s'", String(tc.in), err, tc.err)
 			}
 			continue
 		}
-		if tc.err != "" {
-			t.Errorf("NewPlanValue(%s) error: nil, want '%s'", String(tc.in), tc.err)
+		if err != nil {
+			t.Error(err)
 			continue
 		}
 		if !reflect.DeepEqual(got, tc.out) {

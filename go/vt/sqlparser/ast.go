@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -32,6 +33,41 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// parserPool is a pool for parser objects.
+var parserPool = sync.Pool{}
+
+// zeroParser is a zero-initialized parser to help reinitialize the parser for pooling.
+var zeroParser = *(yyNewParser().(*yyParserImpl))
+
+// yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
+// particularly good reason to use yyParse directly, since it immediately discards its parser.  What
+// would be ideal down the line is to actually pool the stacks themselves rather than the parser
+// objects, as per https://github.com/cznic/goyacc/blob/master/main.go. However, absent an upstream
+// change to goyacc, this is the next best option.
+//
+// N.B: Parser pooling means that you CANNOT take references directly to parse stack variables (e.g.
+// $$ = &$4) in sql.y rules. You must instead add an intermediate reference like so:
+//    showCollationFilterOpt := $4
+//    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
+func yyParsePooled(yylex yyLexer) int {
+	// Being very particular about using the base type and not an interface type b/c we depend on
+	// the implementation to know how to reinitialize the parser.
+	var parser *yyParserImpl
+
+	i := parserPool.Get()
+	if i != nil {
+		parser = i.(*yyParserImpl)
+	} else {
+		parser = yyNewParser().(*yyParserImpl)
+	}
+
+	defer func() {
+		*parser = zeroParser
+		parserPool.Put(parser)
+	}()
+	return parser.Parse(yylex)
+}
 
 // Instructions for creating new types: If a type
 // needs to satisfy an interface, declare that function
@@ -51,7 +87,7 @@ import (
 // error is ignored and the DDL is returned anyway.
 func Parse(sql string) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
-	if yyParse(tokenizer) != 0 {
+	if yyParsePooled(tokenizer) != 0 {
 		if tokenizer.partialDDL != nil {
 			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
 			tokenizer.ParseTree = tokenizer.partialDDL
@@ -69,7 +105,7 @@ func Parse(sql string) (Statement, error) {
 // partially parsed DDL statements.
 func ParseStrictDDL(sql string) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
-	if yyParse(tokenizer) != 0 {
+	if yyParsePooled(tokenizer) != 0 {
 		return nil, tokenizer.LastError
 	}
 	if tokenizer.ParseTree == nil {
@@ -104,7 +140,7 @@ func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 
 	tokenizer.reset()
 	tokenizer.multi = true
-	if yyParse(tokenizer) != 0 {
+	if yyParsePooled(tokenizer) != 0 {
 		if tokenizer.partialDDL != nil && !strict {
 			tokenizer.ParseTree = tokenizer.partialDDL
 			return tokenizer.ParseTree, nil
