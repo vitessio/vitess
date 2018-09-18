@@ -194,7 +194,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		tablets := [](*topodatapb.Tablet){}
 
 		for _, shard := range shardNames {
-			// Get tables for this shard.
+			// Get tablets for this shard.
 			tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 			if err != nil && !topo.IsErrType(err, topo.PartialResult) {
 				return nil, err
