@@ -85,6 +85,11 @@ Slack and Nozzle are swapped for aesthetics, because the icons don't align well 
         <img src="/images/users/stitchlabs_logo.png" alt="Stitch Labs" width="120">
       </div>
     </div>
+    <div class="row logo-row">
+      <div class="col-md-3">
+        <img src="/images/users/pinterest_logo.png" alt="Pinterest" width="120">
+      </div>
+    </div>
   </div>
   <div class="col-md-6">
     <h2><i class="fa fa-rocket"></i>&nbsp;An Introduction to Vitess</h2>
