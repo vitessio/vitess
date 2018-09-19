@@ -29,12 +29,12 @@ import (
 
 // lookupInternal implements the functions for the Lookup vindexes.
 type lookupInternal struct {
-	Table         string   `json:"table"`
-	FromColumns   []string `json:"from_columns"`
-	To            string   `json:"to"`
-	Autocommit    bool     `json:"autocommit,omitempty"`
-	Upsert        bool     `json:"upsert,omitempty"`
-	sel, ver, del string
+	Table                  string   `json:"table"`
+	FromColumns            []string `json:"from_columns"`
+	To                     string   `json:"to"`
+	Autocommit             bool     `json:"autocommit,omitempty"`
+	Upsert                 bool     `json:"upsert,omitempty"`
+	sel, nullsel, ver, del string
 }
 
 func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit, upsert bool) error {
@@ -53,6 +53,7 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 	// as part of face 2 of https://github.com/vitessio/vitess/issues/3481
 	// For now multi column behaves as a single column for Map and Verify operations
 	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", lkp.To, lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0])
+	lkp.nullsel = fmt.Sprintf("select %s from %s where %s is null", lkp.To, lkp.Table, lkp.FromColumns[0])
 	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", lkp.FromColumns[0], lkp.Table, lkp.FromColumns[0], lkp.FromColumns[0], lkp.To, lkp.To)
 	lkp.del = lkp.initDelStmt()
 	return nil
@@ -68,9 +69,17 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 		var err error
 		var result *sqltypes.Result
 		if lkp.Autocommit {
-			result, err = vcursor.ExecuteAutocommit("VindexLookup", lkp.sel, bindVars, false /* isDML */)
+			if id.IsNull() {
+				result, err = vcursor.ExecuteAutocommit("VindexLookup", lkp.nullsel, nil, false /* isDML */)
+			} else {
+				result, err = vcursor.ExecuteAutocommit("VindexLookup", lkp.sel, bindVars, false /* isDML */)
+			}
 		} else {
-			result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* isDML */)
+			if id.IsNull() {
+				result, err = vcursor.Execute("VindexLookup", lkp.nullsel, nil, false /* isDML */)
+			} else {
+				result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* isDML */)
+			}
 		}
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
