@@ -24,10 +24,12 @@ limitations under the License.
 package s3backupstorage
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -59,6 +61,8 @@ var (
 
 	// forcePath is used to ensure that the certificate and path used match the endpoint + region
 	forcePath = flag.Bool("s3_backup_force_path_style", false, "force the s3 path style")
+
+	tlsSkipVerifyCert = flag.Bool("s3_backup_tls_skip_verify_cert", false, "skip the 'certificate is valid' check for SSL connections")
 
 	// verboseLogging provides more verbose logging of AWS actions
 	requiredLogLevel = flag.String("s3_backup_log_level", "LogOff", "determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors")
@@ -328,8 +332,13 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 	if bs._client == nil {
 		logLevel := getLogLevel()
 
+		tlsClientConf := &tls.Config{InsecureSkipVerify: *tlsSkipVerifyCert}
+		httpTransport := &http.Transport{TLSClientConfig: tlsClientConf}
+		httpClient := &http.Client{Transport: httpTransport}
+
 		bs._client = s3.New(session.New(),
 			&aws.Config{
+				HTTPClient:       httpClient,
 				LogLevel:         logLevel,
 				Endpoint:         aws.String(*endpoint),
 				Region:           aws.String(*region),
