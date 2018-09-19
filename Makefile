@@ -233,7 +233,7 @@ docker_unit_test:
 # tests in Travis. The results are saved in test/config.json, which you can
 # then commit and push.
 rebalance_tests:
-	go run test.go -rebalance 5 -remote-stats http://enisoc.com:15123/travis/stats
+	go run test.go -rebalance 5
 
 # Release a version.
 # This will generate a tar.gz file into the releases folder with the current source
