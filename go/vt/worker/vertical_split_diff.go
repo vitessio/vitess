@@ -89,6 +89,8 @@ func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() template.HTML {
 	switch state {
 	case WorkerStateDiff:
 		result += "<b>Running</b>:</br>\n"
+	case WorkerStateDiffWillFail:
+		result += "<b>Running - have already found differences...</b></br>\n"
 	case WorkerStateDone:
 		result += "<b>Success</b>:</br>\n"
 	}
@@ -105,6 +107,8 @@ func (vsdw *VerticalSplitDiffWorker) StatusAsText() string {
 	switch state {
 	case WorkerStateDiff:
 		result += "Running...\n"
+	case WorkerStateDiffWillFail:
+		result += "Running - have already found differences...\n"
 	case WorkerStateDone:
 		result += "Success.\n"
 	}
@@ -365,7 +369,9 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(
 			shortCtx, vsdw.destinationAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */)
 		cancel()
-		rec.RecordError(err)
+		if err != nil {
+			vsdw.markAsWillFail(rec, err)
+		}
 		vsdw.wr.Logger().Infof("Got schema from destination %v", topoproto.TabletAliasString(vsdw.destinationAlias))
 		wg.Done()
 	}()
@@ -376,7 +382,9 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(
 			shortCtx, vsdw.sourceAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */)
 		cancel()
-		rec.RecordError(err)
+		if err != nil {
+			vsdw.markAsWillFail(rec, err)
+		}
 		vsdw.wr.Logger().Infof("Got schema from source %v", topoproto.TabletAliasString(vsdw.sourceAlias))
 		wg.Done()
 	}()
@@ -409,7 +417,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			sourceQueryResultReader, err := TableScan(ctx, vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.sourceAlias, tableDefinition)
 			if err != nil {
 				newErr := vterrors.Wrap(err, "TableScan(source) failed")
-				rec.RecordError(newErr)
+				vsdw.markAsWillFail(rec, newErr)
 				vsdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
@@ -418,7 +426,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			destinationQueryResultReader, err := TableScan(ctx, vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.destinationAlias, tableDefinition)
 			if err != nil {
 				newErr := vterrors.Wrap(err, "TableScan(destination) failed")
-				rec.RecordError(newErr)
+				vsdw.markAsWillFail(rec, newErr)
 				vsdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
@@ -427,7 +435,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, tableDefinition)
 			if err != nil {
 				newErr := vterrors.Wrap(err, "NewRowDiffer() failed")
-				rec.RecordError(newErr)
+				vsdw.markAsWillFail(rec, newErr)
 				vsdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
@@ -438,7 +446,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			} else {
 				if report.HasDifferences() {
 					err := fmt.Errorf("Table %v has differences: %v", tableDefinition.Name, report.String())
-					rec.RecordError(err)
+					vsdw.markAsWillFail(rec, err)
 					vsdw.wr.Logger().Errorf("%v", err)
 				} else {
 					vsdw.wr.Logger().Infof("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS)
@@ -449,4 +457,10 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	wg.Wait()
 
 	return rec.Error()
+}
+
+// markAsWillFail records the error and changes the state of the worker to reflect this
+func (vsdw *VerticalSplitDiffWorker) markAsWillFail(er concurrency.ErrorRecorder, err error) {
+	er.RecordError(err)
+	vsdw.SetState(WorkerStateDiffWillFail)
 }
