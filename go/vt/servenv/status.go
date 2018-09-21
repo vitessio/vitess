@@ -34,40 +34,45 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-var (
-	binaryName  = filepath.Base(os.Args[0])
-	hostname    string
-	serverStart = time.Now()
-
-	statusMu       sync.RWMutex
-	statusSections []section
-	statusTmpl     = template.Must(reparse(nil))
-	statusFuncMap  = make(template.FuncMap)
-)
-
-type section struct {
-	Banner   string
-	Fragment string
-	F        func() interface{}
+// AddStatusPart adds a new section to status. frag is used as a
+// subtemplate of the template used to render /debug/status, and will
+// be executed using the value of invoking f at the time of the
+// /debug/status request. frag is parsed and executed with the
+// html/template package. Functions registered with AddStatusFuncs
+// may be used in the template.
+func AddStatusPart(banner, frag string, f func() interface{}) {
+	globalStatus.addStatusPart(banner, frag, f)
 }
 
 // AddStatusFuncs merges the provided functions into the set of
 // functions used to render /debug/status. Call this before AddStatusPart
 // if your template requires custom functions.
 func AddStatusFuncs(fmap template.FuncMap) {
-	statusMu.Lock()
-	defer statusMu.Unlock()
-
-	for name, fun := range fmap {
-		if !strings.HasPrefix(name, "github_com_vitessio_vitess_") {
-			panic("status func registered without proper prefix, need github_com_vitessio_vitess_:" + name)
-		}
-		if _, ok := statusFuncMap[name]; ok {
-			panic("duplicate status func registered: " + name)
-		}
-		statusFuncMap[name] = fun
-	}
+	globalStatus.addStatusFuncs(fmap)
 }
+
+// AddStatusSection registers a function that generates extra
+// information for the global status page, it will be
+// used as a header before the information. If more complex output
+// than a simple string is required use AddStatusPart instead.
+func AddStatusSection(banner string, f func() string) {
+	globalStatus.addStatusSection(banner, f)
+}
+
+// StatusURLPath returns the path to the status page.
+func StatusURLPath() string {
+	return "/debug/status"
+}
+
+//-----------------------------------------------------------------
+
+var (
+	binaryName  = filepath.Base(os.Args[0])
+	hostname    string
+	serverStart = time.Now()
+
+	globalStatus = newStatusPage("")
+)
 
 var statusHTML = `<!DOCTYPE html>
 <html>
@@ -107,7 +112,111 @@ View <a href=/debug/vars>variables</a>,
 </div>
 </div>`
 
-func reparse(sections []section) (*template.Template, error) {
+type statusPage struct {
+	mu       sync.RWMutex
+	sections []section
+	tmpl     *template.Template
+	funcMap  template.FuncMap
+}
+
+type section struct {
+	Banner   string
+	Fragment string
+	F        func() interface{}
+}
+
+func newStatusPage(name string) *statusPage {
+	sp := &statusPage{
+		funcMap: make(template.FuncMap),
+	}
+	sp.tmpl = template.Must(sp.reparse(nil))
+	if name == "" {
+		http.HandleFunc("/debug/status", sp.statusHandler)
+	} else {
+		http.HandleFunc("/"+name+"/debug/status", sp.statusHandler)
+	}
+	return sp
+}
+
+func (sp *statusPage) reset() {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+
+	sp.sections = nil
+	sp.tmpl = template.Must(sp.reparse(nil))
+	sp.funcMap = make(template.FuncMap)
+}
+
+func (sp *statusPage) addStatusFuncs(fmap template.FuncMap) {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+
+	for name, fun := range fmap {
+		if !strings.HasPrefix(name, "github_com_vitessio_vitess_") {
+			panic("status func registered without proper prefix, need github_com_vitessio_vitess_:" + name)
+		}
+		if _, ok := sp.funcMap[name]; ok {
+			panic("duplicate status func registered: " + name)
+		}
+		sp.funcMap[name] = fun
+	}
+}
+
+func (sp *statusPage) addStatusPart(banner, frag string, f func() interface{}) {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+
+	secs := append(sp.sections, section{
+		Banner:   banner,
+		Fragment: frag,
+		F:        f,
+	})
+
+	var err error
+	sp.tmpl, err = sp.reparse(secs)
+	if err != nil {
+		secs[len(secs)-1] = section{
+			Banner:   banner,
+			Fragment: "<code>bad status template: {{.}}</code>",
+			F:        func() interface{} { return err },
+		}
+	}
+	sp.tmpl, _ = sp.reparse(secs)
+	sp.sections = secs
+}
+
+func (sp *statusPage) addStatusSection(banner string, f func() string) {
+	sp.addStatusPart(banner, `{{.}}`, func() interface{} { return f() })
+}
+
+func (sp *statusPage) statusHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+
+	data := struct {
+		Sections   []section
+		BinaryName string
+		Hostname   string
+		StartTime  string
+	}{
+		Sections:   sp.sections,
+		BinaryName: binaryName,
+		Hostname:   hostname,
+		StartTime:  serverStart.Format(time.RFC1123),
+	}
+
+	if err := sp.tmpl.ExecuteTemplate(w, "status", data); err != nil {
+		if _, ok := err.(net.Error); !ok {
+			log.Errorf("servenv: couldn't execute template: %v", err)
+		}
+	}
+}
+
+func (sp *statusPage) reparse(sections []section) (*template.Template, error) {
 	var buf bytes.Buffer
 
 	io.WriteString(&buf, `{{define "status"}}`)
@@ -124,76 +233,7 @@ func reparse(sections []section) (*template.Template, error) {
 	for i, sec := range sections {
 		fmt.Fprintf(&buf, `{{define "sec-%d"}}%s{{end}}\n`, i, sec.Fragment)
 	}
-	return template.New("").Funcs(statusFuncMap).Parse(buf.String())
-}
-
-// AddStatusPart adds a new section to status. frag is used as a
-// subtemplate of the template used to render /debug/status, and will
-// be executed using the value of invoking f at the time of the
-// /debug/status request. frag is parsed and executed with the
-// html/template package. Functions registered with AddStatusFuncs
-// may be used in the template.
-func AddStatusPart(banner, frag string, f func() interface{}) {
-	statusMu.Lock()
-	defer statusMu.Unlock()
-
-	secs := append(statusSections, section{
-		Banner:   banner,
-		Fragment: frag,
-		F:        f,
-	})
-
-	var err error
-	statusTmpl, err = reparse(secs)
-	if err != nil {
-		secs[len(secs)-1] = section{
-			Banner:   banner,
-			Fragment: "<code>bad status template: {{.}}</code>",
-			F:        func() interface{} { return err },
-		}
-	}
-	statusTmpl, _ = reparse(secs)
-	statusSections = secs
-}
-
-// AddStatusSection registers a function that generates extra
-// information for /debug/status. If banner is not empty, it will be
-// used as a header before the information. If more complex output
-// than a simple string is required use AddStatusPart instead.
-func AddStatusSection(banner string, f func() string) {
-	AddStatusPart(banner, `{{.}}`, func() interface{} { return f() })
-}
-
-func statusHandler(w http.ResponseWriter, r *http.Request) {
-	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
-		acl.SendError(w, err)
-		return
-	}
-	statusMu.Lock()
-	defer statusMu.Unlock()
-
-	data := struct {
-		Sections   []section
-		BinaryName string
-		Hostname   string
-		StartTime  string
-	}{
-		Sections:   statusSections,
-		BinaryName: binaryName,
-		Hostname:   hostname,
-		StartTime:  serverStart.Format(time.RFC1123),
-	}
-
-	if err := statusTmpl.ExecuteTemplate(w, "status", data); err != nil {
-		if _, ok := err.(net.Error); !ok {
-			log.Errorf("servenv: couldn't execute template: %v", err)
-		}
-	}
-}
-
-// StatusURLPath returns the path to the status page.
-func StatusURLPath() string {
-	return "/debug/status"
+	return template.New("").Funcs(sp.funcMap).Parse(buf.String())
 }
 
 func init() {
@@ -202,5 +242,4 @@ func init() {
 	if err != nil {
 		log.Exitf("os.Hostname: %v", err)
 	}
-	http.HandleFunc("/debug/status", statusHandler)
 }

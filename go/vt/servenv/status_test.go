@@ -68,3 +68,46 @@ func TestStatus(t *testing.T) {
 	}
 	t.Logf("body: \n%s", body)
 }
+
+func TestNamedStatus(t *testing.T) {
+	server := httptest.NewServer(nil)
+	defer server.Close()
+
+	name := "test"
+	sp := newStatusPage(name)
+	sp.addStatusFuncs(
+		template.FuncMap{
+			"github_com_vitessio_vitess_to_upper": strings.ToUpper,
+		})
+
+	sp.addStatusPart("test_part", `{{github_com_vitessio_vitess_to_upper . }}`, func() interface{} {
+		return "this should be uppercase"
+	})
+	sp.addStatusSection("test_section", func() string {
+		return "this is a section"
+	})
+
+	resp, err := http.Get(server.URL + "/" + name + StatusURLPath())
+	if err != nil {
+		t.Fatalf("http.Get: %v", err)
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("ioutil.ReadAll: %v", err)
+	}
+
+	cases := []string{
+		`h1.*test_part.*/h1`,
+		`THIS SHOULD BE UPPERCASE`,
+		`h1.*test_section.*/h1`,
+	}
+	for _, cas := range cases {
+		if !regexp.MustCompile(cas).Match(body) {
+			t.Errorf("failed matching: %q", cas)
+		}
+	}
+	t.Logf("body: \n%s", body)
+}

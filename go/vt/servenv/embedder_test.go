@@ -46,6 +46,9 @@ func TestHandleFunc(t *testing.T) {
 	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/path", port)), "1"; got != want {
 		t.Errorf("httpGet: %s, want %s", got, want)
 	}
+	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/debug/status", port)), "Status for"; !strings.Contains(got, want) {
+		t.Errorf("httpGet: %s, must contain %s", got, want)
+	}
 
 	ebd = NewEmbedder("a", "")
 	ebd.HandleFunc("/path", func(w http.ResponseWriter, r *http.Request) {
@@ -54,12 +57,18 @@ func TestHandleFunc(t *testing.T) {
 	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/a/path", port)), "2"; got != want {
 		t.Errorf("httpGet: %s, want %s", got, want)
 	}
+	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/a/debug/status", port)), "Status for"; !strings.Contains(got, want) {
+		t.Errorf("httpGet: %s, must contain %s", got, want)
+	}
 
 	ebd.HandleFunc("/path", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("3"))
 	})
 	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/a/path", port)), "3"; got != want {
 		t.Errorf("httpGet: %s, want %s", got, want)
+	}
+	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/a/debug/status", port)), "Status for"; !strings.Contains(got, want) {
+		t.Errorf("httpGet: %s, must contain %s", got, want)
 	}
 
 	ebd = NewEmbedder("a", "")
@@ -77,9 +86,15 @@ func TestHandleFunc(t *testing.T) {
 	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/b/path", port)), "5"; got != want {
 		t.Errorf("httpGet: %s, want %s", got, want)
 	}
+	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/b/debug/status", port)), "Status for"; !strings.Contains(got, want) {
+		t.Errorf("httpGet: %s, must contain %s", got, want)
+	}
 	// Ensure "a" is still the same.
 	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/a/path", port)), "4"; got != want {
 		t.Errorf("httpGet: %s, want %s", got, want)
+	}
+	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/a/debug/status", port)), "Status for"; !strings.Contains(got, want) {
+		t.Errorf("httpGet: %s, must contain %s", got, want)
 	}
 }
 

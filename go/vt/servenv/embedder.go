@@ -123,6 +123,7 @@ func (hf *handleFunc) Get() func(w http.ResponseWriter, r *http.Request) {
 type Embedder struct {
 	name, label string
 	handleFuncs map[string]*handleFunc
+	sp          *statusPage
 }
 
 // NewEmbedder creates a new Embedder with name as namespace.
@@ -142,6 +143,9 @@ func NewEmbedder(name, label string) *Embedder {
 		label:       label,
 		handleFuncs: make(map[string]*handleFunc),
 	}
+	if name != "" {
+		ebd.sp = newStatusPage(name)
+	}
 	embeds[name] = ebd
 	return ebd
 }
@@ -154,6 +158,9 @@ func (ebd *Embedder) resetLocked() {
 		vmap.mu.Lock()
 		delete(vmap.vars, ebd.name)
 		vmap.mu.Unlock()
+	}
+	if ebd.sp != nil {
+		ebd.sp.reset()
 	}
 }
 
