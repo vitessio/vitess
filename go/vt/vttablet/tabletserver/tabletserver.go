@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -137,6 +138,7 @@ func stateInfo(state int64) string {
 // Open and Close can be called repeatedly during the lifetime of
 // a subcomponent. These should also be idempotent.
 type TabletServer struct {
+	env                    *servenv.Embedder
 	QueryTimeout           sync2.AtomicDuration
 	BeginTimeout           sync2.AtomicDuration
 	TerseErrors            bool
@@ -195,6 +197,10 @@ type TabletServer struct {
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
+
+	// warnings exports warning stats.
+	// TODO(sougou): need to embed other vars in tabletenv also.
+	warnings *stats.CountersWithSingleLabel
 }
 
 // RegisterFunction is a callback type to be called when we
@@ -207,8 +213,8 @@ type RegisterFunction func(Controller)
 var RegisterFunctions []RegisterFunction
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
-	return NewTabletServer(tabletenv.Config, topoServer, alias)
+func NewServer(name string, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+	return NewTabletServer(name, tabletenv.Config, topoServer, alias)
 }
 
 // TxPoolController is how the tablet server interacts with the tx-pool.
@@ -251,16 +257,16 @@ type TxPoolController interface {
 var tsOnce sync.Once
 var srvTopoServer srvtopo.Server
 
-// NewTabletServerWithNilTopoServer is typically used in tests that
-// don't need a topoServer member.
-func NewTabletServerWithNilTopoServer(config tabletenv.TabletConfig) *TabletServer {
-	return NewTabletServer(config, nil, topodatapb.TabletAlias{})
+// NewCustomTabletServer creates a tablet server based on the input config.
+func NewCustomTabletServer(name string, config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+	return NewTabletServer(name, config, topoServer, alias)
 }
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	tsv := &TabletServer{
+		env:                    servenv.NewEmbedder(name, "Tablet"),
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
 		BeginTimeout:           sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
 		TerseErrors:            config.TerseErrors,
@@ -279,33 +285,38 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	tsv.hr = heartbeat.NewReader(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
-	tsv.watcher = NewReplicationWatcher(tsv.se, config)
+	tsv.watcher = NewReplicationWatcher(tsv.env, tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
-	// FIXME(alainjobart) could we move this to the Register method below?
-	// So that vtcombo doesn't even call it once, on the first tablet.
-	// And we can remove the tsOnce variable.
-	tsOnce.Do(func() {
-		srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo")
-		stats.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
-			tsv.mu.Lock()
-			state := tsv.state
-			tsv.mu.Unlock()
-			return state
-		})
-		stats.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
-
-		// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
-		// but exported with TabletStateName as a label for Prometheus, which doesn't support exporting strings as stat values.
-		stats.NewGaugesFuncWithMultiLabels("TabletServerState", "Tablet server state labeled by state name", []string{"name"}, func() map[string]int64 {
-			return map[string]int64{tsv.GetState(): 1}
-		})
-		stats.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
-		stats.NewGaugeDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
-		stats.NewGaugeDurationFunc("BeginTimeout", "Tablet server begin timeout", tsv.BeginTimeout.Get)
-	})
-	// TODO(sougou): move this up once the stats naming problem is fixed.
+	srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo")
 	tsv.vstreamer = vstreamer.NewEngine(srvTopoServer, tsv.se)
+	tsv.env.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
+		tsv.mu.Lock()
+		state := tsv.state
+		tsv.mu.Unlock()
+		return state
+	})
+	tsv.env.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
+
+	// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
+	// but exported with TabletStateName as a label for Prometheus, which doesn't support exporting strings as stat values.
+	tsv.env.NewGaugesFuncWithMultiLabels("TabletServerState", "Tablet server state labeled by state name", []string{"name"}, func() map[string]int64 {
+		return map[string]int64{tsv.GetState(): 1}
+	})
+	tsv.env.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
+	tsv.env.NewGaugeDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
+	tsv.env.NewGaugeDurationFunc("BeginTimeout", "Tablet server begin timeout", tsv.BeginTimeout.Get)
+	tsv.warnings = tsv.env.NewCountersWithSingleLabel("Warnings", "Warnings", "type", "ResultsExceeded")
+
+	tsv.registerDebugHealthHandler()
+	tsv.registerQueryzHandler()
+	tsv.registerStreamQueryzHandlers()
+	tsv.registerTwopczHandler()
 	return tsv
+}
+
+// Env returns the servenv.servenv.
+func (tsv *TabletServer) Env() *servenv.Embedder {
+	return tsv.env
 }
 
 // Register prepares TabletServer for serving by calling
@@ -314,10 +325,6 @@ func (tsv *TabletServer) Register() {
 	for _, f := range RegisterFunctions {
 		f(tsv)
 	}
-	tsv.registerDebugHealthHandler()
-	tsv.registerQueryzHandler()
-	tsv.registerStreamQueryzHandlers()
-	tsv.registerTwopczHandler()
 }
 
 // RegisterQueryRuleSource registers ruleSource for setting query rules.
@@ -2001,7 +2008,7 @@ func (tsv *TabletServer) endRequest(isBegin bool) {
 }
 
 func (tsv *TabletServer) registerDebugHealthHandler() {
-	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+	tsv.env.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
 			acl.SendError(w, err)
 			return
@@ -2016,22 +2023,22 @@ func (tsv *TabletServer) registerDebugHealthHandler() {
 }
 
 func (tsv *TabletServer) registerQueryzHandler() {
-	http.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
+	tsv.env.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
 		queryzHandler(tsv.qe, w, r)
 	})
 }
 
 func (tsv *TabletServer) registerStreamQueryzHandlers() {
-	http.HandleFunc("/streamqueryz", func(w http.ResponseWriter, r *http.Request) {
+	tsv.env.HandleFunc("/streamqueryz", func(w http.ResponseWriter, r *http.Request) {
 		streamQueryzHandler(tsv.qe.streamQList, w, r)
 	})
-	http.HandleFunc("/streamqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
+	tsv.env.HandleFunc("/streamqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
 		streamQueryzTerminateHandler(tsv.qe.streamQList, w, r)
 	})
 }
 
 func (tsv *TabletServer) registerTwopczHandler() {
-	http.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
+	tsv.env.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
 		txe := &TxExecutor{
 			ctx:      ctx,

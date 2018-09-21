@@ -171,14 +171,10 @@ type QueryEngine struct {
 	accessCheckerLogger *logutil.ThrottledLogger
 }
 
-var (
-	qeOnce sync.Once
-)
-
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tabletenv.TabletConfig) *QueryEngine {
+func NewQueryEngine(tsv connpool.TabletService, se *schema.Engine, config tabletenv.TabletConfig) *QueryEngine {
 	qe := &QueryEngine{
 		se:                 se,
 		tables:             make(map[string]*schema.Table),
@@ -192,7 +188,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		config.PoolNamePrefix+"ConnPool",
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
-		checker,
+		tsv,
 	)
 	qe.connTimeout.Set(time.Duration(config.QueryPoolTimeout * 1e9))
 
@@ -200,7 +196,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		config.PoolNamePrefix+"StreamConnPool",
 		config.StreamPoolSize,
 		time.Duration(config.IdleTimeout*1e9),
-		checker,
+		tsv,
 	)
 	qe.enableConsolidator = config.EnableConsolidator
 	qe.consolidator = sync2.NewConsolidator()
@@ -240,39 +236,32 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
-	qeOnce.Do(func() {
-		stats.NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Get)
-		stats.NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
-		stats.NewGaugeFunc("MaxDMLRows", "Query engine max DML rows", qe.maxDMLRows.Get)
-		stats.NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
-		stats.NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
-		stats.NewGaugeFunc("QueryPoolWaiters", "Query engine query pool waiters", qe.queryPoolWaiters.Get)
+	env := tsv.Env()
+	env.NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Get)
+	env.NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
+	env.NewGaugeFunc("MaxDMLRows", "Query engine max DML rows", qe.maxDMLRows.Get)
+	env.NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
+	env.NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
+	env.NewGaugeFunc("QueryPoolWaiters", "Query engine query pool waiters", qe.queryPoolWaiters.Get)
 
-		stats.NewGaugeFunc("QueryCacheLength", "Query engine query cache length", qe.plans.Length)
-		stats.NewGaugeFunc("QueryCacheSize", "Query engine query cache size", qe.plans.Size)
-		stats.NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.Capacity)
-		stats.NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
-		stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
-			return fmt.Sprintf("%v", qe.plans.Oldest())
-		}))
-		_ = stats.NewCountersFuncWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"}, qe.getQueryCount)
-		_ = stats.NewCountersFuncWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"}, qe.getQueryTime)
-		_ = stats.NewCountersFuncWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"}, qe.getQueryRowCount)
-		_ = stats.NewCountersFuncWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"}, qe.getQueryErrorCount)
+	env.NewGaugeFunc("QueryCacheLength", "Query engine query cache length", qe.plans.Length)
+	env.NewGaugeFunc("QueryCacheSize", "Query engine query cache size", qe.plans.Size)
+	env.NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.Capacity)
+	env.NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
+	env.Publish("QueryCacheOldest", stats.StringFunc(func() string {
+		return fmt.Sprintf("%v", qe.plans.Oldest())
+	}))
+	env.NewCountersFuncWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"}, qe.getQueryCount)
+	env.NewCountersFuncWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"}, qe.getQueryTime)
+	env.NewCountersFuncWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"}, qe.getQueryRowCount)
+	env.NewCountersFuncWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"}, qe.getQueryErrorCount)
 
-		http.Handle("/debug/hotrows", qe.txSerializer)
-
-		endpoints := []string{
-			"/debug/tablet_plans",
-			"/debug/query_stats",
-			"/debug/query_rules",
-			"/debug/consolidations",
-			"/debug/acl",
-		}
-		for _, ep := range endpoints {
-			http.Handle(ep, qe)
-		}
-	})
+	env.HandleFunc("/debug/hotrows", qe.txSerializer.ServeHTTP)
+	env.HandleFunc("/debug/tablet_plans", qe.handleHTTPQueryPlans)
+	env.HandleFunc("/debug/query_stats", qe.handleHTTPQueryStats)
+	env.HandleFunc("/debug/query_rules", qe.handleHTTPQueryRules)
+	env.HandleFunc("/debug/consolidations", qe.handleHTTPConsolidations)
+	env.HandleFunc("/debug/acl", qe.handleHTTPAclJSON)
 
 	return qe
 }
@@ -498,27 +487,27 @@ func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, du
 	key := tableName + "." + planName
 
 	qe.queryStatsMu.RLock()
-	stats, ok := qe.queryStats[key]
+	qstats, ok := qe.queryStats[key]
 	qe.queryStatsMu.RUnlock()
 
 	if !ok {
 		// Check again with the write lock held and
 		// create a new record only if none exists
 		qe.queryStatsMu.Lock()
-		if stats, ok = qe.queryStats[key]; !ok {
-			stats = &QueryStats{}
-			qe.queryStats[key] = stats
+		if qstats, ok = qe.queryStats[key]; !ok {
+			qstats = &QueryStats{}
+			qe.queryStats[key] = qstats
 		}
 		qe.queryStatsMu.Unlock()
 	}
 
-	stats.mu.Lock()
-	stats.queryCount += queryCount
-	stats.time += duration
-	stats.mysqlTime += mysqlTime
-	stats.rowCount += rowCount
-	stats.errorCount += errorCount
-	stats.mu.Unlock()
+	qstats.mu.Lock()
+	qstats.queryCount += queryCount
+	qstats.time += duration
+	qstats.mysqlTime += mysqlTime
+	qstats.rowCount += rowCount
+	qstats.errorCount += errorCount
+	qstats.mu.Unlock()
 }
 
 func (qe *QueryEngine) getQueryCount() map[string]int64 {
@@ -578,27 +567,6 @@ type perQueryStats struct {
 	MysqlTime  time.Duration
 	RowCount   int64
 	ErrorCount int64
-}
-
-func (qe *QueryEngine) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
-		acl.SendError(response, err)
-		return
-	}
-	switch request.URL.Path {
-	case "/debug/tablet_plans":
-		qe.handleHTTPQueryPlans(response, request)
-	case "/debug/query_stats":
-		qe.handleHTTPQueryStats(response, request)
-	case "/debug/query_rules":
-		qe.handleHTTPQueryRules(response, request)
-	case "/debug/acl":
-		qe.handleHTTPAclJSON(response, request)
-	case "/debug/consolidations":
-		qe.handleHTTPConsolidations(response, request)
-	default:
-		response.WriteHeader(http.StatusNotFound)
-	}
 }
 
 func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, request *http.Request) {

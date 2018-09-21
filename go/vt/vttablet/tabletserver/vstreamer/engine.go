@@ -83,6 +83,7 @@ func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
 		ts:        ts,
 		se:        se,
 	}
+	// TODO(sougou): migrate this to use embedder.
 	once.Do(func() {
 		vschemaErrors = stats.NewCounter("VSchemaErrors", "Count of VSchema errors")
 		vschemaUpdates = stats.NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors")

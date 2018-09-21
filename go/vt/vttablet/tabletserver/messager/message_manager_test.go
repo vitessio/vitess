@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -753,7 +754,8 @@ type fakeTabletServer struct {
 
 func newFakeTabletServer() *fakeTabletServer { return &fakeTabletServer{} }
 
-func (fts *fakeTabletServer) CheckMySQL() {}
+func (fts *fakeTabletServer) CheckMySQL()            {}
+func (fts *fakeTabletServer) Env() *servenv.Embedder { return servenv.NewEmbedder("test", "") }
 
 func (fts *fakeTabletServer) SetChannel(ch chan string) {
 	fts.mu.Lock()

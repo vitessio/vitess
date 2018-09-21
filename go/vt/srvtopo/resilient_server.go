@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -204,22 +205,27 @@ type srvKeyspaceEntry struct {
 	lastErrorTime time.Time
 }
 
+// TODO(sougou): remove this once we move to use embedder.
+var rsOnce sync.Once
+
 // NewResilientServer creates a new ResilientServer
 // based on the provided topo.Server.
 func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServer {
 	if *srvTopoCacheRefresh > *srvTopoCacheTTL {
 		log.Fatalf("srv_topo_cache_refresh must be less than or equal to srv_topo_cache_ttl")
 	}
-
-	return &ResilientServer{
+	server := &ResilientServer{
 		topoServer:   base,
 		cacheTTL:     *srvTopoCacheTTL,
 		cacheRefresh: *srvTopoCacheRefresh,
-		counts:       stats.NewCountersWithSingleLabel(counterPrefix+"Counts", "Resilient srvtopo server operations", "type"),
+		counts:       servenv.NewEmbedder(counterPrefix, "").NewCountersWithSingleLabel("Counts", "Resilient srvtopo server operations", "type"),
 
 		srvKeyspaceNamesCache: make(map[string]*srvKeyspaceNamesEntry),
 		srvKeyspaceCache:      make(map[string]*srvKeyspaceEntry),
 	}
+	rsOnce.Do(func() {
+	})
+	return server
 }
 
 // GetTopoServer returns the topo.Server that backs the resilient server.

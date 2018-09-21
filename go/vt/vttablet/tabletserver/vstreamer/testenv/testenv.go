@@ -27,11 +27,11 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttest"
@@ -56,11 +56,10 @@ type Env struct {
 	SchemaEngine *schema.Engine
 }
 
-type checker struct{}
+type fakeTabletService struct{}
 
-var _ = connpool.MySQLChecker(checker{})
-
-func (checker) CheckMySQL() {}
+func (f fakeTabletService) CheckMySQL()            {}
+func (f fakeTabletService) Env() *servenv.Embedder { return servenv.NewEmbedder("test", "") }
 
 // Init initializes an Env.
 func Init() (*Env, error) {
@@ -107,7 +106,7 @@ func Init() (*Env, error) {
 
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
-	te.SchemaEngine = schema.NewEngine(checker{}, tabletenv.DefaultQsConfig)
+	te.SchemaEngine = schema.NewEngine(fakeTabletService{}, tabletenv.DefaultQsConfig)
 	te.SchemaEngine.InitDBConfig(te.Dbcfgs)
 
 	// The first vschema should not be empty. Leads to Node not found error.

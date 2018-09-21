@@ -25,17 +25,19 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var errRejected = errors.New("rejected")
 
-type dummyChecker struct {
+type fakeTabletService struct {
 }
 
-func (dummyChecker) CheckMySQL() {}
+func (fakeTabletService) CheckMySQL()            {}
+func (fakeTabletService) Env() *servenv.Embedder { return servenv.NewEmbedder("test", "") }
 
-var DummyChecker = dummyChecker{}
+var FakeTabletService = fakeTabletService{}
 
 type testUtils struct{}
 

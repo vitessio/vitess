@@ -54,7 +54,7 @@ func initProxy(dbcfgs *dbconfigs.DBConfigs) (*tabletserver.TabletServer, error) 
 	log.Infof("initalizing vtqueryserver.Proxy for target %s", target.Keyspace)
 
 	// creates and registers the query service
-	qs := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.Config)
+	qs := tabletserver.NewCustomTabletServer("", tabletenv.Config, nil, topodatapb.TabletAlias{})
 	qs.SetAllowUnsafeDMLs(*allowUnsafeDMLs)
 	mysqlProxy = mysqlproxy.NewProxy(&target, qs, *normalizeQueries)
 

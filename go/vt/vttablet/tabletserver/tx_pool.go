@@ -60,7 +60,6 @@ type queries struct {
 }
 
 var (
-	txOnce  sync.Once
 	txStats = stats.NewTimings("Transactions", "Transaction stats", "operation")
 
 	txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]queries{
@@ -92,7 +91,7 @@ type TxPool struct {
 	lastID        sync2.AtomicInt64
 	timeout       sync2.AtomicDuration
 	ticks         *timer.Timer
-	checker       connpool.MySQLChecker
+	tsv           connpool.TabletService
 	limiter       txlimiter.TxLimiter
 	// Tracking culprits that cause tx pool full errors.
 	logMu     sync.Mutex
@@ -109,26 +108,24 @@ func NewTxPool(
 	timeout time.Duration,
 	idleTimeout time.Duration,
 	waiterCap int,
-	checker connpool.MySQLChecker,
+	tsv connpool.TabletService,
 	limiter txlimiter.TxLimiter) *TxPool {
 	axp := &TxPool{
-		conns:         connpool.New(prefix+"TransactionPool", capacity, idleTimeout, checker),
-		foundRowsPool: connpool.New(prefix+"FoundRowsPool", foundRowsCapacity, idleTimeout, checker),
+		conns:         connpool.New(prefix+"TransactionPool", capacity, idleTimeout, tsv),
+		foundRowsPool: connpool.New(prefix+"FoundRowsPool", foundRowsCapacity, idleTimeout, tsv),
 		activePool:    pools.NewNumbered(),
 		lastID:        sync2.NewAtomicInt64(time.Now().UnixNano()),
 		timeout:       sync2.NewAtomicDuration(timeout),
 		waiterCap:     sync2.NewAtomicInt64(int64(waiterCap)),
 		waiters:       sync2.NewAtomicInt64(0),
 		ticks:         timer.NewTimer(timeout / 10),
-		checker:       checker,
+		tsv:           tsv,
 		limiter:       limiter,
 	}
-	txOnce.Do(func() {
-		// Careful: conns also exports name+"xxx" vars,
-		// but we know it doesn't export Timeout.
-		stats.NewGaugeDurationFunc(prefix+"TransactionPoolTimeout", "Transaction pool timeout", axp.timeout.Get)
-		stats.NewGaugeFunc(prefix+"TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
-	})
+	// Careful: conns also exports name+"xxx" vars,
+	// but we know it doesn't export Timeout.
+	tsv.Env().NewGaugeDurationFunc(prefix+"TransactionPoolTimeout", "Transaction pool timeout", axp.timeout.Get)
+	tsv.Env().NewGaugeFunc(prefix+"TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
 	return axp
 }
 
@@ -417,7 +414,7 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 				// If the context is done, the query was killed.
 				// So, don't trigger a mysql check.
 			default:
-				txc.pool.checker.CheckMySQL()
+				txc.pool.tsv.CheckMySQL()
 			}
 		}
 		return nil, err

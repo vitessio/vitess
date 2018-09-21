@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -416,19 +417,20 @@ func TestStatsURL(t *testing.T) {
 	se.ServeHTTP(response, request)
 }
 
-type dummyChecker struct {
+type fakeTabletService struct {
 }
 
-func (dummyChecker) CheckMySQL() {}
+func (fakeTabletService) CheckMySQL()            {}
+func (fakeTabletService) Env() *servenv.Embedder { return servenv.NewEmbedder("test", "") }
 
-var DummyChecker = dummyChecker{}
+var FakeTabletService = fakeTabletService{}
 
 func newEngine(queryPlanCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool, db *fakesqldb.DB) *Engine {
 	config := tabletenv.DefaultQsConfig
 	config.QueryPlanCacheSize = queryPlanCacheSize
 	config.SchemaReloadTime = float64(reloadTime) / 1e9
 	config.IdleTimeout = float64(idleTimeout) / 1e9
-	se := NewEngine(DummyChecker, config)
+	se := NewEngine(FakeTabletService, config)
 	se.InitDBConfig(newDBConfigs(db))
 	return se
 }

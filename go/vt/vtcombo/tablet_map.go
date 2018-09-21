@@ -82,7 +82,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 	log.Infof("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard)
 	flag.Set("debug-url-prefix", fmt.Sprintf("/debug-%d", uid))
 
-	controller := tabletserver.NewServer(ts, *alias)
+	controller := tabletserver.NewServer(topoproto.TabletAliasString(alias), ts, *alias)
 	initTabletType := tabletType
 	if tabletType == topodatapb.TabletType_MASTER {
 		initTabletType = topodatapb.TabletType_REPLICA

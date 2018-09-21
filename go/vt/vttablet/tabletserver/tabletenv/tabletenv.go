@@ -68,8 +68,6 @@ var (
 	)
 	// InternalErrors shows number of errors from internal components.
 	InternalErrors = stats.NewCountersWithSingleLabel("InternalErrors", "Internal component errors", "type", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")
-	// Warnings shows number of warnings
-	Warnings = stats.NewCountersWithSingleLabel("Warnings", "Warnings", "type", "ResultsExceeded")
 	// Unresolved tracks unresolved items. For now it's just Prepares.
 	Unresolved = stats.NewGaugesWithSingleLabel("Unresolved", "Unresolved items", "item_type", "Prepares")
 	// UserTableQueryCount shows number of queries received for each CallerID/table combination.

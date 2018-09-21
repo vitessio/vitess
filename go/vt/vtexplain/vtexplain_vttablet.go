@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
@@ -81,7 +82,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	}
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServerWithNilTopoServer(config)
+	tsv := tabletserver.NewCustomTabletServer(topoproto.TabletAliasString(t.Alias), config, nil, topodatapb.TabletAlias{})
 
 	tablet := explainTablet{db: db, tsv: tsv}
 	db.Handler = &tablet

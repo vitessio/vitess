@@ -52,7 +52,7 @@ func TestStrictMode(t *testing.T) {
 	// Test default behavior.
 	config := tabletenv.DefaultQsConfig
 	// config.EnforceStrictTransTable is true by default.
-	qe := NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
+	qe := NewQueryEngine(FakeTabletService, schema.NewEngine(FakeTabletService, config), config)
 	qe.InitDBConfig(dbcfgs)
 	qe.se.InitDBConfig(dbcfgs)
 	qe.se.Open()
@@ -69,7 +69,7 @@ func TestStrictMode(t *testing.T) {
 			Rows:   [][]sqltypes.Value{{sqltypes.NewVarBinary("")}},
 		},
 	)
-	qe = NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
+	qe = NewQueryEngine(FakeTabletService, schema.NewEngine(FakeTabletService, config), config)
 	qe.InitDBConfig(dbcfgs)
 	err := qe.Open()
 	wantErr := "require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got ''"
@@ -80,7 +80,7 @@ func TestStrictMode(t *testing.T) {
 
 	// Test that we succeed if the enforcement flag is off.
 	config.EnforceStrictTransTables = false
-	qe = NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
+	qe = NewQueryEngine(FakeTabletService, schema.NewEngine(FakeTabletService, config), config)
 	qe.InitDBConfig(dbcfgs)
 	if err := qe.Open(); err != nil {
 		t.Fatal(err)
@@ -277,27 +277,23 @@ func TestStatsURL(t *testing.T) {
 
 	request, _ := http.NewRequest("GET", "/debug/tablet_plans", nil)
 	response := httptest.NewRecorder()
-	qe.ServeHTTP(response, request)
+	qe.handleHTTPQueryPlans(response, request)
 
 	request, _ = http.NewRequest("GET", "/debug/query_stats", nil)
 	response = httptest.NewRecorder()
-	qe.ServeHTTP(response, request)
+	qe.handleHTTPQueryStats(response, request)
 
 	request, _ = http.NewRequest("GET", "/debug/query_rules", nil)
 	response = httptest.NewRecorder()
-	qe.ServeHTTP(response, request)
-
-	request, _ = http.NewRequest("GET", "/debug/unknown", nil)
-	response = httptest.NewRecorder()
-	qe.ServeHTTP(response, request)
+	qe.handleHTTPQueryRules(response, request)
 }
 
 func newTestQueryEngine(queryPlanCacheSize int, idleTimeout time.Duration, strict bool, dbcfgs *dbconfigs.DBConfigs) *QueryEngine {
 	config := tabletenv.DefaultQsConfig
 	config.QueryPlanCacheSize = queryPlanCacheSize
 	config.IdleTimeout = float64(idleTimeout) / 1e9
-	se := schema.NewEngine(DummyChecker, config)
-	qe := NewQueryEngine(DummyChecker, se, config)
+	se := schema.NewEngine(FakeTabletService, config)
+	qe := NewQueryEngine(FakeTabletService, se, config)
 	se.InitDBConfig(dbcfgs)
 	qe.InitDBConfig(dbcfgs)
 	return qe
@@ -345,7 +341,7 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	unRedactedResponse := httptest.NewRecorder()
 	qe := runConsolidatedQuery(t, sql)
 
-	qe.ServeHTTP(unRedactedResponse, request)
+	qe.handleHTTPConsolidations(unRedactedResponse, request)
 	if !strings.Contains(unRedactedResponse.Body.String(), sql) {
 		t.Fatalf("Response is missing the consolidated query: %v %v", sql, unRedactedResponse.Body.String())
 	}
@@ -353,7 +349,7 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	// Now with the redaction on
 	*streamlog.RedactDebugUIQueries = true
 	redactedResponse := httptest.NewRecorder()
-	qe.ServeHTTP(redactedResponse, request)
+	qe.handleHTTPConsolidations(redactedResponse, request)
 
 	if strings.Contains(redactedResponse.Body.String(), "secret") {
 		t.Fatalf("Response contains unredacted consolidated query: %v %v", sql, redactedResponse.Body.String())

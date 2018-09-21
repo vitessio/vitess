@@ -24,9 +24,9 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -43,10 +43,11 @@ var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: une
 // through non-test code.
 var usedNames = make(map[string]bool)
 
-// MySQLChecker defines the CheckMySQL interface that lower
-// level objects can use to call back into TabletServer.
-type MySQLChecker interface {
+// TabletService defines a subset API of TabletServer so that lower
+// level objects can call back into it.
+type TabletService interface {
 	CheckMySQL()
+	Env() *servenv.Embedder
 }
 
 // Pool implements a custom connection pool for tabletserver.
@@ -61,7 +62,7 @@ type Pool struct {
 	capacity       int
 	idleTimeout    time.Duration
 	dbaPool        *dbconnpool.ConnectionPool
-	checker        MySQLChecker
+	tsv            TabletService
 	appDebugParams *mysql.ConnParams
 }
 
@@ -71,26 +72,27 @@ func New(
 	name string,
 	capacity int,
 	idleTimeout time.Duration,
-	checker MySQLChecker) *Pool {
+	tsv TabletService) *Pool {
 	cp := &Pool{
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
 		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout),
-		checker:     checker,
+		tsv:         tsv,
 	}
-	if name == "" || usedNames[name] {
+	if name == "" {
 		return cp
 	}
 	usedNames[name] = true
-	stats.NewGaugeFunc(name+"Capacity", "Tablet server conn pool capacity", cp.Capacity)
-	stats.NewGaugeFunc(name+"Available", "Tablet server conn pool available", cp.Available)
-	stats.NewGaugeFunc(name+"Active", "Tablet server conn pool active", cp.Active)
-	stats.NewGaugeFunc(name+"InUse", "Tablet server conn pool in use", cp.InUse)
-	stats.NewGaugeFunc(name+"MaxCap", "Tablet server conn pool max cap", cp.MaxCap)
-	stats.NewCounterFunc(name+"WaitCount", "Tablet server conn pool wait count", cp.WaitCount)
-	stats.NewCounterDurationFunc(name+"WaitTime", "Tablet server wait time", cp.WaitTime)
-	stats.NewGaugeDurationFunc(name+"IdleTimeout", "Tablet server idle timeout", cp.IdleTimeout)
-	stats.NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
+	env := tsv.Env()
+	env.NewGaugeFunc(name+"Capacity", "Tablet server conn pool capacity", cp.Capacity)
+	env.NewGaugeFunc(name+"Available", "Tablet server conn pool available", cp.Available)
+	env.NewGaugeFunc(name+"Active", "Tablet server conn pool active", cp.Active)
+	env.NewGaugeFunc(name+"InUse", "Tablet server conn pool in use", cp.InUse)
+	env.NewGaugeFunc(name+"MaxCap", "Tablet server conn pool max cap", cp.MaxCap)
+	env.NewCounterFunc(name+"WaitCount", "Tablet server conn pool wait count", cp.WaitCount)
+	env.NewCounterDurationFunc(name+"WaitTime", "Tablet server wait time", cp.WaitTime)
+	env.NewGaugeDurationFunc(name+"IdleTimeout", "Tablet server idle timeout", cp.IdleTimeout)
+	env.NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
 	return cp
 }
 

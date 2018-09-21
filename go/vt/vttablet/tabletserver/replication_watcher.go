@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/eventtoken"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -53,31 +54,27 @@ type ReplicationWatcher struct {
 	eventToken *querypb.EventToken
 }
 
-var replOnce sync.Once
-
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(se *schema.Engine, config tabletenv.TabletConfig) *ReplicationWatcher {
+func NewReplicationWatcher(env *servenv.Embedder, se *schema.Engine, config tabletenv.TabletConfig) *ReplicationWatcher {
 	rpw := &ReplicationWatcher{
 		watchReplication: config.WatchReplication,
 		se:               se,
 	}
-	replOnce.Do(func() {
-		stats.Publish("EventTokenPosition", stats.StringFunc(func() string {
+	env.Publish("EventTokenPosition", stats.StringFunc(func() string {
+		if e := rpw.EventToken(); e != nil {
+			return e.Position
+		}
+		return ""
+	}))
+	env.NewGaugeFunc(
+		"EventTokenTimestamp",
+		"Replication watcher event token timestamp",
+		func() int64 {
 			if e := rpw.EventToken(); e != nil {
-				return e.Position
+				return e.Timestamp
 			}
-			return ""
-		}))
-		stats.NewGaugeFunc(
-			"EventTokenTimestamp",
-			"Replication watcher event token timestamp",
-			func() int64 {
-				if e := rpw.EventToken(); e != nil {
-					return e.Timestamp
-				}
-				return 0
-			})
-	})
+			return 0
+		})
 	return rpw
 }
 

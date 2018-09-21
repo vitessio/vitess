@@ -108,7 +108,7 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	dbc := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
 
-	tr := NewReader(&fakeMysqlChecker{}, config)
+	tr := NewReader(&fakeTabletService{}, config)
 	tr.dbName = sqlescape.EscapeID(dbc.SidecarDBName.Get())
 	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc
