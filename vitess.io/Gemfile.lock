@@ -19,7 +19,7 @@ GEM
     colorator (1.1.0)
     concurrent-ruby (1.0.5)
     execjs (2.7.0)
-    ffi (1.9.18)
+    ffi (1.9.25)
     forwardable-extended (2.6.0)
     gemoji (2.1.0)
     html-pipeline (1.11.0)
