@@ -38,7 +38,7 @@ import (
 var (
 	// vtexplain uses a logical clock to show order of execution in queries.
 	// Some vtexplain runs can change order depending on the duration of the batch time
-	batchTimeWaitDuration = flag.Duration("batch-time-wait-duration", 10*time.Millisecond, "Duration of a batch time logical clock.")
+	batchIntervalDuration = flag.Duration("batch-interval-duration", 10*time.Millisecond, "Duration of a batch time logical clock.")
 )
 
 // ExecutorMode controls the mode of operation for the vtexplain simulator
@@ -245,7 +245,7 @@ func Run(sql string) ([]*Explain, error) {
 
 		if sql != "" {
 			// Reset the global time simulator for each query
-			batchTime = sync2.NewBatcher(*batchTimeWaitDuration)
+			batchTime = sync2.NewBatcher(*batchIntervalDuration)
 			log.V(100).Infof("explain %s", sql)
 			e, err := explain(sql)
 			if err != nil {
