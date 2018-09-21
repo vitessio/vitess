@@ -58,7 +58,7 @@ const subIndexHTML = `
 
 func httpError(w http.ResponseWriter, format string, args ...interface{}) {
 	log.Errorf(format, args)
-	http.Error(w, fmt.Sprintf(format, args), http.StatusInternalServerError)
+	http.Error(w, fmt.Sprintf(format, args...), http.StatusInternalServerError)
 }
 
 func mustParseTemplate(name, contents string) *template.Template {
@@ -72,7 +72,7 @@ func mustParseTemplate(name, contents string) *template.Template {
 
 func executeTemplate(w http.ResponseWriter, t *template.Template, data interface{}) {
 	if err := t.Execute(w, data); err != nil {
-		httpError(w, "error executing template", err)
+		httpError(w, "error executing template: %v", err)
 	}
 }
 
