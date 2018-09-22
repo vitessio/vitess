@@ -17,72 +17,14 @@ limitations under the License.
 package vtqueryserver
 
 import (
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
-)
-
-var (
-	// proxyTemplate contains the style sheet and the tablet itself.
-	proxyTemplate = `
-<style>
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  td, th {
-    border: 1px solid #999;
-    padding: 0.5rem;
-  }
-  .time {
-    width: 15%;
-  }
-  .healthy {
-    background-color: LightGreen;
-  }
-  .unhealthy {
-    background-color: Salmon;
-  }
-  .unhappy {
-    background-color: Khaki;
-  }
-</style>
-<table width="100%" border="" frame="">
-  <tr border="">
-    <td width="25%" border="">
-      Target Keyspace: {{.Target.Keyspace}}<br>
-    </td>
-    <td width="25%" border="">
-      <a href="/schemaz">Schema</a></br>
-      <a href="/debug/tablet_plans">Schema&nbsp;Query&nbsp;Plans</a></br>
-      <a href="/debug/query_stats">Schema&nbsp;Query&nbsp;Stats</a></br>
-      <a href="/debug/table_stats">Schema&nbsp;Table&nbsp;Stats</a></br>
-    </td>
-    <td width="25%" border="">
-      <a href="/queryz">Query&nbsp;Stats</a></br>
-      <a href="/streamqueryz">Streaming&nbsp;Query&nbsp;Stats</a></br>
-      <a href="/debug/consolidations">Consolidations</a></br>
-      <a href="/querylogz">Current&nbsp;Query&nbsp;Log</a></br>
-      <a href="/txlogz">Current&nbsp;Transaction&nbsp;Log</a></br>
-      <a href="/twopcz">In-flight&nbsp;2PC&nbsp;Transactions</a></br>
-    </td>
-    <td width="25%" border="">
-      <a href="/debug/health">Query Service Health Check</a></br>
-      <a href="/streamqueryz">Current Stream Queries</a></br>
-    </td>
-  </tr>
-</table>
-`
 )
 
 // For use by plugins which wish to avoid racing when registering status page parts.
 var onStatusRegistered func()
 
-func addStatusParts(qsc tabletserver.Controller) {
-	servenv.AddStatusPart("Target", proxyTemplate, func() interface{} {
-		return map[string]interface{}{
-			"Target": target,
-		}
-	})
+func addStatusParts(qsc *tabletserver.TabletServer) {
+	qsc.AddStatusHeader()
 	qsc.AddStatusPart()
 	if onStatusRegistered != nil {
 		onStatusRegistered()

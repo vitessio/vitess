@@ -29,6 +29,15 @@ import (
 	"vitess.io/vitess/go/stats"
 )
 
+func TestURLPrefix(t *testing.T) {
+	if got, want := NewEmbedder("", "").URLPrefix(), ""; got != want {
+		t.Errorf("URLPrefix(''): %v, want %v", got, want)
+	}
+	if got, want := NewEmbedder("a", "").URLPrefix(), "/a"; got != want {
+		t.Errorf("URLPrefix('a'): %v, want %v", got, want)
+	}
+}
+
 func TestHandleFunc(t *testing.T) {
 	// Listen on a random port
 	listener, err := net.Listen("tcp", ":0")

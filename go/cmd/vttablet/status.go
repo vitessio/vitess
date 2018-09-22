@@ -72,22 +72,25 @@ var (
     </td>
     <td width="25%" border="">
       <a href="/schemaz">Schema</a></br>
-      <a href="/debug/tablet_plans">Schema&nbsp;Query&nbsp;Plans</a></br>
-      <a href="/debug/query_stats">Schema&nbsp;Query&nbsp;Stats</a></br>
-      <a href="/debug/table_stats">Schema&nbsp;Table&nbsp;Stats</a></br>
-    </td>
-    <td width="25%" border="">
       <a href="/queryz">Query&nbsp;Stats</a></br>
+      <a href="/debug/query_stats">JSON&nbsp;Query&nbsp;Stats</a></br>
       <a href="/streamqueryz">Streaming&nbsp;Query&nbsp;Stats</a></br>
       <a href="/debug/consolidations">Consolidations</a></br>
-      <a href="/querylogz">Current&nbsp;Query&nbsp;Log</a></br>
-      <a href="/txlogz">Current&nbsp;Transaction&nbsp;Log</a></br>
-      <a href="/twopcz">In-flight&nbsp;2PC&nbsp;Transactions</a></br>
     </td>
     <td width="25%" border="">
-      <a href="/healthz">Health Check</a></br>
-      <a href="/debug/health">Query Service Health Check</a></br>
-      <a href="/streamqueryz">Current Stream Queries</a></br>
+      <a href="/debug/tablet_plans">Query&nbsp;Plans</a></br>
+      <a href="/querylogz">Current&nbsp;Query&nbsp;Log</a></br>
+      <a href="/debug/querylog">Query&nbsp;Log&nbsp;Stream</a></br>
+      <a href="/txlogz">Current&nbsp;Transaction&nbsp;Log</a></br>
+      <a href="/debug/txlog">Transaction&nbsp;Log&nbsp;Stream</a></br>
+    </td>
+    <td width="25%" border="">
+      <a href="/healthz">Health&nbsp;Check</a></br>
+      <a href="/debug/health">Query&nbsp;Service&nbsp;Health&nbsp;Check</a></br>
+      <a href="/streamqueryz">Current&nbsp;Stream&nbsp;Queries</a></br>
+      <a href="/debug/hotrows">Hot&nbsp;Rows</a></br>
+      <a href="/debug/query_rules">Blacklisted&nbsp;Queries</a></br>
+      <a href="/twopcz">In-flight&nbsp;2PC&nbsp;Transactions</a></br>
     </td>
   </tr>
 </table>

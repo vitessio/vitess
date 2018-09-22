@@ -164,6 +164,16 @@ func (ebd *Embedder) resetLocked() {
 	}
 }
 
+// URLPrefix returns the URL prefix for all the embedder.
+func (ebd *Embedder) URLPrefix() string {
+	// There are two other places where this logic is duplicated:
+	// status.go and go/vt/vtgate/discovery/healthcheck.go.
+	if ebd.name == "" {
+		return ebd.name
+	}
+	return "/" + ebd.name
+}
+
 // HandleFunc sets or overwrites the handler for url. If Instance has a name,
 // url remapped from /path to /name/path. If name is empty, the request
 // is passed through to http.HandleFunc.
@@ -184,11 +194,24 @@ func (ebd *Embedder) HandleFunc(url string, f func(w http.ResponseWriter, r *htt
 	hf = &handleFunc{f: f}
 	ebd.handleFuncs[url] = hf
 
-	http.HandleFunc("/"+ebd.name+url, func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(ebd.URLPrefix()+url, func(w http.ResponseWriter, r *http.Request) {
 		if f := hf.Get(); f != nil {
 			f(w, r)
 		}
 	})
+}
+
+// AddStatusPart adds a status part to the status page. If instance has a name,
+// the part is added to a url named /name/debug/status. Otherwise, it's /debug/status.
+func (ebd *Embedder) AddStatusPart(banner, frag string, f func() interface{}) {
+	if ebd.sp == nil {
+		AddStatusPart(banner, frag, f)
+		return
+	}
+
+	embedmu.Lock()
+	defer embedmu.Unlock()
+	ebd.sp.addStatusPart(banner, frag, f)
 }
 
 // NewCountersFuncWithMultiLabels creates a name-spaced equivalent for stats.NewCountersFuncWithMultiLabels.

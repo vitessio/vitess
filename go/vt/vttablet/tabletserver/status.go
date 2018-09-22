@@ -19,11 +19,65 @@ package tabletserver
 import (
 	"time"
 
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // This file contains the status web page export for tabletserver
+
+var headerTemplate = `
+<style>
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  td, th {
+    border: 1px solid #999;
+    padding: 0.5rem;
+  }
+  .time {
+    width: 15%;
+  }
+  .healthy {
+    background-color: LightGreen;
+  }
+  .unhealthy {
+    background-color: Salmon;
+  }
+  .unhappy {
+    background-color: Khaki;
+  }
+</style>
+<table width="100%" border="" frame="">
+  <tr border="">
+    <td width="25%" border="">
+      Keyspace: {{.Target.Keyspace}}<br>
+      Shard: {{.Target.Shard}}<br>
+      TabletType: {{.Target.TabletType}}<br>
+    </td>
+    <td width="25%" border="">
+      <a href="{{.Prefix}}/schemaz">Schema</a></br>
+      <a href="{{.Prefix}}/queryz">Query&nbsp;Stats</a></br>
+      <a href="{{.Prefix}}/debug/query_stats">JSON&nbsp;Query&nbsp;Stats</a></br>
+      <a href="{{.Prefix}}/streamqueryz">Streaming&nbsp;Query&nbsp;Stats</a></br>
+      <a href="{{.Prefix}}/debug/consolidations">Consolidations</a></br>
+    </td>
+    <td width="25%" border="">
+      <a href="{{.Prefix}}/debug/tablet_plans">Query&nbsp;Plans</a></br>
+      <a href="{{.Prefix}}/querylogz">Current&nbsp;Query&nbsp;Log</a></br>
+      <a href="{{.Prefix}}/debug/querylog">Query&nbsp;Log&nbsp;Stream</a></br>
+      <a href="{{.Prefix}}/txlogz">Current&nbsp;Transaction&nbsp;Log</a></br>
+      <a href="{{.Prefix}}/debug/txlog">Transaction&nbsp;Log&nbsp;Stream</a></br>
+    </td>
+    <td width="25%" border="">
+      <a href="{{.Prefix}}/debug/health">Query&nbsp;Service&nbsp;Health&nbsp;Check</a></br>
+      <a href="{{.Prefix}}/streamqueryz">Current&nbsp;Stream&nbsp;Queries</a></br>
+      <a href="{{.Prefix}}/debug/hotrows">Hot&nbsp;Rows</a></br>
+      <a href="{{.Prefix}}/debug/query_rules">Blacklisted&nbsp;Queries</a></br>
+      <a href="{{.Prefix}}/twopcz">In-flight&nbsp;2PC&nbsp;Transactions</a></br>
+    </td>
+  </tr>
+</table>
+`
 
 var queryserviceStatusTemplate = `
 <h2>State: {{.State}}</h2>
@@ -126,9 +180,21 @@ type queryserviceStatus struct {
 	CurrentQPS float64
 }
 
+// AddStatusHeader registers a standlone header for the status page.
+func (tsv *TabletServer) AddStatusHeader() {
+	tsv.env.AddStatusPart("Tablet Server", headerTemplate, func() interface{} {
+		tsv.mu.Lock()
+		defer tsv.mu.Unlock()
+		return map[string]interface{}{
+			"Prefix": tsv.env.URLPrefix(),
+			"Target": tsv.target,
+		}
+	})
+}
+
 // AddStatusPart registers the status part for the status page.
 func (tsv *TabletServer) AddStatusPart() {
-	servenv.AddStatusPart("Queryservice", queryserviceStatusTemplate, func() interface{} {
+	tsv.env.AddStatusPart("Queryservice", queryserviceStatusTemplate, func() interface{} {
 		status := queryserviceStatus{
 			State:   tsv.GetState(),
 			History: tsv.history.Records(),

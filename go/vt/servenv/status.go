@@ -131,9 +131,9 @@ func newStatusPage(name string) *statusPage {
 	}
 	sp.tmpl = template.Must(sp.reparse(nil))
 	if name == "" {
-		http.HandleFunc("/debug/status", sp.statusHandler)
+		http.HandleFunc(StatusURLPath(), sp.statusHandler)
 	} else {
-		http.HandleFunc("/"+name+"/debug/status", sp.statusHandler)
+		http.HandleFunc("/"+name+StatusURLPath(), sp.statusHandler)
 	}
 	return sp
 }

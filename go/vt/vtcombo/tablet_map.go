@@ -93,6 +93,8 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 			return fmt.Errorf("TabletExternallyReparented failed on master %v: %v", topoproto.TabletAliasString(alias), err)
 		}
 	}
+	controller.AddStatusHeader()
+	controller.AddStatusPart()
 	tabletMap[uid] = &tablet{
 		keyspace:   keyspace,
 		shard:      shard,
