@@ -169,6 +169,16 @@ func Init(vSchemaStr, sqlSchema string, opts *Options) error {
 	return nil
 }
 
+// Stop and cleans up fake execution environment
+func Stop() {
+	// Cleanup all created fake dbs.
+	if explainTopo != nil {
+		for _, conn := range explainTopo.TabletConns {
+			conn.db.Close()
+		}
+	}
+}
+
 func parseSchema(sqlSchema string, opts *Options) ([]*sqlparser.DDL, error) {
 	parsedDDLs := make([]*sqlparser.DDL, 0, 16)
 	for {
