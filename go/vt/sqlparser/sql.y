@@ -1493,7 +1493,7 @@ show_statement:
 | SHOW full_opt columns_or_fields FROM table_name from_database_opt like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$6, Filter:$7}
-	$$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
+    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
   }
 | SHOW full_opt tables_or_processlist from_database_opt like_or_where_opt
   {
@@ -1581,11 +1581,11 @@ full_opt:
 columns_or_fields:
   COLUMNS
   {
-	  $$ = string($1)
+      $$ = string($1)
   }
 | FIELDS
   {
-	  $$ = string($1)
+      $$ = string($1)
   } 
 
 from_database_opt:
