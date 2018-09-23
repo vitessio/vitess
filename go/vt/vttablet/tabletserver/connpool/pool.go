@@ -36,13 +36,6 @@ import (
 // ErrConnPoolClosed is returned when the connection pool is closed.
 var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: unexpected: conn pool is closed")
 
-// usedNames is for preventing expvar from panicking. Tests
-// create pool objects multiple time. If a name was previously
-// used, expvar initialization is skipped.
-// TODO(sougou): Find a way to still crash if this happened
-// through non-test code.
-var usedNames = make(map[string]bool)
-
 // TabletService defines a subset API of TabletServer so that lower
 // level objects can call back into it.
 type TabletService interface {
@@ -79,10 +72,6 @@ func New(
 		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout),
 		tsv:         tsv,
 	}
-	if name == "" {
-		return cp
-	}
-	usedNames[name] = true
 	env := tsv.Env()
 	env.NewGaugeFunc(name+"Capacity", "Tablet server conn pool capacity", cp.Capacity)
 	env.NewGaugeFunc(name+"Available", "Tablet server conn pool available", cp.Available)

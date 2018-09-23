@@ -31,17 +31,12 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
 	// ErrConnPoolClosed is returned if the connection pool is closed.
 	ErrConnPoolClosed = errors.New("connection pool is closed")
-	// usedNames is for preventing expvar from panicking. Tests
-	// create pool objects multiple time. If a name was previously
-	// used, expvar initialization is skipped.
-	// TODO(sougou): Find a way to still crash if this happened
-	// through non-test code.
-	usedNames = make(map[string]bool)
 )
 
 // ConnectionPool re-exposes ResourcePool as a pool of
@@ -61,19 +56,19 @@ type ConnectionPool struct {
 // to publish stats only.
 func NewConnectionPool(name string, capacity int, idleTimeout time.Duration) *ConnectionPool {
 	cp := &ConnectionPool{capacity: capacity, idleTimeout: idleTimeout}
-	if name == "" || usedNames[name] {
+	if name == "" {
 		return cp
 	}
-	usedNames[name] = true
-	stats.NewGaugeFunc(name+"Capacity", "Connection pool capacity", cp.Capacity)
-	stats.NewGaugeFunc(name+"Available", "Connection pool available", cp.Available)
-	stats.NewGaugeFunc(name+"Active", "Connection pool active", cp.Active)
-	stats.NewGaugeFunc(name+"InUse", "Connection pool in-use", cp.InUse)
-	stats.NewGaugeFunc(name+"MaxCap", "Connection pool max cap", cp.MaxCap)
-	stats.NewCounterFunc(name+"WaitCount", "Connection pool wait count", cp.WaitCount)
-	stats.NewCounterDurationFunc(name+"WaitTime", "Connection pool wait time", cp.WaitTime)
-	stats.NewGaugeDurationFunc(name+"IdleTimeout", "Connection pool idle timeout", cp.IdleTimeout)
-	stats.NewGaugeFunc(name+"IdleClosed", "Connection pool idle closed", cp.IdleClosed)
+	env := servenv.NewEmbedder(name, name)
+	env.NewGaugeFunc("Capacity", "Connection pool capacity", cp.Capacity)
+	env.NewGaugeFunc("Available", "Connection pool available", cp.Available)
+	env.NewGaugeFunc("Active", "Connection pool active", cp.Active)
+	env.NewGaugeFunc("InUse", "Connection pool in-use", cp.InUse)
+	env.NewGaugeFunc("MaxCap", "Connection pool max cap", cp.MaxCap)
+	env.NewCounterFunc("WaitCount", "Connection pool wait count", cp.WaitCount)
+	env.NewCounterDurationFunc("WaitTime", "Connection pool wait time", cp.WaitTime)
+	env.NewGaugeDurationFunc("IdleTimeout", "Connection pool idle timeout", cp.IdleTimeout)
+	env.NewGaugeFunc("IdleClosed", "Connection pool idle closed", cp.IdleClosed)
 	return cp
 }
 
