@@ -1,4 +1,4 @@
-cd $VITESS_WORKSPACE
+cd $VITESS_WORKSPACE || exit
 seed_file=$HOME/.vitess_bootstrap_done
 
 if [ ! -f $seed_file ];
