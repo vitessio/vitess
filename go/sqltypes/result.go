@@ -55,6 +55,9 @@ func (result *Result) Repair(fields []*querypb.Field) {
 
 // Copy creates a deep copy of Result.
 func (result *Result) Copy() *Result {
+	if result == nil {
+		return nil
+	}
 	out := &Result{
 		InsertID:     result.InsertID,
 		RowsAffected: result.RowsAffected,

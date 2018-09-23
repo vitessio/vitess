@@ -74,6 +74,11 @@ func TestCopy(t *testing.T) {
 	if !reflect.DeepEqual(out, in) {
 		t.Errorf("Copy:\n%v, want\n%v", out, in)
 	}
+
+	in = nil
+	if got := in.Copy(); got != nil {
+		t.Errorf("Copy(nil): %v, want nil", got)
+	}
 }
 
 func TestTruncate(t *testing.T) {

@@ -300,7 +300,7 @@ func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Targ
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 	}
-	return reply, nil
+	return reply.Copy(), nil
 }
 
 // ExecuteBatch is part of queryservice.QueryService
@@ -317,14 +317,20 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 	}
-	return results, nil
+	copied := make([]sqltypes.Result, len(results))
+	for i, result := range results {
+		copied[i] = *result.Copy()
+	}
+	return copied, nil
 }
 
 // StreamExecute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	err := itc.tablet.qsc.QueryService().StreamExecute(ctx, target, query, bindVars, transactionID, options, callback)
+	err := itc.tablet.qsc.QueryService().StreamExecute(ctx, target, query, bindVars, transactionID, options, func(qr *sqltypes.Result) error {
+		return callback(qr.Copy())
+	})
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
@@ -419,7 +425,9 @@ func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *qu
 
 // MessageStream is part of queryservice.QueryService
 func (itc *internalTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {
-	err := itc.tablet.qsc.QueryService().MessageStream(ctx, target, name, callback)
+	err := itc.tablet.qsc.QueryService().MessageStream(ctx, target, name, func(qr *sqltypes.Result) error {
+		return callback(qr.Copy())
+	})
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 

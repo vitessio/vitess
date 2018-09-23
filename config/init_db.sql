@@ -38,8 +38,9 @@ CREATE TABLE IF NOT EXISTS _vt.shard_metadata (
 
 # Admin user with all privileges.
 CREATE USER 'vt_dba'@'localhost';
-GRANT ALL ON *.* TO 'vt_dba'@'localhost';
-GRANT GRANT OPTION ON *.* TO 'vt_dba'@'localhost';
+# Including 127.0.0.1 allows local tcp connections.
+GRANT ALL ON *.* TO 'vt_dba'@'localhost', 'vt_dba'@'127.0.0.1';
+GRANT GRANT OPTION ON *.* TO 'vt_dba'@'localhost', 'vt_dba'@'127.0.0.1';
 
 # User for app traffic, with global read-write access.
 CREATE USER 'vt_app'@'localhost';
@@ -47,11 +48,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
   SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
-  ON *.* TO 'vt_app'@'localhost';
+  ON *.* TO 'vt_app'@'localhost', 'vt_app'@'127.0.0.1';
 
 # User for app debug traffic, with global read access.
 CREATE USER 'vt_appdebug'@'localhost';
-GRANT SELECT, SHOW DATABASES, PROCESS ON *.* TO 'vt_appdebug'@'localhost';
+GRANT SELECT, SHOW DATABASES, PROCESS ON *.* TO 'vt_appdebug'@'localhost', 'vt_appdebug'@'127.0.0.1';
 
 # User for administrative operations that need to be executed as non-SUPER.
 # Same permissions as vt_app here.

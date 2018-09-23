@@ -39,23 +39,16 @@ var (
 )
 
 // TabletDialer represents a function that will return a QueryService
-// object that can communicate with a tablet. Only the tablet's
-// HostName and PortMap should be used (and maybe the alias for debug
-// messages).
+// object that can communicate with a tablet.
 //
 // When using this TabletDialer to talk to a l2vtgate, only the Hostname
 // will be set to the full address to dial. Implementations should detect
 // this use case as the portmap will then be empty.
-//
-// timeout represents the connection timeout. If set to 0, this
-// connection should be established in the background and the
-// TabletDialer should return right away.
 type TabletDialer func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error)
 
 var dialers = make(map[string]TabletDialer)
 
-// RegisterDialer is meant to be used by TabletDialer implementations
-// to self register.
+// RegisterDialer registers an implementation of TabletDialer.
 func RegisterDialer(name string, dialer TabletDialer) {
 	if _, ok := dialers[name]; ok {
 		log.Fatalf("Dialer %s already exists", name)
@@ -63,11 +56,17 @@ func RegisterDialer(name string, dialer TabletDialer) {
 	dialers[name] = dialer
 }
 
-// GetDialer returns the dialer to use, described by the command line flag
+// GetDialer returns the default dialer specified by the command line flag.
 func GetDialer() TabletDialer {
 	td, ok := dialers[*TabletProtocol]
 	if !ok {
 		log.Exitf("No dialer registered for tablet protocol %s", *TabletProtocol)
 	}
 	return td
+}
+
+// GetDialerByName returns the requested dialer.
+// It returns nil if one is not found.
+func GetDialerByName(dialer string) TabletDialer {
+	return dialers[dialer]
 }

@@ -515,6 +515,8 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 			// We're already in the desired state.
 			return actionNone, nil
 		}
+	} else {
+		log.Infof("TabletServer tablet type: %v -> %v", tsv.target.TabletType, tabletType)
 	}
 	tsv.target.TabletType = tabletType
 	switch tsv.state {
