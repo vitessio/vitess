@@ -3,7 +3,6 @@
 # See http://vitess.io/getting-started/local-instance.html#manual-build
 # for more info
 #
-set -ex
 
 ulimit -n 10000
 export MYSQL_FLAVOR=MySQL56
@@ -23,4 +22,4 @@ source /vagrant/dist/grpc/usr/local/bin/activate
 pip install mysqlclient
 make build
 
-printf "\Build completed\n\n."
+printf "\Build completed\n\n"
