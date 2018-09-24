@@ -7,14 +7,12 @@
 // We're using colors picked from images/vitess_logo.svg.
 // Using the brightness principles in https://material.google.com/style/color.html#color-color-palette.
 // Primary is a color of mid-range brighntess from the logo.
-$primaryBrandColor: #296589;
+$primaryBrandColor: #a94600;
 // Darker is one of the darker colors from the logo.
-$darkerBrandColor: #183B4F;
+$darkerBrandColor: #000;
 // The logo doesn't have a color light enough. So, we pick something similar from material design.
-// Cyan 50
-$lighterBrandColor: #E0F7FA;
-// Purple 800
-$accentColor: #6A1B9A;
+$lighterBrandColor: #ffe9d2;
+$accentColor: #662C2C;
 
 // This ensures that icons on the home page use 100% opacity
 // with the $primaryBrandColor. Otherwise, the icons inherit
