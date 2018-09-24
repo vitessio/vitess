@@ -180,7 +180,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS
+%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS FIELDS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -258,7 +258,7 @@ func forceEOF(yylex interface{}) {
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
-%type <str> full_opt from_database_opt tables_or_processlist
+%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
@@ -1490,7 +1490,7 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW full_opt COLUMNS FROM table_name from_database_opt like_or_where_opt
+| SHOW full_opt columns_or_fields FROM table_name from_database_opt like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$6, Filter:$7}
     $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
@@ -1577,6 +1577,16 @@ full_opt:
   {
     $$ = "full "
   }
+
+columns_or_fields:
+  COLUMNS
+  {
+      $$ = string($1)
+  }
+| FIELDS
+  {
+      $$ = string($1)
+  } 
 
 from_database_opt:
   /* empty */
@@ -3191,6 +3201,7 @@ non_reserved_keyword:
 | ENUM
 | EXPANSION
 | FLOAT_TYPE
+| FIELDS
 | FOREIGN
 | FULLTEXT
 | GEOMETRY
