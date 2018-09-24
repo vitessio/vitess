@@ -249,3 +249,17 @@ release: docker_base
 	echo "A git tag was created, you can push it with:"
 	echo "git push origin v$(VERSION)"
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
+
+prep_for_docker:
+	ln -s /opt/vendor_internal/cloud.google.com  vendor/cloud.google.com
+	ln -s /opt/vendor_internal/github.com        vendor/github.com
+	ln -s /opt/vendor_internal/golang.org        vendor/golang.org
+	ln -s /opt/vendor_internal/google.golang.org vendor/google.golang.org
+	ln -s /opt/vendor_internal/gopkg.in          vendor/gopkg.in
+
+enter_docker:
+	set -x ; docker run --rm -it \
+		-v `pwd`:/tmp/src/vitess.io/vitess \
+		-w /tmp/src/vitess.io/vitess \
+		accupara/vitess \
+		bash

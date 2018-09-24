@@ -64,6 +64,11 @@ _test/
 
 # Go vendored libs
 /vendor/*/
+vendor/cloud.google.com
+vendor/github.com
+vendor/golang.org
+vendor/google.golang.org
+vendor/gopkg.in
 
 # release folder
 releases
