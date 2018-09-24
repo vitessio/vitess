@@ -47,6 +47,15 @@ var (
 	connCount  = stats.NewGauge("MysqlServerConnCount", "Active MySQL server connections")
 	connAccept = stats.NewCounter("MysqlServerConnAccepted", "Connections accepted by MySQL server")
 	connSlow   = stats.NewCounter("MysqlServerConnSlow", "Connections that took more than the configured mysql_slow_connect_warn_threshold to establish")
+
+	connCountPerUser = stats.NewGaugesWithSingleLabel("MysqlServerConnCountPerUser", "Active MySQL server connections per user", "count")
+	_                = stats.NewGaugeFunc("MysqlServerConnCountUnauthenticated", "Active MySQL server connections that haven't authenticated yet", func() int64 {
+		totalUsers := int64(0)
+		for _, v := range connCountPerUser.Counts() {
+			totalUsers += v
+		}
+		return connCount.Get() - totalUsers
+	})
 )
 
 // A Handler is an interface used by Listener to send queries.
@@ -341,6 +350,11 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 		c.User = user
 		c.UserData = userData
+	}
+
+	if c.User != "" {
+		connCountPerUser.Add(c.User, 1)
+		defer connCountPerUser.Add(c.User, -1)
 	}
 
 	// Negotiation worked, send OK packet.

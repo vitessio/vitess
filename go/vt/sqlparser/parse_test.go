@@ -1141,6 +1141,10 @@ var (
 	}, {
 		input: "show full columns from messages from test_keyspace like '%'",
 	}, {
+		input: "show full fields from a like '%'",
+	}, {
+		input: "show fields from a like '%'",
+	}, {
 		input:  "show triggers",
 		output: "show triggers",
 	}, {

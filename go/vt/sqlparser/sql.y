@@ -1579,18 +1579,14 @@ full_opt:
   }
 
 columns_or_fields:
-  /* empty */
+  COLUMNS
   {
-	  $$ = ""
-  }
-| COLUMNS
-  {
-	  $$ = string($1)
+      $$ = string($1)
   }
 | FIELDS
   {
-	  $$ = string($1)
-  }
+      $$ = string($1)
+  } 
 
 from_database_opt:
   /* empty */
