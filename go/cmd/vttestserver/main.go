@@ -145,6 +145,8 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 	flag.StringVar(&config.SnapshotFile, "snapshot_file", "",
 		"A MySQL DB snapshot file")
 
+	flag.StringVar(&config.TransactionMode, "transaction_mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
+
 	flag.Parse()
 
 	if basePort != 0 {

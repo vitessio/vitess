@@ -91,6 +91,9 @@ type Config struct {
 	// initialize the mysqld instance in the cluster. Note that some environments
 	// do not suppport initialization through snapshot files.
 	SnapshotFile string
+
+	// TransactionMode is SINGLE, MULTI or TWOPC
+	TransactionMode string
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
