@@ -69,6 +69,9 @@ printf "\nSetting higher limit for max number of open files\n"
 echo "fs.file-max = 10000" >> /etc/sysctl.conf
 sysctl -p
 
+# Set vitess env in .bashrc
+cat /vagrant/src/vitess.io/vitess/vagrant-scripts/vagrant-bashrc  >> /home/vagrant/.bashrc
+
 # Provisioning completed
 touch $SEED_FILE
 printf "\nProvisioning completed!\n\n"
