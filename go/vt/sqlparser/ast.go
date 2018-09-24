@@ -1479,10 +1479,10 @@ type Show struct {
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
-	if (node.Type == "tables" || node.Type == "columns") && node.ShowTablesOpt != nil {
+	if (node.Type == "tables" || node.Type == "columns" || node.Type == "fields") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
 		buf.Myprintf("show %s%s", opt.Full, node.Type)
-		if node.Type == "columns" && node.HasOnTable() {
+		if (node.Type == "columns" || node.Type == "fields") && node.HasOnTable() {
 			buf.Myprintf(" from %v", node.OnTable)
 		}
 		if opt.DbName != "" {
