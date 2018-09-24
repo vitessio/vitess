@@ -118,6 +118,9 @@ func GetMySQLOptions(flavor string) (string, []string, error) {
 
 	mycnf := []string{"config/mycnf/vtcombo.cnf"}
 	switch flavor {
+	case "MariaDB103":
+		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
+		mycnf = append(mycnf, "config/mycnf/master_mariadb103.cnf")
 	case "MariaDB":
 		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
 		mycnf = append(mycnf, "config/mycnf/master_mariadb.cnf")
