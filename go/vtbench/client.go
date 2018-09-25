@@ -46,11 +46,12 @@ type mysqlClientConn struct {
 
 func (c *mysqlClientConn) connect(ctx context.Context, cp ConnParams) error {
 	conn, err := mysql.Connect(ctx, &mysql.ConnParams{
-		Host:   cp.Hosts[0],
-		Port:   cp.Port,
-		DbName: cp.DB,
-		Uname:  cp.Username,
-		Pass:   cp.Password,
+		Host:       cp.Hosts[0],
+		Port:       cp.Port,
+		DbName:     cp.DB,
+		Uname:      cp.Username,
+		Pass:       cp.Password,
+		UnixSocket: cp.UnixSocket,
 	})
 
 	if err != nil {
