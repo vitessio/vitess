@@ -695,6 +695,18 @@ var (
 	}, {
 		input: "set @@session.\"autocommit\" = true",
 	}, {
+		input:  "set @@session.autocommit = ON",
+		output: "set @@session.autocommit = 'on'",
+	}, {
+		input:  "set @@session.autocommit= OFF",
+		output: "set @@session.autocommit = 'off'",
+	}, {
+		input:  "set autocommit = on",
+		output: "set autocommit = 'on'",
+	}, {
+		input:  "set autocommit = off",
+		output: "set autocommit = 'off'",
+	}, {
 		input:  "set names utf8 collate foo",
 		output: "set names 'utf8'",
 	}, {
