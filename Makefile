@@ -40,7 +40,7 @@ endif
 build_web:
 	echo $$(date): Building web artifacts
 	cd web/vtctld2 && ng build -prod
-	cp -f web/vtctld2/src/{favicon.ico,plotly-latest.min.js,primeui-ng-all.min.css} web/vtctld2/dist/
+	cp -f src/{favicon.ico,plotly-latest.min.js,primeui-ng-all.min.css} dist/
 
 build:
 ifndef NOBANNER
