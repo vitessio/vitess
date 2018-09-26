@@ -271,6 +271,7 @@ var keywords = map[string]int{
 	"no_write_to_binlog":  UNUSED,
 	"null":                NULL,
 	"numeric":             NUMERIC,
+	"off":                 OFF,
 	"offset":              OFFSET,
 	"on":                  ON,
 	"only":                ONLY,
