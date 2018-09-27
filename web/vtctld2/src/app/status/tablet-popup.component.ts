@@ -85,7 +85,7 @@ export class TabletPopupComponent implements OnInit {
       this.shard = health.Target.shard;
       this.tabletType = this.typeToString(health.Target.tablet_type);
       this.hostname = health.Tablet.hostname;
-      this.tabletUrl = this.sanitizer.bypassSecurityTrustResourceUrl(`/vttablet/${this.alias.cell}/${this.alias.uid}`);
+      this.tabletUrl = this.sanitizer.bypassSecurityTrustResourceUrl(`/vttablet/${this.alias.cell}/${this.alias.uid}/debug/status`);
       this.lag = (typeof health.Stats.seconds_behind_master === 'undefined') ? 0 : health.Stats.seconds_behind_master;
       this.qps = (typeof health.Stats.qps === 'undefined') ? 0 : health.Stats.qps;
       this.serving = (typeof health.Serving === 'undefined') ? true : health.Serving;
