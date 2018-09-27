@@ -209,9 +209,9 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	}
 
 	queries := getQueries(route.Query, bvs)
-	result, err := vcursor.ExecuteMultiShard(rss, queries, false /* isDML */, false /* autocommit */)
-	if err != nil {
-		return nil, err
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, false /* isDML */, false /* autocommit */)
+	if errs != nil {
+		return nil, vterrors.Aggregate(errs)
 	}
 	if len(route.OrderBy) == 0 {
 		return result, nil
@@ -421,12 +421,13 @@ func execAnyShard(vcursor VCursor, query string, bindVars map[string]*querypb.Bi
 
 func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, isDML, canAutocommit bool) (*sqltypes.Result, error) {
 	autocommit := canAutocommit && vcursor.AutocommitApproval()
-	return vcursor.ExecuteMultiShard([]*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
+	result, errs := vcursor.ExecuteMultiShard([]*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
 		{
 			Sql:           query,
 			BindVariables: bindVars,
 		},
 	}, isDML, autocommit)
+	return result, vterrors.Aggregate(errs)
 }
 
 func getQueries(query string, bvs []map[string]*querypb.BindVariable) []*querypb.BoundQuery {
