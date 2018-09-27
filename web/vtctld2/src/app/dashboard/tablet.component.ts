@@ -60,7 +60,7 @@ export class TabletComponent implements OnInit, OnDestroy {
   getTablet(tabletRef: string) {
     this.tabletService.getTablet(tabletRef).subscribe((tablet) => {
       this.tablet = tablet;
-      this.tabletUrl = this.sanitizer.bypassSecurityTrustResourceUrl(`/vttablet/${tablet.cell}/${tablet.uid}/debug/status`);
+      this.tabletUrl = this.sanitizer.bypassSecurityTrustResourceUrl(`http://${tablet.hostname}:${tablet.port_map.vt}`);
       this.tabletReady = true;
     });
   }

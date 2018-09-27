@@ -149,7 +149,7 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   getUrl(tablet) {
-    return `/vttablet/${tablet.cell}/${tablet.uid}/debug/status`;
+    return `http://${tablet.hostname}:${tablet.port_map.vt}`;
   }
 
   // typeIndex returns a sortable string for a tablet type.

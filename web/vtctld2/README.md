@@ -2,17 +2,14 @@
 
 This project was generated with [angular-cli](https://github.com/angular/angular-cli) version 1.0.0-beta.11-webpack.2.
 
-## Pre-requisites
-Make sure you have Node.js and npm installed
-
 ## Installation
-Once downloaded, run `npm install` to retrieve dependencies.
+Once downloaded, run `npm install` and `bower install` to retrieve dependencies.
 
-Webpack handles bundling of dependencies from the `node_modules` directory.
+Webpack handles bundling of dependencies from the `node_modules` directory,
+but bower dependencies in the `src/assets` folder simply get copied
+into the `dist` folder at build time.
 
 To add more Polymer elements, install them with bower and import them in `src/index.html`.
-
-ng will be installed under node_modules/angular-cli/bin
 
 ## Development server
 Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The app will automatically reload if you change any of the source files.
@@ -23,10 +20,7 @@ Run `ng generate component component-name` to generate a new component. You can 
 
 ## Build
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory. Use the `-prod` flag for a production build. Copy them over to app/ for committing after testing
-`cp -r -f dist/* app/`
-
-You can also build from the top level using `make build_web`. You will need to have `ng` in your path for this to work.
+Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory. Use the `-prod` flag for a production build.
 
 ## Running unit tests
 
