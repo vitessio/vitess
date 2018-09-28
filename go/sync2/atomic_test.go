@@ -56,4 +56,20 @@ func TestAtomicBool(t *testing.T) {
 	if !b.Get() {
 		t.Error("b.Get: false, want true")
 	}
+
+	if b.CompareAndSwap(false, true) {
+		t.Error("b.CompareAndSwap false, true should fail")
+	}
+	if !b.CompareAndSwap(true, false) {
+		t.Error("b.CompareAndSwap true, false should succeed")
+	}
+	if !b.CompareAndSwap(false, false) {
+		t.Error("b.CompareAndSwap false, false should NOP")
+	}
+	if !b.CompareAndSwap(false, true) {
+		t.Error("b.CompareAndSwap false, true should succeed")
+	}
+	if !b.CompareAndSwap(true, true) {
+		t.Error("b.CompareAndSwap true, true should NOP")
+	}
 }

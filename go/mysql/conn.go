@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/bucketpool"
+	"vitess.io/vitess/go/sync2"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -71,8 +72,8 @@ type Conn struct {
 	// - at accept time for the server.
 	ConnectionID uint32
 
-	// Closed is set to true when Close() is called on the connection.
-	Closed bool
+	// closed is set to true when Close() is called on the connection.
+	closed sync2.AtomicBool
 
 	// Capabilities is the current set of features this connection
 	// is using.  It is the features that are both supported by
@@ -157,6 +158,7 @@ var writersPool = sync.Pool{New: func() interface{} { return bufio.NewWriterSize
 func newConn(conn net.Conn) *Conn {
 	return &Conn{
 		conn:           conn,
+		closed:         sync2.NewAtomicBool(false),
 		bufferedReader: bufio.NewReaderSize(conn, connBufferSize),
 	}
 }
@@ -166,7 +168,8 @@ func newConn(conn net.Conn) *Conn {
 // for reads.
 func newServerConn(conn net.Conn, connReadBufferSize int) *Conn {
 	c := &Conn{
-		conn: conn,
+		conn:   conn,
+		closed: sync2.NewAtomicBool(false),
 	}
 	if connReadBufferSize > 0 {
 		c.bufferedReader = bufio.NewReaderSize(conn, connReadBufferSize)
@@ -566,15 +569,16 @@ func (c *Conn) String() string {
 // Close closes the connection. It can be called from a different go
 // routine to interrupt the current connection.
 func (c *Conn) Close() {
-	c.Closed = true
-	c.conn.Close()
+	if c.closed.CompareAndSwap(false, true) {
+		c.conn.Close()
+	}
 }
 
 // IsClosed returns true if this connection was ever closed by the
 // Close() method.  Note if the other side closes the connection, but
 // Close() wasn't called, this will return false.
 func (c *Conn) IsClosed() bool {
-	return c.Closed
+	return c.closed.Get()
 }
 
 //
