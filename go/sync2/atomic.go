@@ -139,6 +139,18 @@ func (i *AtomicBool) Get() bool {
 	return atomic.LoadInt32(&i.int32) != 0
 }
 
+// CompareAndSwap atomatically swaps the old with the new value.
+func (i *AtomicBool) CompareAndSwap(o, n bool) bool {
+	var old, new int32
+	if o {
+		old = 1
+	}
+	if n {
+		new = 1
+	}
+	return atomic.CompareAndSwapInt32(&i.int32, old, new)
+}
+
 // AtomicString gives you atomic-style APIs for string, but
 // it's only a convenience wrapper that uses a mutex. So, it's
 // not as efficient as the rest of the atomic types.
