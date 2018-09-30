@@ -34,14 +34,14 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// AddStatusPart adds a new section to status. frag is used as a
+// AddStatusPart adds a new section to status. fragment is used as a
 // subtemplate of the template used to render /debug/status, and will
 // be executed using the value of invoking f at the time of the
-// /debug/status request. frag is parsed and executed with the
+// /debug/status request. fragment is parsed and executed with the
 // html/template package. Functions registered with AddStatusFuncs
 // may be used in the template.
-func AddStatusPart(banner, frag string, f func() interface{}) {
-	globalStatus.addStatusPart(banner, frag, f)
+func AddStatusPart(banner, fragment string, f func() interface{}) {
+	globalStatus.addStatusPart(banner, fragment, f)
 }
 
 // AddStatusFuncs merges the provided functions into the set of
@@ -162,13 +162,13 @@ func (sp *statusPage) addStatusFuncs(fmap template.FuncMap) {
 	}
 }
 
-func (sp *statusPage) addStatusPart(banner, frag string, f func() interface{}) {
+func (sp *statusPage) addStatusPart(banner, fragment string, f func() interface{}) {
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
 
 	secs := append(sp.sections, section{
 		Banner:   banner,
-		Fragment: frag,
+		Fragment: fragment,
 		F:        f,
 	})
 
