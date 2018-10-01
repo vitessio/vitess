@@ -322,7 +322,7 @@ func main() {
 				wg.Add(1)
 				go func(flavor string) {
 					defer wg.Done()
-					image := "rafael/vitess_bootstrap:" + flavor
+					image := "vitess/bootstrap:" + flavor
 					pullTime := time.Now()
 					log.Printf("Pulling %v...", image)
 					cmd := exec.Command("docker", "pull", image)
