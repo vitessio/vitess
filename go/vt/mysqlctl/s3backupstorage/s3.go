@@ -106,13 +106,13 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 	}
 
 	// Calculate s3 upload part size using the source filesize
-	partSizeMB := s3manager.DefaultUploadPartSize
+	partSizeBytes := s3manager.DefaultUploadPartSize
 	if filesize > 0 {
 		minimumPartSize := float64(filesize) / float64(s3manager.MaxUploadParts)
-		// Convert partsize to mb and round up to ensure large enough partsize
-		calculatedPartSizeMB := int64(math.Ceil(minimumPartSize / 1024 * 1024))
-		if calculatedPartSizeMB > partSizeMB {
-			partSizeMB = calculatedPartSizeMB
+		// Round up to ensure large enough partsize
+		calculatedPartSizeBytes := int64(math.Ceil(minimumPartSize))
+		if calculatedPartSizeBytes > partSizeBytes {
+			partSizeBytes = calculatedPartSizeBytes
 		}
 	}
 
@@ -122,7 +122,7 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 	go func() {
 		defer bh.waitGroup.Done()
 		uploader := s3manager.NewUploaderWithClient(bh.client, func(u *s3manager.Uploader) {
-			u.PartSize = partSizeMB
+			u.PartSize = partSizeBytes
 		})
 		object := objName(bh.dir, bh.name, filename)
 
