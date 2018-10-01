@@ -530,6 +530,40 @@ func TestLookupNonUniqueUpdate(t *testing.T) {
 	}
 }
 
+func TestLookupNonUniqueMapNull(t *testing.T) {
+	lookupNonUnique := createLookup(t, "lookup", false)
+	vc := &vcursor{numRows: 1}
+
+	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NULL})
+	if err != nil {
+		t.Error(err)
+	}
+	want := []key.Destination{
+		key.DestinationKeyspaceIDs([][]byte{
+			[]byte("1"),
+		}),
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Map(): %#v, want %+v", got, want)
+	}
+
+	wantqueries := []*querypb.BoundQuery{{
+		Sql: "select toc from t where fromc is null",
+	}}
+	if !reflect.DeepEqual(vc.queries, wantqueries) {
+		t.Errorf("lookup.Map queries:\n%v, want\n%v", vc.queries, wantqueries)
+	}
+
+	// Test query fail.
+	vc.mustFail = true
+	_, err = lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NULL})
+	wantErr := "lookup.Map: execute failed"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, wantErr)
+	}
+	vc.mustFail = false
+}
+
 func createLookup(t *testing.T, name string, writeOnly bool) Vindex {
 	t.Helper()
 	write := "false"
