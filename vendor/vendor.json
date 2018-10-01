@@ -639,6 +639,30 @@
 			"revisionTime": "2016-01-05T22:08:40Z"
 		},
 		{
+			"checksumSHA1": "rmCbOBewXcbEdHRerzoanS+kI2U=",
+			"path": "github.com/klauspost/compress/flate",
+			"revision": "b50017755d442260d792c34c7c43216d9ba7ffc7",
+			"revisionTime": "2018-08-01T09:52:37Z"
+		},
+		{
+			"checksumSHA1": "vGHBCcWkLCbAc3PJcRs7vFbvaYM=",
+			"path": "github.com/klauspost/cpuid",
+			"revision": "e7e905edc00ea8827e58662220139109efea09db",
+			"revisionTime": "2018-04-05T13:32:22Z"
+		},
+		{
+			"checksumSHA1": "6/zXof97s7P9tlNp3mUioXgeEVI=",
+			"path": "github.com/klauspost/crc32",
+			"revision": "bab58d77464aa9cf4e84200c3276da0831fe0c03",
+			"revisionTime": "2017-06-28T07:24:49Z"
+		},
+		{
+			"checksumSHA1": "N4EMcnfxHl1f4TQsKQWX/yLF/BE=",
+			"path": "github.com/klauspost/pgzip",
+			"revision": "c4ad2ed77aece7b3270909769a30a3fcea262a66",
+			"revisionTime": "2018-07-17T08:42:24Z"
+		},
+		{
 			"checksumSHA1": "DdH3xAkzAWJ4B/LGYJyCeRsly2I=",
 			"path": "github.com/mattn/go-runewidth",
 			"revision": "d6bea18f789704b5f83375793155289da36a3c7f",
