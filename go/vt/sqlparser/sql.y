@@ -1845,6 +1845,12 @@ table_factor:
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $3}
   }
+| subquery
+  {
+    // missed alias for subquery
+    yylex.Error("Every derived table must have its own alias")
+    return 1
+  }
 | openb table_references closeb
   {
     $$ = &ParenTableExpr{Exprs: $2}
