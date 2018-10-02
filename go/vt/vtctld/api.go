@@ -169,6 +169,48 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		}
 	})
 
+	handleCollection("ks_tablets", func(r *http.Request) (interface{}, error) {
+		// Valid requests: api/ks_tables/my_ks (all shards)
+		// Valid requests: api/ks_tables/my_ks/-80 (specific shard)
+		itemPath := getItemPath(r.URL.Path)
+		parts := strings.SplitN(itemPath, "/", 2)
+
+		keyspace := parts[0]
+		if keyspace == "" {
+			return nil, errors.New("keyspace is required")
+		}
+
+		var shardNames []string
+		if len(parts) > 1 && parts[1] != "" {
+			shardNames = []string{parts[1]}
+		} else {
+			var err error
+			shardNames, err = ts.GetShardNames(ctx, keyspace)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		tablets := [](*topodatapb.Tablet){}
+
+		for _, shard := range shardNames {
+			// Get tablets for this shard.
+			tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+			if err != nil && !topo.IsErrType(err, topo.PartialResult) {
+				return nil, err
+			}
+			for _, tabletAlias := range tabletAliases {
+				t, err := ts.GetTablet(ctx, tabletAlias)
+				if err != nil {
+					return nil, err
+				}
+				tablets = append(tablets, t.Tablet)
+			}
+		}
+
+		return tablets, nil
+	})
+
 	// Shards
 	handleCollection("shards", func(r *http.Request) (interface{}, error) {
 		shardPath := getItemPath(r.URL.Path)
