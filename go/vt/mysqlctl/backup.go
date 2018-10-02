@@ -30,9 +30,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/klauspost/pgzip"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/cgzip"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sync2"
@@ -78,6 +78,14 @@ var (
 	// on the backups. Usually would be set if a hook is used, and
 	// the hook compresses the data.
 	backupStorageCompress = flag.Bool("backup_storage_compress", true, "if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data.")
+
+	// backupCompressBlockSize is the splitting size for each
+	// compressed block
+	backupCompressBlockSize = flag.Int("backup_storage_block_size", 250000, "if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000).")
+
+	// backupCompressBlocks is the number of blocks that are processed
+	// once before the writer blocks
+	backupCompressBlocks = flag.Int("backup_storage_number_blocks", 2, "if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression")
 )
 
 // FileEntry is one file to backup
@@ -475,12 +483,13 @@ func backupFile(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logu
 	}
 
 	// Create the gzip compression pipe, if necessary.
-	var gzip *cgzip.Writer
+	var gzip *pgzip.Writer
 	if *backupStorageCompress {
-		gzip, err = cgzip.NewWriterLevel(writer, cgzip.Z_BEST_SPEED)
+		gzip, err = pgzip.NewWriterLevel(writer, pgzip.BestSpeed)
 		if err != nil {
 			return fmt.Errorf("cannot create gziper: %v", err)
 		}
+		gzip.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
 		writer = gzip
 	}
 
@@ -632,7 +641,7 @@ func restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle,
 
 	// Create the uncompresser if needed.
 	if compress {
-		gz, err := cgzip.NewReader(reader)
+		gz, err := pgzip.NewReader(reader)
 		if err != nil {
 			return err
 		}
