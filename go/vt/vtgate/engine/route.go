@@ -153,30 +153,18 @@ var routeName = map[RouteOpcode]string{
 	SelectDBA:         "SelectDBA",
 }
 
-var routeMetrics = map[RouteOpcode]*stats.Counter{
-	SelectUnsharded:   stats.NewCounter("RouteSelectUnsharded", "Counts of statements routed to an unsharded database."),
-	SelectEqualUnique: stats.NewCounter("RouteSelectEqualUnique", "Counts of statements routed to a single shard. Requires: A Unique Vindex, and a single Value."),
-	SelectEqual:       stats.NewCounter("RouteSelectEqual", "Counts of statements routed routed to one or more shards using a non-unique vindex. Requires: A Vindex, and a single Value."),
-	SelectIN:          stats.NewCounter("RouteSelectIN", "Counts of statements routed to one or more shards using a Vindex. Requires: A Vindex, and a Values list."),
-	SelectScatter:     stats.NewCounter("RouteSelectScatter", "Counts of statements routed with a scatter query to all shards of a keyspace"),
-	SelectNext:        stats.NewCounter("RouteSelectNext", "Counts of fetches from a sequence"),
-	SelectDBA:         stats.NewCounter("RouteSelectDBA", "Counts of a DBA statements"),
-}
-
 var (
+	routeMetrics *stats.CountersWithSingleLabel
 	scatterWidth = stats.NewCounter("RouteTotalScatterWidth", "Total width (shards routed to by a statement) of all statements routed")
-	queryCount   = stats.NewCounter("RouteQueryCount", "Total statements routed")
 )
 
 func init() {
-	stats.NewGaugeFunc("RoutesAverageScatterWidth", "Average width (shards routed to by a statement) of scatters routed", func() int64 {
-		width := scatterWidth.Get()
-		count := queryCount.Get()
-		if count == 0 {
-			return 0
-		}
-		return width / count
-	})
+	var routeNames []string
+	for _, value := range routeName {
+		routeNames = append(routeNames, value)
+	}
+
+	routeMetrics = stats.NewCountersWithSingleLabel("Routes", "Counts of statements routed by route type", "route_type", routeNames...)
 }
 
 // MarshalJSON serializes the RouteOpcode as a JSON string.
@@ -230,9 +218,8 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 		return &sqltypes.Result{}, nil
 	}
 
-	routeMetrics[route.Opcode].Add(1)
+	routeMetrics.Add(routeName[route.Opcode], 1)
 	scatterWidth.Add(int64(len(rss)))
-	queryCount.Add(1)
 
 	queries := getQueries(route.Query, bvs)
 	result, err := vcursor.ExecuteMultiShard(rss, queries, false /* isDML */, false /* autocommit */)
