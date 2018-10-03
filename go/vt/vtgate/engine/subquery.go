@@ -31,6 +31,11 @@ type Subquery struct {
 	Subquery Primitive
 }
 
+// RouteType returns a description of the query routing type used by the primitive
+func (sq *Subquery) RouteType() string {
+	return sq.Subquery.RouteType()
+}
+
 // Execute performs a non-streaming exec.
 func (sq *Subquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	inner, err := sq.Subquery.Execute(vcursor, bindVars, wantfields)

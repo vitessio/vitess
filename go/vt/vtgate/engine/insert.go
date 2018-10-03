@@ -153,6 +153,11 @@ func (code InsertOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(insName[code])
 }
 
+// RouteType returns a description of the query routing type used by the primitive
+func (ins *Insert) RouteType() string {
+	return insName[ins.Opcode]
+}
+
 // Execute performs a non-streaming exec.
 func (ins *Insert) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	switch ins.Opcode {
