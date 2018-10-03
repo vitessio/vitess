@@ -79,6 +79,11 @@ func (code VindexOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(vindexOpcodeName[code])
 }
 
+// RouteType returns a description of the query routing type used by the primitive
+func (vf *VindexFunc) RouteType() string {
+	return vindexOpcodeName[vf.Opcode]
+}
+
 // Execute performs a non-streaming exec.
 func (vf *VindexFunc) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return vf.mapVindex(vcursor, bindVars)
