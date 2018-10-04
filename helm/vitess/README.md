@@ -227,7 +227,7 @@ topology:
 
 pmm:
   enabled: true
-  pmmTag: "1.6.1"
+  pmmTag: "1.14.1"
   client:
     resources:
       requests:
