@@ -12,7 +12,7 @@ Some changes have been made to the system since the last time the doc was writte
 * There's one VSchema per keyspace instead of a global one.
 * The concept of Table Class has been eliminated.
 * A new `sequence` table has been introduced, and sequences are orthogonal to vindexes. Any column can now be tied to a sequence.
-* We've introduced the concept of a pinned table, which allows an unsharded table to be pinned to a keypsace id, allowing you to avoid creating a separate keyspace for tiny tables. This is yet to be implemented.
+* We've introduced the concept of a pinned table, which allows an unsharded table to be pinned to a keyspace id, allowing you to avoid creating a separate keyspace for tiny tables. This is yet to be implemented.
 * Instead of a vschema editor, the DDL language will be extended to manage vindexes, and the DDL deployment tools will perform the necessary work.
 
 ## Objective
