@@ -337,4 +337,4 @@ VSchema is still evolving. Features are mostly added on demand. The following fe
 
 * DDL support
 * Lookup Vindex backfill
-* Pinned tables: This feature will allow unsharded tables to be pinned to a keypsace id. This avoids the need for a separate unsharded keyspace to contain them.
+* Pinned tables: This feature will allow unsharded tables to be pinned to a keyspace id. This avoids the need for a separate unsharded keyspace to contain them.
