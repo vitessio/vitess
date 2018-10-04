@@ -163,7 +163,7 @@ vttablet:
 # Default values for pmm
 pmm:
   enabled: false
-  pmmTag: "1.10.0"
+  pmmTag: "1.14.1"
   client:
     resources:
       requests:
