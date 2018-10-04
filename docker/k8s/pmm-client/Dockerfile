@@ -1,9 +1,9 @@
-FROM vitess/base AS base
+FROM vitess/k8s AS k8s
 
 FROM debian:stretch-slim
 
 # Copy CA certs for https calls
-COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 RUN apt-get update && \
     apt-get upgrade -qq && \
