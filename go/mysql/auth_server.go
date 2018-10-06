@@ -164,6 +164,7 @@ func isPassScrambleMysqlNativePassword(reply, salt []byte, mysqlNativePassword s
 		mysqlNativePassword = mysqlNativePassword[1:]
 	}
 
+	// Convert to byte array so that we can feed it into crypt.Write
 	hash, err := hex.DecodeString(mysqlNativePassword)
 	if err != nil {
 		return false
@@ -186,6 +187,7 @@ func isPassScrambleMysqlNativePassword(reply, salt []byte, mysqlNativePassword s
 	candidateHash2 := crypt.Sum(nil)
 
 	if bytes.Compare(candidateHash2, hash) != 0 {
+		fmt.Println("compare failed")
 		return false
 	}
 	return true

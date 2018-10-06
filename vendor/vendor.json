@@ -1309,5 +1309,5 @@
 			"revisionTime": "2016-09-28T15:37:09Z"
 		}
 	],
-	"rootPath": "vitess.io/vitess"
+	"rootPath": "github.com/planetscale/vitess"
 }
