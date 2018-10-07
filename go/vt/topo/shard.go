@@ -440,8 +440,6 @@ func (si *ShardInfo) UpdateDisableQueryService(ctx context.Context, tabletType t
 				DisableQueryService: true,
 				BlacklistedTables:   nil,
 			})
-		} else {
-			log.Warningf("Trying to remove TabletControl.DisableQueryService for missing type %v for shard %v/%v", tabletType, si.keyspace, si.shardName)
 		}
 		return nil
 	}
@@ -452,12 +450,16 @@ func (si *ShardInfo) UpdateDisableQueryService(ctx context.Context, tabletType t
 		return fmt.Errorf("cannot safely alter DisableQueryService as BlacklistedTables is set")
 	}
 	if !tc.DisableQueryService {
+		// This code is unreachable because we always delete the control record when we enable QueryService.
 		return fmt.Errorf("cannot safely alter DisableQueryService as DisableQueryService is not set, this record should not be there for shard %v/%v", si.keyspace, si.shardName)
 	}
 
 	if disableQueryService {
 		tc.Cells = addCells(tc.Cells, cells)
 	} else {
+		if tc.Frozen {
+			return fmt.Errorf("migrate has gone past the point of no return, cannot re-enable serving for %v/%v", si.keyspace, si.shardName)
+		}
 		si.removeCellsFromTabletControl(tc, tabletType, cells)
 	}
 	return nil
@@ -501,56 +503,15 @@ func (si *ShardInfo) GetServedTypesPerCell(cell string) []topodatapb.TabletType 
 	return result
 }
 
-// CheckServedTypesMigration makes sure the provided migration is possible
-func (si *ShardInfo) CheckServedTypesMigration(tabletType topodatapb.TabletType, cells []string, remove bool) error {
-	// we can't remove a type we don't have
-	if si.GetServedType(tabletType) == nil && remove {
-		return fmt.Errorf("supplied type %v cannot be migrated out of the shard because it is not a served type: %v", tabletType, si)
-	}
-
-	// master is a special case with a few extra checks
-	if tabletType == topodatapb.TabletType_MASTER {
-		if len(cells) > 0 {
-			return fmt.Errorf("cannot migrate only some cells for MASTER in shard %v/%v. Do not specify a list of cells", si.keyspace, si.shardName)
-		}
-		if remove && len(si.ServedTypes) > 1 {
-			// Log which types must be migrated first.
-			var types []string
-			for _, servedType := range si.ServedTypes {
-				if servedType.TabletType != topodatapb.TabletType_MASTER {
-					types = append(types, servedType.TabletType.String())
-				}
-			}
-			return fmt.Errorf("cannot migrate MASTER away from %v/%v until everything else is migrated. Make sure that the following types are migrated first: %v", si.keyspace, si.shardName, strings.Join(types, ", "))
-		}
-	}
-
-	return nil
-}
-
-// UpdateServedTypesMap handles ServedTypesMap. It can add or remove
-// records, cells, ...
+// UpdateServedTypesMap handles ServedTypesMap. It can add or remove cells.
 func (si *ShardInfo) UpdateServedTypesMap(tabletType topodatapb.TabletType, cells []string, remove bool) error {
-	// check parameters to be sure
-	if err := si.CheckServedTypesMigration(tabletType, cells, remove); err != nil {
-		return err
-	}
-
 	sst := si.GetServedType(tabletType)
-	if sst == nil {
-		// the record doesn't exist
-		if remove {
-			log.Warningf("Trying to remove ShardServedType for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
-		} else {
-			si.ServedTypes = append(si.ServedTypes, &topodatapb.Shard_ServedType{
-				TabletType: tabletType,
-				Cells:      cells,
-			})
-		}
-		return nil
-	}
 
 	if remove {
+		if sst == nil {
+			// nothing to remove
+			return nil
+		}
 		result, emptyList := removeCells(sst.Cells, cells, si.Cells)
 		if emptyList {
 			// we don't have any cell left, we need to clear this record
@@ -561,12 +522,21 @@ func (si *ShardInfo) UpdateServedTypesMap(tabletType topodatapb.TabletType, cell
 				}
 			}
 			si.ServedTypes = servedTypes
-		} else {
-			sst.Cells = result
+			return nil
 		}
-	} else {
-		sst.Cells = addCells(sst.Cells, cells)
+		sst.Cells = result
+		return nil
 	}
+
+	// add
+	if sst == nil {
+		si.ServedTypes = append(si.ServedTypes, &topodatapb.Shard_ServedType{
+			TabletType: tabletType,
+			Cells:      cells,
+		})
+		return nil
+	}
+	sst.Cells = addCells(sst.Cells, cells)
 	return nil
 }
 
