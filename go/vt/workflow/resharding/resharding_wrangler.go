@@ -33,5 +33,5 @@ type ReshardingWrangler interface {
 
 	WaitForFilteredReplication(ctx context.Context, keyspace, shard string, maxDelay time.Duration) error
 
-	MigrateServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, reverse, skipReFreshState bool, filteredReplicationWaitTime time.Duration) error
+	MigrateServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, reverse, skipReFreshState bool, filteredReplicationWaitTime time.Duration, reverseReplication bool) error
 }

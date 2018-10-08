@@ -194,6 +194,13 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 		vre.mustCreate = false
 	}
 
+	// Change the database to ensure that these events don't get
+	// replicated by another vreplication. This can happen when
+	// we reverse replication.
+	if _, err := dbClient.ExecuteFetch("use _vt", 1); err != nil {
+		return nil, err
+	}
+
 	switch plan.opcode {
 	case insertQuery:
 		qr, err := dbClient.ExecuteFetch(plan.query, 1)
