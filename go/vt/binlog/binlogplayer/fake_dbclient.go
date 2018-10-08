@@ -76,6 +76,8 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 			), nil
 		}
 		return &sqltypes.Result{}, nil
+	case strings.HasPrefix(query, "use"):
+		return &sqltypes.Result{}, nil
 	}
 	return nil, fmt.Errorf("unexpected: %v", query)
 }
