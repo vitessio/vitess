@@ -173,6 +173,11 @@ func (code RouteOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(routeName[code])
 }
 
+// RouteType returns a description of the query routing type used by the primitive
+func (route *Route) RouteType() string {
+	return routeName[route.Opcode]
+}
+
 // Execute performs a non-streaming exec.
 func (route *Route) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if route.QueryTimeout != 0 {

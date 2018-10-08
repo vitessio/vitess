@@ -172,6 +172,11 @@ func (c *CountersWithSingleLabel) Add(name string, value int64) {
 	atomic.AddInt64(a, value)
 }
 
+// ResetAll clears the counters
+func (c *CountersWithSingleLabel) ResetAll() {
+	c.counters.ResetAll()
+}
+
 // CountersWithMultiLabels is a multidimensional counters implementation.
 // Internally, each tuple of dimensions ("labels") is stored as a single
 // label value where all label values are joined with ".".
