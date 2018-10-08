@@ -66,6 +66,11 @@ type Config struct {
 	// If no schema is found in SchemaDir, default to this location.
 	DefaultSchemaDir string
 
+	// DataDir is the directory where the data files will be placed.
+	// If no directory is specified a random directory will be used
+	// under VTDATAROOT.
+	DataDir string
+
 	// Charset is the default charset used by MySQL
 	Charset string
 
@@ -416,6 +421,7 @@ func (db *LocalCluster) JSONConfig() interface{} {
 		"port":               db.vt.Port,
 		"socket":             db.mysql.UnixSocket(),
 		"vtcombo_mysql_port": db.Env.PortForProtocol("vtcombo_mysql_port", ""),
+		"mysql":              db.Env.PortForProtocol("mysql", ""),
 	}
 
 	if grpc := db.vt.PortGrpc; grpc != 0 {

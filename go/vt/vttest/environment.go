@@ -219,9 +219,6 @@ func (env *LocalTestEnv) TearDown() error {
 
 func tmpdir(dataroot string) (dir string, err error) {
 	dir, err = ioutil.TempDir(dataroot, "vttest")
-	if err == nil {
-		err = os.Mkdir(path.Join(dir, "logs"), 0700)
-	}
 	return
 }
 
@@ -247,12 +244,22 @@ func randomPort() int {
 // given MySQL flavor. This will use the `mysqlctl` command to initialize and
 // teardown a single mysqld instance.
 func NewLocalTestEnv(flavor string, basePort int) (*LocalTestEnv, error) {
-	flavor, mycnf, err := GetMySQLOptions(flavor)
+	directory, err := tmpdir(os.Getenv("VTDATAROOT"))
+	if err != nil {
+		return nil, err
+	}
+	return NewLocalTestEnvWithDirectory(flavor, basePort, directory)
+}
+
+// NewLocalTestEnvWithDirectory returns a new instance of the default test
+// environment with a directory explicitly specified.
+func NewLocalTestEnvWithDirectory(flavor string, basePort int, directory string) (*LocalTestEnv, error) {
+	err := os.Mkdir(path.Join(directory, "logs"), 0700)
 	if err != nil {
 		return nil, err
 	}
 
-	directory, err := tmpdir(os.Getenv("VTDATAROOT"))
+	flavor, mycnf, err := GetMySQLOptions(flavor)
 	if err != nil {
 		return nil, err
 	}
