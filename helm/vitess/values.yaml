@@ -163,7 +163,7 @@ vttablet:
 # Default values for pmm
 pmm:
   enabled: false
-  pmmTag: "1.10.0"
+  pmmTag: "1.14.1"
   client:
     resources:
       requests:
@@ -219,7 +219,7 @@ pmm:
 # Default values for orchestrator resources
 orchestrator:
   enabled: false
-  image: "vitess/orchestrator:3.0.11"
+  image: "vitess/orchestrator:3.0.12"
   replicas: 3
   resources:
     requests:
