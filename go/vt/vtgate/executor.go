@@ -1027,7 +1027,7 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 
 	queriesProcessed.Add("Other", 1)
-	queriesRouted.Add("", int64(logStats.ShardQueries))
+	queriesRouted.Add("Other", int64(logStats.ShardQueries))
 
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err
