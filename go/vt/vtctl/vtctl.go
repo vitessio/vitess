@@ -305,15 +305,18 @@ var commands = []commandGroup{
 			{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <keyspace name>",
 				"Validates that all nodes reachable from the specified keyspace are consistent."},
-			{"CancelResharding", commandCancelResharding,
-				"<keyspace/shard>",
-				"Permanently cancels a resharding in progress. All resharding related metadata will be deleted."},
 			{"MigrateServedTypes", commandMigrateServedTypes,
 				"[-cells=c1,c2,...] [-reverse] [-skip-refresh-state] <keyspace/shard> <served tablet type>",
 				"Migrates a serving type from the source shard to the shards that it replicates to. This command also rebuilds the serving graph. The <keyspace/shard> argument can specify any of the shards involved in the migration."},
 			{"MigrateServedFrom", commandMigrateServedFrom,
 				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard> <served tablet type>",
 				"Makes the <destination keyspace/shard> serve the given type. This command also rebuilds the serving graph."},
+			{"CancelResharding", commandCancelResharding,
+				"<keyspace/shard>",
+				"Permanently cancels a resharding in progress. All resharding related metadata will be deleted."},
+			{"ShowResharding", commandShowResharding,
+				"<keyspace/shard>",
+				"Displays all metadata about a resharding in progress."},
 			{"FindAllShardsInKeyspace", commandFindAllShardsInKeyspace,
 				"<keyspace>",
 				"Displays all of the shards in the specified keyspace."},
@@ -1682,21 +1685,6 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	return wr.ValidateKeyspace(ctx, keyspace, *pingTablets)
 }
 
-func commandCancelResharding(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("<keyspace/shard> required for CancelResharding command")
-	}
-
-	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	return wr.CancelResharding(ctx, keyspace, shard)
-}
-
 func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward. Use in case of trouble")
@@ -1752,6 +1740,36 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 		cells = strings.Split(*cellsStr, ",")
 	}
 	return wr.MigrateServedFrom(ctx, keyspace, shard, servedType, cells, *reverse, *filteredReplicationWaitTime)
+}
+
+func commandCancelResharding(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("<keyspace/shard> required for CancelResharding command")
+	}
+
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	return wr.CancelResharding(ctx, keyspace, shard)
+}
+
+func commandShowResharding(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("<keyspace/shard> required for ShowResharding command")
+	}
+
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	return wr.ShowResharding(ctx, keyspace, shard)
 }
 
 func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
