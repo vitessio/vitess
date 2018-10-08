@@ -1102,6 +1102,10 @@ primary key (name)
                      'test_keyspace/c0-', '1', 'test_keyspace/80-'],
                     auto_log=True)
 
+    # CancelResharding should fail because migration has started.
+    utils.run_vtctl(['CancelResharding', 'test_keyspace/80-'],
+                    auto_log=True, expect_fail=True)
+
     # do a Migrate that will fail waiting for replication
     # which should cause the Migrate to be canceled and the source
     # master to be serving again.
@@ -1145,6 +1149,10 @@ primary key (name)
                              sharding_column_name='custom_ksid_col')
     utils.check_tablet_query_service(self, shard_1_master, False, True)
 
+    # check the binlog players are gone now
+    self.check_no_binlog_player(shard_2_master)
+    self.check_no_binlog_player(shard_3_master)
+
     # test reverse_replication
     # start with inserting a row in each destination shard
     self._insert_value(shard_2_master, 'resharding2', 2, 'msg2',
@@ -1171,9 +1179,9 @@ primary key (name)
                      'test_keyspace/80-', 'master'],
                     auto_log=True, expect_fail=True)
 
-    # check the binlog players are gone now
-    self.check_no_binlog_player(shard_2_master)
-    self.check_no_binlog_player(shard_3_master)
+    # CancelResharding should now succeed
+    utils.run_vtctl(['CancelResharding', 'test_keyspace/80-'], auto_log=True)
+    self.check_no_binlog_player(shard_1_master)
 
     # delete the original tablets in the original shard
     tablet.kill_tablets([shard_1_master, shard_1_slave1, shard_1_slave2,
