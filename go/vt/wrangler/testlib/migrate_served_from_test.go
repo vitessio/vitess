@@ -113,6 +113,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
 	}}}, nil)
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
 
 	// simulate the clone, by fixing the dest shard record
