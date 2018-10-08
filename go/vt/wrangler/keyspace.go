@@ -88,6 +88,69 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 	return wr.ts.UpdateKeyspace(ctx, ki)
 }
 
+// CancelResharding cancels any resharding in progress on the specified keyspace/shard.
+// This works for horizontal as well as vertical resharding.
+func (wr *Wrangler) CancelResharding(ctx context.Context, keyspace, shard string) (err error) {
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "CancelResharding")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+
+	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	if len(ki.ServedFroms) == 0 {
+		return wr.cancelHorizontalResharding(ctx, keyspace, shard)
+	}
+	return wr.cancelVerticalResharding(ctx, keyspace, shard)
+}
+
+func (wr *Wrangler) cancelHorizontalResharding(ctx context.Context, keyspace, shard string) error {
+	wr.Logger().Infof("Finding the overlapping shards in keyspace %v", keyspace)
+	osList, err := topotools.FindOverlappingShards(ctx, wr.ts, keyspace)
+	if err != nil {
+		return fmt.Errorf("FindOverlappingShards failed: %v", err)
+	}
+
+	// find our shard in there
+	os := topotools.OverlappingShardsForShard(osList, shard)
+	if os == nil {
+		return fmt.Errorf("Shard %v is not involved in any overlapping shards", shard)
+	}
+
+	_, destinationShards, err := wr.findSourceDest(ctx, os)
+	if err != nil {
+		return err
+	}
+	for _, si := range destinationShards {
+		if len(si.ServedTypes) != 0 {
+			return fmt.Errorf("some served types have migrated for %v/%v, please undo them before canceling", keyspace, shard)
+		}
+	}
+	for i, si := range destinationShards {
+		ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
+		if err != nil {
+			return err
+		}
+		for _, sourceShard := range si.SourceShards {
+			if _, err := wr.tmc.VReplicationExec(ctx, ti.Tablet, binlogplayer.DeleteVReplication(sourceShard.Uid)); err != nil {
+				return err
+			}
+		}
+		destinationShards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
+			si.TabletControls = nil
+			si.SourceShards = nil
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return wr.refreshMasters(ctx, destinationShards)
+}
+
 // MigrateServedTypes is used during horizontal splits to migrate a
 // served type from a list of shards to another.
 func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, reverse, skipReFreshState bool, filteredReplicationWaitTime time.Duration, reverseReplication bool) (err error) {
@@ -712,6 +775,35 @@ func formatTabletStats(ts *discovery.TabletStats) string {
 		webURL = fmt.Sprintf("http://%v:%d/", ts.Tablet.Hostname, webPort)
 	}
 	return fmt.Sprintf("%v: %v stats: %v", topoproto.TabletAliasString(ts.Tablet.Alias), webURL, ts.Stats)
+}
+
+func (wr *Wrangler) cancelVerticalResharding(ctx context.Context, keyspace, shard string) error {
+	destinationShard, err := wr.ts.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return err
+	}
+	if len(destinationShard.SourceShards) != 1 || len(destinationShard.SourceShards[0].Tables) == 0 {
+		return fmt.Errorf("destination shard %v/%v is not a vertical split target", keyspace, shard)
+	}
+	sourceShard, err := wr.ts.GetShard(ctx, destinationShard.SourceShards[0].Keyspace, destinationShard.SourceShards[0].Shard)
+	if err != nil {
+		return err
+	}
+	if len(sourceShard.TabletControls) != 0 {
+		return fmt.Errorf("some served types have migrated for %v/%v, please undo them before canceling", keyspace, shard)
+	}
+	destinationMasterTabletInfo, err := wr.ts.GetTablet(ctx, destinationShard.MasterAlias)
+	if err != nil {
+		return err
+	}
+	if _, err := wr.tmc.VReplicationExec(ctx, destinationMasterTabletInfo.Tablet, binlogplayer.DeleteVReplication(destinationShard.SourceShards[0].Uid)); err != nil {
+		return err
+	}
+	_, err = wr.ts.UpdateShardFields(ctx, destinationShard.Keyspace(), destinationShard.ShardName(), func(si *topo.ShardInfo) error {
+		si.SourceShards = nil
+		return nil
+	})
+	return err
 }
 
 // MigrateServedFrom is used during vertical splits to migrate a
