@@ -24,7 +24,6 @@ import (
 
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -153,20 +152,6 @@ var routeName = map[RouteOpcode]string{
 	SelectDBA:         "SelectDBA",
 }
 
-var (
-	routeMetrics *stats.CountersWithSingleLabel
-	scatterWidth = stats.NewCounter("RouteTotalScatterWidth", "Total width (shards routed to by a statement) of all statements routed")
-)
-
-func init() {
-	var routeNames []string
-	for _, value := range routeName {
-		routeNames = append(routeNames, value)
-	}
-
-	routeMetrics = stats.NewCountersWithSingleLabel("Routes", "Counts of statements routed by route type", "route_type", routeNames...)
-}
-
 // MarshalJSON serializes the RouteOpcode as a JSON string.
 // It's used for testing and diagnostics.
 func (code RouteOpcode) MarshalJSON() ([]byte, error) {
@@ -222,9 +207,6 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 		}
 		return &sqltypes.Result{}, nil
 	}
-
-	routeMetrics.Add(routeName[route.Opcode], 1)
-	scatterWidth.Add(int64(len(rss)))
 
 	queries := getQueries(route.Query, bvs)
 	result, err := vcursor.ExecuteMultiShard(rss, queries, false /* isDML */, false /* autocommit */)
