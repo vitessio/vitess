@@ -298,7 +298,7 @@ type HealthCheck interface {
 
 // HealthCheckImpl performs health checking and notifies downstream components about any changes.
 // It contains a map of tabletHealth objects, each of which stores the health information for
-// a tablet. A checkConn goroutine is spawned for each tabletHealh, which is responsible for
+// a tablet. A checkConn goroutine is spawned for each tabletHealth, which is responsible for
 // keeping that tabletHealth up-to-date. This is done through callbacks to updateHealth.
 // If checkConn terminates for any reason, it updates tabletHealth.Up as false. If a tabletHealth
 // gets removed from the map, its cancelFunc gets called, which ensures that the associated
@@ -309,8 +309,8 @@ type HealthCheckImpl struct {
 	sendDownEvents     bool
 	retryDelay         time.Duration
 	healthCheckTimeout time.Duration
-	// wg keeps track of all launched Go routines.
-	wg sync.WaitGroup
+	// connsWG keeps track of all launched Go routines that monitor tablet connections.
+	connsWG sync.WaitGroup
 
 	// mu protects all the following fields.
 	mu sync.Mutex
@@ -328,13 +328,8 @@ type HealthCheckImpl struct {
 // healthcheck are transmitted through calls to HealthCheckImpl.updateHealth.
 // TODO(sougou): move this and associated functions to a separate file.
 type healthCheckConn struct {
-	// set at construction time
 	ctx context.Context
 
-	// mu protects all the following fields.
-	// When locking both mutex from HealthCheck and healthCheckConn,
-	// HealthCheck.mu goes first.
-	// Note tabletStats.Tablet and tabletStats.Name are immutable.
 	conn                  queryservice.QueryService
 	tabletStats           TabletStats
 	loggedServingState    bool
@@ -460,7 +455,8 @@ func (hc *HealthCheckImpl) updateHealth(ts *TabletStats, conn queryservice.Query
 	hc.mu.Lock()
 	th, ok := hc.addrToHealth[ts.Key]
 	if !ok {
-		// This can happen on delete because the entry is removed first.
+		// This can happen on delete because the entry is removed first,
+		// or if HealthCheckImpl has been closed.
 		hc.mu.Unlock()
 		return
 	}
@@ -500,14 +496,17 @@ func (hc *HealthCheckImpl) finalizeConn(hcc *healthCheckConn) {
 	hc.updateHealth(hcc.tabletStats.Copy(), nil)
 	if hcc.conn != nil {
 		// Don't use hcc.ctx because it's already closed.
-		hcc.conn.Close(context.Background())
+		// Use a separate context, and add a timeout to prevent unbounded waits.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		hcc.conn.Close(ctx)
 		hcc.conn = nil
 	}
 }
 
 // checkConn performs health checking on the given tablet.
 func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
-	defer hc.wg.Done()
+	defer hc.connsWG.Done()
 	defer hc.finalizeConn(hcc)
 
 	// Initial notification for downstream about the tablet existence.
@@ -627,11 +626,12 @@ func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, cal
 	}
 
 	if err := hcc.conn.StreamHealth(ctx, callback); err != nil {
-		hcc.conn.Close(ctx)
-		hcc.conn = nil
 		hcc.setServingState(false, err.Error())
 		hcc.tabletStats.LastError = err
-		hc.updateHealth(hcc.tabletStats.Copy(), hcc.conn)
+		// Send nil because we intend to close the connection.
+		hc.updateHealth(hcc.tabletStats.Copy(), nil)
+		hcc.conn.Close(ctx)
+		hcc.conn = nil
 	}
 }
 
@@ -691,7 +691,6 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 	key := TabletToMapKey(tablet)
 	th, ok := hc.addrToHealth[key]
 	if !ok {
-		log.Warningf("deleting unknown tablet: %+v", tablet)
 		return
 	}
 	th.latestTabletStats.Up = false
@@ -734,6 +733,11 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 		},
 	}
 	hc.mu.Lock()
+	if hc.addrToHealth == nil {
+		// already closed.
+		hc.mu.Unlock()
+		return
+	}
 	if _, ok := hc.addrToHealth[key]; ok {
 		hc.mu.Unlock()
 		log.Warningf("adding duplicate tablet %v for %v: %+v", name, tablet.Alias.Cell, tablet)
@@ -744,9 +748,9 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 		latestTabletStats: hcc.tabletStats,
 	}
 	hc.initialUpdatesWG.Add(1)
+	hc.connsWG.Add(1)
 	hc.mu.Unlock()
 
-	hc.wg.Add(1)
 	go hc.checkConn(hcc, name)
 }
 
@@ -906,14 +910,14 @@ func (hc *HealthCheckImpl) Close() error {
 	for _, th := range hc.addrToHealth {
 		th.cancelFunc()
 	}
-	hc.addrToHealth = make(map[string]*tabletHealth)
+	hc.addrToHealth = nil
 	// Release the lock early or a pending checkHealthCheckTimeout
 	// cannot get a read lock on it.
 	hc.mu.Unlock()
 
 	// Wait for the checkHealthCheckTimeout Go routine and each Go
 	// routine per tablet.
-	hc.wg.Wait()
+	hc.connsWG.Wait()
 
 	return nil
 }
