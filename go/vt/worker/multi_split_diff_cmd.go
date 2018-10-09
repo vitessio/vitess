@@ -29,8 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const multiSplitDiffHTML = `
@@ -64,8 +62,6 @@ const multiSplitDiffHTML2 = `
         <INPUT type="text" id="sourceUID" name="sourceUID" value="{{.DefaultSourceUID}}"></BR>
       <LABEL for="excludeTables">Exclude Tables: </LABEL>
         <INPUT type="text" id="excludeTables" name="excludeTables" value=""></BR>
-      <LABEL for="excludeShards">Exclude Shards (just the shard not the keyspace, comma separated, e.g. "-10,10-20"): </LABEL>
-        <INPUT type="text" id="excludeShards" name="excludeShards" value=""></BR>
       <LABEL for="minHealthyRdonlyTablets">Minimum Number of required healthy RDONLY tablets: </LABEL>
         <INPUT type="text" id="minHealthyRdonlyTablets" name="minHealthyRdonlyTablets" value="{{.DefaultMinHealthyRdonlyTablets}}"></BR>
       <LABEL for="parallelDiffsCount">Number of tables to diff in parallel: </LABEL>
@@ -84,9 +80,7 @@ var multiSplitDiffTemplate2 = mustParseTemplate("multiSplitDiff2", multiSplitDif
 
 func commandMultiSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
-	excludeShards := subFlags.String("exclude_shards", "", "comma separated list of shards to exclude")
 	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyRdonlyTablets, "minimum number of healthy RDONLY tablets before taking out one")
-	destTabletTypeStr := subFlags.String("dest_tablet_type", defaultDestTabletType, "destination tablet type (RDONLY or REPLICA) that will be used to compare the shards")
 	parallelDiffsCount := subFlags.Int("parallel_diffs_count", defaultParallelDiffsCount, "number of tables to diff in parallel")
 	waitForFixedTimeRatherThanGtidSet := subFlags.Bool("wait_for_fixed_time_rather_than_gtid_set", false, "wait for 1m when syncing up the destination RDONLY tablet rather than using the GTID set. Use this when the GTID set on the RDONLY is broken. Make sure the RDONLY is not behind in replication when using this flag.")
 	if err := subFlags.Parse(args); err != nil {
@@ -104,15 +98,7 @@ func commandMultiSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.F
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	var excludeShardsArray []string
-	if *excludeShards != "" {
-		excludeShardsArray = strings.Split(*excludeShards, ",")
-	}
-	destTabletType, ok := topodatapb.TabletType_value[*destTabletTypeStr]
-	if !ok {
-		return nil, fmt.Errorf("command MultiSplitDiff invalid dest_tablet_type: %v", destTabletType)
-	}
-	return NewMultiSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray, excludeShardsArray, *minHealthyRdonlyTablets, *parallelDiffsCount, *waitForFixedTimeRatherThanGtidSet, topodatapb.TabletType(destTabletType)), nil
+	return NewMultiSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray, *minHealthyRdonlyTablets, *parallelDiffsCount, *waitForFixedTimeRatherThanGtidSet), nil
 }
 
 // shardSources returns all the shards that are SourceShards of at least one other shard.
@@ -219,11 +205,6 @@ func interactiveMultiSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.W
 	if excludeTables != "" {
 		excludeTableArray = strings.Split(excludeTables, ",")
 	}
-	excludeShards := r.FormValue("excludeShards")
-	var excludeShardsArray []string
-	if excludeShards != "" {
-		excludeShardsArray = strings.Split(excludeShards, ",")
-	}
 	minHealthyRdonlyTabletsStr := r.FormValue("minHealthyRdonlyTablets")
 	parallelDiffsCountStr := r.FormValue("parallelDiffsCount")
 	minHealthyRdonlyTablets, err := strconv.ParseInt(minHealthyRdonlyTabletsStr, 0, 64)
@@ -238,7 +219,7 @@ func interactiveMultiSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.W
 	}
 
 	// start the diff job
-	wrk := NewMultiSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray, excludeShardsArray, int(minHealthyRdonlyTablets), int(parallelDiffsCount), waitForFixedTimeRatherThanGtidSet, topodatapb.TabletType_RDONLY)
+	wrk := NewMultiSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray, int(minHealthyRdonlyTablets), int(parallelDiffsCount), waitForFixedTimeRatherThanGtidSet)
 	return wrk, nil, nil, nil
 }
 

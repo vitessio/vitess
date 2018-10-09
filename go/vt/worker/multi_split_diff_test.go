@@ -169,7 +169,7 @@ func (sq *msdSourceTabletServer) StreamExecute(ctx context.Context, target *quer
 
 // TODO(aaijazi): Create a test in which source and destination data does not match
 
-func testMultiSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.TabletType) {
+func testMultiSplitDiff(t *testing.T, v3 bool) {
 	*useV3ReshardingMode = v3
 	ts := memorytopo.NewServer("cell1", "cell2")
 	ctx := context.Background()
@@ -220,9 +220,9 @@ func testMultiSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.
 	leftMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
 		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
-		destinationTabletType, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 12,
-		destinationTabletType, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
 	rightMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 20,
 		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
@@ -312,12 +312,10 @@ func testMultiSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.
 		defer ft.StopActionLoop(t)
 	}
 
-	tabletTypeName, _ := topodatapb.TabletType_name[int32(destinationTabletType)]
 	// Run the vtworker command.
 	args := []string{
 		"MultiSplitDiff",
 		"-exclude_tables", excludedTable,
-		"-dest_tablet_type", tabletTypeName,
 		"ks/-80",
 	}
 	// We need to use FakeTabletManagerClient because we don't
@@ -330,13 +328,10 @@ func testMultiSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.
 }
 
 func TestMultiSplitDiffv2(t *testing.T) {
-	testMultiSplitDiff(t, false, topodatapb.TabletType_RDONLY)
+	// TODO: Make MultiSplitDiff work with V2
+	// testMultiSplitDiff(t, false)
 }
 
 func TestMultiSplitDiffv3(t *testing.T) {
-	testMultiSplitDiff(t, true, topodatapb.TabletType_RDONLY)
-}
-
-func TestMultiSplitDiffWithReplica(t *testing.T) {
-	testMultiSplitDiff(t, true, topodatapb.TabletType_REPLICA)
+	testMultiSplitDiff(t, true)
 }
