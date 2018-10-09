@@ -20,25 +20,27 @@ import (
 var (
 	kubeconfig *string
 
-	/* TODO: Describe format of secrets
+	/*
 		To implement authorization through Kubernetes secrets, you must have created a secret with the following in the Data specification: {MysqlNativePassword, UserData}
-	The name of the secret, config,
+		Below, we observe three command line flags. The namespace and name of the secret are passed in normally. Only pass in a value for config if you have an external configuration.
 	*/
-	mysqlAuthServerK8sSecret    = flag.String("mysql_auth_server_k8s_secret", "", "Name of the Kubernetes secret that contains the auth information for vtgate.")
-	mysqlAuthServerK8sConfig    = flag.String("mysql_auth_server_k8s_config", "", "The Kubernetes configuration that sets information for the clientset. ")
-	mysqlAuthServerK8sNamespace = flag.String("mysql_auth_server_k8s_namespace", "", "The namespace in which the Kubernetes secret lives in. ")
+	mysqlAuthServerK8sSecret    = flag.String("mysql_auth_server_k8s_secret", "", "Name of the Kubernetes secret that contains the auth information for vtgate")
+	mysqlAuthServerK8sConfig    = flag.String("mysql_auth_server_k8s_config", "", "The Kubernetes configuration that sets information for the clientset")
+	mysqlAuthServerK8sNamespace = flag.String("mysql_auth_server_k8s_namespace", "default", "The namespace in which the Kubernetes secret lives in")
 )
 
 type SecretGetter interface {
-	Get(namespace string, secret string, getOptions metav1.GetOptions) (*v1.Secret, error)
+	Get(getOptions metav1.GetOptions) (*v1.Secret, error)
 }
 
 type K8sAuthSecretGetter struct {
+	namespace string
+	secret    string
 	clientset *kubernetes.Clientset
 }
 
-func (c *K8sAuthSecretGetter) Get(namespace string, secret string, getOptions metav1.GetOptions) (*v1.Secret, error) {
-	return c.clientset.CoreV1().Secrets(namespace).Get(secret, getOptions)
+func (c *K8sAuthSecretGetter) Get(getOptions metav1.GetOptions) (*v1.Secret, error) {
+	return c.clientset.CoreV1().Secrets(c.namespace).Get(c.secret, getOptions)
 }
 
 // AuthServerK8s indicates that the user will provide authentication through a Kubernetes secret
@@ -58,25 +60,25 @@ type AuthServerK8sEntry struct {
 	UserData            string
 }
 
-// Immediately register AuthServerK8s
-func init() {
-	if *mysqlAuthServerK8sSecret == "" {
+// InitAuthServerK8s registers AuthServerK8s
+func InitAuthServerK8s() {
+	if home := homeDir(); home != "" {
+		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+	} else {
+		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	}
+
+	if mysqlAuthServerK8sSecret == nil || *mysqlAuthServerK8sSecret == "" {
 		log.Infof("Not configuring AuthServerK8s, as you must provide a Kubernetes secret name")
 		return
 	}
 
 	authServerK8s := NewAuthServerK8s()
 	RegisterAuthServerImpl("k8s", authServerK8s)
-
-	if home := homeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	}
 }
 
 func selectAuthServerK8s() (configFlag string) {
-	if *mysqlAuthServerK8sConfig != "" {
+	if mysqlAuthServerK8sSecret != nil && *mysqlAuthServerK8sConfig != "" {
 		configFlag := "external"
 		return configFlag
 	} else {
@@ -109,7 +111,9 @@ func NewAuthServerK8s() *AuthServerK8s {
 	return &AuthServerK8s{
 		Method:  MysqlNativePassword,
 		Entries: make(map[string][]*AuthServerK8sEntry),
-		Getter: K8sAuthSecretGetter{
+		Getter: &K8sAuthSecretGetter{
+			namespace: *mysqlAuthServerK8sNamespace,
+			secret:    *mysqlAuthServerK8sSecret,
 			clientset: clientset,
 		},
 	}
@@ -125,58 +129,22 @@ func (a *AuthServerK8s) Salt() ([]byte, error) {
 	return NewSalt()
 }
 
-func getK8sEntry(namespace string, clientset SecretGetter, secretName string) (secret *v1.Secret, err error) {
+// ValidateHash is part of the AuthServer interface.
+func (a *AuthServerK8s) ValidateHash(salt []byte, user string, authResponse []byte, _ net.Addr) (Getter, error) {
 
-	secret, err = clientset.Get(namespace, secretName, metav1.GetOptions{})
+	secret, err := a.Getter.Get(metav1.GetOptions{})
 
 	if errors.IsNotFound(err) {
 		return nil, fmt.Errorf("Secret not found")
 	} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
 		return nil, fmt.Errorf("Error getting secret %v", statusError.ErrStatus.Message)
 	} else if err != nil {
-		return nil, fmt.Errorf("Uh-oh... %v", err)
-	} else {
-		fmt.Printf("Retrieved secret: " + secretName)
-		return secret, err
-	}
-
-}
-
-// ValidateHash is part of the AuthServer interface.
-func (a *AuthServerK8s) ValidateHash(salt []byte, user string, authResponse []byte, _ net.Addr) (Getter, error) {
-
-	var config *rest.Config
-	var err error
-
-	serverType := selectAuthServerK8s()
-	if serverType == "local" {
-		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	} else {
-		config, err = rest.InClusterConfig()
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return &K8sUserData{""}, fmt.Errorf("Clientset failed to initialize from config: %v", err)
-	}
-
-	sg := &K8sAuthSecretGetter{
-		clientset: clientset,
-	}
-
-	secret, err := getK8sEntry(*mysqlAuthServerK8sNamespace, a.Getter, *mysqlAuthServerK8sSecret)
-	if err != nil {
-		return &K8sUserData{""}, fmt.Errorf("Secret not retrieved: %v", err)
+		return nil, fmt.Errorf("Error getting secret %v", err)
 	}
 
 	entries := []*AuthServerK8sEntry{
 		{
-			//	MysqlNativePassword: string(secret.Data["MysqlNativePassword"]),
-			MysqlNativePassword: "*EA5F8D65608CF3A37FE8134BF3B14129511E52CF",
+			MysqlNativePassword: string(secret.Data["MysqlNativePassword"]),
 			UserData:            string(secret.Data["UserData"]),
 		},
 	}
@@ -194,7 +162,7 @@ func (a *AuthServerK8s) ValidateHash(salt []byte, user string, authResponse []by
 
 // Negotiate returns an error becuase we only support MysqlNativePassword for the K8s AuthServer
 func (a *AuthServerK8s) Negotiate(c *Conn, user string, remoteAddr net.Addr) (Getter, error) {
-	return &K8sUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "I'm sorry Dan, I'm afraid I can't do that.", user)
+	return &K8sUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "I'm sorry Dave, I'm afraid I can't do that.", user)
 }
 
 // K8sUserData holds the username
