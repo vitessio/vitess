@@ -782,6 +782,7 @@ func TestParamsFail(t *testing.T) {
 }
 
 func TestExecFail(t *testing.T) {
+	// Unsharded error
 	sel := &Route{
 		Opcode: SelectUnsharded,
 		Keyspace: &vindexes.Keyspace{
@@ -799,4 +800,92 @@ func TestExecFail(t *testing.T) {
 	vc.Rewind()
 	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "sel.StreamExecute err", err, "result error")
+
+	// Scatter fails if one of N fails without ShardPartial
+	sel = &Route{
+		Opcode: SelectScatter,
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		Query:      "dummy_select",
+		FieldQuery: "dummy_select_field",
+	}
+
+	vc = &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: []*sqltypes.Result{defaultSelectResult},
+		multiShardErrs: []error{
+			errors.New("result error -20"),
+		},
+	}
+	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	expectError(t, "sel.Execute err", err, "result error -20")
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+	})
+
+	vc.Rewind()
+
+	// Scatter fails if ann shards fails even with ShardPartial
+	sel = &Route{
+		Opcode: SelectScatter,
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		Query:        "dummy_select",
+		FieldQuery:   "dummy_select_field",
+		ShardPartial: true,
+	}
+
+	vc = &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: []*sqltypes.Result{defaultSelectResult},
+		multiShardErrs: []error{
+			errors.New("result error -20"),
+			errors.New("result error 20-"),
+		},
+	}
+	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	expectError(t, "sel.Execute err", err, "result error -20\nresult error 20-")
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+	})
+
+	vc.Rewind()
+
+	// Scatter succeeds if one of N fails with ShardPartial
+	sel = &Route{
+		Opcode: SelectScatter,
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		Query:        "dummy_select",
+		FieldQuery:   "dummy_select_field",
+		ShardPartial: true,
+	}
+
+	vc = &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: []*sqltypes.Result{defaultSelectResult},
+		multiShardErrs: []error{
+			errors.New("result error -20"),
+			nil,
+		},
+	}
+	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Errorf("unexpected ShardPartial error %v", err)
+	}
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
+
+	vc.Rewind()
 }

@@ -88,6 +88,10 @@ type loggingVCursor struct {
 	curResult int
 	resultErr error
 
+	// Optional errors that can be returned from nextResult() alongside the results for
+	// multi-shard queries
+	multiShardErrs []error
+
 	log []string
 }
 
@@ -107,9 +111,10 @@ func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries
 	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v %v", printResolvedShardQueries(rss, queries), isDML, canAutocommit))
 	res, err := f.nextResult()
 	if err != nil {
-		return res, []error{err}
+		return nil, []error{err}
 	}
-	return res, nil
+
+	return res, f.multiShardErrs
 }
 
 func (f *loggingVCursor) AutocommitApproval() bool {

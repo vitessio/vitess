@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -71,6 +72,9 @@ type Route struct {
 
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
+
+	// ShardPartial is true if results should be returned even if some shards have an error
+	ShardPartial bool
 }
 
 // OrderbyParams specifies the parameters for ordering.
@@ -97,6 +101,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		OrderBy             []OrderbyParams      `json:",omitempty"`
 		TruncateColumnCount int                  `json:",omitempty"`
 		QueryTimeout        int                  `json:",omitempty"`
+		ShardPartial        bool                 `json:",omitempty"`
 	}{
 		Opcode:              route.Opcode,
 		Keyspace:            route.Keyspace,
@@ -107,6 +112,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		OrderBy:             route.OrderBy,
 		TruncateColumnCount: route.TruncateColumnCount,
 		QueryTimeout:        route.QueryTimeout,
+		ShardPartial:        route.ShardPartial,
 	}
 	return jsonutil.MarshalNoEscape(marshalRoute)
 }
@@ -151,6 +157,10 @@ var routeName = map[RouteOpcode]string{
 	SelectNext:        "SelectNext",
 	SelectDBA:         "SelectDBA",
 }
+
+var (
+	partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
+)
 
 // MarshalJSON serializes the RouteOpcode as a JSON string.
 // It's used for testing and diagnostics.
@@ -210,8 +220,27 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 
 	queries := getQueries(route.Query, bvs)
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, false /* isDML */, false /* autocommit */)
+
 	if errs != nil {
-		return nil, vterrors.Aggregate(errs)
+		if route.ShardPartial {
+			// If all the shards failed, treat the operation as failed.
+			// Otherwise fall through and process whatever was returned.
+			partialSuccess := false
+			for _, err := range errs {
+				if err == nil {
+					partialSuccess = true
+					break
+				}
+			}
+
+			if partialSuccess {
+				partialSuccessScatterQueries.Add(1)
+			} else {
+				return nil, vterrors.Aggregate(errs)
+			}
+		} else {
+			return nil, vterrors.Aggregate(errs)
+		}
 	}
 	if len(route.OrderBy) == 0 {
 		return result, nil
