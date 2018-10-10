@@ -155,11 +155,9 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 
 	// refresh
 	// TODO(b/26388813): Integrate vtctl WaitForDrain here instead of just sleeping.
-	var waitForDrainSleep time.Duration
-	switch servedType {
-	case topodatapb.TabletType_RDONLY:
-		waitForDrainSleep = *waitForDrainSleepRdonly
-	case topodatapb.TabletType_REPLICA:
+	// Anything that's not a replica will use the RDONLY sleep time.
+	waitForDrainSleep := *waitForDrainSleepRdonly
+	if servedType == topodatapb.TabletType_REPLICA {
 		waitForDrainSleep = *waitForDrainSleepReplica
 	}
 	wr.Logger().Infof("WaitForDrain: Sleeping for %.0f seconds before shutting down query service on old tablets...", waitForDrainSleep.Seconds())
