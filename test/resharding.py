@@ -973,6 +973,12 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_1_ny_rdonly, True, False)
     utils.check_tablet_query_service(self, shard_1_rdonly1, False, True)
 
+    # rerun migrate to ensure it doesn't fail
+    # skip refresh to make it go faster
+    utils.run_vtctl(['MigrateServedTypes', '--cells=test_nj',
+                     '-skip-refresh-state=true',
+                     'test_keyspace/80-', 'rdonly'], auto_log=True)
+
     # now serve rdonly from the split shards, everywhere
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'rdonly'],
                     auto_log=True)
@@ -991,6 +997,11 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_0_ny_rdonly, True, False)
     utils.check_tablet_query_service(self, shard_1_ny_rdonly, False, True)
     utils.check_tablet_query_service(self, shard_1_rdonly1, False, True)
+
+    # rerun migrate to ensure it doesn't fail
+    # skip refresh to make it go faster
+    utils.run_vtctl(['MigrateServedTypes', '-skip-refresh-state=true',
+                     'test_keyspace/80-', 'rdonly'], auto_log=True)
 
     # then serve replica from the split shards
     destination_shards = ['test_keyspace/80-c0', 'test_keyspace/c0-']
@@ -1091,8 +1102,39 @@ primary key (name)
                      'test_keyspace/c0-', '1', 'test_keyspace/80-'],
                     auto_log=True)
 
-    # then serve master from the split shards, make sure the source master's
-    # query service is now turned off
+    # do a Migrate that will fail waiting for replication
+    # which should cause the Migrate to be canceled and the source
+    # master to be serving again.
+    utils.run_vtctl(['MigrateServedTypes',
+                     '-filtered_replication_wait_time', '0s',
+                     'test_keyspace/80-', 'master'],
+                     auto_log=True, expect_fail=True)
+    utils.check_srv_keyspace('test_nj', 'test_keyspace',
+                             'Partitions(master): -80 80-\n'
+                             'Partitions(rdonly): -80 80-c0 c0-\n'
+                             'Partitions(replica): -80 80-c0 c0-\n',
+                             keyspace_id_type=base_sharding.keyspace_id_type,
+                             sharding_column_name='custom_ksid_col')
+    utils.check_tablet_query_service(self, shard_1_master, True, False)
+
+    # sabotage master migration and make it fail in an unfinished state
+    utils.run_vtctl(['SetShardTabletControl', '-blacklisted_tables=t',
+                     'test_keyspace/c0-', 'master'], auto_log=True)
+    utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],
+                    auto_log=True, expect_fail=True)
+
+    # remove sabotage, but make it fail early. This should not result
+    # in the source master serving, because this failure is past the
+    # point of no return.
+    utils.run_vtctl(['SetShardTabletControl', '-blacklisted_tables=t',
+                     '-remove', 'test_keyspace/c0-', 'master'], auto_log=True)
+    utils.run_vtctl(['MigrateServedTypes',
+                     '-filtered_replication_wait_time', '0s',
+                     'test_keyspace/80-', 'master'],
+                     auto_log=True, expect_fail=True)
+    utils.check_tablet_query_service(self, shard_1_master, False, True)
+
+    # finally, do the Migration that's expected to succeed
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',

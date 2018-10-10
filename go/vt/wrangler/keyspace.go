@@ -126,49 +126,9 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 		return fmt.Errorf("Shard %v is not involved in any overlapping shards", shard)
 	}
 
-	// find which list is which: the sources have no source
-	// shards, the destination have source shards. We check the
-	// first entry in the lists, then just check they're
-	// consistent
-	var sourceShards []*topo.ShardInfo
-	var destinationShards []*topo.ShardInfo
-	if len(os.Left[0].SourceShards) == 0 {
-		if len(os.Right[0].SourceShards) == 0 {
-			return fmt.Errorf("neither Shard '%v' nor Shard '%v' have a 'SourceShards' entry. Did you successfully run vtworker SplitClone before? Or did you already migrate the MASTER type?", os.Left[0].ShardName(), os.Right[0].ShardName())
-		}
-		sourceShards = os.Left
-		destinationShards = os.Right
-	} else {
-		sourceShards = os.Right
-		destinationShards = os.Left
-	}
-
-	// Verify the sources has the type we're migrating (or not if reverse)
-	for _, si := range sourceShards {
-		if err := si.CheckServedTypesMigration(servedType, cells, !reverse); err != nil {
-			return err
-		}
-	}
-
-	// Verify the destinations do not have the type we're
-	// migrating (or do if reverse)
-	for _, si := range destinationShards {
-		if err := si.CheckServedTypesMigration(servedType, cells, reverse); err != nil {
-			return err
-		}
-	}
-
-	// re-read all the shards so we are up to date
-	wr.Logger().Infof("Re-reading all shards")
-	for i, si := range sourceShards {
-		if sourceShards[i], err = wr.ts.GetShard(ctx, si.Keyspace(), si.ShardName()); err != nil {
-			return err
-		}
-	}
-	for i, si := range destinationShards {
-		if destinationShards[i], err = wr.ts.GetShard(ctx, si.Keyspace(), si.ShardName()); err != nil {
-			return err
-		}
+	sourceShards, destinationShards, err := wr.findSourceDest(ctx, os)
+	if err != nil {
+		return err
 	}
 
 	// execute the migration
@@ -187,43 +147,49 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 		return err
 	}
 
-	// Send a refresh to the tablets we just disabled, iff:
-	// - we're not migrating a master
-	// - we don't have any errors
-	// - we're not told to skip the refresh
-	if servedType != topodatapb.TabletType_MASTER && !skipReFreshState {
-		rec := concurrency.AllErrorRecorder{}
-		var refreshShards []*topo.ShardInfo
-		if reverse {
-			// For a backwards migration, we just disabled query service on the destination shards
-			refreshShards = destinationShards
-		} else {
-			// For a forwards migration, we just disabled query service on the source shards
-			refreshShards = sourceShards
-		}
-
-		// TODO(b/26388813): Integrate vtctl WaitForDrain here instead of just sleeping.
-		var waitForDrainSleep time.Duration
-		switch servedType {
-		case topodatapb.TabletType_RDONLY:
-			waitForDrainSleep = *waitForDrainSleepRdonly
-		case topodatapb.TabletType_REPLICA:
-			waitForDrainSleep = *waitForDrainSleepReplica
-		default:
-			wr.Logger().Warningf("invalid TabletType: %v for MigrateServedTypes command", servedType)
-		}
-
-		wr.Logger().Infof("WaitForDrain: Sleeping for %.0f seconds before shutting down query service on old tablets...", waitForDrainSleep.Seconds())
-		time.Sleep(waitForDrainSleep)
-		wr.Logger().Infof("WaitForDrain: Sleeping finished. Shutting down queryservice on old tablets now.")
-
-		for _, si := range refreshShards {
-			rec.RecordError(wr.RefreshTabletsByShard(ctx, si, []topodatapb.TabletType{servedType}, cells))
-		}
-		return rec.Error()
+	// Master migrate performs its own refresh.
+	// Otherwise, honor skipRefreshState if requested.
+	if servedType == topodatapb.TabletType_MASTER || skipReFreshState {
+		return nil
 	}
 
-	return nil
+	// refresh
+	// TODO(b/26388813): Integrate vtctl WaitForDrain here instead of just sleeping.
+	// Anything that's not a replica will use the RDONLY sleep time.
+	waitForDrainSleep := *waitForDrainSleepRdonly
+	if servedType == topodatapb.TabletType_REPLICA {
+		waitForDrainSleep = *waitForDrainSleepReplica
+	}
+	wr.Logger().Infof("WaitForDrain: Sleeping for %.0f seconds before shutting down query service on old tablets...", waitForDrainSleep.Seconds())
+	time.Sleep(waitForDrainSleep)
+	wr.Logger().Infof("WaitForDrain: Sleeping finished. Shutting down queryservice on old tablets now.")
+
+	rec := concurrency.AllErrorRecorder{}
+	refreshShards := sourceShards
+	if reverse {
+		// For a backwards migration, we should refresh (disable) destination shards instead.
+		refreshShards = destinationShards
+	}
+	for _, si := range refreshShards {
+		rec.RecordError(wr.RefreshTabletsByShard(ctx, si, []topodatapb.TabletType{servedType}, cells))
+	}
+	return rec.Error()
+}
+
+// findSourceDest derives the source and destination from the overlapping shards.
+// Whichever side has SourceShards is a destination.
+func (wr *Wrangler) findSourceDest(ctx context.Context, os *topotools.OverlappingShards) (sourceShards, destinationShards []*topo.ShardInfo, err error) {
+	for _, left := range os.Left {
+		if len(left.SourceShards) != 0 {
+			return os.Right, os.Left, nil
+		}
+	}
+	for _, right := range os.Right {
+		if len(right.SourceShards) != 0 {
+			return os.Left, os.Right, nil
+		}
+	}
+	return nil, nil, fmt.Errorf("neither Shard '%v' nor Shard '%v' have a 'SourceShards' entry. Did you successfully run vtworker SplitClone before? Or did you already migrate the MASTER type?", os.Left[0].ShardName(), os.Right[0].ShardName())
 }
 
 func (wr *Wrangler) getMastersPosition(ctx context.Context, shards []*topo.ShardInfo) (map[*topo.ShardInfo]string, error) {
@@ -288,7 +254,11 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 				}
 
 				if err := wr.tmc.VReplicationWaitForPos(ctx, ti.Tablet, int(sourceShard.Uid), pos); err != nil {
-					rec.RecordError(err)
+					if strings.Contains(err.Error(), "not found") {
+						wr.Logger().Infof("%v stream %d was not found. Skipping wait.", topoproto.TabletAliasString(si.MasterAlias), sourceShard.Uid)
+					} else {
+						rec.RecordError(err)
+					}
 				} else {
 					wr.Logger().Infof("%v caught up", topoproto.TabletAliasString(si.MasterAlias))
 				}
@@ -365,6 +335,16 @@ func (wr *Wrangler) replicaMigrateServedType(ctx context.Context, keyspace strin
 
 // masterMigrateServedType operates with the keyspace locked
 func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string, sourceShards, destinationShards []*topo.ShardInfo, filteredReplicationWaitTime time.Duration) (err error) {
+	// Ensure other served types have migrated.
+	if si := sourceShards[0]; len(si.ServedTypes) > 1 {
+		var types []string
+		for _, servedType := range si.ServedTypes {
+			if servedType.TabletType != topodatapb.TabletType_MASTER {
+				types = append(types, servedType.TabletType.String())
+			}
+		}
+		return fmt.Errorf("cannot migrate MASTER away from %v/%v until everything else is migrated. Make sure that the following types are migrated first: %v", si.Keyspace(), si.ShardName(), strings.Join(types, ", "))
+	}
 
 	ev := &events.MigrateServedTypes{
 		KeyspaceName:      keyspace,
@@ -379,42 +359,55 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		}
 	}()
 
-	// For master type migration, need to:
+	// Phase 1
 	// - switch the source shards to read-only by disabling query service
 	// - gather all replication points
-	// - wait for filtered replication to catch up before we continue
+	// - wait for filtered replication to catch up
+	// - mark source shards as frozen
 	event.DispatchUpdate(ev, "disabling query service on all source masters")
-	if err = wr.updateShardRecords(ctx, sourceShards, nil, topodatapb.TabletType_MASTER, true); err != nil {
+	if err := wr.updateShardRecords(ctx, sourceShards, nil, topodatapb.TabletType_MASTER, true); err != nil {
+		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
 		return err
 	}
 	if err := wr.refreshMasters(ctx, sourceShards); err != nil {
+		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
 		return err
 	}
 
 	event.DispatchUpdate(ev, "getting positions of source masters")
 	masterPositions, err := wr.getMastersPosition(ctx, sourceShards)
 	if err != nil {
+		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
 		return err
 	}
 
 	event.DispatchUpdate(ev, "waiting for destination masters to catch up")
 	if err := wr.waitForFilteredReplication(ctx, masterPositions, destinationShards, filteredReplicationWaitTime); err != nil {
+		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
 		return err
 	}
 
+	// We've reached the point of no return. Freeze the tablet control records in the source masters.
+	if err := wr.freezeMasterMigrateServedType(ctx, sourceShards); err != nil {
+		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
+		return err
+	}
+
+	// Phase 2
 	// Destination shards need different handling than what updateShardRecords does.
 	event.DispatchUpdate(ev, "updating destination shards")
 	for i, si := range destinationShards {
-		// Stop VReplication streams if we're migrating master (forward only).
 		ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 		if err != nil {
 			return err
 		}
+		// Stop VReplication streams.
 		for _, sourceShard := range si.SourceShards {
 			if _, err := wr.tmc.VReplicationExec(ctx, ti.Tablet, binlogplayer.DeleteVReplication(sourceShard.Uid)); err != nil {
 				return err
 			}
 		}
+		// Similar to updateShardRecords, but we also remove SourceShards.
 		destinationShards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
 			if err := si.UpdateServedTypesMap(topodatapb.TabletType_MASTER, nil, false); err != nil {
 				return err
@@ -423,7 +416,6 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 				return err
 			}
 
-			// Final migration. Remove source shards.
 			si.SourceShards = nil
 			return nil
 		})
@@ -432,9 +424,6 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		}
 	}
 
-	// And tell the new shards masters they can now be read-write.
-	// Invoking a remote action will also make the tablet stop filtered
-	// replication.
 	event.DispatchUpdate(ev, "setting destination masters read-write")
 	if err := wr.refreshMasters(ctx, destinationShards); err != nil {
 		return err
@@ -442,6 +431,16 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 
 	event.DispatchUpdate(ev, "finished")
 	return nil
+}
+
+func (wr *Wrangler) cancelMasterMigrateServedTypes(ctx context.Context, sourceShards []*topo.ShardInfo) {
+	if err := wr.updateShardRecords(ctx, sourceShards, nil, topodatapb.TabletType_MASTER, false); err != nil {
+		wr.Logger().Errorf("failed to re-enable source masters: %v", err)
+		return
+	}
+	if err := wr.refreshMasters(ctx, sourceShards); err != nil {
+		wr.Logger().Errorf("failed to refresh source masters: %v", err)
+	}
 }
 
 // updateShardRecords updates the shard records based on 'from' or 'to' direction.
@@ -460,6 +459,25 @@ func (wr *Wrangler) updateShardRecords(ctx context.Context, shards []*topo.Shard
 		// The 'from' shards will be refreshed after traffic has migrated.
 		if !isFrom {
 			wr.RefreshTabletsByShard(ctx, si, []topodatapb.TabletType{servedType}, cells)
+		}
+	}
+	return nil
+}
+
+// freezeMasterMigrateServedType freezes the tablet control record for the source masters
+// to prevent them from being removed.
+func (wr *Wrangler) freezeMasterMigrateServedType(ctx context.Context, shards []*topo.ShardInfo) (err error) {
+	for i, si := range shards {
+		shards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
+			tc := si.GetTabletControl(topodatapb.TabletType_MASTER)
+			if tc == nil {
+				return fmt.Errorf("unexpected: missing tablet control record for source %v/%v", si.Keyspace(), si.ShardName())
+			}
+			tc.Frozen = true
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 	}
 	return nil
