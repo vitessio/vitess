@@ -31,6 +31,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestSelectNext(t *testing.T) {
@@ -782,6 +783,79 @@ func TestSelectScatter(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "SELECT", wantQueries[0].Sql, 8)
 }
 
+func TestSelectScatterPartial(t *testing.T) {
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+
+	// Fail 1 of N without the directive fails the whole operation
+	results, err := executorExec(executor, "select id from user", nil)
+	wantErr := "target: TestExecutor.40-60.master, used tablet: aa-0 (40-60), RESOURCE_EXHAUSTED error"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("want error %v, got %v", wantErr, err)
+	}
+	if results != nil {
+		t.Errorf("want nil results, got %v", results)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select id from user",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	for i, conn := range conns {
+		if conn == conns[2] {
+			if len(conn.Queries) != 0 {
+				t.Errorf("conn[%d].Queries = %#v, want []", i, conn.Queries)
+			}
+		} else {
+			if !reflect.DeepEqual(conn.Queries, wantQueries) {
+				t.Errorf("conn[%d].Queries = %#v, want %#v", i, conn.Queries, wantQueries)
+			}
+		}
+		conn.Queries = nil
+	}
+	testQueryLog(t, logChan, "TestExecute", "SELECT", wantQueries[0].Sql, 8)
+
+	// Fail 1 of N with the directive succeeds
+	results, err = executorExec(executor, "select /*vt+ SHARD_PARTIAL=1 */ id from user", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []*querypb.BoundQuery{{
+		Sql:           "select /*vt+ SHARD_PARTIAL=1 */ id from user",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	if results == nil || len(results.Rows) != 7 {
+		t.Errorf("want 7 results, got %v", results)
+	}
+	for i, conn := range conns {
+		if conn == conns[2] {
+			if len(conn.Queries) != 0 {
+				t.Errorf("conn[%d].Queries = %#v, want []", i, conn.Queries)
+			}
+		} else {
+			if !reflect.DeepEqual(conn.Queries, wantQueries) {
+				t.Errorf("conn[%d].Queries = %#v, want %#v", i, conn.Queries, wantQueries)
+			}
+		}
+	}
+	testQueryLog(t, logChan, "TestExecute", "SELECT", wantQueries[0].Sql, 8)
+}
 func TestStreamSelectScatter(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
