@@ -82,7 +82,12 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 		if rb.ERoute.TargetDestination != nil {
 			return errors.New("unsupported: SELECT with a target destination")
 		}
+
+		if directives.IsSet(sqlparser.DirectiveShardPartial) {
+			rb.ERoute.ShardPartial = true
+		}
 	}
+
 	// Set the outer symtab after processing of FROM clause.
 	// This is because correlation is not allowed there.
 	pb.st.Outer = outer
