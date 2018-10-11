@@ -30,6 +30,8 @@ const (
 	DirectiveSkipQueryPlanCache = "SKIP_QUERY_PLAN_CACHE"
 	// DirectiveQueryTimeout sets a query timeout in vtgate. Only supported for SELECTS.
 	DirectiveQueryTimeout = "QUERY_TIMEOUT_MS"
+	// DirectiveShardPartial enables partial success scatter select queries
+	DirectiveShardPartial = "SHARD_PARTIAL"
 )
 
 func isNonSpace(r rune) bool {
