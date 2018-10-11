@@ -90,7 +90,7 @@ func (p *shardTabletProvider) getTablet() (*topodatapb.Tablet, error) {
 	// Pick any healthy serving tablet.
 	tablets := p.tsc.GetHealthyTabletStats(p.keyspace, p.shard, p.tabletType)
 	if len(tablets) == 0 {
-		return nil, fmt.Errorf("%v: no healthy %v tablets available", p.description(), p.tabletType)
+		return nil, fmt.Errorf("%v: no healthy %v tablets available", p.description(), topodatapb.TabletType_name[int32(p.tabletType)])
 	}
 	return p.tracker.Track(tablets), nil
 }

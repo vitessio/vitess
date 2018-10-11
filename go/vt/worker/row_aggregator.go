@@ -47,7 +47,6 @@ type RowAggregator struct {
 	maxSize       int
 	insertChannel chan string
 	td            *tabletmanagerdatapb.TableDefinition
-	diffType      DiffType
 	builder       QueryBuilder
 	statsCounters *stats.CountersWithSingleLabel
 
@@ -84,7 +83,23 @@ func NewRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel c
 		maxSize:       maxSize,
 		insertChannel: insertChannel,
 		td:            td,
-		diffType:      diffType,
+		builder:       builder,
+		statsCounters: statsCounters,
+	}
+}
+
+// NewInsertIgnoringRowAggregator returns a RowAggregator.
+func NewInsertIgnoringRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel chan string, dbName string, td *tabletmanagerdatapb.TableDefinition, statsCounters *stats.CountersWithSingleLabel) *RowAggregator {
+	// Construct head and tail base commands for the reconciliation statement.
+	var builder QueryBuilder
+	builder = NewInsertIgnoreQueryBuilder(dbName, td)
+
+	return &RowAggregator{
+		ctx:           ctx,
+		maxRows:       maxRows,
+		maxSize:       maxSize,
+		insertChannel: insertChannel,
+		td:            td,
 		builder:       builder,
 		statsCounters: statsCounters,
 	}
@@ -187,6 +202,17 @@ func NewInsertsQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefiniti
 	return &InsertsQueryBuilder{
 		BaseQueryBuilder{
 			head:      "INSERT INTO " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(td.Name) + " (" + strings.Join(escapeAll(td.Columns), ", ") + ") VALUES ",
+			separator: ",",
+		},
+	}
+}
+
+// NewInsertIgnoreQueryBuilder creates a new InsertsQueryBuilder using INSERT IGNORE INTO ....
+func NewInsertIgnoreQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefinition) *InsertsQueryBuilder {
+	// Example: INSERT INTO test (id, sub_id, msg) VALUES (0, 10, 'a'), (1, 11, 'b') IGNORE
+	return &InsertsQueryBuilder{
+		BaseQueryBuilder{
+			head:      "INSERT IGNORE INTO " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(td.Name) + " (" + strings.Join(escapeAll(td.Columns), ", ") + ") VALUES ",
 			separator: ",",
 		},
 	}

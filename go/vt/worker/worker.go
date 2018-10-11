@@ -101,6 +101,11 @@ var (
 		"For every table how many rows were equal",
 		"table")
 
+	statsBackfillInsertsCounters = stats.NewCountersWithSingleLabel(
+		"WorkerBackfillInsertsCounters",
+		"How many rows were inserted during a backfill run",
+		"table")
+
 	statsStreamingQueryCounters = stats.NewCountersWithSingleLabel(
 		"StreamingQueryCounters",
 		"For every tablet alias how often a streaming query was successfully established there",

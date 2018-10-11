@@ -54,4 +54,5 @@ const (
 	defaultMaxTPS                 = throttler.MaxRateModuleDisabled
 	defaultMaxReplicationLag      = throttler.ReplicationLagModuleDisabled
 	defaultUseConsistentSnapshot  = false
+	defaultSkipNullRows           = false
 )
