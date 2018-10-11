@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -137,11 +136,8 @@ func (vtp *VtProcess) WaitStart() (err error) {
 
 	vtp.proc.Args = append(vtp.proc.Args, vtp.ExtraArgs...)
 
-	logfile := path.Join(vtp.LogDirectory, fmt.Sprintf("%s.%d.log", vtp.Name, vtp.Port))
-	vtp.proc.Stderr, err = os.Create(logfile)
-	if err != nil {
-		return
-	}
+	vtp.proc.Stderr = os.Stderr
+	vtp.proc.Stdout = os.Stdout
 
 	vtp.proc.Env = append(vtp.proc.Env, os.Environ()...)
 	vtp.proc.Env = append(vtp.proc.Env, vtp.Env...)

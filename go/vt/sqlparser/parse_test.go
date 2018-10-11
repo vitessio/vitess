@@ -695,6 +695,18 @@ var (
 	}, {
 		input: "set @@session.\"autocommit\" = true",
 	}, {
+		input:  "set @@session.autocommit = ON",
+		output: "set @@session.autocommit = 'on'",
+	}, {
+		input:  "set @@session.autocommit= OFF",
+		output: "set @@session.autocommit = 'off'",
+	}, {
+		input:  "set autocommit = on",
+		output: "set autocommit = 'on'",
+	}, {
+		input:  "set autocommit = off",
+		output: "set autocommit = 'off'",
+	}, {
 		input:  "set names utf8 collate foo",
 		output: "set names 'utf8'",
 	}, {
@@ -1390,6 +1402,29 @@ func TestValidParallel(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestInvalid(t *testing.T) {
+	invalidSQL := []struct {
+		input string
+		err   string
+	}{{
+		input: "select a from (select * from tbl)",
+		err:   "Every derived table must have its own alias",
+	}, {
+		input: "select a, b from (select * from tbl) sort by a",
+		err:   "syntax error",
+	}}
+
+	for _, tcase := range invalidSQL {
+		_, err := Parse(tcase.input)
+		if err == nil {
+			t.Errorf("Parse invalid query(%q), got: nil, want: %s...", tcase.input, tcase.err)
+		}
+		if err != nil && !strings.Contains(err.Error(), tcase.err) {
+			t.Errorf("Parse invalid query(%q), got: %v, want: %s...", tcase.input, err, tcase.err)
+		}
+	}
 }
 
 func TestCaseSensitivity(t *testing.T) {

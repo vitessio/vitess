@@ -191,6 +191,119 @@ func TestSetLimit(t *testing.T) {
 	}
 }
 
+func TestSetAutocommitON(t *testing.T) {
+	stmt, err := Parse("SET autocommit=ON")
+	if err != nil {
+		t.Error(err)
+	}
+	s, ok := stmt.(*Set)
+	if !ok {
+		t.Errorf("SET statement is not Set: %T", s)
+	}
+
+	if len(s.Exprs) < 1 {
+		t.Errorf("SET statement has no expressions")
+	}
+
+	e := s.Exprs[0]
+	switch v := e.Expr.(type) {
+	case *SQLVal:
+		if v.Type != StrVal {
+			t.Errorf("SET statement value is not StrVal: %T", v)
+		}
+
+		if !bytes.Equal([]byte("on"), v.Val) {
+			t.Errorf("SET statement value want: on, got: %s", v.Val)
+		}
+	default:
+		t.Errorf("SET statement expression is not SQLVal: %T", e.Expr)
+	}
+
+	stmt, err = Parse("SET @@session.autocommit=ON")
+	if err != nil {
+		t.Error(err)
+	}
+	s, ok = stmt.(*Set)
+	if !ok {
+		t.Errorf("SET statement is not Set: %T", s)
+	}
+
+	if len(s.Exprs) < 1 {
+		t.Errorf("SET statement has no expressions")
+	}
+
+	e = s.Exprs[0]
+	switch v := e.Expr.(type) {
+	case *SQLVal:
+		if v.Type != StrVal {
+			t.Errorf("SET statement value is not StrVal: %T", v)
+		}
+
+		if !bytes.Equal([]byte("on"), v.Val) {
+			t.Errorf("SET statement value want: on, got: %s", v.Val)
+		}
+	default:
+		t.Errorf("SET statement expression is not SQLVal: %T", e.Expr)
+	}
+}
+
+func TestSetAutocommitOFF(t *testing.T) {
+	stmt, err := Parse("SET autocommit=OFF")
+	if err != nil {
+		t.Error(err)
+	}
+	s, ok := stmt.(*Set)
+	if !ok {
+		t.Errorf("SET statement is not Set: %T", s)
+	}
+
+	if len(s.Exprs) < 1 {
+		t.Errorf("SET statement has no expressions")
+	}
+
+	e := s.Exprs[0]
+	switch v := e.Expr.(type) {
+	case *SQLVal:
+		if v.Type != StrVal {
+			t.Errorf("SET statement value is not StrVal: %T", v)
+		}
+
+		if !bytes.Equal([]byte("off"), v.Val) {
+			t.Errorf("SET statement value want: on, got: %s", v.Val)
+		}
+	default:
+		t.Errorf("SET statement expression is not SQLVal: %T", e.Expr)
+	}
+
+	stmt, err = Parse("SET @@session.autocommit=OFF")
+	if err != nil {
+		t.Error(err)
+	}
+	s, ok = stmt.(*Set)
+	if !ok {
+		t.Errorf("SET statement is not Set: %T", s)
+	}
+
+	if len(s.Exprs) < 1 {
+		t.Errorf("SET statement has no expressions")
+	}
+
+	e = s.Exprs[0]
+	switch v := e.Expr.(type) {
+	case *SQLVal:
+		if v.Type != StrVal {
+			t.Errorf("SET statement value is not StrVal: %T", v)
+		}
+
+		if !bytes.Equal([]byte("off"), v.Val) {
+			t.Errorf("SET statement value want: on, got: %s", v.Val)
+		}
+	default:
+		t.Errorf("SET statement expression is not SQLVal: %T", e.Expr)
+	}
+
+}
+
 func TestWhere(t *testing.T) {
 	var w *Where
 	buf := NewTrackedBuffer(nil)

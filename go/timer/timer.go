@@ -87,16 +87,20 @@ func (tm *Timer) Start(keephouse func()) {
 }
 
 func (tm *Timer) run(keephouse func()) {
+	var timer *time.Timer
 	for {
 		var ch <-chan time.Time
 		interval := tm.interval.Get()
-		if interval <= 0 {
-			ch = nil
-		} else {
-			ch = time.After(interval)
+		if interval > 0 {
+			timer = time.NewTimer(interval)
+			ch = timer.C
 		}
 		select {
 		case action := <-tm.msg:
+			if timer != nil {
+				timer.Stop()
+				timer = nil
+			}
 			switch action {
 			case timerStop:
 				return

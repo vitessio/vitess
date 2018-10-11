@@ -114,6 +114,12 @@ func ParseStrictDDL(sql string) (Statement, error) {
 	return tokenizer.ParseTree, nil
 }
 
+// ParseTokenizer is a raw interface to parse from the given tokenizer.
+// This does not used pooled parsers, and should not be used in general.
+func ParseTokenizer(tokenizer *Tokenizer) int {
+	return yyParse(tokenizer)
+}
+
 // ParseNext parses a single SQL statement from the tokenizer
 // returning a Statement which is the AST representation of the query.
 // The tokenizer will always read up to the end of the statement, allowing for

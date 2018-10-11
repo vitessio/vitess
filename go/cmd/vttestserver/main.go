@@ -87,6 +87,10 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 		"Default directory for initial schema files. If no schema is found"+
 			" in schema_dir, default to this location.")
 
+	flag.StringVar(&config.DataDir, "data_dir", "",
+		"Directory where the data files will be placed, defaults to a random "+
+			"directory under /vt/vtdataroot")
+
 	flag.BoolVar(&config.OnlyMySQL, "mysql_only", false,
 		"If this flag is set only mysql is initialized."+
 			" The rest of the vitess components are not started."+
@@ -150,9 +154,16 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 	flag.Parse()
 
 	if basePort != 0 {
-		env, err = vttest.NewLocalTestEnv("", basePort)
-		if err != nil {
-			return
+		if config.DataDir == "" {
+			env, err = vttest.NewLocalTestEnv("", basePort)
+			if err != nil {
+				return
+			}
+		} else {
+			env, err = vttest.NewLocalTestEnvWithDirectory("", basePort, config.DataDir)
+			if err != nil {
+				return
+			}
 		}
 	}
 

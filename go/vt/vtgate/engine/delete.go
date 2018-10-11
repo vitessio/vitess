@@ -134,6 +134,11 @@ func (code DeleteOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(delName[code])
 }
 
+// RouteType returns a description of the query routing type used by the primitive
+func (del *Delete) RouteType() string {
+	return delName[del.Opcode]
+}
+
 // Execute performs a non-streaming exec.
 func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	switch del.Opcode {

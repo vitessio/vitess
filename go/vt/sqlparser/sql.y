@@ -127,7 +127,7 @@ func forceEOF(yylex interface{}) {
 %left <bytes> ON USING
 %token <empty> '(' ',' ')'
 %token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
-%token <bytes> NULL TRUE FALSE
+%token <bytes> NULL TRUE FALSE OFF
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
@@ -1586,7 +1586,7 @@ columns_or_fields:
 | FIELDS
   {
       $$ = string($1)
-  } 
+  }
 
 from_database_opt:
   /* empty */
@@ -1844,6 +1844,12 @@ table_factor:
 | subquery as_opt table_id
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $3}
+  }
+| subquery
+  {
+    // missed alias for subquery
+    yylex.Error("Every derived table must have its own alias")
+    return 1
   }
 | openb table_references closeb
   {
@@ -2934,6 +2940,10 @@ set_expression:
   {
     $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("on"))}
   }
+| reserved_sql_id '=' OFF
+  {
+    $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("off"))}
+  }
 | reserved_sql_id '=' expression
   {
     $$ = &SetExpr{Name: $1, Expr: $3}
@@ -3137,6 +3147,7 @@ reserved_keyword:
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NOT
 | NULL
+| OFF
 | ON
 | OR
 | ORDER
