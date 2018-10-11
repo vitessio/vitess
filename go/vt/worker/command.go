@@ -64,6 +64,11 @@ var commands = []commandGroup{
 		[]Command{},
 	},
 	{
+		"Backfills",
+		"Workers to backfill data like lookup tables",
+		[]Command{},
+	},
+	{
 		"Debugging",
 		"Internal commands to test the general worker functionality",
 		[]Command{},
