@@ -347,16 +347,14 @@ func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 // recycleReadPacket recycles the read packet. It needs to be called
 // after readEphemeralPacket was called.
 func (c *Conn) recycleReadPacket() {
-	switch c.currentEphemeralPolicy {
-	case ephemeralRead:
-		if c.currentEphemeralBuffer != nil {
-			// We are using the pool, put the buffer back in.
-			bufPool.Put(c.currentEphemeralBuffer)
-			c.currentEphemeralBuffer = nil
-		}
-	case ephemeralUnused, ephemeralWrite:
+	if c.currentEphemeralPolicy != ephemeralRead {
 		// Programming error.
 		panic(fmt.Errorf("trying to call recycleReadPacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
+	}
+	if c.currentEphemeralBuffer != nil {
+		// We are using the pool, put the buffer back in.
+		bufPool.Put(c.currentEphemeralBuffer)
+		c.currentEphemeralBuffer = nil
 	}
 	c.currentEphemeralPolicy = ephemeralUnused
 }
@@ -524,15 +522,13 @@ func (c *Conn) writeEphemeralPacket() error {
 // recycleWritePacket recycles the write packet. It needs to be called
 // after writeEphemeralPacket was called.
 func (c *Conn) recycleWritePacket() {
-	switch c.currentEphemeralPolicy {
-	case ephemeralWrite:
-		// Release our reference so the buffer can be gced
-		bufPool.Put(c.currentEphemeralBuffer)
-		c.currentEphemeralBuffer = nil
-	case ephemeralUnused, ephemeralRead:
+	if c.currentEphemeralPolicy != ephemeralWrite {
 		// Programming error.
 		panic(fmt.Errorf("trying to call recycleWritePacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
 	}
+	// Release our reference so the buffer can be gced
+	bufPool.Put(c.currentEphemeralBuffer)
+	c.currentEphemeralBuffer = nil
 	c.currentEphemeralPolicy = ephemeralUnused
 }
 
