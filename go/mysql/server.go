@@ -591,8 +591,8 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 	// Always 21 (8 + 13).
 	pos = writeByte(data, pos, 21)
 
-	// Reserved
-	pos += 10
+	// Reserved 10 bytes: all 0
+	pos = writeZeroes(data, pos, 10)
 
 	// Second part of auth plugin data.
 	pos += copy(data[pos:], salt[8:])
