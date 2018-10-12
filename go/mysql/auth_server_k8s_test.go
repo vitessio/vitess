@@ -4,26 +4,15 @@ import (
 	"testing"
 
 	"golang.org/x/net/context"
-	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type MockSecretGetter struct {
 }
 
-func (m *MockSecretGetter) Get(getOptions metav1.GetOptions) (*v1.Secret, error) {
-	return &v1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			Kind: "Secret",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "vtgate-test-secret",
-			Namespace: "default",
-		},
-		Data: map[string][]byte{
-			"MysqlNativePassword": []byte("*EA5F8D65608CF3A37FE8134BF3B14129511E52CF"),
-			"UserData":            []byte("vtgate-test-user"),
-		},
+func (m *MockSecretGetter) Get() (map[string][]byte, error) {
+	return map[string][]byte{
+		"MysqlNativePassword": []byte("*EA5F8D65608CF3A37FE8134BF3B14129511E52CF"),
+		"UserData":            []byte("vtgate-test-user"),
 	}, nil
 }
 

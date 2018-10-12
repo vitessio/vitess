@@ -3,15 +3,11 @@ package mysql
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net"
-	"os"
 
-	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
+	"github.com/ghodss/yaml"
+	"vitess.io/vitess/go/mysql/k8s"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -29,17 +25,44 @@ var (
 )
 
 type SecretGetter interface {
-	Get(getOptions metav1.GetOptions) (*v1.Secret, error)
+	Get() (map[string][]byte, error)
 }
 
 type K8sAuthSecretGetter struct {
 	namespace string
 	secret    string
-	clientset *kubernetes.Clientset
+	config    *string
 }
 
-func (c *K8sAuthSecretGetter) Get(getOptions metav1.GetOptions) (*v1.Secret, error) {
-	return c.clientset.CoreV1().Secrets(c.namespace).Get(c.secret, getOptions)
+func (c *K8sAuthSecretGetter) Get() (map[string][]byte, error) {
+	var client *k8s.Client
+	if c.config != nil {
+		data, err := ioutil.ReadFile(*c.config)
+		if err != nil {
+			log.Errorf("Error creating client: %v", err)
+			return nil, err
+		}
+		var config k8s.Config
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			log.Errorf("Error reading config: %v", err)
+			return nil, err
+		}
+		client, err = k8s.NewClient(&config)
+	} else {
+		var err error
+		client, err = k8s.NewInClusterClient()
+		if err != nil {
+			log.Errorf("Error creating in cluster client: %v", err)
+			return nil, err
+		}
+	}
+	secret, err := client.Get(c.namespace, "/secrets/"+c.secret)
+	if err != nil {
+		log.Errorf("Error fetching secret: %v", err)
+		return nil, err
+	}
+	return secret["Data"].(map[string][]byte), nil
+
 }
 
 // AuthServerK8s indicates that the user will provide authentication through a Kubernetes secret
@@ -75,31 +98,12 @@ func InitAuthServerK8s() {
 
 // NewAuthServerK8s returns a new empty AuthServerK8s
 func NewAuthServerK8s() *AuthServerK8s {
-	var config *rest.Config
-	var err error
-
-	if mysqlAuthServerK8sSecret != nil && *mysqlAuthServerK8sConfig != "" {
-		config, err = clientcmd.BuildConfigFromFlags("", *mysqlAuthServerK8sConfig)
-	} else {
-		config, err = rest.InClusterConfig()
-	}
-
-	if err != nil {
-		return nil
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil
-	}
-
 	return &AuthServerK8s{
 		Method:  MysqlNativePassword,
 		Entries: make(map[string][]*AuthServerK8sEntry),
 		Getter: &K8sAuthSecretGetter{
 			namespace: *mysqlAuthServerK8sNamespace,
 			secret:    *mysqlAuthServerK8sSecret,
-			clientset: clientset,
 		},
 	}
 }
@@ -118,20 +122,16 @@ func (a *AuthServerK8s) Salt() ([]byte, error) {
 // ValidateHash is part of the AuthServer interface.
 func (a *AuthServerK8s) ValidateHash(salt []byte, user string, authResponse []byte, _ net.Addr) (Getter, error) {
 
-	secret, err := a.Getter.Get(metav1.GetOptions{})
+	secret, err := a.Getter.Get()
 
-	if errors.IsNotFound(err) {
-		return nil, fmt.Errorf("Secret not found")
-	} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
-		return nil, fmt.Errorf("Error getting secret %v", statusError.ErrStatus.Message)
-	} else if err != nil {
+	if err != nil {
 		return nil, fmt.Errorf("Error getting secret %v", err)
 	}
 
 	entries := []*AuthServerK8sEntry{
 		{
-			MysqlNativePassword: string(secret.Data["MysqlNativePassword"]),
-			UserData:            string(secret.Data["UserData"]),
+			MysqlNativePassword: string(secret["MysqlNativePassword"]),
+			UserData:            string(secret["UserData"]),
 		},
 	}
 
@@ -159,11 +159,4 @@ type K8sUserData struct {
 // Get returns the wrapped username
 func (sud *K8sUserData) Get() *querypb.VTGateCallerID {
 	return &querypb.VTGateCallerID{Username: sud.value}
-}
-
-func homeDir() string {
-	if h := os.Getenv("HOME"); h != "" {
-		return h
-	}
-	return os.Getenv("USERPROFILE") // windows
 }
