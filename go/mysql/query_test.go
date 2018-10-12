@@ -425,22 +425,15 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		count--
 	}
 
+	handler := testHandler{
+		result: result,
+	}
+
 	for i := 0; i < count; i++ {
-		comQuery, err := sConn.ReadPacket()
+		err := sConn.handleNextCommand(&handler)
 		if err != nil {
-			t.Fatalf("server cannot read query: %v", err)
+			t.Fatalf("error handling command: %v", err)
 		}
-		if comQuery[0] != ComQuery {
-			t.Fatalf("server got bad packet: %v", comQuery)
-		}
-		got := sConn.parseComQuery(comQuery)
-		if got != query {
-			t.Errorf("server got query '%v' but expected '%v'", got, query)
-		}
-		if err := writeResult(sConn, result); err != nil {
-			t.Errorf("Error writing result to client: %v", err)
-		}
-		sConn.sequence = 0
 	}
 
 	wg.Wait()

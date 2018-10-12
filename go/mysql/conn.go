@@ -18,14 +18,18 @@ package mysql
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"vitess.io/vitess/go/bucketpool"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -65,6 +69,9 @@ type Conn struct {
 	// Calling Close() on the Conn will close this connection.
 	// If there are any ongoing reads or writes, they may get interrupted.
 	conn net.Conn
+
+	// For server-side connections, listener points to the server object.
+	listener *Listener
 
 	// ConnectionID is set:
 	// - at Connect() time for clients, with the value returned by
@@ -164,15 +171,18 @@ func newConn(conn net.Conn) *Conn {
 }
 
 // newServerConn should be used to create server connections.
-// The only difference from "client" newConn is ability to control buffer size
-// for reads.
-func newServerConn(conn net.Conn, connReadBufferSize int) *Conn {
+//
+// It stashes a reference to the listener to be able to determine if
+// the server is shutting down, and has the ability to control buffer
+// size for reads.
+func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	c := &Conn{
-		conn:   conn,
-		closed: sync2.NewAtomicBool(false),
+		conn:     conn,
+		listener: listener,
+		closed:   sync2.NewAtomicBool(false),
 	}
-	if connReadBufferSize > 0 {
-		c.bufferedReader = bufio.NewReaderSize(conn, connReadBufferSize)
+	if listener.connReadBufferSize > 0 {
+		c.bufferedReader = bufio.NewReaderSize(conn, listener.connReadBufferSize)
 	}
 	return c
 }
@@ -671,6 +681,157 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 	pos = writeUint16(data, pos, flags)
 
 	return c.writeEphemeralPacket()
+}
+
+// handleNextCommand is called in the server loop to process
+// incoming packets.
+func (c *Conn) handleNextCommand(handler Handler) error {
+	c.sequence = 0
+	data, err := c.readEphemeralPacket()
+	if err != nil {
+		// Don't log EOF errors. They cause too much spam.
+		// Note the EOF detection is not 100%
+		// guaranteed, in the case where the client
+		// connection is already closed before we call
+		// 'readEphemeralPacket'.  This is a corner
+		// case though, and very unlikely to happen,
+		// and the only downside is we log a bit more then.
+		if err != io.EOF {
+			log.Errorf("Error reading packet from %s: %v", c, err)
+		}
+		return err
+	}
+
+	switch data[0] {
+	case ComQuit:
+		c.recycleReadPacket()
+		return errors.New("ComQuit")
+	case ComInitDB:
+		db := c.parseComInitDB(data)
+		c.recycleReadPacket()
+		c.SchemaName = db
+		if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
+			log.Errorf("Error writing ComInitDB result to %s: %v", c, err)
+			return err
+		}
+	case ComQuery:
+		// flush is called at the end of this block.
+		// We cannot encapsulate it with a defer inside a func because
+		// we have to return from this func if it fails.
+		c.startWriterBuffering()
+
+		queryStart := time.Now()
+		query := c.parseComQuery(data)
+		c.recycleReadPacket()
+		fieldSent := false
+		// sendFinished is set if the response should just be an OK packet.
+		sendFinished := false
+		err := handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
+			if sendFinished {
+				// Failsafe: Unreachable if server is well-behaved.
+				return io.EOF
+			}
+
+			if !fieldSent {
+				fieldSent = true
+
+				if len(qr.Fields) == 0 {
+					sendFinished = true
+					// We should not send any more packets after this.
+					return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+				}
+				if err := c.writeFields(qr); err != nil {
+					return err
+				}
+			}
+
+			return c.writeRows(qr)
+		})
+
+		// If no field was sent, we expect an error.
+		if !fieldSent {
+			// This is just a failsafe. Should never happen.
+			if err == nil || err == io.EOF {
+				err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+			}
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Errorf("Error writing query error to %s: %v", c, werr)
+				return werr
+			}
+		} else {
+			if err != nil {
+				// We can't send an error in the middle of a stream.
+				// All we can do is abort the send, which will cause a 2013.
+				log.Errorf("Error in the middle of a stream to %s: %v", c, err)
+				return err
+			}
+
+			// Send the end packet only sendFinished is false (results were streamed).
+			if !sendFinished {
+				if err := c.writeEndResult(false); err != nil {
+					log.Errorf("Error writing result to %s: %v", c, err)
+					return err
+				}
+			}
+		}
+
+		timings.Record(queryTimingKey, queryStart)
+
+		if err := c.flush(); err != nil {
+			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
+			return err
+		}
+
+	case ComPing:
+		c.recycleReadPacket()
+		// Return error if listener was shut down and OK otherwise
+		if c.listener.isShutdown() {
+			if err := c.writeErrorPacket(ERServerShutdown, SSServerShutdown, "Server shutdown in progress"); err != nil {
+				log.Errorf("Error writing ComPing error to %s: %v", c, err)
+				return err
+			}
+		} else {
+			if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
+				log.Errorf("Error writing ComPing result to %s: %v", c, err)
+				return err
+			}
+		}
+	case ComSetOption:
+		if operation, ok := c.parseComSetOption(data); ok {
+			switch operation {
+			case 0:
+				c.Capabilities |= CapabilityClientMultiStatements
+			case 1:
+				c.Capabilities &^= CapabilityClientMultiStatements
+			default:
+				log.Errorf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
+				if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
+					log.Errorf("Error writing error packet to client: %v", err)
+					return err
+				}
+			}
+			if err := c.writeEndResult(false); err != nil {
+				log.Errorf("Error writeEndResult error %v ", err)
+				return err
+			}
+		} else {
+			log.Errorf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
+			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
+				log.Errorf("Error writing error packet to client: %v", err)
+				return err
+			}
+		}
+	default:
+		log.Errorf("Got unhandled packet from %s, returning error: %v", c, data)
+		c.recycleReadPacket()
+		if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "command handling not implemented yet: %v", data[0]); err != nil {
+			log.Errorf("Error writing error packet to %s: %s", c, err)
+			return err
+		}
+	}
+
+	return nil
 }
 
 //

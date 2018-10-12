@@ -65,6 +65,7 @@ var selectRowsResult = &sqltypes.Result{
 
 type testHandler struct {
 	lastConn *Conn
+	result   *sqltypes.Result
 	err      error
 }
 
@@ -76,6 +77,11 @@ func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	if th.result != nil {
+		callback(th.result)
+		return nil
+	}
+
 	switch query {
 	case "error":
 		return th.err
