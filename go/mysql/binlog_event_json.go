@@ -51,6 +51,13 @@ const (
 // printJSONData parses the MySQL binary format for JSON data, and prints
 // the result as a string.
 func printJSONData(data []byte) ([]byte, error) {
+	// It's possible for data to be empty. If so, we have to
+	// treat it as 'null'.
+	// The mysql code also says why, but this wasn't reproduceable:
+	// https://github.com/mysql/mysql-server/blob/8.0/sql/json_binary.cc#L1070
+	if len(data) == 0 {
+		return []byte("'null'"), nil
+	}
 	result := &bytes.Buffer{}
 	typ := data[0]
 	if err := printJSONValue(typ, data[1:], true /* toplevel */, result); err != nil {
