@@ -16,7 +16,7 @@ The my.cnf file can be specified the following ways:
 
 Specifying a `-db_host` or a `-db_socket` parameter will cause vttablet to skip the loading of the my.cnf file, and will disable its ability to perform backups or restores.
 
-### -restore_from_backup
+### -restore\_from\_backup
 
 The default value for this flag is false. If set to true, and the my.cnf file was successfully loaded, then vttablet can perform automatic restores as follows:
 
@@ -30,7 +30,11 @@ You can additionally control the level of concurrency for a restore with the `-r
 
 You can start a vttablet against a remote mysql by simply specifying the connection parameters `-db_host` and `-db_port` on the command line. In this mode, backup and restore operations will be disabled. If you start vttablet against a local mysql, you can specify a `-db_socket` instead, which will still make vttablet treat mysql as if it was remote.
 
-Other management functions of vttablet do not depend on whether a my.cnf file was specified or not. They are as follows:
+Specifically, the absence of a my.cnf file indicates to vttablet that it's connecting to a remote MySQL.
+
+## Partially managed MySQL
+
+Even if a MySQL is remote, you can still make vttablet perform some management functions. They are as follows:
 
 * `-disable_active_reparents`: If this flag is set, then any reparent or slave commands will not be allowed. These are InitShardMaster, PlannedReparent, PlannedReparent, EmergencyReparent, and ReparentTablet. In this mode, you should use the TabletExternallyReparented command to inform vitess of the current master.
 * `-master_connect_retry`: This value is give to mysql when it connects a slave to the master as the retry duration parameter.
@@ -51,8 +55,10 @@ $TOPOLOGY_FLAGS
 -grpc_port $grpc_port
 -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream'
 ```
+
+$alias needs to be of the form: `<cell>-id`, and the cell should match one of the local cells that was created in the topology. The id can be left padded with zeroes: `cell-100` and `cell-000000100` are synonymous.
   
-Example TOPOLOGY_FLAGS for a lockserver like zookeeper:
+Example TOPOLOGY\_FLAGS for a lockserver like zookeeper:
 
 `-topo_implementation zk2 -topo_global_server_address localhost:21811,localhost:21812,localhost:21813 -topo_global_root /vitess/global`
 
