@@ -237,3 +237,57 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 	}
 	conn.CloseResult()
 }
+
+func doTestWarnings(t *testing.T, disableClientDeprecateEOF bool) {
+	ctx := context.Background()
+
+	connParams.DisableClientDeprecateEOF = disableClientDeprecateEOF
+
+	conn, err := mysql.Connect(ctx, &connParams)
+	expectNoError(t, err)
+	defer conn.Close()
+
+	connParams.DisableClientDeprecateEOF = false
+
+	expectFlag(t, "Negotiated ClientDeprecateEOF flag", (conn.Capabilities&mysql.CapabilityClientDeprecateEOF) != 0, !disableClientDeprecateEOF)
+	defer conn.Close()
+
+	result, err := conn.ExecuteFetch("create table a(id int, val int not null, primary key(id))", 0, false)
+	if err != nil {
+		t.Fatalf("create table failed: %v", err)
+	}
+	if result.RowsAffected != 0 {
+		t.Errorf("create table returned RowsAffected %v, was expecting 0", result.RowsAffected)
+	}
+
+	// Disable strict mode
+	result, err = conn.ExecuteFetch("set session sql_mode=''", 0, false)
+	if err != nil {
+		t.Fatalf("disable strict mode failed: %v", err)
+	}
+
+	// Try a simple insert with a null value
+	result, warnings, err := conn.ExecuteFetchWithWarningCount("insert into a(id) values(10)", 1000, true)
+	if err != nil {
+		t.Fatalf("insert failed: %v", err)
+	}
+	if result.RowsAffected != 1 || len(result.Rows) != 0 {
+		t.Errorf("unexpected result for insert: %v", result)
+	}
+	if warnings != 1 {
+		t.Errorf("unexpected result for warnings: %v", warnings)
+	}
+
+	result, err = conn.ExecuteFetch("drop table a", 0, false)
+	if err != nil {
+		t.Fatalf("create table failed: %v", err)
+	}
+}
+
+func TestWarningsDeprecateEOF(t *testing.T) {
+	doTestWarnings(t, false)
+}
+
+func TestWarningsNoDeprecateEOF(t *testing.T) {
+	doTestWarnings(t, true)
+}
