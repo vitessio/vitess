@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -316,7 +318,7 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 }
 
 // ComQuery is part of the mysql.Handler interface.
-func (db *DB) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+func (db *DB) ComQuery(ctx context.Context, c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	return db.Handler.HandleQuery(c, query, callback)
 }
 

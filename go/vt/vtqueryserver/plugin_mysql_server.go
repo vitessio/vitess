@@ -86,14 +86,11 @@ func (mh *proxyHandler) ConnectionClosed(c *mysql.Conn) {
 	}
 }
 
-func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
-	var ctx context.Context
+func (mh *proxyHandler) ComQuery(ctx context.Context, c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	var cancel context.CancelFunc
 	if *mysqlQueryTimeout != 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		ctx, cancel = context.WithTimeout(ctx, *mysqlQueryTimeout)
 		defer cancel()
-	} else {
-		ctx = context.Background()
 	}
 	// Fill in the ImmediateCallerID with the UserData returned by
 	// the AuthServer plugin for that user. If nothing was

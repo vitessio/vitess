@@ -39,7 +39,7 @@ func (th *testHandler) NewConnection(c *mysql.Conn) {
 func (th *testHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
-func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
+func (th *testHandler) ComQuery(ctx context.Context, c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
 	return nil
 }
 
