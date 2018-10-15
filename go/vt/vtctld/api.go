@@ -169,17 +169,26 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		}
 	})
 
-	handleCollection("ks_tablets", func(r *http.Request) (interface{}, error) {
-		// Valid requests: api/ks_tables/my_ks (all shards)
-		// Valid requests: api/ks_tables/my_ks/-80 (specific shard)
+	handleCollection("keyspace", func(r *http.Request) (interface{}, error) {
+		// Valid requests: api/keyspace/my_ks/tablets (all shards)
+		// Valid requests: api/keyspace/my_ks/tablets/-80 (specific shard)
 		itemPath := getItemPath(r.URL.Path)
-		parts := strings.SplitN(itemPath, "/", 2)
+		parts := strings.SplitN(itemPath, "/", 3)
+
+		malformedRequestError := fmt.Errorf("invalid keyspace path: %q  expected path: /keyspace/<keyspace>/tablets or /keyspace/<keyspace>/tablets/<shard>", itemPath)
+		if len(parts) < 2 {
+			return nil, malformedRequestError
+		}
+		if parts[1] != "tablets" {
+			return nil, malformedRequestError
+		}
+
 		keyspace := parts[0]
 		if keyspace == "" {
 			return nil, errors.New("keyspace is required")
 		}
 		var shardNames []string
-		if len(parts) > 1 && parts[1] != "" {
+		if len(parts) > 2 && parts[2] != "" {
 			shardNames = []string{parts[1]}
 		} else {
 			var err error
