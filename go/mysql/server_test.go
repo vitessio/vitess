@@ -600,6 +600,23 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "2 rows in set") {
 		t.Errorf("Unexpected output for 'select rows'")
 	}
+	if strings.Contains(output, "warnings") {
+		t.Errorf("Unexpected warnings in 'select rows'")
+	}
+
+	// Run a 'select rows' command with warnings
+	th.warnings = 13
+	output, ok = runMysql(t, params, "select rows")
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "nice name") ||
+		!strings.Contains(output, "nicer name") ||
+		!strings.Contains(output, "2 rows in set") ||
+		!strings.Contains(output, "13 warnings") {
+		t.Errorf("Unexpected output for 'select rows': %v", output)
+	}
+	th.warnings = 0
 
 	// If there's an error after streaming has started,
 	// we should get a 2013
