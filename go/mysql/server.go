@@ -84,6 +84,13 @@ type Handler interface {
 	// the first call to callback. So the Handler should not
 	// hang on to the byte slice.
 	ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error
+
+	// WarningCount is called at the end of each query to obtain
+	// the value to be returned to the client in the EOF packet.
+	// Note that this will be called either in the context of the
+	// ComQuery callback if the result does not contain any fields,
+	// or after the last ComQuery call completes.
+	WarningCount(c *Conn) uint16
 }
 
 // Listener is the MySQL server protocol listener.
