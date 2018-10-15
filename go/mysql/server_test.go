@@ -67,6 +67,7 @@ type testHandler struct {
 	lastConn *Conn
 	result   *sqltypes.Result
 	err      error
+	warnings uint16
 }
 
 func (th *testHandler) NewConnection(c *Conn) {
@@ -168,6 +169,10 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 		callback(&sqltypes.Result{})
 	}
 	return nil
+}
+
+func (th *testHandler) WarningCount(c *Conn) uint16 {
+	return th.warnings
 }
 
 func getHostPort(t *testing.T, a net.Addr) (string, int) {

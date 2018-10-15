@@ -132,6 +132,10 @@ func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sql
 	return callback(result)
 }
 
+func (mh *proxyHandler) WarningCount(c *mysql.Conn) uint16 {
+	return 0
+}
+
 var mysqlListener *mysql.Listener
 var mysqlUnixListener *mysql.Listener
 
