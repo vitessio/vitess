@@ -96,14 +96,11 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	}
 }
 
-func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
-	var ctx context.Context
+func (vh *vtgateHandler) ComQuery(ctx context.Context, c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	var cancel context.CancelFunc
 	if *mysqlQueryTimeout != 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		ctx, cancel = context.WithTimeout(ctx, *mysqlQueryTimeout)
 		defer cancel()
-	} else {
-		ctx = context.Background()
 	}
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)

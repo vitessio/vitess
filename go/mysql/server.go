@@ -24,6 +24,7 @@ import (
 	"net"
 	"time"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -83,7 +84,7 @@ type Handler interface {
 	// Note the contents of the query slice may change after
 	// the first call to callback. So the Handler should not
 	// hang on to the byte slice.
-	ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error
+	ComQuery(ctx context.Context, c *Conn, query string, callback func(*sqltypes.Result) error) error
 }
 
 // Listener is the MySQL server protocol listener.
@@ -132,6 +133,10 @@ type Listener struct {
 	// connReadBufferSize is size of buffer for reads from underlying connection.
 	// Reads are unbuffered if it's <=0.
 	connReadBufferSize int
+
+	// ctx is internal listener context, it'll be cancelled on Shutdown
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewFromListener creares a new mysql listener from an existing net.Listener
@@ -184,6 +189,8 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		l = listener
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	return &Listener{
 		authServer:         cfg.AuthServer,
 		handler:            cfg.Handler,
@@ -193,6 +200,8 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connReadTimeout:    cfg.ConnReadTimeout,
 		connWriteTimeout:   cfg.ConnWriteTimeout,
 		connReadBufferSize: cfg.ConnReadBufferSize,
+		ctx:                ctx,
+		cancel:             cancel,
 	}, nil
 }
 
@@ -220,6 +229,23 @@ func (l *Listener) Accept() {
 
 		go l.handle(conn, connectionID, acceptTime)
 	}
+}
+
+func (l *Listener) isShutdown() bool {
+	select {
+	case <-l.ctx.Done():
+		return true
+	default:
+	}
+	return false
+}
+
+// Shutdown stops accepting new connections and cancels internal context.
+// This leads to fail of all pings, so clients can know that listener is closed.
+func (l *Listener) Shutdown(ctx context.Context) error {
+	l.Close()
+	l.cancel()
+	return nil
 }
 
 // handle is called in a go routine for each client connection.
@@ -414,7 +440,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			fieldSent := false
 			// sendFinished is set if the response should just be an OK packet.
 			sendFinished := false
-			err := l.handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
+			err := l.handler.ComQuery(l.ctx, c, query, func(qr *sqltypes.Result) error {
 				if sendFinished {
 					// Failsafe: Unreachable if server is well-behaved.
 					return io.EOF
@@ -472,8 +498,15 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			}
 
 		case ComPing:
-			// No payload to that one, just return OKPacket.
 			c.recycleReadPacket()
+			// if Shutdown was called return error from Ping, so client will know about this
+			if l.isShutdown() {
+				if err := c.writeErrorPacket(CRServerGone, SSUnknownSQLState, "Server is shut down"); err != nil {
+					log.Errorf("Error writing ComPing result to %s: %v", c, err)
+					return
+				}
+			}
+			// No payload to that one, just return OKPacket.
 			if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
 				log.Errorf("Error writing ComPing result to %s: %v", c, err)
 				return

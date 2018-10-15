@@ -75,7 +75,7 @@ func (th *testHandler) NewConnection(c *Conn) {
 func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
-func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+func (th *testHandler) ComQuery(ctx context.Context, c *Conn, query string, callback func(*sqltypes.Result) error) error {
 	switch query {
 	case "error":
 		return th.err
