@@ -110,6 +110,11 @@ func NewUint64(v uint64) Value {
 	return MakeTrusted(Uint64, strconv.AppendUint(nil, v, 10))
 }
 
+// NewUint32 builds an Uint32 Value.
+func NewUint32(v uint32) Value {
+	return MakeTrusted(Uint32, strconv.AppendUint(nil, uint64(v), 10))
+}
+
 // NewFloat64 builds an Float64 Value.
 func NewFloat64(v float64) Value {
 	return MakeTrusted(Float64, strconv.AppendFloat(nil, v, 'g', -1, 64))
