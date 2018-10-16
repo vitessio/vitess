@@ -828,7 +828,7 @@ func TestExecFail(t *testing.T) {
 
 	vc.Rewind()
 
-	// Scatter fails if ann shards fails even with ShardPartial
+	// Scatter succeeds if all shards fail with ShardPartial
 	sel = &Route{
 		Opcode: SelectScatter,
 		Keyspace: &vindexes.Keyspace{
@@ -849,7 +849,9 @@ func TestExecFail(t *testing.T) {
 		},
 	}
 	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "sel.Execute err", err, "result error -20\nresult error 20-")
+	if err != nil {
+		t.Errorf("unexpected ShardPartial error %v", err)
+	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
