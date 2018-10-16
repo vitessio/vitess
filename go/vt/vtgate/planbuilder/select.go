@@ -83,8 +83,8 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 			return errors.New("unsupported: SELECT with a target destination")
 		}
 
-		if directives.IsSet(sqlparser.DirectiveShardPartial) {
-			rb.ERoute.ShardPartial = true
+		if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
+			rb.ERoute.ScatterErrorsAsWarnings = true
 		}
 	}
 

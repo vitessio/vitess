@@ -73,8 +73,8 @@ type Route struct {
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
 
-	// ShardPartial is true if results should be returned even if some shards have an error
-	ShardPartial bool
+	// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
+	ScatterErrorsAsWarnings bool
 }
 
 // OrderbyParams specifies the parameters for ordering.
@@ -92,27 +92,27 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		vindexName = route.Vindex.String()
 	}
 	marshalRoute := struct {
-		Opcode              RouteOpcode
-		Keyspace            *vindexes.Keyspace   `json:",omitempty"`
-		Query               string               `json:",omitempty"`
-		FieldQuery          string               `json:",omitempty"`
-		Vindex              string               `json:",omitempty"`
-		Values              []sqltypes.PlanValue `json:",omitempty"`
-		OrderBy             []OrderbyParams      `json:",omitempty"`
-		TruncateColumnCount int                  `json:",omitempty"`
-		QueryTimeout        int                  `json:",omitempty"`
-		ShardPartial        bool                 `json:",omitempty"`
+		Opcode                  RouteOpcode
+		Keyspace                *vindexes.Keyspace   `json:",omitempty"`
+		Query                   string               `json:",omitempty"`
+		FieldQuery              string               `json:",omitempty"`
+		Vindex                  string               `json:",omitempty"`
+		Values                  []sqltypes.PlanValue `json:",omitempty"`
+		OrderBy                 []OrderbyParams      `json:",omitempty"`
+		TruncateColumnCount     int                  `json:",omitempty"`
+		QueryTimeout            int                  `json:",omitempty"`
+		ScatterErrorsAsWarnings bool                 `json:",omitempty"`
 	}{
-		Opcode:              route.Opcode,
-		Keyspace:            route.Keyspace,
-		Query:               route.Query,
-		FieldQuery:          route.FieldQuery,
-		Vindex:              vindexName,
-		Values:              route.Values,
-		OrderBy:             route.OrderBy,
-		TruncateColumnCount: route.TruncateColumnCount,
-		QueryTimeout:        route.QueryTimeout,
-		ShardPartial:        route.ShardPartial,
+		Opcode:                  route.Opcode,
+		Keyspace:                route.Keyspace,
+		Query:                   route.Query,
+		FieldQuery:              route.FieldQuery,
+		Vindex:                  vindexName,
+		Values:                  route.Values,
+		OrderBy:                 route.OrderBy,
+		TruncateColumnCount:     route.TruncateColumnCount,
+		QueryTimeout:            route.QueryTimeout,
+		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
 	}
 	return jsonutil.MarshalNoEscape(marshalRoute)
 }
@@ -222,7 +222,7 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, false /* isDML */, false /* autocommit */)
 
 	if errs != nil {
-		if route.ShardPartial {
+		if route.ScatterErrorsAsWarnings {
 			partialSuccessScatterQueries.Add(1)
 			// fall through
 		} else {
