@@ -81,6 +81,9 @@ message Session {
 
   // transaction_mode specifies the current transaction mode.
   TransactionMode transaction_mode = 7;
+
+  // warnings contains non-fatal warnings from the previous query
+  repeated query.QueryWarning warnings = 8;
 }
 
 // ExecuteRequest is the payload to Execute.
