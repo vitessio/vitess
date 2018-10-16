@@ -587,6 +587,7 @@ func (*ParenSelect) iInsertRows() {}
 // If you add fields here, consider adding them to calls to validateSubquerySamePlan.
 type Update struct {
 	Comments   Comments
+	Ignore     string
 	TableExprs TableExprs
 	Exprs      UpdateExprs
 	Where      *Where
@@ -596,8 +597,8 @@ type Update struct {
 
 // Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
-	buf.Myprintf("update %v%v set %v%v%v%v",
-		node.Comments, node.TableExprs,
+	buf.Myprintf("update %v%s%v set %v%v%v%v",
+		node.Comments, node.Ignore, node.TableExprs,
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
