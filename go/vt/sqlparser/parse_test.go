@@ -1197,6 +1197,9 @@ var (
 		input:  "show warnings",
 		output: "show warnings",
 	}, {
+		input:  "select warnings from t",
+		output: "select warnings from t",
+	}, {
 		input:  "show foobar",
 		output: "show foobar",
 	}, {

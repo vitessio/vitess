@@ -162,7 +162,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
-%token <bytes> STATUS VARIABLES
+%token <bytes> STATUS VARIABLES WARNINGS
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -1545,6 +1545,10 @@ show_statement:
     $$ = &Show{Type: string($2)}
   }
 | SHOW VSCHEMA_TABLES
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW WARNINGS
   {
     $$ = &Show{Type: string($2)}
   }
@@ -3298,6 +3302,7 @@ non_reserved_keyword:
 | VITESS_TABLETS
 | VSCHEMA_TABLES
 | VITESS_TARGET
+| WARNINGS
 | WITH
 | WRITE
 | YEAR
