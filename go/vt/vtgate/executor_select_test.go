@@ -798,13 +798,13 @@ func TestSelectScatterPartial(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
+
 	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
-
 	// Fail 1 of N without the directive fails the whole operation
+	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	results, err := executorExec(executor, "select id from user", nil)
 	wantErr := "target: TestExecutor.40-60.master, used tablet: aa-0 (40-60), RESOURCE_EXHAUSTED error"
 	if err == nil || err.Error() != wantErr {
@@ -813,49 +813,37 @@ func TestSelectScatterPartial(t *testing.T) {
 	if results != nil {
 		t.Errorf("want nil results, got %v", results)
 	}
-	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from user",
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-	for i, conn := range conns {
-		if conn == conns[2] {
-			if len(conn.Queries) != 0 {
-				t.Errorf("conn[%d].Queries = %#v, want []", i, conn.Queries)
-			}
-		} else {
-			if !reflect.DeepEqual(conn.Queries, wantQueries) {
-				t.Errorf("conn[%d].Queries = %#v, want %#v", i, conn.Queries, wantQueries)
-			}
-		}
-		conn.Queries = nil
-	}
-	testQueryLog(t, logChan, "TestExecute", "SELECT", wantQueries[0].Sql, 8)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user", 8)
 
-	// Fail 1 of N with the directive succeeds
+	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorExec(executor, "select /*vt+ SHARD_PARTIAL=1 */ id from user", nil)
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select /*vt+ SHARD_PARTIAL=1 */ id from user",
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
 	if results == nil || len(results.Rows) != 7 {
 		t.Errorf("want 7 results, got %v", results)
 	}
-	for i, conn := range conns {
-		if conn == conns[2] {
-			if len(conn.Queries) != 0 {
-				t.Errorf("conn[%d].Queries = %#v, want []", i, conn.Queries)
-			}
-		} else {
-			if !reflect.DeepEqual(conn.Queries, wantQueries) {
-				t.Errorf("conn[%d].Queries = %#v, want %#v", i, conn.Queries, wantQueries)
-			}
-		}
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SHARD_PARTIAL=1 */ id from user", 8)
+
+	// Even if all shards fail the operation succeeds with 0 rows
+	conns[0].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[1].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[3].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[4].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[5].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[6].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[7].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+
+	results, err = executorExec(executor, "select /*vt+ SHARD_PARTIAL=1 */ id from user", nil)
+	if err != nil {
+		t.Error(err)
 	}
-	testQueryLog(t, logChan, "TestExecute", "SELECT", wantQueries[0].Sql, 8)
+	if results == nil || len(results.Rows) != 0 {
+		t.Errorf("want 0 result rows, got %v", results)
+	}
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SHARD_PARTIAL=1 */ id from user", 8)
 }
+
 func TestStreamSelectScatter(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"

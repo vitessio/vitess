@@ -223,21 +223,8 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 
 	if errs != nil {
 		if route.ShardPartial {
-			// If all the shards failed, treat the operation as failed.
-			// Otherwise fall through and process whatever was returned.
-			partialSuccess := false
-			for _, err := range errs {
-				if err == nil {
-					partialSuccess = true
-					break
-				}
-			}
-
-			if partialSuccess {
-				partialSuccessScatterQueries.Add(1)
-			} else {
-				return nil, vterrors.Aggregate(errs)
-			}
+			partialSuccessScatterQueries.Add(1)
+			// fall through
 		} else {
 			return nil, vterrors.Aggregate(errs)
 		}
