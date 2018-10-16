@@ -816,14 +816,14 @@ func TestSelectScatterPartial(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user", 8)
 
 	// Fail 1 of N with the directive succeeds with 7 rows
-	results, err = executorExec(executor, "select /*vt+ SHARD_PARTIAL=1 */ id from user", nil)
+	results, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	if results == nil || len(results.Rows) != 7 {
 		t.Errorf("want 7 results, got %v", results)
 	}
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SHARD_PARTIAL=1 */ id from user", 8)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
 
 	// Even if all shards fail the operation succeeds with 0 rows
 	conns[0].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
@@ -834,14 +834,14 @@ func TestSelectScatterPartial(t *testing.T) {
 	conns[6].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	conns[7].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 
-	results, err = executorExec(executor, "select /*vt+ SHARD_PARTIAL=1 */ id from user", nil)
+	results, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	if results == nil || len(results.Rows) != 0 {
 		t.Errorf("want 0 result rows, got %v", results)
 	}
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SHARD_PARTIAL=1 */ id from user", 8)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
 }
 
 func TestStreamSelectScatter(t *testing.T) {

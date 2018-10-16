@@ -801,7 +801,7 @@ func TestExecFail(t *testing.T) {
 	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "sel.StreamExecute err", err, "result error")
 
-	// Scatter fails if one of N fails without ShardPartial
+	// Scatter fails if one of N fails without ScatterErrorsAsWarnings
 	sel = &Route{
 		Opcode: SelectScatter,
 		Keyspace: &vindexes.Keyspace{
@@ -828,16 +828,16 @@ func TestExecFail(t *testing.T) {
 
 	vc.Rewind()
 
-	// Scatter succeeds if all shards fail with ShardPartial
+	// Scatter succeeds if all shards fail with ScatterErrorsAsWarnings
 	sel = &Route{
 		Opcode: SelectScatter,
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
 		},
-		Query:        "dummy_select",
-		FieldQuery:   "dummy_select_field",
-		ShardPartial: true,
+		Query:                   "dummy_select",
+		FieldQuery:              "dummy_select_field",
+		ScatterErrorsAsWarnings: true,
 	}
 
 	vc = &loggingVCursor{
@@ -850,7 +850,7 @@ func TestExecFail(t *testing.T) {
 	}
 	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Errorf("unexpected ShardPartial error %v", err)
+		t.Errorf("unexpected ScatterErrorsAsWarnings error %v", err)
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -859,16 +859,16 @@ func TestExecFail(t *testing.T) {
 
 	vc.Rewind()
 
-	// Scatter succeeds if one of N fails with ShardPartial
+	// Scatter succeeds if one of N fails with ScatterErrorsAsWarnings
 	sel = &Route{
 		Opcode: SelectScatter,
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
 		},
-		Query:        "dummy_select",
-		FieldQuery:   "dummy_select_field",
-		ShardPartial: true,
+		Query:                   "dummy_select",
+		FieldQuery:              "dummy_select_field",
+		ScatterErrorsAsWarnings: true,
 	}
 
 	vc = &loggingVCursor{
@@ -881,7 +881,7 @@ func TestExecFail(t *testing.T) {
 	}
 	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
-		t.Errorf("unexpected ShardPartial error %v", err)
+		t.Errorf("unexpected ScatterErrorsAsWarnings error %v", err)
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
