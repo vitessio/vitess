@@ -782,10 +782,6 @@ func (scw *SplitCloneWorker) waitForTablets(ctx context.Context, shardInfos []*t
 	var wg sync.WaitGroup
 	rec := concurrency.AllErrorRecorder{}
 
-	if len(shardInfos) > 0 {
-		scw.wr.Logger().Infof("Waiting %v for %d %s/%s RDONLY tablet(s)", timeout, scw.minHealthyRdonlyTablets, shardInfos[0].Keyspace(), shardInfos[0].ShardName())
-	}
-
 	for _, si := range shardInfos {
 		wg.Add(1)
 		go func(keyspace, shard string) {
