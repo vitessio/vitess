@@ -440,6 +440,9 @@ const (
 	// SSHandshakeError is ER_HANDSHAKE_ERROR
 	SSHandshakeError = "08S01"
 
+	// SSServerShutdown is ER_SERVER_SHUTDOWN
+	SSServerShutdown = "08S01"
+
 	// SSDataTooLong is ER_DATA_TOO_LONG
 	SSDataTooLong = "22001"
 
