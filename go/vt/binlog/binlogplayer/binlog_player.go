@@ -606,9 +606,5 @@ type StatsHistoryRecord struct {
 
 // IsDuplicate implements history.Deduplicable
 func (r *StatsHistoryRecord) IsDuplicate(other interface{}) bool {
-	rother, ok := other.(*StatsHistoryRecord)
-	if !ok {
-		return false
-	}
-	return r.Message == rother.Message
+	return false
 }
