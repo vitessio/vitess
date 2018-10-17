@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"html/template"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -51,7 +52,7 @@ VReplication state: Open</br>
       <td>2</td>
       <td><b>All</b>: 0<br></td>
       <td></td>
-      <td>Test Message</td>
+      <td>Test Message2<br>Test Message1<br></td>
     </tr><tr>
       <td>2</td>
       <td>keyspace:&#34;ks&#34; shard:&#34;1&#34; </td>
@@ -62,7 +63,7 @@ VReplication state: Open</br>
       <td>2</td>
       <td><b>All</b>: 0<br></td>
       <td></td>
-      <td>Test Message</td>
+      <td>Test Message2<br>Test Message1<br></td>
     </tr>
 </table>
 `
@@ -76,7 +77,8 @@ func TestStatusHtml(t *testing.T) {
 	blpStats := binlogplayer.NewStats()
 	blpStats.SetLastPosition(pos)
 	blpStats.SecondsBehindMaster.Set(2)
-	blpStats.LastMessage.Set("Test Message")
+	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message1"})
+	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message2"})
 
 	testStats := &vrStats{}
 	testStats.isOpen = true
