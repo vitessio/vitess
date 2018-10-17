@@ -123,9 +123,12 @@ vtgate:
 vttablet:
   vitessTag: "latest"
 
-  # valid values are mysql, maria, or percona
+  # valid values are 
+  # - mysql56 (for MySQL/Percona 5.6 or 5.7)
+  # - mariadb (for MariaDB <= 10.2)
+  # - mariadb103 (for MariaDB >= 10.3)
   # the flavor determines the base my.cnf file for vitess to function
-  flavor: "percona"
+  flavor: "mysql56"
 
   mysqlImage: "percona:5.7.20"
   # mysqlImage: "mysql:5.7.20"
