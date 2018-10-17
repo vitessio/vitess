@@ -28,7 +28,11 @@ import (
 // This removed CBC mode ciphers that are suseptiable to Lucky13 style attacks
 func newTLSConfig() *tls.Config {
 	return &tls.Config{
-		MinVersion: tls.VersionTLS12,
+		// the MySQL client on the CI server does not work with tls1.2
+		// Newer versions of the client do work
+		// TODO: Update the CI server to use a newer version of the mysql client
+		//MinVersion: tls.VersionTLS12,
+
 		// Default ordering taken from
 		// go 1.11 crypto/tls/cipher_suites.go
 		CipherSuites: []uint16{
