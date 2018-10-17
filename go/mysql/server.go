@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -132,6 +133,9 @@ type Listener struct {
 	// connReadBufferSize is size of buffer for reads from underlying connection.
 	// Reads are unbuffered if it's <=0.
 	connReadBufferSize int
+
+	// shutdown indicates that Shutdown method was called.
+	shutdown sync2.AtomicBool
 }
 
 // NewFromListener creares a new mysql listener from an existing net.Listener
@@ -472,11 +476,18 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			}
 
 		case ComPing:
-			// No payload to that one, just return OKPacket.
 			c.recycleReadPacket()
-			if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
-				log.Errorf("Error writing ComPing result to %s: %v", c, err)
-				return
+			// Return error if listener was shut down and OK otherwise
+			if l.isShutdown() {
+				if err := c.writeErrorPacket(ERServerShutdown, SSServerShutdown, "Server shutdown in progress"); err != nil {
+					log.Errorf("Error writing ComPing error to %s: %v", c, err)
+					return
+				}
+			} else {
+				if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
+					log.Errorf("Error writing ComPing result to %s: %v", c, err)
+					return
+				}
 			}
 		case ComSetOption:
 			if operation, ok := c.parseComSetOption(data); ok {
@@ -514,9 +525,21 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	}
 }
 
-// Close stops the listener, and closes all connections.
+// Close stops the listener, which prevents accept of any new connections. Existing connections won't be closed.
 func (l *Listener) Close() {
 	l.listener.Close()
+}
+
+// Shutdown closes listener and fails any Ping requests from existing connections.
+// This can be used for graceful shutdown, to let clients know that they should reconnect to another server.
+func (l *Listener) Shutdown() {
+	if l.shutdown.CompareAndSwap(false, true) {
+		l.Close()
+	}
+}
+
+func (l *Listener) isShutdown() bool {
+	return l.shutdown.Get()
 }
 
 // writeHandshakeV10 writes the Initial Handshake Packet, server side.
