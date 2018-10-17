@@ -68,6 +68,11 @@ var commands = []commandGroup{
 		[]Command{},
 	},
 	{
+		"Square",
+		"Square specific commands",
+		[]Command{},
+	},
+	{
 		"Debugging",
 		"Internal commands to test the general worker functionality",
 		[]Command{},

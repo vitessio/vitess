@@ -53,6 +53,9 @@ const (
 	// WorkerStateDiff is set when the worker compares the data.
 	WorkerStateDiff StatusWorkerState = "running the diff"
 
+	// WorkerStateWorking is set when the worker is working.
+	WorkerStateWorking StatusWorkerState = "working"
+
 	// WorkerStateDiffWillFail is set when the worker is still comparing the data, but we have already found discrepancies.
 	WorkerStateDiffWillFail StatusWorkerState = "running the diff, already found differences"
 
