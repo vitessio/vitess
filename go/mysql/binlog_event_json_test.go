@@ -26,6 +26,9 @@ func TestJSON(t *testing.T) {
 		data     []byte
 		expected string
 	}{{
+		data:     []byte{},
+		expected: `'null'`,
+	}, {
 		data:     []byte{0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98},
 		expected: `JSON_OBJECT('a','b')`,
 	}, {
