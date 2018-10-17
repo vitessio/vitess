@@ -870,25 +870,37 @@ func TestTLSServer(t *testing.T) {
 	}
 
 	// Run a 'select rows' command with results.
-	output, ok := runMysql(t, params, "select rows")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
+	conn, err := Connect(context.Background(), params)
+	//output, ok := runMysql(t, params, "select rows")
+	if err != nil {
+		t.Fatalf("mysql failed: %v", err)
 	}
-	if !strings.Contains(output, "nice name") ||
-		!strings.Contains(output, "nicer name") ||
-		!strings.Contains(output, "2 rows in set") {
-		t.Errorf("Unexpected output for 'select rows'")
+	results, err := conn.ExecuteFetch("select rows", 1000, true)
+	if err != nil {
+		t.Fatalf("mysql fetch failed: %v", err)
+	}
+	output := ""
+	for _, row := range results.Rows {
+		r := make([]string, 0)
+		for _, col := range row {
+			r = append(r, col.String())
+		}
+		output = output + strings.Join(r, ",") + "\n"
+	}
+
+	if results.Rows[0][1].ToString() != "nice name" ||
+		results.Rows[1][1].ToString() != "nicer name" ||
+		len(results.Rows) != 2 {
+		t.Errorf("Unexpected output for 'select rows': %v", output)
 	}
 
 	// make sure this went through SSL
-	output, ok = runMysql(t, params, "ssl echo")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
+	results, err = conn.ExecuteFetch("ssl echo", 1000, true)
+	if err != nil {
+		t.Fatalf("mysql fetch failed: %v", err)
 	}
-	if !strings.Contains(output, "ssl_flag") ||
-		!strings.Contains(output, "ON") ||
-		!strings.Contains(output, "1 row in set") {
-		t.Errorf("Unexpected output for 'ssl echo': %v", output)
+	if results.Rows[0][0].ToString() != "ON" {
+		t.Errorf("Unexpected output for 'ssl echo': %v", results)
 	}
 }
 
