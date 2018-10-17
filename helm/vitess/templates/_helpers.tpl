@@ -97,8 +97,17 @@ if [ "$VT_DB_FLAVOR" = "percona" ]; then
 elif [ "$VT_DB_FLAVOR" = "mysql" ]; then
   FLAVOR_MYCNF=/vt/config/mycnf/master_mysql56.cnf
 
+elif [ "$VT_DB_FLAVOR" = "mysql56" ]; then
+  FLAVOR_MYCNF=/vt/config/mycnf/master_mysql56.cnf
+
 elif [ "$VT_DB_FLAVOR" = "maria" ]; then
   FLAVOR_MYCNF=/vt/config/mycnf/master_mariadb.cnf
+
+elif [ "$VT_DB_FLAVOR" = "mariadb" ]; then
+  FLAVOR_MYCNF=/vt/config/mycnf/master_mariadb.cnf
+
+elif [ "$VT_DB_FLAVOR" = "mariadb103" ]; then
+  FLAVOR_MYCNF=/vt/config/mycnf/master_mariadb103.cnf
 
 fi
 
