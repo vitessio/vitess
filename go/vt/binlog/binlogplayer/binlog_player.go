@@ -531,6 +531,14 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag, timeUpdated, BlpRunning)
 }
 
+// CreateVReplicationStopped returns a statement to create a stopped vreplication.
+func CreateVReplicationStopped(workflow string, source *binlogdatapb.BinlogSource, position string) string {
+	return fmt.Sprintf("insert into _vt.vreplication "+
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v')",
+		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), BlpStopped)
+}
+
 // updateVReplicationPos returns a statement to update a value in the
 // _vt.vreplication table.
 func updateVReplicationPos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64) string {

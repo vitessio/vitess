@@ -61,13 +61,13 @@ func (mr *MockReshardingWranglerMockRecorder) WaitForFilteredReplication(ctx, ke
 }
 
 // MigrateServedTypes mocks base method
-func (m *MockReshardingWrangler) MigrateServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodata.TabletType, reverse, skipReFreshState bool, filteredReplicationWaitTime time.Duration) error {
-	ret := m.ctrl.Call(m, "MigrateServedTypes", ctx, keyspace, shard, cells, servedType, reverse, skipReFreshState, filteredReplicationWaitTime)
+func (m *MockReshardingWrangler) MigrateServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodata.TabletType, reverse, skipReFreshState bool, filteredReplicationWaitTime time.Duration, reverseReplication bool) error {
+	ret := m.ctrl.Call(m, "MigrateServedTypes", ctx, keyspace, shard, cells, servedType, reverse, skipReFreshState, filteredReplicationWaitTime, reverseReplication)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // MigrateServedTypes indicates an expected call of MigrateServedTypes
-func (mr *MockReshardingWranglerMockRecorder) MigrateServedTypes(ctx, keyspace, shard, cells, servedType, reverse, skipReFreshState, filteredReplicationWaitTime interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateServedTypes", reflect.TypeOf((*MockReshardingWrangler)(nil).MigrateServedTypes), ctx, keyspace, shard, cells, servedType, reverse, skipReFreshState, filteredReplicationWaitTime)
+func (mr *MockReshardingWranglerMockRecorder) MigrateServedTypes(ctx, keyspace, shard, cells, servedType, reverse, skipReFreshState, filteredReplicationWaitTime, reverseReplication interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateServedTypes", reflect.TypeOf((*MockReshardingWrangler)(nil).MigrateServedTypes), ctx, keyspace, shard, cells, servedType, reverse, skipReFreshState, filteredReplicationWaitTime, reverseReplication)
 }
