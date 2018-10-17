@@ -664,7 +664,7 @@ var (
 		input:  "update foo f join bar b on f.name = b.name set f.id = b.id where b.name = 'test'",
 		output: "update foo as f join bar as b on f.name = b.name set f.id = b.id where b.name = 'test'",
 	}, {
-		input: "update /* simple */ ignore a set b = 3",
+		input: "update /* ignore */ ignore a set b = 3",
 	}, {
 		input: "delete /* simple */ from a",
 	}, {
