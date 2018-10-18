@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/jsonutil"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/key"
@@ -224,6 +225,12 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	if errs != nil {
 		if route.ScatterErrorsAsWarnings {
 			partialSuccessScatterQueries.Add(1)
+
+			for _, err := range errs {
+				if err != nil {
+					vcursor.RecordWarning(&querypb.QueryWarning{Code: mysql.ERVitessShardError, Message: err.Error()})
+				}
+			}
 			// fall through
 		} else {
 			return nil, vterrors.Aggregate(errs)
