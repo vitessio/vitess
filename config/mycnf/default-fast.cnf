@@ -32,8 +32,6 @@ max_connections = 100
 net_write_timeout = 60
 pid-file = {{.PidFile}}
 port = {{.MysqlPort}}
-query_cache_size = 0
-query_cache_type = 0
 # all db instances should start in read-only mode - once the db is started and
 # fully functional, we'll push it into read-write mode
 read-only
