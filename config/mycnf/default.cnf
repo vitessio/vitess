@@ -36,6 +36,7 @@ port = {{.MysqlPort}}
 read-only
 read_buffer_size = 1M
 read_rnd_buffer_size = 1M
+secure_file_priv = NULL
 server-id = {{.ServerID}}
 skip-name-resolve
 # all db instances should skip the slave startup - that way we can do any
