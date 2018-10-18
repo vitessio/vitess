@@ -46,6 +46,9 @@ func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc
 	return func() {}
 }
 
+func (t noopVCursor) RecordWarning(warning *querypb.QueryWarning) {
+}
+
 func (t noopVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
@@ -88,6 +91,8 @@ type loggingVCursor struct {
 	curResult int
 	resultErr error
 
+	warnings []*querypb.QueryWarning
+
 	// Optional errors that can be returned from nextResult() alongside the results for
 	// multi-shard queries
 	multiShardErrs []error
@@ -98,8 +103,13 @@ type loggingVCursor struct {
 func (f *loggingVCursor) Context() context.Context {
 	return context.Background()
 }
+
 func (f *loggingVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	return func() {}
+}
+
+func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {
+	f.warnings = append(f.warnings, warning)
 }
 
 func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
@@ -206,10 +216,18 @@ func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	}
 }
 
+func (f *loggingVCursor) ExpectWarnings(t *testing.T, want []*querypb.QueryWarning) {
+	t.Helper()
+	if !reflect.DeepEqual(f.warnings, want) {
+		t.Errorf("vc.warnings:\n%+v\nwant:\n%+v", f.warnings, want)
+	}
+}
+
 func (f *loggingVCursor) Rewind() {
 	f.curShardForKsid = 0
 	f.curResult = 0
 	f.log = nil
+	f.warnings = nil
 }
 
 func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {

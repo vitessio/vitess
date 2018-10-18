@@ -20,6 +20,7 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -796,6 +797,7 @@ func TestExecFail(t *testing.T) {
 	vc := &loggingVCursor{shards: []string{"0"}, resultErr: errors.New("result error")}
 	_, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "sel.Execute err", err, "result error")
+	vc.ExpectWarnings(t, nil)
 
 	vc.Rewind()
 	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
@@ -821,6 +823,7 @@ func TestExecFail(t *testing.T) {
 	}
 	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "sel.Execute err", err, "result error -20")
+	vc.ExpectWarnings(t, nil)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
@@ -852,6 +855,10 @@ func TestExecFail(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected ScatterErrorsAsWarnings error %v", err)
 	}
+	vc.ExpectWarnings(t, []*querypb.QueryWarning{
+		{Code: mysql.ERVitessShardError, Message: "result error -20"},
+		{Code: mysql.ERVitessShardError, Message: "result error 20-"},
+	})
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
