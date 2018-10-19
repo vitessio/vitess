@@ -46,7 +46,7 @@ build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
-	go install $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	CGO_ENABLED=0 go install $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 
 parser:
 	make -C go/vt/sqlparser
@@ -213,6 +213,9 @@ docker_lite_percona:
 
 docker_lite_percona57:
 	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) percona57
+
+docker_lite_alpine:
+	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) alpine
 
 docker_guestbook:
 	cd examples/kubernetes/guestbook && ./build.sh
