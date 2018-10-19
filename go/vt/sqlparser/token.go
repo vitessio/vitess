@@ -179,6 +179,7 @@ var keywords = map[string]int{
 	"float":               FLOAT_TYPE,
 	"float4":              UNUSED,
 	"float8":              UNUSED,
+	"flush":               FLUSH,
 	"for":                 FOR,
 	"force":               FORCE,
 	"foreign":             FOREIGN,
