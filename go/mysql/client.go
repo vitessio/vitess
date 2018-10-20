@@ -166,6 +166,28 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 	return c, nil
 }
 
+// Ping implements mysql ping command.
+func (c *Conn) Ping() error {
+	// This is a new command, need to reset the sequence.
+	c.sequence = 0
+
+	if err := c.writePacket([]byte{ComPing}); err != nil {
+		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
+	}
+	data, err := c.readEphemeralPacket()
+	if err != nil {
+		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+	}
+	defer c.recycleReadPacket()
+	switch data[0] {
+	case OKPacket:
+		return nil
+	case ErrPacket:
+		return ParseErrorPacket(data)
+	}
+	return fmt.Errorf("unexpected packet type: %d", data[0])
+}
+
 // parseCharacterSet parses the provided character set.
 // Returns SQLError(CRCantReadCharset) if it can't.
 func parseCharacterSet(cs string) (uint8, error) {
