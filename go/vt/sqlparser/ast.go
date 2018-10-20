@@ -739,6 +739,7 @@ const (
 	DropStr          = "drop"
 	RenameStr        = "rename"
 	TruncateStr      = "truncate"
+	FlushStr         = "flush"
 	CreateVindexStr  = "create vindex"
 	AddColVindexStr  = "add vindex"
 	DropColVindexStr = "drop vindex"
@@ -772,6 +773,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		} else {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
 		}
+	case FlushStr:
+		buf.Myprintf("%s", node.Action)
 	case CreateVindexStr:
 		buf.Myprintf("%s %v %v", node.Action, node.VindexSpec.Name, node.VindexSpec)
 	case AddColVindexStr:

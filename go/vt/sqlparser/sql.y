@@ -156,7 +156,7 @@ func forceEOF(yylex interface{}) {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
+%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH
 %token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN  SPATIAL FULLTEXT KEY_BLOCK_SIZE
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
@@ -203,7 +203,7 @@ func forceEOF(yylex interface{}) {
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement
-%type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement
+%type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
 %type <ddl> create_table_prefix
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
@@ -340,6 +340,7 @@ command:
 | commit_statement
 | rollback_statement
 | other_statement
+| flush_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -1692,6 +1693,11 @@ other_statement:
     $$ = &OtherAdmin{}
   }
 
+flush_statement:
+  FLUSH force_eof
+  {
+    $$ = &DDL{Action: FlushStr}
+  }
 comment_opt:
   {
     setAllowComments(yylex, true)
@@ -3213,6 +3219,7 @@ non_reserved_keyword:
 | EXPANSION
 | FLOAT_TYPE
 | FIELDS
+| FLUSH
 | FOREIGN
 | FULLTEXT
 | GEOMETRY
