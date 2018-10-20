@@ -1087,3 +1087,60 @@ func binaryPath(root, binary string) (string, error) {
 	return "", fmt.Errorf("%s not found in any of %s/{%s}",
 		binary, root, strings.Join(subdirs, ","))
 }
+
+func TestListenerShutdown(t *testing.T) {
+	th := &testHandler{}
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	conn, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatalf("Can't connect to listener: %v", err)
+	}
+
+	if err := conn.Ping(); err != nil {
+		t.Fatalf("Ping failed: %v", err)
+	}
+
+	l.Shutdown()
+
+	if err := conn.Ping(); err != nil {
+		sqlErr, ok := err.(*SQLError)
+		if !ok {
+			t.Fatalf("Wrong error type: %T", err)
+		}
+		if sqlErr.Number() != ERServerShutdown {
+			t.Fatalf("Unexpected sql error code: %d", sqlErr.Number())
+		}
+		if sqlErr.SQLState() != SSServerShutdown {
+			t.Fatalf("Unexpected error sql state: %s", sqlErr.SQLState())
+		}
+		if sqlErr.Message != "Server shutdown in progress" {
+			t.Fatalf("Unexpected error message: %s", sqlErr.Message)
+		}
+	} else {
+		t.Fatalf("Ping should fail after shutdown")
+	}
+}
