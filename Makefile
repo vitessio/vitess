@@ -46,7 +46,7 @@ build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
-    go install $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	go install $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 
 parser:
 	make -C go/vt/sqlparser
