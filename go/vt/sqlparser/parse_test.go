@@ -995,6 +995,12 @@ var (
 		input:  "analyze table a",
 		output: "alter table a",
 	}, {
+		input:  "flush tables",
+		output: "flush",
+	}, {
+		input:  "flush tables with read lock",
+		output: "flush",
+	}, {
 		input:  "show binary logs",
 		output: "show binary logs",
 	}, {

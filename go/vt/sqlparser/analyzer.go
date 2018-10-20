@@ -91,7 +91,7 @@ func Preview(sql string) int {
 		return StmtRollback
 	}
 	switch loweredFirstWord {
-	case "create", "alter", "rename", "drop", "truncate":
+	case "create", "alter", "rename", "drop", "truncate", "flush":
 		return StmtDDL
 	case "set":
 		return StmtSet
