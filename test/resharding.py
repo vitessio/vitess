@@ -1134,7 +1134,7 @@ primary key (name)
                      auto_log=True, expect_fail=True)
     utils.check_tablet_query_service(self, shard_1_master, False, True)
 
-    # finally, do the Migration that's expected to succeed
+    # do the migration that's expected to succeed
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
@@ -1144,6 +1144,32 @@ primary key (name)
                              keyspace_id_type=base_sharding.keyspace_id_type,
                              sharding_column_name='custom_ksid_col')
     utils.check_tablet_query_service(self, shard_1_master, False, True)
+
+    # test reverse_replication
+    # start with inserting a row in each destination shard
+    self._insert_value(shard_2_master, 'resharding2', 2, 'msg2',
+                       0x9000000000000000)
+    self._insert_value(shard_3_master, 'resharding2', 3, 'msg3',
+                       0xD000000000000000)
+    # ensure the rows are not present yet
+    self._check_value(shard_1_master, 'resharding2', 2, 'msg2',
+                      0x9000000000000000, should_be_here=False)
+    self._check_value(shard_1_master, 'resharding2', 3, 'msg3',
+                      0xD000000000000000, should_be_here=False)
+    # repeat the migration with reverse_replication
+    utils.run_vtctl(['MigrateServedTypes', '-reverse_replication=true',
+                     'test_keyspace/80-', 'master'], auto_log=True)
+    # look for the rows in the original master after a short wait
+    time.sleep(1.0)
+    self._check_value(shard_1_master, 'resharding2', 2, 'msg2',
+                      0x9000000000000000)
+    self._check_value(shard_1_master, 'resharding2', 3, 'msg3',
+                      0xD000000000000000)
+
+    # retry the migration to ensure it now fails
+    utils.run_vtctl(['MigrateServedTypes', '-reverse_replication=true',
+                     'test_keyspace/80-', 'master'],
+                    auto_log=True, expect_fail=True)
 
     # check the binlog players are gone now
     self.check_no_binlog_player(shard_2_master)
