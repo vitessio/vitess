@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -34,6 +35,7 @@ import (
 var (
 	mysqlAuthServerStaticFile   = flag.String("mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
 	mysqlAuthServerStaticString = flag.String("mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
+	mysqlAuthRotationTime       = flag.Duration("mysql_auth_rotation_time", 300*time.Second, "Cooldown period before reloading json config.")
 )
 
 const (
@@ -50,7 +52,8 @@ type AuthServerStatic struct {
 	Method string
 
 	// Entries contains the users, passwords and user data.
-	Entries map[string][]*AuthServerStaticEntry
+	Entries          map[string][]*AuthServerStaticEntry
+	LastAuthRotation time.Time
 }
 
 // AuthServerStaticEntry stores the values for a given user.
@@ -105,7 +108,13 @@ func RegisterAuthServerStaticFromParams(file, str string) {
 	authServerStatic := NewAuthServerStatic()
 
 	authServerStatic.loadConfigFromParams(file, str)
+
+	if len(authServerStatic.Entries) <= 0 {
+		log.Exitf("Failed to populate entries from file: %v", file)
+	}
 	authServerStatic.installSignalHandlers()
+
+	authServerStatic.LastAuthRotation = time.Now()
 
 	// And register the server.
 	RegisterAuthServerImpl("static", authServerStatic)
@@ -116,15 +125,19 @@ func (a *AuthServerStatic) loadConfigFromParams(file, str string) {
 	if file != "" {
 		data, err := ioutil.ReadFile(file)
 		if err != nil {
-			log.Exitf("Failed to read mysql_auth_server_static_file file: %v", err)
+			log.Errorf("Failed to read mysql_auth_server_static_file file: %v", err)
+			return
 		}
 		jsonConfig = data
 	}
 
-	a.Entries = make(map[string][]*AuthServerStaticEntry) // clear old entries
-	if err := parseConfig(jsonConfig, &a.Entries); err != nil {
-		log.Exitf("Error parsing auth server config: %v", err)
+	entries := make(map[string][]*AuthServerStaticEntry) // clear old entries
+	if err := parseConfig(jsonConfig, &entries); err != nil {
+		log.Errorf("Error parsing auth server config: %v", err)
+		return
 	}
+
+	a.Entries = entries
 }
 
 func (a *AuthServerStatic) installSignalHandlers() {
@@ -187,6 +200,13 @@ func (a *AuthServerStatic) Salt() ([]byte, error) {
 
 // ValidateHash is part of the AuthServer interface.
 func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
+
+	// If enough time has elpased (default is 5 minutes), reload the auth file/string
+	if time.Now().Sub(a.LastAuthRotation) > *mysqlAuthRotationTime {
+		a.loadConfigFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString)
+		a.LastAuthRotation = time.Now()
+	}
+
 	// Find the entry.
 	entries, ok := a.Entries[user]
 	if !ok {
