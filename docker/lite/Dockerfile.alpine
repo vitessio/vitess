@@ -1,0 +1,38 @@
+# This image is only meant to be built from within the build.sh script.
+FROM vitess/base AS builder
+FROM alpine:3.8 AS staging
+
+RUN mkdir -p /vt/vtdataroot/ && mkdir -p /vt/bin && mkdir -p /vt/src/vitess.io/vitess/web/vtctld2
+
+COPY --from=builder /vt/src/vitess.io/vitess/web/vtctld /vt/src/vitess.io/web/
+COPY --from=builder /vt/src/vitess.io/vitess/web/vtctld2/app /vt/src/vitess.io/web/vtctld2/
+COPY --from=builder /vt/src/vitess.io/vitess/config /vt/config
+COPY --from=builder /vt/bin/mysqlctld /vt/bin/
+COPY --from=builder /vt/bin/vtctld /vt/bin/
+COPY --from=builder /vt/bin/vtctlclient /vt/bin/
+COPY --from=builder /vt/bin/vtgate /vt/bin/
+COPY --from=builder /vt/bin/vttablet /vt/bin/
+COPY --from=builder /vt/bin/vtworker /vt/bin/
+
+FROM alpine:3.8 
+
+# Install dependencies
+RUN echo '@edge http://nl.alpinelinux.org/alpine/edge/main' >> /etc/apk/repositories && \
+    apk add --no-cache mariadb@edge mariadb-client@edge bzip2 bash
+
+# Set up Vitess environment (just enough to run pre-built Go binaries)
+ENV VTTOP /vt/src/vitess.io/vitess
+ENV VTROOT /vt
+ENV GOTOP $VTTOP/go
+ENV VTDATAROOT $VTROOT/vtdataroot
+ENV GOBIN $VTROOT/bin
+ENV GOPATH $VTROOT
+ENV PATH $VTROOT/bin:$PATH
+ENV VT_MYSQL_ROOT /usr
+ENV PKG_CONFIG_PATH $VTROOT/lib
+ENV MYSQL_FLAVOR MariaDB103
+
+# Create vitess user
+RUN addgroup -S vitess && adduser -S -G vitess vitess && mkdir -p /vt
+COPY --from=staging /vt/ /vt/
+USER vitess
