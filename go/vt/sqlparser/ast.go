@@ -89,6 +89,9 @@ func Parse(sql string) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 {
 		if tokenizer.partialDDL != nil {
+			if typ, val := tokenizer.Scan(); typ != 0 {
+				return nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", string(val))
+			}
 			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
 			tokenizer.ParseTree = tokenizer.partialDDL
 			return tokenizer.ParseTree, nil
