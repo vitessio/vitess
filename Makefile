@@ -214,6 +214,9 @@ docker_lite_percona:
 docker_lite_percona57:
 	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) percona57
 
+docker_lite_alpine:
+	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) alpine
+
 docker_guestbook:
 	cd examples/kubernetes/guestbook && ./build.sh
 
