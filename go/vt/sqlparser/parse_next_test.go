@@ -139,7 +139,7 @@ func TestParseNextEdgeCases(t *testing.T) {
 		input: "select 1 from a; update a set b = 2   ;   ",
 		want:  []string{"select 1 from a", "update a set b = 2"},
 	}, {
-		name:  "Handle ForceEOF statements",
+		name:  "Handle SkipToEnd statements",
 		input: "set character set utf8; select 1 from a",
 		want:  []string{"set charset 'utf8'", "select 1 from a"},
 	}, {
