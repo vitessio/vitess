@@ -163,6 +163,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES
+%token <bytes> KILL
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -206,7 +207,7 @@ func forceEOF(yylex interface{}) {
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
 %type <ddl> create_table_prefix
 %type <statement> analyze_statement show_statement use_statement other_statement
-%type <statement> begin_statement commit_statement rollback_statement
+%type <statement> begin_statement commit_statement rollback_statement kill_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
@@ -341,6 +342,7 @@ command:
 | rollback_statement
 | other_statement
 | flush_statement
+| kill_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -1661,6 +1663,16 @@ rollback_statement:
   ROLLBACK
   {
     $$ = &Rollback{}
+  }
+
+kill_statement:
+  KILL QUERY INTEGRAL
+  {
+    $$ = &Kill{Query: true, ConnID: NewIntVal($3)}
+  }
+| KILL INTEGRAL
+  {
+    $$ = &Kill{Query: false, ConnID: NewIntVal($2)}
   }
 
 other_statement:

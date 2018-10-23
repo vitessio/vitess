@@ -226,7 +226,7 @@ var keywords = map[string]int{
 	"key":                 KEY,
 	"keys":                KEYS,
 	"key_block_size":      KEY_BLOCK_SIZE,
-	"kill":                UNUSED,
+	"kill":                KILL,
 	"language":            LANGUAGE,
 	"last_insert_id":      LAST_INSERT_ID,
 	"leading":             UNUSED,

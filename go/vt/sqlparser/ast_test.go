@@ -110,6 +110,37 @@ func TestSelect(t *testing.T) {
 	}
 }
 
+func TestKill(t *testing.T) {
+	for _, query := range []string{
+		"kill query 1234",
+		"kill 1234",
+	} {
+		tree, err := Parse(query)
+		if err != nil {
+			t.Error(err)
+		}
+
+		var b bytes.Buffer
+		Append(&b, tree)
+		got := b.String()
+		want := query
+		if got != want {
+			t.Errorf("Append: %s, want %s", got, want)
+		}
+
+		kill := tree.(*Kill)
+		expects := strings.Contains(query, "query")
+		if kill.Query != expects {
+			t.Errorf("Expected query = %v", expects)
+		}
+		connID := NewIntVal([]byte("1234"))
+		if !bytes.Equal(kill.ConnID.Val, connID.Val) || kill.ConnID.Type != connID.Type {
+			t.Errorf("Expected id = %v. Got %v", connID, kill.ConnID)
+		}
+
+	}
+}
+
 func TestRemoveHints(t *testing.T) {
 	for _, query := range []string{
 		"select * from t use index (i)",

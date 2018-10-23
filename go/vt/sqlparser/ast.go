@@ -291,6 +291,7 @@ func (*Commit) iStatement()     {}
 func (*Rollback) iStatement()   {}
 func (*OtherRead) iStatement()  {}
 func (*OtherAdmin) iStatement() {}
+func (*Kill) iStatement()       {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -1604,6 +1605,27 @@ func (node *Rollback) Format(buf *TrackedBuffer) {
 
 func (node *Rollback) walkSubtree(visit Visit) error {
 	return nil
+}
+
+// Kill represents a Kill statement.
+type Kill struct {
+	// If true, KILL QUERY as opposed to KILL
+	Query bool
+	// Id of the connection for the kill
+	ConnID *SQLVal
+}
+
+// Format formats the node.
+func (node *Kill) Format(buf *TrackedBuffer) {
+	buf.WriteString("kill ")
+	if node.Query {
+		buf.WriteString("query ")
+	}
+	buf.Myprintf("%v", node.ConnID)
+}
+
+func (node *Kill) walkSubtree(visit Visit) error {
+	return Walk(visit, node.ConnID)
 }
 
 // OtherRead represents a DESCRIBE, or EXPLAIN statement.
