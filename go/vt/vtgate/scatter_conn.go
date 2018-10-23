@@ -99,9 +99,9 @@ func (stc *ScatterConn) startAction(name string, target *querypb.Target) (time.T
 	return startTime, statsKey
 }
 
-func (stc *ScatterConn) endAction(startTime time.Time, i int, allErrors *concurrency.AllErrorRecorder, statsKey []string, err *error, session *SafeSession) {
+func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.AllErrorRecorder, statsKey []string, err *error, session *SafeSession) {
 	if *err != nil {
-		allErrors.RecordErrorAt(i, *err)
+		allErrors.RecordError(*err)
 		// Don't increment the error counter for duplicate
 		// keys or bad queries, as those errors are caused by
 		// client queries and are not VTGate's fault.
@@ -167,8 +167,9 @@ func (stc *ScatterConn) Execute(
 // ExecuteMultiShard is like Execute,
 // but each shard gets its own Sql Queries and BindVariables.
 //
-// It returns any successful query results concatenated together, and if one
-// or more shard query had an error, an array of errors indexed by shard
+// It always returns a non-nil query result and an array of
+// shard errors which may be nil so that callers can optionally
+// process a partially-successful operation.
 func (stc *ScatterConn) ExecuteMultiShard(
 	ctx context.Context,
 	rss []*srvtopo.ResolvedShard,
@@ -218,11 +219,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			return transactionID, nil
 		})
 
-	// If there were any errors, return the
-	if allErrors.HasErrors() {
-		errs = allErrors.GetErrors(len(rss))
-	}
-	return qr, errs
+	return qr, allErrors.GetErrors()
 }
 
 func (stc *ScatterConn) executeAutocommit(ctx context.Context, rs *srvtopo.ResolvedShard, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
@@ -370,8 +367,6 @@ func (stc *ScatterConn) ExecuteBatch(
 	session *SafeSession,
 	options *querypb.ExecuteOptions) (qrs []sqltypes.Result, err error) {
 
-	// Any errors are recorded positionally per request in the batch
-	reqNum := 0
 	allErrors := new(concurrency.AllErrorRecorder)
 
 	results := make([]sqltypes.Result, batchRequest.length)
@@ -380,11 +375,11 @@ func (stc *ScatterConn) ExecuteBatch(
 	var wg sync.WaitGroup
 	for _, req := range batchRequest.requests {
 		wg.Add(1)
-		go func(reqNum int, req *shardBatchRequest) {
+		go func(req *shardBatchRequest) {
 			defer wg.Done()
 			var err error
 			startTime, statsKey := stc.startAction("ExecuteBatch", req.rs.Target)
-			defer stc.endAction(startTime, reqNum, allErrors, statsKey, &err, session)
+			defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
 			shouldBegin, transactionID := transactionInfo(req.rs.Target, session, false)
 			var innerqrs []sqltypes.Result
@@ -413,8 +408,7 @@ func (stc *ScatterConn) ExecuteBatch(
 			for i, result := range innerqrs {
 				results[req.resultIndexes[i]].AppendResult(&result)
 			}
-		}(reqNum, req)
-		reqNum++
+		}(req)
 	}
 	wg.Wait()
 
@@ -745,7 +739,7 @@ func (stc *ScatterConn) multiGo(
 	oneShard := func(rs *srvtopo.ResolvedShard, i int) {
 		var err error
 		startTime, statsKey := stc.startAction(name, rs.Target)
-		defer stc.endAction(startTime, i, allErrors, statsKey, &err, nil)
+		defer stc.endAction(startTime, allErrors, statsKey, &err, nil)
 		err = action(rs, i)
 	}
 
@@ -796,7 +790,7 @@ func (stc *ScatterConn) multiGoTransaction(
 	oneShard := func(rs *srvtopo.ResolvedShard, i int) {
 		var err error
 		startTime, statsKey := stc.startAction(name, rs.Target)
-		defer stc.endAction(startTime, i, allErrors, statsKey, &err, session)
+		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
 		shouldBegin, transactionID := transactionInfo(rs.Target, session, notInTransaction)
 		transactionID, err = action(rs, i, shouldBegin, transactionID)
