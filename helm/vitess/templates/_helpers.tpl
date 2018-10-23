@@ -87,7 +87,7 @@ nodeAffinity:
 {{- end -}}
 
 #############################
-# mycnf exec
+# mycnf exec - expects extraMyCnf config map name
 #############################
 {{- define "mycnf-exec" -}}
 
@@ -112,6 +112,12 @@ elif [ "$VT_DB_FLAVOR" = "mariadb103" ]; then
 fi
 
 export EXTRA_MY_CNF="$FLAVOR_MYCNF:/vtdataroot/tabletdata/report-host.cnf:/vt/config/mycnf/rbr.cnf"
+
+{{ if . }}
+for filename in /vt/userconfig/*; do
+  export EXTRA_MY_CNF="$EXTRA_MY_CNF:$filename"
+done
+{{ end }}
 
 {{- end -}}
 
@@ -291,6 +297,35 @@ cat $AWS_SHARED_CREDENTIALS_FILE
     {{ end }}
 
   {{ end }}
+
+{{ end }}
+
+{{- end -}}
+
+#############################
+# user config volume - expects config map name
+#############################
+{{- define "user-config-volume" -}}
+
+{{ if . }}
+
+- name: user-config
+  configMap:
+    name: {{ . }}
+
+{{ end }}
+
+{{- end -}}
+
+#############################
+# user config volumeMount - expects config map name
+#############################
+{{- define "user-config-volumeMount" -}}
+
+{{ if . }}
+
+- name: user-config
+  mountPath: /vt/userconfig
 
 {{ end }}
 
