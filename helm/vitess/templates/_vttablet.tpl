@@ -153,7 +153,7 @@ kind: Job
 metadata:
   name: {{ $shardName }}-init-shard-master
 spec:
-  backoffLimit: 0
+  backoffLimit: 1
   template:
     spec:
       restartPolicy: OnFailure
