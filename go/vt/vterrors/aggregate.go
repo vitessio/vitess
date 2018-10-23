@@ -80,19 +80,12 @@ func Aggregate(errors []error) error {
 	if len(errors) == 0 {
 		return nil
 	}
-	code := aggregateCodes(errors)
-	if code == vtrpcpb.Code_OK {
-		return nil
-	}
-	return New(code, aggregateErrors(errors))
+	return New(aggregateCodes(errors), aggregateErrors(errors))
 }
 
 func aggregateCodes(errors []error) vtrpcpb.Code {
 	highCode := vtrpcpb.Code_OK
 	for _, e := range errors {
-		if e == nil {
-			continue
-		}
 		code := Code(e)
 		if errorPriorities[code] > errorPriorities[highCode] {
 			highCode = code
@@ -105,9 +98,6 @@ func aggregateCodes(errors []error) vtrpcpb.Code {
 func aggregateErrors(errs []error) string {
 	errStrs := make([]string, 0, len(errs))
 	for _, e := range errs {
-		if e == nil {
-			continue
-		}
 		errStrs = append(errStrs, e.Error())
 	}
 	// sort the error strings so we always have deterministic ordering

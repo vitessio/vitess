@@ -42,11 +42,6 @@ func TestAggregateVtGateErrorCodes(t *testing.T) {
 			expected: vtrpcpb.Code_OK,
 		},
 		{
-			// aggregation of no errors is a success code
-			input:    []error{nil, nil},
-			expected: vtrpcpb.Code_OK,
-		},
-		{
 			// single error code gets returned directly
 			input:    []error{errFromCode(vtrpcpb.Code_INVALID_ARGUMENT)},
 			expected: vtrpcpb.Code_INVALID_ARGUMENT,
@@ -56,18 +51,6 @@ func TestAggregateVtGateErrorCodes(t *testing.T) {
 			input: []error{
 				errFromCode(vtrpcpb.Code_UNAVAILABLE),
 				errFromCode(vtrpcpb.Code_INVALID_ARGUMENT),
-			},
-			expected: vtrpcpb.Code_INVALID_ARGUMENT,
-		},
-		{
-			// aggregation handles nil positions
-			input: []error{
-				nil,
-				errFromCode(vtrpcpb.Code_UNAVAILABLE),
-				nil,
-				nil,
-				errFromCode(vtrpcpb.Code_INVALID_ARGUMENT),
-				nil,
 			},
 			expected: vtrpcpb.Code_INVALID_ARGUMENT,
 		},
@@ -98,32 +81,9 @@ func TestAggregateVtGateErrors(t *testing.T) {
 			expected: nil,
 		},
 		{
-			// aggregating an array of all nil errors is not an error
-			input:    []error{nil, nil},
-			expected: nil,
-		},
-		{
 			input: []error{
 				errFromCode(vtrpcpb.Code_UNAVAILABLE),
 				errFromCode(vtrpcpb.Code_INVALID_ARGUMENT),
-			},
-			expected: New(
-				vtrpcpb.Code_INVALID_ARGUMENT,
-				aggregateErrors([]error{
-					errors.New(errGeneric),
-					errors.New(errGeneric),
-				}),
-			),
-		},
-		{
-			// nil errors are ignored in the array
-			input: []error{
-				nil,
-				errFromCode(vtrpcpb.Code_UNAVAILABLE),
-				nil,
-				nil,
-				errFromCode(vtrpcpb.Code_INVALID_ARGUMENT),
-				nil,
 			},
 			expected: New(
 				vtrpcpb.Code_INVALID_ARGUMENT,
