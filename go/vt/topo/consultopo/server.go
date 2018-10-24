@@ -20,15 +20,31 @@ Package consultopo implements topo.Server with consul as the backend.
 package consultopo
 
 import (
+	"encoding/json"
+	"flag"
+	"io/ioutil"
 	"sync"
 
 	"github.com/hashicorp/consul/api"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
 
+var (
+	consulAuthClientStaticFile = flag.String("consul_auth_client_static_file", "", "JSON File to read the topos/tokens from.")
+)
+
+// AuthConsulClientCred ...
+type AuthConsulClientCred struct {
+	Token string
+}
+
 // Factory is the consul topo.Factory implementation.
-type Factory struct{}
+type Factory struct {
+	// Maps cells to consul token credentials
+	Creds map[string]*AuthConsulClientCred
+}
 
 // HasGlobalReadOnlyCell is part of the topo.Factory interface.
 func (f Factory) HasGlobalReadOnlyCell(serverAddr, root string) bool {
@@ -37,7 +53,27 @@ func (f Factory) HasGlobalReadOnlyCell(serverAddr, root string) bool {
 
 // Create is part of the topo.Factory interface.
 func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
-	return NewServer(serverAddr, root)
+	return NewServer(cell, serverAddr, root, f.Creds)
+}
+
+func (f *Factory) initClientConfig() {
+	// Check parameters.
+	if *consulAuthClientStaticFile == "" {
+		// Not configured, nothing to do.
+		log.Infof("Not configuring consul auth, as consul_auth_client_static_file was not provided")
+		return
+	}
+
+	// Create and register auth server.
+	data, err := ioutil.ReadFile(*consulAuthClientStaticFile)
+	if err != nil {
+		log.Exitf("Failed to read consul_auth_client_static_file file: %v", err)
+	}
+
+	f.Creds = make(map[string]*AuthConsulClientCred)
+	if err := json.Unmarshal(data, &f.Creds); err != nil {
+		log.Exitf("Error parsing auth server config: %v", err)
+	}
 }
 
 // Server is the implementation of topo.Server for consul.
@@ -66,9 +102,12 @@ type lockInstance struct {
 }
 
 // NewServer returns a new consultopo.Server.
-func NewServer(serverAddr, root string) (*Server, error) {
+func NewServer(cell, serverAddr, root string, creds map[string]*AuthConsulClientCred) (*Server, error) {
 	cfg := api.DefaultConfig()
 	cfg.Address = serverAddr
+	if creds[cell] != nil {
+		cfg.Token = creds[cell].Token
+	}
 	client, err := api.NewClient(cfg)
 	if err != nil {
 		return nil, err
@@ -94,5 +133,7 @@ func (s *Server) Close() {
 }
 
 func init() {
-	topo.RegisterFactory("consul", Factory{})
+	factory := Factory{}
+	factory.initClientConfig()
+	topo.RegisterFactory("consul", factory)
 }
