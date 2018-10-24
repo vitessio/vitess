@@ -56,14 +56,13 @@ func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 
 func getClientConfig() (creds map[string]*AuthConsulClientCred, err error) {
 	creds = make(map[string]*AuthConsulClientCred)
-	// Check parameters.
+
 	if *consulAuthClientStaticFile == "" {
 		// Not configured, nothing to do.
-		log.Infof("Not configuring consul auth, as consul_auth_client_static_file was not provided")
+		log.Infof("Consul client auth is not set up. consul_auth_client_static_file was not provided")
 		return creds, nil
 	}
 
-	// Create and register auth server.
 	data, err := ioutil.ReadFile(*consulAuthClientStaticFile)
 	if err != nil {
 		err = fmt.Errorf("Failed to read consul_auth_client_static_file file: %v", err)
