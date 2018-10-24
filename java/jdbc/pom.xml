@@ -56,23 +56,29 @@
     <dependency>
       <groupId>org.powermock</groupId>
       <artifactId>powermock-api-mockito</artifactId>
-      <version>1.6.4</version>
+      <version>1.7.4</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.powermock</groupId>
       <artifactId>powermock-core</artifactId>
-      <version>1.6.4</version>
+      <version>1.7.4</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.powermock</groupId>
       <artifactId>powermock-module-junit4</artifactId>
-      <version>1.6.4</version>
+      <version>1.7.4</version>
       <scope>test</scope>
     </dependency>
+	<dependency>
+	  <groupId>org.powermock</groupId>
+	  <artifactId>powermock-api-mockito-common</artifactId>
+	  <version>1.7.4</version>
+	  <scope>test</scope>
+	</dependency>
   </dependencies>
-
+  
   <build>
     <plugins>
       <plugin>
@@ -84,7 +90,16 @@
           <target>7</target>
         </configuration>
       </plugin>
-
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>2.22.1</version>
+        <configuration>
+          <!-- <argLine>${surefireArgLine}</argLine> -->
+		  <useManifestOnlyJar>false</useManifestOnlyJar>
+		  <useSystemClassLoader>true</useSystemClassLoader>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>

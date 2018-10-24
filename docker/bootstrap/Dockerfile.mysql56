@@ -11,4 +11,5 @@ RUN for i in $(seq 1 10); do apt-key adv --recv-keys --keyserver ha.pool.sks-key
 WORKDIR /vt/src/vitess.io/vitess
 
 ENV MYSQL_FLAVOR MySQL56
+USER vitess
 RUN ./bootstrap.sh

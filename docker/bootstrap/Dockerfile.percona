@@ -17,4 +17,5 @@ RUN for i in $(seq 1 10); do apt-key adv --keyserver keys.gnupg.net --recv-keys 
 WORKDIR /vt/src/vitess.io/vitess
 
 ENV MYSQL_FLAVOR MySQL56
+USER vitess
 RUN ./bootstrap.sh
