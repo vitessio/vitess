@@ -38,7 +38,7 @@ import (
 // startConsul starts a consul subprocess, and waits for it to be ready.
 // Returns the exec.Cmd forked, the config file to remove after the test,
 // and the server address to RPC-connect to.
-func startConsul(t *testing.T) (*exec.Cmd, string, string) {
+func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 	// Create a temporary config file, as ports cannot all be set
 	// via command line. The file name has to end with '.json' so
 	// we're not using TempFile.
@@ -64,6 +64,15 @@ func startConsul(t *testing.T) (*exec.Cmd, string, string) {
 			"serf_wan": port + 3,
 		},
 	}
+
+	if authToken != "" {
+		config["datacenter"] = "vitess"
+		config["acl_datacenter"] = "vitess"
+		config["acl_master_token"] = authToken
+		config["acl_default_policy"] = "deny"
+		config["acl_down_policy"] = "extend-cache"
+	}
+
 	data, err := json.Marshal(config)
 	if err != nil {
 		t.Fatalf("cannot json-encode config: %v", err)
@@ -88,6 +97,9 @@ func startConsul(t *testing.T) (*exec.Cmd, string, string) {
 	serverAddr := fmt.Sprintf("localhost:%v", port+1)
 	cfg := api.DefaultConfig()
 	cfg.Address = serverAddr
+	if authToken != "" {
+		cfg.Token = authToken
+	}
 	c, err := api.NewClient(cfg)
 	if err != nil {
 		t.Fatalf("api.NewClient(%v) failed: %v", serverAddr, err)
@@ -97,11 +109,12 @@ func startConsul(t *testing.T) (*exec.Cmd, string, string) {
 	start := time.Now()
 	kv := c.KV()
 	for {
-		if _, _, err := kv.List("/", nil); err == nil {
+		_, _, err := kv.List("/", nil)
+		if err == nil {
 			break
 		}
 		if time.Since(start) > 10*time.Second {
-			t.Fatalf("Failed to start consul daemon in time")
+			t.Fatalf("Failed to start consul daemon in time. Consul is returning error: %v", err)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -114,7 +127,7 @@ func TestConsulTopo(t *testing.T) {
 	*watchPollDuration = 100 * time.Millisecond
 
 	// Start a single consul in the background.
-	cmd, configFilename, serverAddr := startConsul(t)
+	cmd, configFilename, serverAddr := startConsul(t, "")
 	defer func() {
 		cmd.Process.Kill()
 		cmd.Wait()
@@ -144,4 +157,111 @@ func TestConsulTopo(t *testing.T) {
 
 		return ts
 	})
+}
+
+func TestConsulTopoWithAuth(t *testing.T) {
+	// One test is going to wait that full period, so make it shorter.
+	*watchPollDuration = 100 * time.Millisecond
+
+	// Start a single consul in the background.
+	cmd, configFilename, serverAddr := startConsul(t, "123456")
+	defer func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+		os.Remove(configFilename)
+	}()
+
+	// Run the TopoServerTestSuite tests.
+	testIndex := 0
+	tmpFile, err := ioutil.TempFile("", "consul_auth_client_static_file.json")
+
+	if err != nil {
+		t.Fatalf("couldn't create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	*consulAuthClientStaticFile = tmpFile.Name()
+
+	jsonConfig := "{\"global\":{\"Token\":\"123456\"}, \"test\":{\"Token\":\"123456\"}}"
+	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		t.Fatalf("couldn't write temp file: %v", err)
+	}
+
+	// Re-register consul factory but with client creds set
+	topo.DeregisterFactory("consul")
+	factory := Factory{}
+	factory.initClientConfig()
+	topo.RegisterFactory("consul", factory)
+
+	test.TopoServerTestSuite(t, func() *topo.Server {
+		// Each test will use its own sub-directories.
+		testRoot := fmt.Sprintf("test-%v", testIndex)
+		testIndex++
+
+		// Create the server on the new root.
+		ts, err := topo.OpenServer("consul", serverAddr, path.Join(testRoot, topo.GlobalCell))
+		if err != nil {
+			t.Fatalf("OpenServer() failed: %v", err)
+		}
+
+		// Create the CellInfo.
+		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+			ServerAddress: serverAddr,
+			Root:          path.Join(testRoot, test.LocalCellName),
+		}); err != nil {
+			t.Fatalf("CreateCellInfo() failed: %v", err)
+		}
+
+		return ts
+	})
+}
+
+func TestConsulTopoWithAuthFailure(t *testing.T) {
+	// One test is going to wait that full period, so make it shorter.
+	*watchPollDuration = 100 * time.Millisecond
+
+	// Start a single consul in the background.
+	cmd, configFilename, serverAddr := startConsul(t, "123456")
+	defer func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+		os.Remove(configFilename)
+	}()
+
+	tmpFile, err := ioutil.TempFile("", "consul_auth_client_static_file.json")
+
+	if err != nil {
+		t.Fatalf("couldn't create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	*consulAuthClientStaticFile = tmpFile.Name()
+
+	jsonConfig := "{\"global\":{\"Token\":\"badtoken\"}}"
+	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		t.Fatalf("couldn't write temp file: %v", err)
+	}
+
+	// Re-register consul factory but with client creds set
+	topo.DeregisterFactory("consul")
+	factory := Factory{}
+	factory.initClientConfig()
+	topo.RegisterFactory("consul", factory)
+
+	// Create the server on the new root.
+	ts, err := topo.OpenServer("consul", serverAddr, path.Join("globalRoot", topo.GlobalCell))
+	if err != nil {
+		t.Fatalf("OpenServer() failed: %v", err)
+	}
+
+	// Attempt to Create the CellInfo.
+	err = ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+		ServerAddress: serverAddr,
+		Root:          path.Join("globalRoot", test.LocalCellName),
+	})
+
+	want := "Failed request: ACL not found"
+	if err == nil || err.Error() != want {
+		t.Errorf("Expected CreateCellInfo to fail: got  %v, want %s", err, want)
+	}
 }

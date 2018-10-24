@@ -168,6 +168,11 @@ func RegisterFactory(name string, factory Factory) {
 	factories[name] = factory
 }
 
+// DeregisterFactory deregisters a Factory for an implementation for a Server. Only to be used within the context of tests.
+func DeregisterFactory(name string) {
+	factories[name] = nil
+}
+
 // NewWithFactory creates a new Server based on the given Factory.
 // It also opens the global cell connection.
 func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error) {
