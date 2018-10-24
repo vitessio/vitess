@@ -187,12 +187,6 @@ func TestConsulTopoWithAuth(t *testing.T) {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
-	// Re-register consul factory but with client creds set
-	topo.DeregisterFactory("consul")
-	factory := Factory{}
-	factory.initClientConfig()
-	topo.RegisterFactory("consul", factory)
-
 	test.TopoServerTestSuite(t, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		testRoot := fmt.Sprintf("test-%v", testIndex)
@@ -241,12 +235,6 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
-
-	// Re-register consul factory but with client creds set
-	topo.DeregisterFactory("consul")
-	factory := Factory{}
-	factory.initClientConfig()
-	topo.RegisterFactory("consul", factory)
 
 	// Create the server on the new root.
 	ts, err := topo.OpenServer("consul", serverAddr, path.Join("globalRoot", topo.GlobalCell))

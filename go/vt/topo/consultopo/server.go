@@ -22,6 +22,7 @@ package consultopo
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"sync"
 
@@ -41,10 +42,7 @@ type AuthConsulClientCred struct {
 }
 
 // Factory is the consul topo.Factory implementation.
-type Factory struct {
-	// Maps cells to consul token credentials
-	Creds map[string]*AuthConsulClientCred
-}
+type Factory struct{}
 
 // HasGlobalReadOnlyCell is part of the topo.Factory interface.
 func (f Factory) HasGlobalReadOnlyCell(serverAddr, root string) bool {
@@ -53,27 +51,29 @@ func (f Factory) HasGlobalReadOnlyCell(serverAddr, root string) bool {
 
 // Create is part of the topo.Factory interface.
 func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
-	return NewServer(cell, serverAddr, root, f.Creds)
+	return NewServer(cell, serverAddr, root)
 }
 
-func (f *Factory) initClientConfig() {
+func getClientConfig() (creds map[string]*AuthConsulClientCred, err error) {
+	creds = make(map[string]*AuthConsulClientCred)
 	// Check parameters.
 	if *consulAuthClientStaticFile == "" {
 		// Not configured, nothing to do.
 		log.Infof("Not configuring consul auth, as consul_auth_client_static_file was not provided")
-		return
+		return creds, nil
 	}
 
 	// Create and register auth server.
 	data, err := ioutil.ReadFile(*consulAuthClientStaticFile)
 	if err != nil {
-		log.Exitf("Failed to read consul_auth_client_static_file file: %v", err)
+		err = fmt.Errorf("Failed to read consul_auth_client_static_file file: %v", err)
+		return creds, err
 	}
 
-	f.Creds = make(map[string]*AuthConsulClientCred)
-	if err := json.Unmarshal(data, &f.Creds); err != nil {
-		log.Exitf("Error parsing auth server config: %v", err)
+	if err := json.Unmarshal(data, &creds); err != nil {
+		err = fmt.Errorf(fmt.Sprintf("Error parsing auth server config: %v", err))
 	}
+	return creds, nil
 }
 
 // Server is the implementation of topo.Server for consul.
@@ -102,7 +102,11 @@ type lockInstance struct {
 }
 
 // NewServer returns a new consultopo.Server.
-func NewServer(cell, serverAddr, root string, creds map[string]*AuthConsulClientCred) (*Server, error) {
+func NewServer(cell, serverAddr, root string) (*Server, error) {
+	creds, err := getClientConfig()
+	if err != nil {
+		return nil, err
+	}
 	cfg := api.DefaultConfig()
 	cfg.Address = serverAddr
 	if creds[cell] != nil {
@@ -133,7 +137,5 @@ func (s *Server) Close() {
 }
 
 func init() {
-	factory := Factory{}
-	factory.initClientConfig()
-	topo.RegisterFactory("consul", factory)
+	topo.RegisterFactory("consul", Factory{})
 }
