@@ -69,10 +69,23 @@ func (vind *Hash) IsFunctional() bool {
 func (vind *Hash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
-		num, err := sqltypes.ToUint64(id)
-		if err != nil {
-			out[i] = key.DestinationNone{}
-			continue
+		var num uint64
+		var err error
+		if id.IsSigned() {
+			var ival int64
+			ival, err = sqltypes.ToInt64(id)
+			if err != nil {
+				out[i] = key.DestinationNone{}
+				continue
+			}
+
+			num = uint64(ival)
+		} else {
+			num, err = sqltypes.ToUint64(id)
+			if err != nil {
+				out[i] = key.DestinationNone{}
+				continue
+			}
 		}
 		out[i] = key.DestinationKeyspaceID(vhash(num))
 	}

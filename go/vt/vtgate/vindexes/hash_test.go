@@ -56,6 +56,12 @@ func TestHashMap(t *testing.T) {
 		sqltypes.NewInt64(4),
 		sqltypes.NewInt64(5),
 		sqltypes.NewInt64(6),
+		sqltypes.NewInt64(0),
+		sqltypes.NewInt64(-1),
+		sqltypes.NewUint64(18446744073709551615), // 2^64 - 1
+		sqltypes.NewInt64(9223372036854775807),   // 2^63 - 1
+		sqltypes.NewUint64(9223372036854775807),  // 2^63 - 1
+		sqltypes.NewInt64(-9223372036854775808),  // - 2^63
 	})
 	if err != nil {
 		t.Error(err)
@@ -68,6 +74,12 @@ func TestHashMap(t *testing.T) {
 		key.DestinationKeyspaceID([]byte("\xd2\xfd\x88g\xd5\r-\xfe")),
 		key.DestinationKeyspaceID([]byte("p\xbb\x02<\x81\f\xa8z")),
 		key.DestinationKeyspaceID([]byte("\xf0\x98H\n\xc4ľq")),
+		key.DestinationKeyspaceID([]byte("\x8c\xa6M\xe9\xc1\xb1#\xa7")),
+		key.DestinationKeyspaceID([]byte("5UP\xb2\x15\x0e$Q")),
+		key.DestinationKeyspaceID([]byte("5UP\xb2\x15\x0e$Q")),
+		key.DestinationKeyspaceID([]byte("\xf7}H\xaaݡ\xf1\xbb")),
+		key.DestinationKeyspaceID([]byte("\xf7}H\xaaݡ\xf1\xbb")),
+		key.DestinationKeyspaceID([]byte("\x95\xf8\xa5\xe5\xdd1\xd9\x00")),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
@@ -95,11 +107,39 @@ func TestHashVerify(t *testing.T) {
 }
 
 func TestHashReverseMap(t *testing.T) {
-	got, err := hash.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	got, err := hash.(Reversible).ReverseMap(nil, [][]byte{
+		[]byte("\x16k@\xb4J\xbaK\xd6"),
+		[]byte("\x06\xe7\xea\"Βp\x8f"),
+		[]byte("N\xb1\x90ɢ\xfa\x16\x9c"),
+		[]byte("\xd2\xfd\x88g\xd5\r-\xfe"),
+		[]byte("p\xbb\x02<\x81\f\xa8z"),
+		[]byte("\xf0\x98H\n\xc4ľq"),
+		[]byte("\x8c\xa6M\xe9\xc1\xb1#\xa7"),
+		[]byte("5UP\xb2\x15\x0e$Q"),
+		[]byte("5UP\xb2\x15\x0e$Q"),
+		[]byte("\xf7}H\xaaݡ\xf1\xbb"),
+		[]byte("\xf7}H\xaaݡ\xf1\xbb"),
+		[]byte("\x95\xf8\xa5\xe5\xdd1\xd9\x00"),
+	})
 	if err != nil {
 		t.Error(err)
 	}
-	want := []sqltypes.Value{sqltypes.NewUint64(uint64(1))}
+	neg1 := int64(-1)
+	negmax := int64(-9223372036854775808)
+	want := []sqltypes.Value{
+		sqltypes.NewUint64(uint64(1)),
+		sqltypes.NewUint64(2),
+		sqltypes.NewUint64(3),
+		sqltypes.NewUint64(4),
+		sqltypes.NewUint64(5),
+		sqltypes.NewUint64(6),
+		sqltypes.NewUint64(0),
+		sqltypes.NewUint64(uint64(neg1)),
+		sqltypes.NewUint64(18446744073709551615), // 2^64 - 1
+		sqltypes.NewUint64(9223372036854775807),  // 2^63 - 1
+		sqltypes.NewUint64(9223372036854775807),  // 2^63 - 1
+		sqltypes.NewUint64(uint64(negmax)),       // - 2^63
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ReverseMap(): %v, want %v", got, want)
 	}

@@ -198,7 +198,7 @@ func ToUint64(v Value) (uint64, error) {
 	panic("unreachable")
 }
 
-// ToInt64 converts Value to uint64.
+// ToInt64 converts Value to int64.
 func ToInt64(v Value) (int64, error) {
 	num, err := newIntegralNumeric(v)
 	if err != nil {
