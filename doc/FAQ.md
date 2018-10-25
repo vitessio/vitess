@@ -16,11 +16,11 @@ You can also specify the database name as `@master`, etc, which instructs vitess
 
 If no tablet type was specified, then VTGate chooses its default, which can be overridden with the `-default_tablet_type` command line argument.
 
-## There seems to be a 10,000 rowcount limit per query. What if I want to do a full table scan?
+## There seems to be a 10,000 row limit per query. What if I want to do a full table scan?
 
 Vitess supports different modes. In OLTP mode, the result size is typically limited to a preset number (10,000 rows by default). This limit can be adjusted based on your needs.
 
-However, OLAP mode has no limit to the rowcount. In order to change to this mode, you may issue the following command command before executing your query:
+However, OLAP mode has no limit to the number of rows returned. In order to change to this mode, you may issue the following command command before executing your query:
 
 ```
 set workload='olap'
@@ -37,11 +37,11 @@ The list of unsupported constructs is currently in the form of test cases contai
 
 ## If I have a log of all queries from my app. Is there a way I can try them against vitess to see how they’ll work?
 
-Yes. The vtexplain tool can be used to preview how your queries will be executed by vitess. It can also be used to try different sharding scenarios before deciding on one.
+Yes. The [vtexplain tool]({% link user-guide/vtexplain.md %}) can be used to preview how your queries will be executed by vitess. It can also be used to try different sharding scenarios before deciding on one.
 
 ## Does the Primary Vindex for a tablet have to be the same as its Primary Key.
 
-It is not necessary that a Primary Vindex be the same as the Primary Key. In fact, there are many use cases where you would not want this. For example, if there are tables with one-to-many relationships, the Primary Vindex of the main table is likely to be the same as the Primary Key. However, if you want the rows of the secondary table to reside in the same shard as the parent row, the Primary Vindex for that table must be the foreign key that points to the main table.
+It is not necessary that a Primary Vindex be the same as the Primary Key. In fact, there are many use cases where you would not want this. For example, if there are tables with one-to-many relationships, the Primary Vindex of the main table is likely to be the same as the Primary Key. However, if you want the rows of the secondary table to reside in the same shard as the parent row, the Primary Vindex for that table must be the foreign key that points to the main table. A typical example is a `user` and `order` table. In this case, the order table has the `user_id` as a foreign key to the `id` of the `user` table. The `order_id` may be the primary key for `order`, but you may still want to choose `user_id` as Primary Vindex, which will make a user's orders live in the same shard as the user.
 
 ## How do I connect to vtgate using mysql protocol?
 
@@ -62,7 +62,7 @@ mysql -h 127.0.0.1 -P 15306 -u mysql_user --password=mysql_password
 
 ## Can I override the default db name from `vt_xxx` to my own?
 
-Yes. You can start vttablet with the `-init_db_name_override` command line option to specify a different db name.
+Yes. You can start vttablet with the `-init_db_name_override` command line option to specify a different db name. There is no downside to performing this override.
 
 ## I cannot start a cluster, and see these errors in the logs: Could not open required defaults file: /path/to/my.cnf
 
@@ -74,4 +74,4 @@ sudo service apparmor teardown
 sudo update-rc.d -f apparmor remove
 ```
 
-You may also need to reboot the machine after this. Many programs automatically install apparmor. Re-uninstall as needed.
+You may also need to reboot the machine after this. Many programs automatically install apparmor, so you may need to uninstall again.
