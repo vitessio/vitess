@@ -182,7 +182,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 
 	*consulAuthClientStaticFile = tmpFile.Name()
 
-	jsonConfig := "{\"global\":{\"Token\":\"123456\"}, \"test\":{\"Token\":\"123456\"}}"
+	jsonConfig := "{\"global\":{\"acl_token\":\"123456\"}, \"test\":{\"acl_token\":\"123456\"}}"
 	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 
 	*consulAuthClientStaticFile = tmpFile.Name()
 
-	jsonConfig := "{\"global\":{\"Token\":\"badtoken\"}}"
+	jsonConfig := "{\"global\":{\"acl_token\":\"badtoken\"}}"
 	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
