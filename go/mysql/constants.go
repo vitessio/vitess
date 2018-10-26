@@ -231,9 +231,6 @@ const (
 const (
 	// ERVitessMaxRowsExceeded is when a user tries to select more rows than the max rows as enforced by vitess.
 	ERVitessMaxRowsExceeded = 10001
-
-	// ERVitessShardError is when a shard query fails in a partial scatter statement
-	ERVitessShardError = 10002
 )
 
 // Error codes for server-side errors.

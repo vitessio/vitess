@@ -228,7 +228,11 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 
 			for _, err := range errs {
 				if err != nil {
-					vcursor.RecordWarning(&querypb.QueryWarning{Code: mysql.ERVitessShardError, Message: err.Error()})
+					code := mysql.ERUnknownError
+					if serr, ok := err.(*mysql.SQLError); ok {
+						code = serr.Num
+					}
+					vcursor.RecordWarning(&querypb.QueryWarning{Code: uint32(code), Message: err.Error()})
 				}
 			}
 			// fall through
