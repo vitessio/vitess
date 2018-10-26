@@ -38,8 +38,8 @@ var (
 
 // AuthClientCred credential to use for consul clusters
 type AuthClientCred struct {
-	// AclToken when provided, the client will use this token when making requests to the Consul server.
-	AclToken string `json:"acl_token,omitempty"`
+	// ACLToken when provided, the client will use this token when making requests to the Consul server.
+	ACLToken string `json:"acl_token,omitempty"`
 }
 
 // Factory is the consul topo.Factory implementation.
@@ -110,7 +110,7 @@ func NewServer(cell, serverAddr, root string) (*Server, error) {
 	cfg := api.DefaultConfig()
 	cfg.Address = serverAddr
 	if creds[cell] != nil {
-		cfg.Token = creds[cell].AclToken
+		cfg.Token = creds[cell].ACLToken
 	}
 	client, err := api.NewClient(cfg)
 	if err != nil {
