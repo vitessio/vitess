@@ -36,9 +36,10 @@ var (
 	consulAuthClientStaticFile = flag.String("consul_auth_client_static_file", "", "JSON File to read the topos/tokens from.")
 )
 
-// AuthConsulClientCred ...
-type AuthConsulClientCred struct {
-	Token string
+// AuthClientCred credential to use for consul clusters
+type AuthClientCred struct {
+	// AclToken when provided, the client will use this token when making requests to the Consul server.
+	AclToken string `json:"acl_token,omitempty"`
 }
 
 // Factory is the consul topo.Factory implementation.
@@ -54,8 +55,8 @@ func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 	return NewServer(cell, serverAddr, root)
 }
 
-func getClientConfig() (creds map[string]*AuthConsulClientCred, err error) {
-	creds = make(map[string]*AuthConsulClientCred)
+func getClientConfig() (creds map[string]*AuthClientCred, err error) {
+	creds = make(map[string]*AuthClientCred)
 
 	if *consulAuthClientStaticFile == "" {
 		// Not configured, nothing to do.
@@ -109,7 +110,7 @@ func NewServer(cell, serverAddr, root string) (*Server, error) {
 	cfg := api.DefaultConfig()
 	cfg.Address = serverAddr
 	if creds[cell] != nil {
-		cfg.Token = creds[cell].Token
+		cfg.Token = creds[cell].AclToken
 	}
 	client, err := api.NewClient(cfg)
 	if err != nil {
