@@ -574,6 +574,9 @@ var (
 	}, {
 		input: "select /* dual */ 1 from dual",
 	}, {
+		input:  "select * from (select 'tables') tables",
+		output: "select * from (select 'tables' from dual) as `tables`",
+	}, {
 		input: "insert /* simple */ into a values (1)",
 	}, {
 		input: "insert /* a.b */ into a.b values (1)",
