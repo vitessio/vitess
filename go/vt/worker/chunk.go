@@ -19,6 +19,8 @@ package worker
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqlescape"
@@ -95,7 +97,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, tablet, true, []byte(query), 1)
 	cancel()
 	if err != nil {
-		return nil, fmt.Errorf("tablet: %v, table: %v: cannot determine MIN and MAX of the first primary key column. ExecuteFetchAsApp: %v", topoproto.TabletAliasString(tablet.Alias), td.Name, err)
+		return nil, vterrors.Wrapf(err, "tablet: %v, table: %v: cannot determine MIN and MAX of the first primary key column. ExecuteFetchAsApp: %v", topoproto.TabletAliasString(tablet.Alias), td.Name)
 	}
 	if len(qr.Rows) != 1 {
 		return nil, fmt.Errorf("tablet: %v, table: %v: cannot determine MIN and MAX of the first primary key column. Zero rows were returned", topoproto.TabletAliasString(tablet.Alias), td.Name)
@@ -155,7 +157,7 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 		end := add(start, interval)
 		chunk, err := toChunk(start, end, i+1, chunkCount)
 		if err != nil {
-			return nil, fmt.Errorf("tablet: %v, table: %v: %v", topoproto.TabletAliasString(tablet.Alias), td.Name, err)
+			return nil, vterrors.Wrapf(err, "tablet: %v, table: %v", topoproto.TabletAliasString(tablet.Alias), td.Name)
 		}
 		chunks[i] = chunk
 		start = end
@@ -185,11 +187,11 @@ func add(start, interval interface{}) interface{} {
 func toChunk(start, end interface{}, number, total int) (chunk, error) {
 	startValue, err := sqltypes.InterfaceToValue(start)
 	if err != nil {
-		return chunk{}, fmt.Errorf("failed to convert calculated start value (%v) into internal sqltypes.Value: %v", start, err)
+		return chunk{}, vterrors.Wrapf(err, "failed to convert calculated start value (%v) into internal sqltypes.Value", start)
 	}
 	endValue, err := sqltypes.InterfaceToValue(end)
 	if err != nil {
-		return chunk{}, fmt.Errorf("failed to convert calculated end value (%v) into internal sqltypes.Value: %v", end, err)
+		return chunk{}, vterrors.Wrapf(err, "failed to convert calculated end value (%v) into internal sqltypes.Value", end)
 	}
 	return chunk{startValue, endValue, number, total}, nil
 }

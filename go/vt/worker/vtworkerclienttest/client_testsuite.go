@@ -26,7 +26,6 @@ package vtworkerclienttest
 // (e.g.  zookeeper) won't be drawn into production binaries as well.
 
 import (
-	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -102,7 +101,7 @@ func commandSucceeds(t *testing.T, client vtworkerclient.Client) {
 func runVtworkerCommand(client vtworkerclient.Client, args []string) error {
 	stream, err := client.ExecuteVtworkerCommand(context.Background(), args)
 	if err != nil {
-		return fmt.Errorf("cannot execute remote command: %v", err)
+		return vterrors.Wrap(err, "cannot execute remote command")
 	}
 
 	for {
@@ -142,7 +141,7 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client, server
 				// We see CANCELED from the RPC client (client side cancelation) or
 				// from vtworker itself (server side cancelation).
 				if vterrors.Code(err) != vtrpcpb.Code_CANCELED {
-					errorCodeCheck = fmt.Errorf("Block command should only error due to canceled context: %v", err)
+					errorCodeCheck = vterrors.Wrap(err, "Block command should only error due to canceled context")
 				}
 				// Stream has finished.
 				break
@@ -227,11 +226,11 @@ func resetVtworker(t *testing.T, client vtworkerclient.Client) error {
 		}
 
 		if time.Since(start) > 5*time.Second {
-			return fmt.Errorf("Reset was not successful after 5s and %d attempts: %v", attempts, err)
+			return vterrors.Wrapf(err, "Reset was not successful after 5s and %d attempts", attempts)
 		}
 
 		if !strings.Contains(err.Error(), "worker still executing") {
-			return fmt.Errorf("Reset must not fail: %v", err)
+			return vterrors.Wrap(err, "Reset must not fail")
 		}
 
 		t.Logf("retrying to Reset vtworker because the previous command has not finished yet. got err: %v", err)
