@@ -241,7 +241,7 @@ func TestCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	defer se.Close()
 	originalSchemaErrorCount := tabletenv.InternalErrors.Counts()["Schema"]
 	// should silently fail: no errors returned, but increment a counter
-	se.TableWasCreatedOrAltered(context.Background(), "test_table")
+	se.tableWasCreatedOrAltered(context.Background(), "test_table")
 
 	newSchemaErrorCount := tabletenv.InternalErrors.Counts()["Schema"]
 	schemaErrorDiff := newSchemaErrorCount - originalSchemaErrorCount
@@ -285,7 +285,7 @@ func TestCreateOrUpdateTable(t *testing.T) {
 		i++
 	})
 	defer se.UnregisterNotifier("test")
-	if err := se.TableWasCreatedOrAltered(context.Background(), "test_table_01"); err != nil {
+	if err := se.tableWasCreatedOrAltered(context.Background(), "test_table_01"); err != nil {
 		t.Fatal(err)
 	}
 	if i < 2 {
@@ -327,7 +327,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 			mysql.BaseShowTablesRow(tableName.String(), false, ""),
 		},
 	})
-	// Add queries necessary for TableWasCreatedOrAltered() and NewTable()
+	// Add queries necessary for tableWasCreatedOrAltered() and NewTable()
 	db.AddQuery(mysql.BaseShowTablesForTable(tableName.String()), &sqltypes.Result{
 		Fields:       mysql.BaseShowTablesFields,
 		RowsAffected: 1,

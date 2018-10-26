@@ -256,21 +256,12 @@ func (se *Engine) Reload(ctx context.Context) error {
 		createTime, _ := sqltypes.ToInt64(row[2])
 		// Check if we know about the table or it has been recreated.
 		if _, ok := se.tables[tableName]; !ok || createTime >= se.lastChange {
-			func() {
-				// Unlock so TableWasCreatedOrAltered can lock.
-				se.mu.Unlock()
-				defer se.mu.Lock()
-				log.Infof("Reloading schema for table: %s", tableName)
-				rec.RecordError(se.TableWasCreatedOrAltered(ctx, tableName))
-			}()
-			// In case someone closed se when lock was released.
-			if !se.isOpen {
-				return nil
-			}
-			continue
+			log.Infof("Reloading schema for table: %s", tableName)
+			rec.RecordError(se.tableWasCreatedOrAltered(ctx, tableName))
+		} else {
+			// Only update table_rows, data_length, index_length, max_data_length
+			se.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 		}
-		// Only update table_rows, data_length, index_length, max_data_length
-		se.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 	}
 	se.lastChange = curTime
 
@@ -284,7 +275,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 		dropped = append(dropped, tableName)
 	}
 	// We only need to broadcast dropped tables because
-	// TableWasCreatedOrAltered will broadcast the other changes.
+	// tableWasCreatedOrAltered will broadcast the other changes.
 	if len(dropped) > 0 {
 		se.broadcast(nil, nil, dropped)
 	}
@@ -306,10 +297,9 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, 
 	return t, nil
 }
 
-// TableWasCreatedOrAltered must be called if a DDL was applied to that table.
-func (se *Engine) TableWasCreatedOrAltered(ctx context.Context, tableName string) error {
-	se.mu.Lock()
-	defer se.mu.Unlock()
+// tableWasCreatedOrAltered must be called if a DDL was applied to that table.
+// the se.mu mutex _must_ be locked before entering this method
+func (se *Engine) tableWasCreatedOrAltered(ctx context.Context, tableName string) error {
 	if !se.isOpen {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL called on closed schema")
 	}
@@ -322,7 +312,7 @@ func (se *Engine) TableWasCreatedOrAltered(ctx context.Context, tableName string
 	tableData, err := conn.Exec(ctx, mysql.BaseShowTablesForTable(tableName), 1, false)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "TableWasCreatedOrAltered: information_schema query failed for table %s: %v", tableName, err)
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: information_schema query failed for table %s: %v", tableName, err)
 	}
 	if len(tableData.Rows) != 1 {
 		// This can happen if DDLs race with each other.
@@ -337,7 +327,7 @@ func (se *Engine) TableWasCreatedOrAltered(ctx context.Context, tableName string
 	)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "TableWasCreatedOrAltered: failed to load table %s: %v", tableName, err)
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: failed to load table %s: %v", tableName, err)
 	}
 	// table_rows, data_length, index_length, max_data_length
 	table.SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
