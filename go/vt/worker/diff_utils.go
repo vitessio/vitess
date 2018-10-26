@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
@@ -79,7 +81,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts *topo.Server, tabletA
 	// read the columns, or grab the error
 	cols, err := stream.Recv()
 	if err != nil {
-		return nil, fmt.Errorf("Cannot read Fields for query '%v': %v", sql, err)
+		return nil, vterrors.Wrapf(err, "Cannot read Fields for query '%v'", sql)
 	}
 
 	return &QueryResultReader{
@@ -211,7 +213,7 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts *topo.Serve
 		// switch to v3 mode.
 		keyResolver, err := newV3ResolverFromColumnList(keyspaceSchema, td.Name, orderedColumns(td))
 		if err != nil {
-			return nil, fmt.Errorf("cannot resolve v3 sharding keys for table %v: %v", td.Name, err)
+			return nil, vterrors.Wrapf(err, "cannot resolve v3 sharding keys for table %v", td.Name)
 		}
 
 		// full table scan
