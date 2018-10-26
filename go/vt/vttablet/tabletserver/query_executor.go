@@ -395,7 +395,12 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "DDL is not understood")
 	}
 
-	defer qre.tsv.se.Reload(qre.ctx)
+	defer func() {
+		err := qre.tsv.se.Reload(qre.ctx)
+		if err != nil {
+			log.Errorf("failed to reload schema %v", err)
+		}
+	}()
 
 	if qre.transactionID != 0 {
 		conn, err := qre.tsv.te.txPool.Get(qre.transactionID, "DDL begin again")
