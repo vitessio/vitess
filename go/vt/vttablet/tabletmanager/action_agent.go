@@ -44,6 +44,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
@@ -246,7 +248,7 @@ func NewActionAgent(
 
 	// try to initialize the tablet if we have to
 	if err := agent.InitTablet(port, gRPCPort); err != nil {
-		return nil, fmt.Errorf("agent.InitTablet failed: %v", err)
+		return nil, vterrors.Wrap(err, "agent.InitTablet failed")
 	}
 
 	// Create the TabletType stats
@@ -351,16 +353,16 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 
 	// Start will update the topology and setup services.
 	if err := agent.Start(batchCtx, "", 0, vtPort, grpcPort, false); err != nil {
-		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
+		panic(vterrors.Wrapf(err, "agent.Start(%v) failed", tabletAlias))
 	}
 
 	// Update our running state. Need to take action lock.
 	if err := agent.lock(batchCtx); err != nil {
-		panic(fmt.Errorf("agent.lock() failed: %v", err))
+		panic(vterrors.Wrap(err, "agent.lock() failed"))
 	}
 	defer agent.unlock()
 	if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
-		panic(fmt.Errorf("agent.refreshTablet(%v) failed: %v", tabletAlias, err))
+		panic(vterrors.Wrapf(err, "agent.refreshTablet(%v) failed", tabletAlias))
 	}
 
 	return agent
@@ -393,21 +395,21 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 	*initShard = shard
 	*initTabletType = tabletType
 	if err := agent.InitTablet(vtPort, grpcPort); err != nil {
-		panic(fmt.Errorf("agent.InitTablet failed: %v", err))
+		panic(vterrors.Wrap(err, "agent.InitTablet failed"))
 	}
 
 	// Start the agent.
 	if err := agent.Start(batchCtx, "", 0, vtPort, grpcPort, false); err != nil {
-		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
+		panic(vterrors.Wrapf(err, "agent.Start(%v) failed", tabletAlias))
 	}
 
 	// And update our running state (need to take the Action lock).
 	if err := agent.lock(batchCtx); err != nil {
-		panic(fmt.Errorf("agent.lock() failed: %v", err))
+		panic(vterrors.Wrap(err, "agent.lock() failed"))
 	}
 	defer agent.unlock()
 	if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
-		panic(fmt.Errorf("agent.refreshTablet(%v) failed: %v", tabletAlias, err))
+		panic(vterrors.Wrapf(err, "agent.refreshTablet(%v) failed", tabletAlias))
 	}
 
 	return agent
@@ -628,7 +630,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 		Shard:      agent.initialTablet.Shard,
 		TabletType: agent.initialTablet.Type,
 	}, agent.DBConfigs); err != nil {
-		return fmt.Errorf("failed to InitDBConfig: %v", err)
+		return vterrors.Wrap(err, "failed to InitDBConfig")
 	}
 
 	// export a few static variables

@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/hack"
@@ -157,7 +159,7 @@ func (w *Writer) Close() {
 func (w *Writer) initializeTables(cp *mysql.ConnParams) error {
 	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings("", "", ""))
 	if err != nil {
-		return fmt.Errorf("Failed to create connection for heartbeat: %v", err)
+		return vterrors.Wrap(err, "Failed to create connection for heartbeat")
 	}
 	defer conn.Close()
 	statements := []string{
@@ -167,16 +169,16 @@ func (w *Writer) initializeTables(cp *mysql.ConnParams) error {
 	}
 	for _, s := range statements {
 		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
-			return fmt.Errorf("Failed to execute heartbeat init query: %v", err)
+			return vterrors.Wrap(err, "Failed to execute heartbeat init query")
 		}
 	}
 	insert, err := w.bindHeartbeatVars(sqlInsertInitialRow)
 	if err != nil {
-		return fmt.Errorf("Failed to bindHeartbeatVars initial heartbeat insert: %v", err)
+		return vterrors.Wrap(err, "Failed to bindHeartbeatVars initial heartbeat insert")
 	}
 	_, err = conn.ExecuteFetch(insert, 0, false)
 	if err != nil {
-		return fmt.Errorf("Failed to execute initial heartbeat insert: %v", err)
+		return vterrors.Wrap(err, "Failed to execute initial heartbeat insert")
 	}
 	writes.Add(1)
 	return nil
