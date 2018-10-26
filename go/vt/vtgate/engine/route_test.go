@@ -22,9 +22,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 var defaultSelectResult = sqltypes.MakeTestResult(
@@ -794,14 +793,14 @@ func TestExecFail(t *testing.T) {
 		FieldQuery: "dummy_select_field",
 	}
 
-	vc := &loggingVCursor{shards: []string{"0"}, resultErr: errors.New("result error")}
+	vc := &loggingVCursor{shards: []string{"0"}, resultErr: mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout")}
 	_, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "sel.Execute err", err, "result error")
+	expectError(t, "sel.Execute err", err, "query timeout (errno 1317) (sqlstate HY000)")
 	vc.ExpectWarnings(t, nil)
 
 	vc.Rewind()
 	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "sel.StreamExecute err", err, "result error")
+	expectError(t, "sel.StreamExecute err", err, "query timeout (errno 1317) (sqlstate HY000)")
 
 	// Scatter fails if one of N fails without ScatterErrorsAsWarnings
 	sel = &Route{
@@ -847,17 +846,20 @@ func TestExecFail(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
 		multiShardErrs: []error{
-			errors.New("result error -20"),
-			errors.New("result error 20-"),
+			mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout -20"),
+			errors.New("not a sql error 20-"),
 		},
 	}
 	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Errorf("unexpected ScatterErrorsAsWarnings error %v", err)
 	}
+
+	// Ensure that the error code is preserved from SQLErrors and that it
+	// turns into ERUnknownError for all others
 	vc.ExpectWarnings(t, []*querypb.QueryWarning{
-		{Code: mysql.ERVitessShardError, Message: "result error -20"},
-		{Code: mysql.ERVitessShardError, Message: "result error 20-"},
+		{Code: mysql.ERQueryInterrupted, Message: "query timeout -20 (errno 1317) (sqlstate HY000)"},
+		{Code: mysql.ERUnknownError, Message: "not a sql error 20-"},
 	})
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
