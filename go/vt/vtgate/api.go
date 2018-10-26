@@ -19,12 +19,10 @@ package vtgate
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"strings"
 
 	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -88,14 +86,6 @@ func getItemPath(url string) string {
 		return ""
 	}
 	return parts[1]
-}
-
-func unmarshalRequest(r *http.Request, v interface{}) error {
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, v)
 }
 
 func initAPI(ctx context.Context, hc discovery.HealthCheck) {
