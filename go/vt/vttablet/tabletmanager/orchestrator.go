@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -53,7 +55,7 @@ func newOrcClient() (*orcClient, error) {
 	}
 	apiRoot, err := url.Parse(*orcAddr)
 	if err != nil {
-		return nil, fmt.Errorf("can't parse -orc_api_url flag value (%v): %v", *orcAddr, err)
+		return nil, vterrors.Wrapf(err, "can't parse -orc_api_url flag value (%v)", *orcAddr)
 	}
 	return &orcClient{
 		apiRoot:    apiRoot,

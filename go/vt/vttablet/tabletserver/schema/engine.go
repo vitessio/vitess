@@ -19,7 +19,6 @@ package schema
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -242,7 +241,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 		return curTime, tableData, nil
 	}()
 	if err != nil {
-		return fmt.Errorf("could not get table list for reload: %v", err)
+		return vterrors.Wrap(err, "could not get table list for reload")
 	}
 
 	// Reload any tables that have changed. We try every table even if some fail,
@@ -407,7 +406,7 @@ func (se *Engine) GetTable(tableName sqlparser.TableIdent) *Table {
 }
 
 // GetSchema returns the current The Tables are a shared
-// data strucutre and must be treated as read-only.
+// data structure and must be treated as read-only.
 func (se *Engine) GetSchema() map[string]*Table {
 	se.mu.Lock()
 	defer se.mu.Unlock()

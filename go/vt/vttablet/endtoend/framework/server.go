@@ -22,6 +22,8 @@ import (
 	"net/http"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -79,13 +81,13 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	Server.Register()
 	err := Server.StartService(Target, dbcfgs)
 	if err != nil {
-		return fmt.Errorf("could not start service: %v", err)
+		return vterrors.Wrap(err, "could not start service")
 	}
 
 	// Start http service.
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
-		return fmt.Errorf("could not start listener: %v", err)
+		return vterrors.Wrap(err, "could not start listener")
 	}
 	ServerAddress = fmt.Sprintf("http://%s", ln.Addr().String())
 	go http.Serve(ln, nil)

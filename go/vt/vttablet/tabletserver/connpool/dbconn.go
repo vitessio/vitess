@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -235,7 +237,7 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) (BinlogFormat, error) {
 	if strictTransTables {
 		qr, err := dbc.conn.ExecuteFetch(getModeSQL, 2, false)
 		if err != nil {
-			return 0, fmt.Errorf("could not verify mode: %v", err)
+			return 0, vterrors.Wrap(err, "could not verify mode")
 		}
 		if len(qr.Rows) != 1 {
 			return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
@@ -246,7 +248,7 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) (BinlogFormat, error) {
 	}
 	qr, err := dbc.conn.ExecuteFetch(getAutocommit, 2, false)
 	if err != nil {
-		return 0, fmt.Errorf("could not verify mode: %v", err)
+		return 0, vterrors.Wrap(err, "could not verify mode")
 	}
 	if len(qr.Rows) != 1 {
 		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getAutocommit, len(qr.Rows))
@@ -256,7 +258,7 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) (BinlogFormat, error) {
 	}
 	qr, err = dbc.conn.ExecuteFetch(getAutoIsNull, 2, false)
 	if err != nil {
-		return 0, fmt.Errorf("could not verify mode: %v", err)
+		return 0, vterrors.Wrap(err, "could not verify mode")
 	}
 	if len(qr.Rows) != 1 {
 		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getAutoIsNull, len(qr.Rows))
@@ -266,7 +268,7 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) (BinlogFormat, error) {
 	}
 	qr, err = dbc.conn.ExecuteFetch(showBinlog, 10, false)
 	if err != nil {
-		return 0, fmt.Errorf("could not fetch binlog format: %v", err)
+		return 0, vterrors.Wrap(err, "could not fetch binlog format")
 	}
 	if len(qr.Rows) != 1 {
 		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", showBinlog, len(qr.Rows))

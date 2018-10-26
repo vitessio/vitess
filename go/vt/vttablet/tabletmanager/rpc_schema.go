@@ -17,7 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"fmt"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
 
@@ -46,7 +46,7 @@ func (agent *ActionAgent) ReloadSchema(ctx context.Context, waitPosition string)
 	if waitPosition != "" {
 		pos, err := mysql.DecodePosition(waitPosition)
 		if err != nil {
-			return fmt.Errorf("ReloadSchema: can't parse wait position (%q): %v", waitPosition, err)
+			return vterrors.Wrapf(err, "ReloadSchema: can't parse wait position (%q)", waitPosition)
 		}
 		log.Infof("ReloadSchema: waiting for replication position: %v", waitPosition)
 		if err := agent.MysqlDaemon.WaitMasterPos(ctx, pos); err != nil {
