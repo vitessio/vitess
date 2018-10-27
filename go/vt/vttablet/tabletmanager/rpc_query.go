@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -60,7 +61,10 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query []byte, d
 	}
 
 	if err == nil && reloadSchema {
-		agent.QueryServiceControl.ReloadSchema(ctx)
+		reloadErr := agent.QueryServiceControl.ReloadSchema(ctx)
+		if reloadErr != nil {
+			log.Errorf("failed to reload the schema %v", reloadErr)
+		}
 	}
 	return sqltypes.ResultToProto3(result), err
 }
@@ -84,7 +88,10 @@ func (agent *ActionAgent) ExecuteFetchAsAllPrivs(ctx context.Context, query []by
 	result, err := conn.ExecuteFetch(string(query), maxrows, true /*wantFields*/)
 
 	if err == nil && reloadSchema {
-		agent.QueryServiceControl.ReloadSchema(ctx)
+		reloadErr := agent.QueryServiceControl.ReloadSchema(ctx)
+		if reloadErr != nil {
+			log.Errorf("failed to reload the schema %v", reloadErr)
+		}
 	}
 	return sqltypes.ResultToProto3(result), err
 }
