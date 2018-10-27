@@ -54,7 +54,7 @@ func (t noopVCursor) ExecuteAutocommit(method string, query string, bindvars map
 	panic("unimplemented")
 }
 
-func (t noopVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, error) {
+func (t noopVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, []error) {
 	panic("unimplemented")
 }
 
@@ -88,6 +88,10 @@ type loggingVCursor struct {
 	curResult int
 	resultErr error
 
+	// Optional errors that can be returned from nextResult() alongside the results for
+	// multi-shard queries
+	multiShardErrs []error
+
 	log []string
 }
 
@@ -103,9 +107,14 @@ func (f *loggingVCursor) Execute(method string, query string, bindvars map[strin
 	return f.nextResult()
 }
 
-func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error) {
+func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, []error) {
 	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v %v", printResolvedShardQueries(rss, queries), isDML, canAutocommit))
-	return f.nextResult()
+	res, err := f.nextResult()
+	if err != nil {
+		return nil, []error{err}
+	}
+
+	return res, f.multiShardErrs
 }
 
 func (f *loggingVCursor) AutocommitApproval() bool {

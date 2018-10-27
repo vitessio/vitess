@@ -782,6 +782,7 @@ func TestParamsFail(t *testing.T) {
 }
 
 func TestExecFail(t *testing.T) {
+	// Unsharded error
 	sel := &Route{
 		Opcode: SelectUnsharded,
 		Keyspace: &vindexes.Keyspace{
@@ -799,4 +800,94 @@ func TestExecFail(t *testing.T) {
 	vc.Rewind()
 	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "sel.StreamExecute err", err, "result error")
+
+	// Scatter fails if one of N fails without ScatterErrorsAsWarnings
+	sel = &Route{
+		Opcode: SelectScatter,
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		Query:      "dummy_select",
+		FieldQuery: "dummy_select_field",
+	}
+
+	vc = &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: []*sqltypes.Result{defaultSelectResult},
+		multiShardErrs: []error{
+			errors.New("result error -20"),
+		},
+	}
+	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	expectError(t, "sel.Execute err", err, "result error -20")
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+	})
+
+	vc.Rewind()
+
+	// Scatter succeeds if all shards fail with ScatterErrorsAsWarnings
+	sel = &Route{
+		Opcode: SelectScatter,
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		Query:                   "dummy_select",
+		FieldQuery:              "dummy_select_field",
+		ScatterErrorsAsWarnings: true,
+	}
+
+	vc = &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: []*sqltypes.Result{defaultSelectResult},
+		multiShardErrs: []error{
+			errors.New("result error -20"),
+			errors.New("result error 20-"),
+		},
+	}
+	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Errorf("unexpected ScatterErrorsAsWarnings error %v", err)
+	}
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+	})
+
+	vc.Rewind()
+
+	// Scatter succeeds if one of N fails with ScatterErrorsAsWarnings
+	sel = &Route{
+		Opcode: SelectScatter,
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		Query:                   "dummy_select",
+		FieldQuery:              "dummy_select_field",
+		ScatterErrorsAsWarnings: true,
+	}
+
+	vc = &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: []*sqltypes.Result{defaultSelectResult},
+		multiShardErrs: []error{
+			errors.New("result error -20"),
+			nil,
+		},
+	}
+	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Errorf("unexpected ScatterErrorsAsWarnings error %v", err)
+	}
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
+
+	vc.Rewind()
 }

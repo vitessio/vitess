@@ -2032,7 +2032,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	} else {
 		ec := vterrors.Code(err)
 		if ec != expected {
-			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+			t.Errorf("unexpected error, got code %v err %v, want %v", ec, err, expected)
 		}
 	}
 	for _, sbc := range sbcs {
