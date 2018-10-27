@@ -11,8 +11,7 @@ This chart creates a Vitess cluster on Kubernetes in a single
 It currently includes all dependencies (e.g. etcd) and Vitess components
 (vtctld, vtgate, vttablet) inline (in `templates/`) rather than as sub-charts.
 
-**WARNING: This chart should be considered Alpha.
-Upgrading a release of this chart may or may not delete all your data.**
+**WARNING: This chart should be considered Beta.**
 
 ## Prerequisites
 
@@ -117,6 +116,28 @@ topology:
                 - type: "rdonly"
                   vttablet:
                     replicas: 2
+```
+
+### Append custom my.cnf to default Vitess settings
+
+Create a config map with one or more standard `my.cnf` formatted files. Any settings
+provided here will overwrite any colliding values from Vitess defaults.
+
+`kubectl create configmap shared-my-cnf --from-file=shared.my.cnf`
+
+*NOTE:* if using MySQL 8.0.x, this file must contain
+`default_authentication_plugin = mysql_native_password`
+
+```
+topology:
+  cells:
+    ...
+
+vttablet:
+
+  # The name of a config map with N files inside of it. Each file will be added
+  # to $EXTRA_MY_CNF, overriding any default my.cnf settings
+  extraMyCnf: shared-my-cnf
 ```
 
 ### Use a custom database image and a specific Vitess release

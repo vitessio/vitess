@@ -140,6 +140,11 @@ vttablet:
   # will block forever. "rdonly" tablets do not ACK.
   enableSemisync: false
 
+  # The name of a config map with N files inside of it. Each file will be added
+  # to $EXTRA_MY_CNF, overriding any default my.cnf settings
+  extraMyCnf: ""
+  # extraMyCnf: extra-my-cnf
+
   resources:
     # common production values 2-4CPU/4-8Gi RAM
     limits:
