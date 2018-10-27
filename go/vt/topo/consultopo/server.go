@@ -20,12 +20,27 @@ Package consultopo implements topo.Server with consul as the backend.
 package consultopo
 
 import (
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io/ioutil"
 	"sync"
 
 	"github.com/hashicorp/consul/api"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
+
+var (
+	consulAuthClientStaticFile = flag.String("consul_auth_static_file", "", "JSON File to read the topos/tokens from.")
+)
+
+// ClientAuthCred credential to use for consul clusters
+type ClientAuthCred struct {
+	// ACLToken when provided, the client will use this token when making requests to the Consul server.
+	ACLToken string `json:"acl_token,omitempty"`
+}
 
 // Factory is the consul topo.Factory implementation.
 type Factory struct{}
@@ -37,7 +52,29 @@ func (f Factory) HasGlobalReadOnlyCell(serverAddr, root string) bool {
 
 // Create is part of the topo.Factory interface.
 func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
-	return NewServer(serverAddr, root)
+	return NewServer(cell, serverAddr, root)
+}
+
+func getClientCreds() (creds map[string]*ClientAuthCred, err error) {
+	creds = make(map[string]*ClientAuthCred)
+
+	if *consulAuthClientStaticFile == "" {
+		// Not configured, nothing to do.
+		log.Infof("Consul client auth is not set up. consul_auth_static_file was not provided")
+		return nil, nil
+	}
+
+	data, err := ioutil.ReadFile(*consulAuthClientStaticFile)
+	if err != nil {
+		err = fmt.Errorf("Failed to read consul_auth_static_file file: %v", err)
+		return creds, err
+	}
+
+	if err := json.Unmarshal(data, &creds); err != nil {
+		err = fmt.Errorf(fmt.Sprintf("Error parsing consul_auth_static_file: %v", err))
+		return creds, err
+	}
+	return creds, nil
 }
 
 // Server is the implementation of topo.Server for consul.
@@ -66,9 +103,18 @@ type lockInstance struct {
 }
 
 // NewServer returns a new consultopo.Server.
-func NewServer(serverAddr, root string) (*Server, error) {
+func NewServer(cell, serverAddr, root string) (*Server, error) {
+	creds, err := getClientCreds()
+	if err != nil {
+		return nil, err
+	}
 	cfg := api.DefaultConfig()
 	cfg.Address = serverAddr
+	if creds != nil && creds[cell] != nil {
+		cfg.Token = creds[cell].ACLToken
+	} else {
+		log.Warningf("Client auth not configured for cell: %v", cell)
+	}
 	client, err := api.NewClient(cfg)
 	if err != nil {
 		return nil, err
