@@ -33,11 +33,11 @@ import (
 )
 
 var (
-	consulAuthClientStaticFile = flag.String("consul_auth_client_static_file", "", "JSON File to read the topos/tokens from.")
+	consulAuthClientStaticFile = flag.String("consul_auth_static_file", "", "JSON File to read the topos/tokens from.")
 )
 
-// AuthClientCred credential to use for consul clusters
-type AuthClientCred struct {
+// ClientAuthCred credential to use for consul clusters
+type ClientAuthCred struct {
 	// ACLToken when provided, the client will use this token when making requests to the Consul server.
 	ACLToken string `json:"acl_token,omitempty"`
 }
@@ -55,23 +55,24 @@ func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 	return NewServer(cell, serverAddr, root)
 }
 
-func getClientConfig() (creds map[string]*AuthClientCred, err error) {
-	creds = make(map[string]*AuthClientCred)
+func getClientCreds() (creds map[string]*ClientAuthCred, err error) {
+	creds = make(map[string]*ClientAuthCred)
 
 	if *consulAuthClientStaticFile == "" {
 		// Not configured, nothing to do.
-		log.Infof("Consul client auth is not set up. consul_auth_client_static_file was not provided")
-		return creds, nil
+		log.Infof("Consul client auth is not set up. consul_auth_static_file was not provided")
+		return nil, nil
 	}
 
 	data, err := ioutil.ReadFile(*consulAuthClientStaticFile)
 	if err != nil {
-		err = fmt.Errorf("Failed to read consul_auth_client_static_file file: %v", err)
+		err = fmt.Errorf("Failed to read consul_auth_static_file file: %v", err)
 		return creds, err
 	}
 
 	if err := json.Unmarshal(data, &creds); err != nil {
-		err = fmt.Errorf(fmt.Sprintf("Error parsing auth server config: %v", err))
+		err = fmt.Errorf(fmt.Sprintf("Error parsing consul_auth_static_file: %v", err))
+		return creds, err
 	}
 	return creds, nil
 }
@@ -103,14 +104,16 @@ type lockInstance struct {
 
 // NewServer returns a new consultopo.Server.
 func NewServer(cell, serverAddr, root string) (*Server, error) {
-	creds, err := getClientConfig()
+	creds, err := getClientCreds()
 	if err != nil {
 		return nil, err
 	}
 	cfg := api.DefaultConfig()
 	cfg.Address = serverAddr
-	if creds[cell] != nil {
+	if creds != nil && creds[cell] != nil {
 		cfg.Token = creds[cell].ACLToken
+	} else {
+		log.Warningf("Client auth not configured for cell: %v", cell)
 	}
 	client, err := api.NewClient(cfg)
 	if err != nil {
