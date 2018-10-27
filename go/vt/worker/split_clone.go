@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/event"
@@ -425,7 +427,7 @@ func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	// Phase 1: read what we need to do.
 	if err := scw.init(ctx); err != nil {
-		return fmt.Errorf("init() failed: %v", err)
+		return vterrors.Wrap(err, "init() failed")
 	}
 	if err := checkDone(ctx); err != nil {
 		return err
@@ -433,7 +435,7 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 
 	// Phase 2a: Find destination master tablets.
 	if err := scw.findDestinationMasters(ctx); err != nil {
-		return fmt.Errorf("findDestinationMasters() failed: %v", err)
+		return vterrors.Wrap(err, "findDestinationMasters() failed")
 	}
 	if err := checkDone(ctx); err != nil {
 		return err
@@ -442,7 +444,7 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	// diff). Note that while we wait for the minimum number, we'll always use
 	// *all* available RDONLY tablets from each destination shard.
 	if err := scw.waitForTablets(ctx, scw.destinationShards, *waitForHealthyTabletsTimeout); err != nil {
-		return fmt.Errorf("waitForDestinationTablets(destinationShards) failed: %v", err)
+		return vterrors.Wrap(err, "waitForDestinationTablets(destinationShards) failed")
 	}
 	if err := checkDone(ctx); err != nil {
 		return err
@@ -453,12 +455,12 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 		scw.wr.Logger().Infof("Online clone will be run now.")
 		// 3a: Wait for minimum number of source tablets (required for the diff).
 		if err := scw.waitForTablets(ctx, scw.sourceShards, *waitForHealthyTabletsTimeout); err != nil {
-			return fmt.Errorf("waitForDestinationTablets(sourceShards) failed: %v", err)
+			return vterrors.Wrap(err, "waitForDestinationTablets(sourceShards) failed")
 		}
 		// 3b: Clone the data.
 		start := time.Now()
 		if err := scw.clone(ctx, WorkerStateCloneOnline); err != nil {
-			return fmt.Errorf("online clone() failed: %v", err)
+			return vterrors.Wrap(err, "online clone() failed")
 		}
 		d := time.Since(start)
 		if err := checkDone(ctx); err != nil {
@@ -485,7 +487,7 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 
 		// 4a: Take source tablets out of serving for an exact snapshot.
 		if err := scw.findOfflineSourceTablets(ctx); err != nil {
-			return fmt.Errorf("findSourceTablets() failed: %v", err)
+			return vterrors.Wrap(err, "findSourceTablets() failed")
 		}
 		if err := checkDone(ctx); err != nil {
 			return err
@@ -494,7 +496,7 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 		// 4b: Clone the data.
 		start := time.Now()
 		if err := scw.clone(ctx, WorkerStateCloneOffline); err != nil {
-			return fmt.Errorf("offline clone() failed: %v", err)
+			return vterrors.Wrap(err, "offline clone() failed")
 		}
 		d := time.Since(start)
 		if err := checkDone(ctx); err != nil {
@@ -521,28 +523,28 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	scw.destinationKeyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(shortCtx, scw.destinationKeyspace)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot read (destination) keyspace %v: %v", scw.destinationKeyspace, err)
+		return vterrors.Wrapf(err, "cannot read (destination) keyspace %v", scw.destinationKeyspace)
 	}
 
 	// Set source and destination shard infos.
 	switch scw.cloneType {
 	case horizontalResharding:
 		if err := scw.initShardsForHorizontalResharding(ctx); err != nil {
-			return fmt.Errorf("failed initShardsForHorizontalResharding: %s", err)
+			return vterrors.Wrap(err, "failed initShardsForHorizontalResharding")
 		}
 	case verticalSplit:
 		if err := scw.initShardsForVerticalSplit(ctx); err != nil {
-			return fmt.Errorf("failed initShardsForVerticalSplit: %s", err)
+			return vterrors.Wrap(err, "failed initShardsForVerticalSplit")
 		}
 	}
 
 	if err := scw.sanityCheckShardInfos(); err != nil {
-		return fmt.Errorf("failed sanityCheckShardInfos: %s", err)
+		return vterrors.Wrap(err, "failed sanityCheckShardInfos")
 	}
 
 	if scw.cloneType == horizontalResharding {
 		if err := scw.loadVSchema(ctx); err != nil {
-			return fmt.Errorf("failed loadVSchema: %s", err)
+			return vterrors.Wrap(err, "failed loadVSchema")
 		}
 	}
 
@@ -570,7 +572,7 @@ func (scw *SplitCloneWorker) initShardsForHorizontalResharding(ctx context.Conte
 	osList, err := topotools.FindOverlappingShards(shortCtx, scw.wr.TopoServer(), scw.destinationKeyspace)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot FindOverlappingShards in %v: %v", scw.destinationKeyspace, err)
+		return vterrors.Wrapf(err, "cannot FindOverlappingShards in %v", scw.destinationKeyspace)
 	}
 
 	// find the shard we mentioned in there, if any
@@ -619,7 +621,7 @@ func (scw *SplitCloneWorker) initShardsForVerticalSplit(ctx context.Context) err
 	shardMap, err := scw.wr.TopoServer().FindAllShardsInKeyspace(shortCtx, sourceKeyspace)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot find source shard for source keyspace %s: %s", sourceKeyspace, err)
+		return vterrors.Wrapf(err, "cannot find source shard for source keyspace %s", sourceKeyspace)
 	}
 	if len(shardMap) != 1 {
 		return fmt.Errorf("found the wrong number of source shards, there should be only one, %v", shardMap)
@@ -689,7 +691,7 @@ func (scw *SplitCloneWorker) loadVSchema(ctx context.Context) error {
 	if *useV3ReshardingMode {
 		kschema, err := scw.wr.TopoServer().GetVSchema(ctx, scw.destinationKeyspace)
 		if err != nil {
-			return fmt.Errorf("cannot load VSchema for keyspace %v: %v", scw.destinationKeyspace, err)
+			return vterrors.Wrapf(err, "cannot load VSchema for keyspace %v", scw.destinationKeyspace)
 		}
 		if kschema == nil {
 			return fmt.Errorf("no VSchema for keyspace %v", scw.destinationKeyspace)
@@ -697,7 +699,7 @@ func (scw *SplitCloneWorker) loadVSchema(ctx context.Context) error {
 
 		keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, scw.destinationKeyspace)
 		if err != nil {
-			return fmt.Errorf("cannot build vschema for keyspace %v: %v", scw.destinationKeyspace, err)
+			return vterrors.Wrapf(err, "cannot build vschema for keyspace %v", scw.destinationKeyspace)
 		}
 		scw.keyspaceSchema = keyspaceSchema
 	}
@@ -717,7 +719,7 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 		var err error
 		scw.offlineSourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets, topodatapb.TabletType_RDONLY)
 		if err != nil {
-			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
+			return vterrors.Wrapf(err, "FindWorkerTablet() failed for %v/%v/%v", scw.cell, si.Keyspace(), si.ShardName())
 		}
 		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", topoproto.TabletAliasString(scw.offlineSourceAliases[i]), si.Keyspace(), si.ShardName())
 	}
@@ -730,7 +732,7 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, alias)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("cannot read tablet %v: %v", topoproto.TabletAliasString(alias), err)
+			return vterrors.Wrapf(err, "cannot read tablet %v", topoproto.TabletAliasString(alias))
 		}
 		scw.sourceTablets[i] = ti.Tablet
 
@@ -757,7 +759,7 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 		waitCtx, waitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
 		defer waitCancel()
 		if err := scw.tsc.WaitForTablets(waitCtx, scw.cell, si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER); err != nil {
-			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v (in cell: %v): %v", si.Keyspace(), si.ShardName(), scw.cell, err)
+			return vterrors.Wrapf(err, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v)", si.Keyspace(), si.ShardName(), scw.cell)
 		}
 		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
 		if len(masters) == 0 {
@@ -1126,7 +1128,7 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, tablet.Alias, scw.tables, scw.excludeTables, false /* includeViews */)
 	cancel()
 	if err != nil {
-		return nil, fmt.Errorf("cannot get schema from source %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
+		return nil, vterrors.Wrapf(err, "cannot get schema from source %v", topoproto.TabletAliasString(tablet.Alias))
 	}
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
 		return nil, fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(tablet.Alias))
@@ -1189,7 +1191,7 @@ func (scw *SplitCloneWorker) createThrottlers() error {
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 		t, err := throttler.NewThrottler(keyspaceAndShard, "transactions", scw.destinationWriterCount, scw.maxTPS, scw.maxReplicationLag)
 		if err != nil {
-			return fmt.Errorf("cannot instantiate throttler: %v", err)
+			return vterrors.Wrap(err, "cannot instantiate throttler")
 		}
 		scw.throttlers[keyspaceAndShard] = t
 	}

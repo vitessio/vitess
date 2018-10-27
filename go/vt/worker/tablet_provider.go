@@ -19,6 +19,8 @@ package worker
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -59,7 +61,7 @@ func (p *singleTabletProvider) getTablet() (*topodatapb.Tablet, error) {
 	tablet, err := p.ts.GetTablet(shortCtx, p.alias)
 	cancel()
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve tablet alias: %v err: %v", topoproto.TabletAliasString(p.alias), err)
+		return nil, vterrors.Wrapf(err, "failed to resolve tablet alias: %v err", topoproto.TabletAliasString(p.alias))
 	}
 	return tablet.Tablet, err
 }

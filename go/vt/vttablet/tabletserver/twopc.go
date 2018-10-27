@@ -422,7 +422,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	result.Dtid = qr.Rows[0][0].ToString()
 	st, err := sqltypes.ToInt64(qr.Rows[0][1])
 	if err != nil {
-		return nil, fmt.Errorf("Error parsing state for dtid %s: %v", dtid, err)
+		return nil, vterrors.Wrapf(err, "Error parsing state for dtid %s", dtid)
 	}
 	result.State = querypb.TransactionState(st)
 	if result.State < querypb.TransactionState_PREPARE || result.State > querypb.TransactionState_ROLLBACK {

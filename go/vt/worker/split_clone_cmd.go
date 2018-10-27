@@ -25,6 +25,8 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -127,7 +129,7 @@ func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagS
 	}
 	worker, err := newSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, excludeTableArray, *chunkCount, *minRowsPerChunk, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS, *maxReplicationLag)
 	if err != nil {
-		return nil, fmt.Errorf("cannot create split clone worker: %v", err)
+		return nil, vterrors.Wrap(err, "cannot create split clone worker")
 	}
 	return worker, nil
 }
@@ -137,7 +139,7 @@ func keyspacesWithOverlappingShards(ctx context.Context, wr *wrangler.Wrangler) 
 	keyspaces, err := wr.TopoServer().GetKeyspaces(shortCtx)
 	cancel()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get list of keyspaces: %v", err)
+		return nil, vterrors.Wrap(err, "failed to get list of keyspaces")
 	}
 
 	wg := sync.WaitGroup{}
@@ -178,7 +180,7 @@ func keyspacesWithOverlappingShards(ctx context.Context, wr *wrangler.Wrangler) 
 
 func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse form: %s", err)
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse form")
 	}
 
 	keyspace := r.FormValue("keyspace")
@@ -229,52 +231,52 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	chunkCountStr := r.FormValue("chunkCount")
 	chunkCount, err := strconv.ParseInt(chunkCountStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse chunkCount: %s", err)
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse chunkCount")
 	}
 	minRowsPerChunkStr := r.FormValue("minRowsPerChunk")
 	minRowsPerChunk, err := strconv.ParseInt(minRowsPerChunkStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse minRowsPerChunk: %s", err)
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse minRowsPerChunk")
 	}
 	sourceReaderCount, err := strconv.ParseInt(sourceReaderCountStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse sourceReaderCount: %s", err)
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse sourceReaderCount")
 	}
 	writeQueryMaxRowsStr := r.FormValue("writeQueryMaxRows")
 	writeQueryMaxRows, err := strconv.ParseInt(writeQueryMaxRowsStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse writeQueryMaxRows: %s", err)
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse writeQueryMaxRows")
 	}
 	writeQueryMaxSizeStr := r.FormValue("writeQueryMaxSize")
 	writeQueryMaxSize, err := strconv.ParseInt(writeQueryMaxSizeStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse writeQueryMaxSize: %s", err)
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse writeQueryMaxSize")
 	}
 	destinationWriterCountStr := r.FormValue("destinationWriterCount")
 	destinationWriterCount, err := strconv.ParseInt(destinationWriterCountStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse destinationWriterCount: %s", err)
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse destinationWriterCount")
 	}
 	minHealthyRdonlyTabletsStr := r.FormValue("minHealthyRdonlyTablets")
 	minHealthyRdonlyTablets, err := strconv.ParseInt(minHealthyRdonlyTabletsStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse minHealthyRdonlyTablets: %s", err)
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse minHealthyRdonlyTablets")
 	}
 	maxTPSStr := r.FormValue("maxTPS")
 	maxTPS, err := strconv.ParseInt(maxTPSStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse maxTPS: %s", err)
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse maxTPS")
 	}
 	maxReplicationLagStr := r.FormValue("maxReplicationLag")
 	maxReplicationLag, err := strconv.ParseInt(maxReplicationLagStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse maxReplicationLag: %s", err)
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse maxReplicationLag")
 	}
 
 	// start the clone job
 	wrk, err := newSplitCloneWorker(wr, wi.cell, keyspace, shard, online, offline, excludeTableArray, int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS, maxReplicationLag)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
+		return nil, nil, nil, vterrors.Wrap(err, "cannot create worker")
 	}
 	return wrk, nil, nil, nil
 }

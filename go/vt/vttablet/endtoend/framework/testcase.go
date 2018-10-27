@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -52,7 +54,7 @@ func (tq TestQuery) Test(name string, client *QueryClient) error {
 		if name == "" {
 			return err
 		}
-		return fmt.Errorf("%s: Execute failed: %v", name, err)
+		return vterrors.Wrapf(err, "%s: Execute failed", name)
 	}
 	return nil
 }
@@ -108,7 +110,7 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 
 	qr, err := exec(client, tc.Query, tc.BindVars)
 	if err != nil {
-		return fmt.Errorf("%s: Execute failed: %v", name, err)
+		return vterrors.Wrapf(err, "%s: Execute failed", name)
 	}
 
 	if tc.Result != nil {

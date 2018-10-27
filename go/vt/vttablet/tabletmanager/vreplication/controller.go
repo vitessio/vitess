@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
@@ -157,7 +159,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 
 	dbClient := ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
-		return fmt.Errorf("can't connect to database: %v", err)
+		return vterrors.Wrap(err, "can't connect to database")
 	}
 	defer dbClient.Close()
 
@@ -171,7 +173,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		// Table names can have search patterns. Resolve them against the schema.
 		tables, err := mysqlctl.ResolveTables(ct.mysqld, dbClient.DBName(), ct.source.Tables)
 		if err != nil {
-			return fmt.Errorf("failed to resolve table names: %v", err)
+			return vterrors.Wrap(err, "failed to resolve table names")
 		}
 
 		player := binlogplayer.NewBinlogPlayerTables(dbClient, tablet, tables, ct.id, ct.blpStats)

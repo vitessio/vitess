@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -75,7 +77,7 @@ func (e *executor) fetchLoop(ctx context.Context, insertChannel chan string) err
 				_, err := e.wr.TabletManagerClient().ExecuteFetchAsApp(ctx, tablet, true, []byte(cmd), 0)
 				return err
 			}); err != nil {
-				return fmt.Errorf("ExecuteFetch failed: %v", err)
+				return vterrors.Wrap(err, "ExecuteFetch failed")
 			}
 		case <-ctx.Done():
 			// Doesn't really matter if this select gets starved, because the other case
@@ -232,7 +234,7 @@ func (e *executor) checkError(ctx context.Context, err error, isRetry bool, mast
 		statsRetryCounters.Add(retryCategoryConnectionError, 1)
 	case errNo == "1062":
 		if !isRetry {
-			return false, fmt.Errorf("ExecuteFetch failed on %v on the first attempt; not retrying as this is not a recoverable error: %v", tabletString, err)
+			return false, vterrors.Wrapf(err, "ExecuteFetch failed on %v on the first attempt; not retrying as this is not a recoverable error", tabletString)
 		}
 		e.wr.Logger().Infof("ExecuteFetch failed on %v with a duplicate entry error; marking this as a success, because of the likelihood that this query has already succeeded before being retried: %v", tabletString, err)
 		return true, nil
