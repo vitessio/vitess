@@ -3169,7 +3169,6 @@ reserved_keyword:
 | SHOW
 | STRAIGHT_JOIN
 | TABLE
-| TABLES
 | THEN
 | TO
 | TRUE
@@ -3274,6 +3273,7 @@ non_reserved_keyword:
 | SPATIAL
 | START
 | STATUS
+| TABLES
 | TEXT
 | THAN
 | TIME
