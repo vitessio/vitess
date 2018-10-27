@@ -251,5 +251,6 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 		}
 	}
 	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	return vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
+	return result, vterrors.Aggregate(errs)
 }
