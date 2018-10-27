@@ -137,6 +137,9 @@ mkdir -p /tmp/mavencache
 chmod 777 /tmp/mavencache
 args="$args -v /tmp/mavencache:/home/vitess/.m2"
 
+# Add in the vitess user
+args="$args --user vitess"
+
 # Mount in host VTDATAROOT if one exists, since it might be a RAM disk or SSD.
 if [[ -n "$VTDATAROOT" ]]; then
   hostdir=`mktemp -d $VTDATAROOT/test-XXX`
