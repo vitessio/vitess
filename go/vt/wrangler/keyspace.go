@@ -25,6 +25,7 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
@@ -88,6 +89,73 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 	return wr.ts.UpdateKeyspace(ctx, ki)
 }
 
+// ShowResharding shows all resharding related metadata for the keyspace/shard.
+func (wr *Wrangler) ShowResharding(ctx context.Context, keyspace, shard string) (err error) {
+	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	if len(ki.ServedFroms) == 0 {
+		return wr.showHorizontalResharding(ctx, keyspace, shard)
+	}
+	return wr.showVerticalResharding(ctx, keyspace, shard)
+}
+
+func (wr *Wrangler) showHorizontalResharding(ctx context.Context, keyspace, shard string) error {
+	osList, err := topotools.FindOverlappingShards(ctx, wr.ts, keyspace)
+	if err != nil {
+		return fmt.Errorf("FindOverlappingShards failed: %v", err)
+	}
+	os := topotools.OverlappingShardsForShard(osList, shard)
+	if os == nil {
+		wr.Logger().Printf("No resharding in progress\n")
+		return nil
+	}
+
+	sourceShards, destinationShards, err := wr.findSourceDest(ctx, os)
+	if err != nil {
+		return err
+	}
+	wr.Logger().Printf("Horizontal Resharding for %v:\n", keyspace)
+	wr.Logger().Printf("  Sources:\n")
+	if err := wr.printShards(ctx, sourceShards); err != nil {
+		return err
+	}
+	wr.Logger().Printf("  Destinations:\n")
+	return wr.printShards(ctx, destinationShards)
+}
+
+func (wr *Wrangler) printShards(ctx context.Context, si []*topo.ShardInfo) error {
+	for _, si := range si {
+		wr.Logger().Printf("    Shard: %v\n", si.ShardName())
+		if len(si.SourceShards) != 0 {
+			wr.Logger().Printf("      Source Shards: %v\n", si.SourceShards)
+		}
+		ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
+		if err != nil {
+			return err
+		}
+		qr, err := wr.tmc.VReplicationExec(ctx, ti.Tablet, "select * from _vt.vreplication")
+		if err != nil {
+			return err
+		}
+		res := sqltypes.Proto3ToResult(qr)
+		if len(res.Rows) != 0 {
+			wr.Logger().Printf("      VReplication:\n")
+			for _, row := range res.Rows {
+				wr.Logger().Printf("        %v\n", row)
+			}
+		}
+		if len(si.ServedTypes) != 0 {
+			wr.Logger().Printf("      Served Types: %v\n", si.ServedTypes)
+		}
+		if len(si.TabletControls) != 0 {
+			wr.Logger().Printf("      Tablet Controls: %v\n", si.TabletControls)
+		}
+	}
+	return nil
+}
+
 // CancelResharding cancels any resharding in progress on the specified keyspace/shard.
 // This works for horizontal as well as vertical resharding.
 func (wr *Wrangler) CancelResharding(ctx context.Context, keyspace, shard string) (err error) {
@@ -147,8 +215,11 @@ func (wr *Wrangler) cancelHorizontalResharding(ctx context.Context, keyspace, sh
 		if err != nil {
 			return err
 		}
+		if err := wr.RefreshTabletsByShard(ctx, si, nil, nil); err != nil {
+			return err
+		}
 	}
-	return wr.refreshMasters(ctx, destinationShards)
+	return nil
 }
 
 // MigrateServedTypes is used during horizontal splits to migrate a
@@ -773,6 +844,33 @@ func formatTabletStats(ts *discovery.TabletStats) string {
 		webURL = fmt.Sprintf("http://%v:%d/", ts.Tablet.Hostname, webPort)
 	}
 	return fmt.Sprintf("%v: %v stats: %v", topoproto.TabletAliasString(ts.Tablet.Alias), webURL, ts.Stats)
+}
+
+func (wr *Wrangler) showVerticalResharding(ctx context.Context, keyspace, shard string) error {
+	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	destinationShard, err := wr.ts.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return err
+	}
+	if len(destinationShard.SourceShards) != 1 || len(destinationShard.SourceShards[0].Tables) == 0 {
+		wr.Logger().Printf("No resharding in progress\n")
+		return nil
+	}
+	sourceShard, err := wr.ts.GetShard(ctx, destinationShard.SourceShards[0].Keyspace, destinationShard.SourceShards[0].Shard)
+	if err != nil {
+		return err
+	}
+	wr.Logger().Printf("Vertical Resharding:\n")
+	wr.Logger().Printf("  Served From: %v\n", ki.ServedFroms)
+	wr.Logger().Printf("  Source:\n")
+	if err := wr.printShards(ctx, []*topo.ShardInfo{sourceShard}); err != nil {
+		return err
+	}
+	wr.Logger().Printf("  Destination:\n")
+	return wr.printShards(ctx, []*topo.ShardInfo{destinationShard})
 }
 
 func (wr *Wrangler) cancelVerticalResharding(ctx context.Context, keyspace, shard string) error {

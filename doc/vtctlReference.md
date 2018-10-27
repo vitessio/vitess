@@ -179,9 +179,10 @@ Validates that all nodes reachable from the global replication graph and that al
 * [FindAllShardsInKeyspace](#findallshardsinkeyspace)
 * [GetKeyspace](#getkeyspace)
 * [GetKeyspaces](#getkeyspaces)
-* [CancelResharding](#cancelresharding)
 * [MigrateServedFrom](#migrateservedfrom)
 * [MigrateServedTypes](#migrateservedtypes)
+* [CancelResharding](#cancelresharding)
+* [ShowResharding](#showresharding)
 * [RebuildKeyspaceGraph](#rebuildkeyspacegraph)
 * [RemoveKeyspaceCell](#removekeyspacecell)
 * [SetKeyspaceServedFrom](#setkeyspaceservedfrom)
@@ -279,15 +280,6 @@ Outputs a JSON structure that contains information about the Keyspace.
 Outputs a sorted list of all keyspaces.
 
 
-### CancelResharding
-
-Permanently cancels a resharding in progress. All resharding related metadata will be deleted.
-
-#### Arguments
-
-* <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.
-
-
 ### MigrateServedFrom
 
 Makes the &lt;destination keyspace/shard&gt; serve the given type. This command also rebuilds the serving graph.
@@ -373,6 +365,24 @@ Migrates a serving type from the source shard to the shards that it replicates t
 
 * the <code>&lt;source keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;MigrateServedTypes&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 * the <code>&lt;skip-refresh-state&gt;</code> flag can only be specified for non-master migrations
+
+
+### CancelResharding
+
+Permanently cancels a resharding in progress. All resharding related metadata will be deleted.
+
+#### Arguments
+
+* <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.
+
+
+### ShowResharding
+
+"Displays all metadata about a resharding in progress.
+
+#### Arguments
+
+* <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.
 
 
 ### RebuildKeyspaceGraph
