@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -83,7 +85,7 @@ func NewResultMerger(inputs []ResultReader, pkFieldCount int) (*ResultMerger, er
 			if err == io.EOF {
 				continue
 			}
-			return nil, fmt.Errorf("failed to read from input at index: %v ResultReader: %v err: %v", i, input, err)
+			return nil, vterrors.Wrapf(err, "failed to read from input at index: %v ResultReader: %v err", i, input)
 		}
 		activeInputs = append(activeInputs, input)
 		heap.Push(nextRowHeap, nextRow)
@@ -149,7 +151,7 @@ func (rm *ResultMerger) Next() (*sqltypes.Result, error) {
 				rm.lastRowReaderDrained = true
 				break
 			} else {
-				return nil, fmt.Errorf("failed to read from input ResultReader: %v err: %v", next.input, err)
+				return nil, vterrors.Wrapf(err, "failed to read from input ResultReader: %v err", next.input)
 			}
 		}
 		// Input has more rows. Add it back to the priority queue.

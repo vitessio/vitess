@@ -455,7 +455,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			}
 			nextID, err := sqltypes.ToInt64(qr.Rows[0][0])
 			if err != nil {
-				return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
+				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
 			// Initialize SequenceInfo.NextVal if it wasn't already.
 			if t.SequenceInfo.NextVal == 0 {
@@ -463,7 +463,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			}
 			cache, err := sqltypes.ToInt64(qr.Rows[0][1])
 			if err != nil {
-				return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
+				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
 			if cache < 1 {
 				return nil, fmt.Errorf("invalid cache value for sequence %s: %d", tableName, cache)

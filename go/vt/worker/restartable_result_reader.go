@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqlescape"
@@ -82,10 +84,10 @@ func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, tp t
 
 	// If the initial connection fails, we do not restart.
 	if _ /* retryable */, err := r.getTablet(); err != nil {
-		return nil, fmt.Errorf("tablet=unknown: %v", err)
+		return nil, vterrors.Wrap(err, "tablet=unknown")
 	}
 	if _ /* retryable */, err := r.startStream(); err != nil {
-		return nil, fmt.Errorf("tablet=%v: %v", topoproto.TabletAliasString(r.tablet.Alias), err)
+		return nil, vterrors.Wrapf(err, "tablet=%v", topoproto.TabletAliasString(r.tablet.Alias))
 	}
 	return r, nil
 }
@@ -107,13 +109,13 @@ func (r *RestartableResultReader) getTablet() (bool, error) {
 	// Get a tablet from the tablet provider.
 	tablet, err := r.tp.getTablet()
 	if err != nil {
-		return true /* retryable */, fmt.Errorf("failed get tablet for streaming query: %v", err)
+		return true /* retryable */, vterrors.Wrap(err, "failed get tablet for streaming query")
 	}
 
 	// Connect (dial) to the tablet.
 	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
 	if err != nil {
-		return false /* retryable */, fmt.Errorf("failed to get dialer for tablet: %v", err)
+		return false /* retryable */, vterrors.Wrap(err, "failed to get dialer for tablet")
 	}
 	r.tablet = tablet
 	r.conn = conn
@@ -136,7 +138,7 @@ func (r *RestartableResultReader) startStream() (bool, error) {
 	// Read the fields information.
 	cols, err := stream.Recv()
 	if err != nil {
-		return true /* retryable */, fmt.Errorf("cannot read Fields for query '%v': %v", r.query, err)
+		return true /* retryable */, vterrors.Wrapf(err, "cannot read Fields for query '%v'", r.query)
 	}
 	r.fields = cols.Fields
 	r.output = stream
@@ -225,7 +227,7 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 	retry:
 		if attempt == 2 && !r.allowMultipleRetries {
 			// Offline source tablets must not be retried forever. Fail early.
-			return nil, fmt.Errorf("%v: first retry to restart the streaming query on the same tablet failed. We're failing at this point because we're not allowed to keep retrying. err: %v", r.tp.description(), err)
+			return nil, vterrors.Wrapf(err, "%v: first retry to restart the streaming query on the same tablet failed. We're failing at this point because we're not allowed to keep retrying. err", r.tp.description())
 		}
 
 		alias := "unknown"

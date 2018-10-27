@@ -22,6 +22,8 @@ import (
 	"math/rand"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
@@ -76,7 +78,7 @@ func waitForHealthyTablets(ctx context.Context, wr *wrangler.Wrangler, tsc *disc
 
 	// Wait for at least one RDONLY tablet initially before checking the list.
 	if err := tsc.WaitForTablets(busywaitCtx, cell, keyspace, shard, tabletType); err != nil {
-		return nil, fmt.Errorf("error waiting for %v tablets for (%v,%v/%v): %v", tabletType, cell, keyspace, shard, err)
+		return nil, vterrors.Wrapf(err, "error waiting for %v tablets for (%v,%v/%v)", tabletType, cell, keyspace, shard)
 	}
 
 	var healthyTablets []discovery.TabletStats

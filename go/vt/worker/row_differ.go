@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -278,11 +280,11 @@ func (rd *RowDiffer2) reconcileRow(row []sqltypes.Value, typ DiffType) error {
 	}
 	destShardIndex, err := rd.router.Route(row)
 	if err != nil {
-		return fmt.Errorf("failed to route row (%v) to correct shard: %v", row, err)
+		return vterrors.Wrapf(err, "failed to route row (%v) to correct shard", row)
 	}
 
 	if err := rd.aggregators[destShardIndex][typ].Add(row); err != nil {
-		return fmt.Errorf("failed to add row update to RowAggregator: %v", err)
+		return vterrors.Wrap(err, "failed to add row update to RowAggregator")
 	}
 	// TODO(mberlin): Add more fine granular stats here.
 	rd.tableStatusList.addCopiedRows(rd.tableIndex, 1)
@@ -300,25 +302,25 @@ func (rd *RowDiffer2) updateRow(newRow, oldRow []sqltypes.Value, typ DiffType) e
 	}
 	destShardIndexOld, err := rd.router.Route(oldRow)
 	if err != nil {
-		return fmt.Errorf("failed to route old row (%v) to correct shard: %v", oldRow, err)
+		return vterrors.Wrapf(err, "failed to route old row (%v) to correct shard", oldRow)
 	}
 	destShardIndexNew, err := rd.router.Route(newRow)
 	if err != nil {
-		return fmt.Errorf("failed to route new row (%v) to correct shard: %v", newRow, err)
+		return vterrors.Wrapf(err, "failed to route new row (%v) to correct shard", newRow)
 	}
 
 	if destShardIndexOld == destShardIndexNew {
 		// keyspace_id has not changed. Update the row in place on the destination.
 		if err := rd.aggregators[destShardIndexNew][typ].Add(newRow); err != nil {
-			return fmt.Errorf("failed to add row update to RowAggregator (keyspace_id not changed): %v", err)
+			return vterrors.Wrap(err, "failed to add row update to RowAggregator (keyspace_id not changed)")
 		}
 	} else {
 		// keyspace_id has changed. Delete the old row and insert the new one.
 		if err := rd.aggregators[destShardIndexOld][DiffExtraneous].Add(oldRow); err != nil {
-			return fmt.Errorf("failed to add row update to RowAggregator (keyspace_id changed, deleting old row): %v", err)
+			return vterrors.Wrap(err, "failed to add row update to RowAggregator (keyspace_id changed, deleting old row)")
 		}
 		if err := rd.aggregators[destShardIndexNew][DiffMissing].Add(newRow); err != nil {
-			return fmt.Errorf("failed to add row update to RowAggregator (keyspace_id changed, inserting new row): %v", err)
+			return vterrors.Wrap(err, "failed to add row update to RowAggregator (keyspace_id changed, inserting new row)")
 		}
 	}
 

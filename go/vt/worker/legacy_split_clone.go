@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/event"
@@ -235,7 +237,7 @@ func (scw *LegacySplitCloneWorker) Run(ctx context.Context) error {
 func (scw *LegacySplitCloneWorker) run(ctx context.Context) error {
 	// first state: read what we need to do
 	if err := scw.init(ctx); err != nil {
-		return fmt.Errorf("init() failed: %v", err)
+		return vterrors.Wrap(err, "init() failed")
 	}
 	if err := checkDone(ctx); err != nil {
 		return err
@@ -243,7 +245,7 @@ func (scw *LegacySplitCloneWorker) run(ctx context.Context) error {
 
 	// second state: find targets
 	if err := scw.findTargets(ctx); err != nil {
-		return fmt.Errorf("findTargets() failed: %v", err)
+		return vterrors.Wrap(err, "findTargets() failed")
 	}
 	if err := checkDone(ctx); err != nil {
 		return err
@@ -251,7 +253,7 @@ func (scw *LegacySplitCloneWorker) run(ctx context.Context) error {
 
 	// third state: copy data
 	if err := scw.copy(ctx); err != nil {
-		return fmt.Errorf("copy() failed: %v", err)
+		return vterrors.Wrap(err, "copy() failed")
 	}
 
 	return nil
@@ -268,7 +270,7 @@ func (scw *LegacySplitCloneWorker) init(ctx context.Context) error {
 	scw.keyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(shortCtx, scw.keyspace)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot read keyspace %v: %v", scw.keyspace, err)
+		return vterrors.Wrapf(err, "cannot read keyspace %v", scw.keyspace)
 	}
 
 	// find the OverlappingShards in the keyspace
@@ -276,7 +278,7 @@ func (scw *LegacySplitCloneWorker) init(ctx context.Context) error {
 	osList, err := topotools.FindOverlappingShards(shortCtx, scw.wr.TopoServer(), scw.keyspace)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot FindOverlappingShards in %v: %v", scw.keyspace, err)
+		return vterrors.Wrapf(err, "cannot FindOverlappingShards in %v", scw.keyspace)
 	}
 
 	// find the shard we mentioned in there, if any
@@ -336,7 +338,7 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 	for i, si := range scw.sourceShards {
 		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets, topodatapb.TabletType_RDONLY)
 		if err != nil {
-			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
+			return vterrors.Wrapf(err, "FindWorkerTablet() failed for %v/%v/%v", scw.cell, si.Keyspace(), si.ShardName())
 		}
 		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", topoproto.TabletAliasString(scw.sourceAliases[i]), si.Keyspace(), si.ShardName())
 	}
@@ -348,7 +350,7 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, alias)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("cannot read tablet %v: %v", topoproto.TabletAliasString(alias), err)
+			return vterrors.Wrapf(err, "cannot read tablet %v", topoproto.TabletAliasString(alias))
 		}
 		scw.sourceTablets[i] = ti.Tablet
 
@@ -378,7 +380,7 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 		waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
 		defer waitCancel()
 		if err := scw.tsc.WaitForTablets(waitCtx, scw.cell, si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER); err != nil {
-			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v: %v", si.Keyspace(), si.ShardName(), err)
+			return vterrors.Wrapf(err, "cannot find MASTER tablet for destination shard for %v/%v", si.Keyspace(), si.ShardName())
 		}
 		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
 		if len(masters) == 0 {
@@ -391,7 +393,7 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, master.Tablet.Alias)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("cannot get the TabletInfo for destination master (%v) to find out its db name: %v", topoproto.TabletAliasString(master.Tablet.Alias), err)
+			return vterrors.Wrapf(err, "cannot get the TabletInfo for destination master (%v) to find out its db name", topoproto.TabletAliasString(master.Tablet.Alias))
 		}
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 		scw.destinationDbNames[keyspaceAndShard] = ti.DbName()
@@ -406,7 +408,7 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 		t, err := throttler.NewThrottler(
 			keyspaceAndShard, "transactions", scw.destinationWriterCount, scw.maxTPS, throttler.ReplicationLagModuleDisabled)
 		if err != nil {
-			return fmt.Errorf("cannot instantiate throttler: %v", err)
+			return vterrors.Wrap(err, "cannot instantiate throttler")
 		}
 		scw.destinationThrottlers[keyspaceAndShard] = t
 	}
@@ -434,7 +436,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, scw.sourceAliases[0], nil, scw.excludeTables, false /* includeViews */)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot get schema from source %v: %v", topoproto.TabletAliasString(scw.sourceAliases[0]), err)
+		return vterrors.Wrapf(err, "cannot get schema from source %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
 	}
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
 		return fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
@@ -498,7 +500,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 	if *useV3ReshardingMode {
 		kschema, err := scw.wr.TopoServer().GetVSchema(ctx, scw.keyspace)
 		if err != nil {
-			return fmt.Errorf("cannot load VSchema for keyspace %v: %v", scw.keyspace, err)
+			return vterrors.Wrapf(err, "cannot load VSchema for keyspace %v", scw.keyspace)
 		}
 		if kschema == nil {
 			return fmt.Errorf("no VSchema for keyspace %v", scw.keyspace)
@@ -506,7 +508,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 
 		keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, scw.keyspace)
 		if err != nil {
-			return fmt.Errorf("cannot build vschema for keyspace %v: %v", scw.keyspace, err)
+			return vterrors.Wrapf(err, "cannot build vschema for keyspace %v", scw.keyspace)
 		}
 	}
 
@@ -520,12 +522,12 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 			if *useV3ReshardingMode {
 				keyResolver, err = newV3ResolverFromTableDefinition(keyspaceSchema, td)
 				if err != nil {
-					return fmt.Errorf("cannot resolve v3 sharding keys for keyspace %v: %v", scw.keyspace, err)
+					return vterrors.Wrapf(err, "cannot resolve v3 sharding keys for keyspace %v", scw.keyspace)
 				}
 			} else {
 				keyResolver, err = newV2Resolver(scw.keyspaceInfo, td)
 				if err != nil {
-					return fmt.Errorf("cannot resolve sharding keys for keyspace %v: %v", scw.keyspace, err)
+					return vterrors.Wrapf(err, "cannot resolve sharding keys for keyspace %v", scw.keyspace)
 				}
 			}
 			rowSplitter := NewRowSplitter(scw.destinationShards, keyResolver)
@@ -657,7 +659,7 @@ func (scw *LegacySplitCloneWorker) processData(ctx context.Context, dbNames []st
 
 		// Split the rows by keyspace ID, and insert each chunk into each destination
 		if err := rowSplitter.Split(sr, r.Rows); err != nil {
-			return fmt.Errorf("RowSplitter failed for table %v: %v", td.Name, err)
+			return vterrors.Wrapf(err, "RowSplitter failed for table %v", td.Name)
 		}
 		scw.tableStatusList.addCopiedRows(tableIndex, len(r.Rows))
 

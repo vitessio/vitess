@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/event"
@@ -137,7 +139,7 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	ti, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
-		return fmt.Errorf("refreshTablet failed rereading tablet after %v: %v", reason, err)
+		return vterrors.Wrapf(err, "refreshTablet failed rereading tablet after %v", reason)
 	}
 	tablet := ti.Tablet
 

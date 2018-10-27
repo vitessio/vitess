@@ -1682,7 +1682,7 @@ func (se *splitQuerySQLExecuter) SQLExecute(
 	// we don't have to parse the query again here.
 	ast, err := sqlparser.Parse(sql)
 	if err != nil {
-		return nil, fmt.Errorf("splitQuerySQLExecuter: parsing sql failed with: %v", err)
+		return nil, vterrors.Wrap(err, "splitQuerySQLExecuter: parsing sql failed with")
 	}
 	parsedQuery := sqlparser.NewParsedQuery(ast)
 
