@@ -173,6 +173,16 @@ func isDbDir(p string) bool {
 		if strings.HasSuffix(fi.Name(), ".frm") {
 			return true
 		}
+
+		// .frm files were removed in MySQL 8, so we need to check for two other file types
+		// https://dev.mysql.com/doc/refman/8.0/en/data-dictionary-file-removal.html
+		if strings.HasSuffix(fi.Name(), ".ibd") {
+			return true
+		}
+		// https://dev.mysql.com/doc/refman/8.0/en/serialized-dictionary-information.html
+		if strings.HasSuffix(fi.Name(), ".sdi") {
+			return true
+		}
 	}
 
 	return false
@@ -194,6 +204,26 @@ func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) (
 	return fes, nil
 }
 
+// addMySQL8DataDictionary checks to see if the new data dictionary introduced in MySQL 8 exists
+// and adds it to the backup manifest if it does
+// https://dev.mysql.com/doc/refman/8.0/en/data-dictionary-transactional-storage.html
+func addMySQL8DataDictionary(fes []FileEntry, base string, baseDir string) ([]FileEntry, error) {
+	const dataDictionaryFile = "mysql.ibd"
+	filePath := path.Join(baseDir, dataDictionaryFile)
+
+	// no-op if this file doesn't exist
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return fes, nil
+	}
+
+	fes = append(fes, FileEntry{
+		Base: base,
+		Name: dataDictionaryFile,
+	})
+
+	return fes, nil
+}
+
 func findFilesToBackup(cnf *Mycnf) ([]FileEntry, error) {
 	var err error
 	var result []FileEntry
@@ -204,6 +234,12 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, error) {
 		return nil, err
 	}
 	result, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, "")
+	if err != nil {
+		return nil, err
+	}
+
+	// then add the transactional data dictionary if it exists
+	result, err = addMySQL8DataDictionary(result, backupData, cnf.DataDir)
 	if err != nil {
 		return nil, err
 	}
