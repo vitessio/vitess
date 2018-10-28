@@ -48,10 +48,36 @@ func init() {
 		"Removes a backup for the BackupStorage."})
 
 	addCommand("Tablets", command{
+		"Backup",
+		commandBackup,
+		"[-concurrency=4] <tablet alias>",
+		"Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes."})
+	addCommand("Tablets", command{
 		"RestoreFromBackup",
 		commandRestoreFromBackup,
 		"<tablet alias>",
 		"Stops mysqld and restores the data from the latest backup."})
+}
+
+func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the Backup command requires the <tablet alias> argument")
+	}
+
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	return execBackup(ctx, wr, tabletInfo.Tablet, *concurrency)
 }
 
 func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -101,6 +127,25 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 
 	return execBackup(ctx, wr, tabletForBackup, *concurrency)
+}
+
+// execBackup is shared by Backup and BackupShard
+func execBackup(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, concurrency int) error {
+	stream, err := wr.TabletManagerClient().Backup(ctx, tablet, concurrency)
+	if err != nil {
+		return err
+	}
+	for {
+		e, err := stream.Recv()
+		switch err {
+		case nil:
+			logutil.LogEvent(wr.Logger(), e)
+		case io.EOF:
+			return nil
+		default:
+			return err
+		}
+	}
 }
 
 func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
