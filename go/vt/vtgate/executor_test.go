@@ -27,6 +27,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -735,6 +736,58 @@ func TestExecutorShow(t *testing.T) {
 	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("show vindexes on user: %v, want %v", err, wantErr)
+	}
+
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show warnings", nil)
+	wantqr = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "Level", Type: sqltypes.VarChar},
+			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Message", Type: sqltypes.VarChar},
+		},
+		Rows:         [][]sqltypes.Value{},
+		RowsAffected: 0,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show warnings:\n%+v, want\n%+v", qr, wantqr)
+
+	}
+
+	session.Warnings = []*querypb.QueryWarning{}
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show warnings", nil)
+	wantqr = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "Level", Type: sqltypes.VarChar},
+			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Message", Type: sqltypes.VarChar},
+		},
+		Rows:         [][]sqltypes.Value{},
+		RowsAffected: 0,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show warnings:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	session.Warnings = []*querypb.QueryWarning{
+		{Code: mysql.ERBadTable, Message: "bad table"},
+		{Code: mysql.ERVitessShardError, Message: "ks/-40: query timed out"},
+	}
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show warnings", nil)
+	wantqr = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "Level", Type: sqltypes.VarChar},
+			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Message", Type: sqltypes.VarChar},
+		},
+
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(mysql.ERBadTable), sqltypes.NewVarChar("bad table")},
+			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(mysql.ERVitessShardError), sqltypes.NewVarChar("ks/-40: query timed out")},
+		},
+		RowsAffected: 0,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show warnings:\n%+v, want\n%+v", qr, wantqr)
 	}
 
 	// Make sure it still works when one of the keyspaces is in a bad state

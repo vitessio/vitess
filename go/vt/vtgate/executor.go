@@ -969,7 +969,28 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil
+	case sqlparser.KeywordString(sqlparser.WARNINGS):
+		fields := []*querypb.Field{
+			{Name: "Level", Type: sqltypes.VarChar},
+			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Message", Type: sqltypes.VarChar},
+		}
+		rows := make([][]sqltypes.Value, 0, 0)
 
+		if safeSession.Warnings != nil {
+			for _, warning := range safeSession.Warnings {
+				rows = append(rows, []sqltypes.Value{
+					sqltypes.NewVarChar("Warning"),
+					sqltypes.NewUint32(warning.Code),
+					sqltypes.NewVarChar(warning.Message),
+				})
+			}
+		}
+
+		return &sqltypes.Result{
+			Fields: fields,
+			Rows:   rows,
+		}, nil
 	}
 
 	// Any other show statement is passed through
