@@ -1047,7 +1047,13 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	if err != nil {
 		return err
 	}
-	stream, err := wr.TabletManagerClient().Backup(ctx, tabletInfo.Tablet, *concurrency)
+
+	return execBackup(ctx, wr, tabletInfo.Tablet, *concurrency)
+}
+
+// execBackup is shared by Backup and BackupShard
+func execBackup(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, concurrency int) error {
+	stream, err := wr.TabletManagerClient().Backup(ctx, tablet, concurrency)
 	if err != nil {
 		return err
 	}
