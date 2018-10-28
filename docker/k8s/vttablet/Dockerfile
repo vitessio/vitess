@@ -11,6 +11,7 @@ RUN mkdir -p /vt/bin
 
 # Copy binaries
 COPY --from=k8s /vt/bin/vttablet /vt/bin/
+COPY --from=k8s /vt/bin/vtctlclient /vt/bin/
 
 # Copy certs to allow https calls
 COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
@@ -18,7 +19,7 @@ COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificate
 # TODO: remove when https://github.com/vitessio/vitess/issues/3553 is fixed
 RUN apt-get update && \
    apt-get upgrade -qq && \
-   apt-get install mysql-client -qq --no-install-recommends && \
+   apt-get install mysql-client jq -qq --no-install-recommends && \
    apt-get autoremove && \
    apt-get clean && \
    rm -rf /var/lib/apt/lists/*
