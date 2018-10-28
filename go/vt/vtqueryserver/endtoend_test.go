@@ -481,7 +481,7 @@ func TestQueryDeadline(t *testing.T) {
 		t.Errorf("Unexpected error code: %d, want %d", got, want)
 	}
 
-	_, _, err = conn.ReadQueryResult(1000, false)
+	_, _, _, err = conn.ReadQueryResult(1000, false)
 	if err != nil {
 		t.Errorf("unexpected error %v", err)
 	}

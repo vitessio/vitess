@@ -43,6 +43,10 @@ func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes
 	return nil
 }
 
+func (th *testHandler) WarningCount(c *mysql.Conn) uint16 {
+	return 0
+}
+
 func TestConnectionUnixSocket(t *testing.T) {
 	th := &testHandler{}
 
