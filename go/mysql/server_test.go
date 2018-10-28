@@ -65,7 +65,9 @@ var selectRowsResult = &sqltypes.Result{
 
 type testHandler struct {
 	lastConn *Conn
+	result   *sqltypes.Result
 	err      error
+	warnings uint16
 }
 
 func (th *testHandler) NewConnection(c *Conn) {
@@ -76,6 +78,11 @@ func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	if th.result != nil {
+		callback(th.result)
+		return nil
+	}
+
 	switch query {
 	case "error":
 		return th.err
@@ -162,6 +169,10 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 		callback(&sqltypes.Result{})
 	}
 	return nil
+}
+
+func (th *testHandler) WarningCount(c *Conn) uint16 {
+	return th.warnings
 }
 
 func getHostPort(t *testing.T, a net.Addr) (string, int) {
@@ -589,6 +600,23 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "2 rows in set") {
 		t.Errorf("Unexpected output for 'select rows'")
 	}
+	if strings.Contains(output, "warnings") {
+		t.Errorf("Unexpected warnings in 'select rows'")
+	}
+
+	// Run a 'select rows' command with warnings
+	th.warnings = 13
+	output, ok = runMysql(t, params, "select rows")
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "nice name") ||
+		!strings.Contains(output, "nicer name") ||
+		!strings.Contains(output, "2 rows in set") ||
+		!strings.Contains(output, "13 warnings") {
+		t.Errorf("Unexpected output for 'select rows': %v", output)
+	}
+	th.warnings = 0
 
 	// If there's an error after streaming has started,
 	// we should get a 2013

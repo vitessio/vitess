@@ -232,7 +232,10 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 
 	// Remember a subset of the capabilities, so we can use them
 	// later in the protocol.
-	c.Capabilities = capabilities & (CapabilityClientDeprecateEOF)
+	c.Capabilities = 0
+	if !params.DisableClientDeprecateEOF {
+		c.Capabilities = capabilities & (CapabilityClientDeprecateEOF)
+	}
 
 	// Handle switch to SSL if necessary.
 	if params.Flags&CapabilityClientSSL > 0 {
