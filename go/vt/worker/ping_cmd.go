@@ -22,6 +22,8 @@ import (
 	"html/template"
 	"net/http"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/wrangler"
 )
@@ -60,14 +62,14 @@ func commandPing(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 
 	worker, err := NewPingWorker(wr, message)
 	if err != nil {
-		return nil, fmt.Errorf("Could not create Ping worker: %v", err)
+		return nil, vterrors.Wrap(err, "Could not create Ping worker")
 	}
 	return worker, nil
 }
 
 func interactivePing(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
-		return nil, nil, nil, fmt.Errorf("Cannot parse form: %s", err)
+		return nil, nil, nil, vterrors.Wrap(err, "Cannot parse form")
 	}
 
 	message := r.FormValue("message")
@@ -78,7 +80,7 @@ func interactivePing(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w
 
 	wrk, err := NewPingWorker(wr, message)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("Could not create Ping worker: %v", err)
+		return nil, nil, nil, vterrors.Wrap(err, "Could not create Ping worker")
 	}
 	return wrk, nil, nil, nil
 }

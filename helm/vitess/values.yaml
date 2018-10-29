@@ -123,9 +123,12 @@ vtgate:
 vttablet:
   vitessTag: "latest"
 
-  # valid values are mysql, maria, or percona
+  # valid values are 
+  # - mysql56 (for MySQL/Percona 5.6 or 5.7)
+  # - mariadb (for MariaDB <= 10.2)
+  # - mariadb103 (for MariaDB >= 10.3)
   # the flavor determines the base my.cnf file for vitess to function
-  flavor: "percona"
+  flavor: "mysql56"
 
   mysqlImage: "percona:5.7.20"
   # mysqlImage: "mysql:5.7.20"
@@ -136,6 +139,11 @@ vttablet:
   # This requires at least 2 instances of "replica" tablet types, otherwise semi-sync
   # will block forever. "rdonly" tablets do not ACK.
   enableSemisync: false
+
+  # The name of a config map with N files inside of it. Each file will be added
+  # to $EXTRA_MY_CNF, overriding any default my.cnf settings
+  extraMyCnf: ""
+  # extraMyCnf: extra-my-cnf
 
   resources:
     # common production values 2-4CPU/4-8Gi RAM
@@ -163,7 +171,7 @@ vttablet:
 # Default values for pmm
 pmm:
   enabled: false
-  pmmTag: "1.10.0"
+  pmmTag: "1.15.0"
   client:
     resources:
       requests:
@@ -219,7 +227,7 @@ pmm:
 # Default values for orchestrator resources
 orchestrator:
   enabled: false
-  image: "vitess/orchestrator:3.0.11"
+  image: "vitess/orchestrator:3.0.13"
   replicas: 3
   resources:
     requests:

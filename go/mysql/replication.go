@@ -34,7 +34,7 @@ func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlog
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint32(data, pos, serverID)
 	pos = writeEOFString(data, pos, binlogFilename)
-	if err := c.writeEphemeralPacket(true); err != nil {
+	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}
 	return nil
@@ -62,7 +62,7 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 	pos = writeUint64(data, pos, binlogPos)
 	pos = writeUint32(data, pos, uint32(len(gtidSet)))
 	pos += copy(data[pos:], gtidSet)
-	if err := c.writeEphemeralPacket(true); err != nil {
+	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}
 	return nil

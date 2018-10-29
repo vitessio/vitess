@@ -181,6 +181,8 @@ Validates that all nodes reachable from the global replication graph and that al
 * [GetKeyspaces](#getkeyspaces)
 * [MigrateServedFrom](#migrateservedfrom)
 * [MigrateServedTypes](#migrateservedtypes)
+* [CancelResharding](#cancelresharding)
+* [ShowResharding](#showresharding)
 * [RebuildKeyspaceGraph](#rebuildkeyspacegraph)
 * [RemoveKeyspaceCell](#removekeyspacecell)
 * [SetKeyspaceServedFrom](#setkeyspaceservedfrom)
@@ -278,7 +280,6 @@ Outputs a JSON structure that contains information about the Keyspace.
 Outputs a sorted list of all keyspaces.
 
 
-
 ### MigrateServedFrom
 
 Makes the &lt;destination keyspace/shard&gt; serve the given type. This command also rebuilds the serving graph.
@@ -334,9 +335,10 @@ Migrates a serving type from the source shard to the shards that it replicates t
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | cells | string | Specifies a comma-separated list of cells to update |
-| filtered_replication_wait_time | Duration | Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations |
+| filtered\_replication\_wait\_time | Duration | Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations |
 | reverse | Boolean | Moves the served tablet type backward instead of forward. Use in case of trouble |
 | skip-refresh-state | Boolean | Skips refreshing the state of the source tablets after the migration, meaning that the refresh will need to be done manually, replica and rdonly only) |
+| reverse\_replication | Boolean | For master migration, enabling this flag reverses replication which allows you to rollback |
 
 
 #### Arguments
@@ -363,6 +365,24 @@ Migrates a serving type from the source shard to the shards that it replicates t
 
 * the <code>&lt;source keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;MigrateServedTypes&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 * the <code>&lt;skip-refresh-state&gt;</code> flag can only be specified for non-master migrations
+
+
+### CancelResharding
+
+Permanently cancels a resharding in progress. All resharding related metadata will be deleted.
+
+#### Arguments
+
+* <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.
+
+
+### ShowResharding
+
+"Displays all metadata about a resharding in progress.
+
+#### Arguments
+
+* <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.
 
 
 ### RebuildKeyspaceGraph

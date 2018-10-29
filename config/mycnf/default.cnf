@@ -22,7 +22,6 @@ innodb_log_file_size = 64M
 innodb_log_files_in_group = 2
 innodb_log_group_home_dir = {{.InnodbLogGroupHomeDir}}
 innodb_max_dirty_pages_pct = 75
-innodb_support_xa = 0
 innodb_thread_concurrency = 20
 key_buffer_size = 32M
 log-error = {{.ErrorLogPath}}
@@ -32,13 +31,12 @@ max_connections = 100
 net_write_timeout = 60
 pid-file = {{.PidFile}}
 port = {{.MysqlPort}}
-query_cache_size = 0
-query_cache_type = 0
 # all db instances should start in read-only mode - once the db is started and
 # fully functional, we'll push it into read-write mode
 read-only
 read_buffer_size = 1M
 read_rnd_buffer_size = 1M
+secure_file_priv = NULL
 server-id = {{.ServerID}}
 skip-name-resolve
 # all db instances should skip the slave startup - that way we can do any
@@ -56,20 +54,3 @@ thread_cache_size = 200
 tmpdir = {{.TmpDir}}
 tmp_table_size = 32M
 transaction-isolation = REPEATABLE-READ
-
-# Semi-sync replication is required for automated unplanned failover
-# (when the master goes away). Here we just load the plugin so it's
-# available if desired, but it's disabled at startup.
-#
-# If the -enable_semi_sync flag is used, VTTablet will enable semi-sync
-# at the proper time when replication is set up, or when masters are
-# promoted or demoted.
-plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so
-
-# When semi-sync is enabled, don't allow fallback to async
-# if you get no ack, or have no slaves. This is necessary to
-# prevent alternate futures when doing a failover in response to
-# a master that becomes unresponsive.
-rpl_semi_sync_master_timeout = 1000000000000000000
-rpl_semi_sync_master_wait_no_slave = 1
-

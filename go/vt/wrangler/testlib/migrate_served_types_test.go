@@ -149,6 +149,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	dbClient1.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
 	}}}, nil)
+	dbClient1.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient1.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
 
 	// dest2Rdonly will see the refresh
@@ -175,6 +176,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	dbClient2.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
 	}}}, nil)
+	dbClient2.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient2.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
 
 	// migrate will error if the overlapping shards have no "SourceShard" entry

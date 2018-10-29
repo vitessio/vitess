@@ -129,6 +129,11 @@ func (code UpdateOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(updName[code])
 }
 
+// RouteType returns a description of the query routing type used by the primitive
+func (upd *Update) RouteType() string {
+	return updName[upd.Opcode]
+}
+
 // Execute performs a non-streaming exec.
 func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	switch upd.Opcode {
@@ -246,5 +251,6 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 		}
 	}
 	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	return vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
+	return result, vterrors.Aggregate(errs)
 }

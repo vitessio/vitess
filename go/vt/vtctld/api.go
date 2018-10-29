@@ -169,6 +169,52 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		}
 	})
 
+	handleCollection("keyspace", func(r *http.Request) (interface{}, error) {
+		// Valid requests: api/keyspace/my_ks/tablets (all shards)
+		// Valid requests: api/keyspace/my_ks/tablets/-80 (specific shard)
+		itemPath := getItemPath(r.URL.Path)
+		parts := strings.SplitN(itemPath, "/", 3)
+
+		malformedRequestError := fmt.Errorf("invalid keyspace path: %q  expected path: /keyspace/<keyspace>/tablets or /keyspace/<keyspace>/tablets/<shard>", itemPath)
+		if len(parts) < 2 {
+			return nil, malformedRequestError
+		}
+		if parts[1] != "tablets" {
+			return nil, malformedRequestError
+		}
+
+		keyspace := parts[0]
+		if keyspace == "" {
+			return nil, errors.New("keyspace is required")
+		}
+		var shardNames []string
+		if len(parts) > 2 && parts[2] != "" {
+			shardNames = []string{parts[2]}
+		} else {
+			var err error
+			shardNames, err = ts.GetShardNames(ctx, keyspace)
+			if err != nil {
+				return nil, err
+			}
+		}
+		tablets := [](*topodatapb.Tablet){}
+		for _, shard := range shardNames {
+			// Get tablets for this shard.
+			tabletAliases, err := ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+			if err != nil && !topo.IsErrType(err, topo.PartialResult) {
+				return nil, err
+			}
+			for _, tabletAlias := range tabletAliases {
+				t, err := ts.GetTablet(ctx, tabletAlias)
+				if err != nil {
+					return nil, err
+				}
+				tablets = append(tablets, t.Tablet)
+			}
+		}
+		return tablets, nil
+	})
+
 	// Shards
 	handleCollection("shards", func(r *http.Request) (interface{}, error) {
 		shardPath := getItemPath(r.URL.Path)
@@ -454,8 +500,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		logstream := logutil.NewMemoryLogger()
 
 		wr := wrangler.New(logstream, ts, tmClient)
-		// TODO(enisoc): Context for run command should be request-scoped.
-		err := vtctl.RunCommand(ctx, wr, args)
+		err := vtctl.RunCommand(r.Context(), wr, args)
 		if err != nil {
 			resp.Error = err.Error()
 		}

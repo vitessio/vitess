@@ -366,6 +366,13 @@ message QueryResult {
   ResultExtras extras = 5;
 }
 
+// QueryWarning is used to convey out of band query execution warnings
+// by storing in the vtgate.Session
+message QueryWarning {
+  uint32 code = 1;
+  string message = 2;
+}
+
 // StreamEvent describes a set of transformations that happened as a
 // single transactional unit on a server. It is streamed back by the
 // Update Stream calls.

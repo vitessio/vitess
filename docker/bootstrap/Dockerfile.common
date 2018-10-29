@@ -1,4 +1,4 @@
-FROM golang:1.9
+FROM golang:1.10
 
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -49,6 +49,7 @@ ENV GOPATH $VTROOT
 ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$VTROOT/dist/chromedriver:$PATH
 ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
+ENV USER vitess
 
 # Copy files needed for bootstrap
 COPY bootstrap.sh dev.env /vt/src/vitess.io/vitess/

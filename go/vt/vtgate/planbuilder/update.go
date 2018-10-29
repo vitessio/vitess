@@ -172,7 +172,7 @@ func generateUpdateSubquery(upd *sqlparser.Update, table *vindexes.Table) string
 // it's holding. At the moment it only supports: StrVal, HexVal, IntVal, ValArg.
 // If a complex expression is provided (e.g set name = name + 1), the update will be rejected.
 func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (pv sqltypes.PlanValue, err error) {
-	if !sqlparser.IsValue(upd.Expr) {
+	if !sqlparser.IsValue(upd.Expr) && !sqlparser.IsNull(upd.Expr) {
 		err := vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: %v", upd.Name.Name)
 		return sqltypes.PlanValue{}, err
 	}

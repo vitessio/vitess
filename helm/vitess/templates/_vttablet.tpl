@@ -114,6 +114,7 @@ spec:
         - name: vt
           emptyDir: {}
 {{ include "backup-volume" $config.backup | indent 8 }}
+{{ include "user-config-volume" $defaultVttablet.extraMyCnf | indent 8 }}
 
   volumeClaimTemplates:
     - metadata:
@@ -152,7 +153,7 @@ kind: Job
 metadata:
   name: {{ $shardName }}-init-shard-master
 spec:
-  backoffLimit: 0
+  backoffLimit: 1
   template:
     spec:
       restartPolicy: OnFailure
@@ -359,6 +360,7 @@ spec:
     - name: vtdataroot
       mountPath: "/vtdataroot"
 {{ include "backup-volumeMount" $config.backup | indent 4 }}
+{{ include "user-config-volumeMount" $defaultVttablet.extraMyCnf | indent 4 }}
 
   resources:
 {{ toYaml (.resources | default $defaultVttablet.resources) | indent 6 }}
@@ -383,7 +385,7 @@ spec:
     - |
       set -ex
 
-{{ include "mycnf-exec" . | indent 6 }}
+{{ include "mycnf-exec" $defaultVttablet.extraMyCnf | indent 6 }}
 {{ include "backup-exec" $config.backup | indent 6 }}
       
       eval exec /vt/bin/vttablet $(cat <<END_OF_COMMAND
@@ -448,6 +450,7 @@ spec:
       mountPath: /vtdataroot
     - name: vt
       mountPath: /vt
+{{ include "user-config-volumeMount" $defaultVttablet.extraMyCnf | indent 4 }}
   resources:
 {{ toYaml (.mysqlResources | default $defaultVttablet.mysqlResources) | indent 6 }}
   env:
@@ -465,7 +468,7 @@ spec:
     - |
       set -ex
 
-{{ include "mycnf-exec" . | indent 6 }}
+{{ include "mycnf-exec" $defaultVttablet.extraMyCnf | indent 6 }}
 
       eval exec /vt/bin/mysqlctld $(cat <<END_OF_COMMAND
         -logtostderr=true

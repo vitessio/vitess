@@ -66,6 +66,11 @@ type Config struct {
 	// If no schema is found in SchemaDir, default to this location.
 	DefaultSchemaDir string
 
+	// DataDir is the directory where the data files will be placed.
+	// If no directory is specified a random directory will be used
+	// under VTDATAROOT.
+	DataDir string
+
 	// Charset is the default charset used by MySQL
 	Charset string
 
@@ -91,6 +96,9 @@ type Config struct {
 	// initialize the mysqld instance in the cluster. Note that some environments
 	// do not suppport initialization through snapshot files.
 	SnapshotFile string
+
+	// TransactionMode is SINGLE, MULTI or TWOPC
+	TransactionMode string
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
@@ -413,6 +421,7 @@ func (db *LocalCluster) JSONConfig() interface{} {
 		"port":               db.vt.Port,
 		"socket":             db.mysql.UnixSocket(),
 		"vtcombo_mysql_port": db.Env.PortForProtocol("vtcombo_mysql_port", ""),
+		"mysql":              db.Env.PortForProtocol("mysql", ""),
 	}
 
 	if grpc := db.vt.PortGrpc; grpc != 0 {

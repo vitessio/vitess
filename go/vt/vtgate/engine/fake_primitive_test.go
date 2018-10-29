@@ -45,6 +45,10 @@ func (f *fakePrimitive) rewind() {
 	f.log = nil
 }
 
+func (f *fakePrimitive) RouteType() string {
+	return "Fake"
+}
+
 func (f *fakePrimitive) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))
 	if f.results == nil {

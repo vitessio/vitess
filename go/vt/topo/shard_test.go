@@ -18,7 +18,6 @@ package topo
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -329,29 +328,16 @@ func TestUpdateServedTypesMap(t *testing.T) {
 		t.Fatalf("migrate master failed: %v", err)
 	}
 
-	// try to migrate master away, see it fail
-	if err := si.UpdateServedTypesMap(topodatapb.TabletType_MASTER, nil, true); err == nil || err.Error() != "cannot migrate MASTER away from ks/sh until everything else is migrated. Make sure that the following types are migrated first: RDONLY, REPLICA" {
-		t.Fatalf("migrate master away unexpected error: %v", err)
-	}
-
 	// Migrate each serving type away from this shard.
 	// RDONLY
 	if err := si.UpdateServedTypesMap(topodatapb.TabletType_RDONLY, nil, true); err != nil {
 		t.Fatalf("remove master failed: %v", err)
-	}
-	// Cannot migrate a type away (here RDONLY) which is not served (anymore).
-	if err := si.UpdateServedTypesMap(topodatapb.TabletType_RDONLY, nil, true); err == nil || !strings.HasPrefix(err.Error(), "supplied type RDONLY cannot be migrated out of the shard because it is not a served type: ") {
-		t.Fatalf("migrate rdonly should have failed because it's already migrated: %v", err)
 	}
 	// REPLICA
 	if err := si.UpdateServedTypesMap(topodatapb.TabletType_REPLICA, nil, true); err != nil {
 		t.Fatalf("remove master failed: %v", err)
 	}
 	// MASTER
-	// Migration fails if a list of cells is specified.
-	if err := si.UpdateServedTypesMap(topodatapb.TabletType_MASTER, []string{"first", "third"}, true); err == nil || err.Error() != "cannot migrate only some cells for MASTER in shard ks/sh. Do not specify a list of cells" {
-		t.Fatalf("remove master failed: %v", err)
-	}
 	if err := si.UpdateServedTypesMap(topodatapb.TabletType_MASTER, nil, true); err != nil {
 		t.Fatalf("remove master failed: %v", err)
 	}

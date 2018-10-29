@@ -320,6 +320,11 @@ func (db *DB) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Resu
 	return db.Handler.HandleQuery(c, query, callback)
 }
 
+// WarningCount is part of the mysql.Handler interface.
+func (db *DB) WarningCount(c *mysql.Conn) uint16 {
+	return 0
+}
+
 // HandleQuery is the default implementation of the QueryHandler interface
 func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	if db.AllowAll {

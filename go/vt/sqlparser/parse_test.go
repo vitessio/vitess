@@ -574,6 +574,9 @@ var (
 	}, {
 		input: "select /* dual */ 1 from dual",
 	}, {
+		input:  "select * from (select 'tables') tables",
+		output: "select * from (select 'tables' from dual) as `tables`",
+	}, {
 		input: "insert /* simple */ into a values (1)",
 	}, {
 		input: "insert /* a.b */ into a.b values (1)",
@@ -664,6 +667,8 @@ var (
 		input:  "update foo f join bar b on f.name = b.name set f.id = b.id where b.name = 'test'",
 		output: "update foo as f join bar as b on f.name = b.name set f.id = b.id where b.name = 'test'",
 	}, {
+		input: "update /* ignore */ ignore a set b = 3",
+	}, {
 		input: "delete /* simple */ from a",
 	}, {
 		input: "delete /* a.b */ from a.b",
@@ -694,6 +699,18 @@ var (
 		input: "set @@session.'autocommit' = true",
 	}, {
 		input: "set @@session.\"autocommit\" = true",
+	}, {
+		input:  "set @@session.autocommit = ON",
+		output: "set @@session.autocommit = 'on'",
+	}, {
+		input:  "set @@session.autocommit= OFF",
+		output: "set @@session.autocommit = 'off'",
+	}, {
+		input:  "set autocommit = on",
+		output: "set autocommit = 'on'",
+	}, {
+		input:  "set autocommit = off",
+		output: "set autocommit = 'off'",
 	}, {
 		input:  "set names utf8 collate foo",
 		output: "set names 'utf8'",
@@ -981,6 +998,12 @@ var (
 		input:  "analyze table a",
 		output: "alter table a",
 	}, {
+		input:  "flush tables",
+		output: "flush",
+	}, {
+		input:  "flush tables with read lock",
+		output: "flush",
+	}, {
 		input:  "show binary logs",
 		output: "show binary logs",
 	}, {
@@ -1141,6 +1164,10 @@ var (
 	}, {
 		input: "show full columns from messages from test_keyspace like '%'",
 	}, {
+		input: "show full fields from a like '%'",
+	}, {
+		input: "show fields from a like '%'",
+	}, {
 		input:  "show triggers",
 		output: "show triggers",
 	}, {
@@ -1169,6 +1196,9 @@ var (
 	}, {
 		input:  "show warnings",
 		output: "show warnings",
+	}, {
+		input:  "select warnings from t",
+		output: "select `warnings` from t",
 	}, {
 		input:  "show foobar",
 		output: "show foobar",
@@ -1386,6 +1416,29 @@ func TestValidParallel(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestInvalid(t *testing.T) {
+	invalidSQL := []struct {
+		input string
+		err   string
+	}{{
+		input: "select a from (select * from tbl)",
+		err:   "Every derived table must have its own alias",
+	}, {
+		input: "select a, b from (select * from tbl) sort by a",
+		err:   "syntax error",
+	}}
+
+	for _, tcase := range invalidSQL {
+		_, err := Parse(tcase.input)
+		if err == nil {
+			t.Errorf("Parse invalid query(%q), got: nil, want: %s...", tcase.input, tcase.err)
+		}
+		if err != nil && !strings.Contains(err.Error(), tcase.err) {
+			t.Errorf("Parse invalid query(%q), got: %v, want: %s...", tcase.input, err, tcase.err)
+		}
+	}
 }
 
 func TestCaseSensitivity(t *testing.T) {

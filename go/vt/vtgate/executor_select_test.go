@@ -31,6 +31,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestSelectNext(t *testing.T) {
@@ -231,7 +232,7 @@ func TestStreamBuffering(t *testing.T) {
 }
 
 func TestSelectBindvars(t *testing.T) {
-	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor, sbc1, sbc2, lookup := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -255,6 +256,7 @@ func TestSelectBindvars(t *testing.T) {
 	sbc1.Queries = nil
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
+	// Test with StringBindVariable
 	sql = "select id from user where name in (:name1, :name2)"
 	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
 		"name1": sqltypes.StringBindVariable("foo1"),
@@ -279,6 +281,7 @@ func TestSelectBindvars(t *testing.T) {
 	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
+	// Test with BytesBindVariable
 	sql = "select id from user where name in (:name1, :name2)"
 	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
 		"name1": sqltypes.BytesBindVariable([]byte("foo1")),
@@ -302,6 +305,51 @@ func TestSelectBindvars(t *testing.T) {
 	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
 	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
+
+	// Test no match in the lookup vindex
+	sbc1.Queries = nil
+	lookup.Queries = nil
+	lookup.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "user_id", Type: sqltypes.Int32},
+		},
+		RowsAffected: 0,
+		InsertID:     0,
+		Rows:         [][]sqltypes.Value{},
+	}})
+
+	sql = "select id from user where name = :name"
+	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
+		"name": sqltypes.StringBindVariable("nonexistent"),
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	// When there are no matching rows in the vindex, vtgate still needs the field info
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "select id from user where 1 != 1",
+		BindVariables: map[string]*querypb.BindVariable{
+			"name": sqltypes.StringBindVariable("nonexistent"),
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+
+	wantLookupQueries := []*querypb.BoundQuery{{
+		Sql: "select user_id from name_user_map where name = :name",
+		BindVariables: map[string]*querypb.BindVariable{
+			"name": sqltypes.StringBindVariable("nonexistent"),
+		},
+	}}
+	if !reflect.DeepEqual(lookup.Queries, wantLookupQueries) {
+		t.Errorf("lookup.Queries: %+v, want %+v\n", lookup.Queries, wantLookupQueries)
+	}
+
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
+
 }
 
 func TestSelectEqual(t *testing.T) {
@@ -733,6 +781,67 @@ func TestSelectScatter(t *testing.T) {
 		}
 	}
 	testQueryLog(t, logChan, "TestExecute", "SELECT", wantQueries[0].Sql, 8)
+}
+
+func TestSelectScatterPartial(t *testing.T) {
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	// Fail 1 of N without the directive fails the whole operation
+	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	results, err := executorExec(executor, "select id from user", nil)
+	wantErr := "target: TestExecutor.40-60.master, used tablet: aa-0 (40-60), RESOURCE_EXHAUSTED error"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("want error %v, got %v", wantErr, err)
+	}
+	if results != nil {
+		t.Errorf("want nil results, got %v", results)
+	}
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user", 8)
+
+	// Fail 1 of N with the directive succeeds with 7 rows
+	results, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if results == nil || len(results.Rows) != 7 {
+		t.Errorf("want 7 results, got %v", results)
+	}
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+
+	// Even if all shards fail the operation succeeds with 0 rows
+	conns[0].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[1].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[3].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[4].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[5].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[6].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[7].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+
+	results, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if results == nil || len(results.Rows) != 0 {
+		t.Errorf("want 0 result rows, got %v", results)
+	}
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
 }
 
 func TestStreamSelectScatter(t *testing.T) {

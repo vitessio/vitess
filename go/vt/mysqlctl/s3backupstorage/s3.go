@@ -24,13 +24,17 @@ limitations under the License.
 package s3backupstorage
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -46,11 +50,22 @@ var (
 	// AWS API region
 	region = flag.String("s3_backup_aws_region", "us-east-1", "AWS region to use")
 
+	// AWS endpoint, defaults to amazonaws.com but appliances may use a different location
+	endpoint = flag.String("s3_backup_aws_endpoint", "amazonaws.com", "endpoint of the S3 backend (region must be provided)")
+
 	// bucket is where the backups will go.
 	bucket = flag.String("s3_backup_storage_bucket", "", "S3 bucket to use for backups")
 
 	// root is a prefix added to all object names.
 	root = flag.String("s3_backup_storage_root", "", "root prefix for all backup-related object names")
+
+	// forcePath is used to ensure that the certificate and path used match the endpoint + region
+	forcePath = flag.Bool("s3_backup_force_path_style", false, "force the s3 path style")
+
+	tlsSkipVerifyCert = flag.Bool("s3_backup_tls_skip_verify_cert", false, "skip the 'certificate is valid' check for SSL connections")
+
+	// verboseLogging provides more verbose logging of AWS actions
+	requiredLogLevel = flag.String("s3_backup_log_level", "LogOff", "determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors")
 
 	// sse is the server-side encryption algorithm used when storing this object in S3
 	sse = flag.String("s3_backup_server_side_encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms)")
@@ -58,6 +73,10 @@ var (
 	// path component delimiter
 	delimiter = "/"
 )
+
+type logNameToLogLevel map[string]aws.LogLevelType
+
+var logNameMap logNameToLogLevel
 
 // S3BackupHandle implements the backupstorage.BackupHandle interface.
 type S3BackupHandle struct {
@@ -169,6 +188,7 @@ type S3BackupStorage struct {
 
 // ListBackups is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
+	log.Infof("ListBackups: [s3] dir: %v, bucket: %v", dir, *bucket)
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
@@ -217,6 +237,7 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 
 // StartBackup is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
+	log.Infof("StartBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, *bucket)
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
@@ -233,6 +254,8 @@ func (bs *S3BackupStorage) StartBackup(ctx context.Context, dir, name string) (b
 
 // RemoveBackup is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
+	log.Infof("RemoveBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, *bucket)
+
 	c, err := bs.client()
 	if err != nil {
 		return err
@@ -293,11 +316,34 @@ func (bs *S3BackupStorage) Close() error {
 
 var _ backupstorage.BackupStorage = (*S3BackupStorage)(nil)
 
+// getLogLevel converts the string loglevel to an aws.LogLevelType
+func getLogLevel() *aws.LogLevelType {
+	l := new(aws.LogLevelType)
+	*l = aws.LogOff // default setting
+	if level, found := logNameMap[*requiredLogLevel]; found {
+		*l = level // adjust as required
+	}
+	return l
+}
+
 func (bs *S3BackupStorage) client() (*s3.S3, error) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 	if bs._client == nil {
-		bs._client = s3.New(session.New(), &aws.Config{Region: aws.String(*region)})
+		logLevel := getLogLevel()
+
+		tlsClientConf := &tls.Config{InsecureSkipVerify: *tlsSkipVerifyCert}
+		httpTransport := &http.Transport{TLSClientConfig: tlsClientConf}
+		httpClient := &http.Client{Transport: httpTransport}
+
+		bs._client = s3.New(session.New(),
+			&aws.Config{
+				HTTPClient:       httpClient,
+				LogLevel:         logLevel,
+				Endpoint:         aws.String(*endpoint),
+				Region:           aws.String(*region),
+				S3ForcePathStyle: aws.Bool(*forcePath),
+			})
 
 		if len(*bucket) == 0 {
 			return nil, fmt.Errorf("-s3_backup_storage_bucket required")
@@ -321,4 +367,13 @@ func objName(parts ...string) *string {
 
 func init() {
 	backupstorage.BackupStorageMap["s3"] = &S3BackupStorage{}
+
+	logNameMap = logNameToLogLevel{
+		"LogOff":                     aws.LogOff,
+		"LogDebug":                   aws.LogDebug,
+		"LogDebugWithSigning":        aws.LogDebugWithSigning,
+		"LogDebugWithHTTPBody":       aws.LogDebugWithHTTPBody,
+		"LogDebugWithRequestRetries": aws.LogDebugWithRequestRetries,
+		"LogDebugWithRequestErrors":  aws.LogDebugWithRequestErrors,
+	}
 }

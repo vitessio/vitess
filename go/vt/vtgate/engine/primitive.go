@@ -46,13 +46,16 @@ type VCursor interface {
 	// SetContextTimeout updates the context and sets a timeout.
 	SetContextTimeout(timeout time.Duration) context.CancelFunc
 
+	// RecordWarning stores the given warning in the current session
+	RecordWarning(warning *querypb.QueryWarning)
+
 	// V3 functions.
 	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
 	ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
 	AutocommitApproval() bool
 
 	// Shard-level functions.
-	ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, error)
+	ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, []error)
 	ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
 	StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error
 
@@ -119,6 +122,7 @@ func (p *Plan) Size() int {
 // Primitive is the interface that needs to be satisfied by
 // all primitives of a plan.
 type Primitive interface {
+	RouteType() string
 	Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
 	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
 	GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)

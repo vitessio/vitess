@@ -52,6 +52,11 @@ func (l *Limit) MarshalJSON() ([]byte, error) {
 	return json.Marshal(marshalLimit)
 }
 
+// RouteType returns a description of the query routing type used by the primitive
+func (l *Limit) RouteType() string {
+	return l.Input.RouteType()
+}
+
 // Execute satisfies the Primtive interface.
 func (l *Limit) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := l.fetchCount(bindVars)
