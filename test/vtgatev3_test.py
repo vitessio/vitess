@@ -680,6 +680,33 @@ class TestVTGateFunctions(unittest.TestCase):
         ([(0,)], 1L, 0,
          [(u'SLEEP(1)', self.int_type)]))
 
+    # test shard errors as warnings directive
+    cursor.execute('SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ bad from vt_user', {})
+    print vtgate_conn.get_warnings()
+    warnings = vtgate_conn.get_warnings()
+    self.assertEqual(len(warnings), 2)
+    for warning in warnings:
+        self.assertEqual(warning.code, 1054)
+        self.assertIn('errno 1054', warning.message)
+        self.assertIn('Unknown column', warning.message)
+    self.assertEqual(
+        (cursor.fetchall(), cursor.rowcount, cursor.lastrowid,
+         cursor.description),
+        ([], 0L, 0, []))
+
+    # test shard errors as warnings directive with timeout
+    cursor.execute('SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS QUERY_TIMEOUT_MS=10 */ SLEEP(1)', {})
+    print vtgate_conn.get_warnings()
+    warnings = vtgate_conn.get_warnings()
+    self.assertEqual(len(warnings), 1)
+    for warning in warnings:
+        self.assertEqual(warning.code, 1317)
+        self.assertIn('context deadline exceeded', warning.message)
+    self.assertEqual(
+        (cursor.fetchall(), cursor.rowcount, cursor.lastrowid,
+         cursor.description),
+        ([], 0L, 0, []))
+
     # Test insert with no auto-inc
     vtgate_conn.begin()
     result = self.execute_on_master(

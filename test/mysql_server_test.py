@@ -29,6 +29,7 @@ import MySQLdb
 import environment
 import utils
 import tablet
+import warnings
 
 # single shard / 2 tablets
 shard_0_master = tablet.Tablet()
@@ -201,6 +202,63 @@ class TestMySQL(unittest.TestCase):
       # 1317 is DeadlineExceeded error code
       self.assertIn('1317', s)
     conn.close()
+
+    # this query should fail due to the bogus field
+    conn = MySQLdb.Connect(**params)
+    try:
+      cursor = conn.cursor()
+      cursor.execute('SELECT invalid_field from vt_insert_test', {})
+      self.fail('Execute went through')
+    except MySQLdb.OperationalError, e:
+      s = str(e)
+      # 1054 is BadFieldError code
+      self.assertIn('1054', s)
+
+    # this query should trigger a warning not an error
+    with warnings.catch_warnings(record=True) as w:
+      warnings.simplefilter("always")
+
+      cursor.execute('SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ invalid_field from vt_insert_test', {})
+      if cursor.rowcount != 0:
+        self.fail('expected 0 rows got ' + str(cursor.rowcount))
+
+      if len(w) != 1:
+        print 'unexpected warnings: ', w
+
+    # and the next query should get the warnings
+    cursor.execute('SHOW WARNINGS', {})
+    if cursor.rowcount != 1:
+      print 'expected 1 warning row, got ' + str(cursor.rowcount)
+
+    for (_, code, message) in cursor:
+      self.assertEqual(code, 1054)
+      self.assertIn('errno 1054', message)
+      self.assertIn('Unknown column', message)
+
+    # test with a query timeout error
+    with warnings.catch_warnings(record=True) as w:
+      warnings.simplefilter("always")
+
+      cursor.execute('SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS QUERY_TIMEOUT_MS=1 */ sleep(1) from vt_insert_test', {})
+      if cursor.rowcount != 0:
+        self.fail('expected 0 rows got ' + str(cursor.rowcount))
+
+      if len(w) != 1:
+        print 'unexpected warnings: ', w
+
+    cursor.execute('SHOW WARNINGS', {})
+    if cursor.rowcount != 1:
+      print 'expected 1 warning row, got ' + str(cursor.rowcount)
+
+    for (_, code, message) in cursor:
+      self.assertEqual(code, 1317)
+      self.assertIn('context deadline exceeded', message)
+
+    # any non-show query clears the warnings
+    cursor.execute('SELECT 1 from vt_insert_test limit 1', {})
+    cursor.execute('SHOW WARNINGS', {})
+    if cursor.rowcount != 0:
+      print 'expected 0 warnings row, got ' + str(cursor.rowcount)
 
     # 'vtgate client 2' is not authorized to access vt_insert_test
     params['user'] = 'testuser2'

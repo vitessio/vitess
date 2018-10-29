@@ -46,6 +46,9 @@ type VCursor interface {
 	// SetContextTimeout updates the context and sets a timeout.
 	SetContextTimeout(timeout time.Duration) context.CancelFunc
 
+	// RecordWarning stores the given warning in the current session
+	RecordWarning(warning *querypb.QueryWarning)
+
 	// V3 functions.
 	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
 	ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)

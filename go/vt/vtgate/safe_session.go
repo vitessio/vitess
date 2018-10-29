@@ -22,6 +22,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -180,6 +181,20 @@ func (session *SafeSession) MustRollback() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.mustRollback
+}
+
+// RecordWarning stores the given warning in the session
+func (session *SafeSession) RecordWarning(warning *querypb.QueryWarning) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.Session.Warnings = append(session.Session.Warnings, warning)
+}
+
+// ClearWarnings removes all the warnings from the session
+func (session *SafeSession) ClearWarnings() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.Session.Warnings = nil
 }
 
 // Reset clears the session

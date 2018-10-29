@@ -457,3 +457,13 @@ class VTGateClient(object):
       dbexceptions.FatalError: this query should not be retried.
     """
     raise NotImplementedError('Child class needs to implement this')
+
+  def get_warnings(self):
+    """Get warnings from the previous query
+
+    Returns:
+      The list of warnings.
+
+    """
+    raise NotImplementedError('Child class needs to implement this')
+
