@@ -81,6 +81,11 @@ func (vc *vcursorImpl) SetContextTimeout(timeout time.Duration) context.CancelFu
 	return cancel
 }
 
+// RecordWarning stores the given warning in the current session
+func (vc *vcursorImpl) RecordWarning(warning *querypb.QueryWarning) {
+	vc.safeSession.RecordWarning(warning)
+}
+
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
 func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {

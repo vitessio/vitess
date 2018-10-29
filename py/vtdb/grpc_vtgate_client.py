@@ -323,6 +323,10 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
 
     return response.result.rows_affected
 
+  def get_warnings(self):
+    if self.session:
+      return self.session.warnings
+    return []
 
 def _convert_exception(exc, *args, **kwargs):
   """This parses the protocol exceptions to the api interface exceptions.

@@ -770,7 +770,7 @@ func TestExecutorShow(t *testing.T) {
 
 	session.Warnings = []*querypb.QueryWarning{
 		{Code: mysql.ERBadTable, Message: "bad table"},
-		{Code: mysql.ERVitessShardError, Message: "ks/-40: query timed out"},
+		{Code: mysql.EROutOfResources, Message: "ks/-40: query timed out"},
 	}
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show warnings", nil)
 	wantqr = &sqltypes.Result{
@@ -782,7 +782,7 @@ func TestExecutorShow(t *testing.T) {
 
 		Rows: [][]sqltypes.Value{
 			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(mysql.ERBadTable), sqltypes.NewVarChar("bad table")},
-			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(mysql.ERVitessShardError), sqltypes.NewVarChar("ks/-40: query timed out")},
+			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(mysql.EROutOfResources), sqltypes.NewVarChar("ks/-40: query timed out")},
 		},
 		RowsAffected: 0,
 	}
