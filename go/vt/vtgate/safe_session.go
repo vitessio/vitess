@@ -190,6 +190,13 @@ func (session *SafeSession) RecordWarning(warning *querypb.QueryWarning) {
 	session.Session.Warnings = append(session.Session.Warnings, warning)
 }
 
+// ClearWarnings removes all the warnings from the session
+func (session *SafeSession) ClearWarnings() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.Session.Warnings = nil
+}
+
 // Reset clears the session
 func (session *SafeSession) Reset() {
 	if session == nil || session.Session == nil {
