@@ -41,11 +41,11 @@ func decNesting(yylex interface{}) {
   yylex.(*Tokenizer).nesting--
 }
 
-// forceEOF forces the lexer to end prematurely. Not all SQL statements
-// are supported by the Parser, thus calling forceEOF will make the lexer
+// skipToEnd forces the lexer to end prematurely. Not all SQL statements
+// are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
-func forceEOF(yylex interface{}) {
-  yylex.(*Tokenizer).ForceEOF = true
+func skipToEnd(yylex interface{}) {
+  yylex.(*Tokenizer).SkipToEnd = true
 }
 
 %}
@@ -267,7 +267,7 @@ func forceEOF(yylex interface{}) {
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
 %type <empty> as_opt
-%type <empty> force_eof ddl_force_eof
+%type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
 %type <str> set_session_or_global show_session_or_global
 %type <convertType> convert_type
@@ -557,16 +557,16 @@ create_statement:
     $1.OptLike = $2
     $$ = $1
   }
-| CREATE constraint_opt INDEX ID using_opt ON table_name ddl_force_eof
+| CREATE constraint_opt INDEX ID using_opt ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7, NewName:$7}
   }
-| CREATE VIEW table_name ddl_force_eof
+| CREATE VIEW table_name ddl_skip_to_end
   {
     $$ = &DDL{Action: CreateStr, NewName: $3.ToViewName()}
   }
-| CREATE OR REPLACE VIEW table_name ddl_force_eof
+| CREATE OR REPLACE VIEW table_name ddl_skip_to_end
   {
     $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName()}
   }
@@ -578,11 +578,11 @@ create_statement:
         Params: $5,
     }}
   }
-| CREATE DATABASE not_exists_opt ID ddl_force_eof
+| CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
     $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
   }
-| CREATE SCHEMA not_exists_opt ID ddl_force_eof
+| CREATE SCHEMA not_exists_opt ID ddl_skip_to_end
   {
     $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
   }
@@ -1288,15 +1288,15 @@ table_opt_value:
   }
 
 alter_statement:
-  ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation force_eof
+  ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE table_name ADD alter_object_type force_eof
+| ALTER ignore_opt TABLE table_name ADD alter_object_type skip_to_end
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE table_name DROP alter_object_type force_eof
+| ALTER ignore_opt TABLE table_name DROP alter_object_type skip_to_end
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
@@ -1328,12 +1328,12 @@ alter_statement:
     // Change this to a rename statement
     $$ = &DDL{Action: RenameStr, Table: $4, NewName: $7}
   }
-| ALTER ignore_opt TABLE table_name RENAME index_opt force_eof
+| ALTER ignore_opt TABLE table_name RENAME index_opt skip_to_end
   {
     // Rename an index can just be an alter
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER VIEW table_name ddl_force_eof
+| ALTER VIEW table_name ddl_skip_to_end
   {
     $$ = &DDL{Action: AlterStr, Table: $3.ToViewName(), NewName: $3.ToViewName()}
   }
@@ -1396,12 +1396,12 @@ drop_statement:
     }
     $$ = &DDL{Action: DropStr, Table: $4, IfExists: exists}
   }
-| DROP INDEX ID ON table_name ddl_force_eof
+| DROP INDEX ID ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $5, NewName: $5}
   }
-| DROP VIEW exists_opt table_name ddl_force_eof
+| DROP VIEW exists_opt table_name ddl_skip_to_end
   {
     var exists bool
         if $3 != 0 {
@@ -1434,60 +1434,60 @@ analyze_statement:
   }
 
 show_statement:
-  SHOW BINARY ID ddl_force_eof /* SHOW BINARY LOGS */
+  SHOW BINARY ID ddl_skip_to_end /* SHOW BINARY LOGS */
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
-| SHOW CHARACTER SET ddl_force_eof
+| SHOW CHARACTER SET ddl_skip_to_end
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
-| SHOW CREATE DATABASE ddl_force_eof
+| SHOW CREATE DATABASE ddl_skip_to_end
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
-| SHOW CREATE ID ddl_force_eof
+| SHOW CREATE ID ddl_skip_to_end
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
-| SHOW CREATE PROCEDURE ddl_force_eof
+| SHOW CREATE PROCEDURE ddl_skip_to_end
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
-| SHOW CREATE TABLE ddl_force_eof
+| SHOW CREATE TABLE ddl_skip_to_end
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
-| SHOW CREATE TRIGGER ddl_force_eof
+| SHOW CREATE TRIGGER ddl_skip_to_end
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
-| SHOW CREATE VIEW ddl_force_eof
+| SHOW CREATE VIEW ddl_skip_to_end
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
-| SHOW DATABASES ddl_force_eof
+| SHOW DATABASES ddl_skip_to_end
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW INDEX ddl_force_eof
+| SHOW INDEX ddl_skip_to_end
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW KEYS ddl_force_eof
+| SHOW KEYS ddl_skip_to_end
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW PROCEDURE ddl_force_eof
+| SHOW PROCEDURE ddl_skip_to_end
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW show_session_or_global STATUS ddl_force_eof
+| SHOW show_session_or_global STATUS ddl_skip_to_end
   {
     $$ = &Show{Scope: $2, Type: string($3)}
   }
-| SHOW TABLE ddl_force_eof
+| SHOW TABLE ddl_skip_to_end
   {
     $$ = &Show{Type: string($2)}
   }
@@ -1506,7 +1506,7 @@ show_statement:
       $$ = &Show{Type: $3, ShowTablesOpt: showTablesOpt}
     }
   }
-| SHOW show_session_or_global VARIABLES ddl_force_eof
+| SHOW show_session_or_global VARIABLES ddl_skip_to_end
   {
     $$ = &Show{Scope: $2, Type: string($3)}
   }
@@ -1558,7 +1558,7 @@ show_statement:
  *  SHOW BINARY LOGS
  *  SHOW INVALID
  */
-| SHOW ID ddl_force_eof
+| SHOW ID ddl_skip_to_end
   {
     $$ = &Show{Type: string($2)}
   }
@@ -1668,37 +1668,37 @@ rollback_statement:
   }
 
 other_statement:
-  DESC force_eof
+  DESC skip_to_end
   {
     $$ = &OtherRead{}
   }
-| DESCRIBE force_eof
+| DESCRIBE skip_to_end
   {
     $$ = &OtherRead{}
   }
-| EXPLAIN force_eof
+| EXPLAIN skip_to_end
   {
     $$ = &OtherRead{}
   }
-| REPAIR force_eof
+| REPAIR skip_to_end
   {
     $$ = &OtherAdmin{}
   }
-| OPTIMIZE force_eof
+| OPTIMIZE skip_to_end
   {
     $$ = &OtherAdmin{}
   }
-| LOCK TABLES force_eof
+| LOCK TABLES skip_to_end
   {
     $$ = &OtherAdmin{}
   }
-| UNLOCK TABLES force_eof
+| UNLOCK TABLES skip_to_end
   {
     $$ = &OtherAdmin{}
   }
 
 flush_statement:
-  FLUSH force_eof
+  FLUSH skip_to_end
   {
     $$ = &DDL{Action: FlushStr}
   }
@@ -3323,20 +3323,20 @@ closeb:
     decNesting(yylex)
   }
 
-force_eof:
+skip_to_end:
 {
-  forceEOF(yylex)
+  skipToEnd(yylex)
 }
 
-ddl_force_eof:
+ddl_skip_to_end:
   {
-    forceEOF(yylex)
+    skipToEnd(yylex)
   }
 | openb
   {
-    forceEOF(yylex)
+    skipToEnd(yylex)
   }
 | reserved_sql_id
   {
-    forceEOF(yylex)
+    skipToEnd(yylex)
   }

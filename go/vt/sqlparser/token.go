@@ -37,7 +37,7 @@ type Tokenizer struct {
 	InStream            io.Reader
 	AllowComments       bool
 	SkipSpecialComments bool
-	ForceEOF            bool
+	SkipToEnd           bool
 	lastChar            uint16
 	Position            int
 	lastToken           []byte
@@ -428,12 +428,23 @@ func KeywordString(id int) string {
 // Lex returns the next token form the Tokenizer.
 // This function is used by go yacc.
 func (tkn *Tokenizer) Lex(lval *yySymType) int {
+	if tkn.SkipToEnd {
+		return tkn.skipStatement()
+	}
+
 	typ, val := tkn.Scan()
 	for typ == COMMENT {
 		if tkn.AllowComments {
 			break
 		}
 		typ, val = tkn.Scan()
+	}
+	if typ == 0 || typ == ';' || typ == LEX_ERROR {
+		// If encounter end of statement or invalid token,
+		// we should not accept partially parsed DDLs. They
+		// should instead result in parser errors. See the
+		// Parse function to see how this is handled.
+		tkn.partialDDL = nil
 	}
 	lval.bytes = val
 	tkn.lastToken = val
@@ -451,9 +462,7 @@ func (tkn *Tokenizer) Error(err string) {
 	tkn.LastError = errors.New(buf.String())
 
 	// Try and re-sync to the next statement
-	if tkn.lastChar != ';' {
-		tkn.skipStatement()
-	}
+	tkn.skipStatement()
 }
 
 // Scan scans the tokenizer for the next token and returns
@@ -473,11 +482,6 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	}
 	if tkn.lastChar == 0 {
 		tkn.next()
-	}
-
-	if tkn.ForceEOF {
-		tkn.skipStatement()
-		return 0, nil
 	}
 
 	tkn.skipBlank()
@@ -505,14 +509,21 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		return tkn.scanNumber(false)
 	case ch == ':':
 		return tkn.scanBindVar()
-	case ch == ';' && tkn.multi:
+	case ch == ';':
+		if tkn.multi {
+			// In multi mode, ';' is treated as EOF. So, we don't advance.
+			// Repeated calls to Scan will keep returning 0 until ParseNext
+			// forces the advance.
+			return 0, nil
+		}
+		tkn.next()
+		return ';', nil
+	case ch == eofChar:
 		return 0, nil
 	default:
 		tkn.next()
 		switch ch {
-		case eofChar:
-			return 0, nil
-		case '=', ',', ';', '(', ')', '+', '*', '%', '^', '~':
+		case '=', ',', '(', ')', '+', '*', '%', '^', '~':
 			return int(ch), nil
 		case '&':
 			if tkn.lastChar == '&' {
@@ -613,12 +624,14 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	}
 }
 
-// skipStatement scans until the EOF, or end of statement is encountered.
-func (tkn *Tokenizer) skipStatement() {
-	ch := tkn.lastChar
-	for ch != ';' && ch != eofChar {
-		tkn.next()
-		ch = tkn.lastChar
+// skipStatement scans until end of statement.
+func (tkn *Tokenizer) skipStatement() int {
+	tkn.SkipToEnd = false
+	for {
+		typ, _ := tkn.Scan()
+		if typ == 0 || typ == ';' || typ == LEX_ERROR {
+			return typ
+		}
 	}
 }
 
@@ -930,7 +943,7 @@ func (tkn *Tokenizer) reset() {
 	tkn.specialComment = nil
 	tkn.posVarIndex = 0
 	tkn.nesting = 0
-	tkn.ForceEOF = false
+	tkn.SkipToEnd = false
 }
 
 func isLetter(ch uint16) bool {

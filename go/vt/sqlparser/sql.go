@@ -30,11 +30,11 @@ func decNesting(yylex interface{}) {
 	yylex.(*Tokenizer).nesting--
 }
 
-// forceEOF forces the lexer to end prematurely. Not all SQL statements
-// are supported by the Parser, thus calling forceEOF will make the lexer
+// skipToEnd forces the lexer to end prematurely. Not all SQL statements
+// are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
-func forceEOF(yylex interface{}) {
-	yylex.(*Tokenizer).ForceEOF = true
+func skipToEnd(yylex interface{}) {
+	yylex.(*Tokenizer).SkipToEnd = true
 }
 
 //line sql.y:53
@@ -6450,25 +6450,25 @@ yydefault:
 		yyDollar = yyS[yypt-0 : yypt+1]
 //line sql.y:3327
 		{
-			forceEOF(yylex)
+			skipToEnd(yylex)
 		}
 	case 832:
 		yyDollar = yyS[yypt-0 : yypt+1]
 //line sql.y:3332
 		{
-			forceEOF(yylex)
+			skipToEnd(yylex)
 		}
 	case 833:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3336
 		{
-			forceEOF(yylex)
+			skipToEnd(yylex)
 		}
 	case 834:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3340
 		{
-			forceEOF(yylex)
+			skipToEnd(yylex)
 		}
 	}
 	goto yystack /* stack new state and value */
