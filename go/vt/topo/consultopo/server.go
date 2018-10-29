@@ -110,11 +110,14 @@ func NewServer(cell, serverAddr, root string) (*Server, error) {
 	}
 	cfg := api.DefaultConfig()
 	cfg.Address = serverAddr
-	if creds != nil && creds[cell] != nil {
-		cfg.Token = creds[cell].ACLToken
-	} else {
-		log.Warningf("Client auth not configured for cell: %v", cell)
+	if creds != nil {
+		if creds[cell] != nil {
+			cfg.Token = creds[cell].ACLToken
+		} else {
+			log.Warningf("Client auth not configured for cell: %v", cell)
+		}
 	}
+
 	client, err := api.NewClient(cfg)
 	if err != nil {
 		return nil, err
