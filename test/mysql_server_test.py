@@ -231,9 +231,34 @@ class TestMySQL(unittest.TestCase):
       print 'expected 1 warning row, got ' + str(cursor.rowcount)
 
     for (_, code, message) in cursor:
-      self.assertEqual(code, 10002)
+      self.assertEqual(code, 1054)
       self.assertIn('errno 1054', message)
       self.assertIn('Unknown column', message)
+
+    # test with a query timeout error
+    with warnings.catch_warnings(record=True) as w:
+      warnings.simplefilter("always")
+
+      cursor.execute('SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS QUERY_TIMEOUT_MS=1 */ sleep(1) from vt_insert_test', {})
+      if cursor.rowcount != 0:
+        self.fail('expected 0 rows got ' + str(cursor.rowcount))
+
+      if len(w) != 1:
+        print 'unexpected warnings: ', w
+
+    cursor.execute('SHOW WARNINGS', {})
+    if cursor.rowcount != 1:
+      print 'expected 1 warning row, got ' + str(cursor.rowcount)
+
+    for (_, code, message) in cursor:
+      self.assertEqual(code, 1317)
+      self.assertIn('context deadline exceeded', message)
+
+    # any non-show query clears the warnings
+    cursor.execute('SELECT 1 from vt_insert_test limit 1', {})
+    cursor.execute('SHOW WARNINGS', {})
+    if cursor.rowcount != 0:
+      print 'expected 0 warnings row, got ' + str(cursor.rowcount)
 
     # 'vtgate client 2' is not authorized to access vt_insert_test
     params['user'] = 'testuser2'
