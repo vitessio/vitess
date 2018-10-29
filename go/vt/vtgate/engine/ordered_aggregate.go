@@ -91,6 +91,11 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }
 
+// RouteType returns a description of the query routing type used by the primitive
+func (oa *OrderedAggregate) RouteType() string {
+	return oa.Input.RouteType()
+}
+
 // Execute is a Primitive function.
 func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := oa.execute(vcursor, bindVars, wantfields)

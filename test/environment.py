@@ -47,7 +47,7 @@ from vttest import mysql_flavor
 
 
 # sanity check the environment
-if os.environ['USER'] == 'root':
+if os.getuid() == 1:
   sys.stderr.write(
       'ERROR: Vitess and mysqld '
       'should not be run as root.\n')

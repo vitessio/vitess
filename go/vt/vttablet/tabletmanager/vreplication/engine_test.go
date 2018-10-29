@@ -99,6 +99,7 @@ func TestEngineExec(t *testing.T) {
 	}
 	defer vre.Close()
 
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("insert into _vt.vreplication values (null)", &sqltypes.Result{InsertID: 1}, nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -138,6 +139,7 @@ func TestEngineExec(t *testing.T) {
 
 	savedBlp := ct.blpStats
 
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -177,6 +179,7 @@ func TestEngineExec(t *testing.T) {
 
 	// Test Delete
 
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	delQuery := "delete from _vt.vreplication where id = 1"
 	dbClient.ExpectRequest(delQuery, testDMLResponse, nil)
 
@@ -220,6 +223,7 @@ func TestEngineBadInsert(t *testing.T) {
 	}
 	defer vre.Close()
 
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("insert into _vt.vreplication values (null)", &sqltypes.Result{}, nil)
 	_, err := vre.Exec("insert into _vt.vreplication values(null)")
 	want := "insert failed to generate an id"
@@ -250,6 +254,7 @@ func TestEngineSelect(t *testing.T) {
 	}
 	defer vre.Close()
 
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	wantQuery := "select * from _vt.vreplication where workflow = 'x'"
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -400,6 +405,7 @@ func TestCreateDBAndTable(t *testing.T) {
 	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("insert into _vt.vreplication values (null)", &sqltypes.Result{InsertID: 1}, nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(

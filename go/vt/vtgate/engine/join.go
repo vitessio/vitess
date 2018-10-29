@@ -218,6 +218,11 @@ func (code JoinOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }
 
+// RouteType returns a description of the query routing type used by the primitive
+func (jn *Join) RouteType() string {
+	return "Join"
+}
+
 func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
 	out := make(map[string]*querypb.BindVariable)
 	for k, v := range bv1 {

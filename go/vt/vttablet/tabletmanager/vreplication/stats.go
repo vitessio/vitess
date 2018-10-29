@@ -137,7 +137,7 @@ func (st *vrStats) status() *EngineStatus {
 			Rates:               ct.blpStats.Rates.Get(),
 			State:               state,
 			SourceTablet:        ct.sourceTablet.Get(),
-			LastMessage:         ct.blpStats.LastMessage.Get(),
+			Messages:            ct.blpStats.MessageHistory(),
 		}
 		i++
 	}
@@ -163,7 +163,7 @@ type ControllerStatus struct {
 	Rates               map[string][]float64
 	State               string
 	SourceTablet        string
-	LastMessage         string
+	Messages            []string
 }
 
 var vreplicationTemplate = `
@@ -191,7 +191,7 @@ var vreplicationTemplate = `
       <td>{{.SecondsBehindMaster}}</td>
       <td>{{range $key, $value := .Counts}}<b>{{$key}}</b>: {{$value}}<br>{{end}}</td>
       <td>{{range $key, $values := .Rates}}<b>{{$key}}</b>: {{range $values}}{{.}} {{end}}<br>{{end}}</td>
-      <td>{{.LastMessage}}</td>
+      <td>{{range $index, $value := .Messages}}{{$value}}<br>{{end}}</td>
     </tr>{{end}}
 </table>{{else}}VReplication is closed.{{end}}
 `

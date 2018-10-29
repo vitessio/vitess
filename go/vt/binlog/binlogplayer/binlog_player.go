@@ -29,6 +29,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -72,7 +73,7 @@ type Stats struct {
 	lastPosition      mysql.Position
 
 	SecondsBehindMaster sync2.AtomicInt64
-	LastMessage         sync2.AtomicString
+	History             *history.History
 }
 
 // SetLastPosition sets the last replication position.
@@ -89,11 +90,24 @@ func (bps *Stats) LastPosition() mysql.Position {
 	return bps.lastPosition
 }
 
+// MessageHistory gets all the messages, we store 3 at a time
+func (bps *Stats) MessageHistory() []string {
+	strs := make([]string, 0, 3)
+	for _, h := range bps.History.Records() {
+		h1, _ := h.(*StatsHistoryRecord)
+		if h1 != nil {
+			strs = append(strs, h1.Message)
+		}
+	}
+	return strs
+}
+
 // NewStats creates a new Stats structure.
 func NewStats() *Stats {
 	bps := &Stats{}
 	bps.Timings = stats.NewTimings("", "", "")
 	bps.Rates = stats.NewRates("", bps.Timings, 15, 60e9)
+	bps.History = history.New(3)
 	return bps
 }
 
@@ -156,15 +170,16 @@ func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables 
 // If an error is encountered, it updates the vreplication state to "Error".
 // If a stop position was specifed, and reached, the state is updated to "Stopped".
 func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
-	// Clear previous error, if any.
 	if err := setVReplicationState(blp.dbClient, blp.uid, BlpRunning, ""); err != nil {
 		log.Errorf("Error writing Running state: %v", err)
 	}
-	blp.blplStats.LastMessage.Set("")
 
 	if err := blp.applyEvents(ctx); err != nil {
 		msg := err.Error()
-		blp.blplStats.LastMessage.Set(msg)
+		blp.blplStats.History.Add(&StatsHistoryRecord{
+			Time:    time.Now(),
+			Message: msg,
+		})
 		if err := setVReplicationState(blp.dbClient, blp.uid, BlpError, msg); err != nil {
 			log.Errorf("Error writing stop state: %v", err)
 		}
@@ -531,6 +546,14 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag, timeUpdated, BlpRunning)
 }
 
+// CreateVReplicationStopped returns a statement to create a stopped vreplication.
+func CreateVReplicationStopped(workflow string, source *binlogdatapb.BinlogSource, position string) string {
+	return fmt.Sprintf("insert into _vt.vreplication "+
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v')",
+		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), BlpStopped)
+}
+
 // updateVReplicationPos returns a statement to update a value in the
 // _vt.vreplication table.
 func updateVReplicationPos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64) string {
@@ -581,4 +604,15 @@ func encodeString(in string) string {
 // given shard from the _vt.vreplication table.
 func ReadVReplicationPos(index uint32) string {
 	return fmt.Sprintf("select pos from _vt.vreplication where id=%v", index)
+}
+
+// StatsHistoryRecord is used to store a Message with timestamp
+type StatsHistoryRecord struct {
+	Time    time.Time
+	Message string
+}
+
+// IsDuplicate implements history.Deduplicable
+func (r *StatsHistoryRecord) IsDuplicate(other interface{}) bool {
+	return false
 }

@@ -12,9 +12,10 @@ FROM vitess/bootstrap:mysql57
 USER root
 COPY . /vt/src/vitess.io/vitess
 
+# Build Vitess
+RUN make build
+
 # Fix permissions
 RUN chown -R vitess:vitess /vt
 USER vitess
 
-# Build Vitess
-RUN make build

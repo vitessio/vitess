@@ -28,7 +28,7 @@ services:
 
 language: go
 go:
-  - 1.9
+  - 1.11.x
 go_import_path: vitess.io/vitess
 env:
   global:
@@ -42,7 +42,7 @@ env:
     #       See: https://docs.travis-ci.com/user/customizing-the-build#Build-Timeouts
     # To diagnose stuck tests, add "-follow" to TEST_FLAGS below. Then test.go
     # will print the test's output.
-    - TEST_FLAGS="-docker -use_docker_cache -timeout=8m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
+    - TEST_FLAGS="-docker -use_docker_cache -timeout=8m -print-log"
   matrix:
     # NOTE: Travis CI schedules up to 5 tests simultaneously.
     #       All our tests should be spread out as evenly as possible across these 5 slots.

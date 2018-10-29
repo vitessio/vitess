@@ -253,6 +253,8 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 		log.Fatalf("error initializing query logger: %v", err)
 	}
 
+	initAPI(ctx, hc)
+
 	return rpcVTGate
 }
 

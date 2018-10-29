@@ -35,3 +35,4 @@ RUN groupadd -r vitess && useradd -r -g vitess vitess && \
 
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
+USER vitess

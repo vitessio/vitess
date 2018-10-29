@@ -11,6 +11,9 @@
 *.swp
 tags
 
+# emacs
+*~
+
 # Eclipse files
 .classpath
 .project
@@ -20,6 +23,9 @@ tags
 # intellij files
 *.iml
 .idea
+
+# vscode
+.vscode/
 
 # C build dirs
 **/build

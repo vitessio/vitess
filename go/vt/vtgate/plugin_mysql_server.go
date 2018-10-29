@@ -158,6 +158,14 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	return callback(result)
 }
 
+func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
+	session, _ := c.ClientData.(*vtgatepb.Session)
+	if session != nil {
+		return uint16(len(session.GetWarnings()))
+	}
+	return 0
+}
+
 var mysqlListener *mysql.Listener
 var mysqlUnixListener *mysql.Listener
 

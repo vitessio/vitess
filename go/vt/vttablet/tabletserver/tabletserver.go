@@ -702,8 +702,7 @@ func (tsv *TabletServer) isMySQLReachable() bool {
 
 // ReloadSchema reloads the schema.
 func (tsv *TabletServer) ReloadSchema(ctx context.Context) error {
-	tsv.se.Reload(ctx)
-	return nil
+	return tsv.se.Reload(ctx)
 }
 
 // ClearQueryPlanCache clears internal query plan cache
@@ -1683,7 +1682,7 @@ func (se *splitQuerySQLExecuter) SQLExecute(
 	// we don't have to parse the query again here.
 	ast, err := sqlparser.Parse(sql)
 	if err != nil {
-		return nil, fmt.Errorf("splitQuerySQLExecuter: parsing sql failed with: %v", err)
+		return nil, vterrors.Wrap(err, "splitQuerySQLExecuter: parsing sql failed with")
 	}
 	parsedQuery := sqlparser.NewParsedQuery(ast)
 

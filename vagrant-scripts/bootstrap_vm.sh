@@ -35,7 +35,7 @@ apt-get install -y make \
                    unzip
 
 # Install golang
-GO_VER='1.9.1'
+GO_VER='1.11.1'
 GO_DOWNLOAD_URL='https://storage.googleapis.com/golang'
 GO_FILENAME="go${GO_VER}.linux-amd64.tar.gz"
 wget "${GO_DOWNLOAD_URL}/${GO_FILENAME}" -O "${TMP_DIR}/${GO_FILENAME}"
@@ -68,6 +68,9 @@ for line in $( cat /etc/environment ) ; do export "$line" ; done # source enviro
 printf "\nSetting higher limit for max number of open files\n"
 echo "fs.file-max = 10000" >> /etc/sysctl.conf
 sysctl -p
+
+# Set vitess env in .bashrc
+cat /vagrant/src/vitess.io/vitess/vagrant-scripts/vagrant-bashrc  >> /home/vagrant/.bashrc
 
 # Provisioning completed
 touch $SEED_FILE

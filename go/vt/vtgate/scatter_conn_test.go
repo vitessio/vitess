@@ -68,7 +68,8 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 			}
 		}
 
-		return sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, nil, false, false)
+		qr, errs := sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, nil, false, false)
+		return qr, vterrors.Aggregate(errs)
 	})
 }
 

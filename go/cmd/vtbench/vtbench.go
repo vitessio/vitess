@@ -78,11 +78,12 @@ import (
 
 var (
 	// connection flags
-	host     = flag.String("host", "", "vtgate host(s) in the form 'host1,host2,...'")
-	port     = flag.Int("port", 0, "vtgate port")
-	protocol = flag.String("protocol", "mysql", "client protocol, either mysql (default), grpc-vtgate, or grpc-vttablet")
-	user     = flag.String("user", "", "username to connect using mysql (password comes from the db-credentials-file)")
-	db       = flag.String("db", "", "db name to use when connecting / running the queries (e.g. @replica, keyspace, keyspace/shard etc)")
+	host       = flag.String("host", "", "vtgate host(s) in the form 'host1,host2,...'")
+	port       = flag.Int("port", 0, "vtgate port")
+	unixSocket = flag.String("unix_socket", "", "vtgate unix socket")
+	protocol   = flag.String("protocol", "mysql", "client protocol, either mysql (default), grpc-vtgate, or grpc-vttablet")
+	user       = flag.String("user", "", "username to connect using mysql (password comes from the db-credentials-file)")
+	db         = flag.String("db", "", "db name to use when connecting / running the queries (e.g. @replica, keyspace, keyspace/shard etc)")
 
 	// test flags
 	deadline = flag.Duration("deadline", 5*time.Minute, "maximum duration for the test run (default 5 minutes)")
@@ -112,12 +113,20 @@ func main() {
 		log.Exitf("invalid client protocol %s", *protocol)
 	}
 
-	if *host == "" {
-		log.Exitf("must specify host(s)")
+	if (*host != "" || *port != 0) && *unixSocket != "" {
+		log.Exitf("can't specify both host:port and unix_socket")
 	}
 
-	if *port == 0 {
-		log.Exitf("must specify port")
+	if *host != "" && *port == 0 {
+		log.Exitf("must specify port when using host")
+	}
+
+	if *host == "" && *port != 0 {
+		log.Exitf("must specify host when using port")
+	}
+
+	if *host == "" && *port == 0 && *unixSocket == "" {
+		log.Exitf("vtbench requires either host/port or unix_socket")
 	}
 
 	if *sql == "" {
@@ -134,12 +143,13 @@ func main() {
 	}
 
 	connParams := vtbench.ConnParams{
-		Hosts:    strings.Split(*host, ","),
-		Port:     *port,
-		Protocol: clientProto,
-		DB:       *db,
-		Username: *user,
-		Password: password,
+		Hosts:      strings.Split(*host, ","),
+		Port:       *port,
+		UnixSocket: *unixSocket,
+		Protocol:   clientProto,
+		DB:         *db,
+		Username:   *user,
+		Password:   password,
 	}
 
 	b := vtbench.NewBench(*threads, *count, connParams, *sql)

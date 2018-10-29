@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,6 +19,7 @@ package io.vitess.client.grpc;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
 import io.grpc.internal.WithLogId;
@@ -104,54 +105,56 @@ public class GrpcClient implements RpcClient {
   public ListenableFuture<ExecuteResponse> execute(Context ctx, ExecuteRequest request)
       throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).execute(request), Exception.class,
-        new ExceptionConverter<ExecuteResponse>());
+        new ExceptionConverter<ExecuteResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override
   public ListenableFuture<ExecuteShardsResponse> executeShards(Context ctx,
       ExecuteShardsRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).executeShards(request), Exception.class,
-        new ExceptionConverter<ExecuteShardsResponse>());
+        new ExceptionConverter<ExecuteShardsResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override
   public ListenableFuture<ExecuteKeyspaceIdsResponse> executeKeyspaceIds(Context ctx,
       ExecuteKeyspaceIdsRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).executeKeyspaceIds(request), Exception.class,
-        new ExceptionConverter<ExecuteKeyspaceIdsResponse>());
+        new ExceptionConverter<ExecuteKeyspaceIdsResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override
   public ListenableFuture<ExecuteKeyRangesResponse> executeKeyRanges(Context ctx,
       ExecuteKeyRangesRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).executeKeyRanges(request), Exception.class,
-        new ExceptionConverter<ExecuteKeyRangesResponse>());
+        new ExceptionConverter<ExecuteKeyRangesResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override
   public ListenableFuture<ExecuteEntityIdsResponse> executeEntityIds(Context ctx,
       ExecuteEntityIdsRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).executeEntityIds(request), Exception.class,
-        new ExceptionConverter<ExecuteEntityIdsResponse>());
+        new ExceptionConverter<ExecuteEntityIdsResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override public ListenableFuture<Vtgate.ExecuteBatchResponse> executeBatch(Context ctx,
       Vtgate.ExecuteBatchRequest request) throws SQLException {
-    return Futures.catchingAsync(getFutureStub(ctx).executeBatch(request), Exception.class, new ExceptionConverter<Vtgate.ExecuteBatchResponse>());
+    return Futures.catchingAsync(getFutureStub(ctx).executeBatch(request), Exception.class,
+        new ExceptionConverter<Vtgate.ExecuteBatchResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override
   public ListenableFuture<ExecuteBatchShardsResponse> executeBatchShards(Context ctx,
       ExecuteBatchShardsRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).executeBatchShards(request), Exception.class,
-        new ExceptionConverter<ExecuteBatchShardsResponse>());
+        new ExceptionConverter<ExecuteBatchShardsResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override
   public ListenableFuture<ExecuteBatchKeyspaceIdsResponse> executeBatchKeyspaceIds(Context ctx,
       ExecuteBatchKeyspaceIdsRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).executeBatchKeyspaceIds(request),
-        Exception.class, new ExceptionConverter<ExecuteBatchKeyspaceIdsResponse>());
+        Exception.class, new ExceptionConverter<ExecuteBatchKeyspaceIdsResponse>(),
+        MoreExecutors.directExecutor());
   }
 
   @Override
@@ -214,35 +217,35 @@ public class GrpcClient implements RpcClient {
   public ListenableFuture<BeginResponse> begin(Context ctx, BeginRequest request)
       throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).begin(request), Exception.class,
-        new ExceptionConverter<BeginResponse>());
+        new ExceptionConverter<BeginResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override
   public ListenableFuture<CommitResponse> commit(Context ctx, CommitRequest request)
       throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).commit(request), Exception.class,
-        new ExceptionConverter<CommitResponse>());
+        new ExceptionConverter<CommitResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override
   public ListenableFuture<RollbackResponse> rollback(Context ctx, RollbackRequest request)
       throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).rollback(request), Exception.class,
-        new ExceptionConverter<RollbackResponse>());
+        new ExceptionConverter<RollbackResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override
   public ListenableFuture<SplitQueryResponse> splitQuery(Context ctx, SplitQueryRequest request)
       throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).splitQuery(request), Exception.class,
-        new ExceptionConverter<SplitQueryResponse>());
+        new ExceptionConverter<SplitQueryResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override
   public ListenableFuture<GetSrvKeyspaceResponse> getSrvKeyspace(Context ctx,
       GetSrvKeyspaceRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).getSrvKeyspace(request), Exception.class,
-        new ExceptionConverter<GetSrvKeyspaceResponse>());
+        new ExceptionConverter<GetSrvKeyspaceResponse>(), MoreExecutors.directExecutor());
   }
 
   /**

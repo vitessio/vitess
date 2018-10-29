@@ -127,7 +127,7 @@ func forceEOF(yylex interface{}) {
 %left <bytes> ON USING
 %token <empty> '(' ',' ')'
 %token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
-%token <bytes> NULL TRUE FALSE
+%token <bytes> NULL TRUE FALSE OFF
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
@@ -156,13 +156,13 @@ func forceEOF(yylex interface{}) {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
+%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH
 %token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN  SPATIAL FULLTEXT KEY_BLOCK_SIZE
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
-%token <bytes> STATUS VARIABLES
+%token <bytes> STATUS VARIABLES WARNINGS
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -180,7 +180,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS
+%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS FIELDS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -203,7 +203,7 @@ func forceEOF(yylex interface{}) {
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement
-%type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement
+%type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
 %type <ddl> create_table_prefix
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
@@ -258,7 +258,7 @@ func forceEOF(yylex interface{}) {
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
-%type <str> full_opt from_database_opt tables_or_processlist
+%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
@@ -340,6 +340,7 @@ command:
 | commit_statement
 | rollback_statement
 | other_statement
+| flush_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -432,9 +433,9 @@ insert_or_replace:
   }
 
 update_statement:
-  UPDATE comment_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
+  UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($2), TableExprs: $3, Exprs: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
+    $$ = &Update{Comments: Comments($2), Ignore: $3, TableExprs: $4, Exprs: $6, Where: NewWhere(WhereStr, $7), OrderBy: $8, Limit: $9}
   }
 
 delete_statement:
@@ -1490,7 +1491,7 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW full_opt COLUMNS FROM table_name from_database_opt like_or_where_opt
+| SHOW full_opt columns_or_fields FROM table_name from_database_opt like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$6, Filter:$7}
     $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
@@ -1547,6 +1548,10 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
+| SHOW WARNINGS
+  {
+    $$ = &Show{Type: string($2)}
+  }
 /*
  * Catch-all for show statements without vitess keywords:
  *
@@ -1576,6 +1581,16 @@ full_opt:
 | FULL
   {
     $$ = "full "
+  }
+
+columns_or_fields:
+  COLUMNS
+  {
+      $$ = string($1)
+  }
+| FIELDS
+  {
+      $$ = string($1)
   }
 
 from_database_opt:
@@ -1682,6 +1697,11 @@ other_statement:
     $$ = &OtherAdmin{}
   }
 
+flush_statement:
+  FLUSH force_eof
+  {
+    $$ = &DDL{Action: FlushStr}
+  }
 comment_opt:
   {
     setAllowComments(yylex, true)
@@ -1834,6 +1854,12 @@ table_factor:
 | subquery as_opt table_id
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $3}
+  }
+| subquery
+  {
+    // missed alias for subquery
+    yylex.Error("Every derived table must have its own alias")
+    return 1
   }
 | openb table_references closeb
   {
@@ -2924,6 +2950,10 @@ set_expression:
   {
     $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("on"))}
   }
+| reserved_sql_id '=' OFF
+  {
+    $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("off"))}
+  }
 | reserved_sql_id '=' expression
   {
     $$ = &SetExpr{Name: $1, Expr: $3}
@@ -3127,6 +3157,7 @@ reserved_keyword:
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NOT
 | NULL
+| OFF
 | ON
 | OR
 | ORDER
@@ -3142,7 +3173,6 @@ reserved_keyword:
 | SHOW
 | STRAIGHT_JOIN
 | TABLE
-| TABLES
 | THEN
 | TO
 | TRUE
@@ -3191,6 +3221,8 @@ non_reserved_keyword:
 | ENUM
 | EXPANSION
 | FLOAT_TYPE
+| FIELDS
+| FLUSH
 | FOREIGN
 | FULLTEXT
 | GEOMETRY
@@ -3245,6 +3277,7 @@ non_reserved_keyword:
 | SPATIAL
 | START
 | STATUS
+| TABLES
 | TEXT
 | THAN
 | TIME
@@ -3269,6 +3302,7 @@ non_reserved_keyword:
 | VITESS_TABLETS
 | VSCHEMA_TABLES
 | VITESS_TARGET
+| WARNINGS
 | WITH
 | WRITE
 | YEAR

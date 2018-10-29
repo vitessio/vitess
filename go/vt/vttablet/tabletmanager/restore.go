@@ -20,6 +20,8 @@ import (
 	"flag"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/log"
 
@@ -63,12 +65,12 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		tablet.Type = topodatapb.TabletType_RESTORE
 		return nil
 	}); err != nil {
-		return fmt.Errorf("Cannot change type to RESTORE: %v", err)
+		return vterrors.Wrap(err, "Cannot change type to RESTORE")
 	}
 
 	// let's update our internal state (stop query service and other things)
 	if err := agent.refreshTablet(ctx, "restore from backup"); err != nil {
-		return fmt.Errorf("failed to update state before restore: %v", err)
+		return vterrors.Wrap(err, "failed to update state before restore")
 	}
 
 	// Try to restore. Depending on the reason for failure, we may be ok.
@@ -102,7 +104,7 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 			return nil
 		})
 		agent.refreshTablet(ctx, "failed for restore from backup")
-		return fmt.Errorf("Can't restore backup: %v", err)
+		return vterrors.Wrap(err, "Can't restore backup")
 	}
 
 	// If we had type BACKUP or RESTORE it's better to set our type to the init_tablet_type to make result of the restore
@@ -119,12 +121,12 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		tablet.Type = originalType
 		return nil
 	}); err != nil {
-		return fmt.Errorf("Cannot change type back to %v: %v", originalType, err)
+		return vterrors.Wrapf(err, "Cannot change type back to %v", originalType)
 	}
 
 	// let's update our internal state (start query service and other things)
 	if err := agent.refreshTablet(context.Background(), "after restore from backup"); err != nil {
-		return fmt.Errorf("failed to update state after backup: %v", err)
+		return vterrors.Wrap(err, "failed to update state after backup")
 	}
 
 	return nil
@@ -136,19 +138,19 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
 	}
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
-		return fmt.Errorf("failed to reset slave: %v", err)
+		return vterrors.Wrap(err, "failed to reset slave")
 	}
 
 	// Set the position at which to resume from the master.
 	if err := agent.MysqlDaemon.SetSlavePosition(ctx, pos); err != nil {
-		return fmt.Errorf("failed to set slave position: %v", err)
+		return vterrors.Wrap(err, "failed to set slave position")
 	}
 
 	// Read the shard to find the current master, and its location.
 	tablet := agent.Tablet()
 	si, err := agent.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		return fmt.Errorf("can't read shard: %v", err)
+		return vterrors.Wrap(err, "can't read shard")
 	}
 	if si.MasterAlias == nil {
 		// We've restored, but there's no master. This is fine, since we've
@@ -168,7 +170,7 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 	}
 	ti, err := agent.TopoServer.GetTablet(ctx, si.MasterAlias)
 	if err != nil {
-		return fmt.Errorf("Cannot read master tablet %v: %v", si.MasterAlias, err)
+		return vterrors.Wrapf(err, "Cannot read master tablet %v", si.MasterAlias)
 	}
 
 	// If using semi-sync, we need to enable it before connecting to master.
@@ -178,7 +180,7 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 
 	// Set master and start slave.
 	if err := agent.MysqlDaemon.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
-		return fmt.Errorf("MysqlDaemon.SetMaster failed: %v", err)
+		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
 	}
 	return nil
 }

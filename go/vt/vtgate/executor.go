@@ -57,6 +57,9 @@ import (
 var (
 	errNoKeyspace     = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspace in database name specified. Supported database name format (items in <> are optional): keyspace<:shard><@type> or keyspace<[range]><@type>")
 	defaultTabletType topodatapb.TabletType
+
+	queriesProcessed = stats.NewCountersWithSingleLabel("QueriesProcessed", "Queries processed at vtgate by plan type", "Plan")
+	queriesRouted    = stats.NewCountersWithSingleLabel("QueriesRouted", "Queries routed from vtgate to vttablet by plan type", "Plan")
 )
 
 func init() {
@@ -156,6 +159,17 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	stmtType := sqlparser.Preview(sql)
 	logStats.StmtType = sqlparser.StmtType(stmtType)
 
+	// Mysql warnings are scoped to the current session, but are
+	// cleared when a "non-diagnostic statement" is executed:
+	// https://dev.mysql.com/doc/refman/8.0/en/show-warnings.html
+	//
+	// To emulate this behavior, clear warnings from the session
+	// for all statements _except_ SHOW, so that SHOW WARNINGS
+	// can actually return them.
+	if stmtType != sqlparser.StmtShow {
+		safeSession.ClearWarnings()
+	}
+
 	switch stmtType {
 	case sqlparser.StmtSelect:
 		return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats)
@@ -229,6 +243,8 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		// TODO(sougou): change this flow to go through V3 functions
 		// which will allow us to benefit from the autocommitable flag.
 
+		queriesProcessed.Add("ShardDirect", 1)
+
 		if destKeyspace == "" {
 			return nil, errNoKeyspace
 		}
@@ -259,6 +275,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		logStats.BindVariables = bindVars
 		result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 		logStats.ExecuteTime = time.Now().Sub(execStart)
+		queriesRouted.Add("ShardDirect", int64(logStats.ShardQueries))
 		return result, err
 	}
 
@@ -282,7 +299,11 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	}
 
 	qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
+
 	logStats.ExecuteTime = time.Since(execStart)
+	queriesProcessed.Add(plan.Instructions.RouteType(), 1)
+	queriesRouted.Add(plan.Instructions.RouteType(), int64(logStats.ShardQueries))
+
 	var errCount uint64
 	if err != nil {
 		logStats.Error = err
@@ -337,6 +358,10 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 	logStats.ExecuteTime = time.Since(execStart)
+
+	queriesProcessed.Add("DDL", 1)
+	queriesRouted.Add("DDL", int64(logStats.ShardQueries))
+
 	return result, err
 }
 
@@ -493,6 +518,9 @@ func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, sq
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	err := e.txConn.Begin(ctx, safeSession)
 	logStats.ExecuteTime = time.Since(execStart)
+
+	queriesProcessed.Add("Begin", 1)
+
 	return &sqltypes.Result{}, err
 }
 
@@ -500,6 +528,8 @@ func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, s
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
+	queriesProcessed.Add("Commit", 1)
+	queriesRouted.Add("Commit", int64(logStats.ShardQueries))
 	err := e.txConn.Commit(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
@@ -509,6 +539,8 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
+	queriesProcessed.Add("Rollback", 1)
+	queriesRouted.Add("Rollback", int64(logStats.ShardQueries))
 	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
@@ -948,7 +980,28 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil
+	case sqlparser.KeywordString(sqlparser.WARNINGS):
+		fields := []*querypb.Field{
+			{Name: "Level", Type: sqltypes.VarChar},
+			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Message", Type: sqltypes.VarChar},
+		}
+		rows := make([][]sqltypes.Value, 0, 0)
 
+		if safeSession.Warnings != nil {
+			for _, warning := range safeSession.Warnings {
+				rows = append(rows, []sqltypes.Value{
+					sqltypes.NewVarChar("Warning"),
+					sqltypes.NewUint32(warning.Code),
+					sqltypes.NewVarChar(warning.Message),
+				})
+			}
+		}
+
+		return &sqltypes.Result{
+			Fields: fields,
+			Rows:   rows,
+		}, nil
 	}
 
 	// Any other show statement is passed through
@@ -1004,6 +1057,10 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 	}
 	execStart := time.Now()
 	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+
+	queriesProcessed.Add("Other", 1)
+	queriesRouted.Add("Other", int64(logStats.ShardQueries))
+
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err
 }

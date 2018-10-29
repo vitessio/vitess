@@ -114,6 +114,12 @@ func ParseStrictDDL(sql string) (Statement, error) {
 	return tokenizer.ParseTree, nil
 }
 
+// ParseTokenizer is a raw interface to parse from the given tokenizer.
+// This does not used pooled parsers, and should not be used in general.
+func ParseTokenizer(tokenizer *Tokenizer) int {
+	return yyParse(tokenizer)
+}
+
 // ParseNext parses a single SQL statement from the tokenizer
 // returning a Statement which is the AST representation of the query.
 // The tokenizer will always read up to the end of the statement, allowing for
@@ -581,6 +587,7 @@ func (*ParenSelect) iInsertRows() {}
 // If you add fields here, consider adding them to calls to validateSubquerySamePlan.
 type Update struct {
 	Comments   Comments
+	Ignore     string
 	TableExprs TableExprs
 	Exprs      UpdateExprs
 	Where      *Where
@@ -590,8 +597,8 @@ type Update struct {
 
 // Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
-	buf.Myprintf("update %v%v set %v%v%v%v",
-		node.Comments, node.TableExprs,
+	buf.Myprintf("update %v%s%v set %v%v%v%v",
+		node.Comments, node.Ignore, node.TableExprs,
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
@@ -732,6 +739,7 @@ const (
 	DropStr          = "drop"
 	RenameStr        = "rename"
 	TruncateStr      = "truncate"
+	FlushStr         = "flush"
 	CreateVindexStr  = "create vindex"
 	AddColVindexStr  = "add vindex"
 	DropColVindexStr = "drop vindex"
@@ -765,6 +773,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		} else {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
 		}
+	case FlushStr:
+		buf.Myprintf("%s", node.Action)
 	case CreateVindexStr:
 		buf.Myprintf("%s %v %v", node.Action, node.VindexSpec.Name, node.VindexSpec)
 	case AddColVindexStr:
@@ -1479,10 +1489,10 @@ type Show struct {
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
-	if (node.Type == "tables" || node.Type == "columns") && node.ShowTablesOpt != nil {
+	if (node.Type == "tables" || node.Type == "columns" || node.Type == "fields") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
 		buf.Myprintf("show %s%s", opt.Full, node.Type)
-		if node.Type == "columns" && node.HasOnTable() {
+		if (node.Type == "columns" || node.Type == "fields") && node.HasOnTable() {
 			buf.Myprintf(" from %v", node.OnTable)
 		}
 		if opt.DbName != "" {

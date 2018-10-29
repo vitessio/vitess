@@ -178,5 +178,7 @@ func parseAndRun() error {
 		fmt.Print(vtexplain.ExplainsAsJSON(plans))
 	}
 
+	vtexplain.Stop()
+
 	return nil
 }

@@ -105,6 +105,68 @@
   }
 }
 
+# select with partial scatter directive
+"select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user"
+{
+  "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user",
+    "FieldQuery": "select * from user where 1 != 1",
+    "ScatterErrorsAsWarnings": true
+  }
+}
+
+# select aggregation with partial scatter directive
+"select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user"
+{
+  "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
+  "Instructions": {
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 0
+      }
+    ],
+    "Keys": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
+      "FieldQuery": "select count(*) from user where 1 != 1",
+      "ScatterErrorsAsWarnings": true
+    }
+  }
+}
+
+# select limit with partial scatter directive
+"select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10"
+{
+  "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 10,
+    "Offset": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit :__upper_limit",
+      "FieldQuery": "select * from user where 1 != 1",
+      "ScatterErrorsAsWarnings": true
+    }
+  }
+}
+
 # qualified '*' expression for simple route
 "select user.* from user"
 {

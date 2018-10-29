@@ -65,7 +65,9 @@ var selectRowsResult = &sqltypes.Result{
 
 type testHandler struct {
 	lastConn *Conn
+	result   *sqltypes.Result
 	err      error
+	warnings uint16
 }
 
 func (th *testHandler) NewConnection(c *Conn) {
@@ -76,6 +78,11 @@ func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	if th.result != nil {
+		callback(th.result)
+		return nil
+	}
+
 	switch query {
 	case "error":
 		return th.err
@@ -143,9 +150,29 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 			},
 		})
 	default:
+		if strings.HasPrefix(query, benchmarkQueryPrefix) {
+			callback(&sqltypes.Result{
+				Fields: []*querypb.Field{
+					{
+						Name: "result",
+						Type: querypb.Type_VARCHAR,
+					},
+				},
+				Rows: [][]sqltypes.Value{
+					{
+						sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(query)),
+					},
+				},
+			})
+		}
+
 		callback(&sqltypes.Result{})
 	}
 	return nil
+}
+
+func (th *testHandler) WarningCount(c *Conn) uint16 {
+	return th.warnings
 }
 
 func getHostPort(t *testing.T, a net.Addr) (string, int) {
@@ -398,6 +425,83 @@ func TestClientFoundRows(t *testing.T) {
 	c.Close()
 }
 
+func TestConnCounts(t *testing.T) {
+	th := &testHandler{}
+
+	initialNumUsers := len(connCountPerUser.Counts())
+
+	user := "anotherNotYetConnectedUser1"
+	passwd := "password1"
+
+	authServer := NewAuthServerStatic()
+	authServer.Entries[user] = []*AuthServerStaticEntry{{
+		Password: passwd,
+		UserData: "userData1",
+	}}
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+
+	// Test with one new connection.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: user,
+		Pass:  passwd,
+	}
+
+	c, err := Connect(context.Background(), params)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	connCounts := connCountPerUser.Counts()
+	if l := len(connCounts); l-initialNumUsers != 1 {
+		t.Errorf("Expected 1 new user, got %d", l)
+	}
+	checkCountsForUser(t, user, 1)
+
+	// Test with a second new connection.
+	c2, err := Connect(context.Background(), params)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	connCounts = connCountPerUser.Counts()
+	// There is still only one new user.
+	if l2 := len(connCounts); l2-initialNumUsers != 1 {
+		t.Errorf("Expected 1 new user, got %d", l2)
+	}
+	checkCountsForUser(t, user, 2)
+
+	// Test after closing connections. time.Sleep lets it work, but seems flakey.
+	c.Close()
+	//time.Sleep(10 * time.Millisecond)
+	//checkCountsForUser(t, user, 1)
+
+	c2.Close()
+	//time.Sleep(10 * time.Millisecond)
+	//checkCountsForUser(t, user, 0)
+}
+
+func checkCountsForUser(t *testing.T, user string, expected int64) {
+	connCounts := connCountPerUser.Counts()
+
+	userCount, ok := connCounts[user]
+	if ok {
+		if userCount != expected {
+			t.Errorf("Expected connection count for user to be %d, got %d", expected, userCount)
+		}
+	} else {
+		t.Errorf("No count found for user %s", user)
+	}
+}
+
 func TestServer(t *testing.T) {
 	th := &testHandler{}
 
@@ -496,6 +600,23 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "2 rows in set") {
 		t.Errorf("Unexpected output for 'select rows'")
 	}
+	if strings.Contains(output, "warnings") {
+		t.Errorf("Unexpected warnings in 'select rows'")
+	}
+
+	// Run a 'select rows' command with warnings
+	th.warnings = 13
+	output, ok = runMysql(t, params, "select rows")
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "nice name") ||
+		!strings.Contains(output, "nicer name") ||
+		!strings.Contains(output, "2 rows in set") ||
+		!strings.Contains(output, "13 warnings") {
+		t.Errorf("Unexpected output for 'select rows': %v", output)
+	}
+	th.warnings = 0
 
 	// If there's an error after streaming has started,
 	// we should get a 2013
@@ -777,25 +898,37 @@ func TestTLSServer(t *testing.T) {
 	}
 
 	// Run a 'select rows' command with results.
-	output, ok := runMysql(t, params, "select rows")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
+	conn, err := Connect(context.Background(), params)
+	//output, ok := runMysql(t, params, "select rows")
+	if err != nil {
+		t.Fatalf("mysql failed: %v", err)
 	}
-	if !strings.Contains(output, "nice name") ||
-		!strings.Contains(output, "nicer name") ||
-		!strings.Contains(output, "2 rows in set") {
-		t.Errorf("Unexpected output for 'select rows'")
+	results, err := conn.ExecuteFetch("select rows", 1000, true)
+	if err != nil {
+		t.Fatalf("mysql fetch failed: %v", err)
+	}
+	output := ""
+	for _, row := range results.Rows {
+		r := make([]string, 0)
+		for _, col := range row {
+			r = append(r, col.String())
+		}
+		output = output + strings.Join(r, ",") + "\n"
+	}
+
+	if results.Rows[0][1].ToString() != "nice name" ||
+		results.Rows[1][1].ToString() != "nicer name" ||
+		len(results.Rows) != 2 {
+		t.Errorf("Unexpected output for 'select rows': %v", output)
 	}
 
 	// make sure this went through SSL
-	output, ok = runMysql(t, params, "ssl echo")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
+	results, err = conn.ExecuteFetch("ssl echo", 1000, true)
+	if err != nil {
+		t.Fatalf("mysql fetch failed: %v", err)
 	}
-	if !strings.Contains(output, "ssl_flag") ||
-		!strings.Contains(output, "ON") ||
-		!strings.Contains(output, "1 row in set") {
-		t.Errorf("Unexpected output for 'ssl echo': %v", output)
+	if results.Rows[0][0].ToString() != "ON" {
+		t.Errorf("Unexpected output for 'ssl echo': %v", results)
 	}
 }
 
@@ -981,4 +1114,61 @@ func binaryPath(root, binary string) (string, error) {
 	}
 	return "", fmt.Errorf("%s not found in any of %s/{%s}",
 		binary, root, strings.Join(subdirs, ","))
+}
+
+func TestListenerShutdown(t *testing.T) {
+	th := &testHandler{}
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	conn, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatalf("Can't connect to listener: %v", err)
+	}
+
+	if err := conn.Ping(); err != nil {
+		t.Fatalf("Ping failed: %v", err)
+	}
+
+	l.Shutdown()
+
+	if err := conn.Ping(); err != nil {
+		sqlErr, ok := err.(*SQLError)
+		if !ok {
+			t.Fatalf("Wrong error type: %T", err)
+		}
+		if sqlErr.Number() != ERServerShutdown {
+			t.Fatalf("Unexpected sql error code: %d", sqlErr.Number())
+		}
+		if sqlErr.SQLState() != SSServerShutdown {
+			t.Fatalf("Unexpected error sql state: %s", sqlErr.SQLState())
+		}
+		if sqlErr.Message != "Server shutdown in progress" {
+			t.Fatalf("Unexpected error message: %s", sqlErr.Message)
+		}
+	} else {
+		t.Fatalf("Ping should fail after shutdown")
+	}
 }

@@ -611,6 +611,15 @@ func (mysqld *Mysqld) initConfig(root string, cnf *Mycnf, outFile string) error 
 	return ioutil.WriteFile(outFile, []byte(configData), 0664)
 }
 
+func contains(haystack []string, needle string) bool {
+	for _, v := range haystack {
+		if v == needle {
+			return true
+		}
+	}
+	return false
+}
+
 func getMycnfTemplates(root string) []string {
 	if *mycnfTemplateFile != "" {
 		return []string{*mycnfTemplateFile}
@@ -625,6 +634,25 @@ func getMycnfTemplates(root string) []string {
 	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
 		parts := strings.Split(extraCnf, ":")
 		cnfTemplatePaths = append(cnfTemplatePaths, parts...)
+	}
+
+	switch mysqlFlavor := os.Getenv("MYSQL_FLAVOR"); mysqlFlavor {
+	case "MariaDB":
+		path := path.Join(root, "config/mycnf/master_mariadb.cnf")
+		if !contains(cnfTemplatePaths, path) {
+			cnfTemplatePaths = append(cnfTemplatePaths, path)
+		}
+	case "MariaDB103":
+		path := path.Join(root, "config/mycnf/master_mariadb103.cnf")
+		if !contains(cnfTemplatePaths, path) {
+			cnfTemplatePaths = append(cnfTemplatePaths, path)
+		}
+	default:
+		path := path.Join(root, "config/mycnf/master_mysql56.cnf")
+		// By default we assume Mysql56 compatable
+		if !contains(cnfTemplatePaths, path) {
+			cnfTemplatePaths = append(cnfTemplatePaths, path)
+		}
 	}
 
 	return cnfTemplatePaths

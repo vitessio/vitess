@@ -13,13 +13,13 @@ To complete the exercise in this guide, you must
 [install etcd-operator](https://github.com/coreos/etcd-operator/blob/master/doc/user/install_guide.md)
 in the same namespace in which you plan to run Vitess.
 
-You also must locally install Go 1.9+,
+You also must locally install Go 1.11+,
 the Vitess' `vtctlclient` tool, and `kubectl`.
 The following sections explain how to set these up in your environment.
 
-### Install Go 1.9+
+### Install Go 1.11+
 
-You need to install [Go 1.9+](http://golang.org/doc/install) to build the
+You need to install [Go 1.11+](http://golang.org/doc/install) to build the
 `vtctlclient` tool, which issues commands to Vitess.
 
 After installing Go, make sure your `GOPATH` environment

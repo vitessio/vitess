@@ -9,8 +9,7 @@ RUN for i in $(seq 1 10); do apt-key adv --recv-keys --keyserver ha.pool.sks-key
 
 # Bootstrap Vitess
 WORKDIR /vt/src/vitess.io/vitess
-USER vitess
-# Required by e2e test dependencies e.g. test/environment.py.
-ENV USER vitess
+
 ENV MYSQL_FLAVOR MySQL56
+USER vitess
 RUN ./bootstrap.sh

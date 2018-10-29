@@ -23,9 +23,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
+	"strings"
 	"syscall"
 	"time"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/golang/protobuf/proto"
 )
@@ -134,15 +136,16 @@ func (vtp *VtProcess) WaitStart() (err error) {
 
 	vtp.proc.Args = append(vtp.proc.Args, vtp.ExtraArgs...)
 
-	logfile := path.Join(vtp.LogDirectory, fmt.Sprintf("%s.%d.log", vtp.Name, vtp.Port))
-	vtp.proc.Stderr, err = os.Create(logfile)
-	if err != nil {
-		return
-	}
+	vtp.proc.Stderr = os.Stderr
+	vtp.proc.Stdout = os.Stdout
 
 	vtp.proc.Env = append(vtp.proc.Env, os.Environ()...)
 	vtp.proc.Env = append(vtp.proc.Env, vtp.Env...)
 
+	vtp.proc.Stderr = os.Stderr
+	vtp.proc.Stderr = os.Stdout
+
+	log.Infof("%v %v", strings.Join(vtp.proc.Args, " "))
 	err = vtp.proc.Start()
 	if err != nil {
 		return
@@ -230,6 +233,9 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	}
 	if args.WebDir2 != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-web_dir2", args.WebDir2}...)
+	}
+	if args.TransactionMode != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-transaction_mode", args.TransactionMode}...)
 	}
 
 	if socket != "" {

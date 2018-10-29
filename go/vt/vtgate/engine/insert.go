@@ -153,6 +153,11 @@ func (code InsertOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(insName[code])
 }
 
+// RouteType returns a description of the query routing type used by the primitive
+func (ins *Insert) RouteType() string {
+	return insName[ins.Opcode]
+}
+
 // Execute performs a non-streaming exec.
 func (ins *Insert) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	switch ins.Opcode {
@@ -215,9 +220,9 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 	}
 
 	autocommit := (len(rss) == 1 || ins.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	result, err := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execInsertSharded")
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
+	if errs != nil {
+		return nil, vterrors.Wrap(vterrors.Aggregate(errs), "execInsertSharded")
 	}
 
 	if insertID != 0 {

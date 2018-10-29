@@ -38,6 +38,10 @@ type ConnParams struct {
 	// The following is only set when the deprecated "dbname" flags are
 	// supplied and will be removed.
 	DeprecatedDBName string
+
+	// The following is only set to force the client to connect without
+	// using CapabilityClientDeprecateEOF
+	DisableClientDeprecateEOF bool
 }
 
 // EnableSSL will set the right flag on the parameters.

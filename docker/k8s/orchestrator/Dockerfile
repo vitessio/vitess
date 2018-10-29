@@ -11,9 +11,9 @@ COPY --from=k8s /vt/bin/vtctlclient /usr/bin/
 RUN apt-get update && \
     apt-get upgrade -qq && \
     apt-get install wget -qq --no-install-recommends && \
-    wget https://github.com/github/orchestrator/releases/download/v3.0.11/orchestrator_3.0.11_amd64.deb && \
-    dpkg -i orchestrator_3.0.11_amd64.deb && \
-    rm orchestrator_3.0.11_amd64.deb && \
+    wget https://github.com/github/orchestrator/releases/download/v3.0.13/orchestrator_3.0.13_amd64.deb && \
+    dpkg -i orchestrator_3.0.13_amd64.deb && \
+    rm orchestrator_3.0.13_amd64.deb && \
     apt-get purge wget -qq && \
     apt-get autoremove -qq && \
     apt-get clean && \

@@ -1989,7 +1989,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 	transactionID, err := tsv.Begin(context.Background(), &tsv.target, options)
 	if err != nil {
-		panic(fmt.Errorf("failed to start a transaction: %v", err))
+		panic(vterrors.Wrap(err, "failed to start a transaction"))
 	}
 	return transactionID
 }

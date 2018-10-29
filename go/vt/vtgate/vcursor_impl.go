@@ -81,6 +81,11 @@ func (vc *vcursorImpl) SetContextTimeout(timeout time.Duration) context.CancelFu
 	return cancel
 }
 
+// RecordWarning stores the given warning in the current session
+func (vc *vcursorImpl) RecordWarning(warning *querypb.QueryWarning) {
+	vc.safeSession.RecordWarning(warning)
+}
+
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
 func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
@@ -152,13 +157,14 @@ func (vc *vcursorImpl) ExecuteAutocommit(method string, query string, BindVars m
 }
 
 // ExecuteMultiShard is part of the engine.VCursor interface.
-func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, error) {
+func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, []error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
-	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.tabletType, vc.safeSession, false, autocommit)
-	if err == nil {
+	qr, errs := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.tabletType, vc.safeSession, false, autocommit)
+
+	if errs == nil {
 		vc.hasPartialDML = true
 	}
-	return qr, err
+	return qr, errs
 }
 
 // AutocommitApproval is part of the engine.VCursor interface.
@@ -177,7 +183,8 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
-	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, bqs, vc.tabletType, NewAutocommitSession(vc.safeSession.Session), false, false /* autocommit */)
+	qr, errs := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, bqs, vc.tabletType, NewAutocommitSession(vc.safeSession.Session), false, false /* autocommit */)
+	return qr, vterrors.Aggregate(errs)
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.

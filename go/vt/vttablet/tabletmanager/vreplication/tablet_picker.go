@@ -22,6 +22,8 @@ import (
 	"math/rand"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -75,7 +77,7 @@ func newTabletPicker(ts *topo.Server, cell, keyspace, shard, tabletTypesStr stri
 func (tp *tabletPicker) Pick(ctx context.Context) (*topodatapb.Tablet, error) {
 	// wait for any of required the tablets (useful for the first run at least, fast for next runs)
 	if err := tp.statsCache.WaitForAnyTablet(ctx, tp.cell, tp.keyspace, tp.shard, tp.tabletTypes); err != nil {
-		return nil, fmt.Errorf("error waiting for tablets for %v %v %v: %v", tp.cell, tp.keyspace, tp.shard, err)
+		return nil, vterrors.Wrapf(err, "error waiting for tablets for %v %v %v", tp.cell, tp.keyspace, tp.shard)
 	}
 
 	// Find the server list from the health check.

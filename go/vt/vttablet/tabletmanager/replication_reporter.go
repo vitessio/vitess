@@ -22,6 +22,8 @@ import (
 	"html/template"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -138,7 +140,7 @@ func repairReplication(ctx context.Context, agent *ActionAgent) error {
 		// lock any other actions on this tablet by Orchestrator.
 		if err := agent.orc.BeginMaintenance(agent.Tablet(), "vttablet has been told to StopSlave"); err != nil {
 			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
-			return fmt.Errorf("Orchestrator BeginMaintenance failed :%v, skipping repairReplication", err)
+			return vterrors.Wrap(err, "orchestrator BeginMaintenance failed, skipping repairReplication")
 		}
 	}
 

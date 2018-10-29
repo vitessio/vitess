@@ -37,10 +37,12 @@ CREATE TABLE IF NOT EXISTS _vt.shard_metadata (
   ) ENGINE=InnoDB;
 
 # Admin user with all privileges.
+CREATE USER 'vt_dba'@'localhost';
 GRANT ALL ON *.* TO 'vt_dba'@'localhost';
 GRANT GRANT OPTION ON *.* TO 'vt_dba'@'localhost';
 
 # User for app traffic, with global read-write access.
+CREATE USER 'vt_app'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
@@ -48,10 +50,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   ON *.* TO 'vt_app'@'localhost';
 
 # User for app debug traffic, with global read access.
+CREATE USER 'vt_appdebug'@'localhost';
 GRANT SELECT, SHOW DATABASES, PROCESS ON *.* TO 'vt_appdebug'@'localhost';
 
 # User for administrative operations that need to be executed as non-SUPER.
 # Same permissions as vt_app here.
+CREATE USER 'vt_allprivs'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
@@ -59,10 +63,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   ON *.* TO 'vt_allprivs'@'localhost';
 
 # User for slave replication connections.
+CREATE USER 'vt_repl'@'%';
 GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';
 
 # User for Vitess filtered replication (binlog player).
 # Same permissions as vt_app.
+CREATE USER 'vt_filtered'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
@@ -70,10 +76,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   ON *.* TO 'vt_filtered'@'localhost';
 
 # User for Orchestrator (https://github.com/github/orchestrator).
+CREATE USER 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
 GRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD
-  ON *.* TO 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
+  ON *.* TO 'orc_client_user'@'%';
 GRANT SELECT
-  ON _vt.* TO 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
+  ON _vt.* TO 'orc_client_user'@'%';
 
 FLUSH PRIVILEGES;
 

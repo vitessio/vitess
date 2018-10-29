@@ -59,12 +59,13 @@ func (cp ClientProtocol) String() string {
 
 // ConnParams specifies how to connect to the vtgate(s)
 type ConnParams struct {
-	Hosts    []string
-	Port     int
-	DB       string
-	Username string
-	Password string
-	Protocol ClientProtocol
+	Hosts      []string
+	Port       int
+	DB         string
+	Username   string
+	Password   string
+	UnixSocket string
+	Protocol   ClientProtocol
 }
 
 // Bench controls the test
