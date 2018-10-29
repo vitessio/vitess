@@ -23,6 +23,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -69,7 +70,19 @@ func (vind *Hash) IsFunctional() bool {
 func (vind *Hash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
-		num, err := sqltypes.ToUint64(id)
+		var num uint64
+		var err error
+
+		if id.IsSigned() {
+			// This is ToUint64 with no check on negative values.
+			str := id.ToString()
+			var ival int64
+			ival, err = strconv.ParseInt(str, 10, 64)
+			num = uint64(ival)
+		} else {
+			num, err = sqltypes.ToUint64(id)
+		}
+
 		if err != nil {
 			out[i] = key.DestinationNone{}
 			continue
