@@ -24,6 +24,9 @@ tags
 *.iml
 .idea
 
+# vscode
+.vscode/
+
 # C build dirs
 **/build
 
