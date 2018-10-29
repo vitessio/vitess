@@ -82,7 +82,11 @@ func TestHashMap(t *testing.T) {
 		key.DestinationKeyspaceID([]byte("\x95\xf8\xa5\xe5\xdd1\xd9\x00")),
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
+		for i, v := range got {
+			if v.String() != want[i].String() {
+				t.Errorf("Map() %d: %#v, want %#v", i, v, want[i])
+			}
+		}
 	}
 }
 
