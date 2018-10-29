@@ -167,7 +167,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	// for all statements _except_ SHOW, so that SHOW WARNINGS
 	// can actually return them.
 	if stmtType != sqlparser.StmtShow {
-		safeSession.Warnings = nil
+		safeSession.ClearWarnings()
 	}
 
 	switch stmtType {
