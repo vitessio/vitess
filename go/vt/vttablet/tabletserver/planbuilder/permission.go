@@ -50,11 +50,8 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 	case *sqlparser.Set, *sqlparser.Show, *sqlparser.OtherRead:
 		// no-op
 	case *sqlparser.DDL:
-		if !node.Table.IsEmpty() {
-			permissions = buildTableNamePermissions(node.Table, tableacl.ADMIN, permissions)
-		}
-		if !node.NewName.IsEmpty() {
-			permissions = buildTableNamePermissions(node.NewName, tableacl.ADMIN, permissions)
+		for _, t := range node.AffectedTables() {
+			permissions = buildTableNamePermissions(t, tableacl.ADMIN, permissions)
 		}
 	case *sqlparser.OtherAdmin:
 		// no op
