@@ -204,7 +204,7 @@ func skipToEnd(yylex interface{}) {
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
-%type <ddl> create_table_prefix
+%type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
 %type <bytes2> comment_opt comment_list
@@ -560,15 +560,15 @@ create_statement:
 | CREATE constraint_opt INDEX ID using_opt ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: $7, NewName:$7}
+    $$ = &DDL{Action: AlterStr, Table: $7}
   }
 | CREATE VIEW table_name ddl_skip_to_end
   {
-    $$ = &DDL{Action: CreateStr, NewName: $3.ToViewName()}
+    $$ = &DDL{Action: CreateStr, Table: $3.ToViewName()}
   }
 | CREATE OR REPLACE VIEW table_name ddl_skip_to_end
   {
-    $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName()}
+    $$ = &DDL{Action: CreateStr, Table: $5.ToViewName()}
   }
 | CREATE VINDEX sql_id vindex_type_opt vindex_params_opt
   {
@@ -632,7 +632,7 @@ vindex_param:
 create_table_prefix:
   CREATE TABLE not_exists_opt table_name
   {
-    $$ = &DDL{Action: CreateStr, NewName: $4}
+    $$ = &DDL{Action: CreateStr, Table: $4}
     setDDL(yylex, $$)
   }
 
@@ -1290,15 +1290,15 @@ table_opt_value:
 alter_statement:
   ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+    $$ = &DDL{Action: AlterStr, Table: $4}
   }
 | ALTER ignore_opt TABLE table_name ADD alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+    $$ = &DDL{Action: AlterStr, Table: $4}
   }
 | ALTER ignore_opt TABLE table_name DROP alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+    $$ = &DDL{Action: AlterStr, Table: $4}
   }
 | ALTER ignore_opt TABLE table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
   {
@@ -1326,16 +1326,16 @@ alter_statement:
 | ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
-    $$ = &DDL{Action: RenameStr, Table: $4, NewName: $7}
+    $$ = &DDL{Action: RenameStr, FromTables: TableNames{$4}, ToTables: TableNames{$7}}
   }
 | ALTER ignore_opt TABLE table_name RENAME index_opt skip_to_end
   {
     // Rename an index can just be an alter
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+    $$ = &DDL{Action: AlterStr, Table: $4}
   }
 | ALTER VIEW table_name ddl_skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $3.ToViewName(), NewName: $3.ToViewName()}
+    $$ = &DDL{Action: AlterStr, Table: $3.ToViewName()}
   }
 | ALTER ignore_opt TABLE table_name partition_operation
   {
@@ -1382,24 +1382,36 @@ partition_definition:
   }
 
 rename_statement:
-  RENAME TABLE table_name TO table_name
+  RENAME TABLE rename_list
   {
-    $$ = &DDL{Action: RenameStr, Table: $3, NewName: $5}
+    $$ = $3
+  }
+
+rename_list:
+  table_name TO table_name
+  {
+    $$ = &DDL{Action: RenameStr, FromTables: TableNames{$1}, ToTables: TableNames{$3}}
+  }
+| rename_list ',' table_name TO table_name
+  {
+    $$ = $1
+    $$.FromTables = append($$.FromTables, $3)
+    $$.ToTables = append($$.ToTables, $5)
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name
+  DROP TABLE exists_opt table_name_list
   {
     var exists bool
     if $3 != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, Table: $4, IfExists: exists}
+    $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: exists}
   }
 | DROP INDEX ID ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: $5, NewName: $5}
+    $$ = &DDL{Action: AlterStr, Table: $5}
   }
 | DROP VIEW exists_opt table_name ddl_skip_to_end
   {
@@ -1407,7 +1419,7 @@ drop_statement:
         if $3 != 0 {
           exists = true
         }
-    $$ = &DDL{Action: DropStr, Table: $4.ToViewName(), IfExists: exists}
+    $$ = &DDL{Action: DropStr, FromTables: TableNames{$4.ToViewName()}, IfExists: exists}
   }
 | DROP DATABASE exists_opt ID
   {
@@ -1430,7 +1442,7 @@ truncate_statement:
 analyze_statement:
   ANALYZE TABLE table_name
   {
-    $$ = &DDL{Action: AlterStr, Table: $3, NewName: $3}
+    $$ = &DDL{Action: AlterStr, Table: $3}
   }
 
 show_statement:
