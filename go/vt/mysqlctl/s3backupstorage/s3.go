@@ -51,7 +51,7 @@ var (
 	region = flag.String("s3_backup_aws_region", "us-east-1", "AWS region to use")
 
 	// AWS endpoint, defaults to amazonaws.com but appliances may use a different location
-	endpoint = flag.String("s3_backup_aws_endpoint", "amazonaws.com", "endpoint of the S3 backend (region must be provided)")
+	endpoint = flag.String("s3_backup_aws_endpoint", "", "endpoint of the S3 backend (region must be provided)")
 
 	// bucket is where the backups will go.
 	bucket = flag.String("s3_backup_storage_bucket", "", "S3 bucket to use for backups")
