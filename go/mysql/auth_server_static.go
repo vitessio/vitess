@@ -25,6 +25,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -50,7 +51,8 @@ type AuthServerStatic struct {
 	// - MysqlDialog
 	// It defaults to MysqlNativePassword.
 	Method string
-
+	// This mutex helps us prevent data races between the multiple updates of Entries.
+	mu sync.Mutex
 	// Entries contains the users, passwords and user data.
 	Entries          map[string][]*AuthServerStaticEntry
 	LastAuthRotation time.Time
@@ -121,6 +123,8 @@ func RegisterAuthServerStaticFromParams(file, str string) {
 }
 
 func (a *AuthServerStatic) loadConfigFromParams(file, str string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	jsonConfig := []byte(str)
 	if file != "" {
 		data, err := ioutil.ReadFile(file)
@@ -200,15 +204,19 @@ func (a *AuthServerStatic) Salt() ([]byte, error) {
 
 // ValidateHash is part of the AuthServer interface.
 func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
-
 	// If enough time has elpased (default is 5 minutes), reload the auth file/string
 	if time.Now().Sub(a.LastAuthRotation) > *mysqlAuthRotationTime {
 		a.loadConfigFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString)
 		a.LastAuthRotation = time.Now()
 	}
 
+	// We lock after the call to loadConfigFromParams since we lock and unlock the mutex within loadConfig.
+	// This avoids deadlocking, but a cleaner approach could be used.
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	// Find the entry.
 	entries, ok := a.Entries[user]
+
 	if !ok {
 		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
@@ -234,13 +242,17 @@ func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse [
 // We only recognize MysqlClearPassword and MysqlDialog here.
 func (a *AuthServerStatic) Negotiate(c *Conn, user string, remoteAddr net.Addr) (Getter, error) {
 	// Finish the negotiation.
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	password, err := AuthServerNegotiateClearOrDialog(c, a.Method)
 	if err != nil {
 		return nil, err
 	}
 
 	// Find the entry.
+
 	entries, ok := a.Entries[user]
+
 	if !ok {
 		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
