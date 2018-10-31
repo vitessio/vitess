@@ -39,6 +39,11 @@ type PulloutSubquery struct {
 	Underlying     Primitive
 }
 
+// RouteType returns a description of the query routing type used by the primitive
+func (ps *PulloutSubquery) RouteType() string {
+	return ps.Opcode.String()
+}
+
 // Execute satisfies the Primtive interface.
 func (ps *PulloutSubquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	combinedVars, err := ps.execSubquery(vcursor, bindVars)
