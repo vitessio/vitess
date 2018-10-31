@@ -427,6 +427,8 @@ msg varchar(64)
     # test Cancel first
     utils.run_vtctl(['CancelResharding', 'destination_keyspace/0'], auto_log=True)
     self.check_no_binlog_player(destination_master)
+    # master should be in serving state after cancel
+    utils.check_tablet_query_service(self, destination_master, True, False)
 
     # redo VerticalSplitClone
     utils.run_vtworker(['--cell', 'test_nj',
