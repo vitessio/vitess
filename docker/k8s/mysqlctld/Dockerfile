@@ -18,3 +18,10 @@ COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificate
 
 # copy vitess config
 COPY --from=k8s /vt/config /vt/config
+
+RUN apt-get update && \
+   apt-get upgrade -qq && \
+   apt-get install busybox -qq --no-install-recommends && \
+   apt-get autoremove && \
+   apt-get clean && \
+   rm -rf /var/lib/apt/lists/*
