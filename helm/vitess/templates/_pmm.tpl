@@ -169,8 +169,11 @@ spec:
       pmm-admin config --server pmm.{{ $namespace }} --force
 
       # creates a systemd service
-      # TODO: remove "|| true" after https://jira.percona.com/projects/PMM/issues/PMM-1985 is resolved
-      pmm-admin add mysql:metrics --user root --socket /vtdataroot/tabletdata/mysql.sock --force || true
+      until [ -e /vtdataroot/tabletdata/mysql.sock ]; do
+        echo "Waiting for mysql.sock"
+        sleep 1
+      done
+      pmm-admin add mysql:metrics --user root --socket /vtdataroot/tabletdata/mysql.sock --force
 
       # keep the container alive but still responsive to stop requests
       trap : TERM INT; sleep infinity & wait
