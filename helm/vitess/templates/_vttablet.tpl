@@ -464,9 +464,9 @@ spec:
       mountPath: /vtdataroot
     - name: vt
       mountPath: /vt
-{{ include "user-config-volumeMount" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 6 }}
-{{ include "user-secret-volumeMounts" $defaultVttablet.secrets | indent 6 }}
-{{ include "user-secret-volumeMounts" .secrets | indent 6 }}
+{{ include "user-config-volumeMount" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 4 }}
+{{ include "user-secret-volumeMounts" $defaultVttablet.secrets | indent 4 }}
+{{ include "user-secret-volumeMounts" .secrets | indent 4 }}
   resources:
 {{ toYaml (.mysqlResources | default $defaultVttablet.mysqlResources) | indent 6 }}
   env:
