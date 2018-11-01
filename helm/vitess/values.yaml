@@ -19,7 +19,7 @@ config:
   # Backup flags will be applied to components that need them.
   # These are defined globally since all components should agree.
   backup:
-  
+
     enabled: false
 
     # choose a backup service - valid values are gcs/s3
@@ -50,10 +50,10 @@ config:
 
     # S3 bucket to use for backups
     # s3_backup_storage_bucket: "vitess-backups"
-    
+
     # root prefix for all backup-related object names
     # s3_backup_storage_root: "vtbackups"
-    
+
     # server-side encryption algorithm (e.g., AES256, aws:kms)
     # s3_backup_server_side_encryption: "AES256"
 
@@ -109,6 +109,8 @@ vtctld:
     limits:
       cpu: 100m
       memory: 128Mi
+  extraFlags: {}
+  userSecrets: []
 
 # Default values for vtgate resources defined in 'topology'
 vtgate:
@@ -118,12 +120,19 @@ vtgate:
     limits:
       cpu: 500m
       memory: 512Mi
+  extraFlags: {}
+  secrets: []
+
+# Default values for vtctlclient resources defined in 'topology'
+vtctlclient:
+  extraFlags: {}
+  secrets: []
 
 # Default values for vttablet resources defined in 'topology'
 vttablet:
   vitessTag: "latest"
 
-  # valid values are 
+  # valid values are
   # - mysql56 (for MySQL/Percona 5.6 or 5.7)
   # - mariadb (for MariaDB <= 10.2)
   # - mariadb103 (for MariaDB >= 10.3)
@@ -144,6 +153,12 @@ vttablet:
   # to $EXTRA_MY_CNF, overriding any default my.cnf settings
   extraMyCnf: ""
   # extraMyCnf: extra-my-cnf
+
+  # Additional flags that will be appended to the vttablet command
+  extraFlags: {}
+
+  # User secrets that will be mounted under /vt/usersecrets/$secretname/
+  secrets: []
 
   resources:
     # common production values 2-4CPU/4-8Gi RAM
@@ -203,8 +218,8 @@ pmm:
       metricsResolution: 1s
 
       # METRICS_RETENTION (Option)
-      # This option determines how long metrics are stored at PMM Server. 
-      # The value is passed as a combination of hours, minutes, and seconds, such as 720h0m0s. 
+      # This option determines how long metrics are stored at PMM Server.
+      # The value is passed as a combination of hours, minutes, and seconds, such as 720h0m0s.
       # The minutes (a number followed by m) and seconds (a number followed by s) are optional.
       metricsRetention: 720h
 
@@ -216,10 +231,10 @@ pmm:
       # NOTE: The value must be passed in kilobytes
       # NOTE: Make sure to quote this value so it isn't converted into scientific notation
 
-      # By default, Prometheus in PMM Server uses up to 768 MB of memory for storing the most recently used data chunks. 
+      # By default, Prometheus in PMM Server uses up to 768 MB of memory for storing the most recently used data chunks.
       # Depending on the amount of data coming into Prometheus, you may require a higher limit to avoid throttling data ingestion,
       # or allow less memory consumption if it is needed for other processes.
-      # The limit affects only memory reserved for data chunks. Actual RAM usage by Prometheus is higher. 
+      # The limit affects only memory reserved for data chunks. Actual RAM usage by Prometheus is higher.
       # It is recommended to set this limit to roughly 2/3 of the total memory that you are planning to allow for Prometheus.
       metricsMemory: "600000"
 

@@ -33,7 +33,7 @@ spec:
 {{- end -}}
 
 ###################################
-# vttablet 
+# vttablet
 ###################################
 {{- define "vttablet" -}}
 # set tuple values to more recognizable variables
@@ -43,11 +43,12 @@ spec:
 {{- $shard := index . 3 -}}
 {{- $tablet := index . 4 -}}
 {{- $defaultVttablet := index . 5 -}}
-{{- $namespace := index . 6 -}}
-{{- $config := index . 7 -}}
-{{- $pmm := index . 8 -}}
-{{- $orc := index . 9 -}}
-{{- $totalTabletCount := index . 10 -}}
+{{- $defaultVtctlclient := index . 6 -}}
+{{- $namespace := index . 7 -}}
+{{- $config := index . 8 -}}
+{{- $pmm := index . 9 -}}
+{{- $orc := index . 10 -}}
+{{- $totalTabletCount := index . 11 -}}
 
 # sanitize inputs to create tablet name
 {{- $cellClean := include "clean-label" $cell.name -}}
@@ -75,7 +76,7 @@ spec:
   serviceName: vttablet
   replicas: {{ .replicas | default $defaultVttablet.replicas }}
   podManagementPolicy: Parallel
-  updateStrategy: 
+  updateStrategy:
     type: RollingUpdate
   selector:
     matchLabels:
@@ -114,7 +115,9 @@ spec:
         - name: vt
           emptyDir: {}
 {{ include "backup-volume" $config.backup | indent 8 }}
-{{ include "user-config-volume" $defaultVttablet.extraMyCnf | indent 8 }}
+{{ include "user-config-volume" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 8 }}
+{{ include "user-secret-volumes" $defaultVttablet.secrets | indent 8 }}
+{{ include "user-secret-volumes" .secrets | indent 8 }}
 
   volumeClaimTemplates:
     - metadata:
@@ -160,6 +163,8 @@ spec:
       containers:
       - name: init-shard-master
         image: "vitess/vtctlclient:{{$vitessTag}}"
+        volumeMounts:
+{{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
 
         command: ["bash"]
         args:
@@ -170,9 +175,13 @@ spec:
             VTCTLD_SVC=vtctld.{{ $namespace }}:15999
             SECONDS=0
             TIMEOUT_SECONDS=600
+            VTCTL_EXTRA_FLAGS="$(cat <<END_OF_COMMAND
+{{ include "format-flags-all" (tuple $defaultVtctlclient.extraFlags) | indent 14 }}
+            END_OF_COMMAND
+            )"
 
             # poll every 5 seconds to see if vtctld is ready
-            until vtctlclient -server $VTCTLD_SVC ListAllTablets {{ $cellClean }} > /dev/null 2>&1; do 
+            until vtctlclient $VTCTL_EXTRA_FLAGS -server $VTCTLD_SVC ListAllTablets {{ $cellClean }} > /dev/null 2>&1; do
               if (( $SECONDS > $TIMEOUT_SECONDS )); then
                 echo "timed out waiting for vtctlclient to be ready"
                 exit 1
@@ -182,8 +191,8 @@ spec:
 
             until [ $TABLETS_READY ]; do
               # get all the tablets in the current cell
-              cellTablets="$(vtctlclient -server $VTCTLD_SVC ListAllTablets {{ $cellClean }})"
-              
+              cellTablets="$(vtctlclient $VTCTL_EXTRA_FLAGS -server $VTCTLD_SVC ListAllTablets {{ $cellClean }})"
+
               # filter to only the tablets in our current shard
               shardTablets=$( echo "$cellTablets" | awk 'substr( $5,1,{{ len $shardName }} ) == "{{ $shardName }}" {print $0}')
 
@@ -195,7 +204,7 @@ spec:
               fi
 
               # check for a master tablet from the GetShard call
-              master_alias=$(vtctlclient -server $VTCTLD_SVC GetShard {{ $keyspace.name }}/{{ $shard.name }} | jq '.master_alias.uid')
+              master_alias=$(vtctlclient $VTLCTL_EXTRA_FLAGS -server $VTCTLD_SVC GetShard {{ $keyspace.name }}/{{ $shard.name }} | jq '.master_alias.uid')
               if [ $master_alias != "null" ]; then
                   echo "'$master_alias' is already the master tablet, exiting without running InitShardMaster"
                   exit
@@ -203,7 +212,7 @@ spec:
 
               # count the number of newlines for the given shard to get the tablet count
               tabletCount=$( echo "$shardTablets" | wc | awk '{print $1}')
-              
+
               # check to see if the tablet count equals the expected tablet count
               if [ $tabletCount == {{ $totalTabletCount }} ]; then
                 TABLETS_READY=true
@@ -212,7 +221,7 @@ spec:
                   echo "timed out waiting for tablets to be ready"
                   exit 1
                 fi
-                
+
                 # wait 5 seconds for vttablets to continue getting ready
                 sleep 5
               fi
@@ -221,16 +230,18 @@ spec:
 
             # find the tablet id for the "-replica-0" stateful set for a given cell, keyspace and shard
             tablet_id=$( echo "$shardTablets" | awk 'substr( $5,1,{{ add (len $shardName) 10 }} ) == "{{ $shardName }}-replica-0" {print $1}')
-            
+
             # initialize the shard master
-            until vtctlclient -server $VTCTLD_SVC InitShardMaster -force {{ $keyspace.name }}/{{ $shard.name }} $tablet_id; do 
+            until vtctlclient $VTCTL_EXTRA_FLAGS -server $VTCTLD_SVC InitShardMaster -force {{ $keyspace.name }}/{{ $shard.name }} $tablet_id; do
               if (( $SECONDS > $TIMEOUT_SECONDS )); then
                 echo "timed out waiting for InitShardMaster to succeed"
                 exit 1
               fi
               sleep 5
             done
-            
+      volumes:
+{{ include "user-secret-volumes" $defaultVtctlclient.secrets | indent 8 }}
+
 {{- end -}}
 
 {{- end -}}
@@ -360,7 +371,9 @@ spec:
     - name: vtdataroot
       mountPath: "/vtdataroot"
 {{ include "backup-volumeMount" $config.backup | indent 4 }}
-{{ include "user-config-volumeMount" $defaultVttablet.extraMyCnf | indent 4 }}
+{{ include "user-config-volumeMount" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 4 }}
+{{ include "user-secret-volumeMounts" $defaultVttablet.secrets | indent 4 }}
+{{ include "user-secret-volumeMounts" .secrets | indent 4 }}
 
   resources:
 {{ toYaml (.resources | default $defaultVttablet.resources) | indent 6 }}
@@ -385,9 +398,9 @@ spec:
     - |
       set -ex
 
-{{ include "mycnf-exec" $defaultVttablet.extraMyCnf | indent 6 }}
+{{ include "mycnf-exec" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 6 }}
 {{ include "backup-exec" $config.backup | indent 6 }}
-      
+
       eval exec /vt/bin/vttablet $(cat <<END_OF_COMMAND
         -topo_implementation="etcd2"
         -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
@@ -416,6 +429,7 @@ spec:
         -orc_discover_interval "5m"
 {{ end }}
 {{ include "backup-flags" (tuple $config.backup "vttablet") | indent 8 }}
+{{ include "format-flags-all" (tuple $defaultVttablet.extraFlags .extraFlags) | indent 8 }}
       END_OF_COMMAND
       )
 {{- end -}}
@@ -450,7 +464,9 @@ spec:
       mountPath: /vtdataroot
     - name: vt
       mountPath: /vt
-{{ include "user-config-volumeMount" $defaultVttablet.extraMyCnf | indent 4 }}
+{{ include "user-config-volumeMount" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 6 }}
+{{ include "user-secret-volumeMounts" $defaultVttablet.secrets | indent 6 }}
+{{ include "user-secret-volumeMounts" .secrets | indent 6 }}
   resources:
 {{ toYaml (.mysqlResources | default $defaultVttablet.mysqlResources) | indent 6 }}
   env:
@@ -467,8 +483,7 @@ spec:
     - "-c"
     - |
       set -ex
-
-{{ include "mycnf-exec" $defaultVttablet.extraMyCnf | indent 6 }}
+{{ include "mycnf-exec" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 6 }}
 
       eval exec /vt/bin/mysqlctld $(cat <<END_OF_COMMAND
         -logtostderr=true
@@ -551,7 +566,7 @@ affinity:
             cell: {{ $cellClean | quote }}
             keyspace: {{ $keyspaceClean | quote }}
             shard: {{ $shardClean | quote }}
-    
+
     # prefer to stay away from any vttablets
     - weight: 10
       podAffinityTerm:

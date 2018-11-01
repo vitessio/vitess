@@ -4,6 +4,7 @@
 {{- define "orchestrator" -}}
 # set tuple values to more recognizable variables
 {{- $orc := index . 0 -}}
+{{- $defaultVtctlclient := index . 1 -}}
 
 apiVersion: v1
 kind: Service
@@ -58,7 +59,7 @@ spec:
   serviceName: orchestrator-headless
   replicas: {{ $orc.replicas }}
   podManagementPolicy: Parallel
-  updateStrategy: 
+  updateStrategy:
     type: RollingUpdate
   selector:
     matchLabels:
@@ -116,7 +117,7 @@ spec:
               mountPath: /conf/
             - name: tmplogs
               mountPath: /tmp
-
+{{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 12 }}
           env:
             - name: VTCTLD_SERVER_PORT
               value: "15999"
@@ -145,6 +146,7 @@ spec:
           emptyDir: {}
         - name: tmplogs
           emptyDir: {}
+{{ include "user-secret-volumes" $defaultVtctlclient.secrets | indent 8 }}
 
 {{- end -}}
 
