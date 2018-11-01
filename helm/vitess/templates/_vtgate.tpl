@@ -122,7 +122,7 @@ spec:
       volumes:
         - name: creds
           emptyDir: {}
-{{ include "user-secret-volumes" $defaultVtgate.Secrets | indent 8 }}
+{{ include "user-secret-volumes" $defaultVtgate.secrets | indent 8 }}
 {{ include "user-secret-volumes" .secrets | indent 8 }}
 ---
 ###################################
