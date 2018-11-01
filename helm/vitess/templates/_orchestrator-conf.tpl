@@ -6,7 +6,7 @@
 {{- $orc := index . 0 -}}
 {{- $namespace := index . 1 -}}
 {{- $enableHeartbeat := index . 2 -}}
-{{- $defaultVtctlclient := index . 3 -}}
+{{- $defaultVtctlclient := index . 3 }}
 
 apiVersion: v1
 kind: ConfigMap

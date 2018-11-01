@@ -3,7 +3,7 @@
 ###################################
 {{- define "vttablet-service" -}}
 # set tuple values to more recognizable variables
-{{- $pmm := index . 0 -}}
+{{- $pmm := index . 0 }}
 apiVersion: v1
 kind: Service
 metadata:

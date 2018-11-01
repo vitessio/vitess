@@ -4,7 +4,7 @@
 {{- define "orchestrator" -}}
 # set tuple values to more recognizable variables
 {{- $orc := index . 0 -}}
-{{- $defaultVtctlclient := index . 1 -}}
+{{- $defaultVtctlclient := index . 1 }}
 
 apiVersion: v1
 kind: Service
@@ -156,7 +156,7 @@ spec:
 {{- define "orchestrator-statefulset-service" -}}
 # set tuple values to more recognizable variables
 {{- $orc := index . 0 -}}
-{{- $i := index . 1 -}}
+{{- $i := index . 1 }}
 
 apiVersion: v1
 kind: Service
