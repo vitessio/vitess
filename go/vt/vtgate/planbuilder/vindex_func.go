@@ -55,16 +55,14 @@ func newVindexFunc(alias sqlparser.TableName, vindex vindexes.Vindex) (*vindexFu
 	}
 
 	// Column names are hard-coded to id, keyspace_id
-	t.columns = map[string]*column{
-		"id": {
-			origin: vf,
-			colnum: 0,
-		},
-		"keyspace_id": {
-			origin: vf,
-			colnum: 1,
-		},
-	}
+	t.addColumn(sqlparser.NewColIdent("id"), &column{
+		origin: vf,
+		colnum: 0,
+	})
+	t.addColumn(sqlparser.NewColIdent("keyspace_id"), &column{
+		origin: vf,
+		colnum: 1,
+	})
 
 	st := newSymtab()
 	// AddTable will not fail because symtab is empty.
