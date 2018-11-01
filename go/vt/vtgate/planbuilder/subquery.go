@@ -56,16 +56,12 @@ func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab) 
 	}
 
 	// Create column symbols based on the result column names.
-	cols := make(map[string]*column)
 	for i, rc := range bldr.ResultColumns() {
-		cols[rc.alias.Lowered()] = &column{
+		t.addColumn(rc.alias, &column{
 			origin: sq,
 			colnum: i,
-		}
+		})
 	}
-
-	// Populate the table with those columns and add it to symtab.
-	t.columns = cols
 	st := newSymtab()
 	// AddTable will not fail because symtab is empty.
 	_ = st.AddTable(t)

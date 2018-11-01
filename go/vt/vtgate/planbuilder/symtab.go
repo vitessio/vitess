@@ -92,17 +92,16 @@ func newSymtabWithRoute(rb *route) *symtab {
 func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexes.Table, rb *route) error {
 	t := &table{
 		alias:       alias,
-		columns:     make(map[string]*column),
 		origin:      rb,
 		vindexTable: vindexTable,
 	}
 
 	for _, col := range vindexTable.Columns {
-		t.columns[col.Name.Lowered()] = &column{
+		t.addColumn(col.Name, &column{
 			origin: rb,
 			st:     st,
 			typ:    col.Type,
-		}
+		})
 	}
 
 	for _, cv := range vindexTable.ColumnVindexes {
@@ -117,21 +116,21 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 				col.Vindex = vindex
 				continue
 			}
-			t.columns[lowered] = &column{
+			t.addColumn(cvcol, &column{
 				origin: rb,
 				st:     st,
 				Vindex: vindex,
-			}
+			})
 		}
 	}
 
 	if ai := vindexTable.AutoIncrement; ai != nil {
 		lowered := ai.Column.Lowered()
 		if _, ok := t.columns[lowered]; !ok {
-			t.columns[lowered] = &column{
+			t.addColumn(ai.Column, &column{
 				origin: rb,
 				st:     st,
-			}
+			})
 		}
 	}
 	return st.AddTable(t)
@@ -330,6 +329,7 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 	c, ok := t.columns[col.Name.Lowered()]
 	if !ok {
 		// We know all the column names of a subquery. Might as well return an error if it's not found.
+		// TODO(sougou); if column list is authoritative, we should return an error.
 		if _, ok := t.origin.(*subquery); ok {
 			return nil, fmt.Errorf("symbol %s is referencing a non-existent column of the subquery", sqlparser.String(col))
 		}
@@ -337,7 +337,7 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 			origin: t.origin,
 			st:     st,
 		}
-		t.columns[col.Name.Lowered()] = c
+		t.addColumn(col.Name, c)
 	}
 	return c, nil
 }
@@ -400,10 +400,23 @@ func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
 // It represents a table alias in a FROM clause. It points
 // to the builder that represents it.
 type table struct {
-	alias       sqlparser.TableName
-	columns     map[string]*column
-	origin      builder
-	vindexTable *vindexes.Table
+	alias         sqlparser.TableName
+	columns       map[string]*column
+	orderdColumns []sqlparser.ColIdent
+	origin        builder
+	vindexTable   *vindexes.Table
+}
+
+func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
+	if t.columns == nil {
+		t.columns = make(map[string]*column)
+	}
+	lowered := alias.Lowered()
+	// Dups are allowed, but first one wins if referenced.
+	if _, ok := t.columns[lowered]; !ok {
+		t.columns[lowered] = c
+	}
+	t.orderdColumns = append(t.orderdColumns, alias)
 }
 
 // column represents a unique symbol in the query that other
