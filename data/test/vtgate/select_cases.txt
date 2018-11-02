@@ -844,7 +844,7 @@
 
 # non-existent symbol in cross-shard subquery
 "select t.col from (select user.id from user join user_extra) as t"
-"symbol t.col is referencing a non-existent column of the subquery"
+"symbol t.col not found in table or subquery"
 
 # union of information_schema
 "select * from information_schema.a union select * from information_schema.b"

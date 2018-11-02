@@ -41,15 +41,16 @@ type VSchema struct {
 
 // Table represents a table in VSchema.
 type Table struct {
-	IsSequence     bool                 `json:"is_sequence,omitempty"`
-	Name           sqlparser.TableIdent `json:"name"`
-	Keyspace       *Keyspace            `json:"-"`
-	ColumnVindexes []*ColumnVindex      `json:"column_vindexes,omitempty"`
-	Ordered        []*ColumnVindex      `json:"ordered,omitempty"`
-	Owned          []*ColumnVindex      `json:"owned,omitempty"`
-	AutoIncrement  *AutoIncrement       `json:"auto_increment,omitempty"`
-	Columns        []Column             `json:"columns,omitempty"`
-	Pinned         []byte               `json:"pinned,omitempty"`
+	IsSequence      bool                 `json:"is_sequence,omitempty"`
+	Name            sqlparser.TableIdent `json:"name"`
+	Keyspace        *Keyspace            `json:"-"`
+	ColumnVindexes  []*ColumnVindex      `json:"column_vindexes,omitempty"`
+	Ordered         []*ColumnVindex      `json:"ordered,omitempty"`
+	Owned           []*ColumnVindex      `json:"owned,omitempty"`
+	AutoIncrement   *AutoIncrement       `json:"auto_increment,omitempty"`
+	Columns         []Column             `json:"columns,omitempty"`
+	Pinned          []byte               `json:"pinned,omitempty"`
+	IsAuthoritative bool                 `json:"is_authoritative,omitempty"`
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -192,8 +193,9 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 		}
 		for tname, table := range ks.Tables {
 			t := &Table{
-				Name:     sqlparser.NewTableIdent(tname),
-				Keyspace: keyspace,
+				Name:            sqlparser.NewTableIdent(tname),
+				Keyspace:        keyspace,
+				IsAuthoritative: table.IsAuthoritative,
 			}
 			if _, ok := vschema.uniqueTables[tname]; ok {
 				vschema.uniqueTables[tname] = nil
