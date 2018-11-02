@@ -91,9 +91,10 @@ func newSymtabWithRoute(rb *route) *symtab {
 // and adds it to symtab.
 func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexes.Table, rb *route) error {
 	t := &table{
-		alias:       alias,
-		origin:      rb,
-		vindexTable: vindexTable,
+		alias:           alias,
+		origin:          rb,
+		vindexTable:     vindexTable,
+		isAuthoritative: vindexTable.IsAuthoritative,
 	}
 
 	for _, col := range vindexTable.Columns {
@@ -330,8 +331,8 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 	if !ok {
 		// We know all the column names of a subquery. Might as well return an error if it's not found.
 		// TODO(sougou); if column list is authoritative, we should return an error.
-		if _, ok := t.origin.(*subquery); ok {
-			return nil, fmt.Errorf("symbol %s is referencing a non-existent column of the subquery", sqlparser.String(col))
+		if t.isAuthoritative {
+			return nil, fmt.Errorf("symbol %s not found in table or subquery", sqlparser.String(col))
 		}
 		c = &column{
 			origin: t.origin,
@@ -400,11 +401,12 @@ func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
 // It represents a table alias in a FROM clause. It points
 // to the builder that represents it.
 type table struct {
-	alias         sqlparser.TableName
-	columns       map[string]*column
-	orderdColumns []sqlparser.ColIdent
-	origin        builder
-	vindexTable   *vindexes.Table
+	alias           sqlparser.TableName
+	columns         map[string]*column
+	orderdColumns   []sqlparser.ColIdent
+	isAuthoritative bool
+	origin          builder
+	vindexTable     *vindexes.Table
 }
 
 func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
@@ -414,6 +416,7 @@ func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
 	lowered := alias.Lowered()
 	// Dups are allowed, but first one wins if referenced.
 	if _, ok := t.columns[lowered]; !ok {
+		c.colnum = len(t.orderdColumns)
 		t.columns[lowered] = c
 	}
 	t.orderdColumns = append(t.orderdColumns, alias)

@@ -320,4 +320,4 @@
 }
 
 "select none from user_index where id = :id"
-"unrecognized column none for vindex: user_index"
+"symbol none not found in table or subquery"

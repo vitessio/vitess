@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vschema.proto',
   package='vschema',
   syntax='proto3',
-  serialized_pb=_b('\n\rvschema.proto\x12\x07vschema\x1a\x0bquery.proto\"\xfe\x01\n\x08Keyspace\x12\x0f\n\x07sharded\x18\x01 \x01(\x08\x12\x31\n\x08vindexes\x18\x02 \x03(\x0b\x32\x1f.vschema.Keyspace.VindexesEntry\x12-\n\x06tables\x18\x03 \x03(\x0b\x32\x1d.vschema.Keyspace.TablesEntry\x1a@\n\rVindexesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1e\n\x05value\x18\x02 \x01(\x0b\x32\x0f.vschema.Vindex:\x02\x38\x01\x1a=\n\x0bTablesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1d\n\x05value\x18\x02 \x01(\x0b\x32\x0e.vschema.Table:\x02\x38\x01\"\x81\x01\n\x06Vindex\x12\x0c\n\x04type\x18\x01 \x01(\t\x12+\n\x06params\x18\x02 \x03(\x0b\x32\x1b.vschema.Vindex.ParamsEntry\x12\r\n\x05owner\x18\x03 \x01(\t\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xa7\x01\n\x05Table\x12\x0c\n\x04type\x18\x01 \x01(\t\x12.\n\x0f\x63olumn_vindexes\x18\x02 \x03(\x0b\x32\x15.vschema.ColumnVindex\x12.\n\x0e\x61uto_increment\x18\x03 \x01(\x0b\x32\x16.vschema.AutoIncrement\x12 \n\x07\x63olumns\x18\x04 \x03(\x0b\x32\x0f.vschema.Column\x12\x0e\n\x06pinned\x18\x05 \x01(\t\"=\n\x0c\x43olumnVindex\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0f\n\x07\x63olumns\x18\x03 \x03(\t\"1\n\rAutoIncrement\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x10\n\x08sequence\x18\x02 \x01(\t\"1\n\x06\x43olumn\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x19\n\x04type\x18\x02 \x01(\x0e\x32\x0b.query.Type\"\x88\x01\n\nSrvVSchema\x12\x35\n\tkeyspaces\x18\x01 \x03(\x0b\x32\".vschema.SrvVSchema.KeyspacesEntry\x1a\x43\n\x0eKeyspacesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12 \n\x05value\x18\x02 \x01(\x0b\x32\x11.vschema.Keyspace:\x02\x38\x01\x42&Z$vitess.io/vitess/go/vt/proto/vschemab\x06proto3')
+  serialized_pb=_b('\n\rvschema.proto\x12\x07vschema\x1a\x0bquery.proto\"\xfe\x01\n\x08Keyspace\x12\x0f\n\x07sharded\x18\x01 \x01(\x08\x12\x31\n\x08vindexes\x18\x02 \x03(\x0b\x32\x1f.vschema.Keyspace.VindexesEntry\x12-\n\x06tables\x18\x03 \x03(\x0b\x32\x1d.vschema.Keyspace.TablesEntry\x1a@\n\rVindexesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1e\n\x05value\x18\x02 \x01(\x0b\x32\x0f.vschema.Vindex:\x02\x38\x01\x1a=\n\x0bTablesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1d\n\x05value\x18\x02 \x01(\x0b\x32\x0e.vschema.Table:\x02\x38\x01\"\x81\x01\n\x06Vindex\x12\x0c\n\x04type\x18\x01 \x01(\t\x12+\n\x06params\x18\x02 \x03(\x0b\x32\x1b.vschema.Vindex.ParamsEntry\x12\r\n\x05owner\x18\x03 \x01(\t\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xc1\x01\n\x05Table\x12\x0c\n\x04type\x18\x01 \x01(\t\x12.\n\x0f\x63olumn_vindexes\x18\x02 \x03(\x0b\x32\x15.vschema.ColumnVindex\x12.\n\x0e\x61uto_increment\x18\x03 \x01(\x0b\x32\x16.vschema.AutoIncrement\x12 \n\x07\x63olumns\x18\x04 \x03(\x0b\x32\x0f.vschema.Column\x12\x0e\n\x06pinned\x18\x05 \x01(\t\x12\x18\n\x10is_authoritative\x18\x06 \x01(\x08\"=\n\x0c\x43olumnVindex\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0f\n\x07\x63olumns\x18\x03 \x03(\t\"1\n\rAutoIncrement\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x10\n\x08sequence\x18\x02 \x01(\t\"1\n\x06\x43olumn\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x19\n\x04type\x18\x02 \x01(\x0e\x32\x0b.query.Type\"\x88\x01\n\nSrvVSchema\x12\x35\n\tkeyspaces\x18\x01 \x03(\x0b\x32\".vschema.SrvVSchema.KeyspacesEntry\x1a\x43\n\x0eKeyspacesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12 \n\x05value\x18\x02 \x01(\x0b\x32\x11.vschema.Keyspace:\x02\x38\x01\x42&Z$vitess.io/vitess/go/vt/proto/vschemab\x06proto3')
   ,
   dependencies=[query__pb2.DESCRIPTOR,])
 
@@ -270,6 +270,13 @@ _TABLE = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='is_authoritative', full_name='vschema.Table.is_authoritative', index=5,
+      number=6, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -283,7 +290,7 @@ _TABLE = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=429,
-  serialized_end=596,
+  serialized_end=622,
 )
 
 
@@ -327,8 +334,8 @@ _COLUMNVINDEX = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=598,
-  serialized_end=659,
+  serialized_start=624,
+  serialized_end=685,
 )
 
 
@@ -365,8 +372,8 @@ _AUTOINCREMENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=661,
-  serialized_end=710,
+  serialized_start=687,
+  serialized_end=736,
 )
 
 
@@ -403,8 +410,8 @@ _COLUMN = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=712,
-  serialized_end=761,
+  serialized_start=738,
+  serialized_end=787,
 )
 
 
@@ -441,8 +448,8 @@ _SRVVSCHEMA_KEYSPACESENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=833,
-  serialized_end=900,
+  serialized_start=859,
+  serialized_end=926,
 )
 
 _SRVVSCHEMA = _descriptor.Descriptor(
@@ -471,8 +478,8 @@ _SRVVSCHEMA = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=764,
-  serialized_end=900,
+  serialized_start=790,
+  serialized_end=926,
 )
 
 _KEYSPACE_VINDEXESENTRY.fields_by_name['value'].message_type = _VINDEX
