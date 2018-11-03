@@ -183,9 +183,9 @@
 }
 
 # fully qualified '*' expression for simple route
-"select user.user.* from user"
+"select user.user.* from user.user"
 {
-  "Original": "select user.user.* from user",
+  "Original": "select user.user.* from user.user",
   "Instructions": {
     "Opcode": "SelectScatter",
     "Keyspace": {
@@ -197,9 +197,84 @@
   }
 }
 
-# invalid keyspace for '*' expression for simple route
-"select a.user.* from user"
-"cannot resolve a.user.* to keyspace user"
+# select * from authoritative table
+"select * from authoritative"
+{
+  "Original": "select * from authoritative",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2 from authoritative",
+    "FieldQuery": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2 from authoritative where 1 != 1"
+  }
+}
+
+# select * from join of authoritative tables
+"select * from authoritative a join authoritative b on a.user_id=b.user_id"
+{
+  "Original": "select * from authoritative a join authoritative b on a.user_id=b.user_id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id",
+    "FieldQuery": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id where 1 != 1"
+  }
+}
+
+# test table lookup failure for authoritative code path
+"select a.* from authoritative"
+"table a not found"
+
+# select * from qualified authoritative table
+"select a.* from authoritative a"
+{
+  "Original": "select a.* from authoritative a",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select a.user_id, a.col1, a.col2 from authoritative as a",
+    "FieldQuery": "select a.user_id, a.col1, a.col2 from authoritative as a where 1 != 1"
+  }
+}
+
+# select * from intermixing of authoritative table with non-authoritative results in no expansion
+"select * from authoritative join user on authoritative.user_id=user.id"
+{
+  "Original": "select * from authoritative join user on authoritative.user_id=user.id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from authoritative join user on authoritative.user_id = user.id",
+    "FieldQuery": "select * from authoritative join user on authoritative.user_id = user.id where 1 != 1"
+  }
+}
+
+# select authoritative.* with intermixing still expands
+"select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id"
+{
+  "Original": "select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.id, a.user_id, a.col1, a.col2, user.col1 from authoritative as a join user on a.user_id = user.id",
+    "FieldQuery": "select user.id, a.user_id, a.col1, a.col2, user.col1 from authoritative as a join user on a.user_id = user.id where 1 != 1"
+  }
+}
 
 # auto-resolve anonymous columns for simple route
 "select col from user join user_extra on user.id = user_extra.user_id"
@@ -620,6 +695,7 @@
     "FieldQuery": "select * from user where 1 != 1"
   }
 }
+
 # sharded limit offset
 "select user_id from music order by user_id limit 10, 20"
 {
@@ -841,6 +917,47 @@
     }
   }
 }
+
+# select * from subquery expands specific columns
+"select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t"
+{
+  "Original": "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t",
+  "Instructions": {
+    "Cols": [
+      0,
+      1
+    ],
+    "Subquery": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select user.id as id1 from user",
+        "FieldQuery": "select user.id as id1 from user where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select user_extra.id as id2 from user_extra",
+        "FieldQuery": "select user_extra.id as id2 from user_extra where 1 != 1"
+      },
+      "Cols": [
+        -1,
+        1
+      ]
+    }
+  }
+}
+
+# duplicate columns not allowed in subquery
+"select * from (select user.id, user_extra.id from user join user_extra) as t"
+"duplicate column names in subquery: id"
 
 # non-existent symbol in cross-shard subquery
 "select t.col from (select user.id from user join user_extra) as t"

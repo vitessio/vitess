@@ -28,6 +28,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+var errNoTable = errors.New("no table info")
+
 // symtab represents the symbol table for a SELECT statement
 // or a subquery. The symtab evolves over time.
 // As a query is analyzed, multiple independent
@@ -48,7 +50,8 @@ import (
 // which is later used to determine if the subquery can be
 // merged with an outer route.
 type symtab struct {
-	tables map[sqlparser.TableName]*table
+	tables        map[sqlparser.TableName]*table
+	orderedTables []sqlparser.TableName
 
 	// uniqueColumns has the column name as key
 	// and points at the columns that tables contains.
@@ -144,6 +147,12 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 // At this point, only tables and uniqueColumns are set.
 // All other fields are ignored.
 func (st *symtab) Merge(newsyms *symtab) error {
+	if st.orderedTables == nil || newsyms.orderedTables == nil {
+		// This code is unreachable because there are higher level
+		// protections that disallow intermixing of symtabs with
+		// no tables with symtabs that have tables.
+		return nil
+	}
 	for _, t := range newsyms.tables {
 		if err := st.AddTable(t); err != nil {
 			return err
@@ -161,6 +170,7 @@ func (st *symtab) AddTable(t *table) error {
 		return fmt.Errorf("duplicate symbol: %s", sqlparser.String(t.alias))
 	}
 	st.tables[t.alias] = t
+	st.orderedTables = append(st.orderedTables, t.alias)
 
 	// update the uniqueColumns list, and eliminate
 	// duplicate symbols if found.
@@ -176,6 +186,34 @@ func (st *symtab) AddTable(t *table) error {
 		st.uniqueColumns[colname] = c
 	}
 	return nil
+}
+
+// AllTables returns an ordered list of all current tables.
+func (st *symtab) AllTables() []*table {
+	var tables []*table
+	for _, tname := range st.orderedTables {
+		tables = append(tables, st.tables[tname])
+	}
+	return tables
+}
+
+// FindTable finds a table in symtab. This function is specifically used
+// for expanding 'select a.*' constructs. If you're in a subquery,
+// you're most likely referring to a table in the local 'from' clause.
+// For this reason, the search is only performed in the current scope.
+// This may be a deviation from the formal definition of SQL, but there
+// are currently no use cases that require the full support.
+func (st *symtab) FindTable(tname sqlparser.TableName) (*table, error) {
+	if st.orderedTables == nil {
+		// Unreachable because current code path checks for this condition
+		// before invoking this function.
+		return nil, errNoTable
+	}
+	t, ok := st.tables[tname]
+	if !ok {
+		return nil, fmt.Errorf("table %v not found", sqlparser.String(tname))
+	}
+	return t, nil
 }
 
 // ClearVindexes removes the Column Vindexes from the aliases signifying
@@ -330,7 +368,6 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 	c, ok := t.columns[col.Name.Lowered()]
 	if !ok {
 		// We know all the column names of a subquery. Might as well return an error if it's not found.
-		// TODO(sougou); if column list is authoritative, we should return an error.
 		if t.isAuthoritative {
 			return nil, fmt.Errorf("symbol %s not found in table or subquery", sqlparser.String(col))
 		}

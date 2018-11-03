@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"errors"
+	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -42,7 +43,7 @@ type subquery struct {
 }
 
 // newSubquery builds a new subquery.
-func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab) {
+func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab, error) {
 	sq := &subquery{
 		order:     bldr.Order() + 1,
 		input:     bldr,
@@ -57,13 +58,16 @@ func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab) 
 
 	// Create column symbols based on the result column names.
 	for _, rc := range bldr.ResultColumns() {
+		if _, ok := t.columns[rc.alias.Lowered()]; ok {
+			return nil, nil, fmt.Errorf("duplicate column names in subquery: %s", sqlparser.String(rc.alias))
+		}
 		t.addColumn(rc.alias, &column{origin: sq})
 	}
 	t.isAuthoritative = true
 	st := newSymtab()
 	// AddTable will not fail because symtab is empty.
 	_ = st.AddTable(t)
-	return sq, st
+	return sq, st, nil
 }
 
 // Order satisfies the builder interface.
