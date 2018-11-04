@@ -1,86 +1,86 @@
 "create table a(abcd)"
 {
-  "Action": "create", "NewName": "a"
+  "Action": "create"
 }
 
 "drop  table b"
 {
-  "Action": "drop", "TableName": "b"
+  "Action": "drop"
 }
 
 "drop table b.c"
 {
-  "Action": "drop", "TableName": "b.c"
+  "Action": "drop"
 }
 
 "alter table c alter foo"
 {
-  "Action": "alter", "TableName": "c", "NewTable": "c"
+  "Action": "alter"
 }
 
 "alter table c comment 'aa'"
 {
-  "Action": "alter", "TableName": "c", "NewTable": "c"
+  "Action": "alter"
 }
 
 "alter table b.c comment 'aa'"
 {
-  "Action": "alter", "TableName": "b.c", "NewTable": "b.c"
+  "Action": "alter"
 }
 
 "drop index a on b"
 {
-  "Action": "alter", "TableName": "b", "NewName": "b"
+  "Action": "alter"
 }
 
 "drop index a on b.c"
 {
-  "Action": "alter", "TableName": "b.c", "NewName": "b.c"
+  "Action": "alter"
 }
 
 "drop index a on b lock=none"
 {
-  "Action": "alter", "TableName": "b", "NewName": "b"
+  "Action": "alter"
 }
 
 "rename table a to b"
 {
-  "Action": "rename", "TableName": "a", "NewTable": "b"
+  "Action": "rename"
 }
 
 "rename table c.a to c.b"
 {
-  "Action": "rename", "TableName": "c.a", "NewTable": "c.b"
+  "Action": "rename"
 }
 
 "alter table a rename b"
 {
-  "Action": "rename", "TableName": "a", "NewTable": "b"
+  "Action": "rename"
 }
 
 "alter table a rename to b"
 {
-  "Action": "rename", "TableName": "a", "NewTable": "b"
+  "Action": "rename"
 }
 
 "alter table c.a rename to c.b"
 {
-  "Action": "rename", "TableName": "c.a", "NewTable": "c.b"
+  "Action": "rename"
 }
 
 "create view a asdasd"
 {
-  "Action": "create", "NewName": "a"
+  "Action": "create"
 }
 
 "alter view c as foo"
 {
-  "Action": "alter", "TableName": "c", "NewTable": "c"
+  "Action": "alter"
 }
 
 "drop  view b"
 {
-  "Action": "drop", "TableName": "b"
+  "Action": "drop"
 }
 
 "select * from a"
@@ -100,7 +100,7 @@
 
 "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))"
 {
-  "Action": "alter", "TableName": "a", "NewTable": "a"
+  "Action": "alter"
 }
 
 # truncate

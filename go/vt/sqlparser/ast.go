@@ -718,21 +718,30 @@ func (node *DBDDL) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// DDL represents a CREATE, ALTER, DROP, RENAME or TRUNCATE statement.
-// Table is set for AlterStr, DropStr, RenameStr, TruncateStr
-// NewName is set for AlterStr, CreateStr, RenameStr.
-// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr
-// VindexCols is set for AddColVindexStr
+// DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
 type DDL struct {
-	Action        string
-	Table         TableName
-	NewName       TableName
+	Action string
+
+	// FromTables is set if Action is RenameStr or DropStr.
+	FromTables TableNames
+
+	// ToTables is set if Action is RenameStr.
+	ToTables TableNames
+
+	// Table is set if Action is other than RenameStr or DropStr.
+	Table TableName
+
+	// The following fields are set if a DDL was fully analyzed.
 	IfExists      bool
 	TableSpec     *TableSpec
 	OptLike       *OptLike
 	PartitionSpec *PartitionSpec
-	VindexSpec    *VindexSpec
-	VindexCols    []ColIdent
+
+	// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr.
+	VindexSpec *VindexSpec
+
+	// VindexCols is set for AddColVindexStr.
+	VindexCols []ColIdent
 }
 
 // DDL strings.
@@ -756,20 +765,23 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
 		if node.OptLike != nil {
-			buf.Myprintf("%s table %v %v", node.Action, node.NewName, node.OptLike)
+			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.OptLike)
 		} else if node.TableSpec != nil {
-			buf.Myprintf("%s table %v %v", node.Action, node.NewName, node.TableSpec)
+			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.TableSpec)
 		} else {
-			buf.Myprintf("%s table %v", node.Action, node.NewName)
+			buf.Myprintf("%s table %v", node.Action, node.Table)
 		}
 	case DropStr:
 		exists := ""
 		if node.IfExists {
 			exists = " if exists"
 		}
-		buf.Myprintf("%s table%s %v", node.Action, exists, node.Table)
+		buf.Myprintf("%s table%s %v", node.Action, exists, node.FromTables)
 	case RenameStr:
-		buf.Myprintf("%s table %v to %v", node.Action, node.Table, node.NewName)
+		buf.Myprintf("%s table %v to %v", node.Action, node.FromTables[0], node.ToTables[0])
+		for i := 1; i < len(node.FromTables); i++ {
+			buf.Myprintf(", %v to %v", node.FromTables[i], node.ToTables[i])
+		}
 	case AlterStr:
 		if node.PartitionSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.PartitionSpec)
@@ -804,11 +816,23 @@ func (node *DDL) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	return Walk(
-		visit,
-		node.Table,
-		node.NewName,
-	)
+	for _, t := range node.AffectedTables() {
+		if err := Walk(visit, t); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AffectedTables returns the list table names affected by the DDL.
+func (node *DDL) AffectedTables() TableNames {
+	if node.Action == RenameStr || node.Action == DropStr {
+		list := make(TableNames, 0, len(node.FromTables)+len(node.ToTables))
+		list = append(list, node.FromTables...)
+		list = append(list, node.ToTables...)
+		return list
+	}
+	return TableNames{node.Table}
 }
 
 // Partition strings
