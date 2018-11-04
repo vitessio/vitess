@@ -378,7 +378,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 
 	showTableRows := make([][]sqltypes.Value, 0, 4)
 	for _, ddl := range ddls {
-		table := ddl.NewName.Name.String()
+		table := ddl.Table.Name.String()
 		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, ""))
 	}
 	schemaQueries[mysql.BaseShowTables] = &sqltypes.Result{
@@ -388,7 +388,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 	}
 
 	for i, ddl := range ddls {
-		table := ddl.NewName.Name.String()
+		table := ddl.Table.Name.String()
 		schemaQueries[mysql.BaseShowTablesForTable(table)] = &sqltypes.Result{
 			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 1,

@@ -980,11 +980,20 @@ var (
 		input:  "alter view a",
 		output: "alter table a",
 	}, {
+		input:  "rename table a to b",
+		output: "rename table a to b",
+	}, {
+		input:  "rename table a to b, b to c",
+		output: "rename table a to b, b to c",
+	}, {
 		input:  "drop view a",
 		output: "drop table a",
 	}, {
 		input:  "drop table a",
 		output: "drop table a",
+	}, {
+		input:  "drop table a, b",
+		output: "drop table a, b",
 	}, {
 		input:  "drop table if exists a",
 		output: "drop table if exists a",
