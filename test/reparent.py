@@ -339,8 +339,8 @@ class TestReparent(unittest.TestCase):
 
     tablet_62044.kill_vttablet()
 
-  # This is a manual test to check error formatting.
-  def _test_reparent_slave_offline(self, shard_id='0'):
+  # Reparenting should return error if replica vttablet is down
+  def test_reparent_slave_offline(self, shard_id='0'):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as they are serving
@@ -377,9 +377,11 @@ class TestReparent(unittest.TestCase):
     tablet_31981.kill_vttablet()
 
     # Perform a graceful reparent operation.
-    utils.run_vtctl(['PlannedReparentShard',
+    _, stderr = utils.run_vtctl(['PlannedReparentShard',
                      '-keyspace_shard', 'test_keyspace/' + shard_id,
-                     '-new_master', tablet_62044.tablet_alias])
+                     '-new_master', tablet_62044.tablet_alias], expect_fail=True)
+    self.assertIn('Tablet test_ny-0000031981 SetMaster failed', stderr)
+
     self._check_master_tablet(tablet_62044)
 
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983])

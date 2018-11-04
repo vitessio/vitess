@@ -203,6 +203,11 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 	// we stop. It is probably because it is unreachable, and may leave
 	// an unstable database process in the mix, with a database daemon
 	// at a wrong replication spot.
+
+	// Create a context for the following RPCs that respects waitSlaveTimeout
+	resetCtx, resetCancel := context.WithTimeout(ctx, waitSlaveTimeout)
+	defer resetCancel()
+
 	event.DispatchUpdate(ev, "resetting replication on all tablets")
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
@@ -211,13 +216,14 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 		go func(alias string, tabletInfo *topo.TabletInfo) {
 			defer wg.Done()
 			wr.logger.Infof("resetting replication on tablet %v", alias)
-			if err := wr.tmc.ResetReplication(ctx, tabletInfo.Tablet); err != nil {
+			if err := wr.tmc.ResetReplication(resetCtx, tabletInfo.Tablet); err != nil {
 				rec.RecordError(fmt.Errorf("Tablet %v ResetReplication failed (either fix it, or Scrap it): %v", alias, err))
 			}
 		}(alias, tabletInfo)
 	}
 	wg.Wait()
 	if err := rec.Error(); err != nil {
+		// if any of the slaves failed
 		return err
 	}
 
@@ -242,7 +248,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 
 	// Create a cancelable context for the following RPCs.
 	// If error conditions happen, we can cancel all outgoing RPCs.
-	replCtx, replCancel := context.WithCancel(ctx)
+	replCtx, replCancel := context.WithTimeout(ctx, waitSlaveTimeout)
 	defer replCancel()
 
 	// Now tell the new master to insert the reparent_journal row,
@@ -430,7 +436,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 
 	// Create a cancelable context for the following RPCs.
 	// If error conditions happen, we can cancel all outgoing RPCs.
-	replCtx, replCancel := context.WithCancel(ctx)
+	replCtx, replCancel := context.WithTimeout(ctx, waitSlaveTimeout)
 	defer replCancel()
 
 	// Go through all the tablets:
