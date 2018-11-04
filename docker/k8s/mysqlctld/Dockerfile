@@ -2,6 +2,13 @@ FROM vitess/k8s AS k8s
 
 FROM debian:stretch-slim
 
+RUN apt-get update && \
+   apt-get upgrade -qq && \
+   apt-get install busybox -qq --no-install-recommends && \
+   apt-get autoremove && \
+   apt-get clean && \
+   rm -rf /var/lib/apt/lists/*
+
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt
 ENV VTDATAROOT /vtdataroot
