@@ -110,7 +110,7 @@ vtctld:
       cpu: 100m
       memory: 128Mi
   extraFlags: {}
-  userSecrets: []
+  secrets: []
 
 # Default values for vtgate resources defined in 'topology'
 vtgate:

@@ -76,8 +76,7 @@ spec:
 {{ include "backup-env" $config.backup | indent 12 }}
           volumeMounts:
 {{ include "backup-volumeMount" $config.backup | indent 12 }}
-{{ include "user-secret-volumeMounts" $defaultVtctld.secrets | indent 12 }}
-{{ include "user-secret-volumeMounts" .secrets | indent 12 }}
+{{ include "user-secret-volumeMounts" (.secrets | default $defaultVtctld.secrets) | indent 12 }}
           resources:
 {{ toYaml (.resources | default $defaultVtctld.resources) | indent 12 }}
           command:
@@ -109,8 +108,7 @@ spec:
 
       volumes:
 {{ include "backup-volume" $config.backup | indent 8 }}
-{{ include "user-secret-volumes" $defaultVtctld.secrets | indent 8 }}
-{{ include "user-secret-volumes" .secrets | indent 8 }}
+{{ include "user-secret-volumes" (.secrets | default $defaultVtctld.secrets) | indent 8 }}
 
 {{- end -}}
 {{- end -}}

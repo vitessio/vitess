@@ -116,8 +116,7 @@ spec:
           emptyDir: {}
 {{ include "backup-volume" $config.backup | indent 8 }}
 {{ include "user-config-volume" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 8 }}
-{{ include "user-secret-volumes" $defaultVttablet.secrets | indent 8 }}
-{{ include "user-secret-volumes" .secrets | indent 8 }}
+{{ include "user-secret-volumes" (.secrets | default $defaultVttablet.secrets) | indent 8 }}
 
   volumeClaimTemplates:
     - metadata:
@@ -240,7 +239,7 @@ spec:
               sleep 5
             done
       volumes:
-{{ include "user-secret-volumes" $defaultVtctlclient.secrets | indent 8 }}
+{{ include "user-secret-volumes" (.secrets | default $defaultVtctlclient.secrets) | indent 8 }}
 
 {{- end -}}
 
@@ -372,8 +371,7 @@ spec:
       mountPath: "/vtdataroot"
 {{ include "backup-volumeMount" $config.backup | indent 4 }}
 {{ include "user-config-volumeMount" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 4 }}
-{{ include "user-secret-volumeMounts" $defaultVttablet.secrets | indent 4 }}
-{{ include "user-secret-volumeMounts" .secrets | indent 4 }}
+{{ include "user-secret-volumeMounts" (.secrets | default $defaultVttablet.secrets) | indent 4 }}
 
   resources:
 {{ toYaml (.resources | default $defaultVttablet.resources) | indent 6 }}
@@ -465,8 +463,7 @@ spec:
     - name: vt
       mountPath: /vt
 {{ include "user-config-volumeMount" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 4 }}
-{{ include "user-secret-volumeMounts" $defaultVttablet.secrets | indent 4 }}
-{{ include "user-secret-volumeMounts" .secrets | indent 4 }}
+{{ include "user-secret-volumeMounts" (.secrets | $defaultVttablet.secrets) | indent 4 }}
   resources:
 {{ toYaml (.mysqlResources | default $defaultVttablet.mysqlResources) | indent 6 }}
   env:
