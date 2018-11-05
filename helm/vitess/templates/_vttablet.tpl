@@ -174,10 +174,7 @@ spec:
             VTCTLD_SVC=vtctld.{{ $namespace }}:15999
             SECONDS=0
             TIMEOUT_SECONDS=600
-            VTCTL_EXTRA_FLAGS="$(cat <<END_OF_COMMAND
-{{ include "format-flags-all" (tuple $defaultVtctlclient.extraFlags) | indent 14 }}
-            END_OF_COMMAND
-            )"
+            VTCTL_EXTRA_FLAGS={{ include "format-flags-inline" $defaultVtctlclient.extraFlags }}
 
             # poll every 5 seconds to see if vtctld is ready
             until vtctlclient $VTCTL_EXTRA_FLAGS -server $VTCTLD_SVC ListAllTablets {{ $cellClean }} > /dev/null 2>&1; do
