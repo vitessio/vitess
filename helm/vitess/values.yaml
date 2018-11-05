@@ -110,7 +110,7 @@ vtctld:
       cpu: 100m
       memory: 128Mi
   extraFlags: {}
-  secrets: []
+  secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 # Default values for vtgate resources defined in 'topology'
 vtgate:
@@ -121,12 +121,13 @@ vtgate:
       cpu: 500m
       memory: 512Mi
   extraFlags: {}
-  secrets: []
+  secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 # Default values for vtctlclient resources defined in 'topology'
 vtctlclient:
   extraFlags: {}
-  secrets: []
+  secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
+
 
 # Default values for vttablet resources defined in 'topology'
 vttablet:
@@ -157,7 +158,7 @@ vttablet:
   # Additional flags that will be appended to the vttablet command
   extraFlags: {}
 
-  # User secrets that will be mounted under /vt/usersecrets/$secretname/
+  # User secrets that will be mounted under /vt/usersecrets/{secretname}/
   secrets: []
 
   resources:

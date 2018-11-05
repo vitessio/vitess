@@ -286,7 +286,7 @@ orchestrator:
 
 ### Enable TLS encryption for vitess grpc communication
 
-The helm-chart can mount arbitrary secrets under `/vt/usersecrets/{SECRETNAME}` using this and the ability to provide additional command-line flags TLS can be configured. Each component of vitess requires a certificate and private key to secure incoming requests and further configuration for every outgoing connection. In this example TLS certificates were generated and stored in several kubernetes secrets:
+Each component of vitess requires a certificate and private key to secure incoming requests and further configuration for every outgoing connection. In this example TLS certificates were generated and stored in several kubernetes secrets:
 ```yaml
 vttablet:
   extraFlags:
