@@ -15,7 +15,7 @@ ENV VTDATAROOT /vtdataroot
 
 # Prepare directory structure.
 RUN mkdir -p /vt/bin && \
-   mkdir -p /vt/config
+   mkdir -p /vt/config && mkdir -p /vtdataroot
 
 # Copy binaries
 COPY --from=k8s /vt/bin/mysqlctld /vt/bin/
@@ -25,3 +25,9 @@ COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificate
 
 # copy vitess config
 COPY --from=k8s /vt/config /vt/config
+
+# add vitess user/group and add permissions
+RUN groupadd -r --gid 2000 vitess && \
+   useradd -r -g vitess --uid 1000 vitess && \
+   chown -R vitess:vitess /vt && \
+   chown -R vitess:vitess /vtdataroot
