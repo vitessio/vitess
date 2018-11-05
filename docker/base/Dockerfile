@@ -28,6 +28,8 @@ FROM "${image}"
 
 # Allows some docker builds to disable CGO
 ARG CGO_ENABLED=0
+ENV GOPATH="/vt/go"
+ENV GO111MODULE="on"
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER

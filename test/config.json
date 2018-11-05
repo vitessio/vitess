@@ -415,7 +415,7 @@
 		},
 		"reparent": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/reparent"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/reparent", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "14",
@@ -573,7 +573,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/versionupgrade", "-keep-data", "-force-vtdataroot", "/tmp/vtdataroot/vtroot_10901", "-force-port-start", "11900", "-force-base-tablet-uid", "1190"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "28",
+			"Shard": "",
 			"RetryMax": 1,
 			"Tags": []
 		},

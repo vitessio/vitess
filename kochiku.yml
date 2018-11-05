@@ -1,0 +1,50 @@
+test_command: 'square/script/ci'
+retry_count: 1
+
+# do this so the build does not install the version in .ruby-version
+ruby:
+  - 2.6
+
+targets:
+- type: build_bootstrap_image
+  write_to_cache:
+    - docker-cache-vitess-bootstrap/
+- type: deployable_image
+  requires:
+    - build_bootstrap_image
+  read_from_cache:
+    - docker-cache-vitess-bootstrap/
+  write_to_cache:
+    - docker-cache/
+- type: unit
+  workers: 51
+  balance: none
+  requires:
+    - deployable_image
+  read_from_cache:
+    - docker-cache/
+- type: cloud_vitess
+  requires:
+    - build_bootstrap_image
+  read_from_cache:
+    - docker-cache-vitess-bootstrap/
+- type: jdbc
+  requires:
+    - deployable_image
+    - unit
+- type: binaries
+  app_name: vitess-build
+  partial_artifact: true
+  requires:
+    - deployable_image
+    - unit
+  read_from_cache:
+    - docker-cache/
+
+build_artifacts:
+  vitess:
+    distributions:
+      # empty, this is only added to allow canary builds
+
+log_file_globs:
+  - '_test/**/*.log'

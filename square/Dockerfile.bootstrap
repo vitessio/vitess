@@ -1,0 +1,29 @@
+# This is a copy of docker/base/Dockerfile with a few packages installed that are needed by the tests
+ARG bootstrap_version=0
+ARG image="vitess/bootstrap:${bootstrap_version}-mysql57"
+
+FROM "${image}"
+
+# Allows some docker builds to disable CGO
+ARG CGO_ENABLED=0
+ENV GOPATH="/vt/go"
+ENV GO111MODULE="on"
+
+# Allows docker builds to set the BUILD_NUMBER
+ARG BUILD_NUMBER
+
+# Re-copy sources from working tree
+USER root
+COPY . /vt/src/vitess.io/vitess
+
+# Extra SQ stuff for testing
+RUN apt-get update
+RUN apt-get -y install syslog-ng
+
+# Build Vitess
+RUN make build
+
+# Fix permissions
+RUN chown -R vitess:vitess /vt
+USER vitess
+
