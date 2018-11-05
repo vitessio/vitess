@@ -283,3 +283,46 @@ topology:
 orchestrator:
   enabled: true
 ```
+
+### Enable TLS encryption for vitess grpc communication
+
+The helm-chart can mount arbitrary secrets under `/vt/usersecrets/{SECRETNAME}` using this and the ability to provide additional command-line flags TLS can be configured. Each component of vitess requires a certificate and private key to secure incoming requests and further configuration for every outgoing connection. In this example TLS certificates were generated and stored in several kubernetes secrets:
+```yaml
+vttablet:
+  extraFlags:
+    # configure which certificates to use for serving grpc requests
+    grpc_cert: /vt/usersecrets/vttablet-tls/vttablet.pem 
+    grpc_key: /vt/usersecrets/vttablet-tls/vttablet-key.pem
+    tablet_grpc_ca: /vt/usersecrets/vttablet-tls/vitess-ca.pem 
+    tablet_grpc_server_name: vttablet 
+  secrets:
+  - vttablet-tls
+
+vtctld:
+  extraFlags:
+    grpc_cert: /vt/usersecrets/vtctld-tls/vtctld.pem
+    grpc_key: /vt/usersecrets/vtctld-tls/vtctld-key.pem
+    tablet_grpc_ca: /vt/usersecrets/vtctld-tls/vitess-ca.pem
+    tablet_grpc_server_name: vttablet
+    tablet_manager_grpc_ca: /vt/usersecrets/vtctld-tls/vitess-ca.pem
+    tablet_manager_grpc_server_name: vttablet
+  secrets:
+  - vtctld-tls
+
+vtctlclient: # configuration used by both InitShardMaster-jobs and orchestrator to be able to communicate with vtctld
+  extraFlags:
+    vtctld_grpc_ca: /vt/usersecrets/vitess-ca/vitess-ca.pem
+    vtctld_grpc_server_name: vtctld
+  secrets:
+  - vitess-ca
+
+vtgate:
+  extraFlags:
+    grpc_cert: /vt/usersecrets/vtgate-tls/vtgate.pem
+    grpc_key: /vt/usersecrets/vtgate-tls/vtgate-key.pem
+    tablet_grpc_ca: /vt/usersecrets/vtgate-tls/vitess-ca.pem
+    tablet_grpc_server_name: vttablet
+  secrets:
+  - vtgate-tls
+```
+
