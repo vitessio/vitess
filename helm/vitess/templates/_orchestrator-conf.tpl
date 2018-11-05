@@ -78,7 +78,7 @@ data:
     ],
     "PostMasterFailoverProcesses": [
         "echo 'Recovered from {failureType} on {failureCluster}. Failed: {failedHost}:{failedPort}; Promoted: {successorHost}:{successorPort}' >> /tmp/recovery.log",
-        "vtctlclient {{ include "format-flags-inline" $defaultVtctlclient.extraFlags | replace "\"" "\\\"" }} -server vtctld.{{ $namespace }}:15999 TabletExternallyReparented {successorAlias}"
+        "vtctlclient {{ include "format-flags-inline" $defaultVtctlclient.extraFlags | toJson | trimAll "\"" }} -server vtctld.{{ $namespace }}:15999 TabletExternallyReparented {successorAlias}"
     ],
     "PostponeSlaveRecoveryOnLagMinutes": 0,
     "PostUnsuccessfulFailoverProcesses": [
