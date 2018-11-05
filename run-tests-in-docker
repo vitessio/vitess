@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+BUILD_DOCKER_TAG=square-vitess-build-$(git rev-parse HEAD)
+docker run --name tester $BUILD_DOCKER_TAG

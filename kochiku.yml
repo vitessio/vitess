@@ -1,0 +1,22 @@
+test_command: 'square/script/ci'
+retry_count: 1
+
+# do this so the build does not install the version in .ruby-version
+ruby:
+  - 2.6
+
+targets:
+- type: build_image_and_test
+  write_to_cache:
+    - docker-cache/
+- type: cloud_vitess
+  requires:
+    - build_image_and_test
+- type: jdbc
+  requires:
+    - build_image_and_test
+- type: binaries
+  requires:
+    - build_image_and_test
+  read_from_cache:
+    - docker-cache/

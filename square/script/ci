@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Invoked by kochiku (go/kochiku: https://kochiku.sso.global.square/go/square/master)
+# Variables set by kochiku:
+# TEST_RUNNER: from kochiku.yml target.type
+# RUN_LIST: from kochiku.yaml matches for target.glob
+
+set -euxo pipefail
+
+BUILD_PACK=/data/app/kochiku-worker/build-tools/buildpack
+BUILD_PACK_BRANCH=green
+redownload_buildpack() {
+  rm -Rf "$BUILD_PACK"
+  git clone https://gitmirror-us-west.sqcorp.co/scm/git/sq/hoist-buildpacks.git "$BUILD_PACK" -q --branch "$BUILD_PACK_BRANCH"
+}
+
+check_buildpack(){
+  return_value=0
+  if [ ! -d "$BUILD_PACK" ]; then
+    return_value=1
+  fi
+  echo $return_value
+}
+
+checkout_newest_build_pack() {
+  pushd "$BUILD_PACK"
+    git reset HEAD --hard
+    git checkout "$BUILD_PACK_BRANCH"
+    git pull
+  popd
+}
+
+case "$TEST_RUNNER" in
+  build_image_and_test)
+    square/script/build-image.sh
+    exit
+    ;;
+  cloud_vitess)
+    square/script/cloud-vitess.sh
+    exit
+    ;;
+  jdbc)
+    square/script/jdbc.sh
+    exit
+    ;;
+  binaries)
+    if [[ "$(check_buildpack)" != 0 ]]; then
+      redownload_buildpack
+    fi
+    square/script/binaries.sh
+    exit
+    ;;
+  jdbc)
+    square/script/jdbc.sh
+    exit
+    ;;
+esac
+
