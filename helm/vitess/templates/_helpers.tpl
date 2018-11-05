@@ -1,6 +1,6 @@
 # Helper templates
 
-##############################
+#############################
 # Format a flag map into a command line,
 # as expected by the golang 'flag' package.
 # Boolean flags must be given a value, such as "true" or "false".
