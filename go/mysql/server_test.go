@@ -479,6 +479,7 @@ func TestConnCounts(t *testing.T) {
 	}
 	checkCountsForUser(t, user, 2)
 
+	checkCountForTLSVer(t, versionNoTLS, 2)
 	// Test after closing connections. time.Sleep lets it work, but seems flakey.
 	c.Close()
 	//time.Sleep(10 * time.Millisecond)
@@ -929,6 +930,23 @@ func TestTLSServer(t *testing.T) {
 	}
 	if results.Rows[0][0].ToString() != "ON" {
 		t.Errorf("Unexpected output for 'ssl echo': %v", results)
+	}
+
+	checkCountForTLSVer(t, versionTLS12, 1)
+	checkCountForTLSVer(t, versionNoTLS, 0)
+	conn.Close()
+
+}
+
+func checkCountForTLSVer(t *testing.T, version string, expected int64) {
+	connCounts := connCountByTLSVer.Counts()
+	count, ok := connCounts[version]
+	if ok {
+		if count != expected {
+			t.Errorf("Expected connection count for version to be %d, got %d", expected, count)
+		}
+	} else {
+		t.Errorf("No count found for version %s", version)
 	}
 }
 
