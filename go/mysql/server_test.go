@@ -429,6 +429,7 @@ func TestConnCounts(t *testing.T) {
 	th := &testHandler{}
 
 	initialNumUsers := len(connCountPerUser.Counts())
+	initialNoTLSConns := connCountByTLSVer.Counts()[versionNoTLS]
 
 	user := "anotherNotYetConnectedUser1"
 	passwd := "password1"
@@ -479,7 +480,7 @@ func TestConnCounts(t *testing.T) {
 	}
 	checkCountsForUser(t, user, 2)
 
-	checkCountForTLSVer(t, versionNoTLS, 2)
+	checkCountForTLSVer(t, versionNoTLS, 2+initialNoTLSConns)
 	// Test after closing connections. time.Sleep lets it work, but seems flakey.
 	c.Close()
 	//time.Sleep(10 * time.Millisecond)
@@ -943,7 +944,7 @@ func checkCountForTLSVer(t *testing.T, version string, expected int64) {
 	count, ok := connCounts[version]
 	if ok {
 		if count != expected {
-			t.Errorf("Expected connection count for version to be %d, got %d", expected, count)
+			t.Errorf("Expected connection count for version %s to be %d, got %d", version, expected, count)
 		}
 	} else {
 		t.Errorf("No count found for version %s", version)
