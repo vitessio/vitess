@@ -106,7 +106,7 @@ spec:
 
       containers:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
-{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $vitessTag $uid $namespace $config $orc $totalTabletCount) | indent 8 }}
+{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $defaultVtctlclient $vitessTag $uid $namespace $config $orc $totalTabletCount) | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
 {{ include "cont-mysql-slowlog" . | indent 8 }}
 {{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace) | indent 8 }}{{ end }}
@@ -340,12 +340,13 @@ spec:
 {{- $shard := index . 3 -}}
 {{- $tablet := index . 4 -}}
 {{- $defaultVttablet := index . 5 -}}
-{{- $vitessTag := index . 6 -}}
-{{- $uid := index . 7 -}}
-{{- $namespace := index . 8 -}}
-{{- $config := index . 9 -}}
-{{- $orc := index . 10 -}}
-{{- $totalTabletCount := index . 11 -}}
+{{- $defaultVtctlclient := index . 6 -}}
+{{- $vitessTag := index . 7 -}}
+{{- $uid := index . 8 -}}
+{{- $namespace := index . 9 -}}
+{{- $config := index . 10 -}}
+{{- $orc := index . 11 -}}
+{{- $totalTabletCount := index . 12 -}}
 
 {{- $cellClean := include "clean-label" $cell.name -}}
 {{- with $tablet.vttablet -}}
@@ -398,8 +399,9 @@ spec:
             set -x
 
             VTCTLD_SVC=vtctld.{{ $namespace }}:15999
+            VTCTL_EXTRA_FLAGS=({{ include "format-flags-inline" $defaultVtctlclient.extraFlags }})
 
-            master_alias_json=$(/vt/bin/vtctlclient -server $VTCTLD_SVC GetShard {{ $keyspace.name }}/{{ $shard.name }})
+            master_alias_json=$(/vt/bin/vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC GetShard {{ $keyspace.name }}/{{ $shard.name }})
             master_cell=$(jq -r '.master_alias.cell' <<< "$master_alias_json")
             master_uid=$(jq -r '.master_alias.uid' <<< "$master_alias_json")
             master_alias=$master_cell-$master_uid
@@ -424,7 +426,7 @@ spec:
             until [ $DONE_REPARENTING ]; do
 
               # reparent before shutting down
-              /vt/bin/vtctlclient -server $VTCTLD_SVC PlannedReparentShard -keyspace_shard={{ $keyspace.name }}/{{ $shard.name }} -avoid_master=$current_alias
+              /vt/bin/vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC PlannedReparentShard -keyspace_shard={{ $keyspace.name }}/{{ $shard.name }} -avoid_master=$current_alias
 
               # if PlannedReparentShard succeeded, then don't retry
               if [ $? -eq 0 ]; then
@@ -444,7 +446,7 @@ spec:
 
             # delete the current tablet from topology. Not strictly necessary, but helps to prevent
             # edge cases where there are two masters
-            /vt/bin/vtctlclient -server $VTCTLD_SVC DeleteTablet $current_alias
+            /vt/bin/vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC DeleteTablet $current_alias
 
   command: ["bash"]
   args:
