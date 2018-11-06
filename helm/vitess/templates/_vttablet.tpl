@@ -266,6 +266,10 @@ spec:
       cp /bin/busybox /vttmp/bin/
       cp -R /vt/config /vttmp/
 
+      # make sure the log files exist
+      touch /vtdataroot/tabletdata/error.log
+      touch /vtdataroot/tabletdata/slow.log
+
 {{- end -}}
 
 ###################################
@@ -571,7 +575,7 @@ spec:
 {{- define "cont-mysql-errorlog" -}}
 
 - name: error-log
-  image: busybox
+  image: debian:stretch-slim
   command: ["/bin/sh"]
   args: ["-c", "tail -n+1 -F /vtdataroot/tabletdata/error.log"]
   volumeMounts:
@@ -585,7 +589,7 @@ spec:
 {{- define "cont-mysql-slowlog" -}}
 
 - name: slow-log
-  image: busybox
+  image: debian:stretch-slim
   command: ["/bin/sh"]
   args: ["-c", "tail -n+1 -F /vtdataroot/tabletdata/slow.log"]
   volumeMounts:
