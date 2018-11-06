@@ -135,13 +135,6 @@ func TestTabletExecutorValidate(t *testing.T) {
 		t.Fatalf("executor.Validate should fail, alter a table more than 100,000 rows")
 	}
 
-	// change a table with more than 2,000,000 rows
-	if err := executor.Validate(ctx, []string{
-		"RENAME TABLE test_table_04 TO test_table_05",
-	}); err == nil {
-		t.Fatalf("executor.Validate should fail, change a table more than 2,000,000 rows")
-	}
-
 	if err := executor.Validate(ctx, []string{
 		"TRUNCATE TABLE test_table_04",
 	}); err != nil {

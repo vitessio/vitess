@@ -240,15 +240,26 @@ index by_msg (msg)
     for t in [shard_master, shard_replica, shard_rdonly1]:
       t.create_db('vt_test_keyspace')
 
+    # replica is not started, InitShardMaster should timeout
     shard_master.start_vttablet(wait_for_state=None,
                                 binlog_use_v3_resharding_mode=False)
-    shard_replica.start_vttablet(wait_for_state=None,
-                                 binlog_use_v3_resharding_mode=False)
     shard_rdonly1.start_vttablet(wait_for_state=None,
                                  binlog_use_v3_resharding_mode=False)
 
-    for t in [shard_master, shard_replica, shard_rdonly1]:
+    for t in [shard_master, shard_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
+
+    # reparent to make the tablets work - expect fail
+    # because replica tablet is not up
+    _, stderr = utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
+                     shard_master.tablet_alias], auto_log=True, expect_fail=True)
+
+    self.assertIn('Tablet test_nj-0000062345 ResetReplication failed', stderr)
+    # start replica
+    shard_replica.start_vttablet(wait_for_state=None,
+                                 binlog_use_v3_resharding_mode=False)
+
+    shard_replica.wait_for_vttablet_state('NOT_SERVING')
 
     # reparent to make the tablets work
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',

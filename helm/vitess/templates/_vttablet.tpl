@@ -270,6 +270,7 @@ spec:
 
       # copy necessary assets to the volumeMounts
       cp /vt/bin/mysqlctld /vttmp/bin/
+      cp /bin/busybox /vttmp/bin/
       cp -R /vt/config /vttmp/
 
 {{- end -}}
@@ -387,6 +388,64 @@ spec:
           name: vitess-cm
           key: db.flavor
 
+  lifecycle:
+    preStop:
+      exec:
+        command:
+          - "bash"
+          - "-c"
+          - |
+            set -x
+
+            VTCTLD_SVC=vtctld.{{ $namespace }}:15999
+
+            master_alias_json=$(/vt/bin/vtctlclient -server $VTCTLD_SVC GetShard {{ $keyspace.name }}/{{ $shard.name }})
+            master_cell=$(jq -r '.master_alias.cell' <<< "$master_alias_json")
+            master_uid=$(jq -r '.master_alias.uid' <<< "$master_alias_json")
+            master_alias=$master_cell-$master_uid
+
+            current_uid=$(cat /vtdataroot/tabletdata/tablet-uid)
+            current_alias={{ $cell.name }}-$current_uid
+
+            if [ $master_alias != $current_alias ]; then
+                # since this isn't the master, there's no reason to reparent
+                exit
+            fi
+
+            # TODO: add more robust health checks to make sure that we don't initiate a reparent
+            # if there isn't a healthy enough replica to take over
+            # - seconds behind master
+            # - use GTID_SUBTRACT
+
+            RETRY_COUNT=0
+            MAX_RETRY_COUNT=5
+
+            # retry reparenting
+            until [ $DONE_REPARENTING ]; do
+
+              # reparent before shutting down
+              /vt/bin/vtctlclient -server $VTCTLD_SVC PlannedReparentShard -keyspace_shard={{ $keyspace.name }}/{{ $shard.name }} -avoid_master=$current_alias
+
+              # if PlannedReparentShard succeeded, then don't retry
+              if [ $? -eq 0 ]; then
+                DONE_REPARENTING=true
+
+              # if we've reached the max retry count, exit unsuccessfully
+              elif [ $RETRY_COUNT -eq $MAX_RETRY_COUNT ]; then
+                exit 1
+
+              # otherwise, increment the retry count and sleep for 10 seconds
+              else
+                let RETRY_COUNT=RETRY_COUNT+1
+                sleep 10
+              fi
+
+            done
+
+            # delete the current tablet from topology. Not strictly necessary, but helps to prevent
+            # edge cases where there are two masters
+            /vt/bin/vtctlclient -server $VTCTLD_SVC DeleteTablet $current_alias
+
   command: ["bash"]
   args:
     - "-c"
@@ -471,6 +530,28 @@ spec:
         configMapKeyRef:
           name: vitess-cm
           key: db.flavor
+
+  lifecycle:
+    preStop:
+      exec:
+        command:
+          - "bash"
+          - "-c"
+          - |
+            set -x
+
+            # block shutting down mysqlctld until vttablet shuts down first
+            until [ $VTTABLET_GONE ]; do
+
+              # poll every 5 seconds to see if vttablet is still running
+              /vt/bin/busybox wget --spider localhost:15002/debug/vars
+
+              if [ $? -ne 0 ]; then
+                VTTABLET_GONE=true
+              fi
+
+              sleep 5
+            done
 
   command: ["bash"]
   args:

@@ -183,8 +183,6 @@ func TestDDLPlan(t *testing.T) {
 			t.Fatalf("Error marshalling %v", plan)
 		}
 		matchString(t, tcase.lineno, expected["Action"], plan.Action)
-		matchString(t, tcase.lineno, expected["TableName"], sqlparser.String(plan.TableName))
-		matchString(t, tcase.lineno, expected["NewName"], sqlparser.String(plan.NewName))
 	}
 }
 
