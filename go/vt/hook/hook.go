@@ -85,7 +85,7 @@ func NewSimpleHook(name string) *Hook {
 	return &Hook{Name: name}
 }
 
-// NewHook returns a Hook object with the provided name and params.
+// NewHookWithEnv returns a Hook object with the provided name, params and ExtraEnv.
 func NewHookWithEnv(name string, params []string, env map[string]string) *Hook {
 	return &Hook{Name: name, Parameters: params, ExtraEnv: env}
 }
