@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -36,7 +37,7 @@ import (
 var (
 	mysqlAuthServerStaticFile   = flag.String("mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
 	mysqlAuthServerStaticString = flag.String("mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
-	mysqlAuthRotationTime       = flag.Duration("mysql_auth_rotation_time", 300*time.Second, "Cooldown period before reloading json config.")
+	mysqlAuthRotationTime       = flag.Int64("mysql_auth_rotation_time", 300, "Cooldown period before reloading json config.")
 )
 
 const (
@@ -52,10 +53,10 @@ type AuthServerStatic struct {
 	// It defaults to MysqlNativePassword.
 	Method string
 	// This mutex helps us prevent data races between the multiple updates of Entries.
-	mu sync.Mutex
+	mu sync.RWMutex
 	// Entries contains the users, passwords and user data.
 	Entries          map[string][]*AuthServerStaticEntry
-	LastAuthRotation time.Time
+	LastAuthRotation int64
 }
 
 // AuthServerStaticEntry stores the values for a given user.
@@ -116,7 +117,7 @@ func RegisterAuthServerStaticFromParams(file, str string) {
 	}
 	authServerStatic.installSignalHandlers()
 
-	authServerStatic.LastAuthRotation = time.Now()
+	authServerStatic.LastAuthRotation = time.Now().Unix()
 
 	// And register the server.
 	RegisterAuthServerImpl("static", authServerStatic)
@@ -205,15 +206,15 @@ func (a *AuthServerStatic) Salt() ([]byte, error) {
 // ValidateHash is part of the AuthServer interface.
 func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
 	// If enough time has elpased (default is 5 minutes), reload the auth file/string
-	if time.Now().Sub(a.LastAuthRotation) > *mysqlAuthRotationTime {
-		a.loadConfigFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString)
-		a.LastAuthRotation = time.Now()
+	lastAuth := a.LastAuthRotation
+	if (time.Now().Unix() - lastAuth) > *mysqlAuthRotationTime {
+		if swapped := atomic.CompareAndSwapInt64(&a.LastAuthRotation, lastAuth, time.Now().Unix()); swapped {
+			go a.loadConfigFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString)
+		}
 	}
 
-	// We lock after the call to loadConfigFromParams since we lock and unlock the mutex within loadConfig.
-	// This avoids deadlocking, but a cleaner approach could be used.
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	// Find the entry.
 	entries, ok := a.Entries[user]
 
@@ -242,8 +243,8 @@ func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse [
 // We only recognize MysqlClearPassword and MysqlDialog here.
 func (a *AuthServerStatic) Negotiate(c *Conn, user string, remoteAddr net.Addr) (Getter, error) {
 	// Finish the negotiation.
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	password, err := AuthServerNegotiateClearOrDialog(c, a.Method)
 	if err != nil {
 		return nil, err
