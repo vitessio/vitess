@@ -174,12 +174,12 @@ func (wr *Wrangler) RefreshTabletState(ctx context.Context, tabletAlias *topodat
 }
 
 // ExecuteFetchAsApp executes a query remotely using the App pool
-func (wr *Wrangler) ExecuteFetchAsApp(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query string, maxRows int) (*querypb.QueryResult, error) {
+func (wr *Wrangler) ExecuteFetchAsApp(ctx context.Context, tabletAlias *topodatapb.TabletAlias, usePool bool, query string, maxRows int) (*querypb.QueryResult, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ExecuteFetchAsApp(ctx, ti.Tablet, false, []byte(query), maxRows)
+	return wr.tmc.ExecuteFetchAsApp(ctx, ti.Tablet, usePool, []byte(query), maxRows)
 }
 
 // ExecuteFetchAsDba executes a query remotely using the DBA pool

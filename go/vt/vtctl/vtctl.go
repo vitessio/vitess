@@ -209,7 +209,7 @@ var commands = []commandGroup{
 				"Runs the specified hook on the given tablet. A hook is a script that resides in the $VTROOT/vthook directory. You can put any script into that directory and use this command to run that script.\n" +
 					"For this command, the param=value arguments are parameters that the command passes to the specified hook."},
 			{"ExecuteFetchAsApp", commandExecuteFetchAsApp,
-				"[-max_rows=10000] [-json] <tablet alias> <sql command>",
+				"[-max_rows=10000] [-json] [-use_pool] <tablet alias> <sql command>",
 				"Runs the given SQL command as a App on the remote tablet."},
 			{"ExecuteFetchAsDba", commandExecuteFetchAsDba,
 				"[-max_rows=10000] [-disable_binlogs] [-json] <tablet alias> <sql command>",
@@ -1031,6 +1031,7 @@ func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 
 func commandExecuteFetchAsApp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	maxRows := subFlags.Int("max_rows", 10000, "Specifies the maximum number of rows to allow in fetch")
+	usePool := subFlags.Bool("use_pool", false, "Use connection from pool")
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -1045,7 +1046,7 @@ func commandExecuteFetchAsApp(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return err
 	}
 	query := subFlags.Arg(1)
-	qrproto, err := wr.ExecuteFetchAsApp(ctx, alias, query, *maxRows)
+	qrproto, err := wr.ExecuteFetchAsApp(ctx, alias, *usePool, query, *maxRows)
 	if err != nil {
 		return err
 	}
