@@ -591,9 +591,13 @@ spec:
 {{- define "cont-mysql-errorlog" -}}
 
 - name: error-log
-  image: debian:stretch-slim
-  command: ["/bin/sh"]
-  args: ["-c", "tail -n+1 -F /vtdataroot/tabletdata/error.log"]
+  image: vitess/logtail:latest
+  imagePullPolicy: Always
+
+  env:
+  - name: TAIL_FILEPATH
+    value: /vtdataroot/tabletdata/error.log
+
   volumeMounts:
     - name: vtdataroot
       mountPath: /vtdataroot
@@ -605,9 +609,13 @@ spec:
 {{- define "cont-mysql-slowlog" -}}
 
 - name: slow-log
-  image: debian:stretch-slim
-  command: ["/bin/sh"]
-  args: ["-c", "tail -n+1 -F /vtdataroot/tabletdata/slow.log"]
+  image: vitess/logtail:latest
+  imagePullPolicy: Always
+
+  env:
+  - name: TAIL_FILEPATH
+    value: /vtdataroot/tabletdata/slow.log
+
   volumeMounts:
     - name: vtdataroot
       mountPath: /vtdataroot
