@@ -107,6 +107,7 @@ spec:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
 {{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $vitessTag $uid $namespace $config $orc $totalTabletCount) | indent 8 }}
 {{ include "cont-logrotate" . | indent 8 }}
+{{ include "cont-mysql-generallog" . | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
 {{ include "cont-mysql-slowlog" . | indent 8 }}
 {{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace) | indent 8 }}{{ end }}
@@ -269,7 +270,8 @@ spec:
 
       # make sure the log files exist
       touch /vtdataroot/tabletdata/error.log
-      touch /vtdataroot/tabletdata/slow.log
+      touch /vtdataroot/tabletdata/slow-query.log
+      touch /vtdataroot/tabletdata/general.log
 
 {{- end -}}
 
@@ -612,7 +614,25 @@ spec:
 
   env:
   - name: TAIL_FILEPATH
-    value: /vtdataroot/tabletdata/slow.log
+    value: /vtdataroot/tabletdata/slow-query.log
+
+  volumeMounts:
+    - name: vtdataroot
+      mountPath: /vtdataroot
+{{- end -}}
+
+##########################
+# redirect the general log file to stdout
+##########################
+{{- define "cont-mysql-generallog" -}}
+
+- name: general-log
+  image: vitess/logtail:latest
+  imagePullPolicy: Always
+
+  env:
+  - name: TAIL_FILEPATH
+    value: /vtdataroot/tabletdata/general.log
 
   volumeMounts:
     - name: vtdataroot
