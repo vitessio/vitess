@@ -3,24 +3,21 @@ set -ex
 
 # SIGTERM-handler
 term_handler() {
-  # block shutting down mysqlctld until vttablet shuts down first
-  until [ $MYSQL_GONE ]; do
+  # block shutting down log tailers until mysql shuts down first
+  until [ "$MYSQL_GONE" ]; do
+    sleep 5
 
-    # poll every 5 seconds to see if vttablet is still running
-    mysqladmin ping -uroot --socket=/vtdataroot/tabletdata/mysql.sock
-
-    if [ $? -ne 0 ]; then
+    # poll every 5 seconds to see if mysql is still running
+    if ! mysqladmin ping -uroot --socket=/vtdataroot/tabletdata/mysql.sock; then
       MYSQL_GONE=true
     fi
-
-    sleep 5
   done
   
   exit;
 }
 
 # setup handlers
-# on callback, kill the last background process, which is `tail -f /dev/null` and execute the specified handler
+# on callback, kill the last background process and execute the specified handler
 trap 'kill ${!}; term_handler' SIGINT SIGTERM SIGHUP
 
 # wait forever
