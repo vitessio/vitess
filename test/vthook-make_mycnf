@@ -15,11 +15,11 @@
 # limitations under the License.
 
 # this script creates a dummy my.cnf which won't actually work 
-echo "KEYSPACE="$KEYSPACE
-echo "SHARD="$SHARD
-echo "TABLET_TYPE="$TABLET_TYPE
-echo "TABLET_ID="$TABLET_ID
-echo "TABLET_DIR="$TABLET_DIR
+echo "KEYSPACE=""$KEYSPACE"
+echo "SHARD=""$SHARD"
+echo "TABLET_TYPE=""$TABLET_TYPE"
+echo "TABLET_ID=""$TABLET_ID"
+echo "TABLET_DIR=""$TABLET_DIR"
 
 echo "server-id = 22222"
 echo "datadir = /vt/vtdataroot/vt_0000011111/data"
