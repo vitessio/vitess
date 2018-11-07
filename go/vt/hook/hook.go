@@ -85,6 +85,11 @@ func NewSimpleHook(name string) *Hook {
 	return &Hook{Name: name}
 }
 
+// NewHook returns a Hook object with the provided name and params.
+func NewHookWithEnv(name string, params []string, env map[string]string) *Hook {
+	return &Hook{Name: name, Parameters: params, ExtraEnv: env}
+}
+
 // findHook trie to locate the hook, and returns the exec.Cmd for it.
 func (hook *Hook) findHook() (*exec.Cmd, int, error) {
 	// Check the hook path.
