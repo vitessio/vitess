@@ -669,6 +669,7 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 	return c.writeEphemeralPacket()
 }
 
+// Whenever we move to a new version of go, we will need add any new supported TLS versions here
 func tlsVersionToString(version uint16) string {
 	switch version {
 	case tls.VersionSSL30:
