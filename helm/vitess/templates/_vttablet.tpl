@@ -580,9 +580,7 @@ spec:
   volumeMounts:
     - name: vtdataroot
       mountPath: /vtdataroot
-  securityContext:
-    # logrotate requires root privileges
-    runAsUser: 0
+
 {{- end -}}
 
 ##########################
