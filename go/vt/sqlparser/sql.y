@@ -2464,6 +2464,30 @@ function_call_keyword:
   {
     $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
   }
+| SUBSTR openb STRING ',' value_expression closeb
+  {
+    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: nil}
+  }
+| SUBSTR openb STRING ',' value_expression ',' value_expression closeb
+  {
+    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
+  }
+| SUBSTR openb STRING FROM value_expression FOR value_expression closeb
+  {
+    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
+  }
+| SUBSTRING openb STRING ',' value_expression closeb
+  {
+    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: nil}
+  }
+| SUBSTRING openb STRING ',' value_expression ',' value_expression closeb
+  {
+    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
+  }
+| SUBSTRING openb STRING FROM value_expression FOR value_expression closeb
+  {
+    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
+  }
 | MATCH openb select_expression_list closeb AGAINST openb value_expression match_option closeb
   {
   $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
