@@ -56,5 +56,5 @@ COPY --from=base $VTTOP/config/mycnf/backup.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/rbr.cnf /vt/config/mycnf/
 
 # add vitess user and add permissions
-RUN groupadd -r --gid 999 vitess && useradd -r -g vitess --uid 999 vitess && \
+RUN groupadd -r --gid 2000 vitess && useradd -r -g vitess --uid 1000 vitess && \
    chown -R vitess:vitess /vt;

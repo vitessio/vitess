@@ -106,6 +106,8 @@ spec:
       containers:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
 {{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $vitessTag $uid $namespace $config $orc $totalTabletCount) | indent 8 }}
+{{ include "cont-logrotate" . | indent 8 }}
+{{ include "cont-mysql-generallog" . | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
 {{ include "cont-mysql-slowlog" . | indent 8 }}
 {{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace) | indent 8 }}{{ end }}
@@ -265,6 +267,11 @@ spec:
       cp /vt/bin/mysqlctld /vttmp/bin/
       cp /bin/busybox /vttmp/bin/
       cp -R /vt/config /vttmp/
+
+      # make sure the log files exist
+      touch /vtdataroot/tabletdata/error.log
+      touch /vtdataroot/tabletdata/slow-query.log
+      touch /vtdataroot/tabletdata/general.log
 
 {{- end -}}
 
@@ -566,14 +573,31 @@ spec:
 {{- end -}}
 
 ##########################
+# run logrotate for all log files in /vtdataroot/tabletdata
+##########################
+{{- define "cont-logrotate" -}}
+
+- name: logrotate
+  image: vitess/logrotate:latest
+  volumeMounts:
+    - name: vtdataroot
+      mountPath: /vtdataroot
+
+{{- end -}}
+
+##########################
 # redirect the error log file to stdout
 ##########################
 {{- define "cont-mysql-errorlog" -}}
 
 - name: error-log
-  image: busybox
-  command: ["/bin/sh"]
-  args: ["-c", "tail -n+1 -F /vtdataroot/tabletdata/error.log"]
+  image: vitess/logtail:latest
+  imagePullPolicy: Always
+
+  env:
+  - name: TAIL_FILEPATH
+    value: /vtdataroot/tabletdata/error.log
+
   volumeMounts:
     - name: vtdataroot
       mountPath: /vtdataroot
@@ -585,9 +609,31 @@ spec:
 {{- define "cont-mysql-slowlog" -}}
 
 - name: slow-log
-  image: busybox
-  command: ["/bin/sh"]
-  args: ["-c", "tail -n+1 -F /vtdataroot/tabletdata/slow.log"]
+  image: vitess/logtail:latest
+  imagePullPolicy: Always
+
+  env:
+  - name: TAIL_FILEPATH
+    value: /vtdataroot/tabletdata/slow-query.log
+
+  volumeMounts:
+    - name: vtdataroot
+      mountPath: /vtdataroot
+{{- end -}}
+
+##########################
+# redirect the general log file to stdout
+##########################
+{{- define "cont-mysql-generallog" -}}
+
+- name: general-log
+  image: vitess/logtail:latest
+  imagePullPolicy: Always
+
+  env:
+  - name: TAIL_FILEPATH
+    value: /vtdataroot/tabletdata/general.log
+
   volumeMounts:
     - name: vtdataroot
       mountPath: /vtdataroot
