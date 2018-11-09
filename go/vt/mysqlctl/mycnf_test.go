@@ -101,6 +101,7 @@ func NoTestMycnfHook(t *testing.T) {
 	os.Setenv("TABLET_TYPE", "MASTER")
 	os.Setenv("TABLET_ID", "11111")
 	os.Setenv("TABLET_DIR", TabletDir(uid))
+	os.Setenv("MYSQL_PORT", "15306")
 	// this is not being passed, so it should be nil
 	os.Setenv("MY_VAR", "myvalue")
 
@@ -148,6 +149,9 @@ func NoTestMycnfHook(t *testing.T) {
 	}
 	if got, want := mycnf.lookup("TABLET_DIR"), "/vt_0000011111"; !strings.Contains(got, want) {
 		t.Errorf("Error passing env %v, got %v, want %v", "TABLET_DIR", got, want)
+	}
+	if got, want := mycnf.lookup("MYSQL_PORT"), "15306"; got != want {
+		t.Errorf("Error passing env %v, got %v, want %v", "MYSQL_PORT", got, want)
 	}
 	if got := mycnf.lookup("MY_VAR"); got != "" {
 		t.Errorf("Unexpected env %v set to %v", "MY_VAR", got)

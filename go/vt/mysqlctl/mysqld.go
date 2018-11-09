@@ -596,7 +596,7 @@ func (mysqld *Mysqld) initConfig(root string, cnf *Mycnf, outFile string) error 
 	var configData string
 
 	env := make(map[string]string)
-	envVars := []string{"KEYSPACE", "SHARD", "TABLET_TYPE", "TABLET_ID", "TABLET_DIR"}
+	envVars := []string{"KEYSPACE", "SHARD", "TABLET_TYPE", "TABLET_ID", "TABLET_DIR", "MYSQL_PORT"}
 	for _, v := range envVars {
 		env[v] = os.Getenv(v)
 	}
