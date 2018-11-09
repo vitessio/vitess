@@ -57,7 +57,7 @@ const (
 )
 
 var (
-	errReadOnly = errors.New("The MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) during query:")
+	errReadOnly = errors.New("the MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) during query: ")
 
 	errStreamingQueryTimeout = errors.New("vttablet: generic::unknown: error: the query was killed either because it timed out or was canceled: (errno 2013) (sqlstate HY000) during query: ")
 )
@@ -76,9 +76,9 @@ type splitCloneTestCase struct {
 
 	// Destination tablets.
 	leftMasterFakeDb  *fakesqldb.DB
-	leftMasterQs      *fakes.StreamHealthQueryService
+	leftMasterQs      *testQueryService
 	rightMasterFakeDb *fakesqldb.DB
-	rightMasterQs     *fakes.StreamHealthQueryService
+	rightMasterQs     *testQueryService
 
 	// leftReplica is used by the reparent test.
 	leftReplica       *testlib.FakeTablet
@@ -92,14 +92,23 @@ type splitCloneTestCase struct {
 
 	// defaultWorkerArgs are the full default arguments to run SplitClone.
 	defaultWorkerArgs []string
+
+	// Used to restore the default values after the test run
+	defaultExecuteFetchRetryTime time.Duration
+	defaultRetryDuration         time.Duration
 }
 
 func (tc *splitCloneTestCase) setUp(v3 bool) {
-	tc.setUpWithConcurreny(v3, 10, 2, splitCloneTestRowsCount)
+	tc.setUpWithConcurrency(v3, 10, 2, splitCloneTestRowsCount)
 }
 
-func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQueryMaxRows, rowsCount int) {
+func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQueryMaxRows, rowsCount int) {
 	*useV3ReshardingMode = v3
+
+	// Reset some retry flags for the tests that change that
+	tc.defaultRetryDuration = *retryDuration
+	tc.defaultExecuteFetchRetryTime = *executeFetchRetryTime
+
 	tc.ts = memorytopo.NewServer("cell1", "cell2")
 	ctx := context.Background()
 	tc.wi = NewInstance(tc.ts, "cell1", time.Second)
@@ -245,12 +254,13 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 	}
 
 	// Fake stream health reponses because vtworker needs them to find the master.
-	tc.leftMasterQs = fakes.NewStreamHealthQueryService(leftMaster.Target())
-	tc.leftMasterQs.AddDefaultHealthResponse()
+	shqs := fakes.NewStreamHealthQueryService(leftMaster.Target())
+	shqs.AddDefaultHealthResponse()
+	tc.leftMasterQs = newTestQueryService(tc.t, leftMaster.Target(), shqs, 0, 2, topoproto.TabletAliasString(leftMaster.Tablet.Alias), false /* omitKeyspaceID */)
 	tc.leftReplicaQs = fakes.NewStreamHealthQueryService(leftReplica.Target())
-	tc.leftReplicaQs.AddDefaultHealthResponse()
-	tc.rightMasterQs = fakes.NewStreamHealthQueryService(rightMaster.Target())
-	tc.rightMasterQs.AddDefaultHealthResponse()
+	shqs = fakes.NewStreamHealthQueryService(rightMaster.Target())
+	shqs.AddDefaultHealthResponse()
+	tc.rightMasterQs = newTestQueryService(tc.t, rightMaster.Target(), shqs, 1, 2, topoproto.TabletAliasString(rightMaster.Tablet.Alias), false /* omitKeyspaceID */)
 	grpcqueryservice.Register(leftMaster.RPCServer, tc.leftMasterQs)
 	grpcqueryservice.Register(leftReplica.RPCServer, tc.leftReplicaQs)
 	grpcqueryservice.Register(rightMaster.RPCServer, tc.rightMasterQs)
@@ -276,6 +286,9 @@ func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQue
 }
 
 func (tc *splitCloneTestCase) tearDown() {
+	*retryDuration = tc.defaultRetryDuration
+	*executeFetchRetryTime = tc.defaultExecuteFetchRetryTime
+
 	for _, ft := range tc.tablets {
 		ft.StopActionLoop(tc.t)
 	}
@@ -519,7 +532,7 @@ func TestSplitCloneV2_Offline(t *testing.T) {
 // get processed concurrently while the other pending ones are blocked.
 func TestSplitCloneV2_Offline_HighChunkCount(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
-	tc.setUpWithConcurreny(false /* v3 */, 10, 5 /* writeQueryMaxRows */, 1000 /* rowsCount */)
+	tc.setUpWithConcurrency(false /* v3 */, 10, 5 /* writeQueryMaxRows */, 1000 /* rowsCount */)
 	defer tc.tearDown()
 
 	args := make([]string, len(tc.defaultWorkerArgs))
@@ -544,6 +557,9 @@ func TestSplitCloneV2_Offline_RestartStreamingQuery(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
+
+	// Only wait 1 ms between retries, so that the test passes faster.
+	*executeFetchRetryTime = 1 * time.Millisecond
 
 	// Ensure that this test uses only the first tablet. This makes it easier
 	// to verify that the restart actually happened for that tablet.
@@ -580,8 +596,11 @@ func TestSplitCloneV2_Offline_RestartStreamingQuery(t *testing.T) {
 // of the streaming query does not succeed here and instead vtworker will fail.
 func TestSplitCloneV2_Offline_FailOverStreamingQuery_NotAllowed(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
-	tc.setUpWithConcurreny(false /* v3 */, 1, 10, splitCloneTestRowsCount)
+	tc.setUpWithConcurrency(false /* v3 */, 1, 10, splitCloneTestRowsCount)
 	defer tc.tearDown()
+
+	// Only wait 1 ms between retries, so that the test passes faster.
+	*executeFetchRetryTime = 1 * time.Millisecond
 
 	// Ensure that this test uses only the first tablet.
 	tc.sourceRdonlyQs[1].AddHealthResponseWithSecondsBehindMaster(3600)
@@ -617,7 +636,7 @@ func TestSplitCloneV2_Offline_FailOverStreamingQuery_NotAllowed(t *testing.T) {
 // reading the last row.
 func TestSplitCloneV2_Online_FailOverStreamingQuery(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
-	tc.setUpWithConcurreny(false /* v3 */, 1, 10, splitCloneTestRowsCount)
+	tc.setUpWithConcurrency(false /* v3 */, 1, 10, splitCloneTestRowsCount)
 	defer tc.tearDown()
 
 	// In the online phase we won't enable filtered replication. Don't expect it.
@@ -672,7 +691,7 @@ func TestSplitCloneV2_Online_FailOverStreamingQuery(t *testing.T) {
 // available.
 func TestSplitCloneV2_Online_TabletsUnavailableDuringRestart(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
-	tc.setUpWithConcurreny(false /* v3 */, 1, 10, splitCloneTestRowsCount)
+	tc.setUpWithConcurrency(false /* v3 */, 1, 10, splitCloneTestRowsCount)
 	defer tc.tearDown()
 
 	// In the online phase we won't enable filtered replication. Don't expect it.
@@ -692,15 +711,9 @@ func TestSplitCloneV2_Online_TabletsUnavailableDuringRestart(t *testing.T) {
 		tc.sourceRdonlyQs[0].AddHealthResponseWithNotServing()
 	})
 
-	// Only wait 1 ms between retries, so that the test passes faster.
-	*executeFetchRetryTime = 1 * time.Millisecond
 	// Let vtworker keep retrying and give up rather quickly because the test
 	// will be blocked until it finally fails.
-	defaultRetryDuration := *retryDuration
 	*retryDuration = 500 * time.Millisecond
-	defer func() {
-		*retryDuration = defaultRetryDuration
-	}()
 
 	// Run the vtworker command.
 	args := []string{"SplitClone",
@@ -757,14 +770,10 @@ func TestSplitCloneV2_Online_Offline(t *testing.T) {
 	// When the online clone inserted the last rows, modify the destination test
 	// query service such that it will return them as well.
 	tc.leftMasterFakeDb.GetEntry(29).AfterFunc = func() {
-		for i := range []int{0, 1} {
-			tc.leftRdonlyQs[i].addGeneratedRows(100, 200)
-		}
+		tc.leftMasterQs.addGeneratedRows(100, 200)
 	}
 	tc.rightMasterFakeDb.GetEntry(29).AfterFunc = func() {
-		for i := range []int{0, 1} {
-			tc.rightRdonlyQs[i].addGeneratedRows(100, 200)
-		}
+		tc.rightMasterQs.addGeneratedRows(100, 200)
 	}
 
 	// Run the vtworker command.
@@ -789,7 +798,7 @@ func TestSplitCloneV2_Offline_Reconciliation(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
 	// We reduce the parallelism to 1 to test the order of expected
 	// insert/update/delete statements on the destination master.
-	tc.setUpWithConcurreny(false /* v3 */, 1, 10, splitCloneTestRowsCount)
+	tc.setUpWithConcurrency(false /* v3 */, 1, 10, splitCloneTestRowsCount)
 	defer tc.tearDown()
 
 	// We assume that an Online Clone ran before which copied the rows 100-199
@@ -807,15 +816,13 @@ func TestSplitCloneV2_Offline_Reconciliation(t *testing.T) {
 		qs.addGeneratedRows(100, 190)
 	}
 
-	for i := range []int{0, 1} {
-		// The destination has rows 100-190 with the source in common.
-		// Rows 191-200 are extraenous on the destination.
-		tc.leftRdonlyQs[i].addGeneratedRows(100, 200)
-		tc.rightRdonlyQs[i].addGeneratedRows(100, 200)
-		// But some data is outdated data and must be updated.
-		tc.leftRdonlyQs[i].modifyFirstRows(2)
-		tc.rightRdonlyQs[i].modifyFirstRows(2)
-	}
+	// The destination has rows 100-190 with the source in common.
+	// Rows 191-200 are extraneous on the destination.
+	tc.leftMasterQs.addGeneratedRows(100, 200)
+	tc.rightMasterQs.addGeneratedRows(100, 200)
+	// But some data is outdated data and must be updated.
+	tc.leftMasterQs.modifyFirstRows(2)
+	tc.rightMasterQs.modifyFirstRows(2)
 
 	// The destination tablets should see inserts, updates and deletes.
 	// Clear the entries added by setUp() because the reconcilation will
@@ -893,11 +900,12 @@ func TestSplitCloneV2_RetryDueToReadonly(t *testing.T) {
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
 
+	// Only wait 1 ms between retries, so that the test passes faster.
+	*executeFetchRetryTime = 1 * time.Millisecond
+
 	// Provoke a retry to test the error handling.
 	tc.leftMasterFakeDb.AddExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", errReadOnly)
 	tc.rightMasterFakeDb.AddExpectedQueryAtIndex(0, "INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", errReadOnly)
-	// Only wait 1 ms between retries, so that the test passes faster.
-	*executeFetchRetryTime = 1 * time.Millisecond
 
 	// Run the vtworker command.
 	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
@@ -921,6 +929,9 @@ func TestSplitCloneV2_RetryDueToReparent(t *testing.T) {
 	tc := &splitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
+
+	// Only wait 1 ms between retries, so that the test passes faster.
+	*executeFetchRetryTime = 1 * time.Millisecond
 
 	// Provoke a reparent just before the copy finishes.
 	// leftReplica will take over for the last, 30th, insert and the vreplication checkpoint.
@@ -960,9 +971,6 @@ func TestSplitCloneV2_RetryDueToReparent(t *testing.T) {
 		//    => vtworker has no MASTER to go to and will keep retrying.
 	}
 
-	// Only wait 1 ms between retries, so that the test passes faster.
-	*executeFetchRetryTime = 1 * time.Millisecond
-
 	// Run the vtworker command.
 	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
 		t.Fatal(err)
@@ -982,11 +990,15 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
 
+	// Only wait 1 ms between retries, so that the test passes faster.
+	*executeFetchRetryTime = 1 * time.Millisecond
+
 	// leftReplica will take over for the last, 30th, insert and the vreplication checkpoint.
 	tc.leftReplicaFakeDb.AddExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 
 	// During the 29th write, let the MASTER disappear.
 	tc.leftMasterFakeDb.GetEntry(28).AfterFunc = func() {
+		t.Logf("setting MASTER tablet to REPLICA")
 		tc.leftMasterQs.UpdateType(topodatapb.TabletType_REPLICA)
 		tc.leftMasterQs.AddDefaultHealthResponse()
 	}
@@ -1013,7 +1025,9 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 		defer cancel()
 
 		for {
-			if statsRetryCounters.Counts()[retryCategoryNoMasterAvailable] >= 1 {
+			retries := statsRetryCounters.Counts()[retryCategoryNoMasterAvailable]
+			if retries >= 1 {
+				t.Logf("retried on no MASTER %v times", retries)
 				break
 			}
 
@@ -1027,12 +1041,10 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 
 		// Make leftReplica the new MASTER.
 		tc.leftReplica.Agent.TabletExternallyReparented(ctx, "1")
+		t.Logf("resetting tablet back to MASTER")
 		tc.leftReplicaQs.UpdateType(topodatapb.TabletType_MASTER)
 		tc.leftReplicaQs.AddDefaultHealthResponse()
 	}()
-
-	// Only wait 1 ms between retries, so that the test passes faster.
-	*executeFetchRetryTime = 1 * time.Millisecond
 
 	// Run the vtworker command.
 	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {

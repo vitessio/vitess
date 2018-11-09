@@ -448,12 +448,6 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
     Raises:
       AssertionError if things didn't go as expected.
     """
-    if mysql_down:
-      logging.debug('Shutting down mysqld on destination masters.')
-      utils.wait_procs(
-          [shard_0_master.shutdown_mysql(),
-           shard_1_master.shutdown_mysql()])
-
     worker_proc, worker_port, worker_rpc_port = utils.run_vtworker_bg(
         ['--cell', 'test_nj', '--use_v3_resharding_mode=false'],
         auto_log=True)
@@ -471,14 +465,13 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
             '--destination_writer_count', '1',
             '--min_healthy_rdonly_tablets', '1',
             '--max_tps', '9999']
-    if not mysql_down:
-      # Make the clone as slow as necessary such that there is enough time to
-      # run PlannedReparent in the meantime.
-      # TODO(mberlin): Once insert_values is fixed to uniformly distribute the
-      #                rows across shards when sorted by primary key, remove
-      #                --chunk_count 2, --min_rows_per_chunk 1 and set
-      #                --source_reader_count back to 1.
-      args.extend(['--source_reader_count', '2',
+    # Make the clone as slow as necessary such that there is enough time to
+    # run PlannedReparent in the meantime.
+    # TODO(mberlin): Once insert_values is fixed to uniformly distribute the
+    #                rows across shards when sorted by primary key, remove
+    #                --chunk_count 2, --min_rows_per_chunk 1 and set
+    #                --source_reader_count back to 1.
+    args.extend(['--source_reader_count', '2',
                    '--chunk_count', '2',
                    '--min_rows_per_chunk', '1',
                    '--write_query_max_rows', '1'])
@@ -486,6 +479,23 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
     workerclient_proc = utils.run_vtworker_client_bg(args, worker_rpc_port)
 
     if mysql_down:
+      # vtworker is blocked at this point. This is a good time to test that its
+      # throttler server is reacting to RPCs.
+      self.check_throttler_service('localhost:%d' % worker_rpc_port,
+                                   ['test_keyspace/-80', 'test_keyspace/80-'],
+                                   9999)
+
+      utils.poll_for_vars(
+          'vtworker', worker_port,
+          'WorkerState == cloning the data (online)',
+          condition_fn=lambda v: v.get('WorkerState') == 'cloning the'
+          ' data (online)')
+
+      logging.debug('Worker is in copy state, Shutting down mysqld on destination masters.')
+      utils.wait_procs(
+          [shard_0_master.shutdown_mysql(),
+           shard_1_master.shutdown_mysql()])
+
       # If MySQL is down, we wait until vtworker retried at least once to make
       # sure it reached the point where a write failed due to MySQL being down.
       # There should be two retries at least, one for each destination shard.
@@ -493,13 +503,7 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
           'vtworker', worker_port,
           'WorkerRetryCount >= 2',
           condition_fn=lambda v: v.get('WorkerRetryCount') >= 2)
-      logging.debug('Worker has retried at least twice, starting reparent now')
-
-      # vtworker is blocked at this point. This is a good time to test that its
-      # throttler server is reacting to RPCs.
-      self.check_throttler_service('localhost:%d' % worker_rpc_port,
-                                   ['test_keyspace/-80', 'test_keyspace/80-'],
-                                   9999)
+      logging.debug('Worker has retried at least once per shard, starting reparent now')
 
       # Bring back masters. Since we test with semi-sync now, we need at least
       # one replica for the new master. This test is already quite expensive,
