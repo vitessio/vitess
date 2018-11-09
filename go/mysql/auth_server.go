@@ -160,7 +160,7 @@ func isPassScrambleMysqlNativePassword(reply, salt []byte, mysqlNativePassword s
 		return false
 	}
 
-	if strings.Index(mysqlNativePassword, "*") != -1 {
+	if strings.Contains(mysqlNativePassword, "*") {
 		mysqlNativePassword = mysqlNativePassword[1:]
 	}
 

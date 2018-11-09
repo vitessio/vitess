@@ -109,7 +109,7 @@ func (c *Conn) fillFlavor() {
 		return
 	}
 
-	if strings.Index(c.ServerVersion, mariaDBVersionString) != -1 {
+	if strings.Contains(c.ServerVersion, mariaDBVersionString) {
 		c.flavor = mariadbFlavor{}
 		return
 	}
