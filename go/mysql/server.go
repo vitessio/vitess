@@ -39,10 +39,10 @@ const (
 	// timing metric keys
 	connectTimingKey  = "Connect"
 	queryTimingKey    = "Query"
-	versionSSL30      = "SSL 3.0"
-	versionTLS10      = "TLS 1.0"
-	versionTLS11      = "TLS 1.1"
-	versionTLS12      = "TLS 1.2"
+	versionSSL30      = "SSL30"
+	versionTLS10      = "TLS10"
+	versionTLS11      = "TLS11"
+	versionTLS12      = "TLS12"
 	versionTLSUnknown = "Unknown TLS Version"
 	versionNoTLS      = "None"
 )
