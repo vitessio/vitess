@@ -43,7 +43,7 @@ const (
 	versionTLS10      = "TLS10"
 	versionTLS11      = "TLS11"
 	versionTLS12      = "TLS12"
-	versionTLSUnknown = "Unknown TLS Version"
+	versionTLSUnknown = "UnknownTLSVersion"
 	versionNoTLS      = "None"
 )
 
