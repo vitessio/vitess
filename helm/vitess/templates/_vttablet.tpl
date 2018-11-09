@@ -147,6 +147,9 @@ spec:
       shard: {{ $shardClean | quote }}
       type: {{ $tablet.type | quote }}
 
+# conditionally add cron job
+{{ include "vttablet-backup-cron" (tuple $cellClean $keyspaceClean $shardClean $shardName $keyspace $shard $vitessTag $config.backup $namespace $defaultVtctlclient) }}
+
 {{ if eq $tablet.type "replica" }}
 ---
 ###################################
