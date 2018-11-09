@@ -20,6 +20,7 @@ echo "SHARD=""$SHARD"
 echo "TABLET_TYPE=""$TABLET_TYPE"
 echo "TABLET_ID=""$TABLET_ID"
 echo "TABLET_DIR=""$TABLET_DIR"
+echo "MYSQL_PORT=""$MYSQL_PORT"
 
 echo "server-id = 22222"
 echo "datadir = /vt/vtdataroot/vt_0000011111/data"
