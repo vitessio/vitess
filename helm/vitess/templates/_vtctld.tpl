@@ -76,7 +76,7 @@ spec:
 {{ include "backup-env" $config.backup | indent 12 }}
           volumeMounts:
 {{ include "backup-volumeMount" $config.backup | indent 12 }}
-
+{{ include "user-secret-volumeMounts" (.secrets | default $defaultVtctld.secrets) | indent 12 }}
           resources:
 {{ toYaml (.resources | default $defaultVtctld.resources) | indent 12 }}
           command:
@@ -102,11 +102,13 @@ spec:
                 -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
                 -topo_global_root=/vitess/global
 {{ include "backup-flags" (tuple $config.backup "vtctld") | indent 16 }}
+{{ include "format-flags-all" (tuple $defaultVtctld.extraFlags .extraFlags) | indent 16 }}
               END_OF_COMMAND
               )
 
       volumes:
 {{ include "backup-volume" $config.backup | indent 8 }}
+{{ include "user-secret-volumes" (.secrets | default $defaultVtctld.secrets) | indent 8 }}
 
 {{- end -}}
 {{- end -}}

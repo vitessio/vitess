@@ -6,12 +6,13 @@
 {{- $orc := index . 0 -}}
 {{- $namespace := index . 1 -}}
 {{- $enableHeartbeat := index . 2 -}}
+{{- $defaultVtctlclient := index . 3 }}
 
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: orchestrator-cm
-data: 
+data:
   orchestrator.conf.json: |-
     {
     "ActiveNodeExpireSeconds": 5,
@@ -77,7 +78,7 @@ data:
     ],
     "PostMasterFailoverProcesses": [
         "echo 'Recovered from {failureType} on {failureCluster}. Failed: {failedHost}:{failedPort}; Promoted: {successorHost}:{successorPort}' >> /tmp/recovery.log",
-        "vtctlclient -server vtctld.{{ $namespace }}:15999 TabletExternallyReparented {successorAlias}"
+        "vtctlclient {{ include "format-flags-inline" $defaultVtctlclient.extraFlags | toJson | trimAll "\"" }} -server vtctld.{{ $namespace }}:15999 TabletExternallyReparented {successorAlias}"
     ],
     "PostponeSlaveRecoveryOnLagMinutes": 0,
     "PostUnsuccessfulFailoverProcesses": [
@@ -123,7 +124,7 @@ data:
     "ReplicationLagQuery": "SELECT unix_timestamp() - floor(ts/1000000000) FROM `_vt`.heartbeat ORDER BY ts DESC LIMIT 1;",
 {{ else }}
     "ReplicationLagQuery": "",
-{{ end }}    
+{{ end }}
     "ServeAgentsHttp": false,
     "SkipBinlogEventsContaining": [
     ],

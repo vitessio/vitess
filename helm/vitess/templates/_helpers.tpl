@@ -11,6 +11,17 @@
 {{end -}}
 {{- end -}}
 
+############################
+# Format a flag map into a command line (inline),
+# as expected by the golang 'flag' package.
+# Boolean flags must be given a value, such as "true" or "false".
+#############################
+{{- define "format-flags-inline" -}}
+{{- range $key, $value := . -}}
+-{{$key}}={{$value | quote}}{{" "}}
+{{- end -}}
+{{- end -}}
+
 #############################
 # Repeat a string N times, where N is the total number
 # of replicas. Len must be used on the calling end to
@@ -114,7 +125,7 @@ fi
 export EXTRA_MY_CNF="$FLAVOR_MYCNF:/vtdataroot/tabletdata/report-host.cnf:/vt/config/mycnf/rbr.cnf"
 
 {{ if . }}
-for filename in /vt/userconfig/*; do
+for filename in /vt/userconfig/*.cnf; do
   export EXTRA_MY_CNF="$EXTRA_MY_CNF:$filename"
 done
 {{ end }}
@@ -347,6 +358,35 @@ cat $CEPH_CREDENTIALS_FILE
 - name: user-config
   mountPath: /vt/userconfig
 
+{{ end }}
+
+{{- end -}}
+
+#############################
+# user secret volumes - expects list of secret names
+#############################
+{{- define "user-secret-volumes" -}}
+
+{{ if . }}
+{{- range . }}
+- name: user-secret-{{ . }}
+  secret:
+    secretName: {{ . }}
+{{- end }}
+{{ end }}
+
+{{- end -}}
+
+#############################
+# user secret volumeMounts - expects list of secret names
+#############################
+{{- define "user-secret-volumeMounts" -}}
+
+{{ if . }}
+{{- range . }}
+- name: user-secret-{{ . }}
+  mountPath: /vt/usersecrets/{{ . }}
+{{- end }}
 {{ end }}
 
 {{- end -}}

@@ -283,3 +283,97 @@ topology:
 orchestrator:
   enabled: true
 ```
+
+### Enable TLS encryption for vitess grpc communication
+
+Each component of vitess requires a certificate and private key to secure incoming requests and further configuration for every outgoing connection. In this example TLS certificates were generated and stored in several kubernetes secrets:
+```yaml
+vttablet:
+  extraFlags:
+    # configure which certificates to use for serving grpc requests
+    grpc_cert: /vt/usersecrets/vttablet-tls/vttablet.pem 
+    grpc_key: /vt/usersecrets/vttablet-tls/vttablet-key.pem
+    tablet_grpc_ca: /vt/usersecrets/vttablet-tls/vitess-ca.pem 
+    tablet_grpc_server_name: vttablet 
+  secrets:
+  - vttablet-tls
+
+vtctld:
+  extraFlags:
+    grpc_cert: /vt/usersecrets/vtctld-tls/vtctld.pem
+    grpc_key: /vt/usersecrets/vtctld-tls/vtctld-key.pem
+    tablet_grpc_ca: /vt/usersecrets/vtctld-tls/vitess-ca.pem
+    tablet_grpc_server_name: vttablet
+    tablet_manager_grpc_ca: /vt/usersecrets/vtctld-tls/vitess-ca.pem
+    tablet_manager_grpc_server_name: vttablet
+  secrets:
+  - vtctld-tls
+
+vtctlclient: # configuration used by both InitShardMaster-jobs and orchestrator to be able to communicate with vtctld
+  extraFlags:
+    vtctld_grpc_ca: /vt/usersecrets/vitess-ca/vitess-ca.pem
+    vtctld_grpc_server_name: vtctld
+  secrets:
+  - vitess-ca
+
+vtgate:
+  extraFlags:
+    grpc_cert: /vt/usersecrets/vtgate-tls/vtgate.pem
+    grpc_key: /vt/usersecrets/vtgate-tls/vtgate-key.pem
+    tablet_grpc_ca: /vt/usersecrets/vtgate-tls/vitess-ca.pem
+    tablet_grpc_server_name: vttablet
+  secrets:
+  - vtgate-tls
+```
+
+### Slave replication traffic encryption
+
+To encrypt traffic between slaves and master additional flags can be provided. By default MySQL generates self-signed certificates on startup (otherwise specify `ssl_*` settings within you `extraMyCnf`), that can be used to encrypt the traffic:
+```
+vttablet:
+  extraFlags:
+    db_flags: 2048
+    db_repl_use_ssl: true
+    db-config-repl-flags: 2048
+
+```
+
+### Percona at rest encryption using the vault plugin
+
+To use the [percona at rest encryption](https://www.percona.com/doc/percona-server/LATEST/management/data_at_rest_encryption.html) several additional settings have to be provided via an `extraMyCnf`-file. This makes only sense if the traffic is encrypted as well (see above sections), since binlog replication is unencrypted by default.
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vttablet-extra-config
+  namespace: vitess
+data:
+  extra.cnf: |-
+    early-plugin-load=keyring_vault=keyring_vault.so
+    # this includes default rpl plugins, see https://github.com/vitessio/vitess/blob/master/config/mycnf/master_mysql56.cnf for details
+    plugin-load=rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so;keyring_udf=keyring_udf.so
+    keyring_vault_config=/vt/usersecrets/vttablet-vault/vault.conf # load keyring configuration from secret
+    innodb_encrypt_tables=ON # encrypt all tables by default
+    encrypt_binlog=ON # binlog encryption
+    master_verify_checksum=ON # necessary for binlog encryption
+    binlog_checksum=CRC32 # necessary for binlog encryption
+    encrypt-tmp-files=ON # use temporary AES keys to encrypt temporary files
+```
+
+An example vault configuration, which is provided by the `vttablet-vault`-Secret in the above example:
+```
+vault_url = https://10.0.0.1:8200                                                                                
+secret_mount_point = vitess
+token = 11111111-1111-1111-1111111111
+vault_ca = /vt/usersecrets/vttablet-vault/vault-ca-bundle.pem
+```
+
+At last add the secret containing the vault configuration and the additional MySQL-configuration to your helm values:
+```
+vttablet:
+  flavor: "percona" # only works with percona
+  mysqlImage: "percona:5.7.23"
+  extraMyCnf: vttablet-extra-config
+  secrets:
+  - vttablet-vault
+```
