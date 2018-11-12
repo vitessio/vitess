@@ -88,7 +88,7 @@ spec:
           volumeMounts:
             - name: creds
               mountPath: "/mysqlcreds"
-
+{{ include "user-secret-volumeMounts" (.secrets | default $defaultVtgate.secrets) | indent 12 }}
           resources:
 {{ toYaml (.resources | default $defaultVtgate.resources) | indent 12 }}
 
@@ -121,7 +121,7 @@ spec:
       volumes:
         - name: creds
           emptyDir: {}
-
+{{ include "user-secret-volumes" (.secrets | default $defaultVtgate.secrets) | indent 8 }}
 ---
 ###################################
 # vtgate PodDisruptionBudget
@@ -205,7 +205,7 @@ affinity:
 
 ###################################
 # init-container to set mysql credentials file
-# it loops through the users and pulls out their 
+# it loops through the users and pulls out their
 # respective passwords from mounted secrets
 ###################################
 {{- define "init-mysql-creds" -}}
