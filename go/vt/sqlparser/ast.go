@@ -2998,20 +2998,30 @@ func (node *ValuesFuncExpr) replace(from, to Expr) bool {
 }
 
 // SubstrExpr represents a call to SubstrExpr(column, value_expression) or SubstrExpr(column, value_expression,value_expression)
-// also supported syntax SubstrExpr(column from value_expression for value_expression)
+// also supported syntax SubstrExpr(column from value_expression for value_expression).
+// Additionally to column names, SubstrExpr is also supported for string values, e.g.:
+// SubstrExpr('static string value', value_expression, value_expression)
+// In this case StrVal will be set instead of Name.
 type SubstrExpr struct {
-	Name *ColName
-	From Expr
-	To   Expr
+	Name   *ColName
+	StrVal *SQLVal
+	From   Expr
+	To     Expr
 }
 
 // Format formats the node.
 func (node *SubstrExpr) Format(buf *TrackedBuffer) {
+	var val interface{}
+	if node.Name != nil {
+		val = node.Name
+	} else {
+		val = node.StrVal
+	}
 
 	if node.To == nil {
-		buf.Myprintf("substr(%v, %v)", node.Name, node.From)
+		buf.Myprintf("substr(%v, %v)", val, node.From)
 	} else {
-		buf.Myprintf("substr(%v, %v, %v)", node.Name, node.From, node.To)
+		buf.Myprintf("substr(%v, %v, %v)", val, node.From, node.To)
 	}
 }
 
@@ -3020,7 +3030,7 @@ func (node *SubstrExpr) replace(from, to Expr) bool {
 }
 
 func (node *SubstrExpr) walkSubtree(visit Visit) error {
-	if node == nil {
+	if node == nil || node.Name == nil {
 		return nil
 	}
 	return Walk(

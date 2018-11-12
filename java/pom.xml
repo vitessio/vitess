@@ -16,7 +16,7 @@
   <modules>
     <module>client</module>
     <module>example</module>
-    <module>grpc-client</module> 
+    <module>grpc-client</module>
     <!-- <module>hadoop</module> -->
     <module>jdbc</module>
   </modules>
@@ -62,6 +62,7 @@
     <!-- Define versions which are also used by grpc-client/pom.xml. -->
     <grpc.version>1.15.0</grpc.version>
     <protobuf.java.version>3.5.1</protobuf.java.version>
+    <protobuf.protoc.version>3.5.1-1</protobuf.protoc.version>
   </properties>
 
   <!-- Add new dependencies here and then add it below or in your module. -->

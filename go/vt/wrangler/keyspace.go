@@ -874,6 +874,7 @@ func (wr *Wrangler) showVerticalResharding(ctx context.Context, keyspace, shard 
 }
 
 func (wr *Wrangler) cancelVerticalResharding(ctx context.Context, keyspace, shard string) error {
+	wr.Logger().Infof("Cancel vertical resharding in keyspace %v", keyspace)
 	destinationShard, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -895,11 +896,14 @@ func (wr *Wrangler) cancelVerticalResharding(ctx context.Context, keyspace, shar
 	if _, err := wr.tmc.VReplicationExec(ctx, destinationMasterTabletInfo.Tablet, binlogplayer.DeleteVReplication(destinationShard.SourceShards[0].Uid)); err != nil {
 		return err
 	}
-	_, err = wr.ts.UpdateShardFields(ctx, destinationShard.Keyspace(), destinationShard.ShardName(), func(si *topo.ShardInfo) error {
+	if _, err = wr.ts.UpdateShardFields(ctx, destinationShard.Keyspace(), destinationShard.ShardName(), func(si *topo.ShardInfo) error {
 		si.SourceShards = nil
 		return nil
-	})
-	return err
+	}); err != nil {
+		return err
+	}
+	// set destination master back to serving
+	return wr.refreshMasters(ctx, []*topo.ShardInfo{destinationShard})
 }
 
 // MigrateServedFrom is used during vertical splits to migrate a

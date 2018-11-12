@@ -930,6 +930,23 @@ func TestTLSServer(t *testing.T) {
 	if results.Rows[0][0].ToString() != "ON" {
 		t.Errorf("Unexpected output for 'ssl echo': %v", results)
 	}
+
+	checkCountForTLSVer(t, versionTLS12, 1)
+	checkCountForTLSVer(t, versionNoTLS, 0)
+	conn.Close()
+
+}
+
+func checkCountForTLSVer(t *testing.T, version string, expected int64) {
+	connCounts := connCountByTLSVer.Counts()
+	count, ok := connCounts[version]
+	if ok {
+		if count != expected {
+			t.Errorf("Expected connection count for version %s to be %d, got %d", version, expected, count)
+		}
+	} else {
+		t.Errorf("No count found for version %s", version)
+	}
 }
 
 func TestErrorCodes(t *testing.T) {
