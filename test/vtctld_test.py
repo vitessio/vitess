@@ -42,7 +42,7 @@ select_one_table_output = """
 +---+
 | 1 |
 +---+
-""".strip()
+""".lstrip()
 
 
 def setUpModule():
