@@ -73,7 +73,7 @@ func (sa *StaticAuthPlugin) Authenticate(ctx context.Context, fullMethod string)
 func staticAuthPluginInitializer() (Authenticator, error) {
 	entries := make([]StaticAuthConfigEntry, 0)
 	if *credsFile == "" {
-		err := fmt.Errorf("failed to load static auth plugin. Plugin configured but grpc_server_auth_static_file not provided")
+		err := fmt.Errorf("failed to load static auth plugin. Plugin configured but grpc_auth_static_password_file not provided")
 		return nil, err
 	}
 
@@ -91,7 +91,7 @@ func staticAuthPluginInitializer() (Authenticator, error) {
 	staticAuthPlugin := &StaticAuthPlugin{
 		entries: entries,
 	}
-	log.Info("static auth plugin have initialized successfully with config from grpc_server_auth_static_file")
+	log.Info("static auth plugin have initialized successfully with config from grpc_auth_static_password_file")
 	return staticAuthPlugin, nil
 }
 
