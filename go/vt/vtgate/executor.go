@@ -834,19 +834,18 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		fields := buildVarCharFields("Charset", "Description", "Default collation")
 		maxLenField := &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}
 		fields = append(fields, maxLenField)
-		rows := make([][]sqltypes.Value, 2, 4)
-		row1 := buildVarCharRow(
+		rows := make([][]sqltypes.Value, 0, 4)
+		row0 := buildVarCharRow(
 			"utf8",
 			"UTF-8 Unicode",
 			"utf8_general_ci")
-		row1 = append(row1, sqltypes.NewInt32(3))
-		row2 := buildVarCharRow(
+		row0 = append(row0, sqltypes.NewInt32(3))
+		row1 := buildVarCharRow(
 			"utf8mb4",
 			"UTF-8 Unicode",
 			"utf8mb4_general_ci")
-		row2 = append(row2, sqltypes.NewInt32(4))
-		rows[0] = row1
-		rows[1] = row2
+		row1 = append(row1, sqltypes.NewInt32(4))
+		rows = append(rows, row0, row1)
 		return &sqltypes.Result{
 			Fields:       fields,
 			Rows:         rows,
