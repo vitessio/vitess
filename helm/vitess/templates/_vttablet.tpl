@@ -1,7 +1,7 @@
 ###################################
 # vttablet Service
 ###################################
-{{- define "vttablet-service" -}}
+{{ define "vttablet-service" -}}
 # set tuple values to more recognizable variables
 {{- $pmm := index . 0 }}
 apiVersion: v1
@@ -35,7 +35,7 @@ spec:
 ###################################
 # vttablet
 ###################################
-{{- define "vttablet" -}}
+{{ define "vttablet" -}}
 # set tuple values to more recognizable variables
 {{- $topology := index . 0 -}}
 {{- $cell := index . 1 -}}
@@ -63,7 +63,7 @@ spec:
 # define images to use
 {{- $vitessTag := .vitessTag | default $defaultVttablet.vitessTag -}}
 {{- $image := .image | default $defaultVttablet.image -}}
-{{- $mysqlImage := .mysqlImage | default $defaultVttablet.mysqlImage -}}
+{{- $mysqlImage := .mysqlImage | default $defaultVttablet.mysqlImage }}
 
 ###################################
 # vttablet StatefulSet
@@ -255,9 +255,9 @@ spec:
 ###################################
 # init-container to copy binaries for mysql
 ###################################
-{{- define "init-mysql" -}}
+{{ define "init-mysql" -}}
 {{- $vitessTag := index . 0 -}}
-{{- $cellClean := index . 1 -}}
+{{- $cellClean := index . 1 }}
 
 - name: "init-mysql"
   image: "vitess/mysqlctld:{{$vitessTag}}"
@@ -294,11 +294,11 @@ spec:
 # This converts the unique identity assigned by StatefulSet (pod name)
 # into a 31-bit unsigned integer for use as a Vitess tablet UID.
 ###################################
-{{- define "init-vttablet" -}}
+{{ define "init-vttablet" -}}
 {{- $vitessTag := index . 0 -}}
 {{- $cell := index . 1 -}}
 {{- $cellClean := index . 2 -}}
-{{- $namespace := index . 3 -}}
+{{- $namespace := index . 3 }}
 
 - name: init-vttablet
   image: "vitess/vtctl:{{$vitessTag}}"
@@ -347,7 +347,7 @@ spec:
 ##########################
 # main vttablet container
 ##########################
-{{- define "cont-vttablet" -}}
+{{ define "cont-vttablet" -}}
 
 {{- $topology := index . 0 -}}
 {{- $cell := index . 1 -}}
@@ -364,7 +364,7 @@ spec:
 {{- $totalTabletCount := index . 12 -}}
 
 {{- $cellClean := include "clean-label" $cell.name -}}
-{{- with $tablet.vttablet -}}
+{{- with $tablet.vttablet }}
 
 - name: vttablet
   image: "vitess/vttablet:{{$vitessTag}}"
@@ -514,7 +514,7 @@ spec:
 ##########################
 # main mysql container
 ##########################
-{{- define "cont-mysql" -}}
+{{ define "cont-mysql" -}}
 
 {{- $topology := index . 0 -}}
 {{- $cell := index . 1 -}}
@@ -524,7 +524,7 @@ spec:
 {{- $defaultVttablet := index . 5 -}}
 {{- $uid := index . 6 -}}
 
-{{- with $tablet.vttablet -}}
+{{- with $tablet.vttablet }}
 
 - name: mysql
   image: {{.mysqlImage | default $defaultVttablet.mysqlImage | quote}}
@@ -599,7 +599,7 @@ spec:
 ##########################
 # run logrotate for all log files in /vtdataroot/tabletdata
 ##########################
-{{- define "cont-logrotate" -}}
+{{ define "cont-logrotate" }}
 
 - name: logrotate
   image: vitess/logrotate:latest
@@ -613,7 +613,7 @@ spec:
 ##########################
 # redirect the error log file to stdout
 ##########################
-{{- define "cont-mysql-errorlog" -}}
+{{ define "cont-mysql-errorlog" }}
 
 - name: error-log
   image: vitess/logtail:latest
@@ -631,7 +631,7 @@ spec:
 ##########################
 # redirect the slow log file to stdout
 ##########################
-{{- define "cont-mysql-slowlog" -}}
+{{ define "cont-mysql-slowlog" }}
 
 - name: slow-log
   image: vitess/logtail:latest
@@ -649,7 +649,7 @@ spec:
 ##########################
 # redirect the general log file to stdout
 ##########################
-{{- define "cont-mysql-generallog" -}}
+{{ define "cont-mysql-generallog" }}
 
 - name: general-log
   image: vitess/logtail:latest
@@ -667,12 +667,12 @@ spec:
 ###################################
 # vttablet-affinity sets node/pod affinities
 ###################################
-{{- define "vttablet-affinity" -}}
+{{ define "vttablet-affinity" -}}
 # set tuple values to more recognizable variables
 {{- $cellClean := index . 0 -}}
 {{- $keyspaceClean := index . 1 -}}
 {{- $shardClean := index . 2 -}}
-{{- $region := index . 3 -}}
+{{- $region := index . 3 }}
 
 # affinity pod spec
 affinity:

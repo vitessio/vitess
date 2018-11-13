@@ -1,10 +1,10 @@
 ###################################
 # pmm Service + Deployment
 ###################################
-{{- define "pmm" -}}
+{{ define "pmm" -}}
 # set tuple values to more recognizable variables
 {{- $pmm := index . 0 -}}
-{{- $namespace := index . 1 -}}
+{{- $namespace := index . 1 }}
 
 ###################################
 # pmm Service
@@ -131,9 +131,9 @@ spec:
 ###################################
 # sidecar container running pmm-client
 ###################################
-{{- define "cont-pmm-client" -}}
+{{ define "cont-pmm-client" -}}
 {{- $pmm := index . 0 -}}
-{{- $namespace := index . 1 -}}
+{{- $namespace := index . 1 }}
 
 - name: "pmm-client"
   image: "vitess/pmm-client:{{ $pmm.pmmTag }}"
