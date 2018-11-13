@@ -64,6 +64,19 @@ for uid_index in $uids; do
   printf -v alias '%s-%010d' $cell $uid
   printf -v tablet_dir 'vt_%010d' $uid
 
+  export KEYSPACE=$keyspace
+  export SHARD=$shard
+  export TABLET_ID=$alias
+  export TABLET_DIR=$tablet_dir
+  export MYSQL_PORT=$mysql_port
+
+  tablet_type=replica
+  if [[ $uid_index -gt 2 ]]; then
+    tablet_type=rdonly
+  fi
+
+  export TABLET_TYPE=$tablet_type
+
   echo "Starting MySQL for tablet $alias..."
   action="init -init_db_sql_file $init_db_sql_file"
   if [ -d $VTDATAROOT/$tablet_dir ]; then
