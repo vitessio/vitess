@@ -1,7 +1,7 @@
 ###################################
 # vtgate Service + Deployment
 ###################################
-{{- define "vtgate" -}}
+{{ define "vtgate" -}}
 # set tuple values to more recognizable variables
 {{- $topology := index . 0 -}}
 {{- $cell := index . 1 -}}
@@ -12,7 +12,7 @@
 
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtgate.vitessTag -}}
-{{- $cellClean := include "clean-label" $cell.name -}}
+{{- $cellClean := include "clean-label" $cell.name }}
 
 ###################################
 # vtgate Service
@@ -169,10 +169,10 @@ spec:
 ###################################
 # vtgate-affinity sets node/pod affinities
 ###################################
-{{- define "vtgate-affinity" -}}
+{{ define "vtgate-affinity" -}}
 # set tuple values to more recognizable variables
 {{- $cellClean := index . 0 -}}
-{{- $region := index . 1 -}}
+{{- $region := index . 1 }}
 
 # affinity pod spec
 affinity:
@@ -209,11 +209,11 @@ affinity:
 # it loops through the users and pulls out their
 # respective passwords from mounted secrets
 ###################################
-{{- define "init-mysql-creds" -}}
+{{ define "init-mysql-creds" -}}
 {{- $vitessTag := index . 0 -}}
 {{- $cell := index . 1 -}}
 
-{{- with $cell.mysqlProtocol -}}
+{{- with $cell.mysqlProtocol }}
 
 - name: init-mysql-creds
   image: "vitess/vtgate:{{$vitessTag}}"

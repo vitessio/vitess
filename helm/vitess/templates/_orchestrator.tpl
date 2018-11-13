@@ -1,7 +1,7 @@
 ###################################
 # Master Orchestrator Service
 ###################################
-{{- define "orchestrator" -}}
+{{ define "orchestrator" -}}
 # set tuple values to more recognizable variables
 {{- $orc := index . 0 -}}
 {{- $defaultVtctlclient := index . 1 }}
@@ -157,7 +157,7 @@ spec:
 ###################################
 # Per StatefulSet Orchestrator Service
 ###################################
-{{- define "orchestrator-statefulset-service" -}}
+{{ define "orchestrator-statefulset-service" -}}
 # set tuple values to more recognizable variables
 {{- $orc := index . 0 -}}
 {{- $i := index . 1 }}
@@ -191,8 +191,8 @@ spec:
 # init-container to copy and sed
 # Orchestrator config from ConfigMap
 ###################################
-{{- define "init-orchestrator" -}}
-{{- $orc := . -}}
+{{ define "init-orchestrator" -}}
+{{- $orc := . }}
 
 - name: init-orchestrator
   image: {{ $orc.image | quote }}
