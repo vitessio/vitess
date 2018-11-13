@@ -607,7 +607,7 @@ func TestExecutorShow(t *testing.T) {
 			RowsAffected: 4,
 		}
 		if !reflect.DeepEqual(qr, wantqr) {
-			t.Errorf("show databases:\n%+v, want\n%+v", qr, wantqr)
+			t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
 		}
 	}
 	_, err := executor.Execute(context.Background(), "TestExecute", session, "show variables", nil)
@@ -622,37 +622,90 @@ func TestExecutorShow(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show charset", nil)
+	for _, query := range []string{"show charset", "show charset like '%foo'", "show character set", "show character set like '%foo'"} {
+		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
+		if err != nil {
+			t.Error(err)
+		}
+		wantqr := &sqltypes.Result{
+			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
+			Rows: [][]sqltypes.Value{
+				append(buildVarCharRow(
+					"utf8",
+					"UTF-8 Unicode",
+					"utf8_general_ci"), sqltypes.NewInt32(3)),
+				append(buildVarCharRow(
+					"utf8mb4",
+					"UTF-8 Unicode",
+					"utf8mb4_general_ci"),
+					sqltypes.NewInt32(4)),
+			},
+			RowsAffected: 2,
+		}
+		if !reflect.DeepEqual(qr, wantqr) {
+			t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
+		}
+	}
+	qr, err := executor.Execute(context.Background(), "TestExecute", session, "show engines", nil)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show charset like '%foo'", nil)
+	wantqr := &sqltypes.Result{
+		Fields: buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow(
+				"InnoDB",
+				"DEFAULT",
+				"Supports transactions, row-level locking, and foreign keys",
+				"YES",
+				"YES",
+				"YES"),
+		},
+		RowsAffected: 1,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show engines:\n%+v, want\n%+v", qr, wantqr)
+	}
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show plugins", nil)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show engines", nil)
-	if err != nil {
-		t.Error(err)
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Name", "Status", "Type", "Library", "License"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow(
+				"InnoDB",
+				"ACTIVE",
+				"STORAGE ENGINE",
+				"NULL",
+				"GPL"),
+		},
+		RowsAffected: 1,
 	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show plugins", nil)
-	if err != nil {
-		t.Error(err)
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show plugins:\n%+v, want\n%+v", qr, wantqr)
 	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show session status", nil)
-	if err != nil {
-		t.Error(err)
+	for _, query := range []string{"show session status", "show session status like 'Ssl_cipher'"} {
+		qr, err = executor.Execute(context.Background(), "TestExecute", session, "show session status", nil)
+		if err != nil {
+			t.Error(err)
+		}
+		wantqr = &sqltypes.Result{
+			Fields:       buildVarCharFields("Variable_name", "Value"),
+			Rows:         make([][]sqltypes.Value, 0, 2),
+			RowsAffected: 0,
+		}
+		if !reflect.DeepEqual(qr, wantqr) {
+			t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
+		}
 	}
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "show session status like 'Ssl_cipher'", nil)
-	if err != nil {
-		t.Error(err)
-	}
-	qr, err := executor.Execute(context.Background(), "TestExecute", session, "show vitess_shards", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vitess_shards", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	// Just test for first & last.
 	qr.Rows = [][]sqltypes.Value{qr.Rows[0], qr.Rows[len(qr.Rows)-1]}
-	wantqr := &sqltypes.Result{
+	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Shards"),
 		Rows: [][]sqltypes.Value{
 			buildVarCharRow("TestExecutor/-20"),
