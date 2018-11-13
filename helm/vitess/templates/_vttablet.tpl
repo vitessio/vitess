@@ -164,6 +164,7 @@ spec:
       containers:
       - name: init-shard-master
         image: "vitess/vtctlclient:{{$vitessTag}}"
+        imagePullPolicy: Always
         volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
 
@@ -254,7 +255,7 @@ spec:
 
 - name: "init-mysql"
   image: "vitess/mysqlctld:{{$vitessTag}}"
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
   volumeMounts:
     - name: vtdataroot
       mountPath: "/vtdataroot"
@@ -295,6 +296,7 @@ spec:
 
 - name: init-vttablet
   image: "vitess/vtctl:{{$vitessTag}}"
+  imagePullPolicy: Always
   volumeMounts:
     - name: vtdataroot
       mountPath: "/vtdataroot"
@@ -360,6 +362,7 @@ spec:
 
 - name: vttablet
   image: "vitess/vttablet:{{$vitessTag}}"
+  imagePullPolicy: Always
   readinessProbe:
     httpGet:
       path: /debug/health
@@ -590,6 +593,7 @@ spec:
 
 - name: logrotate
   image: vitess/logrotate:latest
+  imagePullPolicy: Always
   volumeMounts:
     - name: vtdataroot
       mountPath: /vtdataroot

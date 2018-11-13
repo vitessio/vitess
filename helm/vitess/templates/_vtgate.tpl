@@ -73,6 +73,7 @@ spec:
       containers:
         - name: vtgate
           image: vitess/vtgate:{{$vitessTag}}
+          imagePullPolicy: Always
           readinessProbe:
             httpGet:
               path: /debug/health
@@ -216,6 +217,7 @@ affinity:
 
 - name: init-mysql-creds
   image: "vitess/vtgate:{{$vitessTag}}"
+  imagePullPolicy: Always
   volumeMounts:
     - name: creds
       mountPath: "/mysqlcreds"
