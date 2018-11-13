@@ -791,6 +791,67 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			}
 			return e.handleOther(ctx, safeSession, sql, bindVars, dest, keyspaces[0], destTabletType, logStats)
 		}
+	// for STATUS, return empty result set
+	case sqlparser.KeywordString(sqlparser.STATUS):
+		return &sqltypes.Result{
+			Fields:       buildVarCharFields("Variable_name", "Value"),
+			Rows:         make([][]sqltypes.Value, 0, 2),
+			RowsAffected: 0,
+		}, nil
+	// for ENGINES, we want to return just InnoDB
+	case sqlparser.KeywordString(sqlparser.ENGINES):
+		rows := make([][]sqltypes.Value, 0, 6)
+		row := buildVarCharRow(
+			"InnoDB",
+			"DEFAULT",
+			"Supports transactions, row-level locking, and foreign keys",
+			"YES",
+			"YES",
+			"YES")
+		rows = append(rows, row)
+		return &sqltypes.Result{
+			Fields:       buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints"),
+			Rows:         rows,
+			RowsAffected: 1,
+		}, nil
+	// for PLUGINS, return InnoDb + mysql_native_password
+	case sqlparser.KeywordString(sqlparser.PLUGINS):
+		rows := make([][]sqltypes.Value, 0, 5)
+		row := buildVarCharRow(
+			"InnoDB",
+			"ACTIVE",
+			"STORAGE ENGINE",
+			"NULL",
+			"GPL")
+		rows = append(rows, row)
+		return &sqltypes.Result{
+			Fields:       buildVarCharFields("Name", "Status", "Type", "Library", "License"),
+			Rows:         rows,
+			RowsAffected: 1,
+		}, nil
+	// CHARSET & CHARACTER SET return utf8mb4 & utf8
+	case sqlparser.KeywordString(sqlparser.CHARSET):
+		fields := buildVarCharFields("Charset", "Description", "Default collation")
+		maxLenField := &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}
+		fields = append(fields, maxLenField)
+		rows := make([][]sqltypes.Value, 2, 4)
+		row1 := buildVarCharRow(
+			"utf8",
+			"UTF-8 Unicode",
+			"utf8_general_ci")
+		row1 = append(row1, sqltypes.NewInt32(3))
+		row2 := buildVarCharRow(
+			"utf8mb4",
+			"UTF-8 Unicode",
+			"utf8mb4_general_ci")
+		row2 = append(row2, sqltypes.NewInt32(4))
+		rows[0] = row1
+		rows[1] = row2
+		return &sqltypes.Result{
+			Fields:       fields,
+			Rows:         rows,
+			RowsAffected: 2,
+		}, nil
 	case sqlparser.KeywordString(sqlparser.TABLES):
 		if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
 			show.ShowTablesOpt.DbName = ""
@@ -1035,6 +1096,7 @@ func (e *Executor) handleUse(ctx context.Context, safeSession *SafeSession, sql 
 
 func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
 	if destKeyspace == "" {
+		//panic("stack trace for show statement")
 		return nil, errNoKeyspace
 	}
 	if dest == nil {
