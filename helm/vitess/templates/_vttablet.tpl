@@ -490,6 +490,10 @@ spec:
         -health_check_interval "5s"
         -mysqlctl_socket "/vtdataroot/mysqlctl.sock"
         -enable_replication_reporter
+
+{{ if $defaultVttablet.useKeyspaceNameAsDbName }}
+        -init_db_name_override {{ $keyspace.name | quote }}
+{{ end }}
 {{ if $defaultVttablet.enableSemisync }}
         -enable_semi_sync
 {{ end }}

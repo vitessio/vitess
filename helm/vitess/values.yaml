@@ -150,6 +150,10 @@ vttablet:
   # will block forever. "rdonly" tablets do not ACK.
   enableSemisync: false
 
+  # This sets the vttablet flag "-init_db_name_override" to be the keyspace name, rather
+  # than "vt_keyspace". This works better with many MySQL client applications
+  useKeyspaceNameAsDbName: true
+
   # The name of a config map with N files inside of it. Each file will be added
   # to $EXTRA_MY_CNF, overriding any default my.cnf settings
   extraMyCnf: ""
