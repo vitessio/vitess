@@ -123,17 +123,21 @@ spec:
               value: "15999"
 
         - name: recovery-log
-          image: busybox
-          command: ["/bin/sh"]
-          args: ["-c", "tail -n+1 -F /tmp/recovery.log"]
+          image: vitess/logtail:latest
+          imagePullPolicy: Always
+          env:
+          - name: TAIL_FILEPATH
+            value: /tmp/recovery.log
           volumeMounts:
             - name: tmplogs
               mountPath: /tmp
 
         - name: audit-log
-          image: busybox
-          command: ["/bin/sh"]
-          args: ["-c", "tail -n+1 -F /tmp/orchestrator-audit.log"]
+          image: vitess/logtail:latest
+          imagePullPolicy: Always
+          env:
+          - name: TAIL_FILEPATH
+            value: /tmp/orchestrator-audit.log
           volumeMounts:
             - name: tmplogs
               mountPath: /tmp
