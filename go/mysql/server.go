@@ -345,10 +345,34 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	case authServerMethod == MysqlNativePassword:
 		// The server really wants to use MysqlNativePassword,
-		// but the client returned a result for something else:
-		// not sure this can happen, so not supporting this now.
-		c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Client asked for auth %v, but server wants auth mysql_native_password", authMethod)
-		return
+		// but the client returned a result for something else.
+
+		salt, err := l.authServer.Salt()
+		if err != nil {
+			return
+		}
+		data := make([]byte, 21)
+		data = append(salt, byte(0x00))
+		if err := c.writeAuthSwitchRequest(MysqlNativePassword, data); err != nil {
+			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
+			return
+		}
+
+		response, err := c.readEphemeralPacket()
+		if err != nil {
+			log.Errorf("Error reading auth switch response for %s: %v", c, err)
+			return
+		}
+		c.recycleReadPacket()
+
+		userData, err := l.authServer.ValidateHash(salt, user, response, conn.RemoteAddr())
+		if err != nil {
+			log.Warningf("Error authenticating user using MySQL native password: %v", err)
+			c.writeErrorPacketFromError(err)
+			return
+		}
+		c.User = user
+		c.UserData = userData
 
 	default:
 		// The server wants to use something else, re-negotiate.
