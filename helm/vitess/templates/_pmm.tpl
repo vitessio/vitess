@@ -137,7 +137,7 @@ spec:
 
 - name: "pmm-client"
   image: "vitess/pmm-client:{{ $pmm.pmmTag }}"
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
   volumeMounts:
     - name: vtdataroot
       mountPath: "/vtdataroot"
