@@ -36,6 +36,13 @@ if [ -d $VTDATAROOT/$tablet_dir ]; then
   action='start'
 fi
 
+export KEYSPACE=$keyspace
+export SHARD=$shard
+export TABLET_ID=$alias
+export TABLET_DIR=$tablet_dir
+export MYSQL_PORT=3306
+export TABLET_TYPE=$tablet_role
+
 $VTROOT/bin/mysqlctl \
   -log_dir $VTDATAROOT/tmp \
   -tablet_uid $uid \
