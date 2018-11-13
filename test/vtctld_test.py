@@ -36,6 +36,14 @@ shard_1_replica = tablet.Tablet()
 # all tablets
 tablets = [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]
 
+select_one_table_output = """
++---+
+| a |
++---+
+| 1 |
++---+
+""".lstrip()
+
 
 def setUpModule():
   try:
@@ -191,13 +199,15 @@ class TestVtctld(unittest.TestCase):
     # All we care is that it's the human-readable table, not JSON or protobuf.
     out, _ = utils.run_vtctl(['ExecuteFetchAsDba', shard_0_replica.tablet_alias,
                               'SELECT 1 AS a'], trap_output=True)
-    want = """+---+
-| a |
-+---+
-| 1 |
-+---+
-"""
-    self.assertEqual(want, out)
+    self.assertEqual(select_one_table_output, out)
+
+  def test_execute_fetch_as_dba(self):
+    """Make sure ExecuteFetchAsApp prints a human-readable table by default."""
+    # Use a simple example so we're not sensitive to alignment settings, etc.
+    # All we care is that it's the human-readable table, not JSON or protobuf.
+    out, _ = utils.run_vtctl(['ExecuteFetchAsApp', shard_0_replica.tablet_alias,
+                              'SELECT 1 AS a'], trap_output=True)
+    self.assertEqual(select_one_table_output, out)
 
 if __name__ == '__main__':
   utils.main()
