@@ -170,6 +170,10 @@ func TestPackets(t *testing.T) {
 	data := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	verifyPacketComms(t, cConn, sConn, data)
 
+	// 0 length packet
+	data = []byte{}
+	verifyPacketComms(t, cConn, sConn, data)
+
 	// Under the limit, still one packet.
 	data = make([]byte, MaxPacketSize-1)
 	data[0] = 0xab
