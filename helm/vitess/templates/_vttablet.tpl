@@ -156,8 +156,14 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ $shardName }}-init-shard-master
+  labels:
+    app: vitess
+    component: vttablet
+    cell: {{ $cellClean | quote }}
+    keyspace: {{ $keyspaceClean | quote }}
+    shard: {{ $shardClean | quote }}
 spec:
-  backoffLimit: 1
+  backoffLimit: 10
   template:
     spec:
       restartPolicy: OnFailure
