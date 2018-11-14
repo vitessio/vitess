@@ -116,10 +116,12 @@ func TestMigrateServedTypes(t *testing.T) {
 	// sourceMaster will see the refresh, and has to respond to it
 	// also will be asked about its replication position.
 	sourceMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   5,
-			Server:   456,
-			Sequence: 892,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   5,
+				Server:   456,
+				Sequence: 892,
+			},
 		},
 	}
 	sourceMaster.StartActionLoop(t, wr)
