@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/callerid"
@@ -1419,7 +1420,12 @@ func (e *Executor) VSchemaStats() *VSchemaStats {
 func buildVarCharFields(names ...string) []*querypb.Field {
 	fields := make([]*querypb.Field, len(names))
 	for i, v := range names {
-		fields[i] = &querypb.Field{Name: v, Type: sqltypes.VarChar}
+		fields[i] = &querypb.Field{
+			Name:    v,
+			Type:    sqltypes.VarChar,
+			Charset: mysql.CharacterSetUtf8,
+			Flags:   uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
+		}
 	}
 	return fields
 }
