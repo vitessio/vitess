@@ -58,10 +58,12 @@ func TestInitMasterShard(t *testing.T) {
 	// Master: set a plausible ReplicationPosition to return,
 	// and expect to add entry in _vt.reparent_journal
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   5,
-			Server:   456,
-			Sequence: 890,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   5,
+				Server:   456,
+				Sequence: 890,
+			},
 		},
 	}
 	master.FakeMysqlDaemon.ReadOnly = true
@@ -186,10 +188,12 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	// Master: set a plausible ReplicationPosition to return,
 	// and expect to add entry in _vt.reparent_journal
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   5,
-			Server:   456,
-			Sequence: 890,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   5,
+				Server:   456,
+				Sequence: 890,
+			},
 		},
 	}
 	master.FakeMysqlDaemon.ReadOnly = true

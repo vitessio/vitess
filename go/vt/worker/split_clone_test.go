@@ -213,7 +213,7 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 			},
 		}
 		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-			GTIDSet: mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
+			GTIDSet: mysql.MariadbGTIDSet{mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}},
 		}
 		sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 			"STOP SLAVE",

@@ -49,10 +49,12 @@ func TestEmergencyReparentShard(t *testing.T) {
 	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   2,
-			Server:   123,
-			Sequence: 456,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   2,
+				Server:   123,
+				Sequence: 456,
+			},
 		},
 	}
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -62,10 +64,12 @@ func TestEmergencyReparentShard(t *testing.T) {
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
 	}
 	newMaster.FakeMysqlDaemon.PromoteSlaveResult = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   2,
-			Server:   123,
-			Sequence: 456,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   2,
+				Server:   123,
+				Sequence: 456,
+			},
 		},
 	}
 	newMaster.StartActionLoop(t, wr)
@@ -80,10 +84,12 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
 	goodSlave1.FakeMysqlDaemon.Replicating = true
 	goodSlave1.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   2,
-			Server:   123,
-			Sequence: 455,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   2,
+				Server:   123,
+				Sequence: 455,
+			},
 		},
 	}
 	goodSlave1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
@@ -99,10 +105,12 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodSlave2.FakeMysqlDaemon.ReadOnly = true
 	goodSlave2.FakeMysqlDaemon.Replicating = false
 	goodSlave2.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   2,
-			Server:   123,
-			Sequence: 454,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   2,
+				Server:   123,
+				Sequence: 454,
+			},
 		},
 	}
 	goodSlave2.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
@@ -165,10 +173,12 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	// new master
 	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   2,
-			Server:   123,
-			Sequence: 456,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   2,
+				Server:   123,
+				Sequence: 456,
+			},
 		},
 	}
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -184,10 +194,12 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	// more advanced slave
 	moreAdvancedSlave.FakeMysqlDaemon.Replicating = true
 	moreAdvancedSlave.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   2,
-			Server:   123,
-			Sequence: 457,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   2,
+				Server:   123,
+				Sequence: 457,
+			},
 		},
 	}
 	moreAdvancedSlave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
