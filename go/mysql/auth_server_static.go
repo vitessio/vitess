@@ -27,7 +27,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -36,7 +35,6 @@ import (
 var (
 	mysqlAuthServerStaticFile   = flag.String("mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
 	mysqlAuthServerStaticString = flag.String("mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
-	mysqlAuthRotationTime       = flag.Duration("mysql_auth_rotation_time", 300*time.Second, "Cooldown period before reloading json config.")
 )
 
 const (
@@ -54,8 +52,7 @@ type AuthServerStatic struct {
 	// This mutex helps us prevent data races between the multiple updates of Entries.
 	mu sync.Mutex
 	// Entries contains the users, passwords and user data.
-	Entries          map[string][]*AuthServerStaticEntry
-	LastAuthRotation time.Time
+	Entries map[string][]*AuthServerStaticEntry
 }
 
 // AuthServerStaticEntry stores the values for a given user.
@@ -116,15 +113,11 @@ func RegisterAuthServerStaticFromParams(file, str string) {
 	}
 	authServerStatic.installSignalHandlers()
 
-	authServerStatic.LastAuthRotation = time.Now()
-
 	// And register the server.
 	RegisterAuthServerImpl("static", authServerStatic)
 }
 
 func (a *AuthServerStatic) loadConfigFromParams(file, str string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
 	jsonConfig := []byte(str)
 	if file != "" {
 		data, err := ioutil.ReadFile(file)
@@ -135,13 +128,15 @@ func (a *AuthServerStatic) loadConfigFromParams(file, str string) {
 		jsonConfig = data
 	}
 
-	entries := make(map[string][]*AuthServerStaticEntry) // clear old entries
+	entries := make(map[string][]*AuthServerStaticEntry)
 	if err := parseConfig(jsonConfig, &entries); err != nil {
 		log.Errorf("Error parsing auth server config: %v", err)
 		return
 	}
 
+	a.mu.Lock()
 	a.Entries = entries
+	a.mu.Unlock()
 }
 
 func (a *AuthServerStatic) installSignalHandlers() {
@@ -204,18 +199,9 @@ func (a *AuthServerStatic) Salt() ([]byte, error) {
 
 // ValidateHash is part of the AuthServer interface.
 func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
-	// If enough time has elpased (default is 5 minutes), reload the auth file/string
-	if time.Now().Sub(a.LastAuthRotation) > *mysqlAuthRotationTime {
-		a.loadConfigFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString)
-		a.LastAuthRotation = time.Now()
-	}
-
-	// We lock after the call to loadConfigFromParams since we lock and unlock the mutex within loadConfig.
-	// This avoids deadlocking, but a cleaner approach could be used.
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	// Find the entry.
 	entries, ok := a.Entries[user]
+	a.mu.Unlock()
 
 	if !ok {
 		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
@@ -242,16 +228,14 @@ func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse [
 // We only recognize MysqlClearPassword and MysqlDialog here.
 func (a *AuthServerStatic) Negotiate(c *Conn, user string, remoteAddr net.Addr) (Getter, error) {
 	// Finish the negotiation.
-	a.mu.Lock()
-	defer a.mu.Unlock()
 	password, err := AuthServerNegotiateClearOrDialog(c, a.Method)
 	if err != nil {
 		return nil, err
 	}
 
-	// Find the entry.
-
+	a.mu.Lock()
 	entries, ok := a.Entries[user]
+	a.mu.Unlock()
 
 	if !ok {
 		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
