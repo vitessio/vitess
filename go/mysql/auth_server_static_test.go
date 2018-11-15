@@ -168,7 +168,7 @@ func TestStaticPasswords(t *testing.T) {
 	auth := NewAuthServerStatic()
 	auth.loadConfigFromParams("", jsonConfig)
 	ip := net.ParseIP("127.0.0.1")
-	addr := &net.IPAddr{ip, ""}
+	addr := &net.IPAddr{IP: ip, Zone: ""}
 
 	for _, c := range tests {
 		t.Run(fmt.Sprintf("%s-%s", c.user, c.password), func(t *testing.T) {
