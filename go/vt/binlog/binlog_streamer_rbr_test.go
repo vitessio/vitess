@@ -237,10 +237,12 @@ func TestStreamerParseRBREvents(t *testing.T) {
 			eventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 0x0d,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
 					},
 				}),
 			},
@@ -477,10 +479,12 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 			eventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 0x0d,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
 					},
 				}),
 			},

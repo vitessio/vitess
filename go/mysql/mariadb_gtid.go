@@ -59,11 +59,16 @@ func parseMariadbGTID(s string) (GTID, error) {
 
 // parseMariadbGTIDSet is registered as a GTIDSet parser.
 func parseMariadbGTIDSet(s string) (GTIDSet, error) {
-	gtid, err := parseMariadbGTID(s)
-	if err != nil {
-		return nil, err
+	gtidStrings := strings.Split(s, ",")
+	gtidSet := make(MariadbGTIDSet, len(gtidStrings))
+	for i, gtidString := range gtidStrings {
+		gtid, err := parseMariadbGTID(gtidString)
+		if err != nil {
+			return nil, err
+		}
+		gtidSet[i] = gtid.(MariadbGTID)
 	}
-	return gtid.(MariadbGTID), err
+	return gtidSet, nil
 }
 
 // MariadbGTID implements GTID.
@@ -75,6 +80,9 @@ type MariadbGTID struct {
 	// Sequence is the sequence number of the transaction within the domain.
 	Sequence uint64
 }
+
+// MariadbGTIDSet implements GTIDSet
+type MariadbGTIDSet []MariadbGTID
 
 // String implements GTID.String().
 func (gtid MariadbGTID) String() string {
@@ -103,49 +111,90 @@ func (gtid MariadbGTID) SequenceNumber() interface{} {
 
 // GTIDSet implements GTID.GTIDSet().
 func (gtid MariadbGTID) GTIDSet() GTIDSet {
-	return gtid
+	return MariadbGTIDSet{gtid}
+}
+
+// String implements GTIDSet.String()
+func (gtidSet MariadbGTIDSet) String() string {
+	s := make([]string, len(gtidSet))
+	for i, gtid := range gtidSet {
+		s[i] = gtid.String()
+	}
+	return strings.Join(s, ",")
+}
+
+// Flavor implements GTIDSet.Flavor()
+func (gtidSet MariadbGTIDSet) Flavor() string {
+	return mariadbFlavorID
 }
 
 // ContainsGTID implements GTIDSet.ContainsGTID().
-func (gtid MariadbGTID) ContainsGTID(other GTID) bool {
+func (gtidSet MariadbGTIDSet) ContainsGTID(other GTID) bool {
 	if other == nil {
 		return true
 	}
-	mdbOther, ok := other.(MariadbGTID)
-	if !ok || gtid.Domain != mdbOther.Domain {
-		return false
-	}
-	return gtid.Sequence >= mdbOther.Sequence
-}
-
-// Contains implements GTIDSet.Contains().
-func (gtid MariadbGTID) Contains(other GTIDSet) bool {
-	if other == nil {
-		return true
-	}
-	mdbOther, ok := other.(MariadbGTID)
-	if !ok || gtid.Domain != mdbOther.Domain {
-		return false
-	}
-	return gtid.Sequence >= mdbOther.Sequence
-}
-
-// Equal implements GTIDSet.Equal().
-func (gtid MariadbGTID) Equal(other GTIDSet) bool {
 	mdbOther, ok := other.(MariadbGTID)
 	if !ok {
 		return false
 	}
-	return gtid == mdbOther
+	for _, gtid := range gtidSet {
+		if gtid.Domain != mdbOther.Domain {
+			continue
+		}
+		return gtid.Sequence >= mdbOther.Sequence
+	}
+	return false
+}
+
+// Contains implements GTIDSet.Contains().
+func (gtidSet MariadbGTIDSet) Contains(other GTIDSet) bool {
+	if other == nil {
+		return true
+	}
+	mdbOther, ok := other.(MariadbGTIDSet)
+	if !ok {
+		return false
+	}
+	for _, gtid := range mdbOther {
+		if !gtidSet.ContainsGTID(gtid) {
+			return false
+		}
+	}
+	return true
+}
+
+// Equal implements GTIDSet.Equal().
+func (gtidSet MariadbGTIDSet) Equal(other GTIDSet) bool {
+	mdbOther, ok := other.(MariadbGTIDSet)
+	if !ok {
+		return false
+	}
+	if len(gtidSet) != len(mdbOther) {
+		return false
+	}
+	for i, gtid := range gtidSet {
+		if gtid != mdbOther[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // AddGTID implements GTIDSet.AddGTID().
-func (gtid MariadbGTID) AddGTID(other GTID) GTIDSet {
+func (gtidSet MariadbGTIDSet) AddGTID(other GTID) GTIDSet {
 	mdbOther, ok := other.(MariadbGTID)
-	if !ok || gtid.Domain != mdbOther.Domain || gtid.Sequence >= mdbOther.Sequence {
-		return gtid
+	if !ok || other == nil {
+		return gtidSet
 	}
-	return mdbOther
+	for i, gtid := range gtidSet {
+		if mdbOther.Domain == gtid.Domain {
+			if mdbOther.Sequence > gtid.Sequence {
+				gtidSet[i] = mdbOther
+			}
+			return gtidSet
+		}
+	}
+	return append(gtidSet, mdbOther)
 }
 
 func init() {

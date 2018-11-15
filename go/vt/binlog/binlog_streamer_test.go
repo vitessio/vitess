@@ -103,10 +103,12 @@ func TestStreamerParseEventsXID(t *testing.T) {
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 0x0d,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
 					},
 				}),
 			},
@@ -157,10 +159,12 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 0x0d,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
 					},
 				}),
 			},
@@ -504,10 +508,12 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 0x0d,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
 					},
 				}),
 			},
@@ -520,10 +526,12 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 0x0d,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
 					},
 				}),
 			},
@@ -568,10 +576,12 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 0x0d,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
 					},
 				}),
 			},
@@ -581,10 +591,12 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 0x0d,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
 					},
 				}),
 			},
@@ -632,10 +644,12 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 0x0d,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
 					},
 				}),
 			},
@@ -645,10 +659,12 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 0x0d,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
 					},
 				}),
 			},
@@ -698,10 +714,12 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 0x0d,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
 					},
 				}),
 			},
@@ -788,10 +806,12 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 0x0d,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
 					},
 				}),
 			},
@@ -842,10 +862,12 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 0x0d,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
 					},
 				}),
 			},
@@ -938,10 +960,12 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 			EventToken: &querypb.EventToken{
 				Timestamp: 1409892744,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 10,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 10,
+						},
 					},
 				}),
 			},
@@ -989,10 +1013,12 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 			EventToken: &querypb.EventToken{
 				Timestamp: 1409892744,
 				Position: mysql.EncodePosition(mysql.Position{
-					GTIDSet: mysql.MariadbGTID{
-						Domain:   0,
-						Server:   62344,
-						Sequence: 9,
+					GTIDSet: mysql.MariadbGTIDSet{
+						mysql.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 9,
+						},
 					},
 				}),
 			},
