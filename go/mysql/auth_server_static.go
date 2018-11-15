@@ -213,11 +213,12 @@ func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse [
 			if matchSourceHost(remoteAddr, entry.SourceHost) && isPass {
 				return &StaticUserData{entry.UserData}, nil
 			}
-		}
-		computedAuthResponse := ScramblePassword(salt, []byte(entry.Password))
-		// Validate the password.
-		if matchSourceHost(remoteAddr, entry.SourceHost) && bytes.Compare(authResponse, computedAuthResponse) == 0 {
-			return &StaticUserData{entry.UserData}, nil
+		} else {
+			computedAuthResponse := ScramblePassword(salt, []byte(entry.Password))
+			// Validate the password.
+			if matchSourceHost(remoteAddr, entry.SourceHost) && bytes.Compare(authResponse, computedAuthResponse) == 0 {
+				return &StaticUserData{entry.UserData}, nil
+			}
 		}
 	}
 	return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
