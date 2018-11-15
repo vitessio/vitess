@@ -123,3 +123,72 @@ func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
 		t.Fatalf("%s's Password should be '%s'", newStr, newStr)
 	}
 }
+
+func TestStaticPasswords(t *testing.T) {
+	jsonConfig := `
+{
+	"user01": [{ "Password": "user01" }],
+	"user02": [{
+		"MysqlNativePassword": "*B3AD996B12F211BEA47A7C666CC136FB26DC96AF"
+	}],
+	"user03": [{
+		"MysqlNativePassword": "*211E0153B172BAED4352D5E4628BD76731AF83E7",
+		"Password": "invalid"
+	}],
+	"user04": [
+		{ "MysqlNativePassword": "*668425423DB5193AF921380129F465A6425216D0" },
+		{ "Password": "password2" }
+	]
+}`
+
+	tests := []struct {
+		user     string
+		password string
+		success  bool
+	}{
+		{"user01", "user01", true},
+		{"user01", "password", false},
+		{"user01", "", false},
+		{"user02", "user02", true},
+		{"user02", "password", false},
+		{"user02", "", false},
+		{"user03", "user03", true},
+		{"user03", "password", false},
+		{"user03", "invalid", false},
+		{"user03", "", false},
+		{"user04", "password1", true},
+		{"user04", "password2", true},
+		{"user04", "", false},
+		{"userXX", "", false},
+		{"userXX", "", false},
+		{"", "", false},
+		{"", "password", false},
+	}
+
+	auth := NewAuthServerStatic()
+	auth.loadConfigFromParams("", jsonConfig)
+	ip := net.ParseIP("127.0.0.1")
+	addr := &net.IPAddr{ip, ""}
+
+	for _, c := range tests {
+		t.Run(fmt.Sprintf("%s-%s", c.user, c.password), func(t *testing.T) {
+			salt, err := NewSalt()
+			if err != nil {
+				t.Fatalf("error generating salt: %v", err)
+			}
+
+			scrambled := ScramblePassword(salt, []byte(c.password))
+			_, err = auth.ValidateHash(salt, c.user, scrambled, addr)
+
+			if c.success {
+				if err != nil {
+					t.Fatalf("authentication should have succeeded: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("authentication should have failed")
+				}
+			}
+		})
+	}
+}
