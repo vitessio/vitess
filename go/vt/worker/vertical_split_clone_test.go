@@ -132,7 +132,7 @@ func TestVerticalSplitClone(t *testing.T) {
 		},
 	}
 	sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
+		GTIDSet: mysql.MariadbGTIDSet{mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}},
 	}
 	sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
