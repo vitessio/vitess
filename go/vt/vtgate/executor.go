@@ -1095,7 +1095,6 @@ func (e *Executor) handleUse(ctx context.Context, safeSession *SafeSession, sql 
 
 func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
 	if destKeyspace == "" {
-		//panic("stack trace for show statement")
 		return nil, errNoKeyspace
 	}
 	if dest == nil {
