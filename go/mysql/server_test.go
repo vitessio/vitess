@@ -937,6 +937,86 @@ func TestTLSServer(t *testing.T) {
 
 }
 
+// TestTLSRequired creates a Server with TLS required, then tests that an insecure mysql
+// client is rejected
+func TestTLSRequired(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+	}}
+
+	// Create the listener, so we can get its host.
+	// Below, we are enabling --ssl-verify-server-cert, which adds
+	// a check that the common name of the certificate matches the
+	// server host name we connect to.
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+
+	// Make sure hostname is added as an entry to /etc/hosts, otherwise ssl handshake will fail
+	host, err := os.Hostname()
+	if err != nil {
+		t.Fatalf("Failed to get os Hostname: %v", err)
+	}
+
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Create the certs.
+	root, err := ioutil.TempDir("", "TestTLSRequired")
+	if err != nil {
+		t.Fatalf("TempDir failed: %v", err)
+	}
+	defer os.RemoveAll(root)
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
+
+	// Create the server with TLS config.
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		path.Join(root, "ca-cert.pem"))
+	if err != nil {
+		t.Fatalf("TLSServerConfig failed: %v", err)
+	}
+	l.TLSConfig = serverConfig
+	l.RequireSecureTransport = true
+	go l.Accept()
+
+	// Setup conn params without SSL.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+	conn, err := Connect(context.Background(), params)
+	if err == nil {
+		t.Fatal("mysql should have failed")
+	}
+	if conn != nil {
+		conn.Close()
+	}
+
+	// setup conn params with TLS
+	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+	params.Flags = CapabilityClientSSL
+	params.SslCa = path.Join(root, "ca-cert.pem")
+	params.SslCert = path.Join(root, "client-cert.pem")
+	params.SslKey = path.Join(root, "client-key.pem")
+
+	conn, err = Connect(context.Background(), params)
+	if err != nil {
+		t.Fatalf("mysql failed: %v", err)
+	}
+	if conn != nil {
+		conn.Close()
+	}
+}
+
 func checkCountForTLSVer(t *testing.T, version string, expected int64) {
 	connCounts := connCountByTLSVer.Counts()
 	count, ok := connCounts[version]
