@@ -149,6 +149,9 @@ type Listener struct {
 
 	// shutdown indicates that Shutdown method was called.
 	shutdown sync2.AtomicBool
+
+	// RequireSecureTransport configures the server to reject connections from insecure clients
+	RequireSecureTransport bool
 }
 
 // NewFromListener creares a new mysql listener from an existing net.Listener
@@ -317,6 +320,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			}
 		}
 	} else {
+		if l.RequireSecureTransport {
+			c.writeErrorPacketFromError(fmt.Errorf("Server does not allow insecure connections, client must use SSL/TLS"))
+		}
 		connCountByTLSVer.Add(versionNoTLS, 1)
 		defer connCountByTLSVer.Add(versionNoTLS, -1)
 	}
