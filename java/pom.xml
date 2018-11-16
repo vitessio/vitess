@@ -16,8 +16,8 @@
   <modules>
     <module>client</module>
     <module>example</module>
-    <module>grpc-client</module>
-    <!-- <module>hadoop</module> -->
+    <module>grpc-client</module> 
+    <module>hadoop</module>
     <module>jdbc</module>
   </modules>
 
