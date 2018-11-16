@@ -670,7 +670,51 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		authMethod = MysqlNativePassword
 	}
 
-	// FIXME(alainjobart) Add CLIENT_CONNECT_ATTRS parsing if we need it.
+	// Decode connection attributes send by the client
+	if clientFlags&CapabilityClientConnAttr != 0 {
+		var attrLen uint64
+
+		attrLen, pos, ok = readLenEncInt(data, pos)
+		if !ok {
+			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read connection attributes variable length")
+		}
+
+		var attrLenRead uint64
+
+		attrs := make(map[string]string)
+
+		for attrLenRead < attrLen {
+			var keyLen byte
+			keyLen, pos, ok = readByte(data, pos)
+			if !ok {
+				return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read connection attribute key length")
+			}
+			attrLenRead += uint64(keyLen) + 1
+
+			var connAttrKey []byte
+			connAttrKey, pos, ok = readBytesCopy(data, pos, int(keyLen))
+			if !ok {
+				return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read connection attribute key")
+			}
+
+			var valLen byte
+			valLen, pos, ok = readByte(data, pos)
+			if !ok {
+				return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read connection attribute value length")
+			}
+			attrLenRead += uint64(valLen) + 1
+
+			var connAttrVal []byte
+			connAttrVal, pos, ok = readBytesCopy(data, pos, int(valLen))
+			if !ok {
+				return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read connection attribute value")
+			}
+
+			attrs[string(connAttrKey[:])] = string(connAttrVal[:])
+		}
+
+		log.Infof("Connection Attributes: %-v", attrs)
+	}
 
 	return username, authMethod, authResponse, nil
 }
