@@ -1020,10 +1020,16 @@ var (
 		output: "show binlog",
 	}, {
 		input:  "show character set",
-		output: "show character set",
+		output: "show charset",
 	}, {
 		input:  "show character set like '%foo'",
-		output: "show character set",
+		output: "show charset",
+	}, {
+		input:  "show charset",
+		output: "show charset",
+	}, {
+		input:  "show charset like '%foo'",
+		output: "show charset",
 	}, {
 		input:  "show collation",
 		output: "show collation",
