@@ -3105,6 +3105,7 @@ type ConvertType struct {
 // this string is "character set" and this comment is required
 const (
 	CharacterSetStr = " character set"
+	CharsetStr      = "charset"
 )
 
 // Format formats the node.

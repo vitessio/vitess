@@ -180,7 +180,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS FIELDS
+%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -1450,9 +1450,14 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
+/* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
 | SHOW CHARACTER SET ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: CharsetStr}
+  }
+| SHOW CHARSET ddl_skip_to_end
+  {
+    $$ = &Show{Type: string($2)}
   }
 | SHOW CREATE DATABASE ddl_skip_to_end
   {
@@ -1483,11 +1488,19 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
+| SHOW ENGINES
+  {
+    $$ = &Show{Type: string($2)}
+  }
 | SHOW INDEX ddl_skip_to_end
   {
     $$ = &Show{Type: string($2)}
   }
 | SHOW KEYS ddl_skip_to_end
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW PLUGINS
   {
     $$ = &Show{Type: string($2)}
   }
@@ -3254,6 +3267,7 @@ non_reserved_keyword:
 | DECIMAL
 | DOUBLE
 | DUPLICATE
+| ENGINES
 | ENUM
 | EXPANSION
 | FLOAT_TYPE
@@ -3292,6 +3306,7 @@ non_reserved_keyword:
 | ONLY
 | OPTIMIZE
 | PARTITION
+| PLUGINS
 | POINT
 | POLYGON
 | PRIMARY
