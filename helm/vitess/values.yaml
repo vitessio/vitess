@@ -22,6 +22,15 @@ config:
 
     enabled: false
 
+    # this creates 1 cron job per shard that will execute a backup using vtctlclient
+    # on this schedule. The job itself uses almost no resources.
+    cron:
+      # the default schedule runs daily at midnight unless overridden by the individual shard
+      schedule: "0 0 * * *"
+
+      # if this is set to true, the cron jobs are created, but never execute
+      suspend: false
+
     # choose a backup service - valid values are gcs/s3
     # TODO: add file and ceph support
     # backup_storage_implementation: gcs

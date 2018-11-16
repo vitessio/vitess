@@ -174,14 +174,58 @@ topology:
 
 ### Enable backup/restore using Google Cloud Storage
 
+Enabling backups creates a cron job per shard that defaults to executing once per day at midnight.
+This can be overridden on a per shard level so you can stagger when backups occur.
+
 ```
 topology:
   cells:
-    ...
+    - name: "zone1"
+      ...
+      keyspaces:
+        - name: "unsharded_dbname"
+          shards:
+            - name: "0"
+              backup:
+                cron:
+                  schedule: "0 1 * * *"
+                  suspend: false
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+        - name: "sharded_db"
+          shards:
+            - name: "-80"
+              backup:
+                cron:
+                  schedule: "0 2 * * *"
+                  suspend: false
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+            - name: "80-"
+              backup:
+                cron:
+                  schedule: "0 3 * * *"
+                  suspend: false
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
 
 config:
   backup:
     enabled: true
+
+    cron:
+      # the default schedule runs daily at midnight unless overridden by the individual shard
+      schedule: "0 0 * * *"
+
+      # if this is set to true, the cron jobs are created, but never execute
+      suspend: false
+
     backup_storage_implementation: gcs
 
     # Google Cloud Storage bucket to use for backups
