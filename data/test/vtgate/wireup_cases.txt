@@ -454,7 +454,6 @@
     "Opcode": "PulloutIn",
     "SubqueryResult": "__sq1",
     "HasValues": "__has_values1",
-    "IsEmpty": "__is_empty1",
     "Subquery": {
       "Opcode": "Limit",
       "Count": 10,
@@ -494,7 +493,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select 1 from user where :__has_values1 and (id in ::__vals)",
+      "Query": "select 1 from user where :__has_values1 = 1 and (id in ::__vals)",
       "FieldQuery": "select 1 from user where 1 != 1",
       "Vindex": "user_index",
       "Values": [
@@ -516,7 +515,6 @@
       "Opcode": "PulloutValue",
       "SubqueryResult": "__sq1",
       "HasValues": "__has_values1",
-      "IsEmpty": "__is_empty1",
       "Subquery": {
         "Opcode": "SelectScatter",
         "Keyspace": {

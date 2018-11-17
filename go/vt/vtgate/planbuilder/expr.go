@@ -177,45 +177,53 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			return nil, nil, nil, errors.New("unsupported: cross-shard correlated subquery")
 		}
 
-		sqName, hasValues, isEmpty := pb.jt.GenerateSubqueryVars()
+		sqName, hasValues := pb.jt.GenerateSubqueryVars()
 		construct, ok := constructsMap[sqi.ast]
 		if !ok {
 			// (subquery) -> :_sq
 			expr = sqlparser.ReplaceExpr(expr, sqi.ast, sqlparser.NewValArg([]byte(":"+sqName)))
-			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutValue, sqName, hasValues, isEmpty, sqi.bldr))
+			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutValue, sqName, hasValues, sqi.bldr))
 			continue
 		}
 		switch construct := construct.(type) {
 		case *sqlparser.ComparisonExpr:
 			if construct.Operator == sqlparser.InStr {
-				// a in (subquery) -> (:__has_values and (a in ::__sq))
+				// a in (subquery) -> (:__has_values = 1 and (a in ::__sq))
 				newExpr := &sqlparser.ParenExpr{
 					Expr: &sqlparser.AndExpr{
-						Left: sqlparser.NewValArg([]byte(":" + hasValues)),
+						Left: &sqlparser.ComparisonExpr{
+							Left:     sqlparser.NewValArg([]byte(":" + hasValues)),
+							Operator: sqlparser.EqualStr,
+							Right:    sqlparser.NewIntVal([]byte("1")),
+						},
 						Right: &sqlparser.ParenExpr{
 							Expr: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
 						},
 					},
 				}
 				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
-				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutIn, sqName, hasValues, isEmpty, sqi.bldr))
+				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutIn, sqName, hasValues, sqi.bldr))
 			} else {
-				// a not in (subquery) -> (:__is_empty or (a not in ::__sq))
+				// a not in (subquery) -> (:__has_values = 0 or (a not in ::__sq))
 				newExpr := &sqlparser.ParenExpr{
 					Expr: &sqlparser.OrExpr{
-						Left: sqlparser.NewValArg([]byte(":" + isEmpty)),
+						Left: &sqlparser.ComparisonExpr{
+							Left:     sqlparser.NewValArg([]byte(":" + hasValues)),
+							Operator: sqlparser.EqualStr,
+							Right:    sqlparser.NewIntVal([]byte("0")),
+						},
 						Right: &sqlparser.ParenExpr{
 							Expr: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
 						},
 					},
 				}
 				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
-				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutNotIn, sqName, hasValues, isEmpty, sqi.bldr))
+				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutNotIn, sqName, hasValues, sqi.bldr))
 			}
 		case *sqlparser.ExistsExpr:
-			// exists (subquery) -> :_sq
-			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewValArg([]byte(":"+sqName)))
-			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutExists, sqName, hasValues, isEmpty, sqi.bldr))
+			// exists (subquery) -> :_has_values
+			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewValArg([]byte(":"+hasValues)))
+			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutExists, sqName, hasValues, sqi.bldr))
 		}
 	}
 	return pullouts, highestOrigin, expr, nil

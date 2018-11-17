@@ -792,7 +792,6 @@
     "Opcode": "PulloutValue",
     "SubqueryResult": "__sq1",
     "HasValues": "__has_values1",
-    "IsEmpty": "__is_empty1",
     "Subquery": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -822,7 +821,6 @@
     "Opcode": "PulloutValue",
     "SubqueryResult": "__sq1",
     "HasValues": "__has_values1",
-    "IsEmpty": "__is_empty1",
     "Subquery": {
       "Opcode": "SelectScatter",
       "Keyspace": {

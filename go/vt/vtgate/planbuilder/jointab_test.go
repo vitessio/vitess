@@ -27,16 +27,16 @@ func TestGenerateSubqueryVars(t *testing.T) {
 		"__has_values3": {},
 	})
 
-	v1, v2, v3 := jt.GenerateSubqueryVars()
-	combined := []string{v1, v2, v3}
-	want := []string{"__sq2", "__has_values2", "__is_empty2"}
+	v1, v2 := jt.GenerateSubqueryVars()
+	combined := []string{v1, v2}
+	want := []string{"__sq2", "__has_values2"}
 	if !reflect.DeepEqual(combined, want) {
 		t.Errorf("jt.GenerateSubqueryVars: %v, want %v", combined, want)
 	}
 
-	v1, v2, v3 = jt.GenerateSubqueryVars()
-	combined = []string{v1, v2, v3}
-	want = []string{"__sq4", "__has_values4", "__is_empty4"}
+	v1, v2 = jt.GenerateSubqueryVars()
+	combined = []string{v1, v2}
+	want = []string{"__sq4", "__has_values4"}
 	if !reflect.DeepEqual(combined, want) {
 		t.Errorf("jt.GenerateSubqueryVars: %v, want %v", combined, want)
 	}

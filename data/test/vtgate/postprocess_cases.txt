@@ -88,7 +88,6 @@
     "Opcode": "PulloutIn",
     "SubqueryResult": "__sq1",
     "HasValues": "__has_values1",
-    "IsEmpty": "__is_empty1",
     "Subquery": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -104,7 +103,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select id from user having :__has_values1 and (id in ::__vals)",
+      "Query": "select id from user having :__has_values1 = 1 and (id in ::__vals)",
       "FieldQuery": "select id from user where 1 != 1",
       "Vindex": "user_index",
       "Values": [
@@ -290,7 +289,6 @@
     "Opcode": "PulloutIn",
     "SubqueryResult": "__sq1",
     "HasValues": "__has_values1",
-    "IsEmpty": "__is_empty1",
     "Subquery": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -306,7 +304,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select col from user where :__has_values1 and (col in ::__sq1) order by col asc",
+      "Query": "select col from user where :__has_values1 = 1 and (col in ::__sq1) order by col asc",
       "FieldQuery": "select col from user where 1 != 1",
       "OrderBy": [
         {
@@ -365,7 +363,6 @@
     "Opcode": "PulloutIn",
     "SubqueryResult": "__sq1",
     "HasValues": "__has_values1",
-    "IsEmpty": "__is_empty1",
     "Subquery": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -381,7 +378,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select col from user where :__has_values1 and (col in ::__sq1) order by null",
+      "Query": "select col from user where :__has_values1 = 1 and (col in ::__sq1) order by null",
       "FieldQuery": "select col from user where 1 != 1"
     }
   }
@@ -449,7 +446,6 @@
     "Opcode": "PulloutIn",
     "SubqueryResult": "__sq1",
     "HasValues": "__has_values1",
-    "IsEmpty": "__is_empty1",
     "Subquery": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -465,7 +461,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select col from user where :__has_values1 and (col in ::__sq1) order by rand()",
+      "Query": "select col from user where :__has_values1 = 1 and (col in ::__sq1) order by rand()",
       "FieldQuery": "select col from user where 1 != 1"
     }
   }
@@ -782,7 +778,6 @@
       "Opcode": "PulloutIn",
       "SubqueryResult": "__sq1",
       "HasValues": "__has_values1",
-      "IsEmpty": "__is_empty1",
       "Subquery": {
         "Opcode": "SelectScatter",
         "Keyspace": {
@@ -798,7 +793,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "select col from user where :__has_values1 and (col in ::__sq1) limit :__upper_limit",
+        "Query": "select col from user where :__has_values1 = 1 and (col in ::__sq1) limit :__upper_limit",
         "FieldQuery": "select col from user where 1 != 1"
       }
     }
