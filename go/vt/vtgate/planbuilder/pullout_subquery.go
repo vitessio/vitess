@@ -34,14 +34,13 @@ type pulloutSubquery struct {
 }
 
 // newPulloutSubquery builds a new pulloutSubquery.
-func newPulloutSubquery(opcode engine.PulloutOpcode, sqName, hasValues, isEmpty string, subquery builder) *pulloutSubquery {
+func newPulloutSubquery(opcode engine.PulloutOpcode, sqName, hasValues string, subquery builder) *pulloutSubquery {
 	return &pulloutSubquery{
 		subquery: subquery,
 		eSubquery: &engine.PulloutSubquery{
 			Opcode:         opcode,
 			SubqueryResult: sqName,
 			HasValues:      hasValues,
-			IsEmpty:        isEmpty,
 		},
 	}
 }

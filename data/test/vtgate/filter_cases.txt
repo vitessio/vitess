@@ -739,7 +739,6 @@
     "Opcode": "PulloutIn",
     "SubqueryResult": "__sq1",
     "HasValues": "__has_values1",
-    "IsEmpty": "__is_empty1",
     "Subquery": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -755,7 +754,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select id from user where :__has_values1 and (id in ::__vals)",
+      "Query": "select id from user where :__has_values1 = 1 and (id in ::__vals)",
       "FieldQuery": "select id from user where 1 != 1",
       "Vindex": "user_index",
       "Values": [
@@ -773,7 +772,6 @@
     "Opcode": "PulloutNotIn",
     "SubqueryResult": "__sq1",
     "HasValues": "__has_values1",
-    "IsEmpty": "__is_empty1",
     "Subquery": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -789,7 +787,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select id from user where (:__is_empty1 or (id not in ::__sq1))",
+      "Query": "select id from user where (:__has_values1 = 0 or (id not in ::__sq1))",
       "FieldQuery": "select id from user where 1 != 1"
     }
   }
@@ -803,7 +801,6 @@
     "Opcode": "PulloutExists",
     "SubqueryResult": "__sq1",
     "HasValues": "__has_values1",
-    "IsEmpty": "__is_empty1",
     "Subquery": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -819,7 +816,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select id from user where :__sq1",
+      "Query": "select id from user where :__has_values1",
       "FieldQuery": "select id from user where 1 != 1"
     }
   }
@@ -833,7 +830,6 @@
     "Opcode": "PulloutValue",
     "SubqueryResult": "__sq1",
     "HasValues": "__has_values1",
-    "IsEmpty": "__is_empty1",
     "Subquery": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -867,12 +863,10 @@
     "Opcode": "PulloutValue",
     "SubqueryResult": "__sq2",
     "HasValues": "__has_values2",
-    "IsEmpty": "__is_empty2",
     "Subquery": {
       "Opcode": "PulloutIn",
       "SubqueryResult": "__sq1",
       "HasValues": "__has_values1",
-      "IsEmpty": "__is_empty1",
       "Subquery": {
         "Opcode": "SelectScatter",
         "Keyspace": {
@@ -888,7 +882,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "select id2 from user where :__has_values1 and (id2 in ::__sq1)",
+        "Query": "select id2 from user where :__has_values1 = 1 and (id2 in ::__sq1)",
         "FieldQuery": "select id2 from user where 1 != 1"
       }
     },

@@ -34,7 +34,6 @@ type PulloutSubquery struct {
 	Opcode         PulloutOpcode
 	SubqueryResult string
 	HasValues      string
-	IsEmpty        string
 	Subquery       Primitive
 	Underlying     Primitive
 }
@@ -44,7 +43,7 @@ func (ps *PulloutSubquery) RouteType() string {
 	return ps.Opcode.String()
 }
 
-// Execute satisfies the Primtive interface.
+// Execute satisfies the Primitive interface.
 func (ps *PulloutSubquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	combinedVars, err := ps.execSubquery(vcursor, bindVars)
 	if err != nil {
@@ -73,13 +72,12 @@ func (ps *PulloutSubquery) GetFields(vcursor VCursor, bindVars map[string]*query
 		combinedVars[ps.SubqueryResult] = sqltypes.NullBindVariable
 	case PulloutIn, PulloutNotIn:
 		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
-		combinedVars[ps.IsEmpty] = sqltypes.Int64BindVariable(1)
 		combinedVars[ps.SubqueryResult] = &querypb.BindVariable{
 			Type:   querypb.Type_TUPLE,
 			Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(0))},
 		}
 	case PulloutExists:
-		combinedVars[ps.SubqueryResult] = sqltypes.Int64BindVariable(0)
+		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
 	}
 	return ps.Underlying.GetFields(vcursor, combinedVars)
 }
@@ -110,7 +108,6 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 		switch len(result.Rows) {
 		case 0:
 			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
-			combinedVars[ps.IsEmpty] = sqltypes.Int64BindVariable(1)
 			// Add a bogus value. It will not be checked.
 			combinedVars[ps.SubqueryResult] = &querypb.BindVariable{
 				Type:   querypb.Type_TUPLE,
@@ -121,7 +118,6 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 				return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "subquery returned more than one column")
 			}
 			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(1)
-			combinedVars[ps.IsEmpty] = sqltypes.Int64BindVariable(0)
 			values := &querypb.BindVariable{
 				Type:   querypb.Type_TUPLE,
 				Values: make([]*querypb.Value, len(result.Rows)),
@@ -134,9 +130,9 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 	case PulloutExists:
 		switch len(result.Rows) {
 		case 0:
-			combinedVars[ps.SubqueryResult] = sqltypes.Int64BindVariable(0)
+			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
 		default:
-			combinedVars[ps.SubqueryResult] = sqltypes.Int64BindVariable(1)
+			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(1)
 		}
 	}
 	return combinedVars, nil

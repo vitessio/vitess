@@ -72,28 +72,27 @@ func (jt *jointab) Procure(bldr builder, col *sqlparser.ColName, to int) string 
 // a subquery. It returns three names based on: __sq, __has_values,
 // __is_empty. The appropriate names can be used for substitution
 // depending on the scenario.
-func (jt *jointab) GenerateSubqueryVars() (sq, hasValues, isEmpty string) {
+func (jt *jointab) GenerateSubqueryVars() (sq, hasValues string) {
 	for {
 		jt.varIndex++
 		suffix := strconv.Itoa(jt.varIndex)
 		var1 := "__sq" + suffix
 		var2 := "__has_values" + suffix
-		var3 := "__is_empty" + suffix
-		if !jt.check(var1, var2, var3) {
+		if jt.containsAny(var1, var2) {
 			continue
 		}
-		return var1, var2, var3
+		return var1, var2
 	}
 }
 
-func (jt *jointab) check(names ...string) bool {
+func (jt *jointab) containsAny(names ...string) bool {
 	for _, name := range names {
 		if _, ok := jt.vars[name]; ok {
-			return false
+			return true
 		}
 		jt.vars[name] = struct{}{}
 	}
-	return true
+	return false
 }
 
 // Lookup returns the order of the route that supplies the column and
