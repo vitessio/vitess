@@ -114,9 +114,9 @@ const (
 	// Client supports plugin authentication.
 	CapabilityClientPluginAuth = 1 << 19
 
-	// CLIENT_CONNECT_ATTRS 1 << 20
+	// CapabilityClientConnAttr is CLIENT_CONNECT_ATTRS
 	// Permits connection attributes in Protocol::HandshakeResponse41.
-	// Not yet supported.
+	CapabilityClientConnAttr = 1 << 20
 
 	// CapabilityClientPluginAuthLenencClientData is CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
 	CapabilityClientPluginAuthLenencClientData = 1 << 21
