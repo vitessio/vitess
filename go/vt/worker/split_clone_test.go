@@ -1033,7 +1033,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 
 			select {
 			case <-ctx.Done():
-				t.Fatalf("timed out waiting for vtworker to retry due to NoMasterAvailable: %v", ctx.Err())
+				panic(fmt.Errorf("timed out waiting for vtworker to retry due to NoMasterAvailable: %v", ctx.Err()))
 			case <-time.After(10 * time.Millisecond):
 				// Poll constantly.
 			}
