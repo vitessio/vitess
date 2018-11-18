@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -235,20 +234,16 @@ func convertToLeftJoin(ajoin *sqlparser.JoinTableExpr) {
 }
 
 func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
-	if ajoin != nil && ajoin.Condition.Using != nil {
-		return errors.New("unsupported: join with USING(column_list) clause")
-	}
 	lRoute, leftIsRoute := pb.bldr.(*route)
 	rRoute, rightIsRoute := rpb.bldr.(*route)
 	if leftIsRoute && rightIsRoute {
 		// If both are routes, they have an opportunity
 		// to merge into one.
-		if lRoute.ERoute.Opcode == engine.SelectNext || rRoute.ERoute.Opcode == engine.SelectNext {
-			return errors.New("unsupported: sequence join with another table")
-		}
 		if lRoute.ERoute.Keyspace.Name != rRoute.ERoute.Keyspace.Name {
 			goto nomerge
 		}
+		// We don't have to check on SelectNext because the syntax
+		// doesn't allow joins.
 		switch lRoute.ERoute.Opcode {
 		case engine.SelectUnsharded:
 			if rRoute.ERoute.Opcode == engine.SelectUnsharded {
@@ -313,11 +308,12 @@ func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, ajoin *sqlparser.
 	if ajoin == nil {
 		return nil
 	}
-	_, expr, err := pb.findOrigin(ajoin.Condition.On)
+	pullouts, _, expr, err := pb.findOrigin(ajoin.Condition.On)
 	if err != nil {
 		return err
 	}
 	ajoin.Condition.On = expr
+	pb.addPullouts(pullouts)
 	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
 		lRoute.UpdatePlan(pb, filter)
 	}

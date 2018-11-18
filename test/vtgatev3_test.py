@@ -1680,7 +1680,7 @@ class TestVTGateFunctions(unittest.TestCase):
         [(1, 1, 1, 1), (3, 3, 3, 0), (4, 4, 4, 0),
          (5, 5, 5, 5), (6, 6, 6, 6), (7, 7, 7, 7)])
 
-  def test_joins(self):
+  def test_joins_subqueries(self):
     vtgate_conn = get_connection()
     vtgate_conn.begin()
     self.execute_on_master(
@@ -1788,6 +1788,20 @@ class TestVTGateFunctions(unittest.TestCase):
          [('id', self.int_type),
           ('name', self.string_type),
           ('info', self.string_type)]))
+
+    # test a cross-shard subquery
+    result = self.execute_on_master(
+        vtgate_conn,
+        'select id, name from join_user '
+        'where id in (select user_id from join_user_extra)',
+        {})
+    self.assertEqual(
+        result,
+        ([(1L, 'name1')],
+         1,
+         0,
+         [('id', self.int_type),
+          ('name', self.string_type)]))
     vtgate_conn.begin()
     self.execute_on_master(
         vtgate_conn,

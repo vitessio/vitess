@@ -125,13 +125,17 @@ func (pb *primitiveBuilder) pushFilter(boolExpr sqlparser.Expr, whereType string
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
-		origin, expr, err := pb.findOrigin(filter)
+		pullouts, origin, expr, err := pb.findOrigin(filter)
 		if err != nil {
 			return err
 		}
-		if err := pb.bldr.PushFilter(pb, expr, whereType, origin); err != nil {
-			return err
+		// The returned expression may be complex. Resplit before pushing.
+		for _, subexpr := range splitAndExpression(nil, expr) {
+			if err := pb.bldr.PushFilter(pb, subexpr, whereType, origin); err != nil {
+				return err
+			}
 		}
+		pb.addPullouts(pullouts)
 	}
 	return nil
 }
@@ -156,6 +160,14 @@ func reorderBySubquery(filters []sqlparser.Expr) {
 	}
 }
 
+// addPullouts adds the pullout subqueries to the primitiveBuilder.
+func (pb *primitiveBuilder) addPullouts(pullouts []*pulloutSubquery) {
+	for _, pullout := range pullouts {
+		pullout.setUnderlying(pb.bldr)
+		pb.bldr = pullout
+	}
+}
+
 // pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
 func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select, grouper groupByHandler) error {
@@ -174,7 +186,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 	for i, node := range selectExprs {
 		switch node := node.(type) {
 		case *sqlparser.AliasedExpr:
-			origin, expr, err := pb.findOrigin(node.Expr)
+			pullouts, origin, expr, err := pb.findOrigin(node.Expr)
 			if err != nil {
 				return nil, err
 			}
@@ -183,6 +195,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 			if err != nil {
 				return nil, err
 			}
+			pb.addPullouts(pullouts)
 		case *sqlparser.StarExpr:
 			// We'll allow select * for simple routes.
 			rb, ok := pb.bldr.(*route)
