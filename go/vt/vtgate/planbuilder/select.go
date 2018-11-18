@@ -257,18 +257,33 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 				return inrcs, false, nil
 			}
 		}
+		singleTable := false
+		if len(tables) == 1 {
+			singleTable = true
+		}
 		for _, t := range tables {
-			for _, col := range t.orderdColumns {
-				// If a and b have id as their column, then
-				// select * from a join b should result in
-				// select a.id as id, b.id as id from a join b.
-				expr := &sqlparser.AliasedExpr{
-					Expr: &sqlparser.ColName{
-						Metadata:  t.columns[col.Lowered()],
-						Name:      col,
-						Qualifier: t.alias,
-					},
-					As: col,
+			for _, col := range t.columnNames {
+				var expr *sqlparser.AliasedExpr
+				if singleTable {
+					// If there's only one table, we use unqualifed column names.
+					expr = &sqlparser.AliasedExpr{
+						Expr: &sqlparser.ColName{
+							Metadata: t.columns[col.Lowered()],
+							Name:     col,
+						},
+					}
+				} else {
+					// If a and b have id as their column, then
+					// select * from a join b should result in
+					// select a.id as id, b.id as id from a join b.
+					expr = &sqlparser.AliasedExpr{
+						Expr: &sqlparser.ColName{
+							Metadata:  t.columns[col.Lowered()],
+							Name:      col,
+							Qualifier: t.alias,
+						},
+						As: col,
+					}
 				}
 				rc, _, err := pb.bldr.PushSelect(expr, t.origin)
 				if err != nil {
@@ -289,7 +304,7 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 	if !t.isAuthoritative {
 		return inrcs, false, nil
 	}
-	for _, col := range t.orderdColumns {
+	for _, col := range t.columnNames {
 		expr := &sqlparser.AliasedExpr{
 			Expr: &sqlparser.ColName{
 				Metadata:  t.columns[col.Lowered()],

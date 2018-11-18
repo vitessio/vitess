@@ -50,8 +50,8 @@ var errNoTable = errors.New("no table info")
 // which is later used to determine if the subquery can be
 // merged with an outer route.
 type symtab struct {
-	tables        map[sqlparser.TableName]*table
-	orderedTables []sqlparser.TableName
+	tables     map[sqlparser.TableName]*table
+	tableNames []sqlparser.TableName
 
 	// uniqueColumns has the column name as key
 	// and points at the columns that tables contains.
@@ -147,10 +147,9 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 // At this point, only tables and uniqueColumns are set.
 // All other fields are ignored.
 func (st *symtab) Merge(newsyms *symtab) error {
-	if st.orderedTables == nil || newsyms.orderedTables == nil {
-		// This code is unreachable because there are higher level
-		// protections that disallow intermixing of symtabs with
-		// no tables with symtabs that have tables.
+	if st.tableNames == nil || newsyms.tableNames == nil {
+		// If any side of symtab has anonymous tables,
+		// we treat the merged symtab as having anonymous tables.
 		return nil
 	}
 	for _, t := range newsyms.tables {
@@ -170,7 +169,7 @@ func (st *symtab) AddTable(t *table) error {
 		return fmt.Errorf("duplicate symbol: %s", sqlparser.String(t.alias))
 	}
 	st.tables[t.alias] = t
-	st.orderedTables = append(st.orderedTables, t.alias)
+	st.tableNames = append(st.tableNames, t.alias)
 
 	// update the uniqueColumns list, and eliminate
 	// duplicate symbols if found.
@@ -190,8 +189,11 @@ func (st *symtab) AddTable(t *table) error {
 
 // AllTables returns an ordered list of all current tables.
 func (st *symtab) AllTables() []*table {
-	var tables []*table
-	for _, tname := range st.orderedTables {
+	if len(st.tableNames) == 0 {
+		return nil
+	}
+	tables := make([]*table, 0, len(st.tableNames))
+	for _, tname := range st.tableNames {
 		tables = append(tables, st.tables[tname])
 	}
 	return tables
@@ -204,7 +206,7 @@ func (st *symtab) AllTables() []*table {
 // This may be a deviation from the formal definition of SQL, but there
 // are currently no use cases that require the full support.
 func (st *symtab) FindTable(tname sqlparser.TableName) (*table, error) {
-	if st.orderedTables == nil {
+	if st.tableNames == nil {
 		// Unreachable because current code path checks for this condition
 		// before invoking this function.
 		return nil, errNoTable
@@ -440,7 +442,7 @@ func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
 type table struct {
 	alias           sqlparser.TableName
 	columns         map[string]*column
-	orderdColumns   []sqlparser.ColIdent
+	columnNames     []sqlparser.ColIdent
 	isAuthoritative bool
 	origin          builder
 	vindexTable     *vindexes.Table
@@ -453,10 +455,10 @@ func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
 	lowered := alias.Lowered()
 	// Dups are allowed, but first one wins if referenced.
 	if _, ok := t.columns[lowered]; !ok {
-		c.colnum = len(t.orderdColumns)
+		c.colnum = len(t.columnNames)
 		t.columns[lowered] = c
 	}
-	t.orderdColumns = append(t.orderdColumns, alias)
+	t.columnNames = append(t.columnNames, alias)
 }
 
 // column represents a unique symbol in the query that other

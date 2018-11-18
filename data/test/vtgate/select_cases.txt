@@ -207,8 +207,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2 from authoritative",
-    "FieldQuery": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2 from authoritative where 1 != 1"
+    "Query": "select user_id, col1, col2 from authoritative",
+    "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1"
   }
 }
 
