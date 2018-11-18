@@ -65,7 +65,7 @@ message Table {
   // The keyspace id is represened in hex form
   // like in keyranges.
   string pinned = 5;
-  // is_authoritative is set ot true if columns is
+  // is_authoritative is set to true if columns is
   // an authoritative list for the table. This allows
   // us to expand 'select *' expressions.
   bool is_authoritative = 6;
