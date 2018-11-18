@@ -69,15 +69,15 @@ func (jt *jointab) Procure(bldr builder, col *sqlparser.ColName, to int) string 
 }
 
 // GenerateSubqueryVars generates substitution variable names for
-// a subquery. It returns three names based on: __sq, __has_values,
-// __is_empty. The appropriate names can be used for substitution
+// a subquery. It returns two names based on: __sq, __sq_has_values.
+// The appropriate names can be used for substitution
 // depending on the scenario.
 func (jt *jointab) GenerateSubqueryVars() (sq, hasValues string) {
 	for {
 		jt.varIndex++
 		suffix := strconv.Itoa(jt.varIndex)
 		var1 := "__sq" + suffix
-		var2 := "__has_values" + suffix
+		var2 := "__sq_has_values" + suffix
 		if jt.containsAny(var1, var2) {
 			continue
 		}
