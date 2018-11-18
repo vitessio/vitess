@@ -88,33 +88,33 @@ select * from (select id from user) s /* scatter paren select */
 1 ks_sharded/c0-: select * from (select id from user) as s limit 10001 /* scatter paren select */
 
 ----------------------------------------------------------------------
-select name from user where id = (select id from t1) /* non-corelated subquery as value */
+select name from user where id = (select id from t1) /* non-correlated subquery as value */
 
-1 ks_unsharded/-: select id from t1 limit 10001 /* non-corelated subquery as value */
-2 ks_sharded/-40: select name from user where id = 1 limit 10001 /* non-corelated subquery as value */
-
-----------------------------------------------------------------------
-select name from user where id in (select id from t1) /* non-corelated subquery in IN clause */
-
-1 ks_unsharded/-: select id from t1 limit 10001 /* non-corelated subquery in IN clause */
-2 ks_sharded/-40: select name from user where 1 = 1 and (id in (1)) limit 10001 /* non-corelated subquery in IN clause */
+1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery as value */
+2 ks_sharded/-40: select name from user where id = 1 limit 10001 /* non-correlated subquery as value */
 
 ----------------------------------------------------------------------
-select name from user where id not in (select id from t1) /* non-corelated subquery in NOT IN clause */
+select name from user where id in (select id from t1) /* non-correlated subquery in IN clause */
 
-1 ks_unsharded/-: select id from t1 limit 10001 /* non-corelated subquery in NOT IN clause */
-2 ks_sharded/-40: select name from user where (1 = 0 or (id not in (1))) limit 10001 /* non-corelated subquery in NOT IN clause */
-2 ks_sharded/40-80: select name from user where (1 = 0 or (id not in (1))) limit 10001 /* non-corelated subquery in NOT IN clause */
-2 ks_sharded/80-c0: select name from user where (1 = 0 or (id not in (1))) limit 10001 /* non-corelated subquery in NOT IN clause */
-2 ks_sharded/c0-: select name from user where (1 = 0 or (id not in (1))) limit 10001 /* non-corelated subquery in NOT IN clause */
+1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery in IN clause */
+2 ks_sharded/-40: select name from user where 1 = 1 and (id in (1)) limit 10001 /* non-correlated subquery in IN clause */
 
 ----------------------------------------------------------------------
-select name from user where exists (select id from t1) /* non-corelated subquery as EXISTS */
+select name from user where id not in (select id from t1) /* non-correlated subquery in NOT IN clause */
 
-1 ks_unsharded/-: select id from t1 limit 10001 /* non-corelated subquery as EXISTS */
-2 ks_sharded/-40: select name from user where 1 limit 10001 /* non-corelated subquery as EXISTS */
-2 ks_sharded/40-80: select name from user where 1 limit 10001 /* non-corelated subquery as EXISTS */
-2 ks_sharded/80-c0: select name from user where 1 limit 10001 /* non-corelated subquery as EXISTS */
-2 ks_sharded/c0-: select name from user where 1 limit 10001 /* non-corelated subquery as EXISTS */
+1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery in NOT IN clause */
+2 ks_sharded/-40: select name from user where (1 = 0 or (id not in (1))) limit 10001 /* non-correlated subquery in NOT IN clause */
+2 ks_sharded/40-80: select name from user where (1 = 0 or (id not in (1))) limit 10001 /* non-correlated subquery in NOT IN clause */
+2 ks_sharded/80-c0: select name from user where (1 = 0 or (id not in (1))) limit 10001 /* non-correlated subquery in NOT IN clause */
+2 ks_sharded/c0-: select name from user where (1 = 0 or (id not in (1))) limit 10001 /* non-correlated subquery in NOT IN clause */
+
+----------------------------------------------------------------------
+select name from user where exists (select id from t1) /* non-correlated subquery as EXISTS */
+
+1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery as EXISTS */
+2 ks_sharded/-40: select name from user where 1 limit 10001 /* non-correlated subquery as EXISTS */
+2 ks_sharded/40-80: select name from user where 1 limit 10001 /* non-correlated subquery as EXISTS */
+2 ks_sharded/80-c0: select name from user where 1 limit 10001 /* non-correlated subquery as EXISTS */
+2 ks_sharded/c0-: select name from user where 1 limit 10001 /* non-correlated subquery as EXISTS */
 
 ----------------------------------------------------------------------

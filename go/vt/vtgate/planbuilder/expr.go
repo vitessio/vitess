@@ -188,7 +188,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 		switch construct := construct.(type) {
 		case *sqlparser.ComparisonExpr:
 			if construct.Operator == sqlparser.InStr {
-				// a in (subquery) -> (:__has_values = 1 and (a in ::__sq))
+				// a in (subquery) -> (:__sq_has_values = 1 and (a in ::__sq))
 				newExpr := &sqlparser.ParenExpr{
 					Expr: &sqlparser.AndExpr{
 						Left: &sqlparser.ComparisonExpr{
@@ -204,7 +204,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
 				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutIn, sqName, hasValues, sqi.bldr))
 			} else {
-				// a not in (subquery) -> (:__has_values = 0 or (a not in ::__sq))
+				// a not in (subquery) -> (:__sq_has_values = 0 or (a not in ::__sq))
 				newExpr := &sqlparser.ParenExpr{
 					Expr: &sqlparser.OrExpr{
 						Left: &sqlparser.ComparisonExpr{
@@ -221,7 +221,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutNotIn, sqName, hasValues, sqi.bldr))
 			}
 		case *sqlparser.ExistsExpr:
-			// exists (subquery) -> :_has_values
+			// exists (subquery) -> :__sq_has_values
 			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewValArg([]byte(":"+hasValues)))
 			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutExists, sqName, hasValues, sqi.bldr))
 		}
