@@ -18,3 +18,5 @@ select name from user where id = (select id from t1) /* non-correlated subquery 
 select name from user where id in (select id from t1) /* non-correlated subquery in IN clause */;
 select name from user where id not in (select id from t1) /* non-correlated subquery in NOT IN clause */;
 select name from user where exists (select id from t1) /* non-correlated subquery as EXISTS */;
+
+select * from name_info order by info /* select * and order by varchar column */

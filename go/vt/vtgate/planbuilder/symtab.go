@@ -97,7 +97,7 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 		alias:           alias,
 		origin:          rb,
 		vindexTable:     vindexTable,
-		isAuthoritative: vindexTable.IsAuthoritative,
+		isAuthoritative: vindexTable.ColumnListAuthoritative,
 	}
 
 	for _, col := range vindexTable.Columns {

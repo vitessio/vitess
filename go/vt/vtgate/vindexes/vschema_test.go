@@ -214,7 +214,7 @@ func TestVSchemaColumns(t *testing.T) {
 	}
 }
 
-func TestVSchemaIsAuthoritative(t *testing.T) {
+func TestVSchemaColumnListAuthoritative(t *testing.T) {
 	good := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"unsharded": {
@@ -226,7 +226,7 @@ func TestVSchemaIsAuthoritative(t *testing.T) {
 							Name: "c2",
 							Type: sqltypes.VarChar,
 						}},
-						IsAuthoritative: true,
+						ColumnListAuthoritative: true,
 					},
 				},
 			},
@@ -249,7 +249,7 @@ func TestVSchemaIsAuthoritative(t *testing.T) {
 			Name: sqlparser.NewColIdent("c2"),
 			Type: sqltypes.VarChar,
 		}},
-		IsAuthoritative: true,
+		ColumnListAuthoritative: true,
 	}
 	dual := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),

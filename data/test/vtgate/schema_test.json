@@ -140,13 +140,14 @@
               "name": "user_id"
             },
             {
-              "name": "col1"
+              "name": "col1",
+              "type": "VARCHAR"
             },
             {
               "name": "col2"
             }
           ],
-          "is_authoritative": true
+          "column_list_authoritative": true
         },
         "multicolvin": {
           "column_vindexes": [
