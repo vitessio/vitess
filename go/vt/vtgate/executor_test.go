@@ -603,8 +603,9 @@ func TestExecutorShow(t *testing.T) {
 				buildVarCharRow(KsTestSharded),
 				buildVarCharRow(KsTestUnsharded),
 				buildVarCharRow("TestXBadSharding"),
+				buildVarCharRow(KsTestBadVSchema),
 			},
-			RowsAffected: 4,
+			RowsAffected: 5,
 		}
 		if !reflect.DeepEqual(qr, wantqr) {
 			t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
@@ -709,9 +710,9 @@ func TestExecutorShow(t *testing.T) {
 		Fields: buildVarCharFields("Shards"),
 		Rows: [][]sqltypes.Value{
 			buildVarCharRow("TestExecutor/-20"),
-			buildVarCharRow("TestXBadSharding/e0-"),
+			buildVarCharRow("TestXBadVSchema/e0-"),
 		},
-		RowsAffected: 25,
+		RowsAffected: 33,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
 		t.Errorf("show vitess_shards:\n%+v, want\n%+v", qr, wantqr)
@@ -879,9 +880,9 @@ func TestExecutorShow(t *testing.T) {
 		Fields: buildVarCharFields("Shards"),
 		Rows: [][]sqltypes.Value{
 			buildVarCharRow("TestSharded/-20"),
-			buildVarCharRow("TestXBadSharding/e0-"),
+			buildVarCharRow("TestXBadVSchema/e0-"),
 		},
-		RowsAffected: 17,
+		RowsAffected: 25,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
 		t.Errorf("show databases:\n%+v, want\n%+v", qr, wantqr)
