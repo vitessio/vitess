@@ -176,6 +176,7 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 }
 
 func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
+outer:
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
 		keyspace := ksvschema.Keyspace
@@ -183,7 +184,7 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			vindex, err := CreateVindex(vindexInfo.Type, vname, vindexInfo.Params)
 			if err != nil {
 				ksvschema.Error = err
-				goto end
+				continue outer
 			}
 			if _, ok := vschema.uniqueVindexes[vname]; ok {
 				vschema.uniqueVindexes[vname] = nil
@@ -210,12 +211,12 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 				decoded, err := hex.DecodeString(table.Pinned)
 				if err != nil {
 					ksvschema.Error = fmt.Errorf("could not decode the keyspace id for pin: %v", err)
-					goto end
+					continue outer
 				}
 				t.Pinned = decoded
 			} else if keyspace.Sharded && len(table.ColumnVindexes) == 0 {
 				ksvschema.Error = fmt.Errorf("missing primary col vindex for table: %s", tname)
-				goto end
+				continue outer
 			}
 
 			// Initialize Columns.
@@ -224,7 +225,7 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 				name := sqlparser.NewColIdent(col.Name)
 				if colNames[name.Lowered()] {
 					ksvschema.Error = fmt.Errorf("duplicate column name '%v' for table: %s", name, tname)
-					goto end
+					continue outer
 				}
 				colNames[name.Lowered()] = true
 				t.Columns = append(t.Columns, Column{Name: name, Type: col.Type})
@@ -235,7 +236,7 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 				vindexInfo, ok := ks.Vindexes[ind.Name]
 				if !ok {
 					ksvschema.Error = fmt.Errorf("vindex %s not found for table %s", ind.Name, tname)
-					goto end
+					continue outer
 				}
 				vindex := vschema.Keyspaces[ksname].Vindexes[ind.Name]
 				owned := false
@@ -246,13 +247,13 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 				if ind.Column != "" {
 					if len(ind.Columns) > 0 {
 						ksvschema.Error = fmt.Errorf("can't use column and columns at the same time in vindex (%s) and table (%s)", ind.Name, tname)
-						goto end
+						continue outer
 					}
 					columns = []sqlparser.ColIdent{sqlparser.NewColIdent(ind.Column)}
 				} else {
 					if len(ind.Columns) == 0 {
 						ksvschema.Error = fmt.Errorf("must specify at least one column for vindex (%s) and table (%s)", ind.Name, tname)
-						goto end
+						continue outer
 					}
 					for _, indCol := range ind.Columns {
 						columns = append(columns, sqlparser.NewColIdent(indCol))
@@ -269,11 +270,11 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 					// Perform Primary vindex check.
 					if !columnVindex.Vindex.IsUnique() {
 						ksvschema.Error = fmt.Errorf("primary vindex %s is not Unique for table %s", ind.Name, tname)
-						goto end
+						continue outer
 					}
 					if owned {
 						ksvschema.Error = fmt.Errorf("primary vindex %s cannot be owned for table %s", ind.Name, tname)
-						goto end
+						continue outer
 					}
 				}
 				t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
@@ -283,7 +284,6 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			}
 			t.Ordered = colVindexSorted(t.ColumnVindexes)
 		}
-	end:
 	}
 }
 
