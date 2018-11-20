@@ -34,8 +34,11 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (*engine.Ins
 	if err := pb.processAliasedTable(aliased); err != nil {
 		return nil, err
 	}
-	// route is guaranteed because of simple table expr.
-	rb := pb.bldr.(*route)
+	rb, ok := pb.bldr.(*route)
+	if !ok {
+		// This can happen only for vindexes right now.
+		return nil, fmt.Errorf("inserting into a vindex not allowed: %s", sqlparser.String(ins.Table))
+	}
 	if rb.ERoute.TargetDestination != nil {
 		return nil, errors.New("unsupported: INSERT with a target destination")
 	}

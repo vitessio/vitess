@@ -39,7 +39,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 	}
 	rb, ok := pb.bldr.(*route)
 	if !ok {
-		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
+		return nil, errors.New("unsupported: multi-table/vindex delete statement in sharded keyspace")
 	}
 	edel.Keyspace = rb.ERoute.Keyspace
 	if !edel.Keyspace.Sharded {
