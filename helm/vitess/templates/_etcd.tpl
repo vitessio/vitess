@@ -1,12 +1,12 @@
 ###################################
 # etcd cluster managed by pre-installed etcd operator
 ###################################
-{{- define "etcd" -}}
+{{ define "etcd" -}}
 # set tuple values to more recognizable variables
 {{- $name := index . 0 -}}
 {{- $replicas := index . 1 -}}
 {{- $version := index . 2 -}}
-{{- $resources := index . 3 -}}
+{{- $resources := index . 3 }}
 
 ###################################
 # EtcdCluster

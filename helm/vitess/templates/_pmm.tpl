@@ -1,10 +1,10 @@
 ###################################
 # pmm Service + Deployment
 ###################################
-{{- define "pmm" -}}
+{{ define "pmm" -}}
 # set tuple values to more recognizable variables
 {{- $pmm := index . 0 -}}
-{{- $namespace := index . 1 -}}
+{{- $namespace := index . 1 }}
 
 ###################################
 # pmm Service
@@ -131,13 +131,13 @@ spec:
 ###################################
 # sidecar container running pmm-client
 ###################################
-{{- define "cont-pmm-client" -}}
+{{ define "cont-pmm-client" -}}
 {{- $pmm := index . 0 -}}
-{{- $namespace := index . 1 -}}
+{{- $namespace := index . 1 }}
 
 - name: "pmm-client"
   image: "vitess/pmm-client:{{ $pmm.pmmTag }}"
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
   volumeMounts:
     - name: vtdataroot
       mountPath: "/vtdataroot"
@@ -179,9 +179,11 @@ spec:
       trap : TERM INT; sleep infinity & wait
 
 - name: pmm-client-metrics-log
-  image: busybox
-  command: ["/bin/sh"]
-  args: ["-c", "tail -n+1 -F /vtdataroot/pmm/pmm-mysql-metrics-42002.log"]
+  image: vitess/logtail:latest
+  imagePullPolicy: Always
+  env:
+  - name: TAIL_FILEPATH
+    value: /vtdataroot/pmm/pmm-mysql-metrics-42002.log
   volumeMounts:
     - name: vtdataroot
       mountPath: /vtdataroot

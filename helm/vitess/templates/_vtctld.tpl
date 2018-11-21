@@ -1,7 +1,7 @@
 ###################################
 # vtctld Service + Deployment
 ###################################
-{{- define "vtctld" -}}
+{{ define "vtctld" -}}
 # set tuple values to more recognizable variables
 {{- $topology := index . 0 -}}
 {{- $cell := index . 1 -}}
@@ -13,7 +13,7 @@
 
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtctld.vitessTag -}}
-{{- $cellClean := include "clean-label" $cell.name -}}
+{{- $cellClean := include "clean-label" $cell.name }}
 
 ###################################
 # vtctld Service
@@ -60,6 +60,7 @@ spec:
       containers:
         - name: vtctld
           image: vitess/vtctld:{{$vitessTag}}
+          imagePullPolicy: Always
           readinessProbe:
             httpGet:
               path: /debug/health
@@ -116,7 +117,7 @@ spec:
 ###################################
 # vtctld-affinity sets node/pod affinities
 ###################################
-{{- define "vtctld-affinity" -}}
+{{ define "vtctld-affinity" -}}
 # set tuple values to more recognizable variables
 {{- $cellClean := index . 0 -}}
 {{- $region := index . 1 -}}
