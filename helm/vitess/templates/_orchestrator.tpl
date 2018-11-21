@@ -1,7 +1,7 @@
 ###################################
 # Master Orchestrator Service
 ###################################
-{{- define "orchestrator" -}}
+{{ define "orchestrator" -}}
 # set tuple values to more recognizable variables
 {{- $orc := index . 0 -}}
 {{- $defaultVtctlclient := index . 1 }}
@@ -123,17 +123,21 @@ spec:
               value: "15999"
 
         - name: recovery-log
-          image: busybox
-          command: ["/bin/sh"]
-          args: ["-c", "tail -n+1 -F /tmp/recovery.log"]
+          image: vitess/logtail:latest
+          imagePullPolicy: Always
+          env:
+          - name: TAIL_FILEPATH
+            value: /tmp/recovery.log
           volumeMounts:
             - name: tmplogs
               mountPath: /tmp
 
         - name: audit-log
-          image: busybox
-          command: ["/bin/sh"]
-          args: ["-c", "tail -n+1 -F /tmp/orchestrator-audit.log"]
+          image: vitess/logtail:latest
+          imagePullPolicy: Always
+          env:
+          - name: TAIL_FILEPATH
+            value: /tmp/orchestrator-audit.log
           volumeMounts:
             - name: tmplogs
               mountPath: /tmp
@@ -153,7 +157,7 @@ spec:
 ###################################
 # Per StatefulSet Orchestrator Service
 ###################################
-{{- define "orchestrator-statefulset-service" -}}
+{{ define "orchestrator-statefulset-service" -}}
 # set tuple values to more recognizable variables
 {{- $orc := index . 0 -}}
 {{- $i := index . 1 }}
@@ -187,8 +191,8 @@ spec:
 # init-container to copy and sed
 # Orchestrator config from ConfigMap
 ###################################
-{{- define "init-orchestrator" -}}
-{{- $orc := . -}}
+{{ define "init-orchestrator" -}}
+{{- $orc := . }}
 
 - name: init-orchestrator
   image: {{ $orc.image | quote }}

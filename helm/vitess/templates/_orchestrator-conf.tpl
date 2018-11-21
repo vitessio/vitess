@@ -1,7 +1,7 @@
 ###################################
 # Orchestrator Config
 ###################################
-{{- define "orchestrator-config" -}}
+{{ define "orchestrator-config" -}}
 # set tuple values to more recognizable variables
 {{- $orc := index . 0 -}}
 {{- $namespace := index . 1 -}}
