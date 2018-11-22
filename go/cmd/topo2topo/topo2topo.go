@@ -36,6 +36,7 @@ var (
 	toServerAddress  = flag.String("to_server", "", "topology server address to copy data to")
 	toRoot           = flag.String("to_root", "", "topology server root to copy data to")
 
+	compare             = flag.Bool("compare", false, "compares data between topologies")
 	doKeyspaces         = flag.Bool("do-keyspaces", false, "copies the keyspace information")
 	doShards            = flag.Bool("do-shards", false, "copies the shard information")
 	doShardReplications = flag.Bool("do-shard-replications", false, "copies the shard replication information")
@@ -64,6 +65,14 @@ func main() {
 
 	ctx := context.Background()
 
+	if *compare {
+		compareTopos(ctx, fromTS, toTS)
+		return
+	}
+	copy(ctx, fromTS, toTS)
+}
+
+func copy(ctx context.Context, fromTS, toTS *topo.Server) {
 	if *doKeyspaces {
 		helpers.CopyKeyspaces(ctx, fromTS, toTS)
 	}
@@ -76,4 +85,22 @@ func main() {
 	if *doTablets {
 		helpers.CopyTablets(ctx, fromTS, toTS)
 	}
+
+}
+
+func compareTopos(ctx context.Context, fromTS, toTS *topo.Server) {
+
+	if *doKeyspaces {
+		helpers.CompareKeyspaces(ctx, fromTS, toTS)
+	}
+	if *doShards {
+		helpers.CompareShards(ctx, fromTS, toTS)
+	}
+	if *doShardReplications {
+		helpers.CompareShardReplications(ctx, fromTS, toTS)
+	}
+	if *doTablets {
+		helpers.CompareTablets(ctx, fromTS, toTS)
+	}
+
 }
