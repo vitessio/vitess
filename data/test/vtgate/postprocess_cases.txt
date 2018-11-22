@@ -168,6 +168,49 @@
   }
 }
 
+# ORDER BY works for select * from authoritative table
+"select * from authoritative order by user_id"
+{
+  "Original": "select * from authoritative order by user_id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user_id, col1, col2 from authoritative order by user_id asc",
+    "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1",
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      }
+    ]
+  }
+}
+
+# ORDER BY works for select * from authoritative table
+"select * from authoritative order by col1"
+{
+  "Original": "select * from authoritative order by col1",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user_id, col1, col2, weight_string(col1) from authoritative order by col1 asc",
+    "FieldQuery": "select user_id, col1, col2, weight_string(col1) from authoritative where 1 != 1",
+    "OrderBy": [
+      {
+        "Col": 3,
+        "Desc": false
+      }
+    ],
+    "TruncateColumnCount": 3
+  }
+}
+
 # ORDER BY on scatter with text column
 "select a, textcol1, b from user order by a, textcol1, b"
 {
