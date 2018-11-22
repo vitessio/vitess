@@ -216,6 +216,71 @@ func TestVSchemaColumns(t *testing.T) {
 	}
 }
 
+func TestVSchemaColumnListAuthoritative(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
+							Name: "c1",
+						}, {
+							Name: "c2",
+							Type: sqltypes.VarChar,
+						}},
+						ColumnListAuthoritative: true,
+					},
+				},
+			},
+		},
+	}
+	got, err := BuildVSchema(&good)
+	if err != nil {
+		t.Error(err)
+	}
+	ks := &Keyspace{
+		Name: "unsharded",
+	}
+	t1 := &Table{
+		Name:     sqlparser.NewTableIdent("t1"),
+		Keyspace: ks,
+		Columns: []Column{{
+			Name: sqlparser.NewColIdent("c1"),
+			Type: sqltypes.Null,
+		}, {
+			Name: sqlparser.NewColIdent("c2"),
+			Type: sqltypes.VarChar,
+		}},
+		ColumnListAuthoritative: true,
+	}
+	dual := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks,
+	}
+	want := &VSchema{
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"dual": dual,
+		},
+		uniqueVindexes: map[string]Vindex{},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"unsharded": {
+				Keyspace: ks,
+				Tables: map[string]*Table{
+					"t1":   t1,
+					"dual": dual,
+				},
+				Vindexes: map[string]Vindex{},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotb, _ := json.Marshal(got)
+		wantb, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:\n%s, want\n%s", gotb, wantb)
+	}
+}
+
 func TestVSchemaColumnsFail(t *testing.T) {
 	good := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{

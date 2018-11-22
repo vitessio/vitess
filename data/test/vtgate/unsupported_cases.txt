@@ -425,10 +425,10 @@
 "select keyspace_id from user_index where 1 = id"
 "unsupported: where clause for vindex function must be of the form id = <val> (lhs is not a column)"
 
-"select keyspace_id from user_index where none = 1"
+"select keyspace_id from user_index where keyspace_id = 1"
 "unsupported: where clause for vindex function must be of the form id = <val> (lhs is not id)"
 
-"select keyspace_id from user_index where id = a"
+"select keyspace_id from user_index where id = id+1"
 "unsupported: where clause for vindex function must be of the form id = <val> (rhs is not a value)"
 
 "select keyspace_id from user_index"

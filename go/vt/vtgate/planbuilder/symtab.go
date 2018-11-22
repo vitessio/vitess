@@ -28,6 +28,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+var errNoTable = errors.New("no table info")
+
 // symtab represents the symbol table for a SELECT statement
 // or a subquery. The symtab evolves over time.
 // As a query is analyzed, multiple independent
@@ -48,7 +50,8 @@ import (
 // which is later used to determine if the subquery can be
 // merged with an outer route.
 type symtab struct {
-	tables map[sqlparser.TableName]*table
+	tables     map[sqlparser.TableName]*table
+	tableNames []sqlparser.TableName
 
 	// uniqueColumns has the column name as key
 	// and points at the columns that tables contains.
@@ -91,18 +94,18 @@ func newSymtabWithRoute(rb *route) *symtab {
 // and adds it to symtab.
 func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexes.Table, rb *route) error {
 	t := &table{
-		alias:       alias,
-		columns:     make(map[string]*column),
-		origin:      rb,
-		vindexTable: vindexTable,
+		alias:           alias,
+		origin:          rb,
+		vindexTable:     vindexTable,
+		isAuthoritative: vindexTable.ColumnListAuthoritative,
 	}
 
 	for _, col := range vindexTable.Columns {
-		t.columns[col.Name.Lowered()] = &column{
+		t.addColumn(col.Name, &column{
 			origin: rb,
 			st:     st,
 			typ:    col.Type,
-		}
+		})
 	}
 
 	for _, cv := range vindexTable.ColumnVindexes {
@@ -117,21 +120,21 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 				col.Vindex = vindex
 				continue
 			}
-			t.columns[lowered] = &column{
+			t.addColumn(cvcol, &column{
 				origin: rb,
 				st:     st,
 				Vindex: vindex,
-			}
+			})
 		}
 	}
 
 	if ai := vindexTable.AutoIncrement; ai != nil {
 		lowered := ai.Column.Lowered()
 		if _, ok := t.columns[lowered]; !ok {
-			t.columns[lowered] = &column{
+			t.addColumn(ai.Column, &column{
 				origin: rb,
 				st:     st,
-			}
+			})
 		}
 	}
 	return st.AddTable(t)
@@ -144,6 +147,11 @@ func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexe
 // At this point, only tables and uniqueColumns are set.
 // All other fields are ignored.
 func (st *symtab) Merge(newsyms *symtab) error {
+	if st.tableNames == nil || newsyms.tableNames == nil {
+		// If any side of symtab has anonymous tables,
+		// we treat the merged symtab as having anonymous tables.
+		return nil
+	}
 	for _, t := range newsyms.tables {
 		if err := st.AddTable(t); err != nil {
 			return err
@@ -161,6 +169,7 @@ func (st *symtab) AddTable(t *table) error {
 		return fmt.Errorf("duplicate symbol: %s", sqlparser.String(t.alias))
 	}
 	st.tables[t.alias] = t
+	st.tableNames = append(st.tableNames, t.alias)
 
 	// update the uniqueColumns list, and eliminate
 	// duplicate symbols if found.
@@ -176,6 +185,37 @@ func (st *symtab) AddTable(t *table) error {
 		st.uniqueColumns[colname] = c
 	}
 	return nil
+}
+
+// AllTables returns an ordered list of all current tables.
+func (st *symtab) AllTables() []*table {
+	if len(st.tableNames) == 0 {
+		return nil
+	}
+	tables := make([]*table, 0, len(st.tableNames))
+	for _, tname := range st.tableNames {
+		tables = append(tables, st.tables[tname])
+	}
+	return tables
+}
+
+// FindTable finds a table in symtab. This function is specifically used
+// for expanding 'select a.*' constructs. If you're in a subquery,
+// you're most likely referring to a table in the local 'from' clause.
+// For this reason, the search is only performed in the current scope.
+// This may be a deviation from the formal definition of SQL, but there
+// are currently no use cases that require the full support.
+func (st *symtab) FindTable(tname sqlparser.TableName) (*table, error) {
+	if st.tableNames == nil {
+		// Unreachable because current code path checks for this condition
+		// before invoking this function.
+		return nil, errNoTable
+	}
+	t, ok := st.tables[tname]
+	if !ok {
+		return nil, fmt.Errorf("table %v not found", sqlparser.String(tname))
+	}
+	return t, nil
 }
 
 // ClearVindexes removes the Column Vindexes from the aliases signifying
@@ -330,14 +370,14 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 	c, ok := t.columns[col.Name.Lowered()]
 	if !ok {
 		// We know all the column names of a subquery. Might as well return an error if it's not found.
-		if _, ok := t.origin.(*subquery); ok {
-			return nil, fmt.Errorf("symbol %s is referencing a non-existent column of the subquery", sqlparser.String(col))
+		if t.isAuthoritative {
+			return nil, fmt.Errorf("symbol %s not found in table or subquery", sqlparser.String(col))
 		}
 		c = &column{
 			origin: t.origin,
 			st:     st,
 		}
-		t.columns[col.Name.Lowered()] = c
+		t.addColumn(col.Name, c)
 	}
 	return c, nil
 }
@@ -400,10 +440,25 @@ func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
 // It represents a table alias in a FROM clause. It points
 // to the builder that represents it.
 type table struct {
-	alias       sqlparser.TableName
-	columns     map[string]*column
-	origin      builder
-	vindexTable *vindexes.Table
+	alias           sqlparser.TableName
+	columns         map[string]*column
+	columnNames     []sqlparser.ColIdent
+	isAuthoritative bool
+	origin          builder
+	vindexTable     *vindexes.Table
+}
+
+func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
+	if t.columns == nil {
+		t.columns = make(map[string]*column)
+	}
+	lowered := alias.Lowered()
+	// Dups are allowed, but first one wins if referenced.
+	if _, ok := t.columns[lowered]; !ok {
+		c.colnum = len(t.columnNames)
+		t.columns[lowered] = c
+	}
+	t.columnNames = append(t.columnNames, alias)
 }
 
 // column represents a unique symbol in the query that other

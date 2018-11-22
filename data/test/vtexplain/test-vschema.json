@@ -1,13 +1,13 @@
 {
 	"ks_unsharded": {
-		"Sharded": false,
-		"Tables": {
+		"sharded": false,
+		"tables": {
 			"t1": {},
 			"table_not_in_schema": {}
 		}
 	},
 	"ks_sharded": {
-		"Sharded": true,
+		"sharded": true,
 		"vindexes": {
 			"music_user_map": {
 				"type": "lookup_hash_unique",
@@ -81,7 +81,18 @@
 						"column": "name",
 						"name": "md5"
 					}
-				]
+				],
+				"columns": [
+						{
+							"name": "name",
+							"type": "VARCHAR"
+						},
+						{
+							"name": "info",
+							"type": "VARCHAR"
+						}
+				],
+					"column_list_authoritative": true
 			}
 		}
 	}

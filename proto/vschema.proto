@@ -64,7 +64,11 @@ message Table {
   // shard, as dictated by the keyspace id.
   // The keyspace id is represened in hex form
   // like in keyranges.
-  string pinned =5;
+  string pinned = 5;
+  // column_list_authoritative is set to true if columns is
+  // an authoritative list for the table. This allows
+  // us to expand 'select *' expressions.
+  bool column_list_authoritative = 6;
 }
 
 // ColumnVindex is used to associate a column to a vindex.

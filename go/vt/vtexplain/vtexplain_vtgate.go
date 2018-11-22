@@ -20,11 +20,11 @@ limitations under the License.
 package vtexplain
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -89,11 +89,15 @@ func buildTopology(opts *Options, vschemaStr string, numShardsPerKeyspace int) e
 	explainTopo.Lock.Lock()
 	defer explainTopo.Lock.Unlock()
 
-	explainTopo.Keyspaces = make(map[string]*vschemapb.Keyspace)
-	err := json.Unmarshal([]byte(vschemaStr), &explainTopo.Keyspaces)
+	// We have to use proto's custom json loader so it can
+	// handle string->enum conversion correctly.
+	var srvVSchema vschemapb.SrvVSchema
+	wrappedStr := fmt.Sprintf(`{"keyspaces": %s}`, vschemaStr)
+	err := json2.Unmarshal([]byte(wrappedStr), &srvVSchema)
 	if err != nil {
 		return err
 	}
+	explainTopo.Keyspaces = srvVSchema.Keyspaces
 
 	explainTopo.TabletConns = make(map[string]*explainTablet)
 	for ks, vschema := range explainTopo.Keyspaces {
