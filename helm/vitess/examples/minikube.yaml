@@ -1,0 +1,44 @@
+topology:
+  cells:
+    - name: "zone1"
+      etcd:
+        replicas: 3
+      vtctld:
+        replicas: 1
+      vtgate:
+        replicas: 3
+      mysqlProtocol:
+        enabled: true
+        authType: "none"
+      keyspaces:
+        - name: "messagedb"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+
+etcd:
+  resources:
+
+vtctld:
+  serviceType: "NodePort"
+  resources:
+
+vtgate:
+  serviceType: "NodePort"
+  resources:
+
+vttablet:
+  resources:
+  mysqlResources:
+
+pmm:
+  client:
+    resources:
+  server:
+    resources:
+
+orchestrator:
+  resources:
