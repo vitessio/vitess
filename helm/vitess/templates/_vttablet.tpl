@@ -247,6 +247,9 @@ spec:
               fi
               sleep 5
             done
+            END_OF_COMMAND
+            )
+{{ end }}
       volumes:
 {{ include "user-secret-volumes" (.secrets | default $defaultVtctlclient.secrets) | indent 8 }}
 

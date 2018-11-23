@@ -84,6 +84,8 @@ topology:
       # enable or disable mysql protocol support, with accompanying auth details
       mysqlProtocol:
         enabled: false
+        authType: "k8s_secret"
+        # authType can be: none or k8s_secret. For k8s_secret, perform the following changes:
         # username: myuser
         # this is the secret that will be mounted as the user password
         # kubectl create secret generic myuser_password --from-literal=password=abc123

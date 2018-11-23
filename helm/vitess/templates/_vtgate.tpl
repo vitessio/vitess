@@ -66,8 +66,10 @@ spec:
 {{ include "vtgate-affinity" (tuple $cellClean $cell.region) | indent 6 }}
 
 {{ if $cell.mysqlProtocol.enabled }}
+{{ if eq $cell.mysqlProtocol.authType "k8s_secret" }}
       initContainers:
 {{ include "init-mysql-creds" (tuple $vitessTag $cell) | indent 8 }}
+{{ end }}
 {{ end }}
 
       containers:
@@ -109,7 +111,12 @@ spec:
                 -grpc_port=15991
 {{ if $cell.mysqlProtocol.enabled }}
                 -mysql_server_port=3306
+{{ if eq $cell.mysqlProtocol.authType "k8s_secret" }}
+                -mysql_auth_server_impl="static"
                 -mysql_auth_server_static_file="/mysqlcreds/creds.json"
+{{ else if eq $cell.mysqlProtocol.authType "none" }}
+                -mysql_auth_server_impl="none"
+{{ end }}
 {{ end }}
                 -service_map="grpc-vtgateservice"
                 -cells_to_watch={{$cell.name | quote}}
