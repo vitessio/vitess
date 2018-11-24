@@ -52,17 +52,19 @@
 
   # Tablets for keyspaces
   {{ range $keyspace := $cell.keyspaces }}
----
-{{ include "keyspace" (tuple $cell $keyspace $.Values.vtctlclient $.Release.Namespace) }}
+
+    # Keyspace initializations
+    {{ include "keyspace" (tuple $cell $keyspace $.Values.vtctlclient $.Release.Namespace) }}
+
     {{ range $shard := $keyspace.shards }}
 
       {{ $totalTabletCount := len (include "tablet-count" $shard.tablets) }}
+      # Shard initializations
+      {{ include "shard" (tuple $cell $keyspace $shard $.Values.vtctlclient $.Release.Namespace $totalTabletCount) }}
 
-      # now range through the tablets again to set them up
+      # Tablet initializations
       {{ range $tablet := $shard.tablets }}
----
-{{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Values.vtctlclient $.Release.Namespace $.Values.config $.Values.pmm $.Values.orchestrator $totalTabletCount) }}
-
+        {{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Values.vtctlclient $.Release.Namespace $.Values.config $.Values.pmm $.Values.orchestrator) }}
       {{ end }} # range $tablet
     {{ end }} # range $shard
   {{ end }} # range $keyspace
