@@ -425,7 +425,7 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 			Owner:  owner,
 		}
 
-		return e.vm.UpdateVSchema(ctx, destKeyspace, vschema)
+		return e.vm.UpdateVSchema(ctx, destKeyspace, ks)
 	case sqlparser.AddColVindexStr:
 		// Support two cases:
 		//
@@ -488,7 +488,7 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 		})
 		ks.Tables[tableName] = table
 
-		return e.vm.UpdateVSchema(ctx, destKeyspace, vschema)
+		return e.vm.UpdateVSchema(ctx, destKeyspace, ks)
 	case sqlparser.DropColVindexStr:
 		spec := ddl.VindexSpec
 		name := spec.Name.String()
@@ -502,7 +502,7 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 				if len(table.ColumnVindexes) == 0 {
 					delete(ks.Tables, tableName)
 				}
-				return e.vm.UpdateVSchema(ctx, destKeyspace, vschema)
+				return e.vm.UpdateVSchema(ctx, destKeyspace, ks)
 			}
 		}
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s not defined in table %s.%s", name, ksName, tableName)
