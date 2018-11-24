@@ -26,17 +26,16 @@ innodb_thread_concurrency = 20
 key_buffer_size = 32M
 log-error = {{.ErrorLogPath}}
 long_query_time = 2
-max_allowed_packet = 16M
-max_connections = 100
+max_allowed_packet = 64M
+max_connections = 500
 net_write_timeout = 60
 pid-file = {{.PidFile}}
 port = {{.MysqlPort}}
 # all db instances should start in read-only mode - once the db is started and
 # fully functional, we'll push it into read-write mode
 read-only
-read_buffer_size = 1M
-read_rnd_buffer_size = 1M
-secure_file_priv = NULL
+read_buffer_size = 8M
+read_rnd_buffer_size = 8M
 server-id = {{.ServerID}}
 skip-name-resolve
 # all db instances should skip the slave startup - that way we can do any

@@ -60,7 +60,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- Define versions which are also used by grpc-client/pom.xml. -->
-    <grpc.version>1.15.0</grpc.version>
+    <grpc.version>1.16.0</grpc.version>
     <protobuf.java.version>3.5.1</protobuf.java.version>
     <protobuf.protoc.version>3.5.1-1</protobuf.protoc.version>
   </properties>

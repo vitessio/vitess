@@ -22,7 +22,6 @@ innodb_log_file_size = 1M
 innodb_log_files_in_group = 2
 innodb_log_group_home_dir = {{.InnodbLogGroupHomeDir}}
 innodb_max_dirty_pages_pct = 75
-innodb_support_xa = 0
 innodb_thread_concurrency = 2
 key_buffer_size = 2M
 log-error = {{.ErrorLogPath}}
@@ -37,7 +36,6 @@ port = {{.MysqlPort}}
 read-only
 read_buffer_size = 1M
 read_rnd_buffer_size = 1M
-secure_file_priv = NULL
 server-id = {{.ServerID}}
 skip-name-resolve
 # we now need networking for replication. this is a tombstone to simpler times.
