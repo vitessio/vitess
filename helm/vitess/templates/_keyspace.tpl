@@ -1,5 +1,5 @@
 ###################################
-# keyspace initialization
+# keyspace initializations
 ###################################
 
 {{- define "keyspace" -}}
@@ -8,20 +8,23 @@
 {{- $defaultVtctlclient := index . 2 -}}
 {{- $namespace := index . 3 -}}
 
+# sanitize inputs for labels
+{{- $keyspaceClean := include "clean-label" $keyspace.name -}}
+
 {{- with $cell.vtctld -}}
 
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtctlclient.vitessTag -}}
 
-{{ if $keyspace.vschema }}
-
+{{- if $keyspace.vschema }}
+---
 ###################################
-# ApplyVschema job
+# ApplyVSchema job
 ###################################
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ $keyspace.name }}-apply-vschema
+  name: {{ $keyspaceClean }}-apply-vschema
 spec:
   backoffLimit: 1
   template:
