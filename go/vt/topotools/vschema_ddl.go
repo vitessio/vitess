@@ -54,12 +54,20 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 		if _, ok := ks.Vindexes[name]; ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s already exists in keyspace %s", name, ksName)
 		}
+
+		// Make sure the keyspace has the sharded bit set to true
+		// if this is the first vindex defined in the keyspace.
+		if len(ks.Vindexes) == 0 {
+			ks.Sharded = true
+		}
+
 		owner, params := ddl.VindexSpec.ParseParams()
 		ks.Vindexes[name] = &vschemapb.Vindex{
 			Type:   ddl.VindexSpec.Type.String(),
 			Params: params,
 			Owner:  owner,
 		}
+
 		return ks, nil
 
 	case sqlparser.AddColVindexStr:
@@ -86,6 +94,11 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with different parameters", name)
 				}
 			} else {
+				// Make sure the keyspace has the sharded bit set to true
+				// if this is the first vindex defined in the keyspace.
+				if len(ks.Vindexes) == 0 {
+					ks.Sharded = true
+				}
 				ks.Vindexes[name] = &vschemapb.Vindex{
 					Type:   spec.Type.String(),
 					Params: params,
