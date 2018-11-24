@@ -2122,6 +2122,7 @@ func commandRebuildVSchemaGraph(ctx context.Context, wr *wrangler.Wrangler, subF
 func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	vschema := subFlags.String("vschema", "", "Identifies the VTGate routing schema")
 	vschemaFile := subFlags.String("vschema_file", "", "Identifies the VTGate routing schema file")
+	dryRun := subFlags.Bool("dry_run", false, "If set, do not save the altered vschema, simply echo to console.")
 	skipRebuild := subFlags.Bool("skip_rebuild", false, "If set, do no rebuild the SrvSchema objects.")
 	var cells flagutil.StringListValue
 	subFlags.Var(&cells, "cells", "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
@@ -2150,16 +2151,23 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
+
 	keyspace := subFlags.Arg(0)
-	if err := wr.TopoServer().SaveVSchema(ctx, keyspace, &vs); err != nil {
-		return err
-	}
 
 	b, err := json2.MarshalIndentPB(&vs, "  ")
 	if err != nil {
 		wr.Logger().Errorf("Failed to marshal VSchema for display: %v", err)
 	} else {
-		wr.Logger().Printf("Uploaded VSchema object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", b)
+		wr.Logger().Printf("New VSchema object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", b)
+	}
+
+	if *dryRun {
+		wr.Logger().Printf("Dry run: Skipping update of VSchema\n")
+		return nil
+	}
+
+	if err := wr.TopoServer().SaveVSchema(ctx, keyspace, &vs); err != nil {
+		return err
 	}
 
 	if *skipRebuild {
