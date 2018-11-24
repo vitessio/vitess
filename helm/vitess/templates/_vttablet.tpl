@@ -247,8 +247,11 @@ spec:
               fi
               sleep 5
             done
+{{ if $keyspace.schema }}
+            vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC ApplySchema -sql "$(cat <<END_OF_COMMAND
+{{ $keyspace.schema | indent 14}}
             END_OF_COMMAND
-            )
+            )" {{ $keyspace.name }}
 {{ end }}
       volumes:
 {{ include "user-secret-volumes" (.secrets | default $defaultVtctlclient.secrets) | indent 8 }}

@@ -136,6 +136,7 @@ vtgate:
 
 # Default values for vtctlclient resources defined in 'topology'
 vtctlclient:
+  vitessTag: "latest"
   extraFlags: {}
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 

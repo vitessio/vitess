@@ -52,6 +52,8 @@
 
   # Tablets for keyspaces
   {{ range $keyspace := $cell.keyspaces }}
+---
+{{ include "keyspace" (tuple $cell $keyspace $.Values.vtctlclient $.Release.Namespace) }}
     {{ range $shard := $keyspace.shards }}
 
       {{ $totalTabletCount := len (include "tablet-count" $shard.tablets) }}
