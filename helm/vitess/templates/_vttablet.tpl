@@ -48,9 +48,8 @@ spec:
 {{- $config := index . 8 -}}
 {{- $pmm := index . 9 -}}
 {{- $orc := index . 10 -}}
-{{- $totalTabletCount := index . 11 -}}
 
-# sanitize inputs to create tablet name
+# sanitize inputs for labels
 {{- $cellClean := include "clean-label" $cell.name -}}
 {{- $keyspaceClean := include "clean-label" $keyspace.name -}}
 {{- $shardClean := include "clean-label" $shard.name -}}
@@ -63,8 +62,9 @@ spec:
 # define images to use
 {{- $vitessTag := .vitessTag | default $defaultVttablet.vitessTag -}}
 {{- $image := .image | default $defaultVttablet.image -}}
+{{- $mysqlImage := .mysqlImage | default $defaultVttablet.mysqlImage -}}
 {{- $mysqlImage := .mysqlImage | default $defaultVttablet.mysqlImage }}
-
+---
 ###################################
 # vttablet StatefulSet
 ###################################
@@ -106,7 +106,7 @@ spec:
 
       containers:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
-{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $defaultVtctlclient $vitessTag $uid $namespace $config $orc $totalTabletCount) | indent 8 }}
+{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $defaultVtctlclient $vitessTag $uid $namespace $config $orc) | indent 8 }}
 {{ include "cont-logrotate" . | indent 8 }}
 {{ include "cont-mysql-generallog" . | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
@@ -149,108 +149,6 @@ spec:
 
 # conditionally add cron job
 {{ include "vttablet-backup-cron" (tuple $cellClean $keyspaceClean $shardClean $shardName $keyspace $shard $vitessTag $config.backup $namespace $defaultVtctlclient) }}
-
-{{ if eq $tablet.type "replica" }}
----
-###################################
-# vttablet InitShardMaster Job
-###################################
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: {{ $shardName }}-init-shard-master
-  labels:
-    app: vitess
-    component: vttablet
-    cell: {{ $cellClean | quote }}
-    keyspace: {{ $keyspaceClean | quote }}
-    shard: {{ $shardClean | quote }}
-spec:
-  backoffLimit: 10
-  template:
-    spec:
-      restartPolicy: OnFailure
-      containers:
-      - name: init-shard-master
-        image: "vitess/vtctlclient:{{$vitessTag}}"
-        imagePullPolicy: Always
-        volumeMounts:
-{{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
-
-        command: ["bash"]
-        args:
-          - "-c"
-          - |
-            set -ex
-
-            VTCTLD_SVC=vtctld.{{ $namespace }}:15999
-            SECONDS=0
-            TIMEOUT_SECONDS=600
-            VTCTL_EXTRA_FLAGS=({{ include "format-flags-inline" $defaultVtctlclient.extraFlags }})
-
-            # poll every 5 seconds to see if vtctld is ready
-            until vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC ListAllTablets {{ $cellClean }} > /dev/null 2>&1; do
-              if (( $SECONDS > $TIMEOUT_SECONDS )); then
-                echo "timed out waiting for vtctlclient to be ready"
-                exit 1
-              fi
-              sleep 5
-            done
-
-            until [ $TABLETS_READY ]; do
-              # get all the tablets in the current cell
-              cellTablets="$(vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC ListAllTablets {{ $cellClean }})"
-
-              # filter to only the tablets in our current shard
-              shardTablets=$( echo "$cellTablets" | awk 'substr( $5,1,{{ len $shardName }} ) == "{{ $shardName }}" {print $0}')
-
-              # check for a master tablet from the ListAllTablets call
-              masterTablet=$( echo "$shardTablets" | awk '$4 == "master" {print $1}')
-              if [ $masterTablet ]; then
-                  echo "'$masterTablet' is already the master tablet, exiting without running InitShardMaster"
-                  exit
-              fi
-
-              # check for a master tablet from the GetShard call
-              master_alias=$(vtctlclient ${VTLCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC GetShard {{ $keyspace.name }}/{{ $shard.name }} | jq '.master_alias.uid')
-              if [ $master_alias != "null" ]; then
-                  echo "'$master_alias' is already the master tablet, exiting without running InitShardMaster"
-                  exit
-              fi
-
-              # count the number of newlines for the given shard to get the tablet count
-              tabletCount=$( echo "$shardTablets" | wc | awk '{print $1}')
-
-              # check to see if the tablet count equals the expected tablet count
-              if [ $tabletCount == {{ $totalTabletCount }} ]; then
-                TABLETS_READY=true
-              else
-                if (( $SECONDS > $TIMEOUT_SECONDS )); then
-                  echo "timed out waiting for tablets to be ready"
-                  exit 1
-                fi
-
-                # wait 5 seconds for vttablets to continue getting ready
-                sleep 5
-              fi
-
-            done
-
-            # find the tablet id for the "-replica-0" stateful set for a given cell, keyspace and shard
-            tablet_id=$( echo "$shardTablets" | awk 'substr( $5,1,{{ add (len $shardName) 10 }} ) == "{{ $shardName }}-replica-0" {print $1}')
-
-            # initialize the shard master
-            until vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC InitShardMaster -force {{ $keyspace.name }}/{{ $shard.name }} $tablet_id; do
-              if (( $SECONDS > $TIMEOUT_SECONDS )); then
-                echo "timed out waiting for InitShardMaster to succeed"
-                exit 1
-              fi
-              sleep 5
-            done
-      volumes:
-{{ include "user-secret-volumes" (.secrets | default $defaultVtctlclient.secrets) | indent 8 }}
-
-{{- end -}}
 
 {{- end -}}
 {{- end -}}
@@ -364,7 +262,6 @@ spec:
 {{- $namespace := index . 9 -}}
 {{- $config := index . 10 -}}
 {{- $orc := index . 11 -}}
-{{- $totalTabletCount := index . 12 -}}
 
 {{- $cellClean := include "clean-label" $cell.name -}}
 {{- with $tablet.vttablet }}

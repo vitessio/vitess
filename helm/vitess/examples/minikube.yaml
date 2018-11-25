@@ -1,0 +1,73 @@
+topology:
+  cells:
+    - name: "zone1"
+      etcd:
+        replicas: 1
+      vtctld:
+        replicas: 1
+      vtgate:
+        replicas: 1
+      mysqlProtocol:
+        enabled: true
+        authType: "none"
+      keyspaces:
+        - name: "messagedb"
+          schema: |-
+            CREATE TABLE messages (
+              page BIGINT(20) UNSIGNED,
+              time_created_ns BIGINT(20) UNSIGNED,
+              message VARCHAR(10000),
+              PRIMARY KEY (page, time_created_ns)
+            ) ENGINE=InnoDB
+          vschema: |-
+            {
+              "sharded": true,
+              "vindexes": {
+                "hash": {
+                  "type": "hash"
+                }
+              },
+              "tables": {
+                "messages": {
+                  "column_vindexes": [
+                    {
+                      "column": "page",
+                      "name": "hash"
+                    }
+                  ]
+                }
+              }
+            }
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+
+etcd:
+  replicas: 1
+  resources:
+
+vtctld:
+  serviceType: "NodePort"
+  resources:
+
+vtgate:
+  serviceType: "NodePort"
+  resources:
+
+vttablet:
+  resources:
+  mysqlResources:
+
+pmm:
+  enabled: false
+  client:
+    resources:
+  server:
+    resources:
+
+orchestrator:
+  enabled: false
+  resources:
