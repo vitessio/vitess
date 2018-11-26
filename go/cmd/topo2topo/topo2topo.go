@@ -18,6 +18,8 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"os"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
@@ -89,18 +91,33 @@ func copy(ctx context.Context, fromTS, toTS *topo.Server) {
 }
 
 func compareTopos(ctx context.Context, fromTS, toTS *topo.Server) {
-
+	var err error
 	if *doKeyspaces {
-		helpers.CompareKeyspaces(ctx, fromTS, toTS)
+		err = helpers.CompareKeyspaces(ctx, fromTS, toTS)
+		if err != nil {
+			log.Exitf("Compare keyspaces failed: %v", err)
+		}
 	}
 	if *doShards {
-		helpers.CompareShards(ctx, fromTS, toTS)
+		err = helpers.CompareShards(ctx, fromTS, toTS)
+		if err != nil {
+			log.Exitf("Compare shards failed: %v", err)
+		}
 	}
 	if *doShardReplications {
-		helpers.CompareShardReplications(ctx, fromTS, toTS)
+		err = helpers.CompareShardReplications(ctx, fromTS, toTS)
+		if err != nil {
+			log.Exitf("Compare shard replications failed: %v", err)
+		}
 	}
 	if *doTablets {
-		helpers.CompareTablets(ctx, fromTS, toTS)
+		err = helpers.CompareTablets(ctx, fromTS, toTS)
+		if err != nil {
+			log.Exitf("Compare tablets failed: %v", err)
+		}
 	}
-
+	if err == nil {
+		fmt.Println("Topologies are in sync")
+		os.Exit(0)
+	}
 }
