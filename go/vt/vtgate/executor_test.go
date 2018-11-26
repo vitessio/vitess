@@ -1556,8 +1556,8 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	}
 
 	stmt = "alter table nonexistent drop vindex test_lookup"
-	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), stmt, nil)
-	wantErr = errNoKeyspace.Error()
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "InvalidKeyspace"}), stmt, nil)
+	wantErr = "table InvalidKeyspace.nonexistent not defined in vschema"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("got %v want err %s", err, wantErr)
 	}
