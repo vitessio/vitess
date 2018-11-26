@@ -68,27 +68,27 @@ func (TransactionMode) EnumDescriptor() ([]byte, []int) {
 // an optional parameter for the V2 APIs.
 type Session struct {
 	// in_transaction is set to true if the session is in a transaction.
-	InTransaction bool `protobuf:"varint,1,opt,name=in_transaction,json=inTransaction" json:"in_transaction,omitempty"`
+	InTransaction bool `protobuf:"varint,1,opt,name=in_transaction,json=inTransaction,proto3" json:"in_transaction,omitempty"`
 	// shard_sessions keep track of per-shard transaction info.
-	ShardSessions []*Session_ShardSession `protobuf:"bytes,2,rep,name=shard_sessions,json=shardSessions" json:"shard_sessions,omitempty"`
+	ShardSessions []*Session_ShardSession `protobuf:"bytes,2,rep,name=shard_sessions,json=shardSessions,proto3" json:"shard_sessions,omitempty"`
 	// single_db is deprecated. Use transaction_mode instead.
 	// The value specifies if the transaction should be restricted
 	// to a single shard.
 	// TODO(sougou): remove in 3.1
-	SingleDb bool `protobuf:"varint,3,opt,name=single_db,json=singleDb" json:"single_db,omitempty"`
+	SingleDb bool `protobuf:"varint,3,opt,name=single_db,json=singleDb,proto3" json:"single_db,omitempty"`
 	// autocommit specifies if the session is in autocommit mode.
 	// This is used only for V3.
-	Autocommit bool `protobuf:"varint,4,opt,name=autocommit" json:"autocommit,omitempty"`
+	Autocommit bool `protobuf:"varint,4,opt,name=autocommit,proto3" json:"autocommit,omitempty"`
 	// target_string is the target expressed as a string. Valid
 	// names are: keyspace:shard@target, keyspace@target or @target.
 	// This is used only for V3.
-	TargetString string `protobuf:"bytes,5,opt,name=target_string,json=targetString" json:"target_string,omitempty"`
+	TargetString string `protobuf:"bytes,5,opt,name=target_string,json=targetString,proto3" json:"target_string,omitempty"`
 	// options is used only for V3.
-	Options *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options" json:"options,omitempty"`
+	Options *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 	// transaction_mode specifies the current transaction mode.
-	TransactionMode TransactionMode `protobuf:"varint,7,opt,name=transaction_mode,json=transactionMode,enum=vtgate.TransactionMode" json:"transaction_mode,omitempty"`
+	TransactionMode TransactionMode `protobuf:"varint,7,opt,name=transaction_mode,json=transactionMode,proto3,enum=vtgate.TransactionMode" json:"transaction_mode,omitempty"`
 	// warnings contains non-fatal warnings from the previous query
-	Warnings             []*query.QueryWarning `protobuf:"bytes,8,rep,name=warnings" json:"warnings,omitempty"`
+	Warnings             []*query.QueryWarning `protobuf:"bytes,8,rep,name=warnings,proto3" json:"warnings,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -175,8 +175,8 @@ func (m *Session) GetWarnings() []*query.QueryWarning {
 }
 
 type Session_ShardSession struct {
-	Target               *query.Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
-	TransactionId        int64         `protobuf:"varint,2,opt,name=transaction_id,json=transactionId" json:"transaction_id,omitempty"`
+	Target               *query.Target `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId        int64         `protobuf:"varint,2,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
 	XXX_unrecognized     []byte        `json:"-"`
 	XXX_sizecache        int32         `json:"-"`
@@ -224,17 +224,17 @@ func (m *Session_ShardSession) GetTransactionId() int64 {
 type ExecuteRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// session carries the session state.
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
 	// These values are deprecated. Use session instead.
 	// TODO(sougou): remove in 3.1
-	TabletType           topodata.TabletType   `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
-	NotInTransaction     bool                  `protobuf:"varint,5,opt,name=not_in_transaction,json=notInTransaction" json:"not_in_transaction,omitempty"`
-	KeyspaceShard        string                `protobuf:"bytes,6,opt,name=keyspace_shard,json=keyspaceShard" json:"keyspace_shard,omitempty"`
-	Options              *query.ExecuteOptions `protobuf:"bytes,7,opt,name=options" json:"options,omitempty"`
+	TabletType           topodata.TabletType   `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	NotInTransaction     bool                  `protobuf:"varint,5,opt,name=not_in_transaction,json=notInTransaction,proto3" json:"not_in_transaction,omitempty"`
+	KeyspaceShard        string                `protobuf:"bytes,6,opt,name=keyspace_shard,json=keyspaceShard,proto3" json:"keyspace_shard,omitempty"`
+	Options              *query.ExecuteOptions `protobuf:"bytes,7,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -318,11 +318,11 @@ type ExecuteResponse struct {
 	// error contains an application level error if necessary. Note the
 	// session may have changed, even when an error is returned (for
 	// instance if a database integrity error happened).
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// session is the updated session information.
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -377,22 +377,22 @@ func (m *ExecuteResponse) GetResult() *query.QueryResult {
 type ExecuteShardsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
 	// keyspace to target the query to.
-	Keyspace string `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,4,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// shards to target the query to. A DML can only target one shard.
-	Shards []string `protobuf:"bytes,5,rep,name=shards" json:"shards,omitempty"`
+	Shards []string `protobuf:"bytes,5,rep,name=shards,proto3" json:"shards,omitempty"`
 	// tablet_type is the type of tablets that this query is targeted to.
-	TabletType topodata.TabletType `protobuf:"varint,6,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,6,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// not_in_transaction is deprecated.
-	NotInTransaction bool `protobuf:"varint,7,opt,name=not_in_transaction,json=notInTransaction" json:"not_in_transaction,omitempty"`
+	NotInTransaction bool `protobuf:"varint,7,opt,name=not_in_transaction,json=notInTransaction,proto3" json:"not_in_transaction,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,8,opt,name=options" json:"options,omitempty"`
+	Options              *query.ExecuteOptions `protobuf:"bytes,8,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -483,11 +483,11 @@ type ExecuteShardsResponse struct {
 	// error contains an application level error if necessary. Note the
 	// session may have changed, even when an error is returned (for
 	// instance if a database integrity error happened).
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// session is the updated session information (only returned inside a transaction).
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -542,23 +542,23 @@ func (m *ExecuteShardsResponse) GetResult() *query.QueryResult {
 type ExecuteKeyspaceIdsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
 	// keyspace to target the query to.
-	Keyspace string `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,4,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// keyspace_ids contains the list of keyspace_ids affected by this query.
 	// Will be used to find the shards to send the query to.
 	KeyspaceIds [][]byte `protobuf:"bytes,5,rep,name=keyspace_ids,json=keyspaceIds,proto3" json:"keyspace_ids,omitempty"`
 	// tablet_type is the type of tablets that this query is targeted to.
-	TabletType topodata.TabletType `protobuf:"varint,6,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,6,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// not_in_transaction is deprecated.
-	NotInTransaction bool `protobuf:"varint,7,opt,name=not_in_transaction,json=notInTransaction" json:"not_in_transaction,omitempty"`
+	NotInTransaction bool `protobuf:"varint,7,opt,name=not_in_transaction,json=notInTransaction,proto3" json:"not_in_transaction,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,8,opt,name=options" json:"options,omitempty"`
+	Options              *query.ExecuteOptions `protobuf:"bytes,8,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -649,11 +649,11 @@ type ExecuteKeyspaceIdsResponse struct {
 	// error contains an application level error if necessary. Note the
 	// session may have changed, even when an error is returned (for
 	// instance if a database integrity error happened).
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// session is the updated session information (only returned inside a transaction).
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -708,23 +708,23 @@ func (m *ExecuteKeyspaceIdsResponse) GetResult() *query.QueryResult {
 type ExecuteKeyRangesRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
 	// keyspace to target the query to
-	Keyspace string `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,4,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// key_ranges contains the list of key ranges affected by this query.
 	// Will be used to find the shards to send the query to.
-	KeyRanges []*topodata.KeyRange `protobuf:"bytes,5,rep,name=key_ranges,json=keyRanges" json:"key_ranges,omitempty"`
+	KeyRanges []*topodata.KeyRange `protobuf:"bytes,5,rep,name=key_ranges,json=keyRanges,proto3" json:"key_ranges,omitempty"`
 	// tablet_type is the type of tablets that this query is targeted to.
-	TabletType topodata.TabletType `protobuf:"varint,6,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,6,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// not_in_transaction is deprecated.
-	NotInTransaction bool `protobuf:"varint,7,opt,name=not_in_transaction,json=notInTransaction" json:"not_in_transaction,omitempty"`
+	NotInTransaction bool `protobuf:"varint,7,opt,name=not_in_transaction,json=notInTransaction,proto3" json:"not_in_transaction,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,8,opt,name=options" json:"options,omitempty"`
+	Options              *query.ExecuteOptions `protobuf:"bytes,8,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -815,11 +815,11 @@ type ExecuteKeyRangesResponse struct {
 	// error contains an application level error if necessary. Note the
 	// session may have changed, even when an error is returned (for
 	// instance if a database integrity error happened).
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// session is the updated session information (only returned inside a transaction).
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -874,25 +874,25 @@ func (m *ExecuteKeyRangesResponse) GetResult() *query.QueryResult {
 type ExecuteEntityIdsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
 	// keyspace to target the query to.
-	Keyspace string `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,4,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// entity_column_name is the column name to use.
-	EntityColumnName string `protobuf:"bytes,5,opt,name=entity_column_name,json=entityColumnName" json:"entity_column_name,omitempty"`
+	EntityColumnName string `protobuf:"bytes,5,opt,name=entity_column_name,json=entityColumnName,proto3" json:"entity_column_name,omitempty"`
 	// entity_keyspace_ids are pairs of entity_column_name values
 	// associated with its corresponding keyspace_id.
-	EntityKeyspaceIds []*ExecuteEntityIdsRequest_EntityId `protobuf:"bytes,6,rep,name=entity_keyspace_ids,json=entityKeyspaceIds" json:"entity_keyspace_ids,omitempty"`
+	EntityKeyspaceIds []*ExecuteEntityIdsRequest_EntityId `protobuf:"bytes,6,rep,name=entity_keyspace_ids,json=entityKeyspaceIds,proto3" json:"entity_keyspace_ids,omitempty"`
 	// tablet_type is the type of tablets that this query is targeted to.
-	TabletType topodata.TabletType `protobuf:"varint,7,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,7,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// not_in_transaction is deprecated.
-	NotInTransaction bool `protobuf:"varint,8,opt,name=not_in_transaction,json=notInTransaction" json:"not_in_transaction,omitempty"`
+	NotInTransaction bool `protobuf:"varint,8,opt,name=not_in_transaction,json=notInTransaction,proto3" json:"not_in_transaction,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,9,opt,name=options" json:"options,omitempty"`
+	Options              *query.ExecuteOptions `protobuf:"bytes,9,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -987,7 +987,7 @@ func (m *ExecuteEntityIdsRequest) GetOptions() *query.ExecuteOptions {
 
 type ExecuteEntityIdsRequest_EntityId struct {
 	// type is the type of the entity's value. Can be NULL_TYPE.
-	Type query.Type `protobuf:"varint,1,opt,name=type,enum=query.Type" json:"type,omitempty"`
+	Type query.Type `protobuf:"varint,1,opt,name=type,proto3,enum=query.Type" json:"type,omitempty"`
 	// value is the value for the entity. Not set if type is NULL_TYPE.
 	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	// keyspace_id is the associated keyspace_id for the entity.
@@ -1047,11 +1047,11 @@ type ExecuteEntityIdsResponse struct {
 	// error contains an application level error if necessary. Note the
 	// session may have changed, even when an error is returned (for
 	// instance if a database integrity error happened).
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// session is the updated session information (only returned inside a transaction).
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -1106,17 +1106,17 @@ func (m *ExecuteEntityIdsResponse) GetResult() *query.QueryResult {
 type ExecuteBatchRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// session carries the session state.
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// queries is a list of query and bind variables to execute.
-	Queries []*query.BoundQuery `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
+	Queries []*query.BoundQuery `protobuf:"bytes,3,rep,name=queries,proto3" json:"queries,omitempty"`
 	// These values are deprecated. Use session instead.
 	// TODO(sougou): remove in 3.1
-	TabletType           topodata.TabletType   `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
-	AsTransaction        bool                  `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction" json:"as_transaction,omitempty"`
-	KeyspaceShard        string                `protobuf:"bytes,6,opt,name=keyspace_shard,json=keyspaceShard" json:"keyspace_shard,omitempty"`
-	Options              *query.ExecuteOptions `protobuf:"bytes,7,opt,name=options" json:"options,omitempty"`
+	TabletType           topodata.TabletType   `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	AsTransaction        bool                  `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction,proto3" json:"as_transaction,omitempty"`
+	KeyspaceShard        string                `protobuf:"bytes,6,opt,name=keyspace_shard,json=keyspaceShard,proto3" json:"keyspace_shard,omitempty"`
+	Options              *query.ExecuteOptions `protobuf:"bytes,7,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -1200,11 +1200,11 @@ type ExecuteBatchResponse struct {
 	// error contains an application level error if necessary. Note the
 	// session may have changed, even when an error is returned (for
 	// instance if a database integrity error happened).
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// session is the updated session information.
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// results contains the query results, only set if application level error is unset.
-	Results              []*query.ResultWithError `protobuf:"bytes,3,rep,name=results" json:"results,omitempty"`
+	Results              []*query.ResultWithError `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
 	XXX_unrecognized     []byte                   `json:"-"`
 	XXX_sizecache        int32                    `json:"-"`
@@ -1260,11 +1260,11 @@ func (m *ExecuteBatchResponse) GetResults() []*query.ResultWithError {
 // ExecuteBatchShardsRequest.
 type BoundShardQuery struct {
 	// query is the query and bind variables to execute.
-	Query *query.BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
 	// keyspace to target the query to.
-	Keyspace string `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// shards to target the query to. A DML can only target one shard.
-	Shards               []string `protobuf:"bytes,3,rep,name=shards" json:"shards,omitempty"`
+	Shards               []string `protobuf:"bytes,3,rep,name=shards,proto3" json:"shards,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1319,20 +1319,20 @@ func (m *BoundShardQuery) GetShards() []string {
 type ExecuteBatchShardsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// queries carries all the queries to execute.
-	Queries []*BoundShardQuery `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
+	Queries []*BoundShardQuery `protobuf:"bytes,3,rep,name=queries,proto3" json:"queries,omitempty"`
 	// tablet_type is the type of tablets that this query is targeted to.
-	TabletType topodata.TabletType `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// as_transaction will execute the queries in this batch in a single transaction per shard, created for this purpose.
 	// (this can be seen as adding a 'begin' before and 'commit' after the queries).
 	// Only makes sense if tablet_type is master. If set, the Session is ignored.
-	AsTransaction bool `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction" json:"as_transaction,omitempty"`
+	AsTransaction bool `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction,proto3" json:"as_transaction,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options" json:"options,omitempty"`
+	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -1409,11 +1409,11 @@ type ExecuteBatchShardsResponse struct {
 	// error contains an application level error if necessary. Note the
 	// session may have changed, even when an error is returned (for
 	// instance if a database integrity error happened).
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// session is the updated session information (only returned inside a transaction).
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Results              []*query.QueryResult `protobuf:"bytes,3,rep,name=results" json:"results,omitempty"`
+	Results              []*query.QueryResult `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
 	XXX_unrecognized     []byte               `json:"-"`
 	XXX_sizecache        int32                `json:"-"`
@@ -1469,9 +1469,9 @@ func (m *ExecuteBatchShardsResponse) GetResults() []*query.QueryResult {
 // ExecuteBatchKeyspaceIdsRequest.
 type BoundKeyspaceIdQuery struct {
 	// query is the query and bind variables to execute.
-	Query *query.BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
 	// keyspace to target the query to.
-	Keyspace string `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// keyspace_ids contains the list of keyspace_ids affected by this query.
 	// Will be used to find the shards to send the query to.
 	KeyspaceIds          [][]byte `protobuf:"bytes,3,rep,name=keyspace_ids,json=keyspaceIds,proto3" json:"keyspace_ids,omitempty"`
@@ -1529,19 +1529,19 @@ func (m *BoundKeyspaceIdQuery) GetKeyspaceIds() [][]byte {
 type ExecuteBatchKeyspaceIdsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
-	Session *Session                `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Queries []*BoundKeyspaceIdQuery `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
+	Session *Session                `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
+	Queries []*BoundKeyspaceIdQuery `protobuf:"bytes,3,rep,name=queries,proto3" json:"queries,omitempty"`
 	// tablet_type is the type of tablets that this query is targeted to.
-	TabletType topodata.TabletType `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// as_transaction will execute the queries in this batch in a single transaction per shard, created for this purpose.
 	// (this can be seen as adding a 'begin' before and 'commit' after the queries).
 	// Only makes sense if tablet_type is master. If set, the Session is ignored.
-	AsTransaction bool `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction" json:"as_transaction,omitempty"`
+	AsTransaction bool `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction,proto3" json:"as_transaction,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options" json:"options,omitempty"`
+	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -1618,11 +1618,11 @@ type ExecuteBatchKeyspaceIdsResponse struct {
 	// error contains an application level error if necessary. Note the
 	// session may have changed, even when an error is returned (for
 	// instance if a database integrity error happened).
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// session is the updated session information (only returned inside a transaction).
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Results              []*query.QueryResult `protobuf:"bytes,3,rep,name=results" json:"results,omitempty"`
+	Results              []*query.QueryResult `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
 	XXX_unrecognized     []byte               `json:"-"`
 	XXX_sizecache        int32                `json:"-"`
@@ -1677,16 +1677,16 @@ func (m *ExecuteBatchKeyspaceIdsResponse) GetResults() []*query.QueryResult {
 type StreamExecuteRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
 	// These values are deprecated. Use session instead.
 	// TODO(sougou): remove in 3.1
-	TabletType    topodata.TabletType   `protobuf:"varint,3,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
-	KeyspaceShard string                `protobuf:"bytes,4,opt,name=keyspace_shard,json=keyspaceShard" json:"keyspace_shard,omitempty"`
-	Options       *query.ExecuteOptions `protobuf:"bytes,5,opt,name=options" json:"options,omitempty"`
+	TabletType    topodata.TabletType   `protobuf:"varint,3,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	KeyspaceShard string                `protobuf:"bytes,4,opt,name=keyspace_shard,json=keyspaceShard,proto3" json:"keyspace_shard,omitempty"`
+	Options       *query.ExecuteOptions `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
 	// session carries the session state.
-	Session              *Session `protobuf:"bytes,6,opt,name=session" json:"session,omitempty"`
+	Session              *Session `protobuf:"bytes,6,opt,name=session,proto3" json:"session,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1765,7 +1765,7 @@ type StreamExecuteResponse struct {
 	// result contains the result data.
 	// The first value contains only Fields information.
 	// The next values contain the actual rows, a few values per result.
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -1806,17 +1806,17 @@ func (m *StreamExecuteResponse) GetResult() *query.QueryResult {
 type StreamExecuteShardsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
 	// keyspace to target the query to.
-	Keyspace string `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,3,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// shards to target the query to.
-	Shards []string `protobuf:"bytes,4,rep,name=shards" json:"shards,omitempty"`
+	Shards []string `protobuf:"bytes,4,rep,name=shards,proto3" json:"shards,omitempty"`
 	// tablet_type is the type of tablets that this query is targeted to.
-	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options" json:"options,omitempty"`
+	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -1893,7 +1893,7 @@ type StreamExecuteShardsResponse struct {
 	// result contains the result data.
 	// The first value contains only Fields information.
 	// The next values contain the actual rows, a few values per result.
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -1934,18 +1934,18 @@ func (m *StreamExecuteShardsResponse) GetResult() *query.QueryResult {
 type StreamExecuteKeyspaceIdsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
 	// keyspace to target the query to.
-	Keyspace string `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,3,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// keyspace_ids contains the list of keyspace_ids affected by this query.
 	// Will be used to find the shards to send the query to.
 	KeyspaceIds [][]byte `protobuf:"bytes,4,rep,name=keyspace_ids,json=keyspaceIds,proto3" json:"keyspace_ids,omitempty"`
 	// tablet_type is the type of tablets that this query is targeted to.
-	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options" json:"options,omitempty"`
+	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -2022,7 +2022,7 @@ type StreamExecuteKeyspaceIdsResponse struct {
 	// result contains the result data.
 	// The first value contains only Fields information.
 	// The next values contain the actual rows, a few values per result.
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -2063,18 +2063,18 @@ func (m *StreamExecuteKeyspaceIdsResponse) GetResult() *query.QueryResult {
 type StreamExecuteKeyRangesRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// query is the query and bind variables to execute.
-	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
 	// keyspace to target the query to.
-	Keyspace string `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,3,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// key_ranges contains the list of key ranges affected by this query.
 	// Will be used to find the shards to send the query to.
-	KeyRanges []*topodata.KeyRange `protobuf:"bytes,4,rep,name=key_ranges,json=keyRanges" json:"key_ranges,omitempty"`
+	KeyRanges []*topodata.KeyRange `protobuf:"bytes,4,rep,name=key_ranges,json=keyRanges,proto3" json:"key_ranges,omitempty"`
 	// tablet_type is the type of tablets that this query is targeted to.
-	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options" json:"options,omitempty"`
+	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -2151,7 +2151,7 @@ type StreamExecuteKeyRangesResponse struct {
 	// result contains the result data.
 	// The first value contains only Fields information.
 	// The next values contain the actual rows, a few values per result.
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -2192,12 +2192,12 @@ func (m *StreamExecuteKeyRangesResponse) GetResult() *query.QueryResult {
 type BeginRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// single_db is deprecated. Use transaction_mode instead.
 	// The value specifies if the transaction should be restricted
 	// to a single database.
 	// TODO(sougou): remove in 3.1
-	SingleDb             bool     `protobuf:"varint,2,opt,name=single_db,json=singleDb" json:"single_db,omitempty"`
+	SingleDb             bool     `protobuf:"varint,2,opt,name=single_db,json=singleDb,proto3" json:"single_db,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2244,7 +2244,7 @@ func (m *BeginRequest) GetSingleDb() bool {
 // BeginResponse is the returned value from Begin.
 type BeginResponse struct {
 	// session is the initial session information to use for subsequent queries.
-	Session              *Session `protobuf:"bytes,1,opt,name=session" json:"session,omitempty"`
+	Session              *Session `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2285,14 +2285,14 @@ func (m *BeginResponse) GetSession() *Session {
 type CommitRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// session carries the current transaction data to commit.
-	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// atomic is deprecated. Use transaction_mode instead.
 	// The value specifies if the commit should go through the
 	// 2PC workflow to ensure atomicity.
 	// TODO(sougou): remove in 3.1
-	Atomic               bool     `protobuf:"varint,3,opt,name=atomic" json:"atomic,omitempty"`
+	Atomic               bool     `protobuf:"varint,3,opt,name=atomic,proto3" json:"atomic,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2378,9 +2378,9 @@ var xxx_messageInfo_CommitResponse proto.InternalMessageInfo
 type RollbackRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// session carries the current transaction data to rollback.
-	Session              *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Session              *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2459,9 +2459,9 @@ var xxx_messageInfo_RollbackResponse proto.InternalMessageInfo
 type ResolveTransactionRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// dtid is the dtid of the transaction to be resolved.
-	Dtid                 string   `protobuf:"bytes,2,opt,name=dtid" json:"dtid,omitempty"`
+	Dtid                 string   `protobuf:"bytes,2,opt,name=dtid,proto3" json:"dtid,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2509,15 +2509,15 @@ func (m *ResolveTransactionRequest) GetDtid() string {
 type MessageStreamRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// keyspace to target the query to.
-	Keyspace string `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// shard to target the query to, for unsharded keyspaces.
-	Shard string `protobuf:"bytes,3,opt,name=shard" json:"shard,omitempty"`
+	Shard string `protobuf:"bytes,3,opt,name=shard,proto3" json:"shard,omitempty"`
 	// KeyRange to target the query to, for sharded keyspaces.
-	KeyRange *topodata.KeyRange `protobuf:"bytes,4,opt,name=key_range,json=keyRange" json:"key_range,omitempty"`
+	KeyRange *topodata.KeyRange `protobuf:"bytes,4,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
 	// name is the message table name.
-	Name                 string   `protobuf:"bytes,5,opt,name=name" json:"name,omitempty"`
+	Name                 string   `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2586,13 +2586,13 @@ func (m *MessageStreamRequest) GetName() string {
 type MessageAckRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// keyspace to target the message to.
-	Keyspace string `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// name is the message table name.
-	Name string `protobuf:"bytes,3,opt,name=name" json:"name,omitempty"`
+	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	// ids is the list of ids to ack.
-	Ids                  []*query.Value `protobuf:"bytes,4,rep,name=ids" json:"ids,omitempty"`
+	Ids                  []*query.Value `protobuf:"bytes,4,rep,name=ids,proto3" json:"ids,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
 	XXX_unrecognized     []byte         `json:"-"`
 	XXX_sizecache        int32          `json:"-"`
@@ -2654,7 +2654,7 @@ func (m *MessageAckRequest) GetIds() []*query.Value {
 // The kesypace_id represents the routing info for id.
 type IdKeyspaceId struct {
 	// id represents the message id.
-	Id *query.Value `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
+	Id *query.Value `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// keyspace_id is the associated keyspace_id for the id.
 	KeyspaceId           []byte   `protobuf:"bytes,2,opt,name=keyspace_id,json=keyspaceId,proto3" json:"keyspace_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -2704,12 +2704,12 @@ func (m *IdKeyspaceId) GetKeyspaceId() []byte {
 type MessageAckKeyspaceIdsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// Optional keyspace for message table.
-	Keyspace string `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// name is the message table name.
-	Name                 string          `protobuf:"bytes,3,opt,name=name" json:"name,omitempty"`
-	IdKeyspaceIds        []*IdKeyspaceId `protobuf:"bytes,4,rep,name=id_keyspace_ids,json=idKeyspaceIds" json:"id_keyspace_ids,omitempty"`
+	Name                 string          `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	IdKeyspaceIds        []*IdKeyspaceId `protobuf:"bytes,4,rep,name=id_keyspace_ids,json=idKeyspaceIds,proto3" json:"id_keyspace_ids,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -2818,9 +2818,9 @@ var xxx_messageInfo_ResolveTransactionResponse proto.InternalMessageInfo
 type SplitQueryRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// keyspace to target the query to.
-	Keyspace string `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// The query and bind variables to produce splits for.
 	// The given query must be a simple query of the form
 	// SELECT <cols> FROM <table> WHERE <filter>.
@@ -2828,7 +2828,7 @@ type SplitQueryRequest struct {
 	// JOIN, GROUP BY, ORDER BY, LIMIT, DISTINCT.
 	// Furthermore, <table> must be a single “concrete” table.
 	// It cannot be a view.
-	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
 	// Each generated query-part will be restricted to rows whose values
 	// in the columns listed in this field are in a particular range.
 	// The list of columns named here must be a prefix of the list of
@@ -2837,7 +2837,7 @@ type SplitQueryRequest struct {
 	// (in order) is sufficient and this is the default if this field is omitted.
 	// See the comment on the 'algorithm' field for more restrictions and
 	// information.
-	SplitColumn []string `protobuf:"bytes,4,rep,name=split_column,json=splitColumn" json:"split_column,omitempty"`
+	SplitColumn []string `protobuf:"bytes,4,rep,name=split_column,json=splitColumn,proto3" json:"split_column,omitempty"`
 	// You can specify either an estimate of the number of query-parts to
 	// generate or an estimate of the number of rows each query-part should
 	// return.
@@ -2850,8 +2850,8 @@ type SplitQueryRequest struct {
 	// Note that if "split_count" is given it is regarded as an estimate.
 	// The number of query-parts returned may differ slightly (in particular,
 	// if it's not a whole multiple of the number of vitess shards).
-	SplitCount          int64 `protobuf:"varint,5,opt,name=split_count,json=splitCount" json:"split_count,omitempty"`
-	NumRowsPerQueryPart int64 `protobuf:"varint,6,opt,name=num_rows_per_query_part,json=numRowsPerQueryPart" json:"num_rows_per_query_part,omitempty"`
+	SplitCount          int64 `protobuf:"varint,5,opt,name=split_count,json=splitCount,proto3" json:"split_count,omitempty"`
+	NumRowsPerQueryPart int64 `protobuf:"varint,6,opt,name=num_rows_per_query_part,json=numRowsPerQueryPart,proto3" json:"num_rows_per_query_part,omitempty"`
 	// The algorithm to use to split the query. The split algorithm is performed
 	// on each database shard in parallel. The lists of query-parts generated
 	// by the shards are merged and returned to the caller.
@@ -2881,12 +2881,12 @@ type SplitQueryRequest struct {
 	//    located between two successive boundary rows.
 	//    This algorithm supports multiple split_column's of any type,
 	//    but is slower than EQUAL_SPLITS.
-	Algorithm query.SplitQueryRequest_Algorithm `protobuf:"varint,7,opt,name=algorithm,enum=query.SplitQueryRequest_Algorithm" json:"algorithm,omitempty"`
+	Algorithm query.SplitQueryRequest_Algorithm `protobuf:"varint,7,opt,name=algorithm,proto3,enum=query.SplitQueryRequest_Algorithm" json:"algorithm,omitempty"`
 	// TODO(erez): This field is no longer used by the server code.
 	// Remove this field after this new server code is released to prod.
 	// We must keep it for now, so that clients can still send it to the old
 	// server code currently in production.
-	UseSplitQueryV2      bool     `protobuf:"varint,8,opt,name=use_split_query_v2,json=useSplitQueryV2" json:"use_split_query_v2,omitempty"`
+	UseSplitQueryV2      bool     `protobuf:"varint,8,opt,name=use_split_query_v2,json=useSplitQueryV2,proto3" json:"use_split_query_v2,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2975,7 +2975,7 @@ func (m *SplitQueryRequest) GetUseSplitQueryV2() bool {
 // SplitQueryResponse is the returned value from SplitQuery.
 type SplitQueryResponse struct {
 	// splits contains the queries to run to fetch the entire data set.
-	Splits               []*SplitQueryResponse_Part `protobuf:"bytes,1,rep,name=splits" json:"splits,omitempty"`
+	Splits               []*SplitQueryResponse_Part `protobuf:"bytes,1,rep,name=splits,proto3" json:"splits,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                   `json:"-"`
 	XXX_unrecognized     []byte                     `json:"-"`
 	XXX_sizecache        int32                      `json:"-"`
@@ -3014,9 +3014,9 @@ func (m *SplitQueryResponse) GetSplits() []*SplitQueryResponse_Part {
 
 type SplitQueryResponse_KeyRangePart struct {
 	// keyspace to target the query to.
-	Keyspace string `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// key ranges to target the query to.
-	KeyRanges            []*topodata.KeyRange `protobuf:"bytes,2,rep,name=key_ranges,json=keyRanges" json:"key_ranges,omitempty"`
+	KeyRanges            []*topodata.KeyRange `protobuf:"bytes,2,rep,name=key_ranges,json=keyRanges,proto3" json:"key_ranges,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
 	XXX_unrecognized     []byte               `json:"-"`
 	XXX_sizecache        int32                `json:"-"`
@@ -3062,9 +3062,9 @@ func (m *SplitQueryResponse_KeyRangePart) GetKeyRanges() []*topodata.KeyRange {
 
 type SplitQueryResponse_ShardPart struct {
 	// keyspace to target the query to.
-	Keyspace string `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// shards to target the query to.
-	Shards               []string `protobuf:"bytes,2,rep,name=shards" json:"shards,omitempty"`
+	Shards               []string `protobuf:"bytes,2,rep,name=shards,proto3" json:"shards,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3110,14 +3110,14 @@ func (m *SplitQueryResponse_ShardPart) GetShards() []string {
 
 type SplitQueryResponse_Part struct {
 	// query is the query and bind variables to execute.
-	Query *query.BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	Query *query.BoundQuery `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
 	// key_range_part is set if the query should be executed by
 	// ExecuteKeyRanges.
-	KeyRangePart *SplitQueryResponse_KeyRangePart `protobuf:"bytes,2,opt,name=key_range_part,json=keyRangePart" json:"key_range_part,omitempty"`
+	KeyRangePart *SplitQueryResponse_KeyRangePart `protobuf:"bytes,2,opt,name=key_range_part,json=keyRangePart,proto3" json:"key_range_part,omitempty"`
 	// shard_part is set if the query should be executed by ExecuteShards.
-	ShardPart *SplitQueryResponse_ShardPart `protobuf:"bytes,3,opt,name=shard_part,json=shardPart" json:"shard_part,omitempty"`
+	ShardPart *SplitQueryResponse_ShardPart `protobuf:"bytes,3,opt,name=shard_part,json=shardPart,proto3" json:"shard_part,omitempty"`
 	// size is the approximate number of rows this query will return.
-	Size                 int64    `protobuf:"varint,4,opt,name=size" json:"size,omitempty"`
+	Size                 int64    `protobuf:"varint,4,opt,name=size,proto3" json:"size,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3178,7 +3178,7 @@ func (m *SplitQueryResponse_Part) GetSize() int64 {
 // GetSrvKeyspaceRequest is the payload to GetSrvKeyspace.
 type GetSrvKeyspaceRequest struct {
 	// keyspace name to fetch.
-	Keyspace             string   `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace             string   `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3218,7 +3218,7 @@ func (m *GetSrvKeyspaceRequest) GetKeyspace() string {
 // GetSrvKeyspaceResponse is the returned value from GetSrvKeyspace.
 type GetSrvKeyspaceResponse struct {
 	// srv_keyspace is the topology object for the SrvKeyspace.
-	SrvKeyspace          *topodata.SrvKeyspace `protobuf:"bytes,1,opt,name=srv_keyspace,json=srvKeyspace" json:"srv_keyspace,omitempty"`
+	SrvKeyspace          *topodata.SrvKeyspace `protobuf:"bytes,1,opt,name=srv_keyspace,json=srvKeyspace,proto3" json:"srv_keyspace,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -3259,24 +3259,24 @@ func (m *GetSrvKeyspaceResponse) GetSrvKeyspace() *topodata.SrvKeyspace {
 type UpdateStreamRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// keyspace to target the query to.
-	Keyspace string `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// shard to target the query to, for unsharded keyspaces.
-	Shard string `protobuf:"bytes,3,opt,name=shard" json:"shard,omitempty"`
+	Shard string `protobuf:"bytes,3,opt,name=shard,proto3" json:"shard,omitempty"`
 	// KeyRange to target the query to, for sharded keyspaces.
-	KeyRange *topodata.KeyRange `protobuf:"bytes,4,opt,name=key_range,json=keyRange" json:"key_range,omitempty"`
+	KeyRange *topodata.KeyRange `protobuf:"bytes,4,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
 	// tablet_type is the type of tablets that this request is targeted to.
-	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// timestamp is the timestamp to start the stream from.  It is
 	// unused is event is set, and we are only streaming from the shard
 	// described by event.shard.
-	Timestamp int64 `protobuf:"varint,6,opt,name=timestamp" json:"timestamp,omitempty"`
+	Timestamp int64 `protobuf:"varint,6,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// event is the event to start the stream from.
 	// Note it is only used if we are streaming from exactly the same shard
 	// as this event was coming from. Otherwise we can't use this event,
 	// and will use the timestamp as a starting point.
-	Event                *query.EventToken `protobuf:"bytes,7,opt,name=event" json:"event,omitempty"`
+	Event                *query.EventToken `protobuf:"bytes,7,opt,name=event,proto3" json:"event,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -3358,13 +3358,13 @@ func (m *UpdateStreamRequest) GetEvent() *query.EventToken {
 // UpdateStreamResponse is streamed by UpdateStream.
 type UpdateStreamResponse struct {
 	// event is one event from the stream.
-	Event *query.StreamEvent `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+	Event *query.StreamEvent `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 	// resume_timestamp is the timestamp to resume streaming from if the
 	// client is interrupted. If the Update Stream only goes to one
 	// shard, this is equal to event.timestamp. If the Update Stream
 	// goes to multiple shards and aggregates, this is the minimum value
 	// of the current timestamp for all shards.
-	ResumeTimestamp      int64    `protobuf:"varint,2,opt,name=resume_timestamp,json=resumeTimestamp" json:"resume_timestamp,omitempty"`
+	ResumeTimestamp      int64    `protobuf:"varint,2,opt,name=resume_timestamp,json=resumeTimestamp,proto3" json:"resume_timestamp,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`

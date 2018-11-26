@@ -71,11 +71,11 @@ func (BinlogTransaction_Statement_Category) EnumDescriptor() ([]byte, []int) {
 // Charset is the per-statement charset info from a QUERY_EVENT binlog entry.
 type Charset struct {
 	// @@session.character_set_client
-	Client int32 `protobuf:"varint,1,opt,name=client" json:"client,omitempty"`
+	Client int32 `protobuf:"varint,1,opt,name=client,proto3" json:"client,omitempty"`
 	// @@session.collation_connection
-	Conn int32 `protobuf:"varint,2,opt,name=conn" json:"conn,omitempty"`
+	Conn int32 `protobuf:"varint,2,opt,name=conn,proto3" json:"conn,omitempty"`
 	// @@session.collation_server
-	Server               int32    `protobuf:"varint,3,opt,name=server" json:"server,omitempty"`
+	Server               int32    `protobuf:"varint,3,opt,name=server,proto3" json:"server,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -130,9 +130,9 @@ func (m *Charset) GetServer() int32 {
 // It is streamed by vttablet for filtered replication, used during resharding.
 type BinlogTransaction struct {
 	// the statements in this transaction
-	Statements []*BinlogTransaction_Statement `protobuf:"bytes,1,rep,name=statements" json:"statements,omitempty"`
+	Statements []*BinlogTransaction_Statement `protobuf:"bytes,1,rep,name=statements,proto3" json:"statements,omitempty"`
 	// The Event Token for this event.
-	EventToken           *query.EventToken `protobuf:"bytes,4,opt,name=event_token,json=eventToken" json:"event_token,omitempty"`
+	EventToken           *query.EventToken `protobuf:"bytes,4,opt,name=event_token,json=eventToken,proto3" json:"event_token,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -178,9 +178,9 @@ func (m *BinlogTransaction) GetEventToken() *query.EventToken {
 
 type BinlogTransaction_Statement struct {
 	// what type of statement is this?
-	Category BinlogTransaction_Statement_Category `protobuf:"varint,1,opt,name=category,enum=binlogdata.BinlogTransaction_Statement_Category" json:"category,omitempty"`
+	Category BinlogTransaction_Statement_Category `protobuf:"varint,1,opt,name=category,proto3,enum=binlogdata.BinlogTransaction_Statement_Category" json:"category,omitempty"`
 	// charset of this statement, if different from pre-negotiated default.
-	Charset *Charset `protobuf:"bytes,2,opt,name=charset" json:"charset,omitempty"`
+	Charset *Charset `protobuf:"bytes,2,opt,name=charset,proto3" json:"charset,omitempty"`
 	// the sql
 	Sql                  []byte   `protobuf:"bytes,3,opt,name=sql,proto3" json:"sql,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -236,11 +236,11 @@ func (m *BinlogTransaction_Statement) GetSql() []byte {
 // StreamKeyRangeRequest is the payload to StreamKeyRange
 type StreamKeyRangeRequest struct {
 	// where to start
-	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	// what to get
-	KeyRange *topodata.KeyRange `protobuf:"bytes,2,opt,name=key_range,json=keyRange" json:"key_range,omitempty"`
+	KeyRange *topodata.KeyRange `protobuf:"bytes,2,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
 	// default charset on the player side
-	Charset              *Charset `protobuf:"bytes,3,opt,name=charset" json:"charset,omitempty"`
+	Charset              *Charset `protobuf:"bytes,3,opt,name=charset,proto3" json:"charset,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -293,7 +293,7 @@ func (m *StreamKeyRangeRequest) GetCharset() *Charset {
 
 // StreamKeyRangeResponse is the response from StreamKeyRange
 type StreamKeyRangeResponse struct {
-	BinlogTransaction    *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction,json=binlogTransaction" json:"binlog_transaction,omitempty"`
+	BinlogTransaction    *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction,json=binlogTransaction,proto3" json:"binlog_transaction,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -333,11 +333,11 @@ func (m *StreamKeyRangeResponse) GetBinlogTransaction() *BinlogTransaction {
 // StreamTablesRequest is the payload to StreamTables
 type StreamTablesRequest struct {
 	// where to start
-	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	// what to get
-	Tables []string `protobuf:"bytes,2,rep,name=tables" json:"tables,omitempty"`
+	Tables []string `protobuf:"bytes,2,rep,name=tables,proto3" json:"tables,omitempty"`
 	// default charset on the player side
-	Charset              *Charset `protobuf:"bytes,3,opt,name=charset" json:"charset,omitempty"`
+	Charset              *Charset `protobuf:"bytes,3,opt,name=charset,proto3" json:"charset,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -390,7 +390,7 @@ func (m *StreamTablesRequest) GetCharset() *Charset {
 
 // StreamTablesResponse is the response from StreamTables
 type StreamTablesResponse struct {
-	BinlogTransaction    *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction,json=binlogTransaction" json:"binlog_transaction,omitempty"`
+	BinlogTransaction    *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction,json=binlogTransaction,proto3" json:"binlog_transaction,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -432,15 +432,15 @@ func (m *StreamTablesResponse) GetBinlogTransaction() *BinlogTransaction {
 // or a list of tables.
 type BinlogSource struct {
 	// the source keyspace
-	Keyspace string `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// the source shard
-	Shard string `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
+	Shard string `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
 	// the source tablet type
-	TabletType topodata.TabletType `protobuf:"varint,3,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,3,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// key_range is set if the request is for a keyrange
-	KeyRange *topodata.KeyRange `protobuf:"bytes,4,opt,name=key_range,json=keyRange" json:"key_range,omitempty"`
+	KeyRange *topodata.KeyRange `protobuf:"bytes,4,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
 	// tables is set if the request is for a list of tables
-	Tables               []string `protobuf:"bytes,5,rep,name=tables" json:"tables,omitempty"`
+	Tables               []string `protobuf:"bytes,5,rep,name=tables,proto3" json:"tables,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
