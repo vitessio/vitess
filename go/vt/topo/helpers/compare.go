@@ -25,17 +25,16 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // CompareKeyspaces will create the keyspaces in the destination topo.
-func CompareKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) {
+func CompareKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) error {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
-		log.Fatalf("GetKeyspaces: %v", err)
+		return fmt.Errorf("GetKeyspace(%v): %v", keyspaces, err)
 	}
 
 	wg := sync.WaitGroup{}
@@ -92,16 +91,16 @@ func CompareKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) {
 	}
 	wg.Wait()
 	if rec.HasErrors() {
-		log.Fatalf("compareKeyspaces failed: %v", rec.Error())
+		return fmt.Errorf("compareKeyspaces failed: %v", rec.Error())
 	}
-	fmt.Println("Keyspaces are matching between from and to topologies")
+	return nil
 }
 
 // CompareShards will create the shards in the destination topo.
-func CompareShards(ctx context.Context, fromTS, toTS *topo.Server) {
+func CompareShards(ctx context.Context, fromTS, toTS *topo.Server) error {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
-		log.Fatalf("fromTS.GetKeyspaces: %v", err)
+		return fmt.Errorf("fromTS.GetKeyspaces: %v", err)
 	}
 
 	wg := sync.WaitGroup{}
@@ -142,16 +141,16 @@ func CompareShards(ctx context.Context, fromTS, toTS *topo.Server) {
 	}
 	wg.Wait()
 	if rec.HasErrors() {
-		log.Fatalf("compareShards failed: %v", rec.Error())
+		return fmt.Errorf("compareShards failed: %v", rec.Error())
 	}
-	fmt.Println("Shards are matching between from and to topologies")
+	return nil
 }
 
 // CompareTablets will create the tablets in the destination topo.
-func CompareTablets(ctx context.Context, fromTS, toTS *topo.Server) {
+func CompareTablets(ctx context.Context, fromTS, toTS *topo.Server) error {
 	cells, err := fromTS.GetKnownCells(ctx)
 	if err != nil {
-		log.Fatalf("fromTS.GetKnownCells: %v", err)
+		return fmt.Errorf("fromTS.GetKnownCells: %v", err)
 	}
 
 	wg := sync.WaitGroup{}
@@ -191,17 +190,17 @@ func CompareTablets(ctx context.Context, fromTS, toTS *topo.Server) {
 	}
 	wg.Wait()
 	if rec.HasErrors() {
-		log.Fatalf("compareTablets failed: %v", rec.Error())
+		return fmt.Errorf("compareTablets failed: %v", rec.Error())
 	}
-	fmt.Println("Tablets are matching between from and to topologies")
+	return nil
 }
 
 // CompareShardReplications will create the ShardReplication objects in
 // the destination topo.
-func CompareShardReplications(ctx context.Context, fromTS, toTS *topo.Server) {
+func CompareShardReplications(ctx context.Context, fromTS, toTS *topo.Server) error {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
-		log.Fatalf("fromTS.GetKeyspaces: %v", err)
+		return fmt.Errorf("fromTS.GetKeyspaces: %v", err)
 	}
 
 	wg := sync.WaitGroup{}
@@ -256,7 +255,7 @@ func CompareShardReplications(ctx context.Context, fromTS, toTS *topo.Server) {
 	}
 	wg.Wait()
 	if rec.HasErrors() {
-		log.Fatalf("compareShardReplication failed: %v", rec.Error())
+		return fmt.Errorf("compareShardReplication failed: %v", rec.Error())
 	}
-	fmt.Println("Shard replications are matching between from and to topologies")
+	return nil
 }
