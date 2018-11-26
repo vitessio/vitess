@@ -32,8 +32,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for UpdateStream service
-
+// UpdateStreamClient is the client API for UpdateStream service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type UpdateStreamClient interface {
 	// StreamKeyRange returns the binlog transactions related to
 	// the specified Keyrange.
@@ -52,7 +53,7 @@ func NewUpdateStreamClient(cc *grpc.ClientConn) UpdateStreamClient {
 }
 
 func (c *updateStreamClient) StreamKeyRange(ctx context.Context, in *binlogdata.StreamKeyRangeRequest, opts ...grpc.CallOption) (UpdateStream_StreamKeyRangeClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_UpdateStream_serviceDesc.Streams[0], c.cc, "/binlogservice.UpdateStream/StreamKeyRange", opts...)
+	stream, err := c.cc.NewStream(ctx, &_UpdateStream_serviceDesc.Streams[0], "/binlogservice.UpdateStream/StreamKeyRange", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +85,7 @@ func (x *updateStreamStreamKeyRangeClient) Recv() (*binlogdata.StreamKeyRangeRes
 }
 
 func (c *updateStreamClient) StreamTables(ctx context.Context, in *binlogdata.StreamTablesRequest, opts ...grpc.CallOption) (UpdateStream_StreamTablesClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_UpdateStream_serviceDesc.Streams[1], c.cc, "/binlogservice.UpdateStream/StreamTables", opts...)
+	stream, err := c.cc.NewStream(ctx, &_UpdateStream_serviceDesc.Streams[1], "/binlogservice.UpdateStream/StreamTables", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -115,8 +116,7 @@ func (x *updateStreamStreamTablesClient) Recv() (*binlogdata.StreamTablesRespons
 	return m, nil
 }
 
-// Server API for UpdateStream service
-
+// UpdateStreamServer is the server API for UpdateStream service.
 type UpdateStreamServer interface {
 	// StreamKeyRange returns the binlog transactions related to
 	// the specified Keyrange.

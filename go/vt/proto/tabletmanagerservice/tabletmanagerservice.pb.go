@@ -32,8 +32,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for TabletManager service
-
+// TabletManagerClient is the client API for TabletManager service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type TabletManagerClient interface {
 	// Ping returns the input payload
 	Ping(ctx context.Context, in *tabletmanagerdata.PingRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PingResponse, error)
@@ -140,7 +141,7 @@ func NewTabletManagerClient(cc *grpc.ClientConn) TabletManagerClient {
 
 func (c *tabletManagerClient) Ping(ctx context.Context, in *tabletmanagerdata.PingRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PingResponse, error) {
 	out := new(tabletmanagerdata.PingResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/Ping", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/Ping", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +150,7 @@ func (c *tabletManagerClient) Ping(ctx context.Context, in *tabletmanagerdata.Pi
 
 func (c *tabletManagerClient) Sleep(ctx context.Context, in *tabletmanagerdata.SleepRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SleepResponse, error) {
 	out := new(tabletmanagerdata.SleepResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/Sleep", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/Sleep", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +159,7 @@ func (c *tabletManagerClient) Sleep(ctx context.Context, in *tabletmanagerdata.S
 
 func (c *tabletManagerClient) ExecuteHook(ctx context.Context, in *tabletmanagerdata.ExecuteHookRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteHookResponse, error) {
 	out := new(tabletmanagerdata.ExecuteHookResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ExecuteHook", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ExecuteHook", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +168,7 @@ func (c *tabletManagerClient) ExecuteHook(ctx context.Context, in *tabletmanager
 
 func (c *tabletManagerClient) GetSchema(ctx context.Context, in *tabletmanagerdata.GetSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetSchemaResponse, error) {
 	out := new(tabletmanagerdata.GetSchemaResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetSchema", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetSchema", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +177,7 @@ func (c *tabletManagerClient) GetSchema(ctx context.Context, in *tabletmanagerda
 
 func (c *tabletManagerClient) GetPermissions(ctx context.Context, in *tabletmanagerdata.GetPermissionsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetPermissionsResponse, error) {
 	out := new(tabletmanagerdata.GetPermissionsResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetPermissions", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetPermissions", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +186,7 @@ func (c *tabletManagerClient) GetPermissions(ctx context.Context, in *tabletmana
 
 func (c *tabletManagerClient) SetReadOnly(ctx context.Context, in *tabletmanagerdata.SetReadOnlyRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReadOnlyResponse, error) {
 	out := new(tabletmanagerdata.SetReadOnlyResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SetReadOnly", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SetReadOnly", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +195,7 @@ func (c *tabletManagerClient) SetReadOnly(ctx context.Context, in *tabletmanager
 
 func (c *tabletManagerClient) SetReadWrite(ctx context.Context, in *tabletmanagerdata.SetReadWriteRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReadWriteResponse, error) {
 	out := new(tabletmanagerdata.SetReadWriteResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SetReadWrite", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SetReadWrite", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +204,7 @@ func (c *tabletManagerClient) SetReadWrite(ctx context.Context, in *tabletmanage
 
 func (c *tabletManagerClient) ChangeType(ctx context.Context, in *tabletmanagerdata.ChangeTypeRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ChangeTypeResponse, error) {
 	out := new(tabletmanagerdata.ChangeTypeResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ChangeType", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ChangeType", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +213,7 @@ func (c *tabletManagerClient) ChangeType(ctx context.Context, in *tabletmanagerd
 
 func (c *tabletManagerClient) RefreshState(ctx context.Context, in *tabletmanagerdata.RefreshStateRequest, opts ...grpc.CallOption) (*tabletmanagerdata.RefreshStateResponse, error) {
 	out := new(tabletmanagerdata.RefreshStateResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/RefreshState", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/RefreshState", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +222,7 @@ func (c *tabletManagerClient) RefreshState(ctx context.Context, in *tabletmanage
 
 func (c *tabletManagerClient) RunHealthCheck(ctx context.Context, in *tabletmanagerdata.RunHealthCheckRequest, opts ...grpc.CallOption) (*tabletmanagerdata.RunHealthCheckResponse, error) {
 	out := new(tabletmanagerdata.RunHealthCheckResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/RunHealthCheck", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/RunHealthCheck", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +231,7 @@ func (c *tabletManagerClient) RunHealthCheck(ctx context.Context, in *tabletmana
 
 func (c *tabletManagerClient) IgnoreHealthError(ctx context.Context, in *tabletmanagerdata.IgnoreHealthErrorRequest, opts ...grpc.CallOption) (*tabletmanagerdata.IgnoreHealthErrorResponse, error) {
 	out := new(tabletmanagerdata.IgnoreHealthErrorResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/IgnoreHealthError", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/IgnoreHealthError", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +240,7 @@ func (c *tabletManagerClient) IgnoreHealthError(ctx context.Context, in *tabletm
 
 func (c *tabletManagerClient) ReloadSchema(ctx context.Context, in *tabletmanagerdata.ReloadSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReloadSchemaResponse, error) {
 	out := new(tabletmanagerdata.ReloadSchemaResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReloadSchema", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReloadSchema", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +249,7 @@ func (c *tabletManagerClient) ReloadSchema(ctx context.Context, in *tabletmanage
 
 func (c *tabletManagerClient) PreflightSchema(ctx context.Context, in *tabletmanagerdata.PreflightSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PreflightSchemaResponse, error) {
 	out := new(tabletmanagerdata.PreflightSchemaResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PreflightSchema", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PreflightSchema", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +258,7 @@ func (c *tabletManagerClient) PreflightSchema(ctx context.Context, in *tabletman
 
 func (c *tabletManagerClient) ApplySchema(ctx context.Context, in *tabletmanagerdata.ApplySchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ApplySchemaResponse, error) {
 	out := new(tabletmanagerdata.ApplySchemaResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ApplySchema", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ApplySchema", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +267,7 @@ func (c *tabletManagerClient) ApplySchema(ctx context.Context, in *tabletmanager
 
 func (c *tabletManagerClient) ExecuteFetchAsDba(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsDbaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsDbaResponse, error) {
 	out := new(tabletmanagerdata.ExecuteFetchAsDbaResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ExecuteFetchAsDba", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ExecuteFetchAsDba", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +276,7 @@ func (c *tabletManagerClient) ExecuteFetchAsDba(ctx context.Context, in *tabletm
 
 func (c *tabletManagerClient) ExecuteFetchAsAllPrivs(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAllPrivsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAllPrivsResponse, error) {
 	out := new(tabletmanagerdata.ExecuteFetchAsAllPrivsResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ExecuteFetchAsAllPrivs", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ExecuteFetchAsAllPrivs", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +285,7 @@ func (c *tabletManagerClient) ExecuteFetchAsAllPrivs(ctx context.Context, in *ta
 
 func (c *tabletManagerClient) ExecuteFetchAsApp(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error) {
 	out := new(tabletmanagerdata.ExecuteFetchAsAppResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ExecuteFetchAsApp", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ExecuteFetchAsApp", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +294,7 @@ func (c *tabletManagerClient) ExecuteFetchAsApp(ctx context.Context, in *tabletm
 
 func (c *tabletManagerClient) SlaveStatus(ctx context.Context, in *tabletmanagerdata.SlaveStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveStatusResponse, error) {
 	out := new(tabletmanagerdata.SlaveStatusResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SlaveStatus", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SlaveStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +303,7 @@ func (c *tabletManagerClient) SlaveStatus(ctx context.Context, in *tabletmanager
 
 func (c *tabletManagerClient) MasterPosition(ctx context.Context, in *tabletmanagerdata.MasterPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.MasterPositionResponse, error) {
 	out := new(tabletmanagerdata.MasterPositionResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/MasterPosition", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/MasterPosition", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +312,7 @@ func (c *tabletManagerClient) MasterPosition(ctx context.Context, in *tabletmana
 
 func (c *tabletManagerClient) StopSlave(ctx context.Context, in *tabletmanagerdata.StopSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopSlaveResponse, error) {
 	out := new(tabletmanagerdata.StopSlaveResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StopSlave", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StopSlave", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +321,7 @@ func (c *tabletManagerClient) StopSlave(ctx context.Context, in *tabletmanagerda
 
 func (c *tabletManagerClient) StopSlaveMinimum(ctx context.Context, in *tabletmanagerdata.StopSlaveMinimumRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopSlaveMinimumResponse, error) {
 	out := new(tabletmanagerdata.StopSlaveMinimumResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StopSlaveMinimum", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StopSlaveMinimum", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +330,7 @@ func (c *tabletManagerClient) StopSlaveMinimum(ctx context.Context, in *tabletma
 
 func (c *tabletManagerClient) StartSlave(ctx context.Context, in *tabletmanagerdata.StartSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartSlaveResponse, error) {
 	out := new(tabletmanagerdata.StartSlaveResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StartSlave", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StartSlave", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +339,7 @@ func (c *tabletManagerClient) StartSlave(ctx context.Context, in *tabletmanagerd
 
 func (c *tabletManagerClient) TabletExternallyReparented(ctx context.Context, in *tabletmanagerdata.TabletExternallyReparentedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.TabletExternallyReparentedResponse, error) {
 	out := new(tabletmanagerdata.TabletExternallyReparentedResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/TabletExternallyReparented", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/TabletExternallyReparented", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +348,7 @@ func (c *tabletManagerClient) TabletExternallyReparented(ctx context.Context, in
 
 func (c *tabletManagerClient) TabletExternallyElected(ctx context.Context, in *tabletmanagerdata.TabletExternallyElectedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.TabletExternallyElectedResponse, error) {
 	out := new(tabletmanagerdata.TabletExternallyElectedResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/TabletExternallyElected", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/TabletExternallyElected", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +357,7 @@ func (c *tabletManagerClient) TabletExternallyElected(ctx context.Context, in *t
 
 func (c *tabletManagerClient) GetSlaves(ctx context.Context, in *tabletmanagerdata.GetSlavesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetSlavesResponse, error) {
 	out := new(tabletmanagerdata.GetSlavesResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetSlaves", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetSlaves", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +366,7 @@ func (c *tabletManagerClient) GetSlaves(ctx context.Context, in *tabletmanagerda
 
 func (c *tabletManagerClient) VReplicationExec(ctx context.Context, in *tabletmanagerdata.VReplicationExecRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationExecResponse, error) {
 	out := new(tabletmanagerdata.VReplicationExecResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/VReplicationExec", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/VReplicationExec", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +375,7 @@ func (c *tabletManagerClient) VReplicationExec(ctx context.Context, in *tabletma
 
 func (c *tabletManagerClient) VReplicationWaitForPos(ctx context.Context, in *tabletmanagerdata.VReplicationWaitForPosRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationWaitForPosResponse, error) {
 	out := new(tabletmanagerdata.VReplicationWaitForPosResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/VReplicationWaitForPos", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/VReplicationWaitForPos", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +384,7 @@ func (c *tabletManagerClient) VReplicationWaitForPos(ctx context.Context, in *ta
 
 func (c *tabletManagerClient) ResetReplication(ctx context.Context, in *tabletmanagerdata.ResetReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetReplicationResponse, error) {
 	out := new(tabletmanagerdata.ResetReplicationResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ResetReplication", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ResetReplication", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +393,7 @@ func (c *tabletManagerClient) ResetReplication(ctx context.Context, in *tabletma
 
 func (c *tabletManagerClient) InitMaster(ctx context.Context, in *tabletmanagerdata.InitMasterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitMasterResponse, error) {
 	out := new(tabletmanagerdata.InitMasterResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/InitMaster", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/InitMaster", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -401,7 +402,7 @@ func (c *tabletManagerClient) InitMaster(ctx context.Context, in *tabletmanagerd
 
 func (c *tabletManagerClient) PopulateReparentJournal(ctx context.Context, in *tabletmanagerdata.PopulateReparentJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PopulateReparentJournalResponse, error) {
 	out := new(tabletmanagerdata.PopulateReparentJournalResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PopulateReparentJournal", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PopulateReparentJournal", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +411,7 @@ func (c *tabletManagerClient) PopulateReparentJournal(ctx context.Context, in *t
 
 func (c *tabletManagerClient) InitSlave(ctx context.Context, in *tabletmanagerdata.InitSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitSlaveResponse, error) {
 	out := new(tabletmanagerdata.InitSlaveResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/InitSlave", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/InitSlave", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +420,7 @@ func (c *tabletManagerClient) InitSlave(ctx context.Context, in *tabletmanagerda
 
 func (c *tabletManagerClient) DemoteMaster(ctx context.Context, in *tabletmanagerdata.DemoteMasterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DemoteMasterResponse, error) {
 	out := new(tabletmanagerdata.DemoteMasterResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/DemoteMaster", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/DemoteMaster", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -428,7 +429,7 @@ func (c *tabletManagerClient) DemoteMaster(ctx context.Context, in *tabletmanage
 
 func (c *tabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, in *tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse, error) {
 	out := new(tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PromoteSlaveWhenCaughtUp", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PromoteSlaveWhenCaughtUp", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +438,7 @@ func (c *tabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, in *
 
 func (c *tabletManagerClient) SlaveWasPromoted(ctx context.Context, in *tabletmanagerdata.SlaveWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveWasPromotedResponse, error) {
 	out := new(tabletmanagerdata.SlaveWasPromotedResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SlaveWasPromoted", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SlaveWasPromoted", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +447,7 @@ func (c *tabletManagerClient) SlaveWasPromoted(ctx context.Context, in *tabletma
 
 func (c *tabletManagerClient) SetMaster(ctx context.Context, in *tabletmanagerdata.SetMasterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetMasterResponse, error) {
 	out := new(tabletmanagerdata.SetMasterResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SetMaster", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SetMaster", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -455,7 +456,7 @@ func (c *tabletManagerClient) SetMaster(ctx context.Context, in *tabletmanagerda
 
 func (c *tabletManagerClient) SlaveWasRestarted(ctx context.Context, in *tabletmanagerdata.SlaveWasRestartedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SlaveWasRestartedResponse, error) {
 	out := new(tabletmanagerdata.SlaveWasRestartedResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SlaveWasRestarted", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SlaveWasRestarted", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -464,7 +465,7 @@ func (c *tabletManagerClient) SlaveWasRestarted(ctx context.Context, in *tabletm
 
 func (c *tabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, in *tabletmanagerdata.StopReplicationAndGetStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error) {
 	out := new(tabletmanagerdata.StopReplicationAndGetStatusResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StopReplicationAndGetStatus", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/StopReplicationAndGetStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -473,7 +474,7 @@ func (c *tabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, i
 
 func (c *tabletManagerClient) PromoteSlave(ctx context.Context, in *tabletmanagerdata.PromoteSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteSlaveResponse, error) {
 	out := new(tabletmanagerdata.PromoteSlaveResponse)
-	err := grpc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PromoteSlave", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PromoteSlave", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -481,7 +482,7 @@ func (c *tabletManagerClient) PromoteSlave(ctx context.Context, in *tabletmanage
 }
 
 func (c *tabletManagerClient) Backup(ctx context.Context, in *tabletmanagerdata.BackupRequest, opts ...grpc.CallOption) (TabletManager_BackupClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_TabletManager_serviceDesc.Streams[0], c.cc, "/tabletmanagerservice.TabletManager/Backup", opts...)
+	stream, err := c.cc.NewStream(ctx, &_TabletManager_serviceDesc.Streams[0], "/tabletmanagerservice.TabletManager/Backup", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -513,7 +514,7 @@ func (x *tabletManagerBackupClient) Recv() (*tabletmanagerdata.BackupResponse, e
 }
 
 func (c *tabletManagerClient) RestoreFromBackup(ctx context.Context, in *tabletmanagerdata.RestoreFromBackupRequest, opts ...grpc.CallOption) (TabletManager_RestoreFromBackupClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_TabletManager_serviceDesc.Streams[1], c.cc, "/tabletmanagerservice.TabletManager/RestoreFromBackup", opts...)
+	stream, err := c.cc.NewStream(ctx, &_TabletManager_serviceDesc.Streams[1], "/tabletmanagerservice.TabletManager/RestoreFromBackup", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -544,8 +545,7 @@ func (x *tabletManagerRestoreFromBackupClient) Recv() (*tabletmanagerdata.Restor
 	return m, nil
 }
 
-// Server API for TabletManager service
-
+// TabletManagerServer is the server API for TabletManager service.
 type TabletManagerServer interface {
 	// Ping returns the input payload
 	Ping(context.Context, *tabletmanagerdata.PingRequest) (*tabletmanagerdata.PingResponse, error)

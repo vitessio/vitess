@@ -24,19 +24,19 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type TableDefinition struct {
 	// the table name
-	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// the SQL to run to create the table
-	Schema string `protobuf:"bytes,2,opt,name=schema" json:"schema,omitempty"`
+	Schema string `protobuf:"bytes,2,opt,name=schema,proto3" json:"schema,omitempty"`
 	// the columns in the order that will be used to dump and load the data
-	Columns []string `protobuf:"bytes,3,rep,name=columns" json:"columns,omitempty"`
+	Columns []string `protobuf:"bytes,3,rep,name=columns,proto3" json:"columns,omitempty"`
 	// the primary key columns in the primary key order
-	PrimaryKeyColumns []string `protobuf:"bytes,4,rep,name=primary_key_columns,json=primaryKeyColumns" json:"primary_key_columns,omitempty"`
+	PrimaryKeyColumns []string `protobuf:"bytes,4,rep,name=primary_key_columns,json=primaryKeyColumns,proto3" json:"primary_key_columns,omitempty"`
 	// type is either mysqlctl.TableBaseTable or mysqlctl.TableView
-	Type string `protobuf:"bytes,5,opt,name=type" json:"type,omitempty"`
+	Type string `protobuf:"bytes,5,opt,name=type,proto3" json:"type,omitempty"`
 	// how much space the data file takes.
-	DataLength uint64 `protobuf:"varint,6,opt,name=data_length,json=dataLength" json:"data_length,omitempty"`
+	DataLength uint64 `protobuf:"varint,6,opt,name=data_length,json=dataLength,proto3" json:"data_length,omitempty"`
 	// approximate number of rows
-	RowCount             uint64   `protobuf:"varint,7,opt,name=row_count,json=rowCount" json:"row_count,omitempty"`
+	RowCount             uint64   `protobuf:"varint,7,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -116,9 +116,9 @@ func (m *TableDefinition) GetRowCount() uint64 {
 }
 
 type SchemaDefinition struct {
-	DatabaseSchema       string             `protobuf:"bytes,1,opt,name=database_schema,json=databaseSchema" json:"database_schema,omitempty"`
-	TableDefinitions     []*TableDefinition `protobuf:"bytes,2,rep,name=table_definitions,json=tableDefinitions" json:"table_definitions,omitempty"`
-	Version              string             `protobuf:"bytes,3,opt,name=version" json:"version,omitempty"`
+	DatabaseSchema       string             `protobuf:"bytes,1,opt,name=database_schema,json=databaseSchema,proto3" json:"database_schema,omitempty"`
+	TableDefinitions     []*TableDefinition `protobuf:"bytes,2,rep,name=table_definitions,json=tableDefinitions,proto3" json:"table_definitions,omitempty"`
+	Version              string             `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -171,9 +171,9 @@ func (m *SchemaDefinition) GetVersion() string {
 
 type SchemaChangeResult struct {
 	// before_schema holds the schema before each change.
-	BeforeSchema *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema,json=beforeSchema" json:"before_schema,omitempty"`
+	BeforeSchema *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema,json=beforeSchema,proto3" json:"before_schema,omitempty"`
 	// after_schema holds the schema after each change.
-	AfterSchema          *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema,json=afterSchema" json:"after_schema,omitempty"`
+	AfterSchema          *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -221,10 +221,10 @@ func (m *SchemaChangeResult) GetAfterSchema() *SchemaDefinition {
 // Primary key is Host+User
 // PasswordChecksum is the crc64 of the password, for security reasons
 type UserPermission struct {
-	Host                 string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
-	User                 string            `protobuf:"bytes,2,opt,name=user" json:"user,omitempty"`
-	PasswordChecksum     uint64            `protobuf:"varint,3,opt,name=password_checksum,json=passwordChecksum" json:"password_checksum,omitempty"`
-	Privileges           map[string]string `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Host                 string            `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	User                 string            `protobuf:"bytes,2,opt,name=user,proto3" json:"user,omitempty"`
+	PasswordChecksum     uint64            `protobuf:"varint,3,opt,name=password_checksum,json=passwordChecksum,proto3" json:"password_checksum,omitempty"`
+	Privileges           map[string]string `protobuf:"bytes,4,rep,name=privileges,proto3" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -285,10 +285,10 @@ func (m *UserPermission) GetPrivileges() map[string]string {
 // DbPermission describes a single row in the mysql.db table
 // Primary key is Host+Db+User
 type DbPermission struct {
-	Host                 string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
-	Db                   string            `protobuf:"bytes,2,opt,name=db" json:"db,omitempty"`
-	User                 string            `protobuf:"bytes,3,opt,name=user" json:"user,omitempty"`
-	Privileges           map[string]string `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Host                 string            `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	Db                   string            `protobuf:"bytes,2,opt,name=db,proto3" json:"db,omitempty"`
+	User                 string            `protobuf:"bytes,3,opt,name=user,proto3" json:"user,omitempty"`
+	Privileges           map[string]string `protobuf:"bytes,4,rep,name=privileges,proto3" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -349,8 +349,8 @@ func (m *DbPermission) GetPrivileges() map[string]string {
 // Permissions have all the rows in mysql.{user,db} tables,
 // (all rows are sorted by primary key)
 type Permissions struct {
-	UserPermissions      []*UserPermission `protobuf:"bytes,1,rep,name=user_permissions,json=userPermissions" json:"user_permissions,omitempty"`
-	DbPermissions        []*DbPermission   `protobuf:"bytes,2,rep,name=db_permissions,json=dbPermissions" json:"db_permissions,omitempty"`
+	UserPermissions      []*UserPermission `protobuf:"bytes,1,rep,name=user_permissions,json=userPermissions,proto3" json:"user_permissions,omitempty"`
+	DbPermissions        []*DbPermission   `protobuf:"bytes,2,rep,name=db_permissions,json=dbPermissions,proto3" json:"db_permissions,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -395,7 +395,7 @@ func (m *Permissions) GetDbPermissions() []*DbPermission {
 }
 
 type PingRequest struct {
-	Payload              string   `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
+	Payload              string   `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -433,7 +433,7 @@ func (m *PingRequest) GetPayload() string {
 }
 
 type PingResponse struct {
-	Payload              string   `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
+	Payload              string   `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -472,7 +472,7 @@ func (m *PingResponse) GetPayload() string {
 
 type SleepRequest struct {
 	// duration is in nanoseconds
-	Duration             int64    `protobuf:"varint,1,opt,name=duration" json:"duration,omitempty"`
+	Duration             int64    `protobuf:"varint,1,opt,name=duration,proto3" json:"duration,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -540,9 +540,9 @@ func (m *SleepResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SleepResponse proto.InternalMessageInfo
 
 type ExecuteHookRequest struct {
-	Name                 string            `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	Parameters           []string          `protobuf:"bytes,2,rep,name=parameters" json:"parameters,omitempty"`
-	ExtraEnv             map[string]string `protobuf:"bytes,3,rep,name=extra_env,json=extraEnv" json:"extra_env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Name                 string            `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Parameters           []string          `protobuf:"bytes,2,rep,name=parameters,proto3" json:"parameters,omitempty"`
+	ExtraEnv             map[string]string `protobuf:"bytes,3,rep,name=extra_env,json=extraEnv,proto3" json:"extra_env,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -594,9 +594,9 @@ func (m *ExecuteHookRequest) GetExtraEnv() map[string]string {
 }
 
 type ExecuteHookResponse struct {
-	ExitStatus           int64    `protobuf:"varint,1,opt,name=exit_status,json=exitStatus" json:"exit_status,omitempty"`
-	Stdout               string   `protobuf:"bytes,2,opt,name=stdout" json:"stdout,omitempty"`
-	Stderr               string   `protobuf:"bytes,3,opt,name=stderr" json:"stderr,omitempty"`
+	ExitStatus           int64    `protobuf:"varint,1,opt,name=exit_status,json=exitStatus,proto3" json:"exit_status,omitempty"`
+	Stdout               string   `protobuf:"bytes,2,opt,name=stdout,proto3" json:"stdout,omitempty"`
+	Stderr               string   `protobuf:"bytes,3,opt,name=stderr,proto3" json:"stderr,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -648,9 +648,9 @@ func (m *ExecuteHookResponse) GetStderr() string {
 }
 
 type GetSchemaRequest struct {
-	Tables               []string `protobuf:"bytes,1,rep,name=tables" json:"tables,omitempty"`
-	IncludeViews         bool     `protobuf:"varint,2,opt,name=include_views,json=includeViews" json:"include_views,omitempty"`
-	ExcludeTables        []string `protobuf:"bytes,3,rep,name=exclude_tables,json=excludeTables" json:"exclude_tables,omitempty"`
+	Tables               []string `protobuf:"bytes,1,rep,name=tables,proto3" json:"tables,omitempty"`
+	IncludeViews         bool     `protobuf:"varint,2,opt,name=include_views,json=includeViews,proto3" json:"include_views,omitempty"`
+	ExcludeTables        []string `protobuf:"bytes,3,rep,name=exclude_tables,json=excludeTables,proto3" json:"exclude_tables,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -702,7 +702,7 @@ func (m *GetSchemaRequest) GetExcludeTables() []string {
 }
 
 type GetSchemaResponse struct {
-	SchemaDefinition     *SchemaDefinition `protobuf:"bytes,1,opt,name=schema_definition,json=schemaDefinition" json:"schema_definition,omitempty"`
+	SchemaDefinition     *SchemaDefinition `protobuf:"bytes,1,opt,name=schema_definition,json=schemaDefinition,proto3" json:"schema_definition,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -770,7 +770,7 @@ func (m *GetPermissionsRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_GetPermissionsRequest proto.InternalMessageInfo
 
 type GetPermissionsResponse struct {
-	Permissions          *Permissions `protobuf:"bytes,1,opt,name=permissions" json:"permissions,omitempty"`
+	Permissions          *Permissions `protobuf:"bytes,1,opt,name=permissions,proto3" json:"permissions,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
 	XXX_unrecognized     []byte       `json:"-"`
 	XXX_sizecache        int32        `json:"-"`
@@ -928,7 +928,7 @@ func (m *SetReadWriteResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SetReadWriteResponse proto.InternalMessageInfo
 
 type ChangeTypeRequest struct {
-	TabletType           topodata.TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType           topodata.TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
 	XXX_unrecognized     []byte              `json:"-"`
 	XXX_sizecache        int32               `json:"-"`
@@ -1116,7 +1116,7 @@ func (m *RunHealthCheckResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_RunHealthCheckResponse proto.InternalMessageInfo
 
 type IgnoreHealthErrorRequest struct {
-	Pattern              string   `protobuf:"bytes,1,opt,name=pattern" json:"pattern,omitempty"`
+	Pattern              string   `protobuf:"bytes,1,opt,name=pattern,proto3" json:"pattern,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1187,7 +1187,7 @@ type ReloadSchemaRequest struct {
 	// wait_position allows scheduling a schema reload to occur after a
 	// given DDL has replicated to this slave, by specifying a replication
 	// position to wait for. Leave empty to trigger the reload immediately.
-	WaitPosition         string   `protobuf:"bytes,1,opt,name=wait_position,json=waitPosition" json:"wait_position,omitempty"`
+	WaitPosition         string   `protobuf:"bytes,1,opt,name=wait_position,json=waitPosition,proto3" json:"wait_position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1255,7 +1255,7 @@ func (m *ReloadSchemaResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_ReloadSchemaResponse proto.InternalMessageInfo
 
 type PreflightSchemaRequest struct {
-	Changes              []string `protobuf:"bytes,1,rep,name=changes" json:"changes,omitempty"`
+	Changes              []string `protobuf:"bytes,1,rep,name=changes,proto3" json:"changes,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1295,7 +1295,7 @@ func (m *PreflightSchemaRequest) GetChanges() []string {
 type PreflightSchemaResponse struct {
 	// change_results has for each change the schema before and after it.
 	// The number of elements is identical to the length of "changes" in the request.
-	ChangeResults        []*SchemaChangeResult `protobuf:"bytes,1,rep,name=change_results,json=changeResults" json:"change_results,omitempty"`
+	ChangeResults        []*SchemaChangeResult `protobuf:"bytes,1,rep,name=change_results,json=changeResults,proto3" json:"change_results,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -1333,11 +1333,11 @@ func (m *PreflightSchemaResponse) GetChangeResults() []*SchemaChangeResult {
 }
 
 type ApplySchemaRequest struct {
-	Sql                  string            `protobuf:"bytes,1,opt,name=sql" json:"sql,omitempty"`
-	Force                bool              `protobuf:"varint,2,opt,name=force" json:"force,omitempty"`
-	AllowReplication     bool              `protobuf:"varint,3,opt,name=allow_replication,json=allowReplication" json:"allow_replication,omitempty"`
-	BeforeSchema         *SchemaDefinition `protobuf:"bytes,4,opt,name=before_schema,json=beforeSchema" json:"before_schema,omitempty"`
-	AfterSchema          *SchemaDefinition `protobuf:"bytes,5,opt,name=after_schema,json=afterSchema" json:"after_schema,omitempty"`
+	Sql                  string            `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
+	Force                bool              `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"`
+	AllowReplication     bool              `protobuf:"varint,3,opt,name=allow_replication,json=allowReplication,proto3" json:"allow_replication,omitempty"`
+	BeforeSchema         *SchemaDefinition `protobuf:"bytes,4,opt,name=before_schema,json=beforeSchema,proto3" json:"before_schema,omitempty"`
+	AfterSchema          *SchemaDefinition `protobuf:"bytes,5,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -1403,8 +1403,8 @@ func (m *ApplySchemaRequest) GetAfterSchema() *SchemaDefinition {
 }
 
 type ApplySchemaResponse struct {
-	BeforeSchema         *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema,json=beforeSchema" json:"before_schema,omitempty"`
-	AfterSchema          *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema,json=afterSchema" json:"after_schema,omitempty"`
+	BeforeSchema         *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema,json=beforeSchema,proto3" json:"before_schema,omitempty"`
+	AfterSchema          *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -1450,10 +1450,10 @@ func (m *ApplySchemaResponse) GetAfterSchema() *SchemaDefinition {
 
 type ExecuteFetchAsDbaRequest struct {
 	Query                []byte   `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
-	DbName               string   `protobuf:"bytes,2,opt,name=db_name,json=dbName" json:"db_name,omitempty"`
-	MaxRows              uint64   `protobuf:"varint,3,opt,name=max_rows,json=maxRows" json:"max_rows,omitempty"`
-	DisableBinlogs       bool     `protobuf:"varint,4,opt,name=disable_binlogs,json=disableBinlogs" json:"disable_binlogs,omitempty"`
-	ReloadSchema         bool     `protobuf:"varint,5,opt,name=reload_schema,json=reloadSchema" json:"reload_schema,omitempty"`
+	DbName               string   `protobuf:"bytes,2,opt,name=db_name,json=dbName,proto3" json:"db_name,omitempty"`
+	MaxRows              uint64   `protobuf:"varint,3,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
+	DisableBinlogs       bool     `protobuf:"varint,4,opt,name=disable_binlogs,json=disableBinlogs,proto3" json:"disable_binlogs,omitempty"`
+	ReloadSchema         bool     `protobuf:"varint,5,opt,name=reload_schema,json=reloadSchema,proto3" json:"reload_schema,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1519,7 +1519,7 @@ func (m *ExecuteFetchAsDbaRequest) GetReloadSchema() bool {
 }
 
 type ExecuteFetchAsDbaResponse struct {
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -1558,9 +1558,9 @@ func (m *ExecuteFetchAsDbaResponse) GetResult() *query.QueryResult {
 
 type ExecuteFetchAsAllPrivsRequest struct {
 	Query                []byte   `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
-	DbName               string   `protobuf:"bytes,2,opt,name=db_name,json=dbName" json:"db_name,omitempty"`
-	MaxRows              uint64   `protobuf:"varint,3,opt,name=max_rows,json=maxRows" json:"max_rows,omitempty"`
-	ReloadSchema         bool     `protobuf:"varint,4,opt,name=reload_schema,json=reloadSchema" json:"reload_schema,omitempty"`
+	DbName               string   `protobuf:"bytes,2,opt,name=db_name,json=dbName,proto3" json:"db_name,omitempty"`
+	MaxRows              uint64   `protobuf:"varint,3,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
+	ReloadSchema         bool     `protobuf:"varint,4,opt,name=reload_schema,json=reloadSchema,proto3" json:"reload_schema,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1619,7 +1619,7 @@ func (m *ExecuteFetchAsAllPrivsRequest) GetReloadSchema() bool {
 }
 
 type ExecuteFetchAsAllPrivsResponse struct {
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -1658,7 +1658,7 @@ func (m *ExecuteFetchAsAllPrivsResponse) GetResult() *query.QueryResult {
 
 type ExecuteFetchAsAppRequest struct {
 	Query                []byte   `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
-	MaxRows              uint64   `protobuf:"varint,2,opt,name=max_rows,json=maxRows" json:"max_rows,omitempty"`
+	MaxRows              uint64   `protobuf:"varint,2,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1703,7 +1703,7 @@ func (m *ExecuteFetchAsAppRequest) GetMaxRows() uint64 {
 }
 
 type ExecuteFetchAsAppResponse struct {
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -1771,7 +1771,7 @@ func (m *SlaveStatusRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_SlaveStatusRequest proto.InternalMessageInfo
 
 type SlaveStatusResponse struct {
-	Status               *replicationdata.Status `protobuf:"bytes,1,opt,name=status" json:"status,omitempty"`
+	Status               *replicationdata.Status `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
 	XXX_sizecache        int32                   `json:"-"`
@@ -1839,7 +1839,7 @@ func (m *MasterPositionRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_MasterPositionRequest proto.InternalMessageInfo
 
 type MasterPositionResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1937,8 +1937,8 @@ func (m *StopSlaveResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_StopSlaveResponse proto.InternalMessageInfo
 
 type StopSlaveMinimumRequest struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
-	WaitTimeout          int64    `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout" json:"wait_timeout,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
+	WaitTimeout          int64    `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout,proto3" json:"wait_timeout,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1983,7 +1983,7 @@ func (m *StopSlaveMinimumRequest) GetWaitTimeout() int64 {
 }
 
 type StopSlaveMinimumResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2084,7 +2084,7 @@ type TabletExternallyReparentedRequest struct {
 	// external_id is an string value that may be provided by an external
 	// agent for tracking purposes. The tablet will emit this string in
 	// events triggered by TabletExternallyReparented, such as VitessReparent.
-	ExternalId           string   `protobuf:"bytes,1,opt,name=external_id,json=externalId" json:"external_id,omitempty"`
+	ExternalId           string   `protobuf:"bytes,1,opt,name=external_id,json=externalId,proto3" json:"external_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2242,7 +2242,7 @@ func (m *GetSlavesRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_GetSlavesRequest proto.InternalMessageInfo
 
 type GetSlavesResponse struct {
-	Addrs                []string `protobuf:"bytes,1,rep,name=addrs" json:"addrs,omitempty"`
+	Addrs                []string `protobuf:"bytes,1,rep,name=addrs,proto3" json:"addrs,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2340,7 +2340,7 @@ func (m *ResetReplicationResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_ResetReplicationResponse proto.InternalMessageInfo
 
 type VReplicationExecRequest struct {
-	Query                string   `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	Query                string   `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2378,7 +2378,7 @@ func (m *VReplicationExecRequest) GetQuery() string {
 }
 
 type VReplicationExecResponse struct {
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -2416,8 +2416,8 @@ func (m *VReplicationExecResponse) GetResult() *query.QueryResult {
 }
 
 type VReplicationWaitForPosRequest struct {
-	Id                   int64    `protobuf:"varint,1,opt,name=id" json:"id,omitempty"`
-	Position             string   `protobuf:"bytes,2,opt,name=position" json:"position,omitempty"`
+	Id                   int64    `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Position             string   `protobuf:"bytes,2,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2522,7 +2522,7 @@ func (m *InitMasterRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_InitMasterRequest proto.InternalMessageInfo
 
 type InitMasterResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2560,10 +2560,10 @@ func (m *InitMasterResponse) GetPosition() string {
 }
 
 type PopulateReparentJournalRequest struct {
-	TimeCreatedNs        int64                 `protobuf:"varint,1,opt,name=time_created_ns,json=timeCreatedNs" json:"time_created_ns,omitempty"`
-	ActionName           string                `protobuf:"bytes,2,opt,name=action_name,json=actionName" json:"action_name,omitempty"`
-	MasterAlias          *topodata.TabletAlias `protobuf:"bytes,3,opt,name=master_alias,json=masterAlias" json:"master_alias,omitempty"`
-	ReplicationPosition  string                `protobuf:"bytes,4,opt,name=replication_position,json=replicationPosition" json:"replication_position,omitempty"`
+	TimeCreatedNs        int64                 `protobuf:"varint,1,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
+	ActionName           string                `protobuf:"bytes,2,opt,name=action_name,json=actionName,proto3" json:"action_name,omitempty"`
+	MasterAlias          *topodata.TabletAlias `protobuf:"bytes,3,opt,name=master_alias,json=masterAlias,proto3" json:"master_alias,omitempty"`
+	ReplicationPosition  string                `protobuf:"bytes,4,opt,name=replication_position,json=replicationPosition,proto3" json:"replication_position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -2652,9 +2652,9 @@ func (m *PopulateReparentJournalResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_PopulateReparentJournalResponse proto.InternalMessageInfo
 
 type InitSlaveRequest struct {
-	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
-	ReplicationPosition  string                `protobuf:"bytes,2,opt,name=replication_position,json=replicationPosition" json:"replication_position,omitempty"`
-	TimeCreatedNs        int64                 `protobuf:"varint,3,opt,name=time_created_ns,json=timeCreatedNs" json:"time_created_ns,omitempty"`
+	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	ReplicationPosition  string                `protobuf:"bytes,2,opt,name=replication_position,json=replicationPosition,proto3" json:"replication_position,omitempty"`
+	TimeCreatedNs        int64                 `protobuf:"varint,3,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -2766,7 +2766,7 @@ func (m *DemoteMasterRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_DemoteMasterRequest proto.InternalMessageInfo
 
 type DemoteMasterResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2804,7 +2804,7 @@ func (m *DemoteMasterResponse) GetPosition() string {
 }
 
 type PromoteSlaveWhenCaughtUpRequest struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2842,7 +2842,7 @@ func (m *PromoteSlaveWhenCaughtUpRequest) GetPosition() string {
 }
 
 type PromoteSlaveWhenCaughtUpResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2940,9 +2940,9 @@ func (m *SlaveWasPromotedResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SlaveWasPromotedResponse proto.InternalMessageInfo
 
 type SetMasterRequest struct {
-	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
-	TimeCreatedNs        int64                 `protobuf:"varint,2,opt,name=time_created_ns,json=timeCreatedNs" json:"time_created_ns,omitempty"`
-	ForceStartSlave      bool                  `protobuf:"varint,3,opt,name=force_start_slave,json=forceStartSlave" json:"force_start_slave,omitempty"`
+	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	TimeCreatedNs        int64                 `protobuf:"varint,2,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
+	ForceStartSlave      bool                  `protobuf:"varint,3,opt,name=force_start_slave,json=forceStartSlave,proto3" json:"force_start_slave,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -3025,7 +3025,7 @@ var xxx_messageInfo_SetMasterResponse proto.InternalMessageInfo
 
 type SlaveWasRestartedRequest struct {
 	// the parent alias the tablet should have
-	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
+	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -3123,7 +3123,7 @@ func (m *StopReplicationAndGetStatusRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_StopReplicationAndGetStatusRequest proto.InternalMessageInfo
 
 type StopReplicationAndGetStatusResponse struct {
-	Status               *replicationdata.Status `protobuf:"bytes,1,opt,name=status" json:"status,omitempty"`
+	Status               *replicationdata.Status `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
 	XXX_sizecache        int32                   `json:"-"`
@@ -3191,7 +3191,7 @@ func (m *PromoteSlaveRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_PromoteSlaveRequest proto.InternalMessageInfo
 
 type PromoteSlaveResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3229,7 +3229,7 @@ func (m *PromoteSlaveResponse) GetPosition() string {
 }
 
 type BackupRequest struct {
-	Concurrency          int64    `protobuf:"varint,1,opt,name=concurrency" json:"concurrency,omitempty"`
+	Concurrency          int64    `protobuf:"varint,1,opt,name=concurrency,proto3" json:"concurrency,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3267,7 +3267,7 @@ func (m *BackupRequest) GetConcurrency() int64 {
 }
 
 type BackupResponse struct {
-	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
 	XXX_unrecognized     []byte         `json:"-"`
 	XXX_sizecache        int32          `json:"-"`
@@ -3335,7 +3335,7 @@ func (m *RestoreFromBackupRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_RestoreFromBackupRequest proto.InternalMessageInfo
 
 type RestoreFromBackupResponse struct {
-	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
 	XXX_unrecognized     []byte         `json:"-"`
 	XXX_sizecache        int32          `json:"-"`
