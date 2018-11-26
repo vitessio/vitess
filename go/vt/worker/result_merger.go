@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"io"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -113,6 +113,13 @@ func CheckValidTypesForResultMerger(fields []*querypb.Field, pkFieldCount int) e
 // It is part of the ResultReader interface.
 func (rm *ResultMerger) Fields() []*querypb.Field {
 	return rm.fields
+}
+
+// Close closes all inputs
+func (rm *ResultMerger) Close(ctx context.Context) {
+	for _, i := range rm.inputs {
+		i.Close(ctx)
+	}
 }
 
 // Next returns the next Result in the sorted, merged stream.

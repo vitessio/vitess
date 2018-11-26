@@ -44,9 +44,9 @@ const (
 	// not throttled.
 	NotThrottled time.Duration = 0
 
-	// ZeroRateNoProgess can be used to set maxRate to 0. In this case, the
+	// ZeroRateNoProgress can be used to set maxRate to 0. In this case, the
 	// throttler won't let any requests through until the rate is increased again.
-	ZeroRateNoProgess = 0
+	ZeroRateNoProgress = 0
 
 	// MaxRateModuleDisabled can be set in NewThrottler() to disable throttling
 	// by a fixed rate.
@@ -262,7 +262,7 @@ func (t *Throttler) updateMaxRate() {
 		return
 	}
 
-	if maxRate != ZeroRateNoProgess && maxRate < int64(threadsRunning) {
+	if maxRate != ZeroRateNoProgress && maxRate < int64(threadsRunning) {
 		log.Warningf("Set maxRate is less than the number of threads (%v). To prevent threads from starving, maxRate was increased from: %v to: %v.", threadsRunning, maxRate, threadsRunning)
 		maxRate = int64(threadsRunning)
 	}

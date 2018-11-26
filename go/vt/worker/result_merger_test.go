@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -108,6 +110,9 @@ func newFakeResultReader(fields []*querypb.Field, index int, distribution []int,
 // Fields returns the field information. It is part of the ResultReader interface.
 func (f *fakeResultReader) Fields() []*querypb.Field {
 	return f.fields
+}
+
+func (f *fakeResultReader) Close(ctx context.Context) {
 }
 
 // Next returns the next fake result. It is part of the ResultReader interface.
@@ -385,6 +390,10 @@ func (m *memoryResultReader) Next() (*sqltypes.Result, error) {
 	result := m.results[m.currentIndex]
 	m.currentIndex++
 	return result, nil
+}
+
+func (m *memoryResultReader) Close(ctx context.Context) {
+	// intentionally blank. we have nothing we need to close
 }
 
 // benchmarkResult is a package level variable whose sole purpose is to
