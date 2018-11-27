@@ -24,11 +24,9 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/wrangler"
 
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -36,7 +34,6 @@ import (
 type TabletExecutor struct {
 	wr                   *wrangler.Wrangler
 	tablets              []*topodatapb.Tablet
-	schemaDiffs          []*tabletmanagerdatapb.SchemaChangeResult
 	isClosed             bool
 	allowBigSchemaChange bool
 	keyspace             string
@@ -98,29 +95,13 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 	return nil
 }
 
-func parseDDLs(sqls []string) ([]*sqlparser.DDL, error) {
-	parsedDDLs := make([]*sqlparser.DDL, len(sqls))
-	for i, sql := range sqls {
-		stat, err := sqlparser.Parse(sql)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
-		}
-		ddl, ok := stat.(*sqlparser.DDL)
-		if !ok {
-			return nil, fmt.Errorf("schema change works for DDLs only, but get non DDL statement: %s", sql)
-		}
-		parsedDDLs[i] = ddl
-	}
-	return parsedDDLs, nil
-}
-
 // Validate validates a list of sql statements.
 func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	if exec.isClosed {
 		return fmt.Errorf("executor is closed")
 	}
 
-	parsedDDLs, err := parseDDLs(sqls)
+	parsedDDLs, err := exec.parseDDLs(sqls)
 	if err != nil {
 		return err
 	}
@@ -131,6 +112,25 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 		return nil
 	}
 	return err
+}
+
+func (exec *TabletExecutor) parseDDLs(sqls []string) ([]*sqlparser.DDL, error) {
+	parsedDDLs := make([]*sqlparser.DDL, 0, len(sqls))
+	for _, sql := range sqls {
+		stat, err := sqlparser.Parse(sql)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
+		}
+		ddl, ok := stat.(*sqlparser.DDL)
+		if !ok {
+			if len(exec.tablets) != 1 {
+				return nil, fmt.Errorf("non-ddl statements can only be executed for single shard keyspaces: %s", sql)
+			}
+			continue
+		}
+		parsedDDLs = append(parsedDDLs, ddl)
+	}
+	return parsedDDLs, nil
 }
 
 // a schema change that satisfies any following condition is considered
@@ -172,32 +172,8 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 }
 
 func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []string) error {
-	schemaDiffs, err := exec.wr.TabletManagerClient().PreflightSchema(ctx, exec.tablets[0], sqls)
-	if err != nil {
-		return err
-	}
-
-	parsedDDLs, err := parseDDLs(sqls)
-	if err != nil {
-		return err
-	}
-
-	for i, schemaDiff := range schemaDiffs {
-		diffs := tmutils.DiffSchemaToArray(
-			"BeforeSchema",
-			schemaDiff.BeforeSchema,
-			"AfterSchema",
-			schemaDiff.AfterSchema)
-		if len(diffs) == 0 {
-			if parsedDDLs[i].Action == sqlparser.DropStr && parsedDDLs[i].IfExists {
-				// DROP IF EXISTS on a nonexistent table does not change the schema. It's safe to ignore.
-				continue
-			}
-			return fmt.Errorf("schema change: '%s' does not introduce any table definition change", sqls[i])
-		}
-	}
-	exec.schemaDiffs = schemaDiffs
-	return nil
+	_, err := exec.wr.TabletManagerClient().PreflightSchema(ctx, exec.tablets[0], sqls)
+	return err
 }
 
 // Execute applies schema changes
