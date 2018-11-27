@@ -12,38 +12,40 @@ topology:
         authType: "none"
       keyspaces:
         - name: "messagedb"
-          schema: |-
-            CREATE TABLE messages (
-              page BIGINT(20) UNSIGNED,
-              time_created_ns BIGINT(20) UNSIGNED,
-              message VARCHAR(10000),
-              PRIMARY KEY (page, time_created_ns)
-            ) ENGINE=InnoDB
-          vschema: |-
-            {
-              "sharded": true,
-              "vindexes": {
-                "hash": {
-                  "type": "hash"
-                }
-              },
-              "tables": {
-                "messages": {
-                  "column_vindexes": [
-                    {
-                      "column": "page",
-                      "name": "hash"
-                    }
-                  ]
-                }
-              }
-            }
           shards:
             - name: "0"
               tablets:
                 - type: "replica"
                   vttablet:
                     replicas: 2
+          schema:
+            phase1: |-
+              CREATE TABLE messages (
+                page BIGINT(20) UNSIGNED,
+                time_created_ns BIGINT(20) UNSIGNED,
+                message VARCHAR(10000),
+                PRIMARY KEY (page, time_created_ns)
+              ) ENGINE=InnoDB
+          vschema:
+            phase1: |-
+              {
+                "sharded": true,
+                "vindexes": {
+                  "hash": {
+                    "type": "hash"
+                  }
+                },
+                "tables": {
+                  "messages": {
+                    "column_vindexes": [
+                      {
+                        "column": "page",
+                        "name": "hash"
+                      }
+                    ]
+                  }
+                }
+              }
 
 etcd:
   replicas: 1

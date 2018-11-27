@@ -15,8 +15,9 @@
 
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtctlclient.vitessTag -}}
+{{- $secrets := .secrets | default $defaultVtctlclient.secrets }}
 
-{{- if $keyspace.schema }}
+{{- range $name, $schema := $keyspace.schema }}
 ---
 ###################################
 # ApplySchema Job
@@ -24,7 +25,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ $keyspaceClean }}-apply-schema
+  name: {{ $keyspaceClean }}-apply-schema-{{ $name }}
 spec:
   backoffLimit: 1
   template:
@@ -76,14 +77,14 @@ spec:
             done
 
             vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC ApplySchema -sql "$(cat <<END_OF_COMMAND
-{{ $keyspace.schema | indent 14}}
+{{ $schema | indent 14}}
             END_OF_COMMAND
             )" {{ $keyspace.name }}
       volumes:
-{{ include "user-secret-volumes" (.secrets | default $defaultVtctlclient.secrets) | indent 8 }}
+{{ include "user-secret-volumes" $secrets | indent 8 }}
 {{ end }}
 
-{{- if $keyspace.vschema }}
+{{- range $name, $vschema := $keyspace.vschema }}
 ---
 ###################################
 # ApplyVSchema job
@@ -91,7 +92,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ $keyspaceClean }}-apply-vschema
+  name: {{ $keyspaceClean }}-apply-vschema-{{ $name }}
 spec:
   backoffLimit: 1
   template:
@@ -124,11 +125,11 @@ spec:
             done
 
             vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC ApplyVSchema -vschema "$(cat <<END_OF_COMMAND
-{{ $keyspace.vschema | indent 14 }}
+{{ $vschema | indent 14 }}
             END_OF_COMMAND
             )" {{ $keyspace.name }}
       volumes:
-{{ include "user-secret-volumes" (.secrets | default $defaultVtctlclient.secrets) | indent 8 }}
+{{ include "user-secret-volumes" $secrets | indent 8 }}
 
 {{- end -}}
 {{- end -}}
