@@ -71,10 +71,10 @@ func main() {
 		compareTopos(ctx, fromTS, toTS)
 		return
 	}
-	copy(ctx, fromTS, toTS)
+	copyTopos(ctx, fromTS, toTS)
 }
 
-func copy(ctx context.Context, fromTS, toTS *topo.Server) {
+func copyTopos(ctx context.Context, fromTS, toTS *topo.Server) {
 	if *doKeyspaces {
 		helpers.CopyKeyspaces(ctx, fromTS, toTS)
 	}
