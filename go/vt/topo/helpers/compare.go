@@ -21,181 +21,124 @@ package helpers
 import (
 	"fmt"
 	"reflect"
-	"sync"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/topo"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// CompareKeyspaces will create the keyspaces in the destination topo.
+// CompareKeyspaces will compare the keyspaces in the destination topo.
 func CompareKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) error {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		return fmt.Errorf("GetKeyspace(%v): %v", keyspaces, err)
 	}
 
-	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
 	for _, keyspace := range keyspaces {
-		wg.Add(1)
-		go func(keyspace string) {
-			defer wg.Done()
 
-			fromKs, err := fromTS.GetKeyspace(ctx, keyspace)
-			if err != nil {
-				rec.RecordError(fmt.Errorf("GetKeyspace(%v): %v", keyspace, err))
-				return
-			}
+		fromKs, err := fromTS.GetKeyspace(ctx, keyspace)
+		if err != nil {
+			return fmt.Errorf("GetKeyspace(%v): %v", keyspace, err)
+		}
 
-			toKs, err := toTS.GetKeyspace(ctx, keyspace)
-			if err != nil {
-				rec.RecordError(fmt.Errorf("GetKeyspace(%v): %v", keyspace, err))
-				return
-			}
+		toKs, err := toTS.GetKeyspace(ctx, keyspace)
+		if err != nil {
+			return fmt.Errorf("GetKeyspace(%v): %v", keyspace, err)
+		}
 
-			if !reflect.DeepEqual(fromKs.Keyspace, toKs.Keyspace) {
-				rec.RecordError(fmt.Errorf("Keyspace: %v does not match between from and to topology", keyspace))
-				return
-			}
+		if !reflect.DeepEqual(fromKs.Keyspace, toKs.Keyspace) {
+			return fmt.Errorf("Keyspace: %v does not match between from and to topology", keyspace)
+		}
 
-			fromVs, err := fromTS.GetVSchema(ctx, keyspace)
-			switch {
-			case err == nil:
-				// Nothing to do.
-			case topo.IsErrType(err, topo.NoNode):
-				// Nothing to do.
-			default:
-				rec.RecordError(fmt.Errorf("GetVSchema(%v): %v", keyspace, err))
-				return
-			}
+		fromVs, err := fromTS.GetVSchema(ctx, keyspace)
+		switch {
+		case err == nil:
+			// Nothing to do.
+		case topo.IsErrType(err, topo.NoNode):
+			// Nothing to do.
+		default:
+			return fmt.Errorf("GetVSchema(%v): %v", keyspace, err)
+		}
 
-			toVs, err := toTS.GetVSchema(ctx, keyspace)
-			switch {
-			case err == nil:
-				// Nothing to do.
-			case topo.IsErrType(err, topo.NoNode):
-				// Nothing to do.
-			default:
-				rec.RecordError(fmt.Errorf("GetVSchema(%v): %v", keyspace, err))
-				return
-			}
+		toVs, err := toTS.GetVSchema(ctx, keyspace)
+		switch {
+		case err == nil:
+			// Nothing to do.
+		case topo.IsErrType(err, topo.NoNode):
+			// Nothing to do.
+		default:
+			return fmt.Errorf("GetVSchema(%v): %v", keyspace, err)
+		}
 
-			if !reflect.DeepEqual(fromVs, toVs) {
-				rec.RecordError(fmt.Errorf("Vschema for keyspace: %v does not match between from and to topology", keyspace))
-				return
-			}
-		}(keyspace)
-	}
-	wg.Wait()
-	if rec.HasErrors() {
-		return fmt.Errorf("compareKeyspaces failed: %v", rec.Error())
+		if !reflect.DeepEqual(fromVs, toVs) {
+			return fmt.Errorf("Vschema for keyspace: %v does not match between from and to topology", keyspace)
+		}
 	}
 	return nil
 }
 
-// CompareShards will create the shards in the destination topo.
+// CompareShards will compare the shards in the destination topo.
 func CompareShards(ctx context.Context, fromTS, toTS *topo.Server) error {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		return fmt.Errorf("fromTS.GetKeyspaces: %v", err)
 	}
 
-	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
 	for _, keyspace := range keyspaces {
-		wg.Add(1)
-		go func(keyspace string) {
-			defer wg.Done()
-			shards, err := fromTS.GetShardNames(ctx, keyspace)
+		shards, err := fromTS.GetShardNames(ctx, keyspace)
+		if err != nil {
+			return fmt.Errorf("GetShardNames(%v): %v", keyspace, err)
+		}
+
+		for _, shard := range shards {
+			fromSi, err := fromTS.GetShard(ctx, keyspace, shard)
 			if err != nil {
-				rec.RecordError(fmt.Errorf("GetShardNames(%v): %v", keyspace, err))
-				return
+				return fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err)
+			}
+			toSi, err := toTS.GetShard(ctx, keyspace, shard)
+			if err != nil {
+				return fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err)
 			}
 
-			for _, shard := range shards {
-				wg.Add(1)
-				go func(keyspace, shard string) {
-					defer wg.Done()
-
-					fromSi, err := fromTS.GetShard(ctx, keyspace, shard)
-					if err != nil {
-						rec.RecordError(fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err))
-						return
-					}
-					toSi, err := toTS.GetShard(ctx, keyspace, shard)
-					if err != nil {
-						rec.RecordError(fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err))
-						return
-					}
-
-					if !reflect.DeepEqual(fromSi.Shard, toSi.Shard) {
-						rec.RecordError(fmt.Errorf("Shard %v for keyspace: %v does not match between from and to topology", shard, keyspace))
-						return
-					}
-				}(keyspace, shard)
+			if !reflect.DeepEqual(fromSi.Shard, toSi.Shard) {
+				return fmt.Errorf("Shard %v for keyspace: %v does not match between from and to topology", shard, keyspace)
 			}
-		}(keyspace)
-	}
-	wg.Wait()
-	if rec.HasErrors() {
-		return fmt.Errorf("compareShards failed: %v", rec.Error())
+		}
 	}
 	return nil
 }
 
-// CompareTablets will create the tablets in the destination topo.
+// CompareTablets will compare the tablets in the destination topo.
 func CompareTablets(ctx context.Context, fromTS, toTS *topo.Server) error {
 	cells, err := fromTS.GetKnownCells(ctx)
 	if err != nil {
 		return fmt.Errorf("fromTS.GetKnownCells: %v", err)
 	}
 
-	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
 	for _, cell := range cells {
-		wg.Add(1)
-		go func(cell string) {
-			defer wg.Done()
-			tabletAliases, err := fromTS.GetTabletsByCell(ctx, cell)
-			if err != nil {
-				rec.RecordError(fmt.Errorf("GetTabletsByCell(%v): %v", cell, err))
-			} else {
-				for _, tabletAlias := range tabletAliases {
-					wg.Add(1)
-					go func(tabletAlias *topodatapb.TabletAlias) {
-						defer wg.Done()
+		tabletAliases, err := fromTS.GetTabletsByCell(ctx, cell)
+		if err != nil {
+			return fmt.Errorf("GetTabletsByCell(%v): %v", cell, err)
+		}
+		for _, tabletAlias := range tabletAliases {
 
-						// read the source tablet
-						fromTi, err := fromTS.GetTablet(ctx, tabletAlias)
-						if err != nil {
-							rec.RecordError(fmt.Errorf("GetTablet(%v): %v", tabletAlias, err))
-							return
-						}
-						toTi, err := toTS.GetTablet(ctx, tabletAlias)
-						if err != nil {
-							rec.RecordError(fmt.Errorf("GetTablet(%v): %v", tabletAlias, err))
-							return
-						}
-						if !reflect.DeepEqual(fromTi.Tablet, toTi.Tablet) {
-							rec.RecordError(fmt.Errorf("Tablet %v:  does not match between from and to topology", tabletAlias))
-							return
-						}
-					}(tabletAlias)
-				}
+			// read the source tablet
+			fromTi, err := fromTS.GetTablet(ctx, tabletAlias)
+			if err != nil {
+				return fmt.Errorf("GetTablet(%v): %v", tabletAlias, err)
 			}
-		}(cell)
-	}
-	wg.Wait()
-	if rec.HasErrors() {
-		return fmt.Errorf("compareTablets failed: %v", rec.Error())
+			toTi, err := toTS.GetTablet(ctx, tabletAlias)
+			if err != nil {
+				return fmt.Errorf("GetTablet(%v): %v", tabletAlias, err)
+			}
+			if !reflect.DeepEqual(fromTi.Tablet, toTi.Tablet) {
+				return fmt.Errorf("Tablet %v:  does not match between from and to topology", tabletAlias)
+			}
+		}
 	}
 	return nil
 }
 
-// CompareShardReplications will create the ShardReplication objects in
+// CompareShardReplications will compare the ShardReplication objects in
 // the destination topo.
 func CompareShardReplications(ctx context.Context, fromTS, toTS *topo.Server) error {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
@@ -203,59 +146,38 @@ func CompareShardReplications(ctx context.Context, fromTS, toTS *topo.Server) er
 		return fmt.Errorf("fromTS.GetKeyspaces: %v", err)
 	}
 
-	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
 	for _, keyspace := range keyspaces {
-		wg.Add(1)
-		go func(keyspace string) {
-			defer wg.Done()
-			shards, err := fromTS.GetShardNames(ctx, keyspace)
+		shards, err := fromTS.GetShardNames(ctx, keyspace)
+		if err != nil {
+			return fmt.Errorf("GetShardNames(%v): %v", keyspace, err)
+		}
+
+		for _, shard := range shards {
+
+			// read the source shard to get the cells
+			si, err := fromTS.GetShard(ctx, keyspace, shard)
 			if err != nil {
-				rec.RecordError(fmt.Errorf("GetShardNames(%v): %v", keyspace, err))
-				return
+				return fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err)
 			}
 
-			for _, shard := range shards {
-				wg.Add(1)
-				go func(keyspace, shard string) {
-					defer wg.Done()
-
-					// read the source shard to get the cells
-					si, err := fromTS.GetShard(ctx, keyspace, shard)
-					if err != nil {
-						rec.RecordError(fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err))
-						return
-					}
-
-					for _, cell := range si.Shard.Cells {
-						fromSRi, err := fromTS.GetShardReplication(ctx, cell, keyspace, shard)
-						if err != nil {
-							rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v): %v", cell, keyspace, shard, err))
-							continue
-						}
-						toSRi, err := toTS.GetShardReplication(ctx, cell, keyspace, shard)
-						if err != nil {
-							rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v): %v", cell, keyspace, shard, err))
-							continue
-						}
-						if !reflect.DeepEqual(fromSRi.ShardReplication, toSRi.ShardReplication) {
-							rec.RecordError(
-								fmt.Errorf(
-									"Shard Replication in cell %v, keyspace %v, shard %v:  does not match between from and to topology",
-									cell,
-									keyspace,
-									shard),
-							)
-							return
-						}
-					}
-				}(keyspace, shard)
+			for _, cell := range si.Shard.Cells {
+				fromSRi, err := fromTS.GetShardReplication(ctx, cell, keyspace, shard)
+				if err != nil {
+					return fmt.Errorf("GetShardReplication(%v, %v, %v): %v", cell, keyspace, shard, err)
+				}
+				toSRi, err := toTS.GetShardReplication(ctx, cell, keyspace, shard)
+				if err != nil {
+					return fmt.Errorf("GetShardReplication(%v, %v, %v): %v", cell, keyspace, shard, err)
+				}
+				if !reflect.DeepEqual(fromSRi.ShardReplication, toSRi.ShardReplication) {
+					return fmt.Errorf(
+						"Shard Replication in cell %v, keyspace %v, shard %v:  does not match between from and to topology",
+						cell,
+						keyspace,
+						shard)
+				}
 			}
-		}(keyspace)
-	}
-	wg.Wait()
-	if rec.HasErrors() {
-		return fmt.Errorf("compareShardReplication failed: %v", rec.Error())
+		}
 	}
 	return nil
 }
