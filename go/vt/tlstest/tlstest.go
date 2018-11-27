@@ -38,6 +38,7 @@ const (
  default_keyfile        = keyfile.pem
  distinguished_name     = req_distinguished_name
  attributes             = req_attributes
+ x509_extensions       = req_ext
  prompt                 = no
  output_password        = mypass
 [ req_distinguished_name ]
@@ -50,6 +51,11 @@ const (
  emailAddress           = test@email.address
 [ req_attributes ]
  challengePassword      = A challenge password
+[ req_ext ]
+ basicConstraints       = CA:TRUE
+ subjectAltName         = @alternate_names
+[ alternate_names ]
+ DNS.1                  = localhost
 `
 
 	certConfig = `
@@ -58,7 +64,7 @@ const (
  default_keyfile        = keyfile.pem
  distinguished_name     = req_distinguished_name
  attributes             = req_attributes
- req_extenstions        = req_ext
+ req_extensions        = req_ext
  prompt                 = no
  output_password        = mypass
 [ req_distinguished_name ]
@@ -71,11 +77,12 @@ const (
  emailAddress           = test@email.address
 [ req_attributes ]
  challengePassword      = A challenge password
-[ req_ext ] 
+[ req_ext ]
+ basicConstraints       = CA:FALSE
  subjectAltName         = @alternate_names
 [ alternate_names ]
  DNS.1                  = localhost
- DNS.2                  = %s
+ DNS.2                  = 127.0.0.1
 `
 )
 
@@ -122,7 +129,7 @@ func CreateSignedCert(root, parent, serial, name, commonName string) {
 	req := path.Join(root, name+"-req.pem")
 
 	config := path.Join(root, name+".config")
-	if err := ioutil.WriteFile(config, []byte(fmt.Sprintf(certConfig, commonName, commonName)), os.ModePerm); err != nil {
+	if err := ioutil.WriteFile(config, []byte(fmt.Sprintf(certConfig, commonName)), os.ModePerm); err != nil {
 		log.Fatalf("cannot write file %v: %v", config, err)
 	}
 	openssl("req", "-newkey", "rsa:2048", "-days", "3600", "-nodes",
