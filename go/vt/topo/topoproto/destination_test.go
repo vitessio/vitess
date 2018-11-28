@@ -46,6 +46,11 @@ func TestParseDestination(t *testing.T) {
 		tabletType:   topodatapb.TabletType_MASTER,
 		dest:         key.DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{}},
 	}, {
+		targetString: "ks[deadbeef]@master",
+		keyspace:     "ks",
+		tabletType:   topodatapb.TabletType_MASTER,
+		dest:         key.DestinationKeyspaceID([]byte("\xde\xad\xbe\xef")),
+	}, {
 		targetString: "ks[10-]@master",
 		keyspace:     "ks",
 		tabletType:   topodatapb.TabletType_MASTER,
@@ -106,6 +111,12 @@ func TestParseDestination(t *testing.T) {
 
 	_, _, _, err = ParseDestination("ks[--60]", topodatapb.TabletType_MASTER)
 	want = "malformed spec: MinKey/MaxKey cannot be in the middle of the spec: \"--60\""
+	if err == nil || err.Error() != want {
+		t.Errorf("executorExec error: %v, want %s", err, want)
+	}
+
+	_, _, _, err = ParseDestination("ks[qrnqorrs]@master", topodatapb.TabletType_MASTER)
+	want = "expected valid hex in keyspace id qrnqorrs"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec error: %v, want %s", err, want)
 	}
