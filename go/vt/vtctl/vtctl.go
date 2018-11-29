@@ -2140,17 +2140,19 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 
 	var vs *vschemapb.Keyspace
 	var err error
-	if *sql != "" || *sqlFile != "" {
-		//
-		// Handle the case where vschema modification is supplied as a sql statement
-		//
-		if *sql != "" && *sqlFile != "" {
-			return fmt.Errorf("only one of the sql, sql_file, vschema, or vschema_file flags may be specified when calling the ApplyVSchema command")
-		}
-		if *vschema != "" || *vschemaFile != "" {
-			return fmt.Errorf("only one of the sql, sql_file, vschema, or vschema_file flags may be specified when calling the ApplyVSchema command")
-		}
 
+	sqlMode := (*sql != "") != (*sqlFile != "")
+	jsonMode := (*vschema != "") != (*vschemaFile != "")
+
+	if sqlMode && jsonMode {
+		return fmt.Errorf("only one of the sql, sql_file, vschema, or vschema_file flags may be specified when calling the ApplyVSchema command")
+	}
+
+	if !sqlMode && !jsonMode {
+		return fmt.Errorf("one of the sql, sql_file, vschema, or vschema_file flags must be specified when calling the ApplyVSchema command")
+	}
+
+	if sqlMode {
 		if *sqlFile != "" {
 			sqlBytes, err := ioutil.ReadFile(*sqlFile)
 			if err != nil {
@@ -2165,7 +2167,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		}
 		ddl, ok := stmt.(*sqlparser.DDL)
 		if !ok {
-			return fmt.Errorf("error parsing: vschema statement `%s`: not a ddl statement", *sql)
+			return fmt.Errorf("error parsing vschema statement `%s`: not a ddl statement", *sql)
 		}
 
 		vs, err = wr.TopoServer().GetVSchema(ctx, keyspace)
@@ -2182,17 +2184,8 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 			return err
 		}
 
-	} else if *vschema != "" || *vschemaFile != "" {
-		//
-		// Handle the case where vschema modification is supplied as a json document
-		//
-		if *vschema != "" && *vschemaFile != "" {
-			return fmt.Errorf("only one of the sql, sql_file, vschema, or vschema_file flags may be specified when calling the ApplyVSchema command")
-		}
-		if *sql != "" || *sqlFile != "" {
-			return fmt.Errorf("only one of the sql, sql_file, vschema, or vschema_file flags may be specified when calling the ApplyVSchema command")
-		}
-
+	} else {
+		// json mode
 		var schema []byte
 		if *vschemaFile != "" {
 			var err error
@@ -2204,16 +2197,11 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 			schema = []byte(*vschema)
 		}
 
-		// Create a local schema object to unmarshal into
-		var vsLocal vschemapb.Keyspace
-		vs = &vsLocal
-
+		vs = &vschemapb.Keyspace{}
 		err := json2.Unmarshal(schema, vs)
 		if err != nil {
 			return err
 		}
-	} else {
-		return fmt.Errorf("one of the sql, sql_file, vschema, or vschema_file flags may be specified when calling the ApplyVSchema command")
 	}
 
 	b, err := json2.MarshalIndentPB(vs, "  ")
