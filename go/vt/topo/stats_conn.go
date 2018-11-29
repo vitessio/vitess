@@ -25,16 +25,12 @@ var _ Conn = (*StatsConn)(nil)
 
 var (
 	topoStatsConnTimings = stats.NewMultiTimings(
-		"TopologyConn",
-		"TopologyConn timings",
-		[]string{"Operation", "Cell"})
-	topoStatsConnCounts = stats.NewCountersWithMultiLabels(
-		"TopologyConnCounts",
-		"Operation counts to topology cells",
+		"TopologyConnOperations",
+		"TopologyConnOperations timings",
 		[]string{"Operation", "Cell"})
 
 	topoStatsConnErrors = stats.NewCountersWithMultiLabels(
-		"TopologyConnErrors",
+		"TopologyErrors",
 		"Operation errors to topology cells",
 		[]string{"Operation", "Cell"})
 )
@@ -63,7 +59,6 @@ func (st *StatsConn) ListDir(ctx context.Context, dirPath string, full bool) ([]
 		topoStatsConnErrors.Add(statsKey, int64(1))
 		return res, err
 	}
-	topoStatsConnCounts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -77,7 +72,6 @@ func (st *StatsConn) Create(ctx context.Context, filePath string, contents []byt
 		topoStatsConnErrors.Add(statsKey, int64(1))
 		return res, err
 	}
-	topoStatsConnCounts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -91,7 +85,6 @@ func (st *StatsConn) Update(ctx context.Context, filePath string, contents []byt
 		topoStatsConnErrors.Add(statsKey, int64(1))
 		return res, err
 	}
-	topoStatsConnCounts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -105,7 +98,6 @@ func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version,
 		topoStatsConnErrors.Add(statsKey, int64(1))
 		return bytes, version, err
 	}
-	topoStatsConnCounts.Add(statsKey, int64(1))
 	return bytes, version, err
 }
 
@@ -119,7 +111,6 @@ func (st *StatsConn) Delete(ctx context.Context, filePath string, version Versio
 		topoStatsConnErrors.Add(statsKey, int64(1))
 		return err
 	}
-	topoStatsConnCounts.Add(statsKey, int64(1))
 	return err
 }
 
@@ -133,7 +124,6 @@ func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDe
 		topoStatsConnErrors.Add(statsKey, int64(1))
 		return res, err
 	}
-	topoStatsConnCounts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -142,7 +132,6 @@ func (st *StatsConn) Watch(ctx context.Context, filePath string) (current *Watch
 	startTime := time.Now()
 	statsKey := []string{"Watch", st.cell}
 	defer topoStatsConnTimings.Record(statsKey, startTime)
-	topoStatsConnCounts.Add(statsKey, int64(1))
 	return st.conn.Watch(ctx, filePath)
 }
 
@@ -156,7 +145,6 @@ func (st *StatsConn) NewMasterParticipation(name, id string) (MasterParticipatio
 		topoStatsConnErrors.Add(statsKey, int64(1))
 		return res, err
 	}
-	topoStatsConnCounts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -165,6 +153,5 @@ func (st *StatsConn) Close() {
 	startTime := time.Now()
 	statsKey := []string{"Close", st.cell}
 	defer topoStatsConnTimings.Record(statsKey, startTime)
-	topoStatsConnCounts.Add(statsKey, int64(1))
 	st.conn.Close()
 }
