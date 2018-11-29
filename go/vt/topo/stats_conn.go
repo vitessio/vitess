@@ -20,19 +20,32 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/stats"
 )
 
 var _ Conn = (*StatsConn)(nil)
 
+var (
+	timings = stats.NewMultiTimings(
+		"TopologyConn",
+		"TopologyConn timings",
+		[]string{"Operation", "Cell"})
+	counts = stats.NewCountersWithMultiLabels(
+		"TopologyConnCounts",
+		"Operation counts to topology cells",
+		[]string{"Operation", "Cell"})
+
+	errors = stats.NewCountersWithMultiLabels(
+		"TopologyConnErrors",
+		"Operation errors to topology cells",
+		[]string{"Operation", "Cell"})
+)
+
 // The StatsConn is a wrapper for a Conn that emits stats for every operation
 type StatsConn struct {
 	cell string
 	conn Conn
-
-	timings *stats.MultiTimings
-	counts  *stats.CountersWithMultiLabels
-	errors  *stats.CountersWithMultiLabels
 }
 
 // NewStatsConn returns a StatsConn
@@ -40,18 +53,6 @@ func NewStatsConn(cell string, conn Conn) *StatsConn {
 	return &StatsConn{
 		cell: cell,
 		conn: conn,
-		timings: stats.NewMultiTimings(
-			"TopologyConn",
-			"TopologyConn timings",
-			[]string{"Operation", "Cell"}),
-		counts: stats.NewCountersWithMultiLabels(
-			"TopologyConnCounts",
-			"Operation counts to topology cells",
-			[]string{"Operation", "Cell"}),
-		errors: stats.NewCountersWithMultiLabels(
-			"TopologyConnErrors",
-			"Operation errors to topology cells",
-			[]string{"Operation", "Cell"}),
 	}
 }
 
@@ -59,13 +60,13 @@ func NewStatsConn(cell string, conn Conn) *StatsConn {
 func (st *StatsConn) ListDir(ctx context.Context, dirPath string, full bool) ([]DirEntry, error) {
 	startTime := time.Now()
 	statsKey := []string{"ListDir", st.cell}
-	defer st.timings.Record(statsKey, startTime)
-	res, err := st.ListDir(ctx, dirPath, full)
+	defer timings.Record(statsKey, startTime)
+	res, err := st.conn.ListDir(ctx, dirPath, full)
 	if err != nil {
-		st.errors.Add(statsKey, int64(1))
+		errors.Add(statsKey, int64(1))
 		return res, err
 	}
-	st.counts.Add(statsKey, int64(1))
+	counts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -73,13 +74,13 @@ func (st *StatsConn) ListDir(ctx context.Context, dirPath string, full bool) ([]
 func (st *StatsConn) Create(ctx context.Context, filePath string, contents []byte) (Version, error) {
 	startTime := time.Now()
 	statsKey := []string{"Create", st.cell}
-	defer st.timings.Record(statsKey, startTime)
-	res, err := st.Create(ctx, filePath, contents)
+	defer timings.Record(statsKey, startTime)
+	res, err := st.conn.Create(ctx, filePath, contents)
 	if err != nil {
-		st.errors.Add(statsKey, int64(1))
+		errors.Add(statsKey, int64(1))
 		return res, err
 	}
-	st.counts.Add(statsKey, int64(1))
+	counts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -87,13 +88,13 @@ func (st *StatsConn) Create(ctx context.Context, filePath string, contents []byt
 func (st *StatsConn) Update(ctx context.Context, filePath string, contents []byte, version Version) (Version, error) {
 	startTime := time.Now()
 	statsKey := []string{"Update", st.cell}
-	defer st.timings.Record(statsKey, startTime)
-	res, err := st.Update(ctx, filePath, contents, version)
+	defer timings.Record(statsKey, startTime)
+	res, err := st.conn.Update(ctx, filePath, contents, version)
 	if err != nil {
-		st.errors.Add(statsKey, int64(1))
+		errors.Add(statsKey, int64(1))
 		return res, err
 	}
-	st.counts.Add(statsKey, int64(1))
+	counts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -101,13 +102,13 @@ func (st *StatsConn) Update(ctx context.Context, filePath string, contents []byt
 func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version, error) {
 	startTime := time.Now()
 	statsKey := []string{"Get", st.cell}
-	defer st.timings.Record(statsKey, startTime)
-	bytes, version, err := st.Get(ctx, filePath)
+	defer timings.Record(statsKey, startTime)
+	bytes, version, err := st.conn.Get(ctx, filePath)
 	if err != nil {
-		st.errors.Add(statsKey, int64(1))
+		errors.Add(statsKey, int64(1))
 		return bytes, version, err
 	}
-	st.counts.Add(statsKey, int64(1))
+	counts.Add(statsKey, int64(1))
 	return bytes, version, err
 }
 
@@ -115,13 +116,13 @@ func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version,
 func (st *StatsConn) Delete(ctx context.Context, filePath string, version Version) error {
 	startTime := time.Now()
 	statsKey := []string{"Delete", st.cell}
-	defer st.timings.Record(statsKey, startTime)
-	err := st.Delete(ctx, filePath, version)
+	defer timings.Record(statsKey, startTime)
+	err := st.conn.Delete(ctx, filePath, version)
 	if err != nil {
-		st.errors.Add(statsKey, int64(1))
+		errors.Add(statsKey, int64(1))
 		return err
 	}
-	st.counts.Add(statsKey, int64(1))
+	counts.Add(statsKey, int64(1))
 	return err
 }
 
@@ -129,13 +130,13 @@ func (st *StatsConn) Delete(ctx context.Context, filePath string, version Versio
 func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
 	startTime := time.Now()
 	statsKey := []string{"Lock", st.cell}
-	defer st.timings.Record(statsKey, startTime)
-	res, err := st.Lock(ctx, dirPath, contents)
+	defer timings.Record(statsKey, startTime)
+	res, err := st.conn.Lock(ctx, dirPath, contents)
 	if err != nil {
-		st.errors.Add(statsKey, int64(1))
+		errors.Add(statsKey, int64(1))
 		return res, err
 	}
-	st.counts.Add(statsKey, int64(1))
+	counts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -143,22 +144,22 @@ func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDe
 func (st *StatsConn) Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc) {
 	startTime := time.Now()
 	statsKey := []string{"Watch", st.cell}
-	defer st.timings.Record(statsKey, startTime)
-	st.counts.Add(statsKey, int64(1))
-	return st.Watch(ctx, filePath)
+	defer timings.Record(statsKey, startTime)
+	counts.Add(statsKey, int64(1))
+	return st.conn.Watch(ctx, filePath)
 }
 
 // NewMasterParticipation is part of the Conn interface
 func (st *StatsConn) NewMasterParticipation(name, id string) (MasterParticipation, error) {
 	startTime := time.Now()
 	statsKey := []string{"NewMasterParticipation", st.cell}
-	defer st.timings.Record(statsKey, startTime)
-	res, err := st.NewMasterParticipation(name, id)
+	defer timings.Record(statsKey, startTime)
+	res, err := st.conn.NewMasterParticipation(name, id)
 	if err != nil {
-		st.errors.Add(statsKey, int64(1))
+		errors.Add(statsKey, int64(1))
 		return res, err
 	}
-	st.counts.Add(statsKey, int64(1))
+	counts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -166,7 +167,7 @@ func (st *StatsConn) NewMasterParticipation(name, id string) (MasterParticipatio
 func (st *StatsConn) Close() {
 	startTime := time.Now()
 	statsKey := []string{"Close", st.cell}
-	defer st.timings.Record(statsKey, startTime)
-	st.counts.Add(statsKey, int64(1))
-	st.Close()
+	defer timings.Record(statsKey, startTime)
+	counts.Add(statsKey, int64(1))
+	st.conn.Close()
 }
