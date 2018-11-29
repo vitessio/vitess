@@ -27,16 +27,16 @@ import (
 var _ Conn = (*StatsConn)(nil)
 
 var (
-	timings = stats.NewMultiTimings(
+	topoStatsConnTimings = stats.NewMultiTimings(
 		"TopologyConn",
 		"TopologyConn timings",
 		[]string{"Operation", "Cell"})
-	counts = stats.NewCountersWithMultiLabels(
+	topoStatsConnCounts = stats.NewCountersWithMultiLabels(
 		"TopologyConnCounts",
 		"Operation counts to topology cells",
 		[]string{"Operation", "Cell"})
 
-	errors = stats.NewCountersWithMultiLabels(
+	topoStatsConnErrors = stats.NewCountersWithMultiLabels(
 		"TopologyConnErrors",
 		"Operation errors to topology cells",
 		[]string{"Operation", "Cell"})
@@ -60,13 +60,13 @@ func NewStatsConn(cell string, conn Conn) *StatsConn {
 func (st *StatsConn) ListDir(ctx context.Context, dirPath string, full bool) ([]DirEntry, error) {
 	startTime := time.Now()
 	statsKey := []string{"ListDir", st.cell}
-	defer timings.Record(statsKey, startTime)
+	defer topoStatsConnTimings.Record(statsKey, startTime)
 	res, err := st.conn.ListDir(ctx, dirPath, full)
 	if err != nil {
-		errors.Add(statsKey, int64(1))
+		topoStatsConnErrors.Add(statsKey, int64(1))
 		return res, err
 	}
-	counts.Add(statsKey, int64(1))
+	topoStatsConnCounts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -74,13 +74,13 @@ func (st *StatsConn) ListDir(ctx context.Context, dirPath string, full bool) ([]
 func (st *StatsConn) Create(ctx context.Context, filePath string, contents []byte) (Version, error) {
 	startTime := time.Now()
 	statsKey := []string{"Create", st.cell}
-	defer timings.Record(statsKey, startTime)
+	defer topoStatsConnTimings.Record(statsKey, startTime)
 	res, err := st.conn.Create(ctx, filePath, contents)
 	if err != nil {
-		errors.Add(statsKey, int64(1))
+		topoStatsConnErrors.Add(statsKey, int64(1))
 		return res, err
 	}
-	counts.Add(statsKey, int64(1))
+	topoStatsConnCounts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -88,13 +88,13 @@ func (st *StatsConn) Create(ctx context.Context, filePath string, contents []byt
 func (st *StatsConn) Update(ctx context.Context, filePath string, contents []byte, version Version) (Version, error) {
 	startTime := time.Now()
 	statsKey := []string{"Update", st.cell}
-	defer timings.Record(statsKey, startTime)
+	defer topoStatsConnTimings.Record(statsKey, startTime)
 	res, err := st.conn.Update(ctx, filePath, contents, version)
 	if err != nil {
-		errors.Add(statsKey, int64(1))
+		topoStatsConnErrors.Add(statsKey, int64(1))
 		return res, err
 	}
-	counts.Add(statsKey, int64(1))
+	topoStatsConnCounts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -102,13 +102,13 @@ func (st *StatsConn) Update(ctx context.Context, filePath string, contents []byt
 func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version, error) {
 	startTime := time.Now()
 	statsKey := []string{"Get", st.cell}
-	defer timings.Record(statsKey, startTime)
+	defer topoStatsConnTimings.Record(statsKey, startTime)
 	bytes, version, err := st.conn.Get(ctx, filePath)
 	if err != nil {
-		errors.Add(statsKey, int64(1))
+		topoStatsConnErrors.Add(statsKey, int64(1))
 		return bytes, version, err
 	}
-	counts.Add(statsKey, int64(1))
+	topoStatsConnCounts.Add(statsKey, int64(1))
 	return bytes, version, err
 }
 
@@ -116,13 +116,13 @@ func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version,
 func (st *StatsConn) Delete(ctx context.Context, filePath string, version Version) error {
 	startTime := time.Now()
 	statsKey := []string{"Delete", st.cell}
-	defer timings.Record(statsKey, startTime)
+	defer topoStatsConnTimings.Record(statsKey, startTime)
 	err := st.conn.Delete(ctx, filePath, version)
 	if err != nil {
-		errors.Add(statsKey, int64(1))
+		topoStatsConnErrors.Add(statsKey, int64(1))
 		return err
 	}
-	counts.Add(statsKey, int64(1))
+	topoStatsConnCounts.Add(statsKey, int64(1))
 	return err
 }
 
@@ -130,13 +130,13 @@ func (st *StatsConn) Delete(ctx context.Context, filePath string, version Versio
 func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
 	startTime := time.Now()
 	statsKey := []string{"Lock", st.cell}
-	defer timings.Record(statsKey, startTime)
+	defer topoStatsConnTimings.Record(statsKey, startTime)
 	res, err := st.conn.Lock(ctx, dirPath, contents)
 	if err != nil {
-		errors.Add(statsKey, int64(1))
+		topoStatsConnErrors.Add(statsKey, int64(1))
 		return res, err
 	}
-	counts.Add(statsKey, int64(1))
+	topoStatsConnCounts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -144,8 +144,8 @@ func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDe
 func (st *StatsConn) Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc) {
 	startTime := time.Now()
 	statsKey := []string{"Watch", st.cell}
-	defer timings.Record(statsKey, startTime)
-	counts.Add(statsKey, int64(1))
+	defer topoStatsConnTimings.Record(statsKey, startTime)
+	topoStatsConnCounts.Add(statsKey, int64(1))
 	return st.conn.Watch(ctx, filePath)
 }
 
@@ -153,13 +153,13 @@ func (st *StatsConn) Watch(ctx context.Context, filePath string) (current *Watch
 func (st *StatsConn) NewMasterParticipation(name, id string) (MasterParticipation, error) {
 	startTime := time.Now()
 	statsKey := []string{"NewMasterParticipation", st.cell}
-	defer timings.Record(statsKey, startTime)
+	defer topoStatsConnTimings.Record(statsKey, startTime)
 	res, err := st.conn.NewMasterParticipation(name, id)
 	if err != nil {
-		errors.Add(statsKey, int64(1))
+		topoStatsConnErrors.Add(statsKey, int64(1))
 		return res, err
 	}
-	counts.Add(statsKey, int64(1))
+	topoStatsConnCounts.Add(statsKey, int64(1))
 	return res, err
 }
 
@@ -167,7 +167,7 @@ func (st *StatsConn) NewMasterParticipation(name, id string) (MasterParticipatio
 func (st *StatsConn) Close() {
 	startTime := time.Now()
 	statsKey := []string{"Close", st.cell}
-	defer timings.Record(statsKey, startTime)
-	counts.Add(statsKey, int64(1))
+	defer topoStatsConnTimings.Record(statsKey, startTime)
+	topoStatsConnCounts.Add(statsKey, int64(1))
 	st.conn.Close()
 }

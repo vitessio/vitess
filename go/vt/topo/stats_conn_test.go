@@ -106,18 +106,18 @@ func TestStatsConnTopoListDir(t *testing.T) {
 	ctx := context.Background()
 
 	statsConn.ListDir(ctx, "", true)
-	timningCounts := timings.Counts()["ListDir.global"]
+	timningCounts := topoStatsConnTimings.Counts()["ListDir.global"]
 	if got, want := timningCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
-	counts := counts.Counts()["ListDir.global"]
+	counts := topoStatsConnCounts.Counts()["ListDir.global"]
 	if got, want := counts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
 	// error if zero before getting an error
-	errorCount := errors.Counts()["ListDir.global"]
+	errorCount := topoStatsConnErrors.Counts()["ListDir.global"]
 	if got, want := errorCount, int64(0); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -125,7 +125,7 @@ func TestStatsConnTopoListDir(t *testing.T) {
 	statsConn.ListDir(ctx, "error", true)
 
 	// error stats gets emitted
-	errorCount = errors.Counts()["ListDir.global"]
+	errorCount = topoStatsConnErrors.Counts()["ListDir.global"]
 	if got, want := errorCount, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -138,18 +138,18 @@ func TestStatsConnTopoCreate(t *testing.T) {
 	ctx := context.Background()
 
 	statsConn.Create(ctx, "", []byte{})
-	timningCounts := timings.Counts()["Create.global"]
+	timningCounts := topoStatsConnTimings.Counts()["Create.global"]
 	if got, want := timningCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
-	counts := counts.Counts()["Create.global"]
+	counts := topoStatsConnCounts.Counts()["Create.global"]
 	if got, want := counts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
 	// error if zero before getting an error
-	errorCount := errors.Counts()["Create.global"]
+	errorCount := topoStatsConnErrors.Counts()["Create.global"]
 	if got, want := errorCount, int64(0); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -157,7 +157,7 @@ func TestStatsConnTopoCreate(t *testing.T) {
 	statsConn.Create(ctx, "error", []byte{})
 
 	// error stats gets emitted
-	errorCount = errors.Counts()["Create.global"]
+	errorCount = topoStatsConnErrors.Counts()["Create.global"]
 	if got, want := errorCount, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -170,18 +170,18 @@ func TestStatsConnTopoUpdate(t *testing.T) {
 	ctx := context.Background()
 
 	statsConn.Update(ctx, "", []byte{}, conn.v)
-	timningCounts := timings.Counts()["Update.global"]
+	timningCounts := topoStatsConnTimings.Counts()["Update.global"]
 	if got, want := timningCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
-	counts := counts.Counts()["Update.global"]
+	counts := topoStatsConnCounts.Counts()["Update.global"]
 	if got, want := counts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
 	// error if zero before getting an error
-	errorCount := errors.Counts()["Update.global"]
+	errorCount := topoStatsConnErrors.Counts()["Update.global"]
 	if got, want := errorCount, int64(0); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -189,7 +189,7 @@ func TestStatsConnTopoUpdate(t *testing.T) {
 	statsConn.Update(ctx, "error", []byte{}, conn.v)
 
 	// error stats gets emitted
-	errorCount = errors.Counts()["Update.global"]
+	errorCount = topoStatsConnErrors.Counts()["Update.global"]
 	if got, want := errorCount, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -202,18 +202,18 @@ func TestStatsConnTopoGet(t *testing.T) {
 	ctx := context.Background()
 
 	statsConn.Get(ctx, "")
-	timningCounts := timings.Counts()["Get.global"]
+	timningCounts := topoStatsConnTimings.Counts()["Get.global"]
 	if got, want := timningCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
-	counts := counts.Counts()["Get.global"]
+	counts := topoStatsConnCounts.Counts()["Get.global"]
 	if got, want := counts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
 	// error if zero before getting an error
-	errorCount := errors.Counts()["Get.global"]
+	errorCount := topoStatsConnErrors.Counts()["Get.global"]
 	if got, want := errorCount, int64(0); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -221,7 +221,7 @@ func TestStatsConnTopoGet(t *testing.T) {
 	statsConn.Get(ctx, "error")
 
 	// error stats gets emitted
-	errorCount = errors.Counts()["Get.global"]
+	errorCount = topoStatsConnErrors.Counts()["Get.global"]
 	if got, want := errorCount, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -234,18 +234,18 @@ func TestStatsConnTopoDelete(t *testing.T) {
 	ctx := context.Background()
 
 	statsConn.Delete(ctx, "", conn.v)
-	timningCounts := timings.Counts()["Delete.global"]
+	timningCounts := topoStatsConnTimings.Counts()["Delete.global"]
 	if got, want := timningCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
-	counts := counts.Counts()["Delete.global"]
+	counts := topoStatsConnCounts.Counts()["Delete.global"]
 	if got, want := counts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
 	// error if zero before getting an error
-	errorCount := errors.Counts()["Delete.global"]
+	errorCount := topoStatsConnErrors.Counts()["Delete.global"]
 	if got, want := errorCount, int64(0); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -253,7 +253,7 @@ func TestStatsConnTopoDelete(t *testing.T) {
 	statsConn.Delete(ctx, "error", conn.v)
 
 	// error stats gets emitted
-	errorCount = errors.Counts()["Delete.global"]
+	errorCount = topoStatsConnErrors.Counts()["Delete.global"]
 	if got, want := errorCount, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -266,18 +266,18 @@ func TestStatsConnTopoLock(t *testing.T) {
 	ctx := context.Background()
 
 	statsConn.Lock(ctx, "", "")
-	timningCounts := timings.Counts()["Lock.global"]
+	timningCounts := topoStatsConnTimings.Counts()["Lock.global"]
 	if got, want := timningCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
-	counts := counts.Counts()["Lock.global"]
+	counts := topoStatsConnCounts.Counts()["Lock.global"]
 	if got, want := counts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
 	// error if zero before getting an error
-	errorCount := errors.Counts()["Lock.global"]
+	errorCount := topoStatsConnErrors.Counts()["Lock.global"]
 	if got, want := errorCount, int64(0); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -285,7 +285,7 @@ func TestStatsConnTopoLock(t *testing.T) {
 	statsConn.Lock(ctx, "error", "")
 
 	// error stats gets emitted
-	errorCount = errors.Counts()["Lock.global"]
+	errorCount = topoStatsConnErrors.Counts()["Lock.global"]
 	if got, want := errorCount, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -298,12 +298,12 @@ func TestStatsConnTopoWatch(t *testing.T) {
 	ctx := context.Background()
 
 	statsConn.Watch(ctx, "")
-	timningCounts := timings.Counts()["Watch.global"]
+	timningCounts := topoStatsConnTimings.Counts()["Watch.global"]
 	if got, want := timningCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
-	counts := counts.Counts()["Watch.global"]
+	counts := topoStatsConnCounts.Counts()["Watch.global"]
 	if got, want := counts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -315,18 +315,18 @@ func TestStatsConnTopoNewMasterParticipation(t *testing.T) {
 	statsConn := NewStatsConn("global", conn)
 
 	statsConn.NewMasterParticipation("", "")
-	timningCounts := timings.Counts()["NewMasterParticipation.global"]
+	timningCounts := topoStatsConnTimings.Counts()["NewMasterParticipation.global"]
 	if got, want := timningCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
-	counts := counts.Counts()["NewMasterParticipation.global"]
+	counts := topoStatsConnCounts.Counts()["NewMasterParticipation.global"]
 	if got, want := counts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
 	// error if zero before getting an error
-	errorCount := errors.Counts()["NewMasterParticipation.global"]
+	errorCount := topoStatsConnErrors.Counts()["NewMasterParticipation.global"]
 	if got, want := errorCount, int64(0); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -334,7 +334,7 @@ func TestStatsConnTopoNewMasterParticipation(t *testing.T) {
 	statsConn.NewMasterParticipation("error", "")
 
 	// error stats gets emitted
-	errorCount = errors.Counts()["NewMasterParticipation.global"]
+	errorCount = topoStatsConnErrors.Counts()["NewMasterParticipation.global"]
 	if got, want := errorCount, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -346,12 +346,12 @@ func TestStatsConnTopoClose(t *testing.T) {
 	statsConn := NewStatsConn("global", conn)
 
 	statsConn.Close()
-	timningCounts := timings.Counts()["Close.global"]
+	timningCounts := topoStatsConnTimings.Counts()["Close.global"]
 	if got, want := timningCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
 
-	counts := counts.Counts()["Close.global"]
+	counts := topoStatsConnCounts.Counts()["Close.global"]
 	if got, want := counts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
