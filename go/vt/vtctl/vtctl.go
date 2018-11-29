@@ -2125,7 +2125,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	vschemaFile := subFlags.String("vschema_file", "", "Identifies the VTGate routing schema file")
 	sql := subFlags.String("sql", "", "A vschema ddl SQL statement (e.g. `add vindex`, `alter table t add vindex hash(id)`, etc)")
 	sqlFile := subFlags.String("sql_file", "", "A vschema ddl SQL statement (e.g. `add vindex`, `alter table t add vindex hash(id)`, etc)")
-	dryRun := subFlags.Bool("dry_run", false, "If set, do not save the altered vschema, simply echo to console.")
+	dryRun := subFlags.Bool("dry-run", false, "If set, do not save the altered vschema, simply echo to console.")
 	skipRebuild := subFlags.Bool("skip_rebuild", false, "If set, do no rebuild the SrvSchema objects.")
 	var cells flagutil.StringListValue
 	subFlags.Var(&cells, "cells", "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
