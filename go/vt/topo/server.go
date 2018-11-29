@@ -48,6 +48,7 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -150,6 +151,9 @@ var (
 	// server.
 	topoGlobalRoot = flag.String("topo_global_root", "", "the path of the global topology data in the global topology server")
 
+	// emitTopoStats turns on StatsConn and stats will be emitted when making calls to underlying lock server
+	emitTopoStats = flag.Bool("emit_topo_stats", false, "when true, stats will be emitted when calling lock server")
+
 	// factories has the factories for the Conn objects.
 	factories = make(map[string]Factory)
 
@@ -184,6 +188,13 @@ func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error
 		}
 	} else {
 		connReadOnly = conn
+	}
+
+	if *emitTopoStats {
+		conn = NewStatsConn(GlobalCell, conn)
+		if factory.HasGlobalReadOnlyCell(serverAddress, root) {
+			connReadOnly = NewStatsConn(GlobalReadOnlyCell, connReadOnly)
+		}
 	}
 
 	return &Server{
@@ -256,6 +267,9 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	conn, err = ts.factory.Create(cell, ci.ServerAddress, ci.Root)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create topo connection to %v, %v: %v", ci.ServerAddress, ci.Root, err)
+	}
+	if *emitTopoStats {
+		conn = NewStatsConn(cell, conn)
 	}
 	ts.cells[cell] = conn
 	return conn, nil
