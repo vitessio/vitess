@@ -151,9 +151,6 @@ var (
 	// server.
 	topoGlobalRoot = flag.String("topo_global_root", "", "the path of the global topology data in the global topology server")
 
-	// emitTopoStats turns on StatsConn and stats will be emitted when making calls to underlying lock server
-	emitTopoStats = flag.Bool("emit_topo_stats", false, "when true, stats will be emitted when calling lock server")
-
 	// factories has the factories for the Conn objects.
 	factories = make(map[string]Factory)
 
@@ -179,6 +176,7 @@ func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error
 	if err != nil {
 		return nil, err
 	}
+	conn = NewStatsConn(GlobalCell, conn)
 
 	var connReadOnly Conn
 	if factory.HasGlobalReadOnlyCell(serverAddress, root) {
@@ -186,15 +184,9 @@ func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error
 		if err != nil {
 			return nil, err
 		}
+		connReadOnly = NewStatsConn(GlobalReadOnlyCell, connReadOnly)
 	} else {
 		connReadOnly = conn
-	}
-
-	if *emitTopoStats {
-		conn = NewStatsConn(GlobalCell, conn)
-		if factory.HasGlobalReadOnlyCell(serverAddress, root) {
-			connReadOnly = NewStatsConn(GlobalReadOnlyCell, connReadOnly)
-		}
 	}
 
 	return &Server{
@@ -268,9 +260,7 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create topo connection to %v, %v: %v", ci.ServerAddress, ci.Root, err)
 	}
-	if *emitTopoStats {
-		conn = NewStatsConn(cell, conn)
-	}
+	conn = NewStatsConn(cell, conn)
 	ts.cells[cell] = conn
 	return conn, nil
 }
