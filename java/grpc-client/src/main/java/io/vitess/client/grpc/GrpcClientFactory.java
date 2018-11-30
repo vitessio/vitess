@@ -16,6 +16,8 @@
 
 package io.vitess.client.grpc;
 
+import io.grpc.CallCredentials;
+import io.grpc.ManagedChannel;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -48,6 +50,7 @@ import io.vitess.client.grpc.tls.TlsOptions;
 public class GrpcClientFactory implements RpcClientFactory {
 
   private RetryingInterceptorConfig config;
+  private CallCredentials credentials;
 
   public GrpcClientFactory() {
     this(RetryingInterceptorConfig.noOpConfig());
@@ -55,6 +58,11 @@ public class GrpcClientFactory implements RpcClientFactory {
 
   public GrpcClientFactory(RetryingInterceptorConfig config) {
     this.config = config;
+  }
+
+  public GrpcClientFactory setCallCredentials(CallCredentials value) {
+    credentials = value;
+    return this;
   }
 
   /**
@@ -67,8 +75,11 @@ public class GrpcClientFactory implements RpcClientFactory {
    */
   @Override
   public RpcClient create(Context ctx, String target) {
-    return new GrpcClient(
-            NettyChannelBuilder.forTarget(target).negotiationType(NegotiationType.PLAINTEXT).intercept(new RetryingInterceptor(config)).build());
+    ManagedChannel channel = NettyChannelBuilder.forTarget(target)
+        .negotiationType(NegotiationType.PLAINTEXT)
+        .intercept(new RetryingInterceptor(config))
+        .build();
+    return credentials != null ? new GrpcClient(channel, credentials) : new GrpcClient(channel);
   }
 
   /**
