@@ -47,6 +47,8 @@ topology:
                   "corder": {}
                 }
               }
+        - name: "customer"
+          servedFrom: "commerce"
 
 etcd:
   replicas: 1

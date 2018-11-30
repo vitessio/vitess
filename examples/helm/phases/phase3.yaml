@@ -47,6 +47,27 @@ topology:
                   "corder": {}
                 }
               }
+        - name: "customer"
+          servedFrom: "commerce"
+          copySchema:
+            source: "commerce/0"
+            tables:
+              - "customer"
+              - "corder"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+          vschema:
+            phase1: |-
+              {
+                "tables": {
+                  "customer": {},
+                  "corder": {}
+                }
+              }
 
 etcd:
   replicas: 1
