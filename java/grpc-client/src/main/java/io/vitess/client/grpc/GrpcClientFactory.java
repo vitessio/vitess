@@ -50,7 +50,7 @@ import io.vitess.client.grpc.tls.TlsOptions;
 public class GrpcClientFactory implements RpcClientFactory {
 
   private RetryingInterceptorConfig config;
-  private CallCredentials credentials;
+  private CallCredentials callCredentials;
 
   public GrpcClientFactory() {
     this(RetryingInterceptorConfig.noOpConfig());
@@ -61,7 +61,7 @@ public class GrpcClientFactory implements RpcClientFactory {
   }
 
   public GrpcClientFactory setCallCredentials(CallCredentials value) {
-    credentials = value;
+    callCredentials = value;
     return this;
   }
 
@@ -79,7 +79,7 @@ public class GrpcClientFactory implements RpcClientFactory {
         .negotiationType(NegotiationType.PLAINTEXT)
         .intercept(new RetryingInterceptor(config))
         .build();
-    return credentials != null ? new GrpcClient(channel, credentials) : new GrpcClient(channel);
+    return callCredentials != null ? new GrpcClient(channel, callCredentials) : new GrpcClient(channel);
   }
 
   /**
