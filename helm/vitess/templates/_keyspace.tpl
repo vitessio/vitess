@@ -132,5 +132,47 @@ spec:
 {{ include "user-secret-volumes" $secrets | indent 8 }}
 
 {{- end -}}
+
+{{- if $keyspace.servedFrom }}
+---
+###################################
+# SetKeyspaceServedFrom job
+###################################
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $keyspaceClean }}-served-from
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: served-from
+        image: "vitess/vtctlclient:{{$vitessTag}}"
+        volumeMounts:
+{{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
+
+        command: ["bash"]
+        args:
+          - "-c"
+          - |
+            set -ex
+
+            VTCTLD_SVC=vtctld.{{ $namespace }}:15999
+            SECONDS=0
+            TIMEOUT_SECONDS=600
+            VTCTL_EXTRA_FLAGS=({{ include "format-flags-inline" $defaultVtctlclient.extraFlags }})
+
+            # if keyspace already exists, it's a no-op
+            if vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC GetKeyspace {{ $keyspace.name }} > /dev/null 2>&1; then
+              exit 0
+            fi
+
+            vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC CreateKeyspace -served_from='master:{{ $keyspace.servedFrom }},replica:{{ $keyspace.servedFrom }},rdonly:{{ $keyspace.servedFrom }}' {{ $keyspace.name }}
+      volumes:
+{{ include "user-secret-volumes" $secrets | indent 8 }}
+
+{{- end -}}
 {{- end -}}
 {{- end -}}
