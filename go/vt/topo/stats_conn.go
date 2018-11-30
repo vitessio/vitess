@@ -30,8 +30,8 @@ var (
 		[]string{"Operation", "Cell"})
 
 	topoStatsConnErrors = stats.NewCountersWithMultiLabels(
-		"TopologyErrors",
-		"Operation errors to topology cells",
+		"TopologyConnErrors",
+		"TopologyConnErrors errors per operation",
 		[]string{"Operation", "Cell"})
 )
 
