@@ -1199,19 +1199,17 @@ var (
 		input:  "show session variables",
 		output: "show session variables",
 	}, {
-		input:  "show vindexes",
-		output: "show vindexes",
-	}, {
-		input:  "show vindexes on t",
-		output: "show vindexes on t",
-	}, {
 		input: "show vitess_keyspaces",
 	}, {
 		input: "show vitess_shards",
 	}, {
 		input: "show vitess_tablets",
 	}, {
-		input: "show vschema_tables",
+		input: "show vschema tables",
+	}, {
+		input: "show vschema vindexes",
+	}, {
+		input: "show vschema vindexes on t",
 	}, {
 		input:  "show warnings",
 		output: "show warnings",
