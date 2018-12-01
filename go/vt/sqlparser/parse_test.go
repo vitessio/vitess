@@ -903,37 +903,6 @@ var (
 		input:  "alter table a drop id",
 		output: "alter table a",
 	}, {
-		input: "alter table a add vindex hash (id)",
-	}, {
-		input:  "alter table a add vindex `hash` (`id`)",
-		output: "alter table a add vindex hash (id)",
-	}, {
-		input:  "alter table a add vindex hash (id) using `hash`",
-		output: "alter table a add vindex hash (id) using hash",
-	}, {
-		input: "alter table a add vindex `add` (`add`)",
-	}, {
-		input: "alter table a add vindex hash (id) using hash",
-	}, {
-		input:  "alter table a add vindex hash (id) using `hash`",
-		output: "alter table a add vindex hash (id) using hash",
-	}, {
-		input: "alter table user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
-	}, {
-		input:  "alter table user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
-		output: "alter table user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
-	}, {
-		input: "alter table a drop vindex hash",
-	}, {
-		input:  "alter table a drop vindex `hash`",
-		output: "alter table a drop vindex hash",
-	}, {
-		input:  "alter table a drop vindex hash",
-		output: "alter table a drop vindex hash",
-	}, {
-		input:  "alter table a drop vindex `add`",
-		output: "alter table a drop vindex `add`",
-	}, {
 		input: "create table a",
 	}, {
 		input:  "create table a (\n\t`a` int\n)",
@@ -950,11 +919,46 @@ var (
 		input:  "create table a (a int, b char, c garbage)",
 		output: "create table a",
 	}, {
-		input: "create vindex hash_vdx using hash",
+		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
-		input: "create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
+		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
-		input: "create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
+		input: "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
+	}, {
+		input: "alter vschema drop vindex hash_vdx",
+	}, {
+		input: "alter vschema on a add vindex hash (id)",
+	}, {
+		input: "alter vschema on a add vindex hash (id)",
+	}, {
+		input:  "alter vschema on a add vindex `hash` (`id`)",
+		output: "alter vschema on a add vindex hash (id)",
+	}, {
+		input:  "alter vschema on a add vindex hash (id) using `hash`",
+		output: "alter vschema on a add vindex hash (id) using hash",
+	}, {
+		input: "alter vschema on a add vindex `add` (`add`)",
+	}, {
+		input: "alter vschema on a add vindex hash (id) using hash",
+	}, {
+		input:  "alter vschema on a add vindex hash (id) using `hash`",
+		output: "alter vschema on a add vindex hash (id) using hash",
+	}, {
+		input: "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+	}, {
+		input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
+		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+	}, {
+		input: "alter vschema on a drop vindex hash",
+	}, {
+		input:  "alter vschema on a drop vindex `hash`",
+		output: "alter vschema on a drop vindex hash",
+	}, {
+		input:  "alter vschema on a drop vindex hash",
+		output: "alter vschema on a drop vindex hash",
+	}, {
+		input:  "alter vschema on a drop vindex `add`",
+		output: "alter vschema on a drop vindex `add`",
 	}, {
 		input:  "create index a on b",
 		output: "alter table b",
