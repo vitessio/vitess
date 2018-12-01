@@ -736,7 +736,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show vitess_tablets:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes", nil)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
@@ -754,10 +754,10 @@ func TestExecutorShow(t *testing.T) {
 		RowsAffected: 10,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vindexes:\n%+v, want\n%+v", qr, wantqr)
+		t.Errorf("show vschema vindexes:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.user", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.user", nil)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
@@ -767,23 +767,23 @@ func TestExecutorShow(t *testing.T) {
 		RowsAffected: 2,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vindexes on TestExecutor.user:\n%+v, want\n%+v", qr, wantqr)
+		t.Errorf("show vschema vindexes on TestExecutor.user:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on user", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on user", nil)
 	wantErr := errNoKeyspace.Error()
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("show vindexes on user: %v, want %v", err, wantErr)
+		t.Errorf("show vschema vindexes on user: %v, want %v", err, wantErr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.garbage", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.garbage", nil)
 	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("show vindexes on user: %v, want %v", err, wantErr)
+		t.Errorf("show vschema vindexes on user: %v, want %v", err, wantErr)
 	}
 
 	session.TargetString = "TestExecutor"
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on user", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on user", nil)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
@@ -793,11 +793,11 @@ func TestExecutorShow(t *testing.T) {
 		RowsAffected: 2,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vindexes on user:\n%+v, want\n%+v", qr, wantqr)
+		t.Errorf("show vschema vindexes on user:\n%+v, want\n%+v", qr, wantqr)
 	}
 
 	session.TargetString = "TestExecutor"
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on user2", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on user2", nil)
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
@@ -807,13 +807,13 @@ func TestExecutorShow(t *testing.T) {
 		RowsAffected: 2,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vindexes on user2:\n%+v, want\n%+v", qr, wantqr)
+		t.Errorf("show vschema vindexes on user2:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on garbage", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on garbage", nil)
 	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("show vindexes on user: %v, want %v", err, wantErr)
+		t.Errorf("show vschema vindexes on user: %v, want %v", err, wantErr)
 	}
 
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show warnings", nil)
@@ -889,7 +889,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	session = NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema_tables", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema tables", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -909,27 +909,27 @@ func TestExecutorShow(t *testing.T) {
 		RowsAffected: 9,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vschema_tables:\n%+v, want\n%+v", qr, wantqr)
+		t.Errorf("show vschema tables:\n%+v, want\n%+v", qr, wantqr)
 	}
 
 	session = NewSafeSession(&vtgatepb.Session{})
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema_tables", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema tables", nil)
 	want := errNoKeyspace.Error()
 	if err == nil || err.Error() != want {
-		t.Errorf("show vschema_tables: %v, want %v", err, want)
+		t.Errorf("show vschema tables: %v, want %v", err, want)
 	}
 
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show 10", nil)
 	want = "syntax error at position 8 near '10'"
 	if err == nil || err.Error() != want {
-		t.Errorf("show vschema_tables: %v, want %v", err, want)
+		t.Errorf("show vschema tables: %v, want %v", err, want)
 	}
 
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "no_such_keyspace"})
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema_tables", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema tables", nil)
 	want = "keyspace no_such_keyspace not found in vschema"
 	if err == nil || err.Error() != want {
-		t.Errorf("show vschema_tables: %v, want %v", err, want)
+		t.Errorf("show vschema tables: %v, want %v", err, want)
 	}
 }
 
@@ -1034,7 +1034,7 @@ func TestExecutorOther(t *testing.T) {
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "analyze", nil)
 	want := errNoKeyspace.Error()
 	if err == nil || err.Error() != want {
-		t.Errorf("show vschema_tables: %v, want %v", err, want)
+		t.Errorf("show vschema tables: %v, want %v", err, want)
 	}
 
 	// Can't target a range with handle other
@@ -1289,9 +1289,9 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	}
 
 	vschema = waitForColVindexes(t, ks, "test", []string{"test_hash"}, executor)
-	qr, err := executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+	qr, err := executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
 	if err != nil {
-		t.Fatalf("error in show vindexes on TestExecutor.test: %v", err)
+		t.Fatalf("error in show vschema vindexes on TestExecutor.test: %v", err)
 	}
 	wantqr := &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
@@ -1301,7 +1301,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+		t.Errorf("show vschema vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
 	}
 
 	// Drop it
@@ -1313,10 +1313,10 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 
 	vschema, vindex = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
 	vschema = waitForColVindexes(t, ks, "test", []string{}, executor)
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
 	wantErr := "table `test` does not exist in keyspace `TestExecutor`"
 	if err == nil || err.Error() != wantErr {
-		t.Fatalf("expected error in show vindexes on TestExecutor.test %v: got %v", wantErr, err)
+		t.Fatalf("expected error in show vschema vindexes on TestExecutor.test %v: got %v", wantErr, err)
 	}
 
 	// add it again using the same syntax
@@ -1333,9 +1333,9 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 
 	vschema = waitForColVindexes(t, ks, "test", []string{"test_hash"}, executor)
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
 	if err != nil {
-		t.Fatalf("error in show vindexes on TestExecutor.test: %v", err)
+		t.Fatalf("error in show vschema vindexes on TestExecutor.test: %v", err)
 	}
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
@@ -1345,7 +1345,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+		t.Errorf("show vschema vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
 	}
 
 	// add another
@@ -1371,9 +1371,9 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 		t.Fatalf("table test not defined in vschema")
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
 	if err != nil {
-		t.Fatalf("error in show vindexes on TestExecutor.test: %v", err)
+		t.Fatalf("error in show vschema vindexes on TestExecutor.test: %v", err)
 	}
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
@@ -1384,7 +1384,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 		RowsAffected: 2,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+		t.Errorf("show vschema vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
 	}
 
 	stmt = "alter vschema on test add vindex test_hash_id2 (id2) using hash"
@@ -1409,9 +1409,9 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 		t.Fatalf("table test not defined in vschema")
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
 	if err != nil {
-		t.Fatalf("error in show vindexes on TestExecutor.test: %v", err)
+		t.Fatalf("error in show vschema vindexes on TestExecutor.test: %v", err)
 	}
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
@@ -1423,7 +1423,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 		RowsAffected: 3,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+		t.Errorf("show vschema vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
 	}
 
 	// drop one
@@ -1436,9 +1436,9 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	// wait for up to 50ms for it to disappear
 	deadline := time.Now().Add(50 * time.Millisecond)
 	for {
-		qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test", nil)
+		qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
 		if err != nil {
-			t.Fatalf("error in show vindexes on TestExecutor.test: %v", err)
+			t.Fatalf("error in show vschema vindexes on TestExecutor.test: %v", err)
 		}
 		wantqr = &sqltypes.Result{
 			Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
@@ -1504,9 +1504,9 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 		t.Fatalf("table test2 not defined in vschema")
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vindexes on TestExecutor.test2", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test2", nil)
 	if err != nil {
-		t.Fatalf("error in show vindexes on TestExecutor.test2: %v", err)
+		t.Fatalf("error in show vschema vindexes on TestExecutor.test2: %v", err)
 	}
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
@@ -1517,7 +1517,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 		RowsAffected: 2,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
+		t.Errorf("show vschema vindexes on TestExecutor.test:\n%+v, want\n%+v", qr, wantqr)
 	}
 
 	stmt = "alter vschema on test2 add vindex nonexistent (c1,c2)"
@@ -1707,7 +1707,7 @@ func TestExecutorUnrecognized(t *testing.T) {
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "invalid statement", nil)
 	want := "unrecognized statement: invalid statement"
 	if err == nil || err.Error() != want {
-		t.Errorf("show vschema_tables: %v, want %v", err, want)
+		t.Errorf("show vschema tables: %v, want %v", err, want)
 	}
 }
 

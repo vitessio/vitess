@@ -1541,10 +1541,6 @@ show_statement:
   {
     $$ = &Show{Scope: $2, Type: string($3)}
   }
-| SHOW VINDEXES
-  {
-    $$ = &Show{Type: string($2)}
-  }
 | SHOW COLLATION
   {
     $$ = &Show{Type: string($2)}
@@ -1554,10 +1550,6 @@ show_statement:
     // Cannot dereference $4 directly, or else the parser stackcannot be pooled. See yyParsePooled
     showCollationFilterOpt := $4
     $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
-  }
-| SHOW VINDEXES ON table_name
-  {
-    $$ = &Show{Type: string($2), OnTable: $4}
   }
 | SHOW VITESS_KEYSPACES
   {
@@ -1575,9 +1567,17 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW VSCHEMA_TABLES
+| SHOW VSCHEMA TABLES
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW VSCHEMA VINDEXES
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW VSCHEMA VINDEXES ON table_name
+  {
+    $$ = &Show{Type: string($2) + " " + string($3), OnTable: $5}
   }
 | SHOW WARNINGS
   {
