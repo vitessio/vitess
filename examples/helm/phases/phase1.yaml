@@ -18,8 +18,11 @@ topology:
                 - type: "replica"
                   vttablet:
                     replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
           schema:
-            phase1: |-
+            initial: |-
               create table product(
                 sku varbinary(128),
                 description varbinary(128),
@@ -39,7 +42,7 @@ topology:
                 primary key(order_id)
               );
           vschema:
-            phase1: |-
+            initial: |-
               {
                 "tables": {
                   "product": {},
@@ -64,13 +67,11 @@ vttablet:
   resources:
   mysqlResources:
 
+vtworker:
+  resources:
+
 pmm:
   enabled: false
-  client:
-    resources:
-  server:
-    resources:
 
 orchestrator:
   enabled: false
-  resources:

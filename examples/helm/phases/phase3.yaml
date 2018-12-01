@@ -18,50 +18,26 @@ topology:
                 - type: "replica"
                   vttablet:
                     replicas: 2
-          schema:
-            phase1: |-
-              create table product(
-                sku varbinary(128),
-                description varbinary(128),
-                price bigint,
-                primary key(sku)
-              );
-              create table customer(
-                user_id bigint not null auto_increment,
-                email varbinary(128),
-                primary key(user_id)
-              );
-              create table corder(
-                order_id bigint not null auto_increment,
-                user_id bigint,
-                product_id bigint,
-                msrp bigint,
-                primary key(order_id)
-              );
-          vschema:
-            phase1: |-
-              {
-                "tables": {
-                  "product": {},
-                  "customer": {},
-                  "corder": {}
-                }
-              }
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
         - name: "customer"
-          servedFrom: "commerce"
-          copySchema:
-            source: "commerce/0"
-            tables:
-              - "customer"
-              - "corder"
           shards:
             - name: "0"
               tablets:
                 - type: "replica"
                   vttablet:
                     replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+          copySchema:
+            source: "commerce/0"
+            tables:
+              - "customer"
+              - "corder"
           vschema:
-            phase1: |-
+            initial: |-
               {
                 "tables": {
                   "customer": {},
@@ -85,13 +61,11 @@ vttablet:
   resources:
   mysqlResources:
 
+vtworker:
+  resources:
+
 pmm:
   enabled: false
-  client:
-    resources:
-  server:
-    resources:
 
 orchestrator:
   enabled: false
-  resources:

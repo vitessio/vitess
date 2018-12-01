@@ -66,11 +66,6 @@ vttablet:
 
 pmm:
   enabled: false
-  client:
-    resources:
-  server:
-    resources:
 
 orchestrator:
   enabled: false
-  resources:
