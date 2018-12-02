@@ -175,6 +175,8 @@ func Stop() {
 	if explainTopo != nil {
 		for _, conn := range explainTopo.TabletConns {
 			conn.tsv.StopService()
+		}
+		for _, conn := range explainTopo.TabletConns {
 			conn.db.Close()
 		}
 	}
