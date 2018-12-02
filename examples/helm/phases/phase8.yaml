@@ -1,0 +1,117 @@
+topology:
+  cells:
+    - name: "zone1"
+      etcd:
+        replicas: 1
+      vtctld:
+        replicas: 1
+      vtgate:
+        replicas: 1
+      mysqlProtocol:
+        enabled: true
+        authType: "none"
+      keyspaces:
+        - name: "commerce"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+          schema:
+            seq: |-
+              create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
+              insert into customer_seq(id, next_id, cache) values(0, 1000, 100);
+              create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
+              insert into order_seq(id, next_id, cache) values(0, 1000, 100);
+          vschema:
+            seq: |-
+              {
+                "tables": {
+                  "customer_seq": {
+                    "type": "sequence"
+                  },
+                  "order_seq": {
+                    "type": "sequence"
+                  },
+                  "product": {}
+                }
+              }
+        - name: "customer"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+          schema:
+            sharded: |-
+              alter table customer change customer_id customer_id bigint not null;
+              alter table corder change order_id customer_id bigint not null;
+          vschema:
+            sharded: |-
+              {
+                "sharded": true,
+                "vindexes": {
+                  "hash": {
+                    "type": "hash"
+                  }
+                },
+                "tables": {
+                  "customer": {
+                    "column_vindexes": [
+                      {
+                        "column": "customer_id",
+                        "name": "hash"
+                      }
+                    ],
+                    "auto_increment": {
+                      "column": "customer_id",
+                      "sequence": "customer_seq"
+                    }
+                  },
+                  "corder": {
+                    "column_vindexes": [
+                      {
+                        "column": "customer_id",
+                        "name": "hash"
+                      }
+                    ],
+                    "auto_increment": {
+                      "column": "order_id",
+                      "sequence": "order_seq"
+                    }
+                  }
+                }
+              }
+
+etcd:
+  replicas: 1
+  resources:
+
+vtctld:
+  serviceType: "NodePort"
+  resources:
+
+vtgate:
+  serviceType: "NodePort"
+  resources:
+
+vttablet:
+  resources:
+  mysqlResources:
+
+vtworker:
+  resources:
+
+pmm:
+  enabled: false
+
+orchestrator:
+  enabled: false
