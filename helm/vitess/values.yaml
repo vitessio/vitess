@@ -191,6 +191,10 @@ vttablet:
   extraMyCnf: ""
   # extraMyCnf: extra-my-cnf
 
+  # mysqlSize can be "test" or "prod". Default is "prod".
+  # If the value is "test", then mysql is instanitated with a smaller footprint.
+  mysqlSize: "prod"
+
   # Additional flags that will be appended to the vttablet command
   extraFlags: {}
 
