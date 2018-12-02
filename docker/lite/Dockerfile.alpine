@@ -4,8 +4,8 @@ FROM alpine:3.8 AS staging
 
 RUN mkdir -p /vt/vtdataroot/ && mkdir -p /vt/bin && mkdir -p /vt/src/vitess.io/vitess/web/vtctld2
 
-COPY --from=builder /vt/src/vitess.io/vitess/web/vtctld /vt/src/vitess.io/web/
-COPY --from=builder /vt/src/vitess.io/vitess/web/vtctld2/app /vt/src/vitess.io/web/vtctld2/
+COPY --from=builder /vt/src/vitess.io/vitess/web/vtctld /vt/src/vitess.io/web/vtctld
+COPY --from=builder /vt/src/vitess.io/vitess/web/vtctld2/app /vt/src/vitess.io/web/vtctld2/app
 COPY --from=builder /vt/src/vitess.io/vitess/config /vt/config
 COPY --from=builder /vt/bin/mysqlctld /vt/bin/
 COPY --from=builder /vt/bin/vtctld /vt/bin/
