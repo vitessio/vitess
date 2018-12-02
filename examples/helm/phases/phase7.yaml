@@ -22,34 +22,37 @@ topology:
                   vttablet:
                     replicas: 1
           schema:
-            initial: |-
-              create table product(
-                sku varbinary(128),
-                description varbinary(128),
-                price bigint,
-                primary key(sku)
-              );
-              create table customer(
-                customer_id bigint not null auto_increment,
-                email varbinary(128),
-                primary key(customer_id)
-              );
-              create table corder(
-                order_id bigint not null auto_increment,
-                customer_id bigint,
-                product_id bigint,
-                msrp bigint,
-                primary key(order_id)
-              );
+            postsplit: |-
+              drop table customer;
+              drop table corder;
           vschema:
-            initial: |-
+            phase1: |-
               {
                 "tables": {
-                  "product": {},
-                  "customer": {},
-                  "corder": {}
+                  "product": {}
                 }
               }
+        - name: "customer"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+
+jobs:
+  - name: "vclean1"
+    kind: "vtctlclient"
+    command: "SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 rdonly"
+  - name: "vclean2"
+    kind: "vtctlclient"
+    command: "SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 replica"
+  - name: "vclean3"
+    kind: "vtctlclient"
+    command: "SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 master"
 
 etcd:
   replicas: 1
