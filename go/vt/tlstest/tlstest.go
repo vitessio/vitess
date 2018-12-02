@@ -53,9 +53,7 @@ const (
  challengePassword      = A challenge password
 [ req_ext ]
  basicConstraints       = CA:TRUE
- subjectAltName         = @alternate_names
-[ alternate_names ]
- DNS.1                  = localhost
+
 `
 
 	certConfig = `
@@ -78,11 +76,13 @@ const (
 [ req_attributes ]
  challengePassword      = A challenge password
 [ req_ext ]
- basicConstraints       = CA:FALSE
+ basicConstraints       = CA:TRUE
  subjectAltName         = @alternate_names
+ extendedKeyUsage       =serverAuth,clientAuth
 [ alternate_names ]
  DNS.1                  = localhost
  DNS.2                  = 127.0.0.1
+ DNS.3                  = %s
 `
 )
 
@@ -129,7 +129,7 @@ func CreateSignedCert(root, parent, serial, name, commonName string) {
 	req := path.Join(root, name+"-req.pem")
 
 	config := path.Join(root, name+".config")
-	if err := ioutil.WriteFile(config, []byte(fmt.Sprintf(certConfig, commonName)), os.ModePerm); err != nil {
+	if err := ioutil.WriteFile(config, []byte(fmt.Sprintf(certConfig, commonName, commonName)), os.ModePerm); err != nil {
 		log.Fatalf("cannot write file %v: %v", config, err)
 	}
 	openssl("req", "-newkey", "rsa:2048", "-days", "3600", "-nodes",
