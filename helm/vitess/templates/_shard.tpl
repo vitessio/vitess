@@ -10,7 +10,6 @@
 {{- $namespace := index . 4 -}}
 {{- $totalTabletCount := index . 5 -}}
 
-# sanitize inputs for labels
 {{- $cellClean := include "clean-label" $cell.name -}}
 {{- $keyspaceClean := include "clean-label" $keyspace.name -}}
 {{- $shardClean := include "clean-label" $shard.name -}}
@@ -111,8 +110,8 @@ spec:
       volumes:
 {{ include "user-secret-volumes" (.secrets | default $defaultVtctlclient.secrets) | indent 8 }}
 
----
-{{- if $keyspace.copySchema }}
+{{- $copySchema := ($keyspace.copySchema  | default $shard.copySchema) -}}
+{{- if $copySchema }}
 ---
 ###################################
 # CopySchemaShard Job
@@ -169,14 +168,14 @@ spec:
               break
             done
 
-            vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC CopySchemaShard {{ if $keyspace.copySchema.tables -}}
+            vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC CopySchemaShard {{ if $copySchema.tables -}}
             -tables='
-              {{- range $index, $table := $keyspace.copySchema.tables -}}
+              {{- range $index, $table := $copySchema.tables -}}
                 {{- if $index -}},{{- end -}}
                 {{ $table }}
               {{- end -}}
             '
-            {{- end }} {{ $keyspace.copySchema.source }} {{ $keyspace.name }}/{{ $shard.name }}
+            {{- end }} {{ $copySchema.source }} {{ $keyspace.name }}/{{ $shard.name }}
       volumes:
 {{ include "user-secret-volumes" (.secrets | default $defaultVtctlclient.secrets) | indent 8 }}
 {{ end }}

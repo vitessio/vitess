@@ -31,22 +31,14 @@ topology:
                 - type: "rdonly"
                   vttablet:
                     replicas: 1
-            - name: "-80"
-              tablets:
-                - type: "replica"
-                  vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
-            - name: "80-"
-              tablets:
-                - type: "replica"
-                  vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
+
+jobs:
+  - name: "msf1"
+    kind: "vtctlclient"
+    command: "MigrateServedFrom customer/0 rdonly"
+  - name: "msf2"
+    kind: "vtctlclient"
+    command: "MigrateServedFrom customer/0 replica"
 
 etcd:
   replicas: 1
@@ -61,6 +53,7 @@ vtgate:
   resources:
 
 vttablet:
+  mysqlSize: "test"
   resources:
   mysqlResources:
 

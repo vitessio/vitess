@@ -21,29 +21,11 @@ topology:
                 - type: "rdonly"
                   vttablet:
                     replicas: 1
-        - name: "customer"
-          shards:
-            - name: "0"
-              tablets:
-                - type: "replica"
-                  vttablet:
-                    replicas: 2
-                - type: "rdonly"
-                  vttablet:
-                    replicas: 1
-          copySchema:
-            source: "commerce/0"
-            tables:
-              - "customer"
-              - "corder"
-          vschema:
-            initial: |-
-              {
-                "tables": {
-                  "customer": {},
-                  "corder": {}
-                }
-              }
+
+jobs:
+  - name: "create-customer-ks"
+    kind: "vtctlclient"
+    command: "CreateKeyspace -served_from='master:commerce,replica:commerce,rdonly:commerce' customer"
 
 etcd:
   replicas: 1
@@ -58,6 +40,7 @@ vtgate:
   resources:
 
 vttablet:
+  mysqlSize: "test"
   resources:
   mysqlResources:
 

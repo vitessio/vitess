@@ -21,17 +21,6 @@ topology:
                 - type: "rdonly"
                   vttablet:
                     replicas: 1
-          schema:
-            postsplit: |-
-              drop table customer;
-              drop table corder;
-          vschema:
-            phase1: |-
-              {
-                "tables": {
-                  "product": {}
-                }
-              }
         - name: "customer"
           shards:
             - name: "0"
@@ -42,17 +31,27 @@ topology:
                 - type: "rdonly"
                   vttablet:
                     replicas: 1
+            - name: "-80"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+            - name: "80-"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
 
 jobs:
-  - name: "vclean1"
+  - name: "mst3"
     kind: "vtctlclient"
-    command: "SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 rdonly"
-  - name: "vclean2"
-    kind: "vtctlclient"
-    command: "SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 replica"
-  - name: "vclean3"
-    kind: "vtctlclient"
-    command: "SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 master"
+    command: "MigrateServedTypes customer/0 master"
 
 etcd:
   replicas: 1
@@ -67,6 +66,7 @@ vtgate:
   resources:
 
 vttablet:
+  mysqlSize: "test"
   resources:
   mysqlResources:
 
