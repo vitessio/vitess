@@ -577,9 +577,6 @@ func (tsv *TabletServer) StopService() {
 	tsv.se.Close()
 	tsv.hw.Close()
 	tsv.hr.Close()
-	tsv.te.Close(true)
-	tsv.messager.Close()
-	tsv.watcher.Close()
 	log.Infof("Shutdown complete.")
 	tsv.transition(StateNotConnected)
 }
