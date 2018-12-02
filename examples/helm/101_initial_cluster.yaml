@@ -37,8 +37,8 @@ topology:
               create table corder(
                 order_id bigint not null auto_increment,
                 customer_id bigint,
-                product_id bigint,
-                msrp bigint,
+                sku varbinary(128),
+                price bigint,
                 primary key(order_id)
               );
           vschema:
