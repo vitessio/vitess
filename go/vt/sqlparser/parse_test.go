@@ -927,7 +927,9 @@ var (
 	}, {
 		input: "alter vschema drop vindex hash_vdx",
 	}, {
-		input: "alter vschema on a add vindex hash (id)",
+		input: "alter vschema add table a",
+	}, {
+		input: "alter vschema drop table a",
 	}, {
 		input: "alter vschema on a add vindex hash (id)",
 	}, {
