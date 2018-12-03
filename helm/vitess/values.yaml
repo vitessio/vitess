@@ -85,7 +85,7 @@ topology:
       mysqlProtocol:
         enabled: false
         authType: "secret"
-        # authType can be: none or k8s_secret. For k8s_secret, perform the following changes:
+        # authType can be: none or secret. For secret, perform the following changes:
         # username: myuser
         # this is the secret that will be mounted as the user password
         # kubectl create secret generic myuser_password --from-literal=password=abc123
@@ -99,6 +99,16 @@ topology:
         replicas: 3
         # if maxReplicas is higher than replicas, an HPA will be created
         maxReplicas: 6
+
+jobs:
+  # examples:
+  #- name: "split-clone-customer"
+  #  kind: "vtworker"
+  #  cell: "zone1"
+  #  command: "SplitClone customer/0"
+  #- name: "list-all-tablet-zone1"
+  #  kind: "vtctlclient"
+  #  command: "ListAllTablets zone1"
 
 # Default values for etcd resources defined in 'topology'
 etcd:
@@ -140,6 +150,16 @@ vtctlclient:
   extraFlags: {}
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
+# Default values for vtworker resources defined in 'jobs'
+vtworker:
+  vitessTag: "latest"
+  extraFlags: {}
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
+
 
 # Default values for vttablet resources defined in 'topology'
 vttablet:
@@ -170,6 +190,10 @@ vttablet:
   # to $EXTRA_MY_CNF, overriding any default my.cnf settings
   extraMyCnf: ""
   # extraMyCnf: extra-my-cnf
+
+  # mysqlSize can be "test" or "prod". Default is "prod".
+  # If the value is "test", then mysql is instanitated with a smaller footprint.
+  mysqlSize: "prod"
 
   # Additional flags that will be appended to the vttablet command
   extraFlags: {}

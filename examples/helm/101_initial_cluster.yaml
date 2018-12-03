@@ -18,8 +18,11 @@ topology:
                 - type: "replica"
                   vttablet:
                     replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
           schema:
-            phase1: |-
+            initial: |-
               create table product(
                 sku varbinary(128),
                 description varbinary(128),
@@ -27,19 +30,19 @@ topology:
                 primary key(sku)
               );
               create table customer(
-                user_id bigint not null auto_increment,
+                customer_id bigint not null auto_increment,
                 email varbinary(128),
-                primary key(user_id)
+                primary key(customer_id)
               );
               create table corder(
                 order_id bigint not null auto_increment,
-                user_id bigint,
-                product_id bigint,
-                msrp bigint,
+                customer_id bigint,
+                sku varbinary(128),
+                price bigint,
                 primary key(order_id)
               );
           vschema:
-            phase1: |-
+            initial: |-
               {
                 "tables": {
                   "product": {},
@@ -61,8 +64,12 @@ vtgate:
   resources:
 
 vttablet:
+  mysqlSize: "test"
   resources:
   mysqlResources:
+
+vtworker:
+  resources:
 
 pmm:
   enabled: false

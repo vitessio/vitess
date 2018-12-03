@@ -18,31 +18,35 @@ topology:
                 - type: "replica"
                   vttablet:
                     replicas: 2
-          schema:
-            phase1: |-
-              create table product(
-                sku varbinary(128),
-                description varbinary(128),
-                price bigint,
-                primary key(sku)
-              );
-              create table customer(
-                user_id bigint not null auto_increment,
-                email varbinary(128),
-                primary key(user_id)
-              );
-              create table corder(
-                order_id bigint not null auto_increment,
-                user_id bigint,
-                product_id bigint,
-                msrp bigint,
-                primary key(order_id)
-              );
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
           vschema:
-            phase1: |-
+            vsplit: |-
               {
                 "tables": {
-                  "product": {},
+                  "product": {}
+                }
+              }
+        - name: "customer"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+              copySchema:
+                source: "commerce/0"
+                tables:
+                  - "customer"
+                  - "corder"
+          vschema:
+            vsplit: |-
+              {
+                "tables": {
                   "customer": {},
                   "corder": {}
                 }
@@ -61,8 +65,12 @@ vtgate:
   resources:
 
 vttablet:
+  mysqlSize: "test"
   resources:
   mysqlResources:
+
+vtworker:
+  resources:
 
 pmm:
   enabled: false
