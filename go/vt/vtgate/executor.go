@@ -396,7 +396,9 @@ func (e *Executor) handleVSchemaDDL(ctx context.Context, safeSession *SafeSessio
 		return err
 	}
 
-	return e.vm.UpdateVSchema(ctx, ksName, ks)
+	vschema.Keyspaces[ksName] = ks
+
+	return e.vm.UpdateVSchema(ctx, ksName, vschema)
 }
 
 func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {

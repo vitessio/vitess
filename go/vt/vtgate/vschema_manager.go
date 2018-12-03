@@ -24,9 +24,7 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -123,12 +121,28 @@ func (vm *VSchemaManager) watchSrvVSchema(ctx context.Context, cell string) {
 // UpdateVSchema propagates the updated vschema to the topo. The entry for
 // the given keyspace is updated in the global topo, and the full SrvVSchema
 // is updated in all known cells.
-func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, keyspace *vschemapb.Keyspace) error {
+func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error {
 	topo := vm.e.serv.GetTopoServer()
-	err := topo.SaveVSchema(ctx, ksName, keyspace)
+
+	ks := vschema.Keyspaces[ksName]
+	err := topo.SaveVSchema(ctx, ksName, ks)
 	if err != nil {
 		return err
 	}
 
-	return topotools.RebuildVSchema(ctx, logutil.NewConsoleLogger(), topo, nil)
+	cells, err := vm.e.serv.GetTopoServer().GetKnownCells(ctx)
+	if err != nil {
+		return err
+	}
+
+	// even if one cell fails, continue to try the others
+	for _, cell := range cells {
+		cellErr := vm.e.serv.GetTopoServer().UpdateSrvVSchema(ctx, cell, vschema)
+		if cellErr != nil {
+			err = cellErr
+			log.Errorf("error updating vschema in cell %s: %v", cell, cellErr)
+		}
+	}
+
+	return err
 }
