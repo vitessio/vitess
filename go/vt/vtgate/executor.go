@@ -337,7 +337,12 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 		execStart := time.Now()
 		logStats.PlanTime = execStart.Sub(logStats.StartTime)
 		switch ddl.Action {
-		case sqlparser.CreateVindexStr, sqlparser.AddColVindexStr, sqlparser.DropColVindexStr:
+		case sqlparser.CreateVindexStr,
+			sqlparser.AddVschemaTableStr,
+			sqlparser.DropVschemaTableStr,
+			sqlparser.AddColVindexStr,
+			sqlparser.DropColVindexStr:
+
 			err := e.handleVSchemaDDL(ctx, safeSession, dest, destKeyspace, destTabletType, ddl, logStats)
 			logStats.ExecuteTime = time.Since(execStart)
 			return &sqltypes.Result{}, err

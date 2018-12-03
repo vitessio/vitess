@@ -746,16 +746,18 @@ type DDL struct {
 
 // DDL strings.
 const (
-	CreateStr        = "create"
-	AlterStr         = "alter"
-	DropStr          = "drop"
-	RenameStr        = "rename"
-	TruncateStr      = "truncate"
-	FlushStr         = "flush"
-	CreateVindexStr  = "create vindex"
-	DropVindexStr    = "drop vindex"
-	AddColVindexStr  = "on table add vindex"
-	DropColVindexStr = "on table drop vindex"
+	CreateStr           = "create"
+	AlterStr            = "alter"
+	DropStr             = "drop"
+	RenameStr           = "rename"
+	TruncateStr         = "truncate"
+	FlushStr            = "flush"
+	CreateVindexStr     = "create vindex"
+	DropVindexStr       = "drop vindex"
+	AddVschemaTableStr  = "add vschema table"
+	DropVschemaTableStr = "drop vschema table"
+	AddColVindexStr     = "on table add vindex"
+	DropColVindexStr    = "on table drop vindex"
 
 	// Vindex DDL param to specify the owner of a vindex
 	VindexOwnerStr = "owner"
@@ -795,6 +797,10 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		buf.Myprintf("alter vschema create vindex %v %v", node.VindexSpec.Name, node.VindexSpec)
 	case DropVindexStr:
 		buf.Myprintf("alter vschema drop vindex %v", node.VindexSpec.Name)
+	case AddVschemaTableStr:
+		buf.Myprintf("alter vschema add table %v", node.Table)
+	case DropVschemaTableStr:
+		buf.Myprintf("alter vschema drop table %v", node.Table)
 	case AddColVindexStr:
 		buf.Myprintf("alter vschema on %v add vindex %v (", node.Table, node.VindexSpec.Name)
 		for i, col := range node.VindexCols {

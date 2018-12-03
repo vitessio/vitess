@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"html/template"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -1150,6 +1151,28 @@ func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSche
 	return nil, nil
 }
 
+func waitForVschemaTables(t *testing.T, ks string, tables []string, executor *Executor) *vschemapb.SrvVSchema {
+	t.Helper()
+
+	// Wait up to 10ms until the vindex manager gets notified of the update
+	for i := 0; i < 10; i++ {
+		vschema := executor.vm.GetCurrentSrvVschema()
+		gotTables := []string{}
+		for t := range vschema.Keyspaces[ks].Tables {
+			gotTables = append(gotTables, t)
+		}
+		sort.Strings(tables)
+		sort.Strings(gotTables)
+		if reflect.DeepEqual(tables, gotTables) {
+			return vschema
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	t.Fatalf("updated vschema did not contain tables %v", tables)
+	return nil
+}
+
 func waitForColVindexes(t *testing.T, ks, table string, names []string, executor *Executor) *vschemapb.SrvVSchema {
 	t.Helper()
 
@@ -1243,6 +1266,66 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 	keyspace, ok := vschema.Keyspaces[ksNew]
 	if !ok || !keyspace.Sharded {
 		t.Errorf("keyspace should have been created with Sharded=true")
+	}
+
+	// No queries should have gone to any tablets
+	wantCount := []int64{0, 0, 0}
+	gotCount := []int64{
+		sbc1.ExecCount.Get(),
+		sbc2.ExecCount.Get(),
+		sbclookup.ExecCount.Get(),
+	}
+	if !reflect.DeepEqual(gotCount, wantCount) {
+		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
+	}
+}
+
+func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+	ks := KsTestUnsharded
+
+	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+		vschemaUpdates <- vschema
+	})
+
+	vschema := <-vschemaUpdates
+	_, ok := vschema.Keyspaces[ks].Tables["test_table"]
+	if ok {
+		t.Fatalf("test_table should not exist in original vschema")
+	}
+
+	vschemaTables := []string{}
+	for t := range vschema.Keyspaces[ks].Tables {
+		vschemaTables = append(vschemaTables, t)
+	}
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	stmt := "alter vschema add table test_table"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	vschema = waitForVschemaTables(t, ks, append(vschemaTables, "test_table"), executor)
+
+	stmt = "alter vschema add table test_table2"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	vschema = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_table", "test_table2"}...), executor)
+
+	// Should fail on a sharded keyspace
+	session = NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	stmt = "alter vschema add table test_table"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr := "add vschema table: unsupported on sharded keyspace TestExecutor"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("want error %v got %v", wantErr, err)
 	}
 
 	// No queries should have gone to any tablets

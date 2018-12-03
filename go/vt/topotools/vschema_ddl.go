@@ -70,6 +70,30 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 
 		return ks, nil
 
+	case sqlparser.AddVschemaTableStr:
+		if ks.Sharded {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "add vschema table: unsupported on sharded keyspace %s", ksName)
+		}
+
+		name := ddl.Table.Name.String()
+		if _, ok := ks.Tables[name]; ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema already contains table %s in keyspace %s", name, ksName)
+		}
+
+		ks.Tables[name] = &vschemapb.Table{}
+
+		return ks, nil
+
+	case sqlparser.DropVschemaTableStr:
+		name := ddl.Table.Name.String()
+		if _, ok := ks.Tables[name]; !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain table %s in keyspace %s", name, ksName)
+		}
+
+		delete(ks.Tables, name)
+
+		return ks, nil
+
 	case sqlparser.AddColVindexStr:
 		// Support two cases:
 		//

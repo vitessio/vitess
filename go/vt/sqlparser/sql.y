@@ -1324,6 +1324,14 @@ alter_statement:
         Name: $5,
     }}
   }
+| ALTER VSCHEMA ADD TABLE table_name
+  {
+    $$ = &DDL{Action: AddVschemaTableStr, Table: $5}
+  }
+| ALTER VSCHEMA DROP TABLE table_name
+  {
+    $$ = &DDL{Action: DropVschemaTableStr, Table: $5}
+  }
 | ALTER VSCHEMA ON table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
   {
     $$ = &DDL{
