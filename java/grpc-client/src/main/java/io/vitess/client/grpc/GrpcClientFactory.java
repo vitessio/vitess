@@ -17,7 +17,8 @@
 package io.vitess.client.grpc;
 
 import io.grpc.CallCredentials;
-import io.grpc.ManagedChannel;
+import io.grpc.LoadBalancer;
+import io.grpc.NameResolver;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -51,6 +52,8 @@ public class GrpcClientFactory implements RpcClientFactory {
 
   private RetryingInterceptorConfig config;
   private CallCredentials callCredentials;
+  private LoadBalancer.Factory loadBalancerFactory;
+  private NameResolver.Factory nameResolverFactory;
 
   public GrpcClientFactory() {
     this(RetryingInterceptorConfig.noOpConfig());
@@ -65,6 +68,16 @@ public class GrpcClientFactory implements RpcClientFactory {
     return this;
   }
 
+  public GrpcClientFactory setLoadBalancerFactory(LoadBalancer.Factory value) {
+    loadBalancerFactory = value;
+    return this;
+  }
+
+  public GrpcClientFactory setNameResolverFactory(NameResolver.Factory value) {
+    nameResolverFactory = value;
+    return this;
+  }
+
   /**
    * Factory method to construct a gRPC client connection with no transport-layer security.
    *
@@ -75,11 +88,17 @@ public class GrpcClientFactory implements RpcClientFactory {
    */
   @Override
   public RpcClient create(Context ctx, String target) {
-    ManagedChannel channel = NettyChannelBuilder.forTarget(target)
+    NettyChannelBuilder channel = NettyChannelBuilder.forTarget(target)
         .negotiationType(NegotiationType.PLAINTEXT)
-        .intercept(new RetryingInterceptor(config))
-        .build();
-    return callCredentials != null ? new GrpcClient(channel, callCredentials) : new GrpcClient(channel);
+        .intercept(new RetryingInterceptor(config));
+    if (loadBalancerFactory != null) {
+      channel.loadBalancerFactory(loadBalancerFactory);
+    }
+    if (nameResolverFactory != null) {
+      channel.nameResolverFactory(nameResolverFactory);
+    }
+    return callCredentials != null ?
+        new GrpcClient(channel.build(), callCredentials) : new GrpcClient(channel.build());
   }
 
   /**
