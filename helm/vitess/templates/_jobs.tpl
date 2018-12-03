@@ -1,77 +1,94 @@
 ###################################
-# backup cron
+# keyspace initializations
 ###################################
-{{ define "vttablet-backup-cron" -}}
-# set tuple values to more recognizable variables
-{{- $cellClean := index . 0 -}}
-{{- $keyspaceClean := index . 1 -}}
-{{- $shardClean := index . 2 -}}
-{{- $shardName := index . 3 -}}
-{{- $keyspace := index . 4 -}}
-{{- $shard := index . 5 -}}
-{{- $vitessTag := index . 6 -}}
-{{- $backup := index . 7 -}}
-{{- $namespace := index . 8 -}}
-{{- $defaultVtctlclient := index . 9 }}
 
-{{ if $backup.enabled }}
-# create cron job for current shard
+{{- define "vtctlclient-job" -}}
+{{- $job := index . 0 -}}
+{{- $defaultVtctlclient := index . 1 -}}
+{{- $namespace := index . 2 -}}
+
+{{- $vitessTag := $job.vitessTag | default $defaultVtctlclient.vitessTag -}}
+{{- $secrets := $job.secrets | default $defaultVtctlclient.secrets }}
 ---
-apiVersion: batch/v1beta1
-kind: CronJob
+###################################
+# Vitess vtctlclient Job
+###################################
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: {{ $shardName }}-backup
-  labels:
-    app: vitess
-    component: vttablet
-    cell: {{ $cellClean | quote }}
-    keyspace: {{ $keyspaceClean | quote }}
-    shard: {{ $shardClean | quote }}
-
+  name: vtctlclient-{{ $job.name }}
 spec:
-  schedule: {{ $shard.backup.cron.schedule | default $backup.cron.schedule | quote }}
-  concurrencyPolicy: Forbid
-  suspend: {{ $shard.backup.cron.suspend | default $backup.cron.suspend }}
-  successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 20
-
-  jobTemplate:
+  backoffLimit: 1
+  template:
     spec:
-      template:
-        metadata:
-          labels:
-            app: vitess
-            component: vttablet
-            cell: {{ $cellClean | quote }}
-            keyspace: {{ $keyspaceClean | quote }}
-            shard: {{ $shardClean | quote }}
-        # pod spec
-        spec:
-          restartPolicy: Never
-{{ include "pod-security" . | indent 10 }}
+      restartPolicy: OnFailure
+      containers:
+      - name: vtjob
+        image: "vitess/vtctlclient:{{$vitessTag}}"
+        volumeMounts:
+{{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
+        resources:
+{{ toYaml ($job.resources | default $defaultVtctlclient.resources) | indent 10 }}
 
-          containers:
-          - name: backup
-            image: "vitess/vtctlclient:{{$vitessTag}}"
-            volumeMounts:
-{{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 14 }}
+        command: ["bash"]
+        args:
+          - "-c"
+          - |
+            set -ex
 
-            command: ["bash"]
-            args:
-              - "-c"
-              - |
-                set -ex
+            VTCTLD_SVC=vtctld.{{ $namespace }}:15999
+            VTCTL_EXTRA_FLAGS=({{ include "format-flags-inline" $defaultVtctlclient.extraFlags }})
+            vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC {{ $job.command }}
+      volumes:
+{{ include "user-secret-volumes" $secrets | indent 8 }}
 
-                VTCTLD_SVC=vtctld.{{ $namespace }}:15999
-                VTCTL_EXTRA_FLAGS=({{ include "format-flags-inline" $defaultVtctlclient.extraFlags }})
+{{- end -}}
 
-                vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC BackupShard {{ $keyspace.name }}/{{ $shard.name }}
+{{- define "vtworker-job" -}}
+{{- $job := index . 0 -}}
+{{- $defaultVtworker := index . 1 -}}
+{{- $namespace := index . 2 -}}
 
-            resources:
-              requests:
-                cpu: 10m
-                memory: 20Mi
+{{- $vitessTag := $job.vitessTag | default $defaultVtworker.vitessTag -}}
+{{- $secrets := $job.secrets | default $defaultVtworker.secrets }}
+---
+###################################
+# Vitess vtworker Job
+###################################
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vtworker-{{ $job.name }}
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+{{ include "pod-security" . | indent 6 }}
+      restartPolicy: OnFailure
+      containers:
+      - name: vtjob
+        image: "vitess/vtworker:{{$vitessTag}}"
+        volumeMounts:
+{{ include "user-secret-volumeMounts" $defaultVtworker.secrets | indent 10 }}
+        resources:
+{{ toYaml ($job.resources | default $defaultVtworker.resources) | indent 10 }}
 
-{{ end }}
+        command: ["bash"]
+        args:
+          - "-c"
+          - |
+            set -ex
+
+            eval exec /vt/bin/vtworker $(cat <<END_OF_COMMAND
+              -topo_implementation="etcd2"
+              -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
+              -topo_global_root=/vitess/global
+              -cell={{ $job.cell | quote }}
+              -logtostderr=true
+              -stderrthreshold=0
+            END_OF_COMMAND
+            ) {{ $job.command }}
+      volumes:
+{{ include "user-secret-volumes" $secrets | indent 8 }}
 
 {{- end -}}

@@ -70,6 +70,14 @@
   {{ end }} # range $keyspace
 
 {{ end }} # range $cell
+
+{{ range $job := $.Values.jobs }}
+  {{ if eq $job.kind "vtctlclient" }}
+    {{ include "vtctlclient-job" (tuple $job $.Values.vtctlclient $.Release.Namespace) }}
+  {{ else }}
+    {{ include "vtworker-job" (tuple $job $.Values.vtworker $.Release.Namespace) }}
+  {{ end }}
+{{ end }}
 ---
 {{ with $.Values.config }}
 # shared ConfigMap
