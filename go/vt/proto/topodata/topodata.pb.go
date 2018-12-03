@@ -171,10 +171,10 @@ func (m *KeyRange) GetEnd() []byte {
 // TabletAlias is a globally unique tablet identifier.
 type TabletAlias struct {
 	// cell is the cell (or datacenter) the tablet is in
-	Cell string `protobuf:"bytes,1,opt,name=cell" json:"cell,omitempty"`
+	Cell string `protobuf:"bytes,1,opt,name=cell,proto3" json:"cell,omitempty"`
 	// uid is a unique id for this tablet within the shard
 	// (this is the MySQL server id as well).
-	Uid                  uint32   `protobuf:"varint,2,opt,name=uid" json:"uid,omitempty"`
+	Uid                  uint32   `protobuf:"varint,2,opt,name=uid,proto3" json:"uid,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -221,36 +221,36 @@ func (m *TabletAlias) GetUid() uint32 {
 // Tablet represents information about a running instance of vttablet.
 type Tablet struct {
 	// alias is the unique name of the tablet.
-	Alias *TabletAlias `protobuf:"bytes,1,opt,name=alias" json:"alias,omitempty"`
+	Alias *TabletAlias `protobuf:"bytes,1,opt,name=alias,proto3" json:"alias,omitempty"`
 	// Fully qualified domain name of the host.
-	Hostname string `protobuf:"bytes,2,opt,name=hostname" json:"hostname,omitempty"`
+	Hostname string `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	// Map of named ports. Normally this should include vt and grpc.
 	// Going forward, the mysql port will be stored in mysql_port
 	// instead of here.
 	// For accessing mysql port, use topoproto.MysqlPort to fetch, and
 	// topoproto.SetMysqlPort to set. These wrappers will ensure
 	// legacy behavior is supported.
-	PortMap map[string]int32 `protobuf:"bytes,4,rep,name=port_map,json=portMap" json:"port_map,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	PortMap map[string]int32 `protobuf:"bytes,4,rep,name=port_map,json=portMap,proto3" json:"port_map,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 	// Keyspace name.
-	Keyspace string `protobuf:"bytes,5,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,5,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// Shard name. If range based sharding is used, it should match
 	// key_range.
-	Shard string `protobuf:"bytes,6,opt,name=shard" json:"shard,omitempty"`
+	Shard string `protobuf:"bytes,6,opt,name=shard,proto3" json:"shard,omitempty"`
 	// If range based sharding is used, range for the tablet's shard.
-	KeyRange *KeyRange `protobuf:"bytes,7,opt,name=key_range,json=keyRange" json:"key_range,omitempty"`
+	KeyRange *KeyRange `protobuf:"bytes,7,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
 	// type is the current type of the tablet.
-	Type TabletType `protobuf:"varint,8,opt,name=type,enum=topodata.TabletType" json:"type,omitempty"`
+	Type TabletType `protobuf:"varint,8,opt,name=type,proto3,enum=topodata.TabletType" json:"type,omitempty"`
 	// It this is set, it is used as the database name instead of the
 	// normal "vt_" + keyspace.
-	DbNameOverride string `protobuf:"bytes,9,opt,name=db_name_override,json=dbNameOverride" json:"db_name_override,omitempty"`
+	DbNameOverride string `protobuf:"bytes,9,opt,name=db_name_override,json=dbNameOverride,proto3" json:"db_name_override,omitempty"`
 	// tablet tags
-	Tags map[string]string `protobuf:"bytes,10,rep,name=tags" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Tags map[string]string `protobuf:"bytes,10,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// MySQL hostname.
-	MysqlHostname string `protobuf:"bytes,12,opt,name=mysql_hostname,json=mysqlHostname" json:"mysql_hostname,omitempty"`
+	MysqlHostname string `protobuf:"bytes,12,opt,name=mysql_hostname,json=mysqlHostname,proto3" json:"mysql_hostname,omitempty"`
 	// MySQL port. Use topoproto.MysqlPort and topoproto.SetMysqlPort
 	// to access this variable. The functions provide support
 	// for legacy behavior.
-	MysqlPort            int32    `protobuf:"varint,13,opt,name=mysql_port,json=mysqlPort" json:"mysql_port,omitempty"`
+	MysqlPort            int32    `protobuf:"varint,13,opt,name=mysql_port,json=mysqlPort,proto3" json:"mysql_port,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -364,27 +364,27 @@ type Shard struct {
 	// shard for reparenting operations (InitShardMaster,
 	// PlannedReparentShard,EmergencyReparentShard), to guarantee
 	// exclusive operation.
-	MasterAlias *TabletAlias `protobuf:"bytes,1,opt,name=master_alias,json=masterAlias" json:"master_alias,omitempty"`
+	MasterAlias *TabletAlias `protobuf:"bytes,1,opt,name=master_alias,json=masterAlias,proto3" json:"master_alias,omitempty"`
 	// key_range is the KeyRange for this shard. It can be unset if:
 	// - we are not using range-based sharding in this shard.
 	// - the shard covers the entire keyrange.
 	// This must match the shard name based on our other conventions, but
 	// helpful to have it decomposed here.
 	// Once set at creation time, it is never changed.
-	KeyRange *KeyRange `protobuf:"bytes,2,opt,name=key_range,json=keyRange" json:"key_range,omitempty"`
+	KeyRange *KeyRange `protobuf:"bytes,2,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
 	// served_types has at most one entry per TabletType
 	// The keyspace lock is always taken when changing this.
-	ServedTypes []*Shard_ServedType `protobuf:"bytes,3,rep,name=served_types,json=servedTypes" json:"served_types,omitempty"`
+	ServedTypes []*Shard_ServedType `protobuf:"bytes,3,rep,name=served_types,json=servedTypes,proto3" json:"served_types,omitempty"`
 	// SourceShards is the list of shards we're replicating from,
 	// using filtered replication.
 	// The keyspace lock is always taken when changing this.
-	SourceShards []*Shard_SourceShard `protobuf:"bytes,4,rep,name=source_shards,json=sourceShards" json:"source_shards,omitempty"`
+	SourceShards []*Shard_SourceShard `protobuf:"bytes,4,rep,name=source_shards,json=sourceShards,proto3" json:"source_shards,omitempty"`
 	// Cells is the list of cells that contain tablets for this shard.
 	// No lock is necessary to update this field.
-	Cells []string `protobuf:"bytes,5,rep,name=cells" json:"cells,omitempty"`
+	Cells []string `protobuf:"bytes,5,rep,name=cells,proto3" json:"cells,omitempty"`
 	// tablet_controls has at most one entry per TabletType.
 	// The keyspace lock is always taken when changing this.
-	TabletControls       []*Shard_TabletControl `protobuf:"bytes,6,rep,name=tablet_controls,json=tabletControls" json:"tablet_controls,omitempty"`
+	TabletControls       []*Shard_TabletControl `protobuf:"bytes,6,rep,name=tablet_controls,json=tabletControls,proto3" json:"tablet_controls,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
 	XXX_unrecognized     []byte                 `json:"-"`
 	XXX_sizecache        int32                  `json:"-"`
@@ -458,8 +458,8 @@ func (m *Shard) GetTabletControls() []*Shard_TabletControl {
 
 // ServedType is an entry in the served_types
 type Shard_ServedType struct {
-	TabletType           TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
-	Cells                []string   `protobuf:"bytes,2,rep,name=cells" json:"cells,omitempty"`
+	TabletType           TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	Cells                []string   `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
 	XXX_unrecognized     []byte     `json:"-"`
 	XXX_sizecache        int32      `json:"-"`
@@ -508,15 +508,15 @@ func (m *Shard_ServedType) GetCells() []string {
 // of that shard will run filtered replication.
 type Shard_SourceShard struct {
 	// Uid is the unique ID for this SourceShard object.
-	Uid uint32 `protobuf:"varint,1,opt,name=uid" json:"uid,omitempty"`
+	Uid uint32 `protobuf:"varint,1,opt,name=uid,proto3" json:"uid,omitempty"`
 	// the source keyspace
-	Keyspace string `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// the source shard
-	Shard string `protobuf:"bytes,3,opt,name=shard" json:"shard,omitempty"`
+	Shard string `protobuf:"bytes,3,opt,name=shard,proto3" json:"shard,omitempty"`
 	// the source shard keyrange
-	KeyRange *KeyRange `protobuf:"bytes,4,opt,name=key_range,json=keyRange" json:"key_range,omitempty"`
+	KeyRange *KeyRange `protobuf:"bytes,4,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
 	// the source table list to replicate
-	Tables               []string `protobuf:"bytes,5,rep,name=tables" json:"tables,omitempty"`
+	Tables               []string `protobuf:"bytes,5,rep,name=tables,proto3" json:"tables,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -584,14 +584,14 @@ func (m *Shard_SourceShard) GetTables() []string {
 // TabletControl controls tablet's behavior
 type Shard_TabletControl struct {
 	// which tablet type is affected
-	TabletType TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
-	Cells      []string   `protobuf:"bytes,2,rep,name=cells" json:"cells,omitempty"`
+	TabletType TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	Cells      []string   `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
 	// what to do
-	DisableQueryService bool     `protobuf:"varint,3,opt,name=disable_query_service,json=disableQueryService" json:"disable_query_service,omitempty"`
-	BlacklistedTables   []string `protobuf:"bytes,4,rep,name=blacklisted_tables,json=blacklistedTables" json:"blacklisted_tables,omitempty"`
+	DisableQueryService bool     `protobuf:"varint,3,opt,name=disable_query_service,json=disableQueryService,proto3" json:"disable_query_service,omitempty"`
+	BlacklistedTables   []string `protobuf:"bytes,4,rep,name=blacklisted_tables,json=blacklistedTables,proto3" json:"blacklisted_tables,omitempty"`
 	// frozen is set if we've started failing over traffic for
 	// the master. If set, this record should not be removed.
-	Frozen               bool     `protobuf:"varint,5,opt,name=frozen" json:"frozen,omitempty"`
+	Frozen               bool     `protobuf:"varint,5,opt,name=frozen,proto3" json:"frozen,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -660,13 +660,13 @@ func (m *Shard_TabletControl) GetFrozen() bool {
 type Keyspace struct {
 	// name of the column used for sharding
 	// empty if the keyspace is not sharded
-	ShardingColumnName string `protobuf:"bytes,1,opt,name=sharding_column_name,json=shardingColumnName" json:"sharding_column_name,omitempty"`
+	ShardingColumnName string `protobuf:"bytes,1,opt,name=sharding_column_name,json=shardingColumnName,proto3" json:"sharding_column_name,omitempty"`
 	// type of the column used for sharding
 	// UNSET if the keyspace is not sharded
-	ShardingColumnType KeyspaceIdType `protobuf:"varint,2,opt,name=sharding_column_type,json=shardingColumnType,enum=topodata.KeyspaceIdType" json:"sharding_column_type,omitempty"`
+	ShardingColumnType KeyspaceIdType `protobuf:"varint,2,opt,name=sharding_column_type,json=shardingColumnType,proto3,enum=topodata.KeyspaceIdType" json:"sharding_column_type,omitempty"`
 	// ServedFrom will redirect the appropriate traffic to
 	// another keyspace.
-	ServedFroms          []*Keyspace_ServedFrom `protobuf:"bytes,4,rep,name=served_froms,json=servedFroms" json:"served_froms,omitempty"`
+	ServedFroms          []*Keyspace_ServedFrom `protobuf:"bytes,4,rep,name=served_froms,json=servedFroms,proto3" json:"served_froms,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
 	XXX_unrecognized     []byte                 `json:"-"`
 	XXX_sizecache        int32                  `json:"-"`
@@ -721,11 +721,11 @@ func (m *Keyspace) GetServedFroms() []*Keyspace_ServedFrom {
 // keyspace name that's serving it.
 type Keyspace_ServedFrom struct {
 	// the tablet type (key for the map)
-	TabletType TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// the cells to limit this to
-	Cells []string `protobuf:"bytes,2,rep,name=cells" json:"cells,omitempty"`
+	Cells []string `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
 	// the keyspace name that's serving it
-	Keyspace             string   `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace             string   `protobuf:"bytes,3,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -781,7 +781,7 @@ func (m *Keyspace_ServedFrom) GetKeyspace() string {
 type ShardReplication struct {
 	// Note there can be only one Node in this array
 	// for a given tablet.
-	Nodes                []*ShardReplication_Node `protobuf:"bytes,1,rep,name=nodes" json:"nodes,omitempty"`
+	Nodes                []*ShardReplication_Node `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
 	XXX_unrecognized     []byte                   `json:"-"`
 	XXX_sizecache        int32                    `json:"-"`
@@ -820,7 +820,7 @@ func (m *ShardReplication) GetNodes() []*ShardReplication_Node {
 
 // Node describes a tablet instance within the cell
 type ShardReplication_Node struct {
-	TabletAlias          *TabletAlias `protobuf:"bytes,1,opt,name=tablet_alias,json=tabletAlias" json:"tablet_alias,omitempty"`
+	TabletAlias          *TabletAlias `protobuf:"bytes,1,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
 	XXX_unrecognized     []byte       `json:"-"`
 	XXX_sizecache        int32        `json:"-"`
@@ -860,8 +860,8 @@ func (m *ShardReplication_Node) GetTabletAlias() *TabletAlias {
 // ShardReference is used as a pointer from a SrvKeyspace to a Shard
 type ShardReference struct {
 	// Copied from Shard.
-	Name                 string    `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	KeyRange             *KeyRange `protobuf:"bytes,2,opt,name=key_range,json=keyRange" json:"key_range,omitempty"`
+	Name                 string    `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	KeyRange             *KeyRange `protobuf:"bytes,2,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
 	XXX_unrecognized     []byte    `json:"-"`
 	XXX_sizecache        int32     `json:"-"`
@@ -908,11 +908,11 @@ func (m *ShardReference) GetKeyRange() *KeyRange {
 // SrvKeyspace is a rollup node for the keyspace itself.
 type SrvKeyspace struct {
 	// The partitions this keyspace is serving, per tablet type.
-	Partitions []*SrvKeyspace_KeyspacePartition `protobuf:"bytes,1,rep,name=partitions" json:"partitions,omitempty"`
+	Partitions []*SrvKeyspace_KeyspacePartition `protobuf:"bytes,1,rep,name=partitions,proto3" json:"partitions,omitempty"`
 	// copied from Keyspace
-	ShardingColumnName   string                    `protobuf:"bytes,2,opt,name=sharding_column_name,json=shardingColumnName" json:"sharding_column_name,omitempty"`
-	ShardingColumnType   KeyspaceIdType            `protobuf:"varint,3,opt,name=sharding_column_type,json=shardingColumnType,enum=topodata.KeyspaceIdType" json:"sharding_column_type,omitempty"`
-	ServedFrom           []*SrvKeyspace_ServedFrom `protobuf:"bytes,4,rep,name=served_from,json=servedFrom" json:"served_from,omitempty"`
+	ShardingColumnName   string                    `protobuf:"bytes,2,opt,name=sharding_column_name,json=shardingColumnName,proto3" json:"sharding_column_name,omitempty"`
+	ShardingColumnType   KeyspaceIdType            `protobuf:"varint,3,opt,name=sharding_column_type,json=shardingColumnType,proto3,enum=topodata.KeyspaceIdType" json:"sharding_column_type,omitempty"`
+	ServedFrom           []*SrvKeyspace_ServedFrom `protobuf:"bytes,4,rep,name=served_from,json=servedFrom,proto3" json:"served_from,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                  `json:"-"`
 	XXX_unrecognized     []byte                    `json:"-"`
 	XXX_sizecache        int32                     `json:"-"`
@@ -972,9 +972,9 @@ func (m *SrvKeyspace) GetServedFrom() []*SrvKeyspace_ServedFrom {
 
 type SrvKeyspace_KeyspacePartition struct {
 	// The type this partition applies to.
-	ServedType TabletType `protobuf:"varint,1,opt,name=served_type,json=servedType,enum=topodata.TabletType" json:"served_type,omitempty"`
+	ServedType TabletType `protobuf:"varint,1,opt,name=served_type,json=servedType,proto3,enum=topodata.TabletType" json:"served_type,omitempty"`
 	// List of non-overlapping continuous shards sorted by range.
-	ShardReferences      []*ShardReference `protobuf:"bytes,2,rep,name=shard_references,json=shardReferences" json:"shard_references,omitempty"`
+	ShardReferences      []*ShardReference `protobuf:"bytes,2,rep,name=shard_references,json=shardReferences,proto3" json:"shard_references,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -1022,9 +1022,9 @@ func (m *SrvKeyspace_KeyspacePartition) GetShardReferences() []*ShardReference {
 // keyspace name that's serving it.
 type SrvKeyspace_ServedFrom struct {
 	// the tablet type
-	TabletType TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// the keyspace name that's serving it
-	Keyspace             string   `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	Keyspace             string   `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1076,13 +1076,13 @@ type CellInfo struct {
 	// The syntax of this field is topology implementation specific.
 	// For instance, for Zookeeper, it is a comma-separated list of
 	// server addresses.
-	ServerAddress string `protobuf:"bytes,1,opt,name=server_address,json=serverAddress" json:"server_address,omitempty"`
+	ServerAddress string `protobuf:"bytes,1,opt,name=server_address,json=serverAddress,proto3" json:"server_address,omitempty"`
 	// Root is the path to store data in. It is only used when talking
 	// to server_address.
-	Root string `protobuf:"bytes,2,opt,name=root" json:"root,omitempty"`
+	Root string `protobuf:"bytes,2,opt,name=root,proto3" json:"root,omitempty"`
 	// Region is a group this cell belongs to. Used by vtgate to route traffic to
 	// other cells (in same region) when there is no available tablet in the current cell.
-	Region               string   `protobuf:"bytes,3,opt,name=region" json:"region,omitempty"`
+	Region               string   `protobuf:"bytes,3,opt,name=region,proto3" json:"region,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`

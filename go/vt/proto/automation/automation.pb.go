@@ -77,13 +77,13 @@ func (TaskState) EnumDescriptor() ([]byte, []int) {
 }
 
 type ClusterOperation struct {
-	Id string `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// TaskContainer are processed sequentially, one at a time.
-	SerialTasks []*TaskContainer `protobuf:"bytes,2,rep,name=serial_tasks,json=serialTasks" json:"serial_tasks,omitempty"`
+	SerialTasks []*TaskContainer `protobuf:"bytes,2,rep,name=serial_tasks,json=serialTasks,proto3" json:"serial_tasks,omitempty"`
 	// Cached value. This has to be re-evaluated e.g. after a checkpoint load because running tasks may have already finished.
-	State ClusterOperationState `protobuf:"varint,3,opt,name=state,enum=automation.ClusterOperationState" json:"state,omitempty"`
+	State ClusterOperationState `protobuf:"varint,3,opt,name=state,proto3,enum=automation.ClusterOperationState" json:"state,omitempty"`
 	// Error of the first task which failed. Set after state advanced to CLUSTER_OPERATION_DONE. If empty, all tasks succeeded. Cached value, see state above.
-	Error                string   `protobuf:"bytes,4,opt,name=error" json:"error,omitempty"`
+	Error                string   `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -144,8 +144,8 @@ func (m *ClusterOperation) GetError() string {
 // TaskContainer holds one or more task which may be executed in parallel.
 // "concurrency", if > 0, limits the amount of concurrently executed tasks.
 type TaskContainer struct {
-	ParallelTasks        []*Task  `protobuf:"bytes,1,rep,name=parallel_tasks,json=parallelTasks" json:"parallel_tasks,omitempty"`
-	Concurrency          int32    `protobuf:"varint,2,opt,name=concurrency" json:"concurrency,omitempty"`
+	ParallelTasks        []*Task  `protobuf:"bytes,1,rep,name=parallel_tasks,json=parallelTasks,proto3" json:"parallel_tasks,omitempty"`
+	Concurrency          int32    `protobuf:"varint,2,opt,name=concurrency,proto3" json:"concurrency,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -192,15 +192,15 @@ func (m *TaskContainer) GetConcurrency() int32 {
 // Task represents a specific task which should be automatically executed.
 type Task struct {
 	// Task specification.
-	Name       string            `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	Parameters map[string]string `protobuf:"bytes,2,rep,name=parameters" json:"parameters,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Name       string            `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Parameters map[string]string `protobuf:"bytes,2,rep,name=parameters,proto3" json:"parameters,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// Runtime data.
-	Id    string    `protobuf:"bytes,3,opt,name=id" json:"id,omitempty"`
-	State TaskState `protobuf:"varint,4,opt,name=state,enum=automation.TaskState" json:"state,omitempty"`
+	Id    string    `protobuf:"bytes,3,opt,name=id,proto3" json:"id,omitempty"`
+	State TaskState `protobuf:"varint,4,opt,name=state,proto3,enum=automation.TaskState" json:"state,omitempty"`
 	// Set after state advanced to DONE.
-	Output string `protobuf:"bytes,5,opt,name=output" json:"output,omitempty"`
+	Output string `protobuf:"bytes,5,opt,name=output,proto3" json:"output,omitempty"`
 	// Set after state advanced to DONE. If empty, the task did succeed.
-	Error                string   `protobuf:"bytes,6,opt,name=error" json:"error,omitempty"`
+	Error                string   `protobuf:"bytes,6,opt,name=error,proto3" json:"error,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -273,8 +273,8 @@ func (m *Task) GetError() string {
 }
 
 type EnqueueClusterOperationRequest struct {
-	Name                 string            `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	Parameters           map[string]string `protobuf:"bytes,2,rep,name=parameters" json:"parameters,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Name                 string            `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Parameters           map[string]string `protobuf:"bytes,2,rep,name=parameters,proto3" json:"parameters,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -319,7 +319,7 @@ func (m *EnqueueClusterOperationRequest) GetParameters() map[string]string {
 }
 
 type EnqueueClusterOperationResponse struct {
-	Id                   string   `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
+	Id                   string   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -357,7 +357,7 @@ func (m *EnqueueClusterOperationResponse) GetId() string {
 }
 
 type GetClusterOperationStateRequest struct {
-	Id                   string   `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
+	Id                   string   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -395,7 +395,7 @@ func (m *GetClusterOperationStateRequest) GetId() string {
 }
 
 type GetClusterOperationStateResponse struct {
-	State                ClusterOperationState `protobuf:"varint,1,opt,name=state,enum=automation.ClusterOperationState" json:"state,omitempty"`
+	State                ClusterOperationState `protobuf:"varint,1,opt,name=state,proto3,enum=automation.ClusterOperationState" json:"state,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -433,7 +433,7 @@ func (m *GetClusterOperationStateResponse) GetState() ClusterOperationState {
 }
 
 type GetClusterOperationDetailsRequest struct {
-	Id                   string   `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
+	Id                   string   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -472,7 +472,7 @@ func (m *GetClusterOperationDetailsRequest) GetId() string {
 
 type GetClusterOperationDetailsResponse struct {
 	// Full snapshot of the execution e.g. including output of each task.
-	ClusterOp            *ClusterOperation `protobuf:"bytes,2,opt,name=cluster_op,json=clusterOp" json:"cluster_op,omitempty"`
+	ClusterOp            *ClusterOperation `protobuf:"bytes,2,opt,name=cluster_op,json=clusterOp,proto3" json:"cluster_op,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`

@@ -23,7 +23,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.CallCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
-import io.grpc.internal.WithLogId;
+import io.grpc.InternalWithLogId;
 import io.vitess.client.Context;
 import io.vitess.client.Proto;
 import io.vitess.client.RpcClient;
@@ -101,8 +101,8 @@ public class GrpcClient implements RpcClient {
   }
 
   private String toChannelId(ManagedChannel channel) {
-    return channel instanceof WithLogId ?
-        ((WithLogId) channel).getLogId().toString() : channel.toString();
+    return channel instanceof InternalWithLogId ?
+        ((InternalWithLogId) channel).getLogId().toString() : channel.toString();
   }
 
   @Override

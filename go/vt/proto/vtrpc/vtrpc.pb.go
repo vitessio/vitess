@@ -293,15 +293,15 @@ type CallerID struct {
 	// came from an automated job or another system component.
 	// If the request comes directly from the Internet, or if the Vitess client
 	// takes action on its own accord, it is okay for this field to be absent.
-	Principal string `protobuf:"bytes,1,opt,name=principal" json:"principal,omitempty"`
+	Principal string `protobuf:"bytes,1,opt,name=principal,proto3" json:"principal,omitempty"`
 	// component describes the running process of the effective caller.
 	// It can for instance be the hostname:port of the servlet initiating the
 	// database call, or the container engine ID used by the servlet.
-	Component string `protobuf:"bytes,2,opt,name=component" json:"component,omitempty"`
+	Component string `protobuf:"bytes,2,opt,name=component,proto3" json:"component,omitempty"`
 	// subcomponent describes a component inisde the immediate caller which
 	// is responsible for generating is request. Suggested values are a
 	// servlet name or an API endpoint name.
-	Subcomponent         string   `protobuf:"bytes,3,opt,name=subcomponent" json:"subcomponent,omitempty"`
+	Subcomponent         string   `protobuf:"bytes,3,opt,name=subcomponent,proto3" json:"subcomponent,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -357,9 +357,9 @@ func (m *CallerID) GetSubcomponent() string {
 // We use this so the clients don't have to parse the error messages,
 // but instead can depend on the value of the code.
 type RPCError struct {
-	LegacyCode           LegacyErrorCode `protobuf:"varint,1,opt,name=legacy_code,json=legacyCode,enum=vtrpc.LegacyErrorCode" json:"legacy_code,omitempty"`
-	Message              string          `protobuf:"bytes,2,opt,name=message" json:"message,omitempty"`
-	Code                 Code            `protobuf:"varint,3,opt,name=code,enum=vtrpc.Code" json:"code,omitempty"`
+	LegacyCode           LegacyErrorCode `protobuf:"varint,1,opt,name=legacy_code,json=legacyCode,proto3,enum=vtrpc.LegacyErrorCode" json:"legacy_code,omitempty"`
+	Message              string          `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Code                 Code            `protobuf:"varint,3,opt,name=code,proto3,enum=vtrpc.Code" json:"code,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
