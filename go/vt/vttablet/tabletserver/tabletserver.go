@@ -518,9 +518,9 @@ func (tsv *TabletServer) fullStart() (err error) {
 }
 
 func (tsv *TabletServer) serveNewType() (err error) {
-	if !tsv.te.isOpen {
-		tsv.te.Open()
-	}
+	// Make sure to give transactions a chance to close up so we can start a new engine
+	tsv.te.Close(false)
+	tsv.te.Open()
 
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
