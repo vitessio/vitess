@@ -112,7 +112,7 @@ jobs:
 
 # Default values for etcd resources defined in 'topology'
 etcd:
-  version: "3.2.13"
+  version: "3.3.10"
   replicas: 3
   resources:
     limits:
