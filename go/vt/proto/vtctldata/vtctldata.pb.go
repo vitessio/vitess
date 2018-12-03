@@ -22,8 +22,8 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 // ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
 // timeouts are in nanoseconds.
 type ExecuteVtctlCommandRequest struct {
-	Args                 []string `protobuf:"bytes,1,rep,name=args" json:"args,omitempty"`
-	ActionTimeout        int64    `protobuf:"varint,2,opt,name=action_timeout,json=actionTimeout" json:"action_timeout,omitempty"`
+	Args                 []string `protobuf:"bytes,1,rep,name=args,proto3" json:"args,omitempty"`
+	ActionTimeout        int64    `protobuf:"varint,2,opt,name=action_timeout,json=actionTimeout,proto3" json:"action_timeout,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -69,7 +69,7 @@ func (m *ExecuteVtctlCommandRequest) GetActionTimeout() int64 {
 
 // ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.
 type ExecuteVtctlCommandResponse struct {
-	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
 	XXX_unrecognized     []byte         `json:"-"`
 	XXX_sizecache        int32          `json:"-"`

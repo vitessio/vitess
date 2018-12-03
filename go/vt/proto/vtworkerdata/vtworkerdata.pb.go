@@ -21,7 +21,7 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 // ExecuteVtworkerCommandRequest is the payload for ExecuteVtworkerCommand.
 type ExecuteVtworkerCommandRequest struct {
-	Args                 []string `protobuf:"bytes,1,rep,name=args" json:"args,omitempty"`
+	Args                 []string `protobuf:"bytes,1,rep,name=args,proto3" json:"args,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -60,7 +60,7 @@ func (m *ExecuteVtworkerCommandRequest) GetArgs() []string {
 
 // ExecuteVtworkerCommandResponse is streamed back by ExecuteVtworkerCommand.
 type ExecuteVtworkerCommandResponse struct {
-	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
 	XXX_unrecognized     []byte         `json:"-"`
 	XXX_sizecache        int32          `json:"-"`
