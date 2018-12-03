@@ -125,13 +125,17 @@ func (pb *primitiveBuilder) pushFilter(boolExpr sqlparser.Expr, whereType string
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
-		origin, expr, err := pb.findOrigin(filter)
+		pullouts, origin, expr, err := pb.findOrigin(filter)
 		if err != nil {
 			return err
 		}
-		if err := pb.bldr.PushFilter(pb, expr, whereType, origin); err != nil {
-			return err
+		// The returned expression may be complex. Resplit before pushing.
+		for _, subexpr := range splitAndExpression(nil, expr) {
+			if err := pb.bldr.PushFilter(pb, subexpr, whereType, origin); err != nil {
+				return err
+			}
 		}
+		pb.addPullouts(pullouts)
 	}
 	return nil
 }
@@ -156,6 +160,14 @@ func reorderBySubquery(filters []sqlparser.Expr) {
 	}
 }
 
+// addPullouts adds the pullout subqueries to the primitiveBuilder.
+func (pb *primitiveBuilder) addPullouts(pullouts []*pulloutSubquery) {
+	for _, pullout := range pullouts {
+		pullout.setUnderlying(pb.bldr)
+		pb.bldr = pullout
+	}
+}
+
 // pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
 func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select, grouper groupByHandler) error {
@@ -170,20 +182,31 @@ func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select, grouper group
 // pusheSelectRoutes is a convenience function that pushes all the select
 // expressions and returns the list of resultColumns generated for it.
 func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) ([]*resultColumn, error) {
-	resultColumns := make([]*resultColumn, len(selectExprs))
-	for i, node := range selectExprs {
+	resultColumns := make([]*resultColumn, 0, len(selectExprs))
+	for _, node := range selectExprs {
 		switch node := node.(type) {
 		case *sqlparser.AliasedExpr:
-			origin, expr, err := pb.findOrigin(node.Expr)
+			pullouts, origin, expr, err := pb.findOrigin(node.Expr)
 			if err != nil {
 				return nil, err
 			}
 			node.Expr = expr
-			resultColumns[i], _, err = pb.bldr.PushSelect(node, origin)
+			rc, _, err := pb.bldr.PushSelect(node, origin)
 			if err != nil {
 				return nil, err
 			}
+			resultColumns = append(resultColumns, rc)
+			pb.addPullouts(pullouts)
 		case *sqlparser.StarExpr:
+			var expanded bool
+			var err error
+			resultColumns, expanded, err = pb.expandStar(resultColumns, node)
+			if err != nil {
+				return nil, err
+			}
+			if expanded {
+				continue
+			}
 			// We'll allow select * for simple routes.
 			rb, ok := pb.bldr.(*route)
 			if !ok {
@@ -197,7 +220,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 					}
 				}
 			}
-			resultColumns[i] = rb.PushAnonymous(node)
+			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		case sqlparser.Nextval:
 			rb, ok := pb.bldr.(*route)
 			if !ok {
@@ -207,12 +230,96 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 			if err := rb.SetOpcode(engine.SelectNext); err != nil {
 				return nil, err
 			}
-			resultColumns[i] = rb.PushAnonymous(node)
+			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		default:
 			panic(fmt.Sprintf("BUG: unexpceted select expression type: %T", node))
 		}
 	}
 	return resultColumns, nil
+}
+
+// expandStar expands a StarExpr and pushes the expanded
+// expressions down if the tables have authoritative column lists.
+// If not, it returns false.
+// This function breaks the abstraction a bit: it directly sets the
+// the Metadata for newly created expressions. In all other cases,
+// the Metadata is set through a symtab Find.
+func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.StarExpr) (outrcs []*resultColumn, expanded bool, err error) {
+	tables := pb.st.AllTables()
+	if tables == nil {
+		// no table metadata available.
+		return inrcs, false, nil
+	}
+	if expr.TableName.IsEmpty() {
+		for _, t := range tables {
+			// All tables must have authoritative column lists.
+			if !t.isAuthoritative {
+				return inrcs, false, nil
+			}
+		}
+		singleTable := false
+		if len(tables) == 1 {
+			singleTable = true
+		}
+		for _, t := range tables {
+			for _, col := range t.columnNames {
+				var expr *sqlparser.AliasedExpr
+				if singleTable {
+					// If there's only one table, we use unqualifed column names.
+					expr = &sqlparser.AliasedExpr{
+						Expr: &sqlparser.ColName{
+							Metadata: t.columns[col.Lowered()],
+							Name:     col,
+						},
+					}
+				} else {
+					// If a and b have id as their column, then
+					// select * from a join b should result in
+					// select a.id as id, b.id as id from a join b.
+					expr = &sqlparser.AliasedExpr{
+						Expr: &sqlparser.ColName{
+							Metadata:  t.columns[col.Lowered()],
+							Name:      col,
+							Qualifier: t.alias,
+						},
+						As: col,
+					}
+				}
+				rc, _, err := pb.bldr.PushSelect(expr, t.origin)
+				if err != nil {
+					// Unreachable because PushSelect won't fail on ColName.
+					return inrcs, false, err
+				}
+				inrcs = append(inrcs, rc)
+			}
+		}
+		return inrcs, true, nil
+	}
+
+	// Expression qualified with table name.
+	t, err := pb.st.FindTable(expr.TableName)
+	if err != nil {
+		return inrcs, false, err
+	}
+	if !t.isAuthoritative {
+		return inrcs, false, nil
+	}
+	for _, col := range t.columnNames {
+		expr := &sqlparser.AliasedExpr{
+			Expr: &sqlparser.ColName{
+				Metadata:  t.columns[col.Lowered()],
+				Name:      col,
+				Qualifier: expr.TableName,
+			},
+		}
+		rc, _, err := pb.bldr.PushSelect(expr, t.origin)
+		if err != nil {
+			// Unreachable because PushSelect won't fail on ColName.
+			return inrcs, false, err
+		}
+		inrcs = append(inrcs, rc)
+	}
+	return inrcs, true, nil
 }
 
 // queryTimeout returns DirectiveQueryTimeout value if set, otherwise returns 0.

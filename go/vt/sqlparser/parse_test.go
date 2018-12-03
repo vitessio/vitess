@@ -980,11 +980,20 @@ var (
 		input:  "alter view a",
 		output: "alter table a",
 	}, {
+		input:  "rename table a to b",
+		output: "rename table a to b",
+	}, {
+		input:  "rename table a to b, b to c",
+		output: "rename table a to b, b to c",
+	}, {
 		input:  "drop view a",
 		output: "drop table a",
 	}, {
 		input:  "drop table a",
 		output: "drop table a",
+	}, {
+		input:  "drop table a, b",
+		output: "drop table a, b",
 	}, {
 		input:  "drop table if exists a",
 		output: "drop table if exists a",
@@ -1011,10 +1020,16 @@ var (
 		output: "show binlog",
 	}, {
 		input:  "show character set",
-		output: "show character set",
+		output: "show charset",
 	}, {
 		input:  "show character set like '%foo'",
-		output: "show character set",
+		output: "show charset",
+	}, {
+		input:  "show charset",
+		output: "show charset",
+	}, {
+		input:  "show charset like '%foo'",
+		output: "show charset",
 	}, {
 		input:  "show collation",
 		output: "show collation",
@@ -1740,7 +1755,7 @@ func TestSubStr(t *testing.T) {
 		input  string
 		output string
 	}{{
-		input: "select substr(a, 1) from t",
+		input: `select substr('foobar', 1) from t`,
 	}, {
 		input: "select substr(a, 1, 6) from t",
 	}, {
@@ -1755,6 +1770,12 @@ func TestSubStr(t *testing.T) {
 	}, {
 		input:  "select substring(a from 1 for 6) from t",
 		output: "select substr(a, 1, 6) from t",
+	}, {
+		input:  `select substr("foo" from 1 for 2) from t`,
+		output: `select substr('foo', 1, 2) from t`,
+	}, {
+		input:  `select substring("foo", 1, 2) from t`,
+		output: `select substr('foo', 1, 2) from t`,
 	}}
 
 	for _, tcase := range validSQL {
@@ -2236,6 +2257,40 @@ var (
 
 func TestErrors(t *testing.T) {
 	for _, tcase := range invalidSQL {
+		_, err := Parse(tcase.input)
+		if err == nil || err.Error() != tcase.output {
+			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
+		}
+	}
+}
+
+// TestSkipToEnd tests that the skip to end functionality
+// does not skip past a ';'. If any tokens exist after that, Parse
+// should return an error.
+func TestSkipToEnd(t *testing.T) {
+	testcases := []struct {
+		input  string
+		output string
+	}{{
+		// This is the case where the partial ddl will be reset
+		// because of a premature ';'.
+		input:  "create table a(id; select * from t",
+		output: "syntax error at position 19",
+	}, {
+		// Partial DDL should get reset for valid DDLs also.
+		input:  "create table a(id int); select * from t",
+		output: "syntax error at position 31 near 'select'",
+	}, {
+		// Partial DDL does not get reset here. But we allow the
+		// DDL only if there are no new tokens after skipping to end.
+		input:  "create table a bb cc; select * from t",
+		output: "extra characters encountered after end of DDL: 'select'",
+	}, {
+		// Test that we don't step at ';' inside strings.
+		input:  "create table a bb 'a;'; select * from t",
+		output: "extra characters encountered after end of DDL: 'select'",
+	}}
+	for _, tcase := range testcases {
 		_, err := Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)

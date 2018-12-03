@@ -96,6 +96,8 @@ func (sdw *SplitDiffWorker) StatusAsHTML() template.HTML {
 	switch state {
 	case WorkerStateDiff:
 		result += "<b>Running...</b></br>\n"
+	case WorkerStateDiffWillFail:
+		result += "<b>Running - have already found differences...</b></br>\n"
 	case WorkerStateDone:
 		result += "<b>Success.</b></br>\n"
 	}
@@ -112,6 +114,8 @@ func (sdw *SplitDiffWorker) StatusAsText() string {
 	switch state {
 	case WorkerStateDiff:
 		result += "Running...\n"
+	case WorkerStateDiffWillFail:
+		result += "Running - have already found differences...\n"
 	case WorkerStateDone:
 		result += "Success.\n"
 	}
@@ -400,7 +404,9 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(
 			shortCtx, sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 		cancel()
-		rec.RecordError(err)
+		if err != nil {
+			sdw.markAsWillFail(rec, err)
+		}
 		sdw.wr.Logger().Infof("Got schema from destination %v", sdw.destinationAlias)
 		wg.Done()
 	}()
@@ -411,7 +417,9 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 		sdw.sourceSchemaDefinition, err = sdw.wr.GetSchema(
 			shortCtx, sdw.sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 		cancel()
-		rec.RecordError(err)
+		if err != nil {
+			sdw.markAsWillFail(rec, err)
+		}
 		sdw.wr.Logger().Infof("Got schema from source %v", sdw.sourceAlias)
 		wg.Done()
 	}()
@@ -495,7 +503,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			}
 			if err != nil {
 				newErr := vterrors.Wrap(err, "TableScan(ByKeyRange?)(source) failed")
-				rec.RecordError(newErr)
+				sdw.markAsWillFail(rec, newErr)
 				sdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
@@ -511,7 +519,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			}
 			if err != nil {
 				newErr := vterrors.Wrap(err, "TableScan(ByKeyRange?)(destination) failed")
-				rec.RecordError(newErr)
+				sdw.markAsWillFail(rec, newErr)
 				sdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
@@ -521,7 +529,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, tableDefinition)
 			if err != nil {
 				newErr := vterrors.Wrap(err, "NewRowDiffer() failed")
-				rec.RecordError(newErr)
+				sdw.markAsWillFail(rec, newErr)
 				sdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
@@ -530,12 +538,12 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			report, err := differ.Go(sdw.wr.Logger())
 			if err != nil {
 				newErr := fmt.Errorf("Differ.Go failed: %v", err.Error())
-				rec.RecordError(newErr)
+				sdw.markAsWillFail(rec, newErr)
 				sdw.wr.Logger().Errorf("%v", newErr)
 			} else {
 				if report.HasDifferences() {
 					err := fmt.Errorf("Table %v has differences: %v", tableDefinition.Name, report.String())
-					rec.RecordError(err)
+					sdw.markAsWillFail(rec, err)
 					sdw.wr.Logger().Warningf(err.Error())
 				} else {
 					sdw.wr.Logger().Infof("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS)
@@ -548,4 +556,10 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	wg.Wait()
 
 	return rec.Error()
+}
+
+// markAsWillFail records the error and changes the state of the worker to reflect this
+func (sdw *SplitDiffWorker) markAsWillFail(er concurrency.ErrorRecorder, err error) {
+	er.RecordError(err)
+	sdw.SetState(WorkerStateDiffWillFail)
 }

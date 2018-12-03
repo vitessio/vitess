@@ -17,7 +17,7 @@ limitations under the License.
 package mysql
 
 import (
-	"crypto/tls"
+	tls "crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -37,8 +37,14 @@ const (
 	DefaultServerVersion = "5.5.10-Vitess"
 
 	// timing metric keys
-	connectTimingKey = "Connect"
-	queryTimingKey   = "Query"
+	connectTimingKey  = "Connect"
+	queryTimingKey    = "Query"
+	versionSSL30      = "SSL30"
+	versionTLS10      = "TLS10"
+	versionTLS11      = "TLS11"
+	versionTLS12      = "TLS12"
+	versionTLSUnknown = "UnknownTLSVersion"
+	versionNoTLS      = "None"
 )
 
 var (
@@ -48,8 +54,9 @@ var (
 	connAccept = stats.NewCounter("MysqlServerConnAccepted", "Connections accepted by MySQL server")
 	connSlow   = stats.NewCounter("MysqlServerConnSlow", "Connections that took more than the configured mysql_slow_connect_warn_threshold to establish")
 
-	connCountPerUser = stats.NewGaugesWithSingleLabel("MysqlServerConnCountPerUser", "Active MySQL server connections per user", "count")
-	_                = stats.NewGaugeFunc("MysqlServerConnCountUnauthenticated", "Active MySQL server connections that haven't authenticated yet", func() int64 {
+	connCountByTLSVer = stats.NewGaugesWithSingleLabel("MysqlServerConnCountByTLSVer", "Active MySQL server connections by TLS version", "tls")
+	connCountPerUser  = stats.NewGaugesWithSingleLabel("MysqlServerConnCountPerUser", "Active MySQL server connections per user", "count")
+	_                 = stats.NewGaugeFunc("MysqlServerConnCountUnauthenticated", "Active MySQL server connections that haven't authenticated yet", func() int64 {
 		totalUsers := int64(0)
 		for _, v := range connCountPerUser.Counts() {
 			totalUsers += v
@@ -142,6 +149,9 @@ type Listener struct {
 
 	// shutdown indicates that Shutdown method was called.
 	shutdown sync2.AtomicBool
+
+	// RequireSecureTransport configures the server to reject connections from insecure clients
+	RequireSecureTransport bool
 }
 
 // NewFromListener creares a new mysql listener from an existing net.Listener
@@ -300,6 +310,21 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			return
 		}
 		c.recycleReadPacket()
+
+		if con, ok := c.conn.(*tls.Conn); ok {
+			connState := con.ConnectionState()
+			tlsVerStr := tlsVersionToString(connState.Version)
+			if tlsVerStr != "" {
+				connCountByTLSVer.Add(tlsVerStr, 1)
+				defer connCountByTLSVer.Add(tlsVerStr, -1)
+			}
+		}
+	} else {
+		if l.RequireSecureTransport {
+			c.writeErrorPacketFromError(fmt.Errorf("Server does not allow insecure connections, client must use SSL/TLS"))
+		}
+		connCountByTLSVer.Add(versionNoTLS, 1)
+		defer connCountByTLSVer.Add(versionNoTLS, -1)
 	}
 
 	// See what auth method the AuthServer wants to use for that user.
@@ -326,10 +351,34 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	case authServerMethod == MysqlNativePassword:
 		// The server really wants to use MysqlNativePassword,
-		// but the client returned a result for something else:
-		// not sure this can happen, so not supporting this now.
-		c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Client asked for auth %v, but server wants auth mysql_native_password", authMethod)
-		return
+		// but the client returned a result for something else.
+
+		salt, err := l.authServer.Salt()
+		if err != nil {
+			return
+		}
+		data := make([]byte, 21)
+		data = append(salt, byte(0x00))
+		if err := c.writeAuthSwitchRequest(MysqlNativePassword, data); err != nil {
+			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
+			return
+		}
+
+		response, err := c.readEphemeralPacket()
+		if err != nil {
+			log.Errorf("Error reading auth switch response for %s: %v", c, err)
+			return
+		}
+		c.recycleReadPacket()
+
+		userData, err := l.authServer.ValidateHash(salt, user, response, conn.RemoteAddr())
+		if err != nil {
+			log.Warningf("Error authenticating user using MySQL native password: %v", err)
+			c.writeErrorPacketFromError(err)
+			return
+		}
+		c.User = user
+		c.UserData = userData
 
 	default:
 		// The server wants to use something else, re-negotiate.
@@ -421,7 +470,8 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 		CapabilityClientMultiResults |
 		CapabilityClientPluginAuth |
 		CapabilityClientPluginAuthLenencClientData |
-		CapabilityClientDeprecateEOF
+		CapabilityClientDeprecateEOF |
+		CapabilityClientConnAttr
 	if enableTLS {
 		capabilities |= CapabilityClientSSL
 	}
@@ -620,9 +670,64 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		authMethod = MysqlNativePassword
 	}
 
-	// FIXME(alainjobart) Add CLIENT_CONNECT_ATTRS parsing if we need it.
+	// Decode connection attributes send by the client
+	if clientFlags&CapabilityClientConnAttr != 0 {
+		var attrs map[string]string
+		var err error
+		attrs, pos, err = parseConnAttrs(data, pos)
+		if err != nil {
+			return "", "", nil, err
+		}
+		log.Infof("Connection Attributes: %-v", attrs)
+	}
 
 	return username, authMethod, authResponse, nil
+}
+
+func parseConnAttrs(data []byte, pos int) (map[string]string, int, error) {
+	var attrLen uint64
+
+	attrLen, pos, ok := readLenEncInt(data, pos)
+	if !ok {
+		return nil, 0, fmt.Errorf("parseClientHandshakePacket: can't read connection attributes variable length")
+	}
+
+	var attrLenRead uint64
+
+	attrs := make(map[string]string)
+
+	for attrLenRead < attrLen {
+		var keyLen byte
+		keyLen, pos, ok = readByte(data, pos)
+		if !ok {
+			return nil, 0, fmt.Errorf("parseClientHandshakePacket: can't read connection attribute key length")
+		}
+		attrLenRead += uint64(keyLen) + 1
+
+		var connAttrKey []byte
+		connAttrKey, pos, ok = readBytesCopy(data, pos, int(keyLen))
+		if !ok {
+			return nil, 0, fmt.Errorf("parseClientHandshakePacket: can't read connection attribute key")
+		}
+
+		var valLen byte
+		valLen, pos, ok = readByte(data, pos)
+		if !ok {
+			return nil, 0, fmt.Errorf("parseClientHandshakePacket: can't read connection attribute value length")
+		}
+		attrLenRead += uint64(valLen) + 1
+
+		var connAttrVal []byte
+		connAttrVal, pos, ok = readBytesCopy(data, pos, int(valLen))
+		if !ok {
+			return nil, 0, fmt.Errorf("parseClientHandshakePacket: can't read connection attribute value")
+		}
+
+		attrs[string(connAttrKey[:])] = string(connAttrVal[:])
+	}
+
+	return attrs, pos, nil
+
 }
 
 // writeAuthSwitchRequest writes an auth switch request packet.
@@ -648,4 +753,20 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 		return fmt.Errorf("error building AuthSwitchRequestPacket packet: got %v bytes expected %v", pos, len(data))
 	}
 	return c.writeEphemeralPacket()
+}
+
+// Whenever we move to a new version of go, we will need add any new supported TLS versions here
+func tlsVersionToString(version uint16) string {
+	switch version {
+	case tls.VersionSSL30:
+		return versionSSL30
+	case tls.VersionTLS10:
+		return versionTLS10
+	case tls.VersionTLS11:
+		return versionTLS11
+	case tls.VersionTLS12:
+		return versionTLS12
+	default:
+		return versionTLSUnknown
+	}
 }

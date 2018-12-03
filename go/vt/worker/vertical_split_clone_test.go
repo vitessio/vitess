@@ -132,7 +132,7 @@ func TestVerticalSplitClone(t *testing.T) {
 		},
 	}
 	sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
+		GTIDSet: mysql.MariadbGTIDSet{mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}},
 	}
 	sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
@@ -144,24 +144,20 @@ func TestVerticalSplitClone(t *testing.T) {
 	sourceRdonlyQs.addGeneratedRows(verticalSplitCloneTestMin, verticalSplitCloneTestMax)
 	grpcqueryservice.Register(sourceRdonly.RPCServer, sourceRdonlyQs)
 
-	// Set up destination rdonly which will be used as input for the diff during the clone.
-	destRdonlyShqs := fakes.NewStreamHealthQueryService(destRdonly.Target())
-	destRdonlyShqs.AddDefaultHealthResponse()
-	destRdonlyQs := newTestQueryService(t, destRdonly.Target(), destRdonlyShqs, 0, 1, topoproto.TabletAliasString(destRdonly.Tablet.Alias), true /* omitKeyspaceID */)
+	// Set up destination master which will be used as input for the diff during the clone.
+	destMasterShqs := fakes.NewStreamHealthQueryService(destMaster.Target())
+	destMasterShqs.AddDefaultHealthResponse()
+	destMasterQs := newTestQueryService(t, destMaster.Target(), destMasterShqs, 0, 1, topoproto.TabletAliasString(destMaster.Tablet.Alias), true /* omitKeyspaceID */)
 	// This tablet is empty and does not return any rows.
-	grpcqueryservice.Register(destRdonly.RPCServer, destRdonlyQs)
+	grpcqueryservice.Register(destMaster.RPCServer, destMasterQs)
 
-	// Fake stream health reponses because vtworker needs them to find the master.
-	qs := fakes.NewStreamHealthQueryService(destMaster.Target())
-	qs.AddDefaultHealthResponse()
-	grpcqueryservice.Register(destMaster.RPCServer, qs)
 	// Only wait 1 ms between retries, so that the test passes faster
 	*executeFetchRetryTime = (1 * time.Millisecond)
 
 	// When the online clone inserted the last rows, modify the destination test
 	// query service such that it will return them as well.
 	destMasterFakeDb.GetEntry(29).AfterFunc = func() {
-		destRdonlyQs.addGeneratedRows(verticalSplitCloneTestMin, verticalSplitCloneTestMax)
+		destMasterQs.addGeneratedRows(verticalSplitCloneTestMin, verticalSplitCloneTestMax)
 	}
 
 	// Start action loop after having registered all RPC services.

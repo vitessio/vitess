@@ -35,10 +35,6 @@
 "select * from user where id in (select * from user union select * from user_extra)"
 "unsupported: UNION or subquery containing multi-shard queries"
 
-# subquery with join primitive (expressions)
-"select * from user where id in (select user.id from user join user_extra)"
-"unsupported: cross-shard query in subqueries"
-
 # TODO: Implement support for select with a target destination
 "select * from `user[-]`.user_metadata"
 "unsupported: SELECT with a target destination"
@@ -54,38 +50,6 @@
 # Unsupported DELETE statement with a replica target destination
 "DELETE FROM `user[-]@replica`.user_metadata limit 1"
 "unsupported: DELETE statement with a replica target"
-
-# subquery keyspace different from outer query
-"select * from user where id in (select m from unsharded)"
-"unsupported: subquery keyspace different from outer query"
-
-# scatter subquery
-"select * from user where id in (select id from user)"
-"unsupported: scatter subquery"
-
-# complex on clause on join
-"select c from user join user_extra on user.id in (select id from user)"
-"unsupported: scatter subquery"
-
-# complex on clause on left join
-"select c from user left join user_extra on user.id in (select id from user)"
-"unsupported: scatter subquery"
-
-# merging routes, but complex on clause
-"select user.id from user join user_extra on user_extra.user_id = user.id and user.id in (select id from user)"
-"unsupported: scatter subquery"
-
-# subquery does not depend on unique vindex of outer query
-"select id from user where id in (select user_id from user_extra where user_extra.user_id = user.col)"
-"unsupported: UNION or subquery containing multi-shard queries"
-
-# subquery does not depend on scatter outer query
-"select id from user where id in (select user_id from user_extra where user_extra.user_id = 4)"
-"unsupported: UNION or subquery containing multi-shard queries"
-
-# subquery depends on a cross-shard subquery
-"select id from (select user.id, user.col from user join user_extra) as t where id in (select t.col from user)"
-"unsupported: subquery cannot be merged with cross-shard subquery"
 
 # order by on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t order by id"
@@ -103,10 +67,6 @@
 "select id+1 from (select user.id, user.col from user join user_extra) as t"
 "unsupported: expression on results of a cross-shard subquery"
 
-# subquery and outer query route to different shards
-"select id from user where id = 5 and id in (select user_id from user_extra where user_extra.user_id = 4)"
-"unsupported: UNION or subquery on different shards: vindex values are different"
-
 # last_insert_id for sharded keyspace
 "select last_insert_id() from user"
 "unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces"
@@ -119,10 +79,6 @@
 "select foo from unsharded join information_schema.a"
 "unsupported: intermixing of information_schema and regular tables"
 
-# scatter subquery in select
-"select id, (select id from user) from user"
-"unsupported: scatter subquery"
-
 # natural join
 "select * from user natural join user_extra"
 "unsupported: natural join"
@@ -134,6 +90,10 @@
 # natural right join
 "select * from user natural right join user_extra"
 "unsupported: natural right join"
+
+# join with USING construct
+"select * from user join user_extra using(id)"
+"unsupported: join with USING(column_list) clause"
 
 # left join with expressions
 "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
@@ -223,14 +183,6 @@
 "select id from user group by id, (select id from user_extra)"
 "unsupported: in group by: subqueries disallowed"
 
-# subquery of information_schema with normal table
-"select (select * from unsharded) from information_schema.a"
-"unsupported: intermixing of information_schema and regular tables"
-
-# subquery of normal table with information_schema
-"select (select * from information_schema.a) from unsharded"
-"unsupported: intermixing of information_schema and regular tables"
-
 # Order by uses cross-shard expression
 "select id from user order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
@@ -254,10 +206,6 @@
 # Order by has subqueries
 "select id from unsharded order by (select id from unsharded)"
 "unsupported: order by has subquery"
-
-# sequence in subquery
-"select col from unsharded where id in (select next value from seq)"
-"unsupported: use of sequence in subquery"
 
 # subqueries in update
 "update user set col = (select id from unsharded)"
@@ -305,7 +253,7 @@
 
 # multi delete multi table
 "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'"
-"unsupported: multi-table delete statement in sharded keyspace"
+"unsupported: multi-table/vindex delete statement in sharded keyspace"
 
 # scatter delete with owned lookup vindex
 "delete from user"
@@ -341,11 +289,11 @@
 
 # join in update tables
 "update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
-"unsupported: multi-table update statement in sharded keyspace"
+"unsupported: multi-table/vindex update statement in sharded keyspace"
 
 # multiple tables in update
 "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
-"unsupported: multi-table update statement in sharded keyspace"
+"unsupported: multi-table/vindex update statement in sharded keyspace"
 
 # unsharded insert with cross-shard join"
 "insert into unsharded select u.col from user u join user u1"
@@ -477,10 +425,10 @@
 "select keyspace_id from user_index where 1 = id"
 "unsupported: where clause for vindex function must be of the form id = <val> (lhs is not a column)"
 
-"select keyspace_id from user_index where none = 1"
+"select keyspace_id from user_index where keyspace_id = 1"
 "unsupported: where clause for vindex function must be of the form id = <val> (lhs is not id)"
 
-"select keyspace_id from user_index where id = a"
+"select keyspace_id from user_index where id = id+1"
 "unsupported: where clause for vindex function must be of the form id = <val> (rhs is not a value)"
 
 "select keyspace_id from user_index"

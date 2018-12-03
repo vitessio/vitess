@@ -55,16 +55,11 @@ func newVindexFunc(alias sqlparser.TableName, vindex vindexes.Vindex) (*vindexFu
 	}
 
 	// Column names are hard-coded to id, keyspace_id
-	t.columns = map[string]*column{
-		"id": {
-			origin: vf,
-			colnum: 0,
-		},
-		"keyspace_id": {
-			origin: vf,
-			colnum: 1,
-		},
-	}
+	t.addColumn(sqlparser.NewColIdent("id"), &column{origin: vf})
+	t.addColumn(sqlparser.NewColIdent("keyspace_id"), &column{origin: vf})
+	t.addColumn(sqlparser.NewColIdent("range_start"), &column{origin: vf})
+	t.addColumn(sqlparser.NewColIdent("range_end"), &column{origin: vf})
+	t.isAuthoritative = true
 
 	st := newSymtab()
 	// AddTable will not fail because symtab is empty.
@@ -151,18 +146,7 @@ func (vf *vindexFunc) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *re
 		Name: rc.alias.String(),
 		Type: querypb.Type_VARBINARY,
 	})
-	switch {
-	case col.Name.EqualString("id"):
-		vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, 0)
-	case col.Name.EqualString("keyspace_id"):
-		vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, 1)
-	case col.Name.EqualString("range_start"):
-		vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, 2)
-	case col.Name.EqualString("range_end"):
-		vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, 3)
-	default:
-		return nil, 0, fmt.Errorf("unrecognized column %s for vindex: %s", col.Name, vf.eVindexFunc.Vindex)
-	}
+	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, col.Metadata.(*column).colnum)
 	return rc, len(vf.resultColumns) - 1, nil
 }
 

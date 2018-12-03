@@ -25,6 +25,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"vitess.io/vitess/go/vt/log"
@@ -48,7 +49,8 @@ type AuthServerStatic struct {
 	// - MysqlDialog
 	// It defaults to MysqlNativePassword.
 	Method string
-
+	// This mutex helps us prevent data races between the multiple updates of Entries.
+	mu sync.Mutex
 	// Entries contains the users, passwords and user data.
 	Entries map[string][]*AuthServerStaticEntry
 }
@@ -105,6 +107,10 @@ func RegisterAuthServerStaticFromParams(file, str string) {
 	authServerStatic := NewAuthServerStatic()
 
 	authServerStatic.loadConfigFromParams(file, str)
+
+	if len(authServerStatic.Entries) <= 0 {
+		log.Exitf("Failed to populate entries from file: %v", file)
+	}
 	authServerStatic.installSignalHandlers()
 
 	// And register the server.
@@ -116,15 +122,21 @@ func (a *AuthServerStatic) loadConfigFromParams(file, str string) {
 	if file != "" {
 		data, err := ioutil.ReadFile(file)
 		if err != nil {
-			log.Exitf("Failed to read mysql_auth_server_static_file file: %v", err)
+			log.Errorf("Failed to read mysql_auth_server_static_file file: %v", err)
+			return
 		}
 		jsonConfig = data
 	}
 
-	a.Entries = make(map[string][]*AuthServerStaticEntry) // clear old entries
-	if err := parseConfig(jsonConfig, &a.Entries); err != nil {
-		log.Exitf("Error parsing auth server config: %v", err)
+	entries := make(map[string][]*AuthServerStaticEntry)
+	if err := parseConfig(jsonConfig, &entries); err != nil {
+		log.Errorf("Error parsing auth server config: %v", err)
+		return
 	}
+
+	a.mu.Lock()
+	a.Entries = entries
+	a.mu.Unlock()
 }
 
 func (a *AuthServerStatic) installSignalHandlers() {
@@ -187,8 +199,10 @@ func (a *AuthServerStatic) Salt() ([]byte, error) {
 
 // ValidateHash is part of the AuthServer interface.
 func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
-	// Find the entry.
+	a.mu.Lock()
 	entries, ok := a.Entries[user]
+	a.mu.Unlock()
+
 	if !ok {
 		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
@@ -199,11 +213,12 @@ func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse [
 			if matchSourceHost(remoteAddr, entry.SourceHost) && isPass {
 				return &StaticUserData{entry.UserData}, nil
 			}
-		}
-		computedAuthResponse := ScramblePassword(salt, []byte(entry.Password))
-		// Validate the password.
-		if matchSourceHost(remoteAddr, entry.SourceHost) && bytes.Compare(authResponse, computedAuthResponse) == 0 {
-			return &StaticUserData{entry.UserData}, nil
+		} else {
+			computedAuthResponse := ScramblePassword(salt, []byte(entry.Password))
+			// Validate the password.
+			if matchSourceHost(remoteAddr, entry.SourceHost) && bytes.Compare(authResponse, computedAuthResponse) == 0 {
+				return &StaticUserData{entry.UserData}, nil
+			}
 		}
 	}
 	return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
@@ -219,8 +234,10 @@ func (a *AuthServerStatic) Negotiate(c *Conn, user string, remoteAddr net.Addr) 
 		return nil, err
 	}
 
-	// Find the entry.
+	a.mu.Lock()
 	entries, ok := a.Entries[user]
+	a.mu.Unlock()
+
 	if !ok {
 		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}

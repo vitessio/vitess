@@ -191,6 +191,82 @@ func TestSetLimit(t *testing.T) {
 	}
 }
 
+func TestDDL(t *testing.T) {
+	testcases := []struct {
+		query    string
+		output   *DDL
+		affected []string
+	}{{
+		query: "create table a",
+		output: &DDL{
+			Action: CreateStr,
+			Table:  TableName{Name: NewTableIdent("a")},
+		},
+		affected: []string{"a"},
+	}, {
+		query: "rename table a to b",
+		output: &DDL{
+			Action: RenameStr,
+			FromTables: TableNames{
+				TableName{Name: NewTableIdent("a")},
+			},
+			ToTables: TableNames{
+				TableName{Name: NewTableIdent("b")},
+			},
+		},
+		affected: []string{"a", "b"},
+	}, {
+		query: "rename table a to b, c to d",
+		output: &DDL{
+			Action: RenameStr,
+			FromTables: TableNames{
+				TableName{Name: NewTableIdent("a")},
+				TableName{Name: NewTableIdent("c")},
+			},
+			ToTables: TableNames{
+				TableName{Name: NewTableIdent("b")},
+				TableName{Name: NewTableIdent("d")},
+			},
+		},
+		affected: []string{"a", "c", "b", "d"},
+	}, {
+		query: "drop table a",
+		output: &DDL{
+			Action: DropStr,
+			FromTables: TableNames{
+				TableName{Name: NewTableIdent("a")},
+			},
+		},
+		affected: []string{"a"},
+	}, {
+		query: "drop table a, b",
+		output: &DDL{
+			Action: DropStr,
+			FromTables: TableNames{
+				TableName{Name: NewTableIdent("a")},
+				TableName{Name: NewTableIdent("b")},
+			},
+		},
+		affected: []string{"a", "b"},
+	}}
+	for _, tcase := range testcases {
+		got, err := Parse(tcase.query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, tcase.output) {
+			t.Errorf("%s: %v, want %v", tcase.query, got, tcase.output)
+		}
+		want := make(TableNames, 0, len(tcase.affected))
+		for _, t := range tcase.affected {
+			want = append(want, TableName{Name: NewTableIdent(t)})
+		}
+		if affected := got.(*DDL).AffectedTables(); !reflect.DeepEqual(affected, want) {
+			t.Errorf("Affected(%s): %v, want %v", tcase.query, affected, want)
+		}
+	}
+}
+
 func TestSetAutocommitON(t *testing.T) {
 	stmt, err := Parse("SET autocommit=ON")
 	if err != nil {

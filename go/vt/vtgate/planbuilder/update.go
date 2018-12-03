@@ -40,7 +40,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	}
 	rb, ok := pb.bldr.(*route)
 	if !ok {
-		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
+		return nil, errors.New("unsupported: multi-table/vindex update statement in sharded keyspace")
 	}
 	if rb.ERoute.TargetDestination != nil {
 		return nil, errors.New("unsupported: UPDATE with a target destination")

@@ -11,6 +11,17 @@
 {{end -}}
 {{- end -}}
 
+############################
+# Format a flag map into a command line (inline),
+# as expected by the golang 'flag' package.
+# Boolean flags must be given a value, such as "true" or "false".
+#############################
+{{- define "format-flags-inline" -}}
+{{- range $key, $value := . -}}
+-{{$key}}={{$value | quote}}{{" "}}
+{{- end -}}
+{{- end -}}
+
 #############################
 # Repeat a string N times, where N is the total number
 # of replicas. Len must be used on the calling end to
@@ -114,7 +125,7 @@ fi
 export EXTRA_MY_CNF="$FLAVOR_MYCNF:/vtdataroot/tabletdata/report-host.cnf:/vt/config/mycnf/rbr.cnf"
 
 {{ if . }}
-for filename in /vt/userconfig/*; do
+for filename in /vt/userconfig/*.cnf; do
   export EXTRA_MY_CNF="$EXTRA_MY_CNF:$filename"
 done
 {{ end }}
@@ -152,6 +163,9 @@ done
 -s3_backup_storage_bucket=$VT_S3_BACKUP_STORAGE_BUCKET
 -s3_backup_storage_root=$VT_S3_BACKUP_STORAGE_ROOT
 -s3_backup_server_side_encryption=$VT_S3_BACKUP_SERVER_SIDE_ENCRYPTION
+
+    {{ else if eq .backup_storage_implementation "ceph" }}
+-ceph_backup_storage_config=$CEPH_CREDENTIALS_FILE
     {{ end }}
 
   {{ end }}
@@ -238,6 +252,12 @@ done
     secretName: {{ .s3Secret }}
     {{ end }}
 
+  {{ else if eq .backup_storage_implementation "ceph" }}
+
+- name: backup-creds
+  secret:
+    secretName: {{required ".cephSecret necessary to use backup_storage_implementation: ceph!" .cephSecret }}
+
   {{ end }}
 
 {{ end }}
@@ -264,6 +284,11 @@ done
 - name: backup-creds
   mountPath: /etc/secrets/creds
     {{ end }}
+
+  {{ else if eq .backup_storage_implementation "ceph" }}
+
+- name: backup-creds
+  mountPath: /etc/secrets/creds
 
   {{ end }}
 
@@ -296,6 +321,12 @@ export AWS_SHARED_CREDENTIALS_FILE=$credsPath
 cat $AWS_SHARED_CREDENTIALS_FILE
     {{ end }}
 
+  {{ else if eq .backup_storage_implementation "ceph" }}
+
+credsPath=/etc/secrets/creds/$(ls /etc/secrets/creds/ | head -1)
+export CEPH_CREDENTIALS_FILE=$credsPath
+cat $CEPH_CREDENTIALS_FILE
+
   {{ end }}
 
 {{ end }}
@@ -327,6 +358,35 @@ cat $AWS_SHARED_CREDENTIALS_FILE
 - name: user-config
   mountPath: /vt/userconfig
 
+{{ end }}
+
+{{- end -}}
+
+#############################
+# user secret volumes - expects list of secret names
+#############################
+{{- define "user-secret-volumes" -}}
+
+{{ if . }}
+{{- range . }}
+- name: user-secret-{{ . }}
+  secret:
+    secretName: {{ . }}
+{{- end }}
+{{ end }}
+
+{{- end -}}
+
+#############################
+# user secret volumeMounts - expects list of secret names
+#############################
+{{- define "user-secret-volumeMounts" -}}
+
+{{ if . }}
+{{- range . }}
+- name: user-secret-{{ . }}
+  mountPath: /vt/usersecrets/{{ . }}
+{{- end }}
 {{ end }}
 
 {{- end -}}

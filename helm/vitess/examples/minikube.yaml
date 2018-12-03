@@ -1,0 +1,71 @@
+topology:
+  cells:
+    - name: "zone1"
+      etcd:
+        replicas: 1
+      vtctld:
+        replicas: 1
+      vtgate:
+        replicas: 1
+      mysqlProtocol:
+        enabled: true
+        authType: "none"
+      keyspaces:
+        - name: "commerce"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+          schema:
+            phase1: |-
+              create table product(
+                sku varbinary(128),
+                description varbinary(128),
+                price bigint,
+                primary key(sku)
+              );
+              create table customer(
+                user_id bigint not null auto_increment,
+                email varbinary(128),
+                primary key(user_id)
+              );
+              create table corder(
+                order_id bigint not null auto_increment,
+                user_id bigint,
+                product_id bigint,
+                msrp bigint,
+                primary key(order_id)
+              );
+          vschema:
+            phase1: |-
+              {
+                "tables": {
+                  "product": {},
+                  "customer": {},
+                  "corder": {}
+                }
+              }
+
+etcd:
+  replicas: 1
+  resources:
+
+vtctld:
+  serviceType: "NodePort"
+  resources:
+
+vtgate:
+  serviceType: "NodePort"
+  resources:
+
+vttablet:
+  resources:
+  mysqlResources:
+
+pmm:
+  enabled: false
+
+orchestrator:
+  enabled: false

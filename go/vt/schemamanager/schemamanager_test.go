@@ -316,6 +316,29 @@ func newFakeTopo(t *testing.T) *topo.Server {
 			t.Fatalf("UpdateShardFields failed: %v", err)
 		}
 	}
+	if err := ts.CreateKeyspace(ctx, "unsharded_keyspace", &topodatapb.Keyspace{}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+	if err := ts.CreateShard(ctx, "unsharded_keyspace", "0"); err != nil {
+		t.Fatalf("CreateShard(%v) failed: %v", "0", err)
+	}
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "test_cell",
+			Uid:  uint32(4),
+		},
+		Keyspace: "test_keyspace",
+		Shard:    "0",
+	}
+	if err := ts.CreateTablet(ctx, tablet); err != nil {
+		t.Fatalf("CreateTablet failed: %v", err)
+	}
+	if _, err := ts.UpdateShardFields(ctx, "unsharded_keyspace", "0", func(si *topo.ShardInfo) error {
+		si.Shard.MasterAlias = tablet.Alias
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateShardFields failed: %v", err)
+	}
 	return ts
 }
 

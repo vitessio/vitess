@@ -1015,6 +1015,10 @@
   }
 }
 
+# insert into a vindex not allowed
+"insert into user_index(id) values(1)"
+"inserting into a vindex not allowed: user_index"
+
 # simple replace unsharded
 "replace into unsharded values(1, 2)"
 {

@@ -128,6 +128,27 @@
             }
           ]
         },
+        "authoritative": {
+          "column_vindexes": [
+            {
+              "column": "user_id",
+              "name": "user_index"
+            }
+          ],
+          "columns": [
+            {
+              "name": "user_id"
+            },
+            {
+              "name": "col1",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "col2"
+            }
+          ],
+          "column_list_authoritative": true
+        },
         "multicolvin": {
           "column_vindexes": [
             {

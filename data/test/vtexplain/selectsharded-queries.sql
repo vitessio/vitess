@@ -13,3 +13,10 @@ select name, count(*) from user group by name /* scatter aggregate */;
 
 select 1, "hello", 3.14 from user limit 10 /* select constant sql values */;
 select * from (select id from user) s /* scatter paren select */;
+
+select name from user where id = (select id from t1) /* non-correlated subquery as value */;
+select name from user where id in (select id from t1) /* non-correlated subquery in IN clause */;
+select name from user where id not in (select id from t1) /* non-correlated subquery in NOT IN clause */;
+select name from user where exists (select id from t1) /* non-correlated subquery as EXISTS */;
+
+select * from name_info order by info /* select * and order by varchar column */

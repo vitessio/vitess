@@ -1,7 +1,7 @@
 ###################################
 # vtctld Service + Deployment
 ###################################
-{{- define "vtctld" -}}
+{{ define "vtctld" -}}
 # set tuple values to more recognizable variables
 {{- $topology := index . 0 -}}
 {{- $cell := index . 1 -}}
@@ -13,7 +13,7 @@
 
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtctld.vitessTag -}}
-{{- $cellClean := include "clean-label" $cell.name -}}
+{{- $cellClean := include "clean-label" $cell.name }}
 
 ###################################
 # vtctld Service
@@ -60,6 +60,7 @@ spec:
       containers:
         - name: vtctld
           image: vitess/vtctld:{{$vitessTag}}
+          imagePullPolicy: Always
           readinessProbe:
             httpGet:
               path: /debug/health
@@ -76,7 +77,7 @@ spec:
 {{ include "backup-env" $config.backup | indent 12 }}
           volumeMounts:
 {{ include "backup-volumeMount" $config.backup | indent 12 }}
-
+{{ include "user-secret-volumeMounts" (.secrets | default $defaultVtctld.secrets) | indent 12 }}
           resources:
 {{ toYaml (.resources | default $defaultVtctld.resources) | indent 12 }}
           command:
@@ -102,11 +103,13 @@ spec:
                 -topo_global_server_address="etcd-global-client.{{ $namespace }}:2379"
                 -topo_global_root=/vitess/global
 {{ include "backup-flags" (tuple $config.backup "vtctld") | indent 16 }}
+{{ include "format-flags-all" (tuple $defaultVtctld.extraFlags .extraFlags) | indent 16 }}
               END_OF_COMMAND
               )
 
       volumes:
 {{ include "backup-volume" $config.backup | indent 8 }}
+{{ include "user-secret-volumes" (.secrets | default $defaultVtctld.secrets) | indent 8 }}
 
 {{- end -}}
 {{- end -}}
@@ -114,7 +117,7 @@ spec:
 ###################################
 # vtctld-affinity sets node/pod affinities
 ###################################
-{{- define "vtctld-affinity" -}}
+{{ define "vtctld-affinity" -}}
 # set tuple values to more recognizable variables
 {{- $cellClean := index . 0 -}}
 {{- $region := index . 1 -}}

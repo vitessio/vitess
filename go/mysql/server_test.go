@@ -930,6 +930,103 @@ func TestTLSServer(t *testing.T) {
 	if results.Rows[0][0].ToString() != "ON" {
 		t.Errorf("Unexpected output for 'ssl echo': %v", results)
 	}
+
+	checkCountForTLSVer(t, versionTLS12, 1)
+	checkCountForTLSVer(t, versionNoTLS, 0)
+	conn.Close()
+
+}
+
+// TestTLSRequired creates a Server with TLS required, then tests that an insecure mysql
+// client is rejected
+func TestTLSRequired(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+	}}
+
+	// Create the listener, so we can get its host.
+	// Below, we are enabling --ssl-verify-server-cert, which adds
+	// a check that the common name of the certificate matches the
+	// server host name we connect to.
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+
+	// Make sure hostname is added as an entry to /etc/hosts, otherwise ssl handshake will fail
+	host, err := os.Hostname()
+	if err != nil {
+		t.Fatalf("Failed to get os Hostname: %v", err)
+	}
+
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Create the certs.
+	root, err := ioutil.TempDir("", "TestTLSRequired")
+	if err != nil {
+		t.Fatalf("TempDir failed: %v", err)
+	}
+	defer os.RemoveAll(root)
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
+
+	// Create the server with TLS config.
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		path.Join(root, "ca-cert.pem"))
+	if err != nil {
+		t.Fatalf("TLSServerConfig failed: %v", err)
+	}
+	l.TLSConfig = serverConfig
+	l.RequireSecureTransport = true
+	go l.Accept()
+
+	// Setup conn params without SSL.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+	conn, err := Connect(context.Background(), params)
+	if err == nil {
+		t.Fatal("mysql should have failed")
+	}
+	if conn != nil {
+		conn.Close()
+	}
+
+	// setup conn params with TLS
+	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+	params.Flags = CapabilityClientSSL
+	params.SslCa = path.Join(root, "ca-cert.pem")
+	params.SslCert = path.Join(root, "client-cert.pem")
+	params.SslKey = path.Join(root, "client-key.pem")
+
+	conn, err = Connect(context.Background(), params)
+	if err != nil {
+		t.Fatalf("mysql failed: %v", err)
+	}
+	if conn != nil {
+		conn.Close()
+	}
+}
+
+func checkCountForTLSVer(t *testing.T, version string, expected int64) {
+	connCounts := connCountByTLSVer.Counts()
+	count, ok := connCounts[version]
+	if ok {
+		if count != expected {
+			t.Errorf("Expected connection count for version %s to be %d, got %d", version, expected, count)
+		}
+	} else {
+		t.Errorf("No count found for version %s", version)
+	}
 }
 
 func TestErrorCodes(t *testing.T) {
@@ -1170,5 +1267,41 @@ func TestListenerShutdown(t *testing.T) {
 		}
 	} else {
 		t.Fatalf("Ping should fail after shutdown")
+	}
+}
+
+func TestParseConnAttrs(t *testing.T) {
+	expected := map[string]string{
+		"_client_version": "8.0.11",
+		"program_name":    "mysql",
+		"_pid":            "22850",
+		"_platform":       "x86_64",
+		"_os":             "linux-glibc2.12",
+		"_client_name":    "libmysql",
+	}
+
+	data := []byte{0x70, 0x04, 0x5f, 0x70, 0x69, 0x64, 0x05, 0x32, 0x32, 0x38, 0x35, 0x30, 0x09, 0x5f, 0x70, 0x6c,
+		0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x06, 0x78, 0x38, 0x36, 0x5f, 0x36, 0x34, 0x03, 0x5f, 0x6f,
+		0x73, 0x0f, 0x6c, 0x69, 0x6e, 0x75, 0x78, 0x2d, 0x67, 0x6c, 0x69, 0x62, 0x63, 0x32, 0x2e, 0x31,
+		0x32, 0x0c, 0x5f, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x08, 0x6c,
+		0x69, 0x62, 0x6d, 0x79, 0x73, 0x71, 0x6c, 0x0f, 0x5f, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x5f,
+		0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x06, 0x38, 0x2e, 0x30, 0x2e, 0x31, 0x31, 0x0c, 0x70,
+		0x72, 0x6f, 0x67, 0x72, 0x61, 0x6d, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x05, 0x6d, 0x79, 0x73, 0x71, 0x6c}
+
+	attrs, pos, err := parseConnAttrs(data, 0)
+	if err != nil {
+		t.Fatalf("Failed to read connection attributes: %v", err)
+	}
+	if pos != 113 {
+		t.Fatalf("Unexpeded pos after reading connection attributes: %d intead of 113", pos)
+	}
+	for k, v := range expected {
+		if val, ok := attrs[k]; ok {
+			if val != v {
+				t.Fatalf("Unexpected value found in attrs for key %s: got %s expected %s", k, val, v)
+			}
+		} else {
+			t.Fatalf("Error reading key %s from connection attributes: attrs: %-v", k, attrs)
+		}
 	}
 }

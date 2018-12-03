@@ -33,6 +33,41 @@
   }
 }
 
+# vindex func select *
+"select * from user_index where id = :id"
+{
+  "Original": "select * from user_index where id = :id",
+  "Instructions": {
+    "Opcode": "VindexMap",
+    "Fields": [
+      {
+        "name": "id",
+        "type": 10262
+      },
+      {
+        "name": "keyspace_id",
+        "type": 10262
+      },
+      {
+        "name": "range_start",
+        "type": 10262
+      },
+      {
+        "name": "range_end",
+        "type": 10262
+      }
+    ],
+    "Cols": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "Vindex": "user_index",
+    "Value": ":id"
+  }
+}
+
 # vindex func read with id repeated
 "select id, keyspace_id, id from user_index where id = :id"
 {
@@ -320,4 +355,4 @@
 }
 
 "select none from user_index where id = :id"
-"unrecognized column none for vindex: user_index"
+"symbol none not found in table or subquery"

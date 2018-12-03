@@ -135,13 +135,6 @@ func TestTabletExecutorValidate(t *testing.T) {
 		t.Fatalf("executor.Validate should fail, alter a table more than 100,000 rows")
 	}
 
-	// change a table with more than 2,000,000 rows
-	if err := executor.Validate(ctx, []string{
-		"RENAME TABLE test_table_04 TO test_table_05",
-	}); err == nil {
-		t.Fatalf("executor.Validate should fail, change a table more than 2,000,000 rows")
-	}
-
 	if err := executor.Validate(ctx, []string{
 		"TRUNCATE TABLE test_table_04",
 	}); err != nil {
@@ -170,6 +163,46 @@ func TestTabletExecutorValidate(t *testing.T) {
 	}
 }
 
+func TestTabletExecutorDML(t *testing.T) {
+	fakeTmc := newFakeTabletManagerClient()
+
+	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{
+		DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name:   "test_table",
+				Schema: "table schema",
+				Type:   tmutils.TableBaseTable,
+			},
+			{
+				Name:     "test_table_03",
+				Schema:   "table schema",
+				Type:     tmutils.TableBaseTable,
+				RowCount: 200000,
+			},
+			{
+				Name:     "test_table_04",
+				Schema:   "table schema",
+				Type:     tmutils.TableBaseTable,
+				RowCount: 3000000,
+			},
+		},
+	})
+
+	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), fakeTmc)
+	executor := NewTabletExecutor(wr, testWaitSlaveTimeout)
+	ctx := context.Background()
+
+	executor.Open(ctx, "unsharded_keyspace")
+	defer executor.Close()
+
+	// schema changes with DMLs should fail
+	if err := executor.Validate(ctx, []string{
+		"INSERT INTO test_table VALUES(1)"}); err != nil {
+		t.Fatalf("executor.Validate should succeed, for DML to unsharded keyspace")
+	}
+}
+
 func TestTabletExecutorExecute(t *testing.T) {
 	executor := newFakeExecutor(t)
 	ctx := context.Background()
@@ -179,18 +212,5 @@ func TestTabletExecutorExecute(t *testing.T) {
 	result := executor.Execute(ctx, sqls)
 	if result.ExecutorErr == "" {
 		t.Fatalf("execute should fail, call execute.Open first")
-	}
-}
-
-func TestTabletExecutorExecute_PreflightWithoutChangesIsAnError(t *testing.T) {
-	executor := newFakeExecutor(t)
-	ctx := context.Background()
-	executor.Open(ctx, "test_keyspace")
-	defer executor.Close()
-
-	sqls := []string{"DROP TABLE unknown_table"}
-	result := executor.Execute(ctx, sqls)
-	if result.ExecutorErr == "" {
-		t.Fatalf("execute should fail, ddl does not introduce any table schema change")
 	}
 }

@@ -279,13 +279,13 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 		return nil, err
 	}
 
+	c.currentEphemeralPolicy = ephemeralRead
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
 		return nil, nil
 	}
 
-	c.currentEphemeralPolicy = ephemeralRead
 	// Use the bufPool.
 	if length < MaxPacketSize {
 		c.currentEphemeralBuffer = bufPool.Get(length)
@@ -339,13 +339,13 @@ func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 		return nil, err
 	}
 
+	c.currentEphemeralPolicy = ephemeralRead
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
 		return nil, nil
 	}
 
-	c.currentEphemeralPolicy = ephemeralRead
 	if length < MaxPacketSize {
 		c.currentEphemeralBuffer = bufPool.Get(length)
 		if _, err := io.ReadFull(r, *c.currentEphemeralBuffer); err != nil {

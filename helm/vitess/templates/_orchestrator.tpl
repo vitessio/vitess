@@ -1,9 +1,10 @@
 ###################################
 # Master Orchestrator Service
 ###################################
-{{- define "orchestrator" -}}
+{{ define "orchestrator" -}}
 # set tuple values to more recognizable variables
 {{- $orc := index . 0 -}}
+{{- $defaultVtctlclient := index . 1 }}
 
 apiVersion: v1
 kind: Service
@@ -58,7 +59,7 @@ spec:
   serviceName: orchestrator-headless
   replicas: {{ $orc.replicas }}
   podManagementPolicy: Parallel
-  updateStrategy: 
+  updateStrategy:
     type: RollingUpdate
   selector:
     matchLabels:
@@ -116,23 +117,27 @@ spec:
               mountPath: /conf/
             - name: tmplogs
               mountPath: /tmp
-
+{{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 12 }}
           env:
             - name: VTCTLD_SERVER_PORT
               value: "15999"
 
         - name: recovery-log
-          image: busybox
-          command: ["/bin/sh"]
-          args: ["-c", "tail -n+1 -F /tmp/recovery.log"]
+          image: vitess/logtail:latest
+          imagePullPolicy: Always
+          env:
+          - name: TAIL_FILEPATH
+            value: /tmp/recovery.log
           volumeMounts:
             - name: tmplogs
               mountPath: /tmp
 
         - name: audit-log
-          image: busybox
-          command: ["/bin/sh"]
-          args: ["-c", "tail -n+1 -F /tmp/orchestrator-audit.log"]
+          image: vitess/logtail:latest
+          imagePullPolicy: Always
+          env:
+          - name: TAIL_FILEPATH
+            value: /tmp/orchestrator-audit.log
           volumeMounts:
             - name: tmplogs
               mountPath: /tmp
@@ -145,16 +150,17 @@ spec:
           emptyDir: {}
         - name: tmplogs
           emptyDir: {}
+{{ include "user-secret-volumes" $defaultVtctlclient.secrets | indent 8 }}
 
 {{- end -}}
 
 ###################################
 # Per StatefulSet Orchestrator Service
 ###################################
-{{- define "orchestrator-statefulset-service" -}}
+{{ define "orchestrator-statefulset-service" -}}
 # set tuple values to more recognizable variables
 {{- $orc := index . 0 -}}
-{{- $i := index . 1 -}}
+{{- $i := index . 1 }}
 
 apiVersion: v1
 kind: Service
@@ -185,8 +191,8 @@ spec:
 # init-container to copy and sed
 # Orchestrator config from ConfigMap
 ###################################
-{{- define "init-orchestrator" -}}
-{{- $orc := . -}}
+{{ define "init-orchestrator" -}}
+{{- $orc := . }}
 
 - name: init-orchestrator
   image: {{ $orc.image | quote }}

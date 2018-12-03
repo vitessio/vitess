@@ -46,17 +46,21 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   7,
-			Server:   123,
-			Sequence: 990,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   7,
+				Server:   123,
+				Sequence: 990,
+			},
 		},
 	}
 	newMaster.FakeMysqlDaemon.PromoteSlaveResult = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   7,
-			Server:   456,
-			Sequence: 991,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   7,
+				Server:   456,
+				Sequence: 991,
+			},
 		},
 	}
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -148,17 +152,21 @@ func TestPlannedReparentShard(t *testing.T) {
 	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   7,
-			Server:   123,
-			Sequence: 990,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   7,
+				Server:   123,
+				Sequence: 990,
+			},
 		},
 	}
 	newMaster.FakeMysqlDaemon.PromoteSlaveResult = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   7,
-			Server:   456,
-			Sequence: 991,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   7,
+				Server:   456,
+				Sequence: 991,
+			},
 		},
 	}
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{

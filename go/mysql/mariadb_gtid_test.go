@@ -87,20 +87,20 @@ func TestParseMariaGTIDInvalidSequence(t *testing.T) {
 }
 
 func TestParseMariaGTIDSet(t *testing.T) {
-	input := "12-34-5678"
-	want := MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}
+	input := "12-34-5678,11-22-3333"
+	want := MariadbGTIDSet{MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}, MariadbGTID{Domain: 11, Server: 22, Sequence: 3333}}
 
 	got, err := parseMariadbGTIDSet(input)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	if got.(MariadbGTID) != want {
+	if !got.Equal(want) {
 		t.Errorf("parseMariadbGTIDSet(%#v) = %#v, want %#v", input, got, want)
 	}
 }
 
 func TestParseInvalidMariaGTIDSet(t *testing.T) {
-	input := "12-34-56d78"
+	input := "12-34-5678,11-22-33e33"
 	want := "invalid MariaDB GTID Sequence number"
 
 	_, err := parseMariadbGTIDSet(input)
@@ -165,17 +165,17 @@ func TestMariaGTIDSequenceNumber(t *testing.T) {
 
 func TestMariaGTIDGTIDSet(t *testing.T) {
 	input := MariadbGTID{Domain: 12, Server: 345, Sequence: 6789}
-	want := GTIDSet(input)
+	want := MariadbGTIDSet{input}
 
 	got := input.GTIDSet()
-	if got != want {
+	if !got.Equal(want) {
 		t.Errorf("%#v.GTIDSet() = %#v, want %#v", input, got, want)
 	}
 }
 
-func TestMariaGTIDContainsLess(t *testing.T) {
-	input1 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 300}
-	input2 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 700}
+func TestMariaGTIDSetContainsLess(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 5, Server: 4727, Sequence: 300}}
+	input2 := MariadbGTIDSet{MariadbGTID{Domain: 5, Server: 4727, Sequence: 700}}
 	want := false
 
 	if got := input1.Contains(input2); got != want {
@@ -183,9 +183,9 @@ func TestMariaGTIDContainsLess(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDContainsGreater(t *testing.T) {
-	input1 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 9000}
-	input2 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 100}
+func TestMariaGTIDSetContainsGreater(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 5, Server: 4727, Sequence: 9000}}
+	input2 := MariadbGTIDSet{MariadbGTID{Domain: 5, Server: 4727, Sequence: 100}}
 	want := true
 
 	if got := input1.Contains(input2); got != want {
@@ -193,9 +193,9 @@ func TestMariaGTIDContainsGreater(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDContainsEqual(t *testing.T) {
-	input1 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}
-	input2 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}
+func TestMariaGTIDSetContainsEqual(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}}
+	input2 := MariadbGTIDSet{MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}}
 	want := true
 
 	if got := input1.Contains(input2); got != want {
@@ -203,8 +203,58 @@ func TestMariaGTIDContainsEqual(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDContainsNil(t *testing.T) {
-	input1 := MariadbGTID{Domain: 1, Server: 2, Sequence: 123}
+func TestMariaGTIDSetMultipleContainsLess(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 4, Server: 1, Sequence: 123}, MariadbGTID{Domain: 5, Server: 5, Sequence: 24601}}
+	input2 := MariadbGTIDSet{MariadbGTID{Domain: 4, Server: 1, Sequence: 124}}
+	want := false
+
+	if got := input1.Contains(input2); got != want {
+		t.Errorf("%#v.Contains(%#v) = %v, want %v", input1, input2, got, want)
+	}
+}
+
+func TestMariaGTIDSetMultipleContainsGreater(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 4, Server: 1, Sequence: 123}, MariadbGTID{Domain: 5, Server: 5, Sequence: 24601}}
+	input2 := MariadbGTIDSet{MariadbGTID{Domain: 4, Server: 1, Sequence: 122}}
+	want := true
+
+	if got := input1.Contains(input2); got != want {
+		t.Errorf("%#v.Contains(%#v) = %v, want %v", input1, input2, got, want)
+	}
+}
+
+func TestMariaGTIDSetMultipleContainsMultipleGreater(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 4, Server: 1, Sequence: 123}, MariadbGTID{Domain: 5, Server: 5, Sequence: 24601}}
+	input2 := MariadbGTIDSet{MariadbGTID{Domain: 4, Server: 1, Sequence: 122}, MariadbGTID{Domain: 5, Server: 4, Sequence: 1999}}
+	want := true
+
+	if got := input1.Contains(input2); got != want {
+		t.Errorf("%#v.Contains(%#v) = %v, want %v", input1, input2, got, want)
+	}
+}
+
+func TestMariaGTIDSetMultipleContainsOneLess(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 4, Server: 1, Sequence: 123}, MariadbGTID{Domain: 5, Server: 5, Sequence: 24601}}
+	input2 := MariadbGTIDSet{MariadbGTID{Domain: 4, Server: 1, Sequence: 122}, MariadbGTID{Domain: 5, Server: 4, Sequence: 24602}}
+	want := false
+
+	if got := input1.Contains(input2); got != want {
+		t.Errorf("%#v.Contains(%#v) = %v, want %v", input1, input2, got, want)
+	}
+}
+
+func TestMariaGTIDSetSingleContainsMultiple(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 4, Server: 1, Sequence: 123}}
+	input2 := MariadbGTIDSet{MariadbGTID{Domain: 4, Server: 1, Sequence: 122}, MariadbGTID{Domain: 5, Server: 4, Sequence: 24602}}
+	want := false
+
+	if got := input1.Contains(input2); got != want {
+		t.Errorf("%#v.Contains(%#v) = %v, want %v", input1, input2, got, want)
+	}
+}
+
+func TestMariaGTIDSetContainsNil(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 1, Server: 2, Sequence: 123}}
 	input2 := GTIDSet(nil)
 	want := true
 
@@ -213,8 +263,8 @@ func TestMariaGTIDContainsNil(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDContainsWrongType(t *testing.T) {
-	input1 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}
+func TestMariaGTIDSetContainsWrongType(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}}
 	input2 := fakeGTID{}
 	want := false
 
@@ -223,9 +273,9 @@ func TestMariaGTIDContainsWrongType(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDContainsDifferentDomain(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 4727, Sequence: 1235}
-	input2 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}
+func TestMariaGTIDSetContainsDifferentDomain(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 4727, Sequence: 1235}}
+	input2 := MariadbGTIDSet{MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}}
 	want := false
 
 	if got := input1.Contains(input2); got != want {
@@ -233,9 +283,9 @@ func TestMariaGTIDContainsDifferentDomain(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDContainsDifferentServer(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 4727, Sequence: 1235}
-	input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+func TestMariaGTIDSetContainsDifferentServer(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 4727, Sequence: 1235}}
+	input2 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	want := true
 
 	if got := input1.Contains(input2); got != want {
@@ -243,8 +293,8 @@ func TestMariaGTIDContainsDifferentServer(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDContainsGTIDLess(t *testing.T) {
-	input1 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 300}
+func TestMariaGTIDSetContainsGTIDLess(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 5, Server: 4727, Sequence: 300}}
 	input2 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 700}
 	want := false
 
@@ -253,8 +303,8 @@ func TestMariaGTIDContainsGTIDLess(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDContainsGTIDGreater(t *testing.T) {
-	input1 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 9000}
+func TestMariaGTIDSetContainsGTIDGreater(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 5, Server: 4727, Sequence: 9000}}
 	input2 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 100}
 	want := true
 
@@ -263,8 +313,8 @@ func TestMariaGTIDContainsGTIDGreater(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDContainsGTIDEqual(t *testing.T) {
-	input1 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}
+func TestMariaGTIDSetContainsGTIDEqual(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}}
 	input2 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}
 	want := true
 
@@ -273,8 +323,8 @@ func TestMariaGTIDContainsGTIDEqual(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDContainsGTIDNil(t *testing.T) {
-	input1 := MariadbGTID{Domain: 1, Server: 2, Sequence: 123}
+func TestMariaGTIDSetContainsGTIDNil(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 1, Server: 2, Sequence: 123}}
 	input2 := GTID(nil)
 	want := true
 
@@ -283,8 +333,8 @@ func TestMariaGTIDContainsGTIDNil(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDContainsGTIDWrongType(t *testing.T) {
-	input1 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}
+func TestMariaGTIDSetContainsGTIDWrongType(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}}
 	input2 := fakeGTID{}
 	want := false
 
@@ -293,8 +343,8 @@ func TestMariaGTIDContainsGTIDWrongType(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDContainsGTIDDifferentDomain(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 4727, Sequence: 1235}
+func TestMariaGTIDSetContainsGTIDDifferentDomain(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 4727, Sequence: 1235}}
 	input2 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}
 	want := false
 
@@ -303,8 +353,8 @@ func TestMariaGTIDContainsGTIDDifferentDomain(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDContainsGTIDDifferentServer(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 4727, Sequence: 1235}
+func TestMariaGTIDSetContainsGTIDDifferentServer(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 4727, Sequence: 1235}}
 	input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
 	want := true
 
@@ -313,9 +363,9 @@ func TestMariaGTIDContainsGTIDDifferentServer(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDEqual(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
-	input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+func TestMariaGTIDSetEqual(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+	input2 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	want := true
 
 	if got := input1.Equal(input2); got != want {
@@ -323,9 +373,9 @@ func TestMariaGTIDEqual(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDNotEqual(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
-	input2 := MariadbGTID{Domain: 3, Server: 4555, Sequence: 1234}
+func TestMariaGTIDSetNotEqual(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
+	input2 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 4555, Sequence: 1234}}
 	want := false
 
 	if got := input1.Equal(input2); got != want {
@@ -333,8 +383,8 @@ func TestMariaGTIDNotEqual(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDEqualWrongType(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+func TestMariaGTIDSetEqualWrongType(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	input2 := fakeGTID{}
 	want := false
 
@@ -343,8 +393,8 @@ func TestMariaGTIDEqualWrongType(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDEqualNil(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+func TestMariaGTIDSetEqualNil(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	input2 := GTIDSet(nil)
 	want := false
 
@@ -353,72 +403,72 @@ func TestMariaGTIDEqualNil(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDAddGTIDEqual(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+func TestMariaGTIDSetAddGTIDEqual(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
-	want := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+	want := input1
 
-	if got := input1.AddGTID(input2); got != want {
+	if got := input1.AddGTID(input2); !got.Equal(want) {
 		t.Errorf("%#v.AddGTID(%#v) = %v, want %v", input1, input2, got, want)
 	}
 }
 
-func TestMariaGTIDAddGTIDGreater(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 5234}
+func TestMariaGTIDSetAddGTIDGreater(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 5234}}
 	input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
-	want := MariadbGTID{Domain: 3, Server: 5555, Sequence: 5234}
+	want := input1
 
-	if got := input1.AddGTID(input2); got != want {
+	if got := input1.AddGTID(input2); !got.Equal(want) {
 		t.Errorf("%#v.AddGTID(%#v) = %v, want %v", input1, input2, got, want)
 	}
 }
 
-func TestMariaGTIDAddGTIDLess(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+func TestMariaGTIDSetAddGTIDLess(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 5234}
-	want := MariadbGTID{Domain: 3, Server: 5555, Sequence: 5234}
+	want := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 5234}}
 
-	if got := input1.AddGTID(input2); got != want {
+	if got := input1.AddGTID(input2); !got.Equal(want) {
 		t.Errorf("%#v.AddGTID(%#v) = %v, want %v", input1, input2, got, want)
 	}
 }
 
-func TestMariaGTIDAddGTIDWrongType(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+func TestMariaGTIDSetAddGTIDWrongType(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	input2 := fakeGTID{}
 	want := input1
 
-	if got := input1.AddGTID(input2); got != want {
+	if got := input1.AddGTID(input2); !got.Equal(want) {
 		t.Errorf("%#v.AddGTID(%#v) = %v, want %v", input1, input2, got, want)
 	}
 }
 
-func TestMariaGTIDAddGTIDNil(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+func TestMariaGTIDSetAddGTIDNil(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	input2 := GTID(nil)
 	want := input1
 
-	if got := input1.AddGTID(input2); got != want {
+	if got := input1.AddGTID(input2); !got.Equal(want) {
 		t.Errorf("%#v.AddGTID(%#v) = %v, want %v", input1, input2, got, want)
 	}
 }
 
-func TestMariaGTIDAddGTIDDifferentServer(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+func TestMariaGTIDSetAddGTIDDifferentServer(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	input2 := MariadbGTID{Domain: 3, Server: 4444, Sequence: 5234}
-	want := MariadbGTID{Domain: 3, Server: 4444, Sequence: 5234}
+	want := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 4444, Sequence: 5234}}
 
-	if got := input1.AddGTID(input2); got != want {
+	if got := input1.AddGTID(input2); !got.Equal(want) {
 		t.Errorf("%#v.AddGTID(%#v) = %v, want %v", input1, input2, got, want)
 	}
 }
 
-func TestMariaGTIDAddGTIDDifferentDomain(t *testing.T) {
-	input1 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+func TestMariaGTIDSetAddGTIDDifferentDomain(t *testing.T) {
+	input1 := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}
 	input2 := MariadbGTID{Domain: 5, Server: 5555, Sequence: 5234}
-	want := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+	want := MariadbGTIDSet{MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}, MariadbGTID{Domain: 5, Server: 5555, Sequence: 5234}}
 
-	if got := input1.AddGTID(input2); got != want {
+	if got := input1.AddGTID(input2); !got.Equal(want) {
 		t.Errorf("%#v.AddGTID(%#v) = %v, want %v", input1, input2, got, want)
 	}
 }

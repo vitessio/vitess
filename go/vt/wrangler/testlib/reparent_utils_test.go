@@ -54,10 +54,12 @@ func TestShardReplicationStatuses(t *testing.T) {
 
 	// master action loop (to initialize host and port)
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   5,
-			Server:   456,
-			Sequence: 892,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   5,
+				Server:   456,
+				Sequence: 892,
+			},
 		},
 	}
 	master.StartActionLoop(t, wr)
@@ -65,10 +67,12 @@ func TestShardReplicationStatuses(t *testing.T) {
 
 	// slave loop
 	slave.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTID{
-			Domain:   5,
-			Server:   456,
-			Sequence: 890,
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   5,
+				Server:   456,
+				Sequence: 890,
+			},
 		},
 	}
 	slave.FakeMysqlDaemon.CurrentMasterHost = topoproto.MysqlHostname(master.Tablet)

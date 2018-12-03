@@ -19,8 +19,17 @@ config:
   # Backup flags will be applied to components that need them.
   # These are defined globally since all components should agree.
   backup:
-  
+
     enabled: false
+
+    # this creates 1 cron job per shard that will execute a backup using vtctlclient
+    # on this schedule. The job itself uses almost no resources.
+    cron:
+      # the default schedule runs daily at midnight unless overridden by the individual shard
+      schedule: "0 0 * * *"
+
+      # if this is set to true, the cron jobs are created, but never execute
+      suspend: false
 
     # choose a backup service - valid values are gcs/s3
     # TODO: add file and ceph support
@@ -50,10 +59,10 @@ config:
 
     # S3 bucket to use for backups
     # s3_backup_storage_bucket: "vitess-backups"
-    
+
     # root prefix for all backup-related object names
     # s3_backup_storage_root: "vtbackups"
-    
+
     # server-side encryption algorithm (e.g., AES256, aws:kms)
     # s3_backup_server_side_encryption: "AES256"
 
@@ -75,6 +84,8 @@ topology:
       # enable or disable mysql protocol support, with accompanying auth details
       mysqlProtocol:
         enabled: false
+        authType: "secret"
+        # authType can be: none or secret. For secret, perform the following changes:
         # username: myuser
         # this is the secret that will be mounted as the user password
         # kubectl create secret generic myuser_password --from-literal=password=abc123
@@ -88,6 +99,16 @@ topology:
         replicas: 3
         # if maxReplicas is higher than replicas, an HPA will be created
         maxReplicas: 6
+
+jobs:
+  # examples:
+  #- name: "split-clone-customer"
+  #  kind: "vtworker"
+  #  cell: "zone1"
+  #  command: "SplitClone customer/0"
+  #- name: "list-all-tablet-zone1"
+  #  kind: "vtctlclient"
+  #  command: "ListAllTablets zone1"
 
 # Default values for etcd resources defined in 'topology'
 etcd:
@@ -109,6 +130,8 @@ vtctld:
     limits:
       cpu: 100m
       memory: 128Mi
+  extraFlags: {}
+  secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 # Default values for vtgate resources defined in 'topology'
 vtgate:
@@ -118,12 +141,31 @@ vtgate:
     limits:
       cpu: 500m
       memory: 512Mi
+  extraFlags: {}
+  secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
+
+# Default values for vtctlclient resources defined in 'topology'
+vtctlclient:
+  vitessTag: "latest"
+  extraFlags: {}
+  secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
+
+# Default values for vtworker resources defined in 'jobs'
+vtworker:
+  vitessTag: "latest"
+  extraFlags: {}
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
+
 
 # Default values for vttablet resources defined in 'topology'
 vttablet:
   vitessTag: "latest"
 
-  # valid values are 
+  # valid values are
   # - mysql56 (for MySQL/Percona 5.6 or 5.7)
   # - mariadb (for MariaDB <= 10.2)
   # - mariadb103 (for MariaDB >= 10.3)
@@ -140,10 +182,24 @@ vttablet:
   # will block forever. "rdonly" tablets do not ACK.
   enableSemisync: false
 
+  # This sets the vttablet flag "-init_db_name_override" to be the keyspace name, rather
+  # than "vt_keyspace". This works better with many MySQL client applications
+  useKeyspaceNameAsDbName: true
+
   # The name of a config map with N files inside of it. Each file will be added
   # to $EXTRA_MY_CNF, overriding any default my.cnf settings
   extraMyCnf: ""
   # extraMyCnf: extra-my-cnf
+
+  # mysqlSize can be "test" or "prod". Default is "prod".
+  # If the value is "test", then mysql is instanitated with a smaller footprint.
+  mysqlSize: "prod"
+
+  # Additional flags that will be appended to the vttablet command
+  extraFlags: {}
+
+  # User secrets that will be mounted under /vt/usersecrets/{secretname}/
+  secrets: []
 
   resources:
     # common production values 2-4CPU/4-8Gi RAM
@@ -203,8 +259,8 @@ pmm:
       metricsResolution: 1s
 
       # METRICS_RETENTION (Option)
-      # This option determines how long metrics are stored at PMM Server. 
-      # The value is passed as a combination of hours, minutes, and seconds, such as 720h0m0s. 
+      # This option determines how long metrics are stored at PMM Server.
+      # The value is passed as a combination of hours, minutes, and seconds, such as 720h0m0s.
       # The minutes (a number followed by m) and seconds (a number followed by s) are optional.
       metricsRetention: 720h
 
@@ -216,10 +272,10 @@ pmm:
       # NOTE: The value must be passed in kilobytes
       # NOTE: Make sure to quote this value so it isn't converted into scientific notation
 
-      # By default, Prometheus in PMM Server uses up to 768 MB of memory for storing the most recently used data chunks. 
+      # By default, Prometheus in PMM Server uses up to 768 MB of memory for storing the most recently used data chunks.
       # Depending on the amount of data coming into Prometheus, you may require a higher limit to avoid throttling data ingestion,
       # or allow less memory consumption if it is needed for other processes.
-      # The limit affects only memory reserved for data chunks. Actual RAM usage by Prometheus is higher. 
+      # The limit affects only memory reserved for data chunks. Actual RAM usage by Prometheus is higher.
       # It is recommended to set this limit to roughly 2/3 of the total memory that you are planning to allow for Prometheus.
       metricsMemory: "600000"
 

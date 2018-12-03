@@ -41,15 +41,16 @@ type VSchema struct {
 
 // Table represents a table in VSchema.
 type Table struct {
-	IsSequence     bool                 `json:"is_sequence,omitempty"`
-	Name           sqlparser.TableIdent `json:"name"`
-	Keyspace       *Keyspace            `json:"-"`
-	ColumnVindexes []*ColumnVindex      `json:"column_vindexes,omitempty"`
-	Ordered        []*ColumnVindex      `json:"ordered,omitempty"`
-	Owned          []*ColumnVindex      `json:"owned,omitempty"`
-	AutoIncrement  *AutoIncrement       `json:"auto_increment,omitempty"`
-	Columns        []Column             `json:"columns,omitempty"`
-	Pinned         []byte               `json:"pinned,omitempty"`
+	IsSequence              bool                 `json:"is_sequence,omitempty"`
+	Name                    sqlparser.TableIdent `json:"name"`
+	Keyspace                *Keyspace            `json:"-"`
+	ColumnVindexes          []*ColumnVindex      `json:"column_vindexes,omitempty"`
+	Ordered                 []*ColumnVindex      `json:"ordered,omitempty"`
+	Owned                   []*ColumnVindex      `json:"owned,omitempty"`
+	AutoIncrement           *AutoIncrement       `json:"auto_increment,omitempty"`
+	Columns                 []Column             `json:"columns,omitempty"`
+	Pinned                  []byte               `json:"pinned,omitempty"`
+	ColumnListAuthoritative bool                 `json:"column_list_authoritative,omitempty"`
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -89,6 +90,7 @@ type KeyspaceSchema struct {
 	Keyspace *Keyspace
 	Tables   map[string]*Table
 	Vindexes map[string]Vindex
+	Error    error
 }
 
 // MarshalJSON returns a JSON representation of KeyspaceSchema.
@@ -97,10 +99,17 @@ func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 		Sharded  bool              `json:"sharded,omitempty"`
 		Tables   map[string]*Table `json:"tables,omitempty"`
 		Vindexes map[string]Vindex `json:"vindexes,omitempty"`
+		Error    string            `json:"error,omitempty"`
 	}{
 		Sharded:  ks.Keyspace.Sharded,
 		Tables:   ks.Tables,
 		Vindexes: ks.Vindexes,
+		Error: func(ks *KeyspaceSchema) string {
+			if ks.Error == nil {
+				return ""
+			}
+			return ks.Error.Error()
+		}(ks),
 	})
 }
 
@@ -118,14 +127,8 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema, err error) {
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
 	buildKeyspaces(source, vschema)
-	err = buildTables(source, vschema)
-	if err != nil {
-		return nil, err
-	}
-	err = resolveAutoIncrement(source, vschema)
-	if err != nil {
-		return nil, err
-	}
+	buildTables(source, vschema)
+	resolveAutoIncrement(source, vschema)
 	addDual(vschema)
 	return vschema, nil
 }
@@ -148,11 +151,9 @@ func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceS
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
 	buildKeyspaces(formal, vschema)
-	err := buildTables(formal, vschema)
-	if err != nil {
-		return nil, err
-	}
-	return vschema.Keyspaces[keyspace], nil
+	buildTables(formal, vschema)
+	err := vschema.Keyspaces[keyspace].Error
+	return vschema.Keyspaces[keyspace], err
 }
 
 // ValidateKeyspace ensures that the keyspace vschema is valid.
@@ -175,13 +176,16 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	}
 }
 
-func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
+func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
+outer:
 	for ksname, ks := range source.Keyspaces {
-		keyspace := vschema.Keyspaces[ksname].Keyspace
+		ksvschema := vschema.Keyspaces[ksname]
+		keyspace := ksvschema.Keyspace
 		for vname, vindexInfo := range ks.Vindexes {
 			vindex, err := CreateVindex(vindexInfo.Type, vname, vindexInfo.Params)
 			if err != nil {
-				return err
+				ksvschema.Error = err
+				continue outer
 			}
 			if _, ok := vschema.uniqueVindexes[vname]; ok {
 				vschema.uniqueVindexes[vname] = nil
@@ -192,8 +196,9 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 		}
 		for tname, table := range ks.Tables {
 			t := &Table{
-				Name:     sqlparser.NewTableIdent(tname),
-				Keyspace: keyspace,
+				Name:                    sqlparser.NewTableIdent(tname),
+				Keyspace:                keyspace,
+				ColumnListAuthoritative: table.ColumnListAuthoritative,
 			}
 			if _, ok := vschema.uniqueTables[tname]; ok {
 				vschema.uniqueTables[tname] = nil
@@ -207,11 +212,13 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 			if table.Pinned != "" {
 				decoded, err := hex.DecodeString(table.Pinned)
 				if err != nil {
-					return fmt.Errorf("could not decode the keyspace id for pin: %v", err)
+					ksvschema.Error = fmt.Errorf("could not decode the keyspace id for pin: %v", err)
+					continue outer
 				}
 				t.Pinned = decoded
 			} else if keyspace.Sharded && len(table.ColumnVindexes) == 0 {
-				return fmt.Errorf("missing primary col vindex for table: %s", tname)
+				ksvschema.Error = fmt.Errorf("missing primary col vindex for table: %s", tname)
+				continue outer
 			}
 
 			// Initialize Columns.
@@ -219,7 +226,8 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 			for _, col := range table.Columns {
 				name := sqlparser.NewColIdent(col.Name)
 				if colNames[name.Lowered()] {
-					return fmt.Errorf("duplicate column name '%v' for table: %s", name, tname)
+					ksvschema.Error = fmt.Errorf("duplicate column name '%v' for table: %s", name, tname)
+					continue outer
 				}
 				colNames[name.Lowered()] = true
 				t.Columns = append(t.Columns, Column{Name: name, Type: col.Type})
@@ -229,7 +237,8 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 			for i, ind := range table.ColumnVindexes {
 				vindexInfo, ok := ks.Vindexes[ind.Name]
 				if !ok {
-					return fmt.Errorf("vindex %s not found for table %s", ind.Name, tname)
+					ksvschema.Error = fmt.Errorf("vindex %s not found for table %s", ind.Name, tname)
+					continue outer
 				}
 				vindex := vschema.Keyspaces[ksname].Vindexes[ind.Name]
 				owned := false
@@ -239,12 +248,14 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 				var columns []sqlparser.ColIdent
 				if ind.Column != "" {
 					if len(ind.Columns) > 0 {
-						return fmt.Errorf("can't use column and columns at the same time in vindex (%s) and table (%s)", ind.Name, tname)
+						ksvschema.Error = fmt.Errorf("can't use column and columns at the same time in vindex (%s) and table (%s)", ind.Name, tname)
+						continue outer
 					}
 					columns = []sqlparser.ColIdent{sqlparser.NewColIdent(ind.Column)}
 				} else {
 					if len(ind.Columns) == 0 {
-						return fmt.Errorf("must specify at least one column for vindex (%s) and table (%s)", ind.Name, tname)
+						ksvschema.Error = fmt.Errorf("must specify at least one column for vindex (%s) and table (%s)", ind.Name, tname)
+						continue outer
 					}
 					for _, indCol := range ind.Columns {
 						columns = append(columns, sqlparser.NewColIdent(indCol))
@@ -260,10 +271,12 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 				if i == 0 {
 					// Perform Primary vindex check.
 					if !columnVindex.Vindex.IsUnique() {
-						return fmt.Errorf("primary vindex %s is not Unique for table %s", ind.Name, tname)
+						ksvschema.Error = fmt.Errorf("primary vindex %s is not Unique for table %s", ind.Name, tname)
+						continue outer
 					}
 					if owned {
-						return fmt.Errorf("primary vindex %s cannot be owned for table %s", ind.Name, tname)
+						ksvschema.Error = fmt.Errorf("primary vindex %s cannot be owned for table %s", ind.Name, tname)
+						continue outer
 					}
 				}
 				t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
@@ -274,10 +287,9 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 			t.Ordered = colVindexSorted(t.ColumnVindexes)
 		}
 	}
-	return nil
 }
 
-func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) error {
+func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
 		for tname, table := range ks.Tables {
@@ -288,12 +300,12 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) error 
 			t.AutoIncrement = &AutoIncrement{Column: sqlparser.NewColIdent(table.AutoIncrement.Column)}
 			seq, err := vschema.findQualified(table.AutoIncrement.Sequence)
 			if err != nil {
-				return fmt.Errorf("cannot resolve sequence %s: %v", table.AutoIncrement.Sequence, err)
+				ksvschema.Error = fmt.Errorf("cannot resolve sequence %s: %v", table.AutoIncrement.Sequence, err)
+				break
 			}
 			t.AutoIncrement.Sequence = seq
 		}
 	}
-	return nil
 }
 
 // addDual adds dual as a valid table to all keyspaces.

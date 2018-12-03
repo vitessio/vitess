@@ -2076,12 +2076,8 @@ options:PassthroughDMLs
 "alter table a add column(a int)"
 {
   "PlanID": "DDL",
-  "TableName": "a",
+  "TableName": "",
   "Permissions": [
-    {
-      "TableName": "a",
-      "Role": 2
-    },
     {
       "TableName": "a",
       "Role": 2
@@ -2093,7 +2089,7 @@ options:PassthroughDMLs
 "alter table a rename b"
 {
   "PlanID": "DDL",
-  "TableName": "a",
+  "TableName": "",
   "Permissions": [
     {
       "TableName": "a",
@@ -2110,7 +2106,7 @@ options:PassthroughDMLs
 "rename table a to b"
 {
   "PlanID": "DDL",
-  "TableName": "a",
+  "TableName": "",
   "Permissions": [
     {
       "TableName": "a",
@@ -2123,14 +2119,56 @@ options:PassthroughDMLs
   ]
 }
 
+# multi-rename
+"rename table a to b, b to a"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    },
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ]
+}
+
 # drop
 "drop table a"
 {
   "PlanID": "DDL",
-  "TableName": "a",
+  "TableName": "",
   "Permissions": [
     {
       "TableName": "a",
+      "Role": 2
+    }
+  ]
+}
+
+# multi-drop
+"drop table a, b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
       "Role": 2
     }
   ]
@@ -2140,12 +2178,8 @@ options:PassthroughDMLs
 "analyze table a"
 {
   "PlanID": "DDL",
-  "TableName": "a",
+  "TableName": "",
   "Permissions": [
-    {
-      "TableName": "a",
-      "Role": 2
-    },
     {
       "TableName": "a",
       "Role": 2
@@ -2157,7 +2191,7 @@ options:PassthroughDMLs
 "alter table a reorganize partition b into (partition c values less than (:bv), partition d values less than (maxvalue))"
 {
   "PlanID": "DDL",
-  "TableName": "a",
+  "TableName": "",
   "Permissions": [
     {
       "TableName": "a",
@@ -2171,12 +2205,8 @@ options:PassthroughDMLs
 "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))"
 {
   "PlanID": "DDL",
-  "TableName": "a",
+  "TableName": "",
   "Permissions": [
-    {
-      "TableName": "a",
-      "Role": 2
-    },
     {
       "TableName": "a",
       "Role": 2

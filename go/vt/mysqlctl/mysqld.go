@@ -595,7 +595,13 @@ func (mysqld *Mysqld) initConfig(root string, cnf *Mycnf, outFile string) error 
 	var err error
 	var configData string
 
-	switch hr := hook.NewSimpleHook("make_mycnf").Execute(); hr.ExitStatus {
+	env := make(map[string]string)
+	envVars := []string{"KEYSPACE", "SHARD", "TABLET_TYPE", "TABLET_ID", "TABLET_DIR", "MYSQL_PORT"}
+	for _, v := range envVars {
+		env[v] = os.Getenv(v)
+	}
+
+	switch hr := hook.NewHookWithEnv("make_mycnf", nil, env).Execute(); hr.ExitStatus {
 	case hook.HOOK_DOES_NOT_EXIST:
 		log.Infof("make_mycnf hook doesn't exist, reading template files")
 		configData, err = cnf.makeMycnf(getMycnfTemplates(root))

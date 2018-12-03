@@ -96,7 +96,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"sort"
 	"strconv"
@@ -205,13 +204,13 @@ var commands = []commandGroup{
 			{"Sleep", commandSleep,
 				"<tablet alias> <duration>",
 				"Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing."},
-			{"Backup", commandBackup,
-				"[-concurrency=4] <tablet alias>",
-				"Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes."},
 			{"ExecuteHook", commandExecuteHook,
 				"<tablet alias> <hook name> [<param1=value1> <param2=value2> ...]",
 				"Runs the specified hook on the given tablet. A hook is a script that resides in the $VTROOT/vthook directory. You can put any script into that directory and use this command to run that script.\n" +
 					"For this command, the param=value arguments are parameters that the command passes to the specified hook."},
+			{"ExecuteFetchAsApp", commandExecuteFetchAsApp,
+				"[-max_rows=10000] [-json] [-use_pool] <tablet alias> <sql command>",
+				"Runs the given SQL command as a App on the remote tablet."},
 			{"ExecuteFetchAsDba", commandExecuteFetchAsDba,
 				"[-max_rows=10000] [-disable_binlogs] [-json] <tablet alias> <sql command>",
 				"Runs the given SQL command as a DBA on the remote tablet."},
@@ -1030,42 +1029,37 @@ func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	return wr.TabletManagerClient().Sleep(ctx, ti.Tablet, duration)
 }
 
-func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
+func commandExecuteFetchAsApp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	maxRows := subFlags.Int("max_rows", 10000, "Specifies the maximum number of rows to allow in fetch")
+	usePool := subFlags.Bool("use_pool", false, "Use connection from pool")
+	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the Backup command requires the <tablet alias> argument")
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("the <tablet alias> and <sql command> arguments are required for the ExecuteFetchAsApp command")
 	}
 
-	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	alias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	query := subFlags.Arg(1)
+	qrproto, err := wr.ExecuteFetchAsApp(ctx, alias, *usePool, query, *maxRows)
 	if err != nil {
 		return err
 	}
-	stream, err := wr.TabletManagerClient().Backup(ctx, tabletInfo.Tablet, *concurrency)
-	if err != nil {
-		return err
+	qr := sqltypes.Proto3ToResult(qrproto)
+	if *json {
+		return printJSON(wr.Logger(), qr)
 	}
-	for {
-		e, err := stream.Recv()
-		switch err {
-		case nil:
-			logutil.LogEvent(wr.Logger(), e)
-		case io.EOF:
-			return nil
-		default:
-			return err
-		}
-	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
 }
 
 func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	maxRows := subFlags.Int("max_rows", 10000, "Specifies the maximum number of rows to allow in reset")
+	maxRows := subFlags.Int("max_rows", 10000, "Specifies the maximum number of rows to allow in fetch")
 	disableBinlogs := subFlags.Bool("disable_binlogs", false, "Disables writing to binlogs during the query")
 	reloadSchema := subFlags.Bool("reload_schema", false, "Indicates whether the tablet schema will be reloaded after executing the SQL command. The default value is <code>false</code>, which indicates that the tablet schema will not be reloaded.")
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")

@@ -37,6 +37,7 @@ type VSchemaKeyspaceStats struct {
 	Sharded     bool
 	TableCount  int
 	VindexCount int
+	Error       string
 }
 
 // NewVSchemaStats returns a new VSchemaStats from a VSchema.
@@ -55,6 +56,9 @@ func NewVSchemaStats(vschema *vindexes.VSchema, errorMessage string) *VSchemaSta
 			for _, t := range k.Tables {
 				s.VindexCount += len(t.ColumnVindexes) + len(t.Ordered) + len(t.Owned)
 			}
+		}
+		if k.Error != nil {
+			s.Error = k.Error.Error()
 		}
 		stats.Keyspaces = append(stats.Keyspaces, s)
 	}
@@ -77,7 +81,7 @@ const (
 </style>
 <table>
   <tr>
-    <th colspan="4">VSchema Cache <i><a href="/debug/vschema">in JSON</a></i></th>
+    <th colspan="5">VSchema Cache <i><a href="/debug/vschema">in JSON</a></i></th>
   </tr>
 {{if .Error}}
   <tr>
@@ -93,12 +97,14 @@ const (
     <th>Sharded</th>
     <th>Table Count</th>
     <th>Vindex Count</th>
+    <th>Error</th>
   </tr>
 {{range $i, $ks := .Keyspaces}}  <tr>
     <td>{{$ks.Keyspace}}</td>
     <td>{{if $ks.Sharded}}Yes{{else}}No{{end}}</td>
     <td>{{$ks.TableCount}}</td>
     <td>{{$ks.VindexCount}}</td>
+    <td style="color:red">{{$ks.Error}}</td>
   </tr>{{end}}
 </table>
 `
