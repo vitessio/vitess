@@ -81,6 +81,54 @@ topology:
       # set failure-domain.beta.kubernetes.io/region
       # region: eastus
 
+      ## You MUST set up at least one keyspace, as these are what actually define and
+      #  create the Vitess cluster
+      #
+      # keyspaces:
+      #   - name: "commerce"
+      #     shards:
+      #       - name: "0"
+      #         tablets:
+      #           - type: "replica"
+      #             vttablet:
+      #               replicas: 2
+
+      ##    this defines named jobs that will run vtctlclient ApplySchema to initialize
+      #     your tables
+      #
+      #     schema:
+      #       phase1: |-
+      #         create table product(
+      #           sku varbinary(128),
+      #           description varbinary(128),
+      #           price bigint,
+      #           primary key(sku)
+      #         );
+      #         create table customer(
+      #           user_id bigint not null auto_increment,
+      #           email varbinary(128),
+      #           primary key(user_id)
+      #         );
+      #         create table corder(
+      #           order_id bigint not null auto_increment,
+      #           user_id bigint,
+      #           product_id bigint,
+      #           msrp bigint,
+      #           primary key(order_id)
+      #         );
+
+      ##    this defines named jobs that will run vtctlclient ApplyVSchema
+      #
+      #     vschema:
+      #       phase1: |-
+      #         {
+      #           "tables": {
+      #             "product": {},
+      #             "customer": {},
+      #             "corder": {}
+      #           }
+      #         }
+
       # enable or disable mysql protocol support, with accompanying auth details
       mysqlProtocol:
         enabled: false
