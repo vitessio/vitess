@@ -163,9 +163,6 @@ etcd:
   version: "3.3.10"
   replicas: 3
   resources:
-    limits:
-      cpu: 300m
-      memory: 200Mi
     requests:
       cpu: 200m
       memory: 100Mi
@@ -175,9 +172,9 @@ vtctld:
   serviceType: "ClusterIP"
   vitessTag: "latest"
   resources:
-    limits:
-      cpu: 100m
-      memory: 128Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
   extraFlags: {}
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
@@ -186,9 +183,9 @@ vtgate:
   serviceType: "ClusterIP"
   vitessTag: "latest"
   resources:
-    limits:
-      cpu: 500m
-      memory: 512Mi
+    # requests:
+    #   cpu: 500m
+    #   memory: 512Mi
   extraFlags: {}
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
@@ -203,9 +200,9 @@ vtworker:
   vitessTag: "latest"
   extraFlags: {}
   resources:
-    limits:
-      cpu: 500m
-      memory: 512Mi
+    # requests:
+    #   cpu: 500m
+    #   memory: 512Mi
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 
@@ -251,14 +248,16 @@ vttablet:
 
   resources:
     # common production values 2-4CPU/4-8Gi RAM
-    limits:
-      cpu: 500m
-      memory: 1Gi
+    # requests:
+    #   cpu: 2
+    #   memory: 4Gi
+
   mysqlResources:
     # common production values 4CPU/8-16Gi RAM
-    limits:
-      cpu: 500m
-      memory: 1Gi
+    # requests:
+    #   cpu: 4
+    #   memory: 8Gi
+
   # PVC for mysql
   dataVolumeClaimAnnotations:
   dataVolumeClaimSpec:
@@ -281,14 +280,13 @@ pmm:
       requests:
         cpu: 50m
         memory: 128Mi
-      limits:
-        cpu: 200m
-        memory: 256Mi
+
   server:
     resources:
-      limits:
-        cpu: 500m
-        memory: 1Gi
+      # requests:
+      #   cpu: 500m
+      #   memory: 1Gi
+
     # PVC for pmm
     dataVolumeClaimAnnotations:
     dataVolumeClaimSpec:
@@ -335,5 +333,5 @@ orchestrator:
   replicas: 3
   resources:
     requests:
-      cpu: "100m"
-      memory: "64Mi"
+      cpu: 50m
+      memory: 350Mi
