@@ -55,16 +55,16 @@ config:
     #########
 
     # AWS region to use
-    # s3_backup_aws_region: "us-east-1"
+    # s3_backup_aws_region: us-east-1
 
     # S3 bucket to use for backups
-    # s3_backup_storage_bucket: "vitess-backups"
+    # s3_backup_storage_bucket: vitess-backups
 
     # root prefix for all backup-related object names
-    # s3_backup_storage_root: "vtbackups"
+    # s3_backup_storage_root: vtbackups
 
     # server-side encryption algorithm (e.g., AES256, aws:kms)
-    # s3_backup_server_side_encryption: "AES256"
+    # s3_backup_server_side_encryption: AES256
 
     # secret that contains AWS S3 credentials file with read/write access to the bucket
     # kubectl create secret generic s3-credentials --from-file=s3-creds
@@ -76,7 +76,7 @@ topology:
     etcd:
       replicas: 3
   cells:
-    - name: "zone1"
+    - name: zone1
 
       # set failure-domain.beta.kubernetes.io/region
       # region: eastus
@@ -132,7 +132,7 @@ topology:
       # enable or disable mysql protocol support, with accompanying auth details
       mysqlProtocol:
         enabled: false
-        authType: "secret"
+        authType: secret
         # authType can be: none or secret. For secret, perform the following changes:
         # username: myuser
         # this is the secret that will be mounted as the user password
@@ -169,8 +169,8 @@ etcd:
 
 # Default values for vtctld resources defined in 'topology'
 vtctld:
-  serviceType: "ClusterIP"
-  vitessTag: "latest"
+  serviceType: ClusterIP
+  vitessTag: latest
   resources:
     # requests:
     #   cpu: 100m
@@ -180,8 +180,8 @@ vtctld:
 
 # Default values for vtgate resources defined in 'topology'
 vtgate:
-  serviceType: "ClusterIP"
-  vitessTag: "latest"
+  serviceType: ClusterIP
+  vitessTag: latest
   resources:
     # requests:
     #   cpu: 500m
@@ -191,13 +191,13 @@ vtgate:
 
 # Default values for vtctlclient resources defined in 'topology'
 vtctlclient:
-  vitessTag: "latest"
+  vitessTag: latest
   extraFlags: {}
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 # Default values for vtworker resources defined in 'jobs'
 vtworker:
-  vitessTag: "latest"
+  vitessTag: latest
   extraFlags: {}
   resources:
     # requests:
@@ -208,7 +208,7 @@ vtworker:
 
 # Default values for vttablet resources defined in 'topology'
 vttablet:
-  vitessTag: "latest"
+  vitessTag: latest
 
   # valid values are
   # - mysql56 (for MySQL 8.0)
@@ -239,7 +239,7 @@ vttablet:
 
   # mysqlSize can be "test" or "prod". Default is "prod".
   # If the value is "test", then mysql is instanitated with a smaller footprint.
-  mysqlSize: "prod"
+  mysqlSize: prod
 
   # Additional flags that will be appended to the vttablet command
   extraFlags: {}
@@ -266,16 +266,16 @@ vttablet:
     # managed-premium (Azure)
     # standard (AWS) - not sure what the default class is for ssd
     # Note: Leave storageClassName unset to use cluster-specific default class.
-    #storageClassName: "pd-ssd"
+    #storageClassName: pd-ssd
     accessModes: ["ReadWriteOnce"]
     resources:
       requests:
-        storage: "10Gi"
+        storage: 10Gi
 
 # Default values for pmm
 pmm:
   enabled: false
-  pmmTag: "1.17.0"
+  pmmTag: 1.17.0
   client:
     resources:
       requests:
@@ -291,11 +291,11 @@ pmm:
     # PVC for pmm
     dataVolumeClaimAnnotations:
     dataVolumeClaimSpec:
-      # storageClassName: "pd-ssd"
+      # storageClassName: pd-ssd
       accessModes: ["ReadWriteOnce"]
       resources:
         requests:
-          storage: "10Gi"
+          storage: 10Gi
     env:
       # DISABLE_TELEMETRY
       # With telemetry enabled, your PMM Server sends some statistics to v.percona.com every 24 hours
@@ -330,7 +330,7 @@ pmm:
 # Default values for orchestrator resources
 orchestrator:
   enabled: false
-  image: "vitess/orchestrator:3.0.13"
+  image: vitess/orchestrator:3.0.13
   replicas: 3
   resources:
     requests:
