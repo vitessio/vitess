@@ -218,8 +218,8 @@ vttablet:
   # the flavor determines the base my.cnf file for vitess to function
   flavor: mysql56
 
-  mysqlImage: percona:5.7.24
-  # mysqlImage: mysql:5.7.23
+  mysqlImage: percona:5.7.23
+  # mysqlImage: mysql:5.7.24
   # mysqlImage: mariadb:10.3.11
 
   enableHeartbeat: false
