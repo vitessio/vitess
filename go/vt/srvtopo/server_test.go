@@ -134,7 +134,7 @@ var (
 	stockTopoServer = &topo.Server{}
 	stockFilters    = []string{"bar", "baz"}
 	stockCell       = "some-cell"
-	stockCtx        = context.WithValue(context.Background(), "key", "value")
+	stockCtx, _     = context.WithCancel(context.Background())
 )
 
 func TestFilteringServerReturnsUnderlyingServer(t *testing.T) {
