@@ -11,8 +11,6 @@ This chart creates a Vitess cluster on Kubernetes in a single
 It currently includes all dependencies (e.g. etcd) and Vitess components
 (vtctld, vtgate, vttablet) inline (in `templates/`) rather than as sub-charts.
 
-**WARNING: This chart should be considered Beta.**
-
 ## Prerequisites
 
 * Install [etcd-operator](https://github.com/coreos/etcd-operator) in the
@@ -98,7 +96,7 @@ topology:
                     replicas: 2
 ```
 
-### Separate pools of replicas and rdonly tablets 
+### Separate pools of replicas and rdonly tablets
 
 ```
 topology:
@@ -292,7 +290,7 @@ topology:
 
 pmm:
   enabled: true
-  pmmTag: "1.15.0"
+  pmmTag: "1.17.0"
   client:
     resources:
       requests:
@@ -335,10 +333,10 @@ Each component of vitess requires a certificate and private key to secure incomi
 vttablet:
   extraFlags:
     # configure which certificates to use for serving grpc requests
-    grpc_cert: /vt/usersecrets/vttablet-tls/vttablet.pem 
+    grpc_cert: /vt/usersecrets/vttablet-tls/vttablet.pem
     grpc_key: /vt/usersecrets/vttablet-tls/vttablet-key.pem
-    tablet_grpc_ca: /vt/usersecrets/vttablet-tls/vitess-ca.pem 
-    tablet_grpc_server_name: vttablet 
+    tablet_grpc_ca: /vt/usersecrets/vttablet-tls/vitess-ca.pem
+    tablet_grpc_server_name: vttablet
   secrets:
   - vttablet-tls
 
@@ -406,7 +404,7 @@ data:
 
 An example vault configuration, which is provided by the `vttablet-vault`-Secret in the above example:
 ```
-vault_url = https://10.0.0.1:8200                                                                                
+vault_url = https://10.0.0.1:8200
 secret_mount_point = vitess
 token = 11111111-1111-1111-1111111111
 vault_ca = /vt/usersecrets/vttablet-vault/vault-ca-bundle.pem
