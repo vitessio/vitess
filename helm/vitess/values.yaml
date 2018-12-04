@@ -146,7 +146,7 @@ topology:
       vtgate:
         replicas: 3
         # if maxReplicas is higher than replicas, an HPA will be created
-        maxReplicas: 6
+        # maxReplicas: 6
 
 jobs:
   # examples:
