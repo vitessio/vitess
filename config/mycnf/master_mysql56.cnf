@@ -5,7 +5,10 @@ log_bin
 log_slave_updates
 enforce_gtid_consistency
 secure_file_priv = NULL
-innodb_support_xa = 0
+
+# setting loose options that aren't globally supported by all versions
+loose_default_authentication_plugin = mysql_native_password
+loose_innodb_support_xa = 0
 
 # Crash-safe replication settings.
 master_info_repository = TABLE
