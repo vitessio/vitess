@@ -23,7 +23,6 @@ package srvtopo
 import (
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
@@ -57,8 +56,6 @@ func NewKeyspaceFilteringServer(underlying Server, selectedKeyspaces []string) S
 	for _, ks := range selectedKeyspaces {
 		keyspaces[ks] = true
 	}
-
-	log.Infof("Keyspace filtering enabled, selecting %v", selectedKeyspaces)
 
 	return keyspaceFilteringServer{
 		server:         underlying,

@@ -197,6 +197,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
 	if len(filters.WatchKeyspaces) > 0 {
+		log.Infof("Keyspace filtering enabled, selecting %v", selectedKeyspaces)
 		serv = srvtopo.NewKeyspaceFilteringServer(serv, filters.WatchKeyspaces)
 	}
 
