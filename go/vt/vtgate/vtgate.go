@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	"vitess.io/vitess/go/vt/vtgate/filters"
 	"vitess.io/vitess/go/vt/vtgate/gateway"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
@@ -191,6 +192,12 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	// Check we have something to do.
 	if gw == nil {
 		log.Fatalf("'-disable_local_gateway' cannot be specified if 'l2vtgate_addrs' is also empty, otherwise this vtgate has no backend")
+	}
+
+	// If we want to filter keyspaces replace the srvtopo.Server with a
+	// filtering server
+	if len(filters.WatchKeyspaces) > 0 {
+		serv = srvtopo.NewKeyspaceFilteringServer(serv, filters.WatchKeyspaces)
 	}
 
 	tc := NewTxConn(gw, getTxMode())
