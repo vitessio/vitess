@@ -672,13 +672,11 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 
 	// Decode connection attributes send by the client
 	if clientFlags&CapabilityClientConnAttr != 0 {
-		var attrs map[string]string
 		var err error
-		attrs, pos, err = parseConnAttrs(data, pos)
+		_, pos, err = parseConnAttrs(data, pos)
 		if err != nil {
 			return "", "", nil, err
 		}
-		log.Infof("Connection Attributes: %-v", attrs)
 	}
 
 	return username, authMethod, authResponse, nil
