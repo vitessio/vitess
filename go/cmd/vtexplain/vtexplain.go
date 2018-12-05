@@ -122,6 +122,7 @@ func getFileParam(flag, flagFile, name string) (string, error) {
 }
 
 func main() {
+	defer vtexplain.Stop()
 	defer exit.RecoverAll()
 	defer logutil.Flush()
 
@@ -177,8 +178,6 @@ func parseAndRun() error {
 	} else {
 		fmt.Print(vtexplain.ExplainsAsJSON(plans))
 	}
-
-	vtexplain.Stop()
 
 	return nil
 }

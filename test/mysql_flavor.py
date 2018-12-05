@@ -130,6 +130,12 @@ class MariaDB(MysqlFlavor):
         (host, port)]
 
 
+class MariaDB103(MariaDB):
+  """Overrides specific to MariaDB 10.3+."""
+
+  def extra_my_cnf(self):
+    return environment.vttop + "/config/mycnf/master_mariadb103.cnf"
+
 class MySQL56(MysqlFlavor):
   """Overrides specific to MySQL 5.6."""
 
@@ -230,5 +236,5 @@ def register_flavor(flavor, cls, env):
   flavor_map[flavor] = {"cls": cls, "env": env}
 
 register_flavor("MariaDB", MariaDB, "MariaDB")
-register_flavor("MariaDB103", MariaDB, "MariaDB103")
+register_flavor("MariaDB103", MariaDB103, "MariaDB103")
 register_flavor("MySQL56", MySQL56, "MySQL56")

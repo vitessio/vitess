@@ -4,6 +4,8 @@ gtid_mode = ON
 log_bin
 log_slave_updates
 enforce_gtid_consistency
+secure_file_priv = NULL
+innodb_support_xa = 0
 
 # Crash-safe replication settings.
 master_info_repository = TABLE

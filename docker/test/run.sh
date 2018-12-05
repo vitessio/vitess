@@ -204,9 +204,9 @@ fi
 # Clean up host dir mounted VTDATAROOT
 if [[ -n "$hostdir" ]]; then
   # Use Docker user to clean up first, to avoid permission errors.
-  docker run --name=rm_$testid -v $hostdir:/vt/vtdataroot $image bash -c 'rm -rf /vt/vtdataroot/*'
+  #docker run --name=rm_$testid -v $hostdir:/vt/vtdataroot $image bash -c 'rm -rf /vt/vtdataroot/*'
   docker rm -f rm_$testid &>/dev/null
-  rm -rf $hostdir
+  #rm -rf $hostdir
 fi
 
 # If requested, create the cache image.

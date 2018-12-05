@@ -117,7 +117,7 @@ In addition, Vitess requires the software and libraries listed below.
 4.  Select a lock service from the options listed below. It is technically
     possible to use another lock server, but plugins currently exist only
     for ZooKeeper, etcd and consul.
-    - ZooKeeper 3.4.10 is included by default. 
+    - ZooKeeper 3.4.13 is included by default. 
     - [Install etcd v3.0+](https://github.com/coreos/etcd/releases).
       If you use etcd, remember to include the `etcd` command
       on your path.
