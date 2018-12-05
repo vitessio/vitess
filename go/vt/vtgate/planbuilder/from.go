@@ -157,7 +157,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		return nil
 	}
 
-	table, vindex, _, _, destTarget, err := pb.vschema.FindTableOrVindex(tableName)
+	table, vindex, _, destTableType, destTarget, err := pb.vschema.FindTableOrVindex(tableName)
 	if err != nil {
 		return err
 	}
@@ -183,6 +183,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			Opcode:            engine.SelectScatter,
 			Keyspace:          table.Keyspace,
 			TargetDestination: destTarget,
+			TargetTabletType:  destTableType,
 		}
 		return nil
 	}
