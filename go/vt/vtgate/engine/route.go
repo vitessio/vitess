@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var _ Primitive = (*Route)(nil)
@@ -49,6 +50,10 @@ type Route struct {
 	// TargetDestination specifies an explicit target destination to send the query to.
 	// This bypases the core of the v3 engine.
 	TargetDestination key.Destination
+
+	// TargetTabletType specifies an explicit target destination tablet type
+	// this is only used in conjunction with TargetDestination
+	TargetTabletType topodatapb.TabletType
 
 	// Query specifies the query to be executed.
 	Query string
