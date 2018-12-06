@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2018 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,22 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that runs vtworker.
+# this scripts brings up zookeeper and all the vitess components
+# required for a single shard deployment.
 
 set -e
 
-cell=${CELL:-'test'}
 script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
 
-echo "Starting vtworker..."
-exec $VTROOT/bin/vtworker \
-  $TOPOLOGY_FLAGS \
-  -cell $cell \
-  -log_dir $VTDATAROOT/tmp \
-  -alsologtostderr \
-  -service_map=grpc-vtworker \
-  -grpc_port 15033 \
-  -port 15032 \
-  -pid_file $VTDATAROOT/tmp/vtworker.pid \
-  -use_v3_resharding_mode &
+CELL=zone1 KEYSPACE=customer UID_BASE=200 $script_root/vttablet-up.sh
+sleep 15
+./lvtctl.sh InitShardMaster -force customer/0 zone1-200
+./lvtctl.sh CopySchemaShard -tables customer,corder commerce/0 customer/0
+./lvtctl.sh ApplyVSchema -vschema_file vschema_commerce_vsplit.json commerce
+./lvtctl.sh ApplyVSchema -vschema_file vschema_customer_vsplit.json customer
+
+disown -a

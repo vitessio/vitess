@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2018 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,16 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that creates a sharded vttablet deployment.
+# this scripts brings up zookeeper and all the vitess components
+# required for a single shard deployment.
 
 set -e
 
 script_root=`dirname "${BASH_SOURCE}"`
+source $script_root/env.sh
 
-# Shard -80 contains all entries whose keyspace ID has a first byte < 0x80.
-# See: http://vitess.io/overview/concepts/#keyspace-id
-SHARD=-80 UID_BASE=200 $script_root/vttablet-up.sh "$@"
+$VTROOT/bin/vtworker \
+    $TOPOLOGY_FLAGS \
+    -cell zone1 \
+    -log_dir $VTDATAROOT/tmp \
+    -alsologtostderr \
+    -use_v3_resharding_mode \
+    VerticalSplitClone -min_healthy_rdonly_tablets=1 -tables=customer,corder customer/0
 
-# Shard 80- contains all entries whose keyspace ID has a first byte >= 0x80.
-SHARD=80- UID_BASE=300 $script_root/vttablet-up.sh "$@"
-
+disown -a

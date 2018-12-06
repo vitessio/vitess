@@ -17,6 +17,7 @@
 # This is an example script that creates a quorum of ZooKeeper servers.
 
 set -e
+cell=${CELL:-'test'}
 
 script_root=$(dirname "${BASH_SOURCE[0]}")
 
@@ -33,18 +34,18 @@ echo "add /vitess/global"
 "${VTROOT}"/dist/etcd/etcd-"${ETCD_VERSION}"-linux-amd64/etcdctl --endpoints "http://${ETCD_SERVER}" mkdir /vitess/global &
 
 
-echo "add /vitess/test"
-"${VTROOT}"/dist/etcd/etcd-"${ETCD_VERSION}"-linux-amd64/etcdctl --endpoints "http://${ETCD_SERVER}" mkdir /vitess/test &
+echo "add /vitess/$cell"
+"${VTROOT}"/dist/etcd/etcd-"${ETCD_VERSION}"-linux-amd64/etcdctl --endpoints "http://${ETCD_SERVER}" mkdir /vitess/$cell &
 
 # And also add the CellInfo description for the 'test' cell.
 # If the node already exists, it's fine, means we used existing data.
-echo "add test CellInfo"
+echo "add $cell CellInfo"
 set +e
 # shellcheck disable=SC2086
 "${VTROOT}"/bin/vtctl $TOPOLOGY_FLAGS AddCellInfo \
-  -root /vitess/test \
+  -root /vitess/$cell \
   -server_address "${ETCD_SERVER}" \
-  test
+  $cell
 set -e
 
 echo "etcd start done..."
