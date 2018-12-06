@@ -18,7 +18,7 @@
 
 set -e
 
-cell='test'
+cell=${CELL:-'test'}
 web_port=15001
 grpc_port=15991
 mysql_server_port=15306

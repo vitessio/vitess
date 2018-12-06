@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2018 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that stops the mysqld and vttablet instances
-# created by sharded-vttablet-up.sh
+# this scripts brings up zookeeper and all the vitess components
+# required for a single shard deployment.
+
+set -e
 
 script_root=`dirname "${BASH_SOURCE}"`
 
-UID_BASE=200 $script_root/vttablet-down.sh "$@"
-UID_BASE=300 $script_root/vttablet-down.sh "$@"
+./lvtctl.sh ApplySchema -sql-file drop_commerce_tables.sql commerce
+./lvtctl.sh SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 rdonly
+./lvtctl.sh SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 replica
+./lvtctl.sh SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 master
 
+disown -a
