@@ -18,13 +18,14 @@
 
 set -e
 
+cell=${CELL:-'test'}
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 echo "Starting vtworker..."
 exec $VTROOT/bin/vtworker \
   $TOPOLOGY_FLAGS \
-  -cell test \
+  -cell $cell \
   -log_dir $VTDATAROOT/tmp \
   -alsologtostderr \
   -service_map=grpc-vtworker \
