@@ -39,10 +39,6 @@
 "select * from `user[-]`.user_metadata"
 "unsupported: SELECT with a target destination"
 
-# Unsupported UPDATE statement with a target destination
-"update `user[-]`.user_metadata set id=2"
-"unsupported: UPDATE with a target destination"
-
 # Unsupported INSERT statement with a target destination
 "insert into `user[-]`.user_metadata (a, b) values (1,2)"
 "unsupported: INSERT with a target destination"
@@ -50,6 +46,10 @@
 # Unsupported DELETE statement with a replica target destination
 "DELETE FROM `user[-]@replica`.user_metadata limit 1"
 "unsupported: DELETE statement with a replica target"
+
+# Unsupported UPDATE statement with a replica target destination
+"update `user[-]@replica`.user_metadata set id=2"
+"unsupported: UPDATE statement with a replica target"
 
 # order by on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t order by id"
