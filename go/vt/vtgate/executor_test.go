@@ -1203,12 +1203,50 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 		t.Fatalf("test_vindex should not exist in original vschema")
 	}
 
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt := "create vindex test_vindex using hash"
-	wantCount := []int64{0, 0, 0}
-	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ks}), stmt, nil)
+	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	if err != nil {
 		t.Error(err)
 	}
+
+	vschema, vindex = waitForVindex(t, ks, "test_vindex", vschemaUpdates, executor)
+	if vindex == nil || vindex.Type != "hash" {
+		t.Errorf("updated vschema did not contain test_vindex")
+	}
+
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	wantErr := "vindex test_vindex already exists in keyspace TestExecutor"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("create duplicate vindex: %v, want %s", err, wantErr)
+	}
+	select {
+	case vschema = <-vschemaUpdates:
+		t.Errorf("vschema should not be updated on error")
+	default:
+	}
+
+	// Create a new vschema keyspace implicitly by creating a vindex with a different
+	// target in the session
+	ksNew := "test_new_keyspace"
+	session = NewSafeSession(&vtgatepb.Session{TargetString: ksNew})
+	stmt = "create vindex test_vindex2 using hash"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+
+	vschema, vindex = waitForVindex(t, ksNew, "test_vindex2", vschemaUpdates, executor)
+	if vindex.Type != "hash" {
+		t.Errorf("vindex type %s not hash", vindex.Type)
+	}
+	keyspace, ok := vschema.Keyspaces[ksNew]
+	if !ok || !keyspace.Sharded {
+		t.Errorf("keyspace should have been created with Sharded=true")
+	}
+
+	// No queries should have gone to any tablets
+	wantCount := []int64{0, 0, 0}
 	gotCount := []int64{
 		sbc1.ExecCount.Get(),
 		sbc2.ExecCount.Get(),
@@ -1216,49 +1254,6 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 	}
 	if !reflect.DeepEqual(gotCount, wantCount) {
 		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
-	}
-
-	time.Sleep(10 * time.Millisecond)
-	select {
-	case vschema = <-vschemaUpdates:
-		vindex, ok = vschema.Keyspaces[ks].Vindexes["test_vindex"]
-		if !ok || vindex.Type != "hash" {
-			t.Errorf("updated vschema did not contain test_vindex")
-		}
-	default:
-		t.Errorf("vschema was not updated as expected")
-	}
-
-	// Wait up to 10ms until the vindex manager gets notified of the update
-	for i := 0; i < 10; i++ {
-		vschema = executor.vm.GetCurrentSrvVschema()
-		vindex, ok = vschema.Keyspaces[ks].Vindexes["test_vindex"]
-		if ok {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if !ok || vindex.Type != "hash" {
-		t.Errorf("updated vschema did not contain test_vindex")
-	}
-
-	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ks}), stmt, nil)
-	wantErr := "vindex test_vindex already exists in keyspace TestExecutor"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("create duplicate vindex: %v, want %s", err, wantErr)
-	}
-	gotCount = []int64{
-		sbc1.ExecCount.Get(),
-		sbc2.ExecCount.Get(),
-		sbclookup.ExecCount.Get(),
-	}
-	if !reflect.DeepEqual(gotCount, wantCount) {
-		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
-	}
-	select {
-	case vschema = <-vschemaUpdates:
-		t.Errorf("vschema shoud not be updated on error")
-	default:
 	}
 }
 
@@ -1561,8 +1556,8 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	}
 
 	stmt = "alter table nonexistent drop vindex test_lookup"
-	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), stmt, nil)
-	wantErr = errNoKeyspace.Error()
+	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "InvalidKeyspace"}), stmt, nil)
+	wantErr = "table InvalidKeyspace.nonexistent not defined in vschema"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("got %v want err %s", err, wantErr)
 	}
