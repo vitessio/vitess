@@ -24,7 +24,7 @@ source $script_root/env.sh
 echo "Starting vtworker..."
 exec $VTROOT/bin/vtworker \
   $TOPOLOGY_FLAGS \
-  -cell test \
+  -cell zone1 \
   -log_dir $VTDATAROOT/tmp \
   -alsologtostderr \
   -use_v3_resharding_mode \

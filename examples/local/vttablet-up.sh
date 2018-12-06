@@ -18,7 +18,7 @@
 
 set -e
 
-cell='test'
+cell=${CELL:-'test'}
 keyspace=${KEYSPACE:-'test_keyspace'}
 shard=${SHARD:-'0'}
 uid_base=${UID_BASE:-'100'}
@@ -38,12 +38,16 @@ source $script_root/env.sh
 
 init_db_sql_file="$VTROOT/config/init_db.sql"
 
+export  EXTRA_MY_CNF=$VTROOT/config/mycnf/default-fast.cnf
+
 case "$MYSQL_FLAVOR" in
   "MySQL56")
-    export EXTRA_MY_CNF=$VTROOT/config/mycnf/master_mysql56.cnf
+    export EXTRA_MY_CNF=$EXTRA_MY_CNF:$VTROOT/config/mycnf/master_mysql56.cnf
+#    export EXTRA_MY_CNF=$VTROOT/config/mycnf/master_mysql56.cnf
     ;;
   "MariaDB")
-    export EXTRA_MY_CNF=$VTROOT/config/mycnf/master_mariadb.cnf
+    export EXTRA_MY_CNF=$EXTRA_MY_CNF:$VTROOT/config/mycnf/master_mariadb.cnf
+#    export EXTRA_MY_CNF=$VTROOT/config/mycnf/master_mariadb.cnf
     ;;
   *)
     echo "Please set MYSQL_FLAVOR to MySQL56 or MariaDB."
@@ -55,7 +59,7 @@ mkdir -p $VTDATAROOT/backups
 
 # Start 5 vttablets by default.
 # Pass TABLETS_UIDS indices as env variable to change
-uids=${TABLETS_UIDS:-'0 1 2 3 4'}
+uids=${TABLETS_UIDS:-'0 1 2'}
 
 # Start all mysqlds in background.
 for uid_index in $uids; do
@@ -71,7 +75,7 @@ for uid_index in $uids; do
   export MYSQL_PORT=$mysql_port
 
   tablet_type=replica
-  if [[ $uid_index -gt 2 ]]; then
+  if [[ $uid_index -gt 1 ]]; then
     tablet_type=rdonly
   fi
 
@@ -110,7 +114,7 @@ for uid_index in $uids; do
   printf -v tablet_dir 'vt_%010d' $uid
   printf -v tablet_logfile 'vttablet_%010d_querylog.txt' $uid
   tablet_type=replica
-  if [[ $uid_index -gt 2 ]]; then
+  if [[ $uid_index -gt 1 ]]; then
     tablet_type=rdonly
   fi
 
