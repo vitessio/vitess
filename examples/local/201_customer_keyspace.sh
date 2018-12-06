@@ -14,8 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this scripts brings up zookeeper and all the vitess components
-# required for a single shard deployment.
+# this script creates a new keyspace in preparation for vertical resharding
 
 set -e
 

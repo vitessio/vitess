@@ -14,8 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this scripts brings up zookeeper and all the vitess components
-# required for a single shard deployment.
+# this script brings down zookeeper and all the vitess components
+# we brought up in the example
+# optionally, you may want to delete everything that was created
+# by the example from $VTDATAROOT
 
 set -e
 
@@ -27,6 +29,11 @@ CELL=zone1 UID_BASE=200 $script_root/vttablet-down.sh
 CELL=zone1 UID_BASE=300 $script_root/vttablet-down.sh
 CELL=zone1 UID_BASE=400 $script_root/vttablet-down.sh
 ./vtctld-down.sh
-./zk-down.sh
+
+if [ "${TOPO}" = "etcd2" ]; then
+    CELL=zone1 $script_root/etcd-down.sh
+else
+    CELL=zone1 $script_root/zk-down.sh
+fi
 
 disown -a

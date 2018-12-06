@@ -26,5 +26,5 @@ source "${script_root}/env.sh"
 
 # Stop etcd servers.
 echo "Stopping etcd servers..."
-ETCD_VERSION=$(cat "$VTROOT/dist/etcd/version")
+ETCD_VERSION=$(cat "$VTROOT/dist/etcd/.installed_version")
 kill -9 "$(pgrep -f "dist/etcd/etcd-${ETCD_VERSION}-linux-amd64/etcd")"

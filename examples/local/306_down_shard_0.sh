@@ -14,8 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this scripts brings up zookeeper and all the vitess components
-# required for a single shard deployment.
+# this script deletes the old shard 0 which has been replaced by 2 shards
 
 set -e
 

@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this scripts brings up zookeeper and all the vitess components
-# required for a single shard deployment.
+# this script migrates master traffic for the customer keyspace to the
+# new master tablet
 
 set -e
 
