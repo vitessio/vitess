@@ -14,20 +14,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this scripts brings up zookeeper and all the vitess components
+# this script brings up zookeeper and all the vitess components
 # required for a single shard deployment.
 
 set -e
 
 script_root=`dirname "${BASH_SOURCE}"`
 
-CELL=zone1 $script_root/zk-up.sh
+# start topo server
+if [ "${TOPO}" = "etcd2" ]; then
+    CELL=zone1 $script_root/etcd-up.sh
+else
+    CELL=zone1 $script_root/zk-up.sh
+fi
+
+# start vtctld
 CELL=zone1 $script_root/vtctld-up.sh
+
+# start vttablets for keyspace commerce
 CELL=zone1 KEYSPACE=commerce UID_BASE=100 $script_root/vttablet-up.sh
 sleep 15
+
+# set one of the replicas to master
 ./lvtctl.sh InitShardMaster -force commerce/0 zone1-100
+
+# create the schema
 ./lvtctl.sh ApplySchema -sql-file create_commerce_schema.sql commerce
+
+# create the vschema
 ./lvtctl.sh ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
+
+# start vtgate
 CELL=zone1 $script_root/vtgate-up.sh
 
 disown -a

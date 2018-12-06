@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this scripts brings up zookeeper and all the vitess components
-# required for a single shard deployment.
+# this script brings up new tablets for the two new shards that we will
+# be creating in the customer keyspace and copies the schema 
 
 set -e
 

@@ -14,8 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this scripts brings up zookeeper and all the vitess components
-# required for a single shard deployment.
+# this script creates vitess sequences for the auto_increment fields
+# and alters the fields to no longer be auto_increment in preparation
+# for horizontal sharding
+# it also changes the customer vschema from unsharded to sharded and
+# sets up the necessary vindexes
 
 set -e
 

@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this scripts brings up zookeeper and all the vitess components
-# required for a single shard deployment.
+# this script copies the data from customer/0 to customer/-80 and customer/80-
+# each row will be copied to exactly one shard based on the vindex value
 
 set -e
 

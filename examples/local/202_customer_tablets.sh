@@ -14,8 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this scripts brings up zookeeper and all the vitess components
-# required for a single shard deployment.
+# this script creates the tablets and initializes them for vertical
+# resharding it also splits the vschema between the two keyspaces
+# old (commerce) and new (customer)
 
 set -e
 
