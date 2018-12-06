@@ -121,11 +121,11 @@ func (vm *VSchemaManager) watchSrvVSchema(ctx context.Context, cell string) {
 // UpdateVSchema propagates the updated vschema to the topo. The entry for
 // the given keyspace is updated in the global topo, and the full SrvVSchema
 // is updated in all known cells.
-func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, keyspace string, vschema *vschemapb.SrvVSchema) error {
-	// update the global vschema, then update the SrvVschema for
-	// each cell
-	ks, _ := vschema.Keyspaces[keyspace]
-	err := vm.e.serv.GetTopoServer().SaveVSchema(ctx, keyspace, ks)
+func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error {
+	topo := vm.e.serv.GetTopoServer()
+
+	ks := vschema.Keyspaces[ksName]
+	err := topo.SaveVSchema(ctx, ksName, ks)
 	if err != nil {
 		return err
 	}
