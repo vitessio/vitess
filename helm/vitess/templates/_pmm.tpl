@@ -177,6 +177,11 @@ spec:
       if [ ! -z "$FIRST_RUN" ]; then
         cp -r /usr/local/percona_tmp/* /vtdataroot/pmm/percona || :
         cp -r /etc/init.d_tmp/* /vtdataroot/pmm/init.d || :
+      fi
+
+      # if this doesn't return an error, pmm-admin has already been configured
+      # and we want to stop/remove running services, in case pod ips have changed
+      if pmm-admin info; then
         pmm-admin stop --all
         pmm-admin rm --all
       fi
