@@ -20,6 +20,12 @@ metadata:
 spec:
   backoffLimit: 1
   template:
+    metadata:
+      labels:
+        app: vitess
+        component: vtctlclient
+        vtctlclientJob: "true"
+
     spec:
       restartPolicy: OnFailure
       containers:
@@ -62,6 +68,12 @@ metadata:
 spec:
   backoffLimit: 1
   template:
+    metadata:
+      labels:
+        app: vitess
+        component: vtworker
+        vtworkerJob: "true"
+
     spec:
 {{ include "pod-security" . | indent 6 }}
       restartPolicy: OnFailure
