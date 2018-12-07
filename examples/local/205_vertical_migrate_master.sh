@@ -24,6 +24,6 @@ script_root=`dirname "${BASH_SOURCE}"`
 ./lvtctl.sh MigrateServedFrom customer/0 master
 
 # customer and order data cannot be accessed from commerce keyspace
-mysql -h 127.0.0.1 -P 15306 -u mysql_user -pmysql_password --table < select_commerce_data.sql
+mysql -h 127.0.0.1 -P 15306 -u mysql_user --table < $script_root/../common/select_commerce_data.sql
 
 disown -a

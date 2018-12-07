@@ -32,6 +32,6 @@ $VTROOT/bin/vtworker \
 
 sleep 2
 # check that customer and order data has been copied to customer keyspace
-mysql -h 127.0.0.1 -P 15306 -u mysql_user -pmysql_password --table < select_customer0_data.sql
+mysql -h 127.0.0.1 -P 15306 -u mysql_user --table < $script_root/../common/select_customer0_data.sql
 
 disown -a
