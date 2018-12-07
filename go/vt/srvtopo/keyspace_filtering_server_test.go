@@ -17,13 +17,16 @@ limitations under the License.
 package srvtopo
 
 import (
+	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/srvtopo/srvtopotest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
@@ -37,18 +40,10 @@ var (
 		"bar": &topodatapb.SrvKeyspace{ShardingColumnName: "bar"},
 		"baz": &topodatapb.SrvKeyspace{ShardingColumnName: "baz"},
 	}
-	stockResilientServer Server
-	stockTopoServer      *topo.Server
-	stockVSchema         *vschemapb.SrvVSchema
+	stockVSchema *vschemapb.SrvVSchema
 )
 
 func init() {
-	stockTopoServer = memorytopo.NewServer(stockCell)
-
-	for ks, kp := range stockKeyspaces {
-		stockTopoServer.UpdateSrvKeyspace(stockCtx, stockCell, ks, kp)
-	}
-
 	stockVSchema = &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"foo": &vschemapb.Keyspace{Sharded: true},
@@ -56,14 +51,18 @@ func init() {
 			"baz": &vschemapb.Keyspace{Sharded: false},
 		},
 	}
-	stockTopoServer.UpdateSrvVSchema(stockCtx, stockCell, stockVSchema)
-
-	stockResilientServer = NewResilientServer(stockTopoServer, "srvtopo_resilient")
 }
 
-func newFiltering(filter []string) (*topo.Server, Server, Server) {
-	filtering, _ := NewKeyspaceFilteringServer(stockResilientServer, filter)
-	return stockTopoServer, stockResilientServer, filtering
+func newFiltering(filter []string) (*topo.Server, *srvtopotest.Server, Server) {
+	testServer := srvtopotest.New()
+
+	testServer.TopoServer = memorytopo.NewServer(stockCell)
+	testServer.SrvKeyspaceNames = []string{"foo", "bar", "baz"}
+	testServer.SrvKeyspace = &topodatapb.SrvKeyspace{ShardingColumnName: "test-column"}
+	testServer.WatchedSrvVSchema = stockVSchema
+
+	filtering, _ := NewKeyspaceFilteringServer(testServer, filter)
+	return testServer.TopoServer, testServer, filtering
 }
 
 func TestFilteringServerHandlesNilUnderlying(t *testing.T) {
@@ -86,38 +85,41 @@ func TestFilteringServerReturnsUnderlyingServer(t *testing.T) {
 
 func doTestGetSrvKeyspaceNames(
 	t *testing.T,
+	f Server,
 	cell string,
 	want []string,
-	wantErr topo.ErrorCode,
+	wantErr error,
 ) {
-	_, _, f := newFiltering(stockFilters)
 	got, gotErr := f.GetSrvKeyspaceNames(stockCtx, cell)
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("GetSrvKeyspaceNames failed: want %v, got %v", want, got)
 	}
-	if wantErr == -1 && gotErr != nil || wantErr != -1 && !topo.IsErrType(gotErr, wantErr) {
+	if wantErr != gotErr {
 		t.Errorf("GetSrvKeyspaceNames returned incorrect error: want %v, got %v", wantErr, gotErr)
 	}
-
 }
 
 func TestFilteringServerGetSrvKeyspaceNamesFiltersKeyspaces(t *testing.T) {
-	doTestGetSrvKeyspaceNames(t, stockCell, stockFilters, -1)
+	_, _, f := newFiltering(stockFilters)
+	doTestGetSrvKeyspaceNames(t, f, stockCell, stockFilters, nil)
 }
 
 func TestFilteringServerGetSrvKeyspaceNamesPassesThroughErrors(t *testing.T) {
-	doTestGetSrvKeyspaceNames(t, "badcell", []string{}, topo.NoNode)
+	_, mock, f := newFiltering(stockFilters)
+	wantErr := fmt.Errorf("some badcell error")
+	mock.SrvKeyspaceNamesError = wantErr
+	doTestGetSrvKeyspaceNames(t, f, "badcell", stockFilters, wantErr)
 }
 
 func doTestGetSrvKeyspace(
 	t *testing.T,
+	f Server,
 	cell,
 	ksName string,
 	want *topodatapb.SrvKeyspace,
-	wantErr topo.ErrorCode,
+	wantErr error,
 ) {
-	_, _, f := newFiltering(stockFilters)
 	got, gotErr := f.GetSrvKeyspace(stockCtx, cell, ksName)
 
 	gotColumnName := ""
@@ -135,25 +137,34 @@ func doTestGetSrvKeyspace(
 		t.Errorf("keyspace incorrect: got %v, want %v", got, want)
 	}
 
-	if wantErr == -1 && gotErr != nil || wantErr != -1 && !topo.IsErrType(gotErr, wantErr) {
+	if wantErr != gotErr {
 		t.Errorf("returned error incorrect: got %v, want %v", gotErr, wantErr)
 	}
-
 }
+
 func TestFilteringServerGetSrvKeyspaceReturnsSelectedKeyspaces(t *testing.T) {
-	doTestGetSrvKeyspace(t, stockCell, "bar", stockKeyspaces["bar"], -1)
+	_, mock, f := newFiltering(stockFilters)
+	mock.SrvKeyspace = stockKeyspaces["bar"]
+	doTestGetSrvKeyspace(t, f, stockCell, "bar", stockKeyspaces["bar"], nil)
 }
 
 func TestFilteringServerGetSrvKeyspaceErrorPassthrough(t *testing.T) {
-	doTestGetSrvKeyspace(t, "badcell", "bar", nil, topo.NoNode)
+	wantErr := fmt.Errorf("some error")
+	_, mock, f := newFiltering(stockFilters)
+	mock.SrvKeyspace = stockKeyspaces["bar"]
+	mock.SrvKeyspaceError = wantErr
+	doTestGetSrvKeyspace(t, f, "badcell", "bar", stockKeyspaces["bar"], wantErr)
 }
 
 func TestFilteringServerGetSrvKeyspaceFilters(t *testing.T) {
-	doTestGetSrvKeyspace(t, stockCell, "foo", nil, topo.NoNode)
+	wantErr := topo.NewError(topo.NoNode, "foo")
+	_, mock, f := newFiltering(stockFilters)
+	mock.SrvKeyspaceError = wantErr
+	doTestGetSrvKeyspace(t, f, stockCell, "foo", nil, wantErr)
 }
 
 func TestFilteringServerWatchSrvVSchemaFiltersPassthroughSrvVSchema(t *testing.T) {
-	_, _, f := newFiltering(stockFilters)
+	_, mock, f := newFiltering(stockFilters)
 
 	allowed := map[string]bool{}
 	for _, ks := range stockFilters {
@@ -161,43 +172,51 @@ func TestFilteringServerWatchSrvVSchemaFiltersPassthroughSrvVSchema(t *testing.T
 	}
 
 	// we need to verify that the nested callback actually gets called
-	wasCalled := false
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
 	cb := func(gotSchema *vschemapb.SrvVSchema, gotErr error) {
-		wasCalled = true
 		// ensure that only selected keyspaces made it into the callback
-		for ks := range gotSchema.Keyspaces {
-			if !allowed[ks] {
+		for name, ks := range gotSchema.Keyspaces {
+			if !allowed[name] {
 				t.Errorf("Unexpected keyspace found in callback: %v", ks)
 			}
+			wantKS := mock.WatchedSrvVSchema.Keyspaces[name]
+			if !reflect.DeepEqual(ks, wantKS) {
+				t.Errorf(
+					"Expected keyspace to be passed through unmodified: want %#v got %#v",
+					wantKS,
+					ks,
+				)
+			}
 		}
+		wg.Done()
 	}
 
 	f.WatchSrvVSchema(stockCtx, stockCell, cb)
-
-	if !wasCalled {
-		t.Errorf("WatchSrvVSchema callback was not called as expected")
-	}
+	wg.Wait()
 }
 
 func TestFilteringServerWatchSrvVSchemaHandlesNilSchema(t *testing.T) {
-	_, _, f := newFiltering(stockFilters)
+	wantErr := fmt.Errorf("some err")
+	_, mock, f := newFiltering(stockFilters)
+	mock.WatchedSrvVSchema = nil
+	mock.WatchedSrvVSchemaError = wantErr
 
 	// we need to verify that the nested callback actually gets called
-	wasCalled := false
-	cb := func(gotSchema *vschemapb.SrvVSchema, gotErr error) {
-		wasCalled = true
-		if !topo.IsErrType(gotErr, topo.NoNode) {
-			t.Errorf("Unexpected error in callback, want %v got %v", topo.NoNode, gotErr)
-		}
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 
+	cb := func(gotSchema *vschemapb.SrvVSchema, gotErr error) {
 		if gotSchema != nil {
-			t.Errorf("Expected no SrvVSchema, got %v", gotSchema)
+			t.Errorf("Expected nil gotSchema: got %#v", gotSchema)
 		}
+		if gotErr != wantErr {
+			t.Errorf("Unexpected error: want %v got %v", wantErr, gotErr)
+		}
+		wg.Done()
 	}
 
 	f.WatchSrvVSchema(stockCtx, "other-cell", cb)
-
-	if !wasCalled {
-		t.Errorf("WatchSrvVSchema callback was not called as expected")
-	}
+	wg.Wait()
 }
