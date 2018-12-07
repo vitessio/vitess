@@ -18,8 +18,6 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-
 ./lvtctl.sh DeleteShard -recursive customer/0
 
 disown -a
