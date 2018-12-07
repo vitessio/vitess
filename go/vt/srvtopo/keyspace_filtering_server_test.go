@@ -71,8 +71,8 @@ func TestFilteringServerHandlesNilUnderlying(t *testing.T) {
 	if got != nil {
 		t.Errorf("got: %v, wanted: nil server", got)
 	}
-	if gotErr != NilUnderlyingServer {
-		t.Errorf("Bad error returned: got %v wanted %v", gotErr, NilUnderlyingServer)
+	if gotErr != ErrNilUnderlyingServer {
+		t.Errorf("Bad error returned: got %v wanted %v", gotErr, ErrNilUnderlyingServer)
 	}
 }
 
