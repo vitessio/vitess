@@ -44,7 +44,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/vt/vtgate/filters"
 	"vitess.io/vitess/go/vt/vtgate/gateway"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
@@ -196,10 +195,10 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
-	if len(filters.KeyspacesToWatch) > 0 {
-		log.Infof("Keyspace filtering enabled, selecting %v", filters.KeyspacesToWatch)
+	if len(gateway.KeyspacesToWatch) > 0 {
+		log.Infof("Keyspace filtering enabled, selecting %v", gateway.KeyspacesToWatch)
 		var err error
-		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, filters.KeyspacesToWatch)
+		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, gateway.KeyspacesToWatch)
 		if err != nil {
 			log.Fatalf("Unable to construct SrvTopo server: %v", err.Error())
 		}
