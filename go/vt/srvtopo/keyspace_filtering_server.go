@@ -26,14 +26,16 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
-var NilUnderlyingServer = fmt.Errorf("Unable to construct filtering server without an underlying server")
+// ErrNilUnderlyingServer is returned when attempting to create a new keyspace
+// filtering server if a nil underlying server implementation is provided.
+var ErrNilUnderlyingServer = fmt.Errorf("Unable to construct filtering server without an underlying server")
 
 // NewKeyspaceFilteringServer constructs a new server based on the provided
 // implementation that prevents the specified keyspaces from being exposed
 // to consumers of the new Server.
 func NewKeyspaceFilteringServer(underlying Server, selectedKeyspaces []string) (Server, error) {
 	if underlying == nil {
-		return nil, NilUnderlyingServer
+		return nil, ErrNilUnderlyingServer
 	}
 
 	keyspaces := map[string]bool{}
