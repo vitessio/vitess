@@ -89,7 +89,7 @@ func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error
 		return nil, err
 	}
 
-	// We have the lock, keep mastership until we loose it.
+	// We have the lock, keep mastership until we lose it.
 	lockCtx, lockCancel := context.WithCancel(context.Background())
 	go func() {
 		select {
