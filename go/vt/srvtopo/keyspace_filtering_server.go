@@ -89,7 +89,6 @@ func (ksf keyspaceFilteringServer) WatchSrvVSchema(
 ) {
 	filteringCallback := func(schema *vschemapb.SrvVSchema, err error) {
 		if schema != nil {
-			// TODO: unit test should include schema == nil
 			for ks := range schema.Keyspaces {
 				if !ksf.selectKeyspaces[ks] {
 					delete(schema.Keyspaces, ks)
