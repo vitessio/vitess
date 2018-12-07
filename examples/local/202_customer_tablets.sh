@@ -20,9 +20,10 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
+# shellcheck disable=SC2128
+script_root=$(dirname "${BASH_SOURCE}")
 
-CELL=zone1 KEYSPACE=customer UID_BASE=200 $script_root/vttablet-up.sh
+CELL=zone1 KEYSPACE=customer UID_BASE=200 "$script_root/vttablet-up.sh"
 sleep 15
 ./lvtctl.sh InitShardMaster -force customer/0 zone1-200
 ./lvtctl.sh CopySchemaShard -tables customer,corder commerce/0 customer/0

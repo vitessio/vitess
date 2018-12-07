@@ -21,18 +21,19 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
+# shellcheck disable=SC2128
+script_root=$(dirname "${BASH_SOURCE}")
 
 ./vtgate-down.sh
-CELL=zone1 UID_BASE=200 $script_root/vttablet-down.sh
-CELL=zone1 UID_BASE=300 $script_root/vttablet-down.sh
-CELL=zone1 UID_BASE=400 $script_root/vttablet-down.sh
+CELL=zone1 UID_BASE=200 "$script_root/vttablet-down.sh"
+CELL=zone1 UID_BASE=300 "$script_root/vttablet-down.sh"
+CELL=zone1 UID_BASE=400 "$script_root/vttablet-down.sh"
 ./vtctld-down.sh
 
 if [ "${TOPO}" = "etcd2" ]; then
-    CELL=zone1 $script_root/etcd-down.sh
+    CELL=zone1 "$script_root/etcd-down.sh"
 else
-    CELL=zone1 $script_root/zk-down.sh
+    CELL=zone1 "$script_root/zk-down.sh"
 fi
 
 disown -a
