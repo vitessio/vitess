@@ -94,8 +94,11 @@ func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error
 	go func() {
 		select {
 		case <-lost:
-			// We lost the lock, nothing to do but lockCancel().
 			lockCancel()
+			// We could have lost the lock. Per consul API, explicitly call Unlock to make sure that session will not be renewed.
+			if err := l.Unlock(); err != nil {
+				log.Errorf("master election(%v) Unlock failed: %v", mp.name, err)
+			}
 		case <-mp.stop:
 			// Stop was called. We stop the context first,
 			// so the running process is not thinking it
