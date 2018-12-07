@@ -18,8 +18,6 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-
 ./lvtctl.sh MigrateServedTypes customer/0 rdonly
 ./lvtctl.sh MigrateServedTypes customer/0 replica
 

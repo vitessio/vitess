@@ -18,8 +18,9 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
+# shellcheck disable=SC2128
+script_root=$(dirname "${BASH_SOURCE}")
 
-CELL=zone1 UID_BASE=100 $script_root/vttablet-down.sh
+CELL=zone1 UID_BASE=100 "$script_root/vttablet-down.sh"
 
 disown -a

@@ -22,8 +22,6 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-
 ./lvtctl.sh ApplySchema -sql-file create_commerce_seq.sql commerce
 ./lvtctl.sh ApplyVSchema -vschema_file vschema_commerce_seq.json commerce
 ./lvtctl.sh ApplySchema -sql-file create_customer_sharded.sql customer

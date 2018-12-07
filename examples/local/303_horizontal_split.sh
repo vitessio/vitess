@@ -19,13 +19,18 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
+# shellcheck disable=SC2128
+script_root=$(dirname "${BASH_SOURCE}")
 
-$VTROOT/bin/vtworker \
+# shellcheck source=./env.sh
+# shellcheck disable=SC1091
+source "${script_root}/env.sh"
+
+# shellcheck disable=SC2086
+"$VTROOT"/bin/vtworker \
     $TOPOLOGY_FLAGS \
     -cell zone1 \
-    -log_dir $VTDATAROOT/tmp \
+    -log_dir "$VTDATAROOT"/tmp \
     -alsologtostderr \
     -use_v3_resharding_mode \
     SplitClone -min_healthy_rdonly_tablets=1 customer/0

@@ -19,8 +19,6 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-
 ./lvtctl.sh MigrateServedFrom customer/0 rdonly
 ./lvtctl.sh MigrateServedFrom customer/0 replica
 

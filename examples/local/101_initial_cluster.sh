@@ -19,20 +19,21 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
+# shellcheck disable=SC2128
+script_root=$(dirname "${BASH_SOURCE}")
 
 # start topo server
 if [ "${TOPO}" = "etcd2" ]; then
-    CELL=zone1 $script_root/etcd-up.sh
+    CELL=zone1 "$script_root/etcd-up.sh"
 else
-    CELL=zone1 $script_root/zk-up.sh
+    CELL=zone1 "$script_root/zk-up.sh"
 fi
 
 # start vtctld
-CELL=zone1 $script_root/vtctld-up.sh
+CELL=zone1 "$script_root/vtctld-up.sh"
 
 # start vttablets for keyspace commerce
-CELL=zone1 KEYSPACE=commerce UID_BASE=100 $script_root/vttablet-up.sh
+CELL=zone1 KEYSPACE=commerce UID_BASE=100 "$script_root/vttablet-up.sh"
 sleep 15
 
 # set one of the replicas to master
@@ -45,6 +46,6 @@ sleep 15
 ./lvtctl.sh ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
 
 # start vtgate
-CELL=zone1 $script_root/vtgate-up.sh
+CELL=zone1 "$script_root/vtgate-up.sh"
 
 disown -a
