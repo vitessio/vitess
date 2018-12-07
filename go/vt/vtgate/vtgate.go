@@ -196,9 +196,13 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
-	if len(filters.WatchKeyspaces) > 0 {
-		log.Infof("Keyspace filtering enabled, selecting %v", filters.WatchKeyspaces)
-		serv = srvtopo.NewKeyspaceFilteringServer(serv, filters.WatchKeyspaces)
+	if len(filters.KeyspacesToWatch) > 0 {
+		log.Infof("Keyspace filtering enabled, selecting %v", filters.KeyspacesToWatch)
+		var err error
+		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, filters.KeyspacesToWatch)
+		if err != nil {
+			log.Fatalf("Unable to construct SrvTopo server: %v", err.Error())
+		}
 	}
 
 	tc := NewTxConn(gw, getTxMode())
