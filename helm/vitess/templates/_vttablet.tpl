@@ -111,7 +111,7 @@ spec:
 {{ include "cont-mysql-generallog" . | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
 {{ include "cont-mysql-slowlog" . | indent 8 }}
-{{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace) | indent 8 }}{{ end }}
+{{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace $keyspace) | indent 8 }}{{ end }}
 
       volumes:
         - name: vt
@@ -119,6 +119,11 @@ spec:
 {{ include "backup-volume" $config.backup | indent 8 }}
 {{ include "user-config-volume" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 8 }}
 {{ include "user-secret-volumes" (.secrets | default $defaultVttablet.secrets) | indent 8 }}
+{{ if $keyspace.pmm }}{{if $keyspace.pmm.config }}
+        - name: config
+          configMap:
+            name: {{ $keyspace.pmm.config }}
+{{ end }}{{ end }}
 
   volumeClaimTemplates:
     - metadata:

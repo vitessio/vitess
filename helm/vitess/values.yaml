@@ -129,6 +129,13 @@ topology:
       #           }
       #         }
 
+          ## this defines keyspace specific information for PMM
+          # pmm:
+            ## PMM supports collecting metrics from custom SQL queries in a file named queries-mysqld.yml
+            #  The specified ConfigMap will be mounted in a directory, so the file name is important.
+            #  https://www.percona.com/blog/2018/10/10/percona-monitoring-and-management-pmm-1-15-0-is-now-available/
+            # config: pmm-commerce-config
+
       # enable or disable mysql protocol support, with accompanying auth details
       mysqlProtocol:
         enabled: false
