@@ -40,10 +40,6 @@ var (
 		"bar": &topodatapb.SrvKeyspace{ShardingColumnName: "bar"},
 		"baz": &topodatapb.SrvKeyspace{ShardingColumnName: "baz"},
 	}
-	stockVSchema *vschemapb.SrvVSchema
-)
-
-func init() {
 	stockVSchema = &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"foo": &vschemapb.Keyspace{Sharded: true},
@@ -51,7 +47,7 @@ func init() {
 			"baz": &vschemapb.Keyspace{Sharded: false},
 		},
 	}
-}
+)
 
 func newFiltering(filter []string) (*topo.Server, *srvtopotest.Server, Server) {
 	testServer := srvtopotest.New()
