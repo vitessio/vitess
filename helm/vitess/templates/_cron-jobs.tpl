@@ -27,6 +27,7 @@ metadata:
     cell: {{ $cellClean | quote }}
     keyspace: {{ $keyspaceClean | quote }}
     shard: {{ $shardClean | quote }}
+    backupJob: "true"
 
 spec:
   schedule: {{ $shard.backup.cron.schedule | default $backup.cron.schedule | quote }}
@@ -45,6 +46,8 @@ spec:
             cell: {{ $cellClean | quote }}
             keyspace: {{ $keyspaceClean | quote }}
             shard: {{ $shardClean | quote }}
+            backupJob: "true"
+
         # pod spec
         spec:
           restartPolicy: Never
