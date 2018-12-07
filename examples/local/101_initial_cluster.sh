@@ -46,5 +46,10 @@ sleep 15
 
 # start vtgate
 CELL=zone1 $script_root/vtgate-up.sh
+sleep 5
+
+# insert rows into the tables. we are actually connecting to vtgate here, it will route the sql correctly
+mysql -h 127.0.0.1 -P 15306 -u mysql_user -pmysql_password < insert_commerce_data.sql
+mysql -h 127.0.0.1 -P 15306 -u mysql_user -pmysql_password --table < select_commerce_data.sql
 
 disown -a

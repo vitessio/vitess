@@ -22,4 +22,8 @@ script_root=`dirname "${BASH_SOURCE}"`
 
 ./lvtctl.sh MigrateServedTypes customer/0 master
 
+# data has been copied over to shards, and databases for the new shards are now available
+mysql -h 127.0.0.1 -P 15306 -u mysql_user -pmysql_password --table < select_customer-80_data.sql
+mysql -h 127.0.0.1 -P 15306 -u mysql_user -pmysql_password --table < select_customer80-_data.sql
+
 disown -a
