@@ -193,6 +193,9 @@ spec:
       touch /vtdataroot/tabletdata/slow-query.log
       touch /vtdataroot/tabletdata/general.log
 
+      # remove the old socket file if it is still around
+      rm -f /vtdataroot/tabletdata/mysql.sock
+
 {{- end -}}
 
 ###################################
