@@ -14,14 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates traffic for the master tablet
+# this script deletes the old shard 0 which has been replaced by 2 shards
 
 set -e
 
 script_root=`dirname "${BASH_SOURCE}"`
 
-./lvtctl.sh MigrateServedTypes customer/0 master
-
-# data has been copied over to shards, and databases for the new shards are now available
+./lvtctl.sh DeleteShard -recursive customer/0
 
 disown -a
