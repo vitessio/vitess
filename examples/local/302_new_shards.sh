@@ -29,4 +29,9 @@ sleep 15
 ./lvtctl.sh CopySchemaShard customer/0 customer/-80
 ./lvtctl.sh CopySchemaShard customer/0 customer/80-
 
+sleep 15
+# new tables are empty
+mysql -h 127.0.0.1 -P 15306 -u mysql_user -pmysql_password --table < select_customer-80_data.sql
+mysql -h 127.0.0.1 -P 15306 -u mysql_user -pmysql_password --table < select_customer80-_data.sql
+
 disown -a
