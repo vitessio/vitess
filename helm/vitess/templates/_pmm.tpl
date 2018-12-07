@@ -210,6 +210,7 @@ spec:
       done
 
       # creates systemd services
+      pmm-admin add linux:metrics
       pmm-admin add mysql:metrics --user root --socket /vtdataroot/tabletdata/mysql.sock --force
       pmm-admin add mysql:queries --user root --socket /vtdataroot/tabletdata/mysql.sock --force --query-source=perfschema
 
