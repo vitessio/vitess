@@ -230,7 +230,7 @@ func (bs *GCSBackupStorage) client(ctx context.Context) (*storage.Client, error)
 		// the creation context, so we create a new one, but
 		// keep the span information.
 		ctx = trace.CopySpan(context.Background(), ctx)
-		authClient, err := google.DefaultClient(ctx)
+		authClient, err := google.DefaultClient(ctx, storage.ScopeFullControl)
 		if err != nil {
 			return nil, err
 		}
