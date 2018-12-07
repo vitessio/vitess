@@ -14,14 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates traffic for the master tablet
+# This is a convenience script to run mysql client against the local vtgate.
 
-set -e
-
-script_root=`dirname "${BASH_SOURCE}"`
-
-./lvtctl.sh MigrateServedTypes customer/0 master
-
-# data has been copied over to shards, and databases for the new shards are now available
-
-disown -a
+mysql -h 127.0.0.1 -P 15306 -u mysql_user
