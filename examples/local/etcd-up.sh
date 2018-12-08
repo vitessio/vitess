@@ -25,9 +25,9 @@ script_root=$(dirname "${BASH_SOURCE[0]}")
 # shellcheck disable=SC1091
 source "${script_root}/env.sh"
 
-ETCD_VERSION=$(cat "${VTROOT}/dist/etcd/version")
+ETCD_VERSION=$(cat "${VTROOT}/dist/etcd/.installed_version")
 
-"${VTROOT}"/dist/etcd/etcd-"${ETCD_VERSION}"-linux-amd64/etcd --data-dir "${VTDATAROOT}/etcd/"  --listen-client-urls "http://${ETCD_SERVER}" --advertise-client-urls "http://${ETCD_SERVER}" &
+"${VTROOT}"/dist/etcd/etcd-"${ETCD_VERSION}"-linux-amd64/etcd --data-dir "${VTDATAROOT}/etcd/"  --listen-client-urls "http://${ETCD_SERVER}" --advertise-client-urls "http://${ETCD_SERVER}" > "${VTDATAROOT}"/tmp/etcd.out 2>&1 &
 sleep 5
 
 echo "add /vitess/global"
@@ -37,7 +37,7 @@ echo "add /vitess/global"
 echo "add /vitess/$cell"
 "${VTROOT}"/dist/etcd/etcd-"${ETCD_VERSION}"-linux-amd64/etcdctl --endpoints "http://${ETCD_SERVER}" mkdir /vitess/$cell &
 
-# And also add the CellInfo description for the 'test' cell.
+# And also add the CellInfo description for the cell.
 # If the node already exists, it's fine, means we used existing data.
 echo "add $cell CellInfo"
 set +e
