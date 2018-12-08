@@ -55,10 +55,11 @@ then
 fi
 
 optional_auth_args='-mysql_auth_server_impl none'
+optional_grpc_auth_args=''
 if [ "$1" = "--enable-grpc-static-auth" ];
 then
 	  echo "Enabling Auth with static authentication in grpc"
-    optional_auth_args='-grpc_auth_static_client_creds ./grpc_static_client_auth.json'
+    optional_grpc_auth_args='-grpc_auth_static_client_creds ./grpc_static_client_auth.json'
 fi
 
 if [ "$1" = "--enable-mysql-static-auth" ];
@@ -84,6 +85,7 @@ $VTROOT/bin/vtgate \
   -service_map 'grpc-vtgateservice' \
   -pid_file $VTDATAROOT/tmp/vtgate.pid \
   $optional_auth_args \
+  $optional_grpc_auth_args \
   $optional_tls_args \
   > $VTDATAROOT/tmp/vtgate.out 2>&1 &
 
