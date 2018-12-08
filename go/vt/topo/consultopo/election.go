@@ -28,19 +28,8 @@ import (
 
 // NewMasterParticipation is part of the topo.Server interface
 func (s *Server) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
-	// Create the lock here.
-	electionPath := path.Join(s.root, electionsPath, name)
-	l, err := s.client.LockOpts(&api.LockOptions{
-		Key:   electionPath,
-		Value: []byte(id),
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	return &consulMasterParticipation{
 		s:    s,
-		lock: l,
 		name: name,
 		id:   id,
 		stop: make(chan struct{}),
@@ -55,9 +44,6 @@ func (s *Server) NewMasterParticipation(name, id string) (topo.MasterParticipati
 type consulMasterParticipation struct {
 	// s is our parent consul topo Server
 	s *Server
-
-	// lock is the *api.Lock structure we're going to use.
-	lock *api.Lock
 
 	// name is the name of this MasterParticipation
 	name string
@@ -74,6 +60,16 @@ type consulMasterParticipation struct {
 
 // WaitForMastership is part of the topo.MasterParticipation interface.
 func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error) {
+
+	electionPath := path.Join(mp.s.root, electionsPath, mp.name)
+	l, err := mp.s.client.LockOpts(&api.LockOptions{
+		Key:   electionPath,
+		Value: []byte(mp.id),
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	// If Stop was already called, mp.done is closed, so we are interrupted.
 	select {
 	case <-mp.done:
@@ -82,7 +78,7 @@ func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error
 	}
 
 	// Try to lock until mp.stop is closed.
-	lost, err := mp.lock.Lock(mp.stop)
+	lost, err := l.Lock(mp.stop)
 	if err != nil {
 		// We can't lock. See if it was because we got canceled.
 		select {
@@ -93,19 +89,22 @@ func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error
 		return nil, err
 	}
 
-	// We have the lock, keep mastership until we loose it.
+	// We have the lock, keep mastership until we lose it.
 	lockCtx, lockCancel := context.WithCancel(context.Background())
 	go func() {
 		select {
 		case <-lost:
-			// We lost the lock, nothing to do but lockCancel().
 			lockCancel()
+			// We could have lost the lock. Per consul API, explicitly call Unlock to make sure that session will not be renewed.
+			if err := l.Unlock(); err != nil {
+				log.Errorf("master election(%v) Unlock failed: %v", mp.name, err)
+			}
 		case <-mp.stop:
 			// Stop was called. We stop the context first,
 			// so the running process is not thinking it
 			// is the master any more, then we unlock.
 			lockCancel()
-			if err := mp.lock.Unlock(); err != nil {
+			if err := l.Unlock(); err != nil {
 				log.Errorf("master election(%v) Unlock failed: %v", mp.name, err)
 			}
 			close(mp.done)
