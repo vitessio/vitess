@@ -14,15 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this scripts brings up zookeeper and all the vitess components
-# required for a single shard deployment.
+# this script migrates traffic for the rdonly and replica tablets
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-
 ./lvtctl.sh MigrateServedTypes customer/0 rdonly
 ./lvtctl.sh MigrateServedTypes customer/0 replica
-
 
 disown -a

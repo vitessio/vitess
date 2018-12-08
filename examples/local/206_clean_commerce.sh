@@ -14,12 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this scripts brings up zookeeper and all the vitess components
-# required for a single shard deployment.
+# this script removes the customer and corder tables from the commerce
+# keyspace
 
 set -e
-
-script_root=`dirname "${BASH_SOURCE}"`
 
 ./lvtctl.sh ApplySchema -sql-file drop_commerce_tables.sql commerce
 ./lvtctl.sh SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 rdonly

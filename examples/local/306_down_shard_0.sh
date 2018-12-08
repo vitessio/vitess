@@ -14,13 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this scripts brings up zookeeper and all the vitess components
-# required for a single shard deployment.
+# this script brings down the tablets for customer/0 keyspace
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
+# shellcheck disable=SC2128
+script_root=$(dirname "${BASH_SOURCE}")
 
-./lvtctl.sh DeleteShard -recursive customer/0
+CELL=zone1 UID_BASE=100 "$script_root/vttablet-down.sh"
 
 disown -a

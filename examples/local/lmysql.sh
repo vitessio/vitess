@@ -14,11 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates master traffic for the customer keyspace to the
-# new master tablet
+# This is a convenience script to run mysql client against the local vtgate.
 
-set -e
-
-./lvtctl.sh MigrateServedFrom customer/0 master
-
-disown -a
+mysql -h 127.0.0.1 -P 15306 -u mysql_user
