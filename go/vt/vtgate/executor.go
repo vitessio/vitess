@@ -337,7 +337,12 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 		execStart := time.Now()
 		logStats.PlanTime = execStart.Sub(logStats.StartTime)
 		switch ddl.Action {
-		case sqlparser.CreateVindexStr, sqlparser.AddColVindexStr, sqlparser.DropColVindexStr:
+		case sqlparser.CreateVindexStr,
+			sqlparser.AddVschemaTableStr,
+			sqlparser.DropVschemaTableStr,
+			sqlparser.AddColVindexStr,
+			sqlparser.DropColVindexStr:
+
 			err := e.handleVSchemaDDL(ctx, safeSession, dest, destKeyspace, destTabletType, ddl, logStats)
 			logStats.ExecuteTime = time.Since(execStart)
 			return &sqltypes.Result{}, err
@@ -821,7 +826,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil
-	case sqlparser.KeywordString(sqlparser.VSCHEMA_TABLES):
+	case "vschema tables":
 		if destKeyspace == "" {
 			return nil, errNoKeyspace
 		}
@@ -846,7 +851,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil
-	case sqlparser.KeywordString(sqlparser.VINDEXES):
+	case "vschema vindexes":
 		vschema := e.vm.GetCurrentSrvVschema()
 		if vschema == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")

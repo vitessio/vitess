@@ -253,6 +253,9 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([
 // GetSrvKeyspace is part of the srvtopo.Server interface.
 func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	sand := getSandbox(keyspace)
+	if sand == nil {
+		return nil, fmt.Errorf("topo error GetSrvKeyspace")
+	}
 	sand.sandmu.Lock()
 	defer sand.sandmu.Unlock()
 	if sand.SrvKeyspaceCallback != nil {
