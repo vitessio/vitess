@@ -88,9 +88,9 @@ public class GrpcClientFactory implements RpcClientFactory {
    */
   @Override
   public RpcClient create(Context ctx, String target) {
-    NettyChannelBuilder channel = NettyChannelBuilder.forTarget(target)
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .intercept(new RetryingInterceptor(config));
+    NettyChannelBuilder channel = channelBuilder(target)
+            .negotiationType(NegotiationType.PLAINTEXT)
+            .intercept(new RetryingInterceptor(config));
     if (loadBalancerFactory != null) {
       channel.loadBalancerFactory(loadBalancerFactory);
     }
@@ -98,7 +98,29 @@ public class GrpcClientFactory implements RpcClientFactory {
       channel.nameResolverFactory(nameResolverFactory);
     }
     return callCredentials != null ?
-        new GrpcClient(channel.build(), callCredentials) : new GrpcClient(channel.build());
+            new GrpcClient(channel.build(), callCredentials) : new GrpcClient(channel.build());
+  }
+
+  /**
+   * <p>This method constructs NettyChannelBuilder object that will be used to create RpcClient.<p/>
+   * <p>Subclasses may override this method to make adjustments to the builder<p/>
+   * for example:
+   * <code>
+   *     @Override
+   *     protected NettyChannelBuilder channelBuilder(String target) {
+   *       return super.channelBuilder(target)
+   *               .eventLoopGroup(new EpollEventLoopGroup())
+   *               .withOption(EpollChannelOption.TCP_USER_TIMEOUT,30);
+   *     }
+   *
+   * </code>
+   *
+   * @param target
+   *    target is passed to NettyChannelBuilder which will resolve based on scheme, by default dns.
+   * @return
+   */
+  protected NettyChannelBuilder channelBuilder(String target){
+    return NettyChannelBuilder.forTarget(target);
   }
 
   /**
@@ -152,7 +174,7 @@ public class GrpcClientFactory implements RpcClientFactory {
     }
 
     return new GrpcClient(
-        NettyChannelBuilder.forTarget(target).negotiationType(NegotiationType.TLS).sslContext(sslContext).intercept(new RetryingInterceptor(config)).build());
+            channelBuilder(target).negotiationType(NegotiationType.TLS).sslContext(sslContext).intercept(new RetryingInterceptor(config)).build());
   }
 
   /**
