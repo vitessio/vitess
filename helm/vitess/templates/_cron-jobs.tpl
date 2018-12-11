@@ -71,6 +71,8 @@ spec:
               requests:
                 cpu: 10m
                 memory: 20Mi
+          volumes:
+{{ include "user-secret-volumes" $defaultVtctlclient.secrets | indent 12 }}
 
 {{ end }}
 
