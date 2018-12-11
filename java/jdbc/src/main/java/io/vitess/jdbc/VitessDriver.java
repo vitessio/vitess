@@ -38,9 +38,6 @@ import io.vitess.util.Constants;
  */
 public class VitessDriver implements Driver {
 
-    /* Get actual class name to be printed on */
-    private static Logger logger = Logger.getLogger(VitessDriver.class.getName());
-
     static {
         try {
             DriverManager.registerDriver(new VitessDriver());
@@ -73,7 +70,7 @@ public class VitessDriver implements Driver {
      * TODO: Write a better regex
      */
     @Override
-    public boolean acceptsURL(String url) throws SQLException {
+    public boolean acceptsURL(String url) {
         return null != url && url.startsWith(Constants.URL_PREFIX);
     }
 

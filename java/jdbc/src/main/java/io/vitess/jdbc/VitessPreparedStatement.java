@@ -48,7 +48,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.logging.Logger;
 
 import io.vitess.client.Context;
 import io.vitess.client.VTGateConnection;
@@ -70,7 +69,6 @@ import io.vitess.util.StringUtils;
 public class VitessPreparedStatement extends VitessStatement implements PreparedStatement {
 
     /* Get actual class name to be printed on */
-    private static Logger logger = Logger.getLogger(VitessPreparedStatement.class.getName());
     private final String sql;
     private final Map<String, Object> bindVariables;
     /**
@@ -394,7 +392,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             vtGateConn = this.vitessConnection.getVtGateConn();
 
             this.retrieveGeneratedKeys = true; // mimicking mysql-connector-j
-            /**
+            /*
              * Current api does not support single query and multiple bindVariables list.
              * So, List of the query is created to match the bindVariables list.
              */
@@ -466,9 +464,6 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                             continue; // inline quote escape
                         }
 
-                        inQuotes = !inQuotes;
-                        currentQuoteChar = 0;
-                    } else if (((c == '\'') || (c == '"')) && c == currentQuoteChar) {
                         inQuotes = !inQuotes;
                         currentQuoteChar = 0;
                     }
