@@ -495,7 +495,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	// Wait for the slaves to complete.
 	wgSlaves.Wait()
 	if err := rec.Error(); err != nil {
-		wr.Logger().Errorf("Some slaves failed to reparent: %v", err)
+		wr.Logger().Errorf2(err, "some slaves failed to reparent")
 		return err
 	}
 
@@ -791,7 +791,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	// will rebuild the shard serving graph anyway
 	wgSlaves.Wait()
 	if err := rec.Error(); err != nil {
-		wr.Logger().Errorf("Some slaves failed to reparent: %v", err)
+		wr.Logger().Errorf2(err, "some slaves failed to reparent")
 		return err
 	}
 
