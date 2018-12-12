@@ -67,7 +67,7 @@ func RebuildVSchema(ctx context.Context, log logutil.Logger, ts *topo.Server, ce
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				log.Errorf("GetVSchema(%v) failed: %v", keyspace, err)
+				log.Errorf2(err, "GetVSchema(%v) failed", keyspace)
 				finalErr = err
 				return
 			}
@@ -85,7 +85,7 @@ func RebuildVSchema(ctx context.Context, log logutil.Logger, ts *topo.Server, ce
 		go func(cell string) {
 			defer wg.Done()
 			if err := ts.UpdateSrvVSchema(ctx, cell, srvVSchema); err != nil {
-				log.Errorf("UpdateSrvVSchema(%v) failed: %v", cell, err)
+				log.Errorf2(err, "UpdateSrvVSchema(%v) failed", cell)
 				mu.Lock()
 				finalErr = err
 				mu.Unlock()

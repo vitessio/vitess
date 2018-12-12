@@ -206,7 +206,7 @@ func (scw *LegacySplitCloneWorker) Run(ctx context.Context) error {
 	cerr := scw.cleaner.CleanUp(scw.wr)
 	if cerr != nil {
 		if err != nil {
-			scw.wr.Logger().Errorf("CleanUp failed in addition to job error: %v", cerr)
+			scw.wr.Logger().Errorf2(cerr, "CleanUp failed in addition to job error")
 		} else {
 			err = cerr
 		}
@@ -222,7 +222,7 @@ func (scw *LegacySplitCloneWorker) Run(ctx context.Context) error {
 	}
 	if scw.healthCheck != nil {
 		if err := scw.healthCheck.Close(); err != nil {
-			scw.wr.Logger().Errorf("HealthCheck.Close() failed: %v", err)
+			scw.wr.Logger().Errorf2(err, "HealthCheck.Close() failed")
 		}
 	}
 

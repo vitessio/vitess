@@ -207,7 +207,7 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 			retryable, err = r.getTablet()
 			if err != nil {
 				if !retryable {
-					r.logger.Errorf("table=%v chunk=%v: Failed to restart streaming query (attempt %d) and failover to a different tablet (%v) due to a non-retryable error: %v", r.td.Name, r.chunk, attempt, r.tablet, err)
+					r.logger.Errorf2(err, "table=%v chunk=%v: Failed to restart streaming query (attempt %d) and failover to a different tablet (%v) due to a non-retryable error", r.td.Name, r.chunk, attempt, r.tablet)
 					return nil, err
 				}
 				goto retry
@@ -219,7 +219,7 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 			retryable, err = r.startStream()
 			if err != nil {
 				if !retryable {
-					r.logger.Errorf("tablet=%v table=%v chunk=%v: Failed to restart streaming query (attempt %d) with query '%v' and stopped due to a non-retryable error: %v", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, attempt, r.query, err)
+					r.logger.Errorf2(err, "tablet=%v table=%v chunk=%v: Failed to restart streaming query (attempt %d) with query '%v' and stopped due to a non-retryable error", topoproto.TabletAliasString(r.tablet.Alias), r.td.Name, r.chunk, attempt, r.query)
 					return nil, err
 				}
 				goto retry
