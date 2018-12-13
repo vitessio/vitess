@@ -5,7 +5,7 @@
   <parent>
     <groupId>io.vitess</groupId>
     <artifactId>vitess-parent</artifactId>
-    <version>3.0.0-SNAPSHOT</version>
+    <version>3.1.0-SNAPSHOT</version>
   </parent>
   <artifactId>vitess-hadoop</artifactId>
 
