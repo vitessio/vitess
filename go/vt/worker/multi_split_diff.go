@@ -91,6 +91,8 @@ func (msdw *MultiSplitDiffWorker) StatusAsHTML() template.HTML {
 	switch state {
 	case WorkerStateDiff:
 		result += "<b>Running...</b></br>\n"
+	case WorkerStateDiffWillFail:
+		result += "Running - have already found differences...\n"
 	case WorkerStateDone:
 		result += "<b>Success.</b></br>\n"
 	}
@@ -107,6 +109,8 @@ func (msdw *MultiSplitDiffWorker) StatusAsText() string {
 	switch state {
 	case WorkerStateDiff:
 		result += "Running...\n"
+	case WorkerStateDiffWillFail:
+		result += "Running - have already found differences...\n"
 	case WorkerStateDone:
 		result += "Success.\n"
 	}
@@ -175,7 +179,7 @@ func (msdw *MultiSplitDiffWorker) searchInKeyspace(ctx context.Context, wg *sync
 	shards, err := msdw.wr.TopoServer().GetShardNames(shortCtx, keyspace)
 	cancel()
 	if err != nil {
-		rec.RecordError(fmt.Errorf("failed to get list of shards for keyspace '%v': %v", keyspace, err))
+		msdw.markAsWillFail(rec, fmt.Errorf("failed to get list of shards for keyspace '%v': %v", keyspace, err))
 		return
 	}
 	for _, shard := range shards {
@@ -190,7 +194,7 @@ func (msdw *MultiSplitDiffWorker) produceShardInfo(ctx context.Context, wg *sync
 	si, err := msdw.wr.TopoServer().GetShard(shortCtx, keyspace, shard)
 	cancel()
 	if err != nil {
-		rec.RecordError(fmt.Errorf("failed to get details for shard '%v': %v", topoproto.KeyspaceShardString(keyspace, shard), err))
+		msdw.markAsWillFail(rec, fmt.Errorf("failed to get details for shard '%v': %v", topoproto.KeyspaceShardString(keyspace, shard), err))
 		return
 	}
 
@@ -244,7 +248,7 @@ func (msdw *MultiSplitDiffWorker) findDestinationShards(ctx context.Context) ([]
 				first = false
 				msdw.sourceUID = r
 			} else if r != msdw.sourceUID {
-				rec.RecordError(fmt.Errorf("found a source ID that was different, aborting. %v vs %v", r, msdw.sourceUID))
+				msdw.markAsWillFail(&rec, fmt.Errorf("found a source ID that was different, aborting. %v vs %v", r, msdw.sourceUID))
 			}
 		}
 	}()
@@ -625,7 +629,7 @@ func (msdw *MultiSplitDiffWorker) tableDiffingConsumer(ctx context.Context, wg *
 	for tableDefinition := range tableChan {
 		err := msdw.diffSingleTable(ctx, wg, tableDefinition, keyspaceSchema)
 		if err != nil {
-			rec.RecordError(err)
+			msdw.markAsWillFail(rec, err)
 			msdw.wr.Logger().Errorf("%v", err)
 		}
 	}
@@ -647,7 +651,7 @@ func (msdw *MultiSplitDiffWorker) gatherSchemaInfo(ctx context.Context) ([]*tabl
 			destinationSchemaDefinition, err := msdw.wr.GetSchema(
 				shortCtx, destinationAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
 			cancel()
-			rec.RecordError(err)
+			msdw.markAsWillFail(rec, err)
 			destinationSchemaDefinitions[i] = destinationSchemaDefinition
 			msdw.wr.Logger().Infof("Got schema from destination %v", destinationAlias)
 			wg.Done()
@@ -660,7 +664,7 @@ func (msdw *MultiSplitDiffWorker) gatherSchemaInfo(ctx context.Context) ([]*tabl
 		sourceSchemaDefinition, err = msdw.wr.GetSchema(
 			shortCtx, msdw.sourceAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
 		cancel()
-		rec.RecordError(err)
+		msdw.markAsWillFail(rec, err)
 		msdw.wr.Logger().Infof("Got schema from source %v", msdw.sourceAlias)
 		wg.Done()
 	}()
@@ -754,4 +758,10 @@ func (msdw *MultiSplitDiffWorker) diff(ctx context.Context) error {
 	consumers.Wait()
 
 	return rec.Error()
+}
+
+// markAsWillFail records the error and changes the state of the worker to reflect this
+func (msdw *MultiSplitDiffWorker) markAsWillFail(er concurrency.ErrorRecorder, err error) {
+	er.RecordError(err)
+	msdw.SetState(WorkerStateDiffWillFail)
 }
