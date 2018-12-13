@@ -24,9 +24,10 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
-// Server is a bare implementation of srvtopo.Server for use in tests
-type Server struct {
-	TopoServer *topo.Server
+// PassthroughSrvTopoServer is a bare implementation of srvtopo.Server for use in tests
+type PassthroughSrvTopoServer struct {
+	TopoServer      *topo.Server
+	TopoServerError error
 
 	SrvKeyspaceNames      []string
 	SrvKeyspaceNamesError error
@@ -38,27 +39,27 @@ type Server struct {
 	WatchedSrvVSchemaError error
 }
 
-// New returns a new, unconfigured test Server
-func New() *Server {
-	return &Server{}
+// NewPassthroughSrvTopoServer returns a new, unconfigured test PassthroughSrvTopoServer
+func NewPassthroughSrvTopoServer() *PassthroughSrvTopoServer {
+	return &PassthroughSrvTopoServer{}
 }
 
 // GetTopoServer implements srvtopo.Server
-func (srv *Server) GetTopoServer() *topo.Server {
-	return srv.TopoServer
+func (srv *PassthroughSrvTopoServer) GetTopoServer() (*topo.Server, error) {
+	return srv.TopoServer, srv.TopoServerError
 }
 
 // GetSrvKeyspaceNames implements srvtopo.Server
-func (srv *Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
+func (srv *PassthroughSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	return srv.SrvKeyspaceNames, srv.SrvKeyspaceNamesError
 }
 
 // GetSrvKeyspace implements srvtopo.Server
-func (srv *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+func (srv *PassthroughSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	return srv.SrvKeyspace, srv.SrvKeyspaceError
 }
 
 // WatchSrvVSchema implements srvtopo.Server
-func (srv *Server) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
+func (srv *PassthroughSrvTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
 	callback(srv.WatchedSrvVSchema, srv.WatchedSrvVSchemaError)
 }

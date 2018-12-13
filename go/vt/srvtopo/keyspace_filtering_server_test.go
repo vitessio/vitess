@@ -49,8 +49,8 @@ var (
 	}
 )
 
-func newFiltering(filter []string) (*topo.Server, *srvtopotest.Server, Server) {
-	testServer := srvtopotest.New()
+func newFiltering(filter []string) (*topo.Server, *srvtopotest.PassthroughSrvTopoServer, Server) {
+	testServer := srvtopotest.NewPassthroughSrvTopoServer()
 
 	testServer.TopoServer = memorytopo.NewServer(stockCell)
 	testServer.SrvKeyspaceNames = []string{"foo", "bar", "baz"}
@@ -72,10 +72,13 @@ func TestFilteringServerHandlesNilUnderlying(t *testing.T) {
 }
 
 func TestFilteringServerReturnsUnderlyingServer(t *testing.T) {
-	want, _, f := newFiltering(nil)
-	got := f.GetTopoServer()
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Got incorrect topo.Server from FilteringServer: expected %p but got %p", want, got)
+	_, _, f := newFiltering(nil)
+	got, gotErr := f.GetTopoServer()
+	if got != nil {
+		t.Errorf("Got non-nil topo.Server from FilteringServer")
+	}
+	if gotErr != ErrTopoServerNotAvailable {
+		t.Errorf("Unexpected error from GetTopoServer; wanted %v but got %v", ErrTopoServerNotAvailable, gotErr)
 	}
 }
 
@@ -88,6 +91,9 @@ func doTestGetSrvKeyspaceNames(
 ) {
 	got, gotErr := f.GetSrvKeyspaceNames(stockCtx, cell)
 
+	if got == nil {
+		t.Errorf("GetSrvKeyspaceNames failed: should not return nil")
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("GetSrvKeyspaceNames failed: want %v, got %v", want, got)
 	}

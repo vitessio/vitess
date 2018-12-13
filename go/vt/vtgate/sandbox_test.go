@@ -235,8 +235,8 @@ func newSandboxForCells(cells []string) *sandboxTopo {
 }
 
 // GetTopoServer is part of the srvtopo.Server interface
-func (sct *sandboxTopo) GetTopoServer() *topo.Server {
-	return sct.topoServer
+func (sct *sandboxTopo) GetTopoServer() (*topo.Server, error) {
+	return sct.topoServer, nil
 }
 
 // GetSrvKeyspaceNames is part of the srvtopo.Server interface.
