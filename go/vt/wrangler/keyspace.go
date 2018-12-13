@@ -29,14 +29,13 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 const (
@@ -553,6 +552,13 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 	// Always setup reverse replication. We'll start it later if reverseReplication was specified.
 	// This will allow someone to reverse the replication later if they change their mind.
 	if err := wr.setupReverseReplication(ctx, sourceShards, destinationShards); err != nil {
+		// It's safe to unfreeze if reverse replication setup fails.
+		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
+		unfreezeErr := wr.updateFrozenFlag(ctx, sourceShards, false)
+		if unfreezeErr != nil {
+			wr.Logger().Errorf("Problem recovering for failed reverse replication: %v", unfreezeErr)
+		}
+
 		return err
 	}
 
