@@ -48,6 +48,7 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -175,6 +176,7 @@ func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error
 	if err != nil {
 		return nil, err
 	}
+	conn = NewStatsConn(GlobalCell, conn)
 
 	var connReadOnly Conn
 	if factory.HasGlobalReadOnlyCell(serverAddress, root) {
@@ -182,6 +184,7 @@ func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error
 		if err != nil {
 			return nil, err
 		}
+		connReadOnly = NewStatsConn(GlobalReadOnlyCell, connReadOnly)
 	} else {
 		connReadOnly = conn
 	}
@@ -257,6 +260,7 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create topo connection to %v, %v: %v", ci.ServerAddress, ci.Root, err)
 	}
+	conn = NewStatsConn(cell, conn)
 	ts.cells[cell] = conn
 	return conn, nil
 }

@@ -23,11 +23,11 @@ type Shard struct {
 	// name has to be unique in a keyspace. For unsharded keyspaces, it
 	// should be '0'. For sharded keyspace, it should be derived from
 	// the keyrange, like '-80' or '40-80'.
-	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// db_name_override is the mysql db name for this shard. Has to be
 	// globally unique. If not specified, we will by default use
 	// 'vt_<keyspace>_<shard>'.
-	DbNameOverride       string   `protobuf:"bytes,2,opt,name=db_name_override,json=dbNameOverride" json:"db_name_override,omitempty"`
+	DbNameOverride       string   `protobuf:"bytes,2,opt,name=db_name_override,json=dbNameOverride,proto3" json:"db_name_override,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -74,19 +74,19 @@ func (m *Shard) GetDbNameOverride() string {
 // Keyspace describes a single keyspace.
 type Keyspace struct {
 	// name has to be unique in a VTTestTopology.
-	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// shards inside this keyspace. Ignored if redirect is set.
-	Shards []*Shard `protobuf:"bytes,2,rep,name=shards" json:"shards,omitempty"`
+	Shards []*Shard `protobuf:"bytes,2,rep,name=shards,proto3" json:"shards,omitempty"`
 	// sharding_column_name for this keyspace. Used for v2 calls, but not for v3.
-	ShardingColumnName string `protobuf:"bytes,3,opt,name=sharding_column_name,json=shardingColumnName" json:"sharding_column_name,omitempty"`
+	ShardingColumnName string `protobuf:"bytes,3,opt,name=sharding_column_name,json=shardingColumnName,proto3" json:"sharding_column_name,omitempty"`
 	// sharding_column_type for this keyspace. Used for v2 calls, but not for v3.
-	ShardingColumnType string `protobuf:"bytes,4,opt,name=sharding_column_type,json=shardingColumnType" json:"sharding_column_type,omitempty"`
+	ShardingColumnType string `protobuf:"bytes,4,opt,name=sharding_column_type,json=shardingColumnType,proto3" json:"sharding_column_type,omitempty"`
 	// redirects all traffic to another keyspace. If set, shards is ignored.
-	ServedFrom string `protobuf:"bytes,5,opt,name=served_from,json=servedFrom" json:"served_from,omitempty"`
+	ServedFrom string `protobuf:"bytes,5,opt,name=served_from,json=servedFrom,proto3" json:"served_from,omitempty"`
 	// number of replica tablets to instantiate. This includes the master tablet.
-	ReplicaCount int32 `protobuf:"varint,6,opt,name=replica_count,json=replicaCount" json:"replica_count,omitempty"`
+	ReplicaCount int32 `protobuf:"varint,6,opt,name=replica_count,json=replicaCount,proto3" json:"replica_count,omitempty"`
 	// number of rdonly tablets to instantiate.
-	RdonlyCount          int32    `protobuf:"varint,7,opt,name=rdonly_count,json=rdonlyCount" json:"rdonly_count,omitempty"`
+	RdonlyCount          int32    `protobuf:"varint,7,opt,name=rdonly_count,json=rdonlyCount,proto3" json:"rdonly_count,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -168,9 +168,9 @@ func (m *Keyspace) GetRdonlyCount() int32 {
 // VTTestTopology describes the keyspaces in the topology.
 type VTTestTopology struct {
 	// all keyspaces in the topology.
-	Keyspaces []*Keyspace `protobuf:"bytes,1,rep,name=keyspaces" json:"keyspaces,omitempty"`
+	Keyspaces []*Keyspace `protobuf:"bytes,1,rep,name=keyspaces,proto3" json:"keyspaces,omitempty"`
 	// list of cells the keyspaces reside in. Vtgate is started in only the first cell.
-	Cells                []string `protobuf:"bytes,2,rep,name=cells" json:"cells,omitempty"`
+	Cells                []string `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`

@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -41,9 +42,6 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	rb, ok := pb.bldr.(*route)
 	if !ok {
 		return nil, errors.New("unsupported: multi-table/vindex update statement in sharded keyspace")
-	}
-	if rb.ERoute.TargetDestination != nil {
-		return nil, errors.New("unsupported: UPDATE with a target destination")
 	}
 	eupd.Keyspace = rb.ERoute.Keyspace
 	if !eupd.Keyspace.Sharded {
@@ -76,6 +74,16 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 		return nil, errors.New("internal error: table.vindexTable is mysteriously nil")
 	}
 	var err error
+
+	if rb.ERoute.TargetDestination != nil {
+		if rb.ERoute.TargetTabletType != topodatapb.TabletType_MASTER {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: UPDATE statement with a replica target")
+		}
+		eupd.Opcode = engine.UpdateByDestination
+		eupd.TargetDestination = rb.ERoute.TargetDestination
+		return eupd, nil
+	}
+
 	eupd.Vindex, eupd.Values, err = getDMLRouting(upd.Where, eupd.Table)
 	if err != nil {
 		eupd.Opcode = engine.UpdateScatter

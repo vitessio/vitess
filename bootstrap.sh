@@ -136,7 +136,7 @@ function install_grpc() {
   grpcio_ver=$version
   $PIP install --upgrade grpcio=="$grpcio_ver" grpcio-tools=="$grpcio_ver"
 }
-install_dep "gRPC" "1.10.0" "$VTROOT/dist/grpc" install_grpc
+install_dep "gRPC" "1.16.0" "$VTROOT/dist/grpc" install_grpc
 
 
 # Install protoc.
@@ -153,7 +153,7 @@ function install_protoc() {
   unzip "protoc-$version-$platform-x86_64.zip"
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
-protoc_ver=3.5.1
+protoc_ver=3.6.1
 install_dep "protoc" "$protoc_ver" "$VTROOT/dist/vt-protoc-$protoc_ver" install_protoc
 
 
@@ -169,11 +169,11 @@ function install_zookeeper() {
   cp "$zk/contrib/fatjar/$zk-fatjar.jar" lib
   # TODO(sougou): when version changes, see if we can drop the 'zip -d' hack to get the fatjars working.
   #               If yes, also delete "zip" from the Dockerfile files and the manual build instructions again.
-  # 3.4.10 workaround: Delete META-INF files which should not be in there.
+  # 3.4.13 workaround: Delete META-INF files which should not be in there.
   zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF'
   rm -rf "$zk" "$zk.tar.gz"
 }
-zk_ver=3.4.10
+zk_ver=3.4.13
 install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
 
 
@@ -190,7 +190,7 @@ function install_etcd() {
   rm "$tar_file"
   ln -snf "$dist/etcd-${version}-linux-amd64/etcd" "$VTROOT/bin/etcd"
 }
-install_dep "etcd" "v3.1.0-rc.1" "$VTROOT/dist/etcd" install_etcd
+install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
 
 # Download and install consul, link consul binary into our root.
@@ -203,7 +203,7 @@ function install_consul() {
   unzip "consul_${version}_linux_amd64.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
-install_dep "Consul" "1.0.6" "$VTROOT/dist/consul" install_consul
+install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
 
 
 # Install py-mock.
@@ -251,7 +251,7 @@ function install_chromedriver() {
   unzip -o -q chromedriver_linux64.zip -d "$dist"
   rm chromedriver_linux64.zip
 }
-install_dep "chromedriver" "2.40" "$VTROOT/dist/chromedriver" install_chromedriver
+install_dep "chromedriver" "2.44" "$VTROOT/dist/chromedriver" install_chromedriver
 
 
 #

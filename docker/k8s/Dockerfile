@@ -47,6 +47,7 @@ COPY --from=base $VTTOP/config/mycnf/master_mariadb103.cnf /vt/config/mycnf/
 
 # settings for different types of instances
 COPY --from=base $VTTOP/config/mycnf/default.cnf /vt/config/mycnf/
+COPY --from=base $VTTOP/config/mycnf/default-fast.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/master.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/replica.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/rdonly.cnf /vt/config/mycnf/

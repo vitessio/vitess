@@ -1,0 +1,79 @@
+topology:
+  cells:
+    - name: "zone1"
+      etcd:
+        replicas: 1
+      vtctld:
+        replicas: 1
+      vtgate:
+        replicas: 1
+      mysqlProtocol:
+        enabled: true
+        authType: "none"
+      keyspaces:
+        - name: "commerce"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+          vschema:
+            vsplit: |-
+              {
+                "tables": {
+                  "product": {}
+                }
+              }
+        - name: "customer"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+              copySchema:
+                source: "commerce/0"
+                tables:
+                  - "customer"
+                  - "corder"
+          vschema:
+            vsplit: |-
+              {
+                "tables": {
+                  "customer": {},
+                  "corder": {}
+                }
+              }
+
+etcd:
+  replicas: 1
+  resources:
+
+vtctld:
+  serviceType: "NodePort"
+  resources:
+
+vtgate:
+  serviceType: "NodePort"
+  resources:
+
+vttablet:
+  mysqlSize: "test"
+  resources:
+  mysqlResources:
+
+vtworker:
+  resources:
+
+pmm:
+  enabled: false
+
+orchestrator:
+  enabled: false

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2018 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,16 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that creates a sharded vttablet deployment.
+# this script migrates master traffic for the customer keyspace to the
+# new master tablet
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
+./lvtctl.sh MigrateServedFrom customer/0 master
 
-# Shard -80 contains all entries whose keyspace ID has a first byte < 0x80.
-# See: http://vitess.io/overview/concepts/#keyspace-id
-SHARD=-80 UID_BASE=200 $script_root/vttablet-up.sh "$@"
-
-# Shard 80- contains all entries whose keyspace ID has a first byte >= 0x80.
-SHARD=80- UID_BASE=300 $script_root/vttablet-up.sh "$@"
-
+disown -a

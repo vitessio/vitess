@@ -1306,6 +1306,21 @@
   }
 }
 
+# update with target destination
+"update `user[-]`.user_extra set val = 1"
+{
+  "Original": "update `user[-]`.user_extra set val = 1",
+  "Instructions": {
+    "Opcode": "UpdateByDestination",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user_extra set val = 1",
+    "Table": "user_extra"
+  }
+}
+
 # update with no primary vindex on where clause (scatter update)   - multi shard autocommit
 "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */  user_extra set val = 1"
 {

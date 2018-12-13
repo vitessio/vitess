@@ -32,8 +32,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for Vtctl service
-
+// VtctlClient is the client API for Vtctl service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type VtctlClient interface {
 	ExecuteVtctlCommand(ctx context.Context, in *vtctldata.ExecuteVtctlCommandRequest, opts ...grpc.CallOption) (Vtctl_ExecuteVtctlCommandClient, error)
 }
@@ -47,7 +48,7 @@ func NewVtctlClient(cc *grpc.ClientConn) VtctlClient {
 }
 
 func (c *vtctlClient) ExecuteVtctlCommand(ctx context.Context, in *vtctldata.ExecuteVtctlCommandRequest, opts ...grpc.CallOption) (Vtctl_ExecuteVtctlCommandClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_Vtctl_serviceDesc.Streams[0], c.cc, "/vtctlservice.Vtctl/ExecuteVtctlCommand", opts...)
+	stream, err := c.cc.NewStream(ctx, &_Vtctl_serviceDesc.Streams[0], "/vtctlservice.Vtctl/ExecuteVtctlCommand", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -78,8 +79,7 @@ func (x *vtctlExecuteVtctlCommandClient) Recv() (*vtctldata.ExecuteVtctlCommandR
 	return m, nil
 }
 
-// Server API for Vtctl service
-
+// VtctlServer is the server API for Vtctl service.
 type VtctlServer interface {
 	ExecuteVtctlCommand(*vtctldata.ExecuteVtctlCommandRequest, Vtctl_ExecuteVtctlCommandServer) error
 }
