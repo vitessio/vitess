@@ -33,7 +33,7 @@ var (
 
 	// ErrTopoServerNotAvailable is returned if a caller tries to access the
 	// topo.Server supporting this srvtopo.Server.
-	ErrTopoServerNotAvailable = fmt.Errorf("Cannot modify underlying topology server when keyspace filtering is enabled")
+	ErrTopoServerNotAvailable = fmt.Errorf("Cannot access underlying topology server when keyspace filtering is enabled")
 )
 
 // NewKeyspaceFilteringServer constructs a new server based on the provided
