@@ -49,7 +49,7 @@ var (
 )
 
 func init() {
-	flag.Var(&KeyspacesToWatch, "keyspaces_to_watch", "Specifics which keyspaces this vtgate should have access to while routing queries or accessing the vschema")
+	flag.Var(&KeyspacesToWatch, "keyspaces_to_watch", "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema")
 }
 
 // A Gateway is the query processing module for each shard,
