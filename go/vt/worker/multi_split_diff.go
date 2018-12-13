@@ -21,12 +21,13 @@ import (
 	"html/template"
 	"sync"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	"sort"
@@ -173,102 +174,6 @@ func (msdw *MultiSplitDiffWorker) run(ctx context.Context) error {
 	return checkDone(ctx)
 }
 
-func (msdw *MultiSplitDiffWorker) searchInKeyspace(ctx context.Context, wg *sync.WaitGroup, rec *concurrency.AllErrorRecorder, keyspace string, result chan *topo.ShardInfo, UIDs chan uint32) {
-	defer wg.Done()
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	shards, err := msdw.wr.TopoServer().GetShardNames(shortCtx, keyspace)
-	cancel()
-	if err != nil {
-		msdw.markAsWillFail(rec, fmt.Errorf("failed to get list of shards for keyspace '%v': %v", keyspace, err))
-		return
-	}
-	for _, shard := range shards {
-		wg.Add(1)
-		go msdw.produceShardInfo(ctx, wg, rec, keyspace, shard, result, UIDs)
-	}
-}
-
-func (msdw *MultiSplitDiffWorker) produceShardInfo(ctx context.Context, wg *sync.WaitGroup, rec *concurrency.AllErrorRecorder, keyspace string, shard string, result chan *topo.ShardInfo, UIDs chan uint32) {
-	defer wg.Done()
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	si, err := msdw.wr.TopoServer().GetShard(shortCtx, keyspace, shard)
-	cancel()
-	if err != nil {
-		msdw.markAsWillFail(rec, fmt.Errorf("failed to get details for shard '%v': %v", topoproto.KeyspaceShardString(keyspace, shard), err))
-		return
-	}
-
-	for _, sourceShard := range si.SourceShards {
-		if len(sourceShard.Tables) == 0 && sourceShard.Keyspace == msdw.keyspace && sourceShard.Shard == msdw.shard {
-			result <- si
-			UIDs <- sourceShard.Uid
-			// Prevents the same shard from showing up multiple times
-			return
-		}
-	}
-}
-
-// findDestinationShards finds all the shards that have filtered replication from the source shard
-func (msdw *MultiSplitDiffWorker) findDestinationShards(ctx context.Context) ([]*topo.ShardInfo, error) {
-	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	keyspaces, err := msdw.wr.TopoServer().GetKeyspaces(shortCtx)
-	cancel()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get list of keyspaces: %v", err)
-	}
-
-	producers := sync.WaitGroup{}
-	consumer := sync.WaitGroup{}
-	result := make(chan *topo.ShardInfo, 2 /*the consumer will just copy out the data, so this should be enough*/)
-	sourceUIDs := make(chan uint32, 2 /*the consumer will just copy out the data, so this should be enough*/)
-	rec := concurrency.AllErrorRecorder{}
-	var resultArray = make([]*topo.ShardInfo, 0, len(keyspaces))
-
-	for _, keyspace := range keyspaces {
-		producers.Add(1)
-		go msdw.searchInKeyspace(ctx, &producers, &rec, keyspace, result, sourceUIDs)
-	}
-
-	// Start the result array consumer
-	consumer.Add(1)
-	go func() {
-		defer consumer.Done()
-		for r := range result {
-			resultArray = append(resultArray, r)
-		}
-	}()
-
-	// Start the sourceUID check consumer
-	consumer.Add(1)
-	go func() {
-		defer consumer.Done()
-		first := true
-		for r := range sourceUIDs {
-			if first {
-				first = false
-				msdw.sourceUID = r
-			} else if r != msdw.sourceUID {
-				msdw.markAsWillFail(&rec, fmt.Errorf("found a source ID that was different, aborting. %v vs %v", r, msdw.sourceUID))
-			}
-		}
-	}()
-
-	// we use this pattern because we don't know the size of shards up front, so we are using a buffered channel
-	producers.Wait()
-	close(result)
-	close(sourceUIDs)
-	consumer.Wait()
-
-	if rec.HasErrors() {
-		return nil, rec.Error()
-	}
-
-	if len(resultArray) == 0 {
-		return nil, fmt.Errorf("there are no destination shards")
-	}
-	return resultArray, nil
-}
-
 // init phase:
 // - read the shard info, make sure it has sources
 func (msdw *MultiSplitDiffWorker) init(ctx context.Context) error {
@@ -299,6 +204,81 @@ func (msdw *MultiSplitDiffWorker) init(ctx context.Context) error {
 	msdw.destinationShards = destinationShards
 
 	return nil
+}
+
+// findDestinationShards finds all the shards that have filtered replication from the source shard
+func (msdw *MultiSplitDiffWorker) findDestinationShards(ctx context.Context) ([]*topo.ShardInfo, error) {
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	keyspaces, err := msdw.wr.TopoServer().GetKeyspaces(shortCtx)
+	cancel()
+	if err != nil {
+		return nil, vterrors.Wrap(err, "failed to get list of keyspaces")
+	}
+
+	var resultArray []*topo.ShardInfo
+
+	for _, keyspace := range keyspaces {
+		shardInfo, err := msdw.findShardsInKeyspace(ctx, keyspace)
+		if err != nil {
+			return nil, err
+		}
+		resultArray = append(resultArray, shardInfo...)
+	}
+
+	if len(resultArray) == 0 {
+		return nil, fmt.Errorf("there are no destination shards")
+	}
+	return resultArray, nil
+}
+
+func (msdw *MultiSplitDiffWorker) findShardsInKeyspace(ctx context.Context, keyspace string) ([]*topo.ShardInfo, error) {
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	shards, err := msdw.wr.TopoServer().GetShardNames(shortCtx, keyspace)
+	cancel()
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
+	}
+
+	var resultArray []*topo.ShardInfo
+	first := true
+
+	for _, shard := range shards {
+		shardInfo, uid, err := msdw.getShardInfo(ctx, keyspace, shard)
+		if err != nil {
+			return nil, err
+		}
+		// There might not be any source shards here
+		if shardInfo != nil {
+			if first {
+				msdw.sourceUID = uid
+				first = false
+			} else if msdw.sourceUID != uid {
+				return nil, fmt.Errorf("found a source ID that was different, aborting. %v vs %v", msdw.sourceUID, uid)
+			}
+
+			resultArray = append(resultArray, shardInfo)
+		}
+	}
+
+	return resultArray, nil
+}
+
+func (msdw *MultiSplitDiffWorker) getShardInfo(ctx context.Context, keyspace string, shard string) (*topo.ShardInfo, uint32, error) {
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	si, err := msdw.wr.TopoServer().GetShard(shortCtx, keyspace, shard)
+	cancel()
+	if err != nil {
+		return nil, 0, vterrors.Wrap(err, "failed to get shard info from toposerver")
+	}
+
+	for _, sourceShard := range si.SourceShards {
+		if len(sourceShard.Tables) == 0 && sourceShard.Keyspace == msdw.keyspace && sourceShard.Shard == msdw.shard {
+			// Prevents the same shard from showing up multiple times
+			return si, sourceShard.Uid, nil
+		}
+	}
+
+	return nil, 0, nil
 }
 
 // findTargets phase:
