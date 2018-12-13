@@ -20,9 +20,10 @@ import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+import io.grpc.CallCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
-import io.grpc.internal.WithLogId;
+import io.grpc.InternalWithLogId;
 import io.vitess.client.Context;
 import io.vitess.client.Proto;
 import io.vitess.client.RpcClient;
@@ -87,13 +88,21 @@ public class GrpcClient implements RpcClient {
 
   public GrpcClient(ManagedChannel channel) {
     this.channel = channel;
-    if (channel instanceof WithLogId) {
-      channelId = ((WithLogId) channel).getLogId().toString();
-    } else {
-      channelId = channel.toString();
-    }
+    channelId = toChannelId(channel);
     asyncStub = VitessGrpc.newStub(channel);
     futureStub = VitessGrpc.newFutureStub(channel);
+  }
+
+  public GrpcClient(ManagedChannel channel, CallCredentials credentials) {
+    this.channel = channel;
+    channelId = toChannelId(channel);
+    asyncStub = VitessGrpc.newStub(channel).withCallCredentials(credentials);
+    futureStub = VitessGrpc.newFutureStub(channel).withCallCredentials(credentials);
+  }
+
+  private String toChannelId(ManagedChannel channel) {
+    return channel instanceof InternalWithLogId ?
+        ((InternalWithLogId) channel).getLogId().toString() : channel.toString();
   }
 
   @Override

@@ -180,7 +180,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
+%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -569,14 +569,6 @@ create_statement:
 | CREATE OR REPLACE VIEW table_name ddl_skip_to_end
   {
     $$ = &DDL{Action: CreateStr, Table: $5.ToViewName()}
-  }
-| CREATE VINDEX sql_id vindex_type_opt vindex_params_opt
-  {
-    $$ = &DDL{Action: CreateVindexStr, VindexSpec: &VindexSpec{
-        Name: $3,
-        Type: $4,
-        Params: $5,
-    }}
   }
 | CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
@@ -1300,29 +1292,6 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4}
   }
-| ALTER ignore_opt TABLE table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
-  {
-    $$ = &DDL{
-        Action: AddColVindexStr,
-        Table: $4,
-        VindexSpec: &VindexSpec{
-            Name: $7,
-            Type: $11,
-            Params: $12,
-        },
-        VindexCols: $9,
-      }
-  }
-| ALTER ignore_opt TABLE table_name DROP VINDEX sql_id
-  {
-    $$ = &DDL{
-        Action: DropColVindexStr,
-        Table: $4,
-        VindexSpec: &VindexSpec{
-            Name: $7,
-        },
-      }
-  }
 | ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
@@ -1340,6 +1309,51 @@ alter_statement:
 | ALTER ignore_opt TABLE table_name partition_operation
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
+  }
+| ALTER VSCHEMA CREATE VINDEX sql_id vindex_type_opt vindex_params_opt
+  {
+    $$ = &DDL{Action: CreateVindexStr, VindexSpec: &VindexSpec{
+        Name: $5,
+        Type: $6,
+        Params: $7,
+    }}
+  }
+| ALTER VSCHEMA DROP VINDEX sql_id
+  {
+    $$ = &DDL{Action: DropVindexStr, VindexSpec: &VindexSpec{
+        Name: $5,
+    }}
+  }
+| ALTER VSCHEMA ADD TABLE table_name
+  {
+    $$ = &DDL{Action: AddVschemaTableStr, Table: $5}
+  }
+| ALTER VSCHEMA DROP TABLE table_name
+  {
+    $$ = &DDL{Action: DropVschemaTableStr, Table: $5}
+  }
+| ALTER VSCHEMA ON table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
+  {
+    $$ = &DDL{
+        Action: AddColVindexStr,
+        Table: $4,
+        VindexSpec: &VindexSpec{
+            Name: $7,
+            Type: $11,
+            Params: $12,
+        },
+        VindexCols: $9,
+      }
+  }
+| ALTER VSCHEMA ON table_name DROP VINDEX sql_id
+  {
+    $$ = &DDL{
+        Action: DropColVindexStr,
+        Table: $4,
+        VindexSpec: &VindexSpec{
+            Name: $7,
+        },
+      }
   }
 
 alter_object_type:
@@ -1535,10 +1549,6 @@ show_statement:
   {
     $$ = &Show{Scope: $2, Type: string($3)}
   }
-| SHOW VINDEXES
-  {
-    $$ = &Show{Type: string($2)}
-  }
 | SHOW COLLATION
   {
     $$ = &Show{Type: string($2)}
@@ -1548,10 +1558,6 @@ show_statement:
     // Cannot dereference $4 directly, or else the parser stackcannot be pooled. See yyParsePooled
     showCollationFilterOpt := $4
     $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
-  }
-| SHOW VINDEXES ON table_name
-  {
-    $$ = &Show{Type: string($2), OnTable: $4}
   }
 | SHOW VITESS_KEYSPACES
   {
@@ -1569,9 +1575,17 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW VSCHEMA_TABLES
+| SHOW VSCHEMA TABLES
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW VSCHEMA VINDEXES
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW VSCHEMA VINDEXES ON table_name
+  {
+    $$ = &Show{Type: string($2) + " " + string($3), OnTable: $5}
   }
 | SHOW WARNINGS
   {
@@ -3351,6 +3365,7 @@ non_reserved_keyword:
 | VITESS_KEYSPACES
 | VITESS_SHARDS
 | VITESS_TABLETS
+| VSCHEMA
 | VSCHEMA_TABLES
 | VITESS_TARGET
 | WARNINGS

@@ -746,15 +746,18 @@ type DDL struct {
 
 // DDL strings.
 const (
-	CreateStr        = "create"
-	AlterStr         = "alter"
-	DropStr          = "drop"
-	RenameStr        = "rename"
-	TruncateStr      = "truncate"
-	FlushStr         = "flush"
-	CreateVindexStr  = "create vindex"
-	AddColVindexStr  = "add vindex"
-	DropColVindexStr = "drop vindex"
+	CreateStr           = "create"
+	AlterStr            = "alter"
+	DropStr             = "drop"
+	RenameStr           = "rename"
+	TruncateStr         = "truncate"
+	FlushStr            = "flush"
+	CreateVindexStr     = "create vindex"
+	DropVindexStr       = "drop vindex"
+	AddVschemaTableStr  = "add vschema table"
+	DropVschemaTableStr = "drop vschema table"
+	AddColVindexStr     = "on table add vindex"
+	DropColVindexStr    = "on table drop vindex"
 
 	// Vindex DDL param to specify the owner of a vindex
 	VindexOwnerStr = "owner"
@@ -791,9 +794,15 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	case FlushStr:
 		buf.Myprintf("%s", node.Action)
 	case CreateVindexStr:
-		buf.Myprintf("%s %v %v", node.Action, node.VindexSpec.Name, node.VindexSpec)
+		buf.Myprintf("alter vschema create vindex %v %v", node.VindexSpec.Name, node.VindexSpec)
+	case DropVindexStr:
+		buf.Myprintf("alter vschema drop vindex %v", node.VindexSpec.Name)
+	case AddVschemaTableStr:
+		buf.Myprintf("alter vschema add table %v", node.Table)
+	case DropVschemaTableStr:
+		buf.Myprintf("alter vschema drop table %v", node.Table)
 	case AddColVindexStr:
-		buf.Myprintf("alter table %v %s %v (", node.Table, node.Action, node.VindexSpec.Name)
+		buf.Myprintf("alter vschema on %v add vindex %v (", node.Table, node.VindexSpec.Name)
 		for i, col := range node.VindexCols {
 			if i != 0 {
 				buf.Myprintf(", %v", col)
@@ -806,7 +815,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			buf.Myprintf(" %v", node.VindexSpec)
 		}
 	case DropColVindexStr:
-		buf.Myprintf("alter table %v %s %v", node.Table, node.Action, node.VindexSpec.Name)
+		buf.Myprintf("alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}

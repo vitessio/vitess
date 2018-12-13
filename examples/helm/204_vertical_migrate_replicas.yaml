@@ -1,0 +1,67 @@
+topology:
+  cells:
+    - name: "zone1"
+      etcd:
+        replicas: 1
+      vtctld:
+        replicas: 1
+      vtgate:
+        replicas: 1
+      mysqlProtocol:
+        enabled: true
+        authType: "none"
+      keyspaces:
+        - name: "commerce"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+        - name: "customer"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+                - type: "rdonly"
+                  vttablet:
+                    replicas: 1
+
+jobs:
+  - name: "msf1"
+    kind: "vtctlclient"
+    command: "MigrateServedFrom customer/0 rdonly"
+  - name: "msf2"
+    kind: "vtctlclient"
+    command: "MigrateServedFrom customer/0 replica"
+
+etcd:
+  replicas: 1
+  resources:
+
+vtctld:
+  serviceType: "NodePort"
+  resources:
+
+vtgate:
+  serviceType: "NodePort"
+  resources:
+
+vttablet:
+  mysqlSize: "test"
+  resources:
+  mysqlResources:
+
+vtworker:
+  resources:
+
+pmm:
+  enabled: false
+
+orchestrator:
+  enabled: false

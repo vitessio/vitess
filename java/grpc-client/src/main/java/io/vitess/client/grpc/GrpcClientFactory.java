@@ -16,6 +16,9 @@
 
 package io.vitess.client.grpc;
 
+import io.grpc.CallCredentials;
+import io.grpc.LoadBalancer;
+import io.grpc.NameResolver;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -48,6 +51,9 @@ import io.vitess.client.grpc.tls.TlsOptions;
 public class GrpcClientFactory implements RpcClientFactory {
 
   private RetryingInterceptorConfig config;
+  private CallCredentials callCredentials;
+  private LoadBalancer.Factory loadBalancerFactory;
+  private NameResolver.Factory nameResolverFactory;
 
   public GrpcClientFactory() {
     this(RetryingInterceptorConfig.noOpConfig());
@@ -55,6 +61,21 @@ public class GrpcClientFactory implements RpcClientFactory {
 
   public GrpcClientFactory(RetryingInterceptorConfig config) {
     this.config = config;
+  }
+
+  public GrpcClientFactory setCallCredentials(CallCredentials value) {
+    callCredentials = value;
+    return this;
+  }
+
+  public GrpcClientFactory setLoadBalancerFactory(LoadBalancer.Factory value) {
+    loadBalancerFactory = value;
+    return this;
+  }
+
+  public GrpcClientFactory setNameResolverFactory(NameResolver.Factory value) {
+    nameResolverFactory = value;
+    return this;
   }
 
   /**
@@ -67,8 +88,39 @@ public class GrpcClientFactory implements RpcClientFactory {
    */
   @Override
   public RpcClient create(Context ctx, String target) {
-    return new GrpcClient(
-            NettyChannelBuilder.forTarget(target).negotiationType(NegotiationType.PLAINTEXT).intercept(new RetryingInterceptor(config)).build());
+    NettyChannelBuilder channel = channelBuilder(target)
+            .negotiationType(NegotiationType.PLAINTEXT)
+            .intercept(new RetryingInterceptor(config));
+    if (loadBalancerFactory != null) {
+      channel.loadBalancerFactory(loadBalancerFactory);
+    }
+    if (nameResolverFactory != null) {
+      channel.nameResolverFactory(nameResolverFactory);
+    }
+    return callCredentials != null ?
+            new GrpcClient(channel.build(), callCredentials) : new GrpcClient(channel.build());
+  }
+
+  /**
+   * <p>This method constructs NettyChannelBuilder object that will be used to create RpcClient.<p/>
+   * <p>Subclasses may override this method to make adjustments to the builder<p/>
+   * for example:
+   * <code>
+   *     @Override
+   *     protected NettyChannelBuilder channelBuilder(String target) {
+   *       return super.channelBuilder(target)
+   *               .eventLoopGroup(new EpollEventLoopGroup())
+   *               .withOption(EpollChannelOption.TCP_USER_TIMEOUT,30);
+   *     }
+   *
+   * </code>
+   *
+   * @param target
+   *    target is passed to NettyChannelBuilder which will resolve based on scheme, by default dns.
+   * @return
+   */
+  protected NettyChannelBuilder channelBuilder(String target){
+    return NettyChannelBuilder.forTarget(target);
   }
 
   /**
@@ -122,7 +174,7 @@ public class GrpcClientFactory implements RpcClientFactory {
     }
 
     return new GrpcClient(
-        NettyChannelBuilder.forTarget(target).negotiationType(NegotiationType.TLS).sslContext(sslContext).intercept(new RetryingInterceptor(config)).build());
+            channelBuilder(target).negotiationType(NegotiationType.TLS).sslContext(sslContext).intercept(new RetryingInterceptor(config)).build());
   }
 
   /**

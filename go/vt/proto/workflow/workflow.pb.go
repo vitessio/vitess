@@ -78,13 +78,13 @@ func (TaskState) EnumDescriptor() ([]byte, []int) {
 type Workflow struct {
 	// uuid is set when the workflow is created, and immutable after
 	// that.
-	Uuid string `protobuf:"bytes,1,opt,name=uuid" json:"uuid,omitempty"`
+	Uuid string `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
 	// factory_name is set with the name of the factory that created the
 	// job (and can also restart it). It is set at creation time, and
 	// immutable after that.
-	FactoryName string `protobuf:"bytes,2,opt,name=factory_name,json=factoryName" json:"factory_name,omitempty"`
+	FactoryName string `protobuf:"bytes,2,opt,name=factory_name,json=factoryName,proto3" json:"factory_name,omitempty"`
 	// name is the display name of the workflow.
-	Name string `protobuf:"bytes,3,opt,name=name" json:"name,omitempty"`
+	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	// state describes the state of the job. A job is created as
 	// NotStarted, then the Workflow Manager picks it up and starts it,
 	// switching it to Running (and populating 'start_time').  The
@@ -92,7 +92,7 @@ type Workflow struct {
 	// necessary, and still be in Running state.  When done, it goes to
 	// Done, 'end_time' is populated, and 'error' is set if there was an
 	// error.
-	State WorkflowState `protobuf:"varint,4,opt,name=state,enum=workflow.WorkflowState" json:"state,omitempty"`
+	State WorkflowState `protobuf:"varint,4,opt,name=state,proto3,enum=workflow.WorkflowState" json:"state,omitempty"`
 	// data is workflow-specific stored data. It is usually a binary
 	// proto-encoded data structure. It can vary throughout the
 	// execution of the workflow.  It will not change after the workflow
@@ -100,16 +100,16 @@ type Workflow struct {
 	Data []byte `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
 	// error is set if the job finished with an error. This field only
 	// makes sense if 'state' is Done.
-	Error string `protobuf:"bytes,6,opt,name=error" json:"error,omitempty"`
+	Error string `protobuf:"bytes,6,opt,name=error,proto3" json:"error,omitempty"`
 	// start_time is set when the workflow manager starts a workflow for
 	// the first time. This field only makes sense if 'state' is Running
 	// or Done.
-	StartTime int64 `protobuf:"varint,7,opt,name=start_time,json=startTime" json:"start_time,omitempty"`
+	StartTime int64 `protobuf:"varint,7,opt,name=start_time,json=startTime,proto3" json:"start_time,omitempty"`
 	// end_time is set when the workflow is finished.
 	// This field only makes sense if 'state' is Done.
-	EndTime int64 `protobuf:"varint,8,opt,name=end_time,json=endTime" json:"end_time,omitempty"`
+	EndTime int64 `protobuf:"varint,8,opt,name=end_time,json=endTime,proto3" json:"end_time,omitempty"`
 	// create_time is set when the workflow is created.
-	CreateTime           int64    `protobuf:"varint,9,opt,name=create_time,json=createTime" json:"create_time,omitempty"`
+	CreateTime           int64    `protobuf:"varint,9,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -207,13 +207,13 @@ type WorkflowCheckpoint struct {
 	// running workflow and the one which wrote the checkpoint. If they don't
 	// match, the workflow must not continue. The author of workflow must update
 	// this variable in their implementation when incompabilities are introduced.
-	CodeVersion int32 `protobuf:"varint,1,opt,name=code_version,json=codeVersion" json:"code_version,omitempty"`
+	CodeVersion int32 `protobuf:"varint,1,opt,name=code_version,json=codeVersion,proto3" json:"code_version,omitempty"`
 	// Task is the data structure that stores the execution status and the
 	// attributes of a task.
-	Tasks map[string]*Task `protobuf:"bytes,2,rep,name=tasks" json:"tasks,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Tasks map[string]*Task `protobuf:"bytes,2,rep,name=tasks,proto3" json:"tasks,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// settings includes workflow specific data, e.g. the resharding workflow
 	// would store the source shards and destination shards.
-	Settings             map[string]string `protobuf:"bytes,3,rep,name=settings" json:"settings,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Settings             map[string]string `protobuf:"bytes,3,rep,name=settings,proto3" json:"settings,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -265,11 +265,11 @@ func (m *WorkflowCheckpoint) GetSettings() map[string]string {
 }
 
 type Task struct {
-	Id    string    `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
-	State TaskState `protobuf:"varint,2,opt,name=state,enum=workflow.TaskState" json:"state,omitempty"`
+	Id    string    `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	State TaskState `protobuf:"varint,2,opt,name=state,proto3,enum=workflow.TaskState" json:"state,omitempty"`
 	// attributes includes the parameters the task needs.
-	Attributes           map[string]string `protobuf:"bytes,3,rep,name=attributes" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Error                string            `protobuf:"bytes,4,opt,name=error" json:"error,omitempty"`
+	Attributes           map[string]string `protobuf:"bytes,3,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Error                string            `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`

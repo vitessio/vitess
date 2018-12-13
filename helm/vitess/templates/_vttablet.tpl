@@ -162,7 +162,7 @@ spec:
 
 - name: "init-mysql"
   image: "vitess/mysqlctld:{{$vitessTag}}"
-  imagePullPolicy: Always
+  ImagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
       mountPath: "/vtdataroot"
@@ -203,7 +203,7 @@ spec:
 
 - name: init-vttablet
   image: "vitess/vtctl:{{$vitessTag}}"
-  imagePullPolicy: Always
+  ImagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
       mountPath: "/vtdataroot"
@@ -268,7 +268,7 @@ spec:
 
 - name: vttablet
   image: "vitess/vttablet:{{$vitessTag}}"
-  imagePullPolicy: Always
+  ImagePullPolicy: IfNotPresent
   readinessProbe:
     httpGet:
       path: /debug/health
@@ -428,7 +428,7 @@ spec:
 
 - name: mysql
   image: {{.mysqlImage | default $defaultVttablet.mysqlImage | quote}}
-  imagePullPolicy: Always
+  ImagePullPolicy: IfNotPresent
   readinessProbe:
     exec:
       command: ["mysqladmin", "ping", "-uroot", "--socket=/vtdataroot/tabletdata/mysql.sock"]
@@ -441,7 +441,7 @@ spec:
     - name: vt
       mountPath: /vt
 {{ include "user-config-volumeMount" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 4 }}
-{{ include "user-secret-volumeMounts" (.secrets | $defaultVttablet.secrets) | indent 4 }}
+{{ include "user-secret-volumeMounts" (.secrets | default $defaultVttablet.secrets) | indent 4 }}
   resources:
 {{ toYaml (.mysqlResources | default $defaultVttablet.mysqlResources) | indent 6 }}
   env:
@@ -481,6 +481,9 @@ spec:
     - |
       set -ex
 {{ include "mycnf-exec" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 6 }}
+{{- if eq (.mysqlSize | default $defaultVttablet.mysqlSize) "test" }}
+      export EXTRA_MY_CNF="$EXTRA_MY_CNF:/vt/config/mycnf/default-fast.cnf"
+{{- end }}
 
       eval exec /vt/bin/mysqlctld $(cat <<END_OF_COMMAND
         -logtostderr=true
@@ -503,7 +506,7 @@ spec:
 
 - name: logrotate
   image: vitess/logrotate:latest
-  imagePullPolicy: Always
+  ImagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
       mountPath: /vtdataroot
@@ -517,7 +520,7 @@ spec:
 
 - name: error-log
   image: vitess/logtail:latest
-  imagePullPolicy: Always
+  ImagePullPolicy: IfNotPresent
 
   env:
   - name: TAIL_FILEPATH
@@ -535,7 +538,7 @@ spec:
 
 - name: slow-log
   image: vitess/logtail:latest
-  imagePullPolicy: Always
+  ImagePullPolicy: IfNotPresent
 
   env:
   - name: TAIL_FILEPATH
@@ -553,7 +556,7 @@ spec:
 
 - name: general-log
   image: vitess/logtail:latest
-  imagePullPolicy: Always
+  ImagePullPolicy: IfNotPresent
 
   env:
   - name: TAIL_FILEPATH

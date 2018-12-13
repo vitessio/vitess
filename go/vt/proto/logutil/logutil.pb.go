@@ -55,8 +55,8 @@ func (Level) EnumDescriptor() ([]byte, []int) {
 // Time represents a time stamp in nanoseconds. In go, use logutil library
 // to convert times.
 type Time struct {
-	Seconds              int64    `protobuf:"varint,1,opt,name=seconds" json:"seconds,omitempty"`
-	Nanoseconds          int32    `protobuf:"varint,2,opt,name=nanoseconds" json:"nanoseconds,omitempty"`
+	Seconds              int64    `protobuf:"varint,1,opt,name=seconds,proto3" json:"seconds,omitempty"`
+	Nanoseconds          int32    `protobuf:"varint,2,opt,name=nanoseconds,proto3" json:"nanoseconds,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -102,11 +102,11 @@ func (m *Time) GetNanoseconds() int32 {
 
 // Event is a single logging event
 type Event struct {
-	Time                 *Time    `protobuf:"bytes,1,opt,name=time" json:"time,omitempty"`
-	Level                Level    `protobuf:"varint,2,opt,name=level,enum=logutil.Level" json:"level,omitempty"`
-	File                 string   `protobuf:"bytes,3,opt,name=file" json:"file,omitempty"`
-	Line                 int64    `protobuf:"varint,4,opt,name=line" json:"line,omitempty"`
-	Value                string   `protobuf:"bytes,5,opt,name=value" json:"value,omitempty"`
+	Time                 *Time    `protobuf:"bytes,1,opt,name=time,proto3" json:"time,omitempty"`
+	Level                Level    `protobuf:"varint,2,opt,name=level,proto3,enum=logutil.Level" json:"level,omitempty"`
+	File                 string   `protobuf:"bytes,3,opt,name=file,proto3" json:"file,omitempty"`
+	Line                 int64    `protobuf:"varint,4,opt,name=line,proto3" json:"line,omitempty"`
+	Value                string   `protobuf:"bytes,5,opt,name=value,proto3" json:"value,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`

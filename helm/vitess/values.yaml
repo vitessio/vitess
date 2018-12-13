@@ -55,16 +55,16 @@ config:
     #########
 
     # AWS region to use
-    # s3_backup_aws_region: "us-east-1"
+    # s3_backup_aws_region: us-east-1
 
     # S3 bucket to use for backups
-    # s3_backup_storage_bucket: "vitess-backups"
+    # s3_backup_storage_bucket: vitess-backups
 
     # root prefix for all backup-related object names
-    # s3_backup_storage_root: "vtbackups"
+    # s3_backup_storage_root: vtbackups
 
     # server-side encryption algorithm (e.g., AES256, aws:kms)
-    # s3_backup_server_side_encryption: "AES256"
+    # s3_backup_server_side_encryption: AES256
 
     # secret that contains AWS S3 credentials file with read/write access to the bucket
     # kubectl create secret generic s3-credentials --from-file=s3-creds
@@ -76,16 +76,64 @@ topology:
     etcd:
       replicas: 3
   cells:
-    - name: "zone1"
+    - name: zone1
 
       # set failure-domain.beta.kubernetes.io/region
       # region: eastus
 
+      ## You MUST set up at least one keyspace, as these are what actually define and
+      #  create the Vitess cluster
+      #
+      # keyspaces:
+      #   - name: "commerce"
+      #     shards:
+      #       - name: "0"
+      #         tablets:
+      #           - type: "replica"
+      #             vttablet:
+      #               replicas: 2
+
+      ##    this defines named jobs that will run vtctlclient ApplySchema to initialize
+      #     your tables
+      #
+      #     schema:
+      #       phase1: |-
+      #         create table product(
+      #           sku varbinary(128),
+      #           description varbinary(128),
+      #           price bigint,
+      #           primary key(sku)
+      #         );
+      #         create table customer(
+      #           user_id bigint not null auto_increment,
+      #           email varbinary(128),
+      #           primary key(user_id)
+      #         );
+      #         create table corder(
+      #           order_id bigint not null auto_increment,
+      #           user_id bigint,
+      #           product_id bigint,
+      #           msrp bigint,
+      #           primary key(order_id)
+      #         );
+
+      ##    this defines named jobs that will run vtctlclient ApplyVSchema
+      #
+      #     vschema:
+      #       phase1: |-
+      #         {
+      #           "tables": {
+      #             "product": {},
+      #             "customer": {},
+      #             "corder": {}
+      #           }
+      #         }
+
       # enable or disable mysql protocol support, with accompanying auth details
       mysqlProtocol:
         enabled: false
-        authType: "secret"
-        # authType can be: none or k8s_secret. For k8s_secret, perform the following changes:
+        authType: secret
+        # authType can be: none or secret. For secret, perform the following changes:
         # username: myuser
         # this is the secret that will be mounted as the user password
         # kubectl create secret generic myuser_password --from-literal=password=abc123
@@ -98,63 +146,81 @@ topology:
       vtgate:
         replicas: 3
         # if maxReplicas is higher than replicas, an HPA will be created
-        maxReplicas: 6
+        # maxReplicas: 6
+
+jobs:
+  # examples:
+  #- name: "split-clone-customer"
+  #  kind: "vtworker"
+  #  cell: "zone1"
+  #  command: "SplitClone customer/0"
+  #- name: "list-all-tablet-zone1"
+  #  kind: "vtctlclient"
+  #  command: "ListAllTablets zone1"
 
 # Default values for etcd resources defined in 'topology'
 etcd:
-  version: "3.2.13"
+  version: "3.3.10"
   replicas: 3
   resources:
-    limits:
-      cpu: 300m
-      memory: 200Mi
     requests:
       cpu: 200m
       memory: 100Mi
 
 # Default values for vtctld resources defined in 'topology'
 vtctld:
-  serviceType: "ClusterIP"
-  vitessTag: "latest"
+  serviceType: ClusterIP
+  vitessTag: latest
   resources:
-    limits:
-      cpu: 100m
-      memory: 128Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
   extraFlags: {}
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 # Default values for vtgate resources defined in 'topology'
 vtgate:
-  serviceType: "ClusterIP"
-  vitessTag: "latest"
+  serviceType: ClusterIP
+  vitessTag: latest
   resources:
-    limits:
-      cpu: 500m
-      memory: 512Mi
+    # requests:
+    #   cpu: 500m
+    #   memory: 512Mi
   extraFlags: {}
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 # Default values for vtctlclient resources defined in 'topology'
 vtctlclient:
-  vitessTag: "latest"
+  vitessTag: latest
   extraFlags: {}
+  secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
+
+# Default values for vtworker resources defined in 'jobs'
+vtworker:
+  vitessTag: latest
+  extraFlags: {}
+  resources:
+    # requests:
+    #   cpu: 500m
+    #   memory: 512Mi
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 
 # Default values for vttablet resources defined in 'topology'
 vttablet:
-  vitessTag: "latest"
+  vitessTag: latest
 
   # valid values are
+  # - mysql56 (for MySQL 8.0)
   # - mysql56 (for MySQL/Percona 5.6 or 5.7)
   # - mariadb (for MariaDB <= 10.2)
   # - mariadb103 (for MariaDB >= 10.3)
   # the flavor determines the base my.cnf file for vitess to function
-  flavor: "mysql56"
+  flavor: mysql56
 
-  mysqlImage: "percona:5.7.20"
-  # mysqlImage: "mysql:5.7.20"
-  # mysqlImage: "mariadb:10.3.4"
+  mysqlImage: percona:5.7.23
+  # mysqlImage: mysql:5.7.24
+  # mysqlImage: mariadb:10.3.11
 
   enableHeartbeat: false
 
@@ -171,6 +237,10 @@ vttablet:
   extraMyCnf: ""
   # extraMyCnf: extra-my-cnf
 
+  # mysqlSize can be "test" or "prod". Default is "prod".
+  # If the value is "test", then mysql is instanitated with a smaller footprint.
+  mysqlSize: prod
+
   # Additional flags that will be appended to the vttablet command
   extraFlags: {}
 
@@ -179,14 +249,16 @@ vttablet:
 
   resources:
     # common production values 2-4CPU/4-8Gi RAM
-    limits:
-      cpu: 500m
-      memory: 1Gi
+    # requests:
+    #   cpu: 2
+    #   memory: 4Gi
+
   mysqlResources:
     # common production values 4CPU/8-16Gi RAM
-    limits:
-      cpu: 500m
-      memory: 1Gi
+    # requests:
+    #   cpu: 4
+    #   memory: 8Gi
+
   # PVC for mysql
   dataVolumeClaimAnnotations:
   dataVolumeClaimSpec:
@@ -194,37 +266,36 @@ vttablet:
     # managed-premium (Azure)
     # standard (AWS) - not sure what the default class is for ssd
     # Note: Leave storageClassName unset to use cluster-specific default class.
-    #storageClassName: "pd-ssd"
+    #storageClassName: pd-ssd
     accessModes: ["ReadWriteOnce"]
     resources:
       requests:
-        storage: "10Gi"
+        storage: 10Gi
 
 # Default values for pmm
 pmm:
   enabled: false
-  pmmTag: "1.15.0"
+  pmmTag: 1.17.0
   client:
     resources:
       requests:
         cpu: 50m
         memory: 128Mi
-      limits:
-        cpu: 200m
-        memory: 256Mi
+
   server:
     resources:
-      limits:
-        cpu: 500m
-        memory: 1Gi
+      # requests:
+      #   cpu: 500m
+      #   memory: 1Gi
+
     # PVC for pmm
     dataVolumeClaimAnnotations:
     dataVolumeClaimSpec:
-      # storageClassName: "pd-ssd"
+      # storageClassName: pd-ssd
       accessModes: ["ReadWriteOnce"]
       resources:
         requests:
-          storage: "10Gi"
+          storage: 10Gi
     env:
       # DISABLE_TELEMETRY
       # With telemetry enabled, your PMM Server sends some statistics to v.percona.com every 24 hours
@@ -259,9 +330,9 @@ pmm:
 # Default values for orchestrator resources
 orchestrator:
   enabled: false
-  image: "vitess/orchestrator:3.0.13"
+  image: vitess/orchestrator:3.0.13
   replicas: 3
   resources:
     requests:
-      cpu: "100m"
-      memory: "64Mi"
+      cpu: 50m
+      memory: 350Mi

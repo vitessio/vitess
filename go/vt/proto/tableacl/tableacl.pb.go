@@ -20,12 +20,12 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 // TableGroupSpec defines ACLs for a group of tables.
 type TableGroupSpec struct {
-	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// either tables or a table name prefixes (if it ends in a %)
-	TableNamesOrPrefixes []string `protobuf:"bytes,2,rep,name=table_names_or_prefixes,json=tableNamesOrPrefixes" json:"table_names_or_prefixes,omitempty"`
-	Readers              []string `protobuf:"bytes,3,rep,name=readers" json:"readers,omitempty"`
-	Writers              []string `protobuf:"bytes,4,rep,name=writers" json:"writers,omitempty"`
-	Admins               []string `protobuf:"bytes,5,rep,name=admins" json:"admins,omitempty"`
+	TableNamesOrPrefixes []string `protobuf:"bytes,2,rep,name=table_names_or_prefixes,json=tableNamesOrPrefixes,proto3" json:"table_names_or_prefixes,omitempty"`
+	Readers              []string `protobuf:"bytes,3,rep,name=readers,proto3" json:"readers,omitempty"`
+	Writers              []string `protobuf:"bytes,4,rep,name=writers,proto3" json:"writers,omitempty"`
+	Admins               []string `protobuf:"bytes,5,rep,name=admins,proto3" json:"admins,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -91,7 +91,7 @@ func (m *TableGroupSpec) GetAdmins() []string {
 }
 
 type Config struct {
-	TableGroups          []*TableGroupSpec `protobuf:"bytes,1,rep,name=table_groups,json=tableGroups" json:"table_groups,omitempty"`
+	TableGroups          []*TableGroupSpec `protobuf:"bytes,1,rep,name=table_groups,json=tableGroups,proto3" json:"table_groups,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`

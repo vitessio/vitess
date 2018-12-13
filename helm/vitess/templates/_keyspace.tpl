@@ -15,7 +15,7 @@
 
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtctlclient.vitessTag -}}
-{{- $secrets := .secrets | default $defaultVtctlclient.secrets }}
+{{- $secrets := .secrets | default $defaultVtctlclient.secrets -}}
 
 {{- range $name, $schema := $keyspace.schema }}
 ---

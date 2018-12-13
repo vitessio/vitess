@@ -174,6 +174,9 @@ func Stop() {
 	// Cleanup all created fake dbs.
 	if explainTopo != nil {
 		for _, conn := range explainTopo.TabletConns {
+			conn.tsv.StopService()
+		}
+		for _, conn := range explainTopo.TabletConns {
 			conn.db.Close()
 		}
 	}

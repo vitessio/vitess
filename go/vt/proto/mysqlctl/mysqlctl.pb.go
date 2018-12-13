@@ -24,7 +24,7 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type StartRequest struct {
-	MysqldArgs           []string `protobuf:"bytes,1,rep,name=mysqld_args,json=mysqldArgs" json:"mysqld_args,omitempty"`
+	MysqldArgs           []string `protobuf:"bytes,1,rep,name=mysqld_args,json=mysqldArgs,proto3" json:"mysqld_args,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -92,7 +92,7 @@ func (m *StartResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_StartResponse proto.InternalMessageInfo
 
 type ShutdownRequest struct {
-	WaitForMysqld        bool     `protobuf:"varint,1,opt,name=wait_for_mysqld,json=waitForMysqld" json:"wait_for_mysqld,omitempty"`
+	WaitForMysqld        bool     `protobuf:"varint,1,opt,name=wait_for_mysqld,json=waitForMysqld,proto3" json:"wait_for_mysqld,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -360,8 +360,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for MysqlCtl service
-
+// MysqlCtlClient is the client API for MysqlCtl service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type MysqlCtlClient interface {
 	Start(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error)
 	Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
@@ -380,7 +381,7 @@ func NewMysqlCtlClient(cc *grpc.ClientConn) MysqlCtlClient {
 
 func (c *mysqlCtlClient) Start(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error) {
 	out := new(StartResponse)
-	err := grpc.Invoke(ctx, "/mysqlctl.MysqlCtl/Start", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/Start", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +390,7 @@ func (c *mysqlCtlClient) Start(ctx context.Context, in *StartRequest, opts ...gr
 
 func (c *mysqlCtlClient) Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error) {
 	out := new(ShutdownResponse)
-	err := grpc.Invoke(ctx, "/mysqlctl.MysqlCtl/Shutdown", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/Shutdown", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +399,7 @@ func (c *mysqlCtlClient) Shutdown(ctx context.Context, in *ShutdownRequest, opts
 
 func (c *mysqlCtlClient) RunMysqlUpgrade(ctx context.Context, in *RunMysqlUpgradeRequest, opts ...grpc.CallOption) (*RunMysqlUpgradeResponse, error) {
 	out := new(RunMysqlUpgradeResponse)
-	err := grpc.Invoke(ctx, "/mysqlctl.MysqlCtl/RunMysqlUpgrade", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/RunMysqlUpgrade", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -407,7 +408,7 @@ func (c *mysqlCtlClient) RunMysqlUpgrade(ctx context.Context, in *RunMysqlUpgrad
 
 func (c *mysqlCtlClient) ReinitConfig(ctx context.Context, in *ReinitConfigRequest, opts ...grpc.CallOption) (*ReinitConfigResponse, error) {
 	out := new(ReinitConfigResponse)
-	err := grpc.Invoke(ctx, "/mysqlctl.MysqlCtl/ReinitConfig", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/ReinitConfig", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -416,15 +417,14 @@ func (c *mysqlCtlClient) ReinitConfig(ctx context.Context, in *ReinitConfigReque
 
 func (c *mysqlCtlClient) RefreshConfig(ctx context.Context, in *RefreshConfigRequest, opts ...grpc.CallOption) (*RefreshConfigResponse, error) {
 	out := new(RefreshConfigResponse)
-	err := grpc.Invoke(ctx, "/mysqlctl.MysqlCtl/RefreshConfig", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/mysqlctl.MysqlCtl/RefreshConfig", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// Server API for MysqlCtl service
-
+// MysqlCtlServer is the server API for MysqlCtl service.
 type MysqlCtlServer interface {
 	Start(context.Context, *StartRequest) (*StartResponse, error)
 	Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)

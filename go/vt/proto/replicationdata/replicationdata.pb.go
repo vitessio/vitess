@@ -21,13 +21,13 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 // Status is the replication status for MySQL (returned by 'show slave status'
 // and parsed into a Position and fields).
 type Status struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
-	SlaveIoRunning       bool     `protobuf:"varint,2,opt,name=slave_io_running,json=slaveIoRunning" json:"slave_io_running,omitempty"`
-	SlaveSqlRunning      bool     `protobuf:"varint,3,opt,name=slave_sql_running,json=slaveSqlRunning" json:"slave_sql_running,omitempty"`
-	SecondsBehindMaster  uint32   `protobuf:"varint,4,opt,name=seconds_behind_master,json=secondsBehindMaster" json:"seconds_behind_master,omitempty"`
-	MasterHost           string   `protobuf:"bytes,5,opt,name=master_host,json=masterHost" json:"master_host,omitempty"`
-	MasterPort           int32    `protobuf:"varint,6,opt,name=master_port,json=masterPort" json:"master_port,omitempty"`
-	MasterConnectRetry   int32    `protobuf:"varint,7,opt,name=master_connect_retry,json=masterConnectRetry" json:"master_connect_retry,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
+	SlaveIoRunning       bool     `protobuf:"varint,2,opt,name=slave_io_running,json=slaveIoRunning,proto3" json:"slave_io_running,omitempty"`
+	SlaveSqlRunning      bool     `protobuf:"varint,3,opt,name=slave_sql_running,json=slaveSqlRunning,proto3" json:"slave_sql_running,omitempty"`
+	SecondsBehindMaster  uint32   `protobuf:"varint,4,opt,name=seconds_behind_master,json=secondsBehindMaster,proto3" json:"seconds_behind_master,omitempty"`
+	MasterHost           string   `protobuf:"bytes,5,opt,name=master_host,json=masterHost,proto3" json:"master_host,omitempty"`
+	MasterPort           int32    `protobuf:"varint,6,opt,name=master_port,json=masterPort,proto3" json:"master_port,omitempty"`
+	MasterConnectRetry   int32    `protobuf:"varint,7,opt,name=master_connect_retry,json=masterConnectRetry,proto3" json:"master_connect_retry,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`

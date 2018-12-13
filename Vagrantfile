@@ -39,10 +39,13 @@ Vagrant.configure("2") do |config|
   # Demo Appp
   config.vm.network "forwarded_port", guest: 8000, host: 8000 # http
 
-  # If possible, use nfs, this gives a good boost to IO operations in the VM.
-  # if you run into with nfs, just remove this from the synced folder
-
-  config.vm.synced_folder ".", "/vagrant/src/vitess.io/vitess", type: "nfs"
+  # N.B. It's possible to use NFS to help speed up IO operations in the VM but
+  # some OSX users have reported issues running govendor with it enabled.
+  # Additional details in https://github.com/vitessio/vitess/issues/4396
+  #
+  # To enable, use:
+  #   config.vm.synced_folder ".", "/vagrant/src/vitess.io/vitess", type: "nfs"
+  config.vm.synced_folder ".", "/vagrant/src/vitess.io/vitess"
 
   config.vm.provider :virtualbox do |vb|
     vb.name = "vitess"

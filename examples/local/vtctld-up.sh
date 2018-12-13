@@ -18,7 +18,7 @@
 
 set -e
 
-cell='test'
+cell=${CELL:-'test'}
 grpc_port=15999
 
 script_root=`dirname "${BASH_SOURCE}"`

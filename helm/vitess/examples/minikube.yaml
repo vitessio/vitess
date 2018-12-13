@@ -11,7 +11,7 @@ topology:
         enabled: true
         authType: "none"
       keyspaces:
-        - name: "messagedb"
+        - name: "commerce"
           shards:
             - name: "0"
               tablets:
@@ -20,30 +20,31 @@ topology:
                     replicas: 2
           schema:
             phase1: |-
-              CREATE TABLE messages (
-                page BIGINT(20) UNSIGNED,
-                time_created_ns BIGINT(20) UNSIGNED,
-                message VARCHAR(10000),
-                PRIMARY KEY (page, time_created_ns)
-              ) ENGINE=InnoDB
+              create table product(
+                sku varbinary(128),
+                description varbinary(128),
+                price bigint,
+                primary key(sku)
+              );
+              create table customer(
+                user_id bigint not null auto_increment,
+                email varbinary(128),
+                primary key(user_id)
+              );
+              create table corder(
+                order_id bigint not null auto_increment,
+                user_id bigint,
+                product_id bigint,
+                msrp bigint,
+                primary key(order_id)
+              );
           vschema:
             phase1: |-
               {
-                "sharded": true,
-                "vindexes": {
-                  "hash": {
-                    "type": "hash"
-                  }
-                },
                 "tables": {
-                  "messages": {
-                    "column_vindexes": [
-                      {
-                        "column": "page",
-                        "name": "hash"
-                      }
-                    ]
-                  }
+                  "product": {},
+                  "customer": {},
+                  "corder": {}
                 }
               }
 
@@ -65,11 +66,6 @@ vttablet:
 
 pmm:
   enabled: false
-  client:
-    resources:
-  server:
-    resources:
 
 orchestrator:
   enabled: false
-  resources:

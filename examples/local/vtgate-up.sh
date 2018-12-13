@@ -18,7 +18,7 @@
 
 set -e
 
-cell='test'
+cell=${CELL:-'test'}
 web_port=15001
 grpc_port=15991
 mysql_server_port=15306
@@ -54,11 +54,17 @@ then
     optional_tls_args="-grpc_cert $cert_dir/server-cert.pem -grpc_key $cert_dir/server-key.pem -grpc_ca $cert_dir/ca-cert.pem"
 fi
 
-optional_auth_args=''
+optional_auth_args='-mysql_auth_server_impl none'
 if [ "$1" = "--enable-grpc-static-auth" ];
 then
 	  echo "Enabling Auth with static authentication in grpc"
     optional_auth_args='-grpc_auth_static_client_creds ./grpc_static_client_auth.json'
+fi
+
+if [ "$1" = "--enable-mysql-static-auth" ];
+then
+    echo "Enabling Auth with mysql static authentication"
+    optional_auth_args='-mysql_auth_server_static_file ./mysql_auth_server_static_creds.json'
 fi
 
 # Start vtgate.
@@ -71,7 +77,6 @@ $VTROOT/bin/vtgate \
   -grpc_port $grpc_port \
   -mysql_server_port $mysql_server_port \
   -mysql_server_socket_path $mysql_server_socket_path \
-  -mysql_auth_server_static_file "./mysql_auth_server_static_creds.json" \
   -cell $cell \
   -cells_to_watch $cell \
   -tablet_types_to_wait MASTER,REPLICA \
