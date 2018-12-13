@@ -102,6 +102,11 @@ func doTestGetSrvKeyspaceNames(
 	}
 }
 
+func TestFilteringServerGetSrvKeyspameNamesFiltersEverythingOut(t *testing.T) {
+	_, _, f := newFiltering(nil)
+	doTestGetSrvKeyspaceNames(t, f, stockCell, []string{}, nil)
+}
+
 func TestFilteringServerGetSrvKeyspaceNamesFiltersKeyspaces(t *testing.T) {
 	_, _, f := newFiltering(stockFilters)
 	doTestGetSrvKeyspaceNames(t, f, stockCell, stockFilters, nil)
