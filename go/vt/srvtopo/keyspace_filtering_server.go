@@ -39,6 +39,9 @@ var (
 // NewKeyspaceFilteringServer constructs a new server based on the provided
 // implementation that prevents the specified keyspaces from being exposed
 // to consumers of the new Server.
+//
+// A filtering server will not allow access to the topo.Server to prevent
+// updates that may corrupt the global VSchema keyspace.
 func NewKeyspaceFilteringServer(underlying Server, selectedKeyspaces []string) (Server, error) {
 	if underlying == nil {
 		return nil, ErrNilUnderlyingServer
@@ -60,6 +63,8 @@ type keyspaceFilteringServer struct {
 	selectKeyspaces map[string]bool
 }
 
+// GetTopoServer returns an error; filtering srvtopo.Server consumers may not
+// access the underlying topo.Server.
 func (ksf keyspaceFilteringServer) GetTopoServer() (*topo.Server, error) {
 	return nil, ErrTopoServerNotAvailable
 }
