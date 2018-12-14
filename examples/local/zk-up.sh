@@ -18,6 +18,8 @@
 
 set -e
 
+cell=${CELL:-'test'}
+
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
@@ -50,14 +52,14 @@ done
 
 echo "Started zk servers."
 
-# Add the CellInfo description for the 'test' cell.
+# Add the CellInfo description for the $CELL cell.
 # If the node already exists, it's fine, means we used existing data.
 set +e
 # shellcheck disable=SC2086
 $VTROOT/bin/vtctl $TOPOLOGY_FLAGS AddCellInfo \
-  -root /vitess/test \
+  -root /vitess/$cell \
   -server_address $ZK_SERVER \
-  test
+  $cell
 set -e
 
 echo "Configured zk servers."

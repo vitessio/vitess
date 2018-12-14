@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2018 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that stops the mysqld and vttablet instances
-# created by sharded-vttablet-up.sh
+# This is a convenience script to run mysql client against the local vtgate.
 
-script_root=`dirname "${BASH_SOURCE}"`
-
-UID_BASE=200 $script_root/vttablet-down.sh "$@"
-UID_BASE=300 $script_root/vttablet-down.sh "$@"
-
+mysql -h 127.0.0.1 -P 15306 -u mysql_user
