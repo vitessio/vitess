@@ -16,12 +16,6 @@
 
 package io.vitess.jdbc;
 
-import java.sql.DriverPropertyInfo;
-import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.Properties;
-
-import io.vitess.util.Constants.ZeroDateTimeBehavior;
 import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -29,11 +23,20 @@ import org.mockito.Mockito;
 import io.vitess.proto.Query;
 import io.vitess.proto.Topodata;
 import io.vitess.util.Constants;
+import io.vitess.util.Constants.ZeroDateTimeBehavior;
+
+import java.sql.DriverPropertyInfo;
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.Properties;
 
 import static io.vitess.util.Constants.DEFAULT_EXECUTE_TYPE;
 import static io.vitess.util.Constants.DEFAULT_INCLUDED_FIELDS;
 import static io.vitess.util.Constants.DEFAULT_TABLET_TYPE;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;

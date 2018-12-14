@@ -16,6 +16,14 @@
 
 package io.vitess.jdbc;
 
+import io.vitess.client.Context;
+import io.vitess.client.VTGateConnection;
+import io.vitess.client.cursor.Cursor;
+import io.vitess.client.cursor.CursorWithError;
+import io.vitess.mysql.DateTime;
+import io.vitess.util.Constants;
+import io.vitess.util.StringUtils;
+
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -48,14 +56,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-
-import io.vitess.client.Context;
-import io.vitess.client.VTGateConnection;
-import io.vitess.client.cursor.Cursor;
-import io.vitess.client.cursor.CursorWithError;
-import io.vitess.mysql.DateTime;
-import io.vitess.util.Constants;
-import io.vitess.util.StringUtils;
 
 /**
  * Created by harshit.gangal on 25/01/16.

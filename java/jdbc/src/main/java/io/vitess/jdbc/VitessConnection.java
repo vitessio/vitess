@@ -16,6 +16,14 @@
 
 package io.vitess.jdbc;
 
+import io.vitess.client.Context;
+import io.vitess.client.VTGateConnection;
+import io.vitess.client.VTSession;
+import io.vitess.proto.Query;
+import io.vitess.util.CommonUtils;
+import io.vitess.util.Constants;
+import io.vitess.util.MysqlDefs;
+
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
@@ -41,14 +49,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.Executor;
-
-import io.vitess.client.Context;
-import io.vitess.client.VTGateConnection;
-import io.vitess.client.VTSession;
-import io.vitess.proto.Query;
-import io.vitess.util.CommonUtils;
-import io.vitess.util.Constants;
-import io.vitess.util.MysqlDefs;
 
 /**
  * Created by harshit.gangal on 23/01/16.

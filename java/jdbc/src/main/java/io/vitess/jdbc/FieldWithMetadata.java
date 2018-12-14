@@ -17,15 +17,16 @@
 package io.vitess.jdbc;
 
 import com.google.common.annotations.VisibleForTesting;
-import java.sql.SQLException;
-import java.sql.Types;
-import java.util.regex.PatternSyntaxException;
 
 import io.vitess.proto.Query;
 import io.vitess.util.Constants;
 import io.vitess.util.MysqlDefs;
 import io.vitess.util.StringUtils;
 import io.vitess.util.charset.CharsetMapping;
+
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.regex.PatternSyntaxException;
 
 public class FieldWithMetadata {
 

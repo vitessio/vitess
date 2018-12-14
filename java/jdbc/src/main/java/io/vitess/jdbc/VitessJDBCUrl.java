@@ -16,6 +16,9 @@
 
 package io.vitess.jdbc;
 
+import io.vitess.util.Constants;
+import io.vitess.util.StringUtils;
+
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.sql.SQLException;
@@ -25,9 +28,6 @@ import java.util.Properties;
 import java.util.StringTokenizer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import io.vitess.util.Constants;
-import io.vitess.util.StringUtils;
 
 /**
  * VitessJDBCUrl is responsible for parsing a driver URL and Properties object,
