@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2018 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,17 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that stops the ZooKeeper servers started by zk-up.sh.
+# this script brings down the tablets for customer/0 keyspace
 
 set -e
 
-script_root=$(dirname "${BASH_SOURCE[0]}")
+# shellcheck disable=SC2128
+script_root=$(dirname "${BASH_SOURCE}")
 
-# shellcheck source=./env.sh
-# shellcheck disable=SC1091
-source "${script_root}/env.sh"
+CELL=zone1 UID_BASE=200 "$script_root/vttablet-down.sh"
 
-# Stop etcd servers.
-echo "Stopping etcd servers..."
-ETCD_VERSION=$(cat "$VTROOT/dist/etcd/.installed_version")
-kill -9 "$(pgrep -f "dist/etcd/etcd-${ETCD_VERSION}-linux-amd64/etcd")"
+disown -a

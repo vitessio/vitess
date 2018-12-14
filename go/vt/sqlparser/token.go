@@ -393,6 +393,7 @@ var keywords = map[string]int{
 	"vitess_shards":       VITESS_SHARDS,
 	"vitess_tablets":      VITESS_TABLETS,
 	"vitess_target":       VITESS_TARGET,
+	"vschema":             VSCHEMA,
 	"vschema_tables":      VSCHEMA_TABLES,
 	"warnings":            WARNINGS,
 	"when":                WHEN,

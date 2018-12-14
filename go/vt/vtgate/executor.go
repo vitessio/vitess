@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -42,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
@@ -50,7 +50,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -338,8 +337,13 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 		execStart := time.Now()
 		logStats.PlanTime = execStart.Sub(logStats.StartTime)
 		switch ddl.Action {
-		case sqlparser.CreateVindexStr, sqlparser.AddColVindexStr, sqlparser.DropColVindexStr:
-			err := e.handleVindexDDL(ctx, safeSession, dest, destKeyspace, destTabletType, ddl, logStats)
+		case sqlparser.CreateVindexStr,
+			sqlparser.AddVschemaTableStr,
+			sqlparser.DropVschemaTableStr,
+			sqlparser.AddColVindexStr,
+			sqlparser.DropColVindexStr:
+
+			err := e.handleVSchemaDDL(ctx, safeSession, dest, destKeyspace, destTabletType, ddl, logStats)
 			logStats.ExecuteTime = time.Since(execStart)
 			return &sqltypes.Result{}, err
 		default:
@@ -366,7 +370,7 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 	return result, err
 }
 
-func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, ddl *sqlparser.DDL, logStats *LogStats) error {
+func (e *Executor) handleVSchemaDDL(ctx context.Context, safeSession *SafeSession, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, ddl *sqlparser.DDL, logStats *LogStats) error {
 	vschema := e.vm.GetCurrentSrvVschema()
 	if vschema == nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
@@ -386,129 +390,20 @@ func (e *Executor) handleVindexDDL(ctx context.Context, safeSession *SafeSession
 	if ksName == "" {
 		ksName = destKeyspace
 	}
-
 	if ksName == "" {
 		return errNoKeyspace
 	}
 
 	ks, _ := vschema.Keyspaces[ksName]
-	if ks == nil {
-		ks = new(vschemapb.Keyspace)
-		vschema.Keyspaces[ksName] = ks
+	ks, err := topotools.ApplyVSchemaDDL(ksName, ks, ddl)
+
+	if err != nil {
+		return err
 	}
 
-	if ks.Tables == nil {
-		ks.Tables = map[string]*vschemapb.Table{}
-	}
+	vschema.Keyspaces[ksName] = ks
 
-	if ks.Vindexes == nil {
-		ks.Vindexes = map[string]*vschemapb.Vindex{}
-	}
-
-	var tableName string
-	var table *vschemapb.Table
-	if !ddl.Table.IsEmpty() {
-		tableName = ddl.Table.Name.String()
-		table, _ = ks.Tables[tableName]
-	}
-
-	switch ddl.Action {
-	case sqlparser.CreateVindexStr:
-		name := ddl.VindexSpec.Name.String()
-		if _, ok := ks.Vindexes[name]; ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s already exists in keyspace %s", name, destKeyspace)
-		}
-		owner, params := ddl.VindexSpec.ParseParams()
-		ks.Vindexes[name] = &vschemapb.Vindex{
-			Type:   ddl.VindexSpec.Type.String(),
-			Params: params,
-			Owner:  owner,
-		}
-
-		return e.vm.UpdateVSchema(ctx, destKeyspace, vschema)
-	case sqlparser.AddColVindexStr:
-		// Support two cases:
-		//
-		// 1. The vindex type / params / owner are specified. If the
-		//    named vindex doesn't exist, create it. If it does exist,
-		//    require the parameters to match.
-		//
-		// 2. The vindex type is not specified. Make sure the vindex
-		//    already exists.
-		spec := ddl.VindexSpec
-		name := spec.Name.String()
-		if !spec.Type.IsEmpty() {
-			owner, params := spec.ParseParams()
-			if vindex, ok := ks.Vindexes[name]; ok {
-				if vindex.Type != spec.Type.String() {
-					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with type %s not %s", name, vindex.Type, spec.Type.String())
-				}
-				if vindex.Owner != owner {
-					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with owner %s not %s", name, vindex.Owner, owner)
-				}
-				if (len(vindex.Params) != 0 || len(params) != 0) && !reflect.DeepEqual(vindex.Params, params) {
-					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s defined with different parameters", name)
-				}
-			} else {
-				ks.Vindexes[name] = &vschemapb.Vindex{
-					Type:   spec.Type.String(),
-					Params: params,
-					Owner:  owner,
-				}
-			}
-		} else {
-			if _, ok := ks.Vindexes[name]; !ok {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s does not exist in keyspace %s", name, destKeyspace)
-			}
-		}
-
-		// If this is the first vindex being defined on the table, create
-		// the empty table record
-		if table == nil {
-			table = &vschemapb.Table{
-				ColumnVindexes: make([]*vschemapb.ColumnVindex, 0, 4),
-			}
-		}
-
-		// Make sure there isn't already a vindex with the same name on
-		// this table.
-		for _, vindex := range table.ColumnVindexes {
-			if vindex.Name == name {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s already defined on table %s", name, tableName)
-			}
-		}
-
-		columns := make([]string, len(ddl.VindexCols), len(ddl.VindexCols))
-		for i, col := range ddl.VindexCols {
-			columns[i] = col.String()
-		}
-		table.ColumnVindexes = append(table.ColumnVindexes, &vschemapb.ColumnVindex{
-			Name:    name,
-			Columns: columns,
-		})
-		ks.Tables[tableName] = table
-
-		return e.vm.UpdateVSchema(ctx, destKeyspace, vschema)
-	case sqlparser.DropColVindexStr:
-		spec := ddl.VindexSpec
-		name := spec.Name.String()
-		if table == nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s.%s not defined in vschema", ksName, tableName)
-		}
-
-		for i, colVindex := range table.ColumnVindexes {
-			if colVindex.Name == name {
-				table.ColumnVindexes = append(table.ColumnVindexes[:i], table.ColumnVindexes[i+1:]...)
-				if len(table.ColumnVindexes) == 0 {
-					delete(ks.Tables, tableName)
-				}
-				return e.vm.UpdateVSchema(ctx, destKeyspace, vschema)
-			}
-		}
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s not defined in table %s.%s", name, ksName, tableName)
-	}
-
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected vindex ddl operation %s", ddl.Action)
+	return e.vm.UpdateVSchema(ctx, ksName, vschema)
 }
 
 func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
@@ -931,7 +826,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil
-	case sqlparser.KeywordString(sqlparser.VSCHEMA_TABLES):
+	case "vschema tables":
 		if destKeyspace == "" {
 			return nil, errNoKeyspace
 		}
@@ -956,7 +851,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil
-	case sqlparser.KeywordString(sqlparser.VINDEXES):
+	case "vschema vindexes":
 		vschema := e.vm.GetCurrentSrvVschema()
 		if vschema == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")

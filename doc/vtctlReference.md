@@ -1119,8 +1119,11 @@ Applies the VTGate routing schema to the provided keyspace. Shows the result aft
 | :-------- | :--------- | :--------- |
 | cells | string | If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set. |
 | skip_rebuild | Boolean | If set, do no rebuild the SrvSchema objects. |
+| dry-run | Boolean | Shows the proposed change without executing it |
 | vschema | string | Identifies the VTGate routing schema |
 | vschema_file | string | Identifies the VTGate routing schema file |
+| sql | string | Identifies a VSchema DDL SQL statement |
+| sql_file | string | Identifies a VSchema DDL SQL statement |
 
 
 #### Arguments
