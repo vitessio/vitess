@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -40,7 +41,16 @@ import (
 var (
 	implementation       = flag.String("gateway_implementation", "discoverygateway", "The implementation of gateway")
 	initialTabletTimeout = flag.Duration("gateway_initial_tablet_timeout", 30*time.Second, "At startup, the gateway will wait up to that duration to get one tablet per keyspace/shard/tablettype")
+
+	// KeyspacesToWatch - if provided this specifies which keyspaces should be
+	// visible to a vtgate. By default the vtgate will allow access to any
+	// keyspace.
+	KeyspacesToWatch flagutil.StringListValue
 )
+
+func init() {
+	flag.Var(&KeyspacesToWatch, "keyspaces_to_watch", "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema")
+}
 
 // A Gateway is the query processing module for each shard,
 // which is used by ScatterConn.

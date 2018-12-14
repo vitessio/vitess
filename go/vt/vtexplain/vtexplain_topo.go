@@ -55,8 +55,8 @@ func (et *ExplainTopo) getSrvVSchema() *vschemapb.SrvVSchema {
 }
 
 // GetTopoServer is part of the srvtopo.Server interface
-func (et *ExplainTopo) GetTopoServer() *topo.Server {
-	return nil
+func (et *ExplainTopo) GetTopoServer() (*topo.Server, error) {
+	return nil, nil
 }
 
 // GetSrvKeyspaceNames is part of the srvtopo.Server interface.

@@ -193,6 +193,17 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 		log.Fatalf("'-disable_local_gateway' cannot be specified if 'l2vtgate_addrs' is also empty, otherwise this vtgate has no backend")
 	}
 
+	// If we want to filter keyspaces replace the srvtopo.Server with a
+	// filtering server
+	if len(gateway.KeyspacesToWatch) > 0 {
+		log.Infof("Keyspace filtering enabled, selecting %v", gateway.KeyspacesToWatch)
+		var err error
+		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, gateway.KeyspacesToWatch)
+		if err != nil {
+			log.Fatalf("Unable to construct SrvTopo server: %v", err.Error())
+		}
+	}
+
 	tc := NewTxConn(gw, getTxMode())
 	// ScatterConn depends on TxConn to perform forced rollbacks.
 	sc := NewScatterConn("VttabletCall", tc, gw, hc)
