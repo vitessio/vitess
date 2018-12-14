@@ -87,8 +87,13 @@ type discoveryGateway struct {
 func createDiscoveryGateway(hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int) Gateway {
 	var topoServer *topo.Server
 	if serv != nil {
-		topoServer = serv.GetTopoServer()
+		var err error
+		topoServer, err = serv.GetTopoServer()
+		if err != nil {
+			log.Exitf("Unable to create new discoverygateway: %v", err)
+		}
 	}
+
 	dg := &discoveryGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(topoServer, cell),
@@ -111,6 +116,10 @@ func createDiscoveryGateway(hc discovery.HealthCheck, serv srvtopo.Server, cell 
 		}
 		var tr discovery.TabletRecorder = dg.hc
 		if len(tabletFilters) > 0 {
+			if len(KeyspacesToWatch) > 0 {
+				log.Exitf("Only one of -keyspaces_to_watch and -tablet_filters may be specified at a time")
+			}
+
 			fbs, err := discovery.NewFilterByShard(dg.hc, tabletFilters)
 			if err != nil {
 				log.Exitf("Cannot parse tablet_filters parameter: %v", err)

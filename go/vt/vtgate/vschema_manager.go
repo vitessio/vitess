@@ -122,22 +122,25 @@ func (vm *VSchemaManager) watchSrvVSchema(ctx context.Context, cell string) {
 // the given keyspace is updated in the global topo, and the full SrvVSchema
 // is updated in all known cells.
 func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error {
-	topo := vm.e.serv.GetTopoServer()
-
-	ks := vschema.Keyspaces[ksName]
-	err := topo.SaveVSchema(ctx, ksName, ks)
+	topoServer, err := vm.e.serv.GetTopoServer()
 	if err != nil {
 		return err
 	}
 
-	cells, err := vm.e.serv.GetTopoServer().GetKnownCells(ctx)
+	ks := vschema.Keyspaces[ksName]
+	err = topoServer.SaveVSchema(ctx, ksName, ks)
+	if err != nil {
+		return err
+	}
+
+	cells, err := topoServer.GetKnownCells(ctx)
 	if err != nil {
 		return err
 	}
 
 	// even if one cell fails, continue to try the others
 	for _, cell := range cells {
-		cellErr := vm.e.serv.GetTopoServer().UpdateSrvVSchema(ctx, cell, vschema)
+		cellErr := topoServer.UpdateSrvVSchema(ctx, cell, vschema)
 		if cellErr != nil {
 			err = cellErr
 			log.Errorf("error updating vschema in cell %s: %v", cell, cellErr)
