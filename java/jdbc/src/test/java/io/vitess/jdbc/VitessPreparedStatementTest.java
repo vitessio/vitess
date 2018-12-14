@@ -16,6 +16,28 @@
 
 package io.vitess.jdbc;
 
+import com.google.common.collect.ImmutableMap;
+import org.junit.Assert;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Matchers;
+import org.mockito.Mockito;
+import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
+
+import io.vitess.client.Context;
+import io.vitess.client.SQLFuture;
+import io.vitess.client.VTGateConnection;
+import io.vitess.client.VTSession;
+import io.vitess.client.cursor.Cursor;
+import io.vitess.client.cursor.CursorWithError;
+import io.vitess.mysql.DateTime;
+import io.vitess.proto.Query;
+import io.vitess.proto.Vtrpc;
+import io.vitess.util.Constants;
+
+import javax.sql.rowset.serial.SerialClob;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -32,30 +54,6 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
-
-import javax.sql.rowset.serial.SerialClob;
-
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Matchers;
-import org.mockito.Mockito;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
-
-import com.google.common.collect.ImmutableMap;
-
-import io.vitess.client.Context;
-import io.vitess.client.SQLFuture;
-import io.vitess.client.VTGateConnection;
-import io.vitess.client.VTSession;
-import io.vitess.client.cursor.Cursor;
-import io.vitess.client.cursor.CursorWithError;
-import io.vitess.mysql.DateTime;
-import io.vitess.proto.Query;
-import io.vitess.proto.Vtrpc;
-import io.vitess.util.Constants;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;

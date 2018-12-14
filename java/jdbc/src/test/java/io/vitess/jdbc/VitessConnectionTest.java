@@ -16,14 +16,6 @@
 
 package io.vitess.jdbc;
 
-import java.lang.reflect.Field;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.Properties;
-
-import io.vitess.proto.Query.ExecuteOptions.TransactionIsolation;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
@@ -32,11 +24,26 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import io.vitess.client.VTSession;
 import io.vitess.proto.Query;
+import io.vitess.proto.Query.ExecuteOptions.TransactionIsolation;
 import io.vitess.proto.Topodata;
 import io.vitess.util.Constants;
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+import java.lang.reflect.Field;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Properties;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Created by harshit.gangal on 19/01/16.
