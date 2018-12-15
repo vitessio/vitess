@@ -498,11 +498,28 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 			return agg, nil
 		}
 	}
-	agg, ok := e.aggregates[target.Cell]
-	if !ok {
+	targetRegion := tc.getRegionByCell(target.Cell)
+	regionAggregateStats := &querypb.AggregateStats{SecondsBehindMasterMin: math.MaxUint32}
+	regionAggrFound := false
+	for cell, agg := range e.aggregates {
+		cellRegion := tc.getRegionByCell(cell)
+		if cellRegion == targetRegion {
+			regionAggrFound = true
+			regionAggregateStats.HealthyTabletCount += agg.HealthyTabletCount
+			regionAggregateStats.UnhealthyTabletCount += agg.UnhealthyTabletCount
+			if agg.SecondsBehindMasterMin < regionAggregateStats.SecondsBehindMasterMin {
+				regionAggregateStats.SecondsBehindMasterMin = agg.SecondsBehindMasterMin
+			}
+			if regionAggregateStats.SecondsBehindMasterMax > agg.SecondsBehindMasterMax {
+				regionAggregateStats.SecondsBehindMasterMax = agg.SecondsBehindMasterMax
+			}
+		}
+	}
+	if !regionAggrFound {
 		return nil, topo.NewError(topo.NoNode, topotools.TargetIdent(target))
 	}
-	return agg, nil
+	return regionAggregateStats, nil
+
 }
 
 // GetMasterCell is part of the TargetStatsListener interface.
