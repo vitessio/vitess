@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/netutil"
@@ -273,7 +274,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	// First build and send the server handshake packet.
 	salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig != nil)
 	if err != nil {
-		log.Errorf("Cannot send HandshakeV10 packet to %s: %v", c, err)
+		if err != io.EOF {
+			log.Errorf("Cannot send HandshakeV10 packet to %s: %v", c, err)
+		}
 		return
 	}
 
@@ -547,6 +550,12 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 	}
 
 	if err := c.writeEphemeralPacket(); err != nil {
+		if strings.HasSuffix(err.Error(), "write: connection reset by peer") {
+			return nil, io.EOF
+		}
+		if strings.HasSuffix(err.Error(), "write: broken pipe") {
+			return nil, io.EOF
+		}
 		return nil, err
 	}
 
