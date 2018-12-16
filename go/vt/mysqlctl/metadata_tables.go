@@ -36,7 +36,7 @@ const sqlCreateShardMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.shard_metada
   PRIMARY KEY (name)
   ) ENGINE=InnoDB`
 
-// populateMetadataTables creates and fills the _vt.local_metadata table and
+// PopulateMetadataTables creates and fills the _vt.local_metadata table and
 // creates _vt.shard_metadata table. _vt.local_metadata table is
 // a per-tablet table that is never replicated. This allows queries
 // against local_metadata to return different values on different tablets,
@@ -46,7 +46,7 @@ const sqlCreateShardMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.shard_metada
 // created here to make it easier to create it on databases that were running
 // old version of Vitess, or databases that are getting converted to run under
 // Vitess.
-func populateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string) error {
+func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string) error {
 	log.Infof("Populating _vt.local_metadata table...")
 
 	// Get a non-pooled DBA connection.
