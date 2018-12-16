@@ -60,7 +60,7 @@ spec:
       containers:
         - name: vtctld
           image: vitess/vtctld:{{$vitessTag}}
-          ImagePullPolicy: IfNotPresent
+          imagePullPolicy: IfNotPresent
           readinessProbe:
             httpGet:
               path: /debug/health

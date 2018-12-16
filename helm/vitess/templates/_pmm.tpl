@@ -138,7 +138,7 @@ spec:
 
 - name: "pmm-client"
   image: "vitess/pmm-client:{{ $pmm.pmmTag }}"
-  ImagePullPolicy: IfNotPresent
+  imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
       mountPath: "/vtdataroot"
@@ -219,7 +219,7 @@ spec:
 
 - name: pmm-client-metrics-log
   image: vitess/logtail:latest
-  ImagePullPolicy: IfNotPresent
+  imagePullPolicy: IfNotPresent
   env:
   - name: TAIL_FILEPATH
     value: /vtdataroot/pmm/pmm-mysql-metrics-42002.log
