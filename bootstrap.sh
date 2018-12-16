@@ -307,7 +307,7 @@ fi
 case "$MYSQL_FLAVOR" in
   "MySQL56")
     myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
-    [[ "$myversion" =~ Distrib\ 5\.[67] ]] || fail "Couldn't find MySQL 5.6+ in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
+    [[ "$myversion" =~ Distrib\ 5\.[67] || "$myversion" =~ Ver\ 8\. ]] || fail "Couldn't find MySQL 5.6+ in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
     echo "Found MySQL 5.6+ installation in $VT_MYSQL_ROOT."
     ;;
 
