@@ -29,6 +29,15 @@ metadata:
 spec:
   backoffLimit: 1
   template:
+    metadata:
+      labels:
+        app: vitess
+        component: vttablet
+        cell: {{ $cellClean | quote }}
+        keyspace: {{ $keyspaceClean | quote }}
+        shard: {{ $shardClean | quote }}
+        initShardMasterJob: "true"
+
     spec:
       restartPolicy: OnFailure
       containers:
@@ -123,6 +132,15 @@ metadata:
 spec:
   backoffLimit: 1
   template:
+    metadata:
+      labels:
+        app: vitess
+        component: vttablet
+        cell: {{ $cellClean | quote }}
+        keyspace: {{ $keyspaceClean | quote }}
+        shard: {{ $shardClean | quote }}
+        copySchemaShardJob: "true"
+
     spec:
       restartPolicy: OnFailure
       containers:

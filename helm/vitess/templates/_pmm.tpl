@@ -133,7 +133,8 @@ spec:
 ###################################
 {{ define "cont-pmm-client" -}}
 {{- $pmm := index . 0 -}}
-{{- $namespace := index . 1 }}
+{{- $namespace := index . 1 -}}
+{{- $keyspace := index . 2 }}
 
 - name: "pmm-client"
   image: "vitess/pmm-client:{{ $pmm.pmmTag }}"
@@ -141,6 +142,11 @@ spec:
   volumeMounts:
     - name: vtdataroot
       mountPath: "/vtdataroot"
+{{ if $keyspace.pmm }}{{if $keyspace.pmm.config }}
+    - name: config
+      mountPath: "/vt-pmm-config"
+{{ end }}{{ end }}
+
   ports:
     - containerPort: 42001
       name: query-data
@@ -173,10 +179,23 @@ spec:
       ln -s /vtdataroot/pmm/init.d /etc/init.d
       ln -s /vtdataroot/pmm/pmm-mysql-metrics-42002.log /var/log/pmm-mysql-metrics-42002.log
 
-      # workaround for when pod ips change
       if [ ! -z "$FIRST_RUN" ]; then
         cp -r /usr/local/percona_tmp/* /vtdataroot/pmm/percona || :
         cp -r /etc/init.d_tmp/* /vtdataroot/pmm/init.d || :
+      fi
+
+{{ if $keyspace.pmm }}{{if $keyspace.pmm.config }}
+      # link all the configmap files into their expected file locations
+      for filename in /vt-pmm-config/*; do
+        DEST_FILE=/vtdataroot/pmm/percona/pmm-client/$(basename "$filename")
+        rm -f $DEST_FILE
+        ln -s "$filename" $DEST_FILE
+      done
+{{ end }}{{ end }}
+
+      # if this doesn't return an error, pmm-admin has already been configured
+      # and we want to stop/remove running services, in case pod ips have changed
+      if pmm-admin info; then
         pmm-admin stop --all
         pmm-admin rm --all
       fi
@@ -191,6 +210,7 @@ spec:
       done
 
       # creates systemd services
+      pmm-admin add linux:metrics
       pmm-admin add mysql:metrics --user root --socket /vtdataroot/tabletdata/mysql.sock --force
       pmm-admin add mysql:queries --user root --socket /vtdataroot/tabletdata/mysql.sock --force --query-source=perfschema
 
