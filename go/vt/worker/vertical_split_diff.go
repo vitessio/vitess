@@ -124,7 +124,7 @@ func (vsdw *VerticalSplitDiffWorker) Run(ctx context.Context) error {
 	cerr := vsdw.cleaner.CleanUp(vsdw.wr)
 	if cerr != nil {
 		if err != nil {
-			vsdw.wr.Logger().Errorf("CleanUp failed in addition to job error: %v", cerr)
+			vsdw.wr.Logger().Errorf2(cerr, "CleanUp failed in addition to job error")
 		} else {
 			err = cerr
 		}
@@ -418,7 +418,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := vterrors.Wrap(err, "TableScan(source) failed")
 				vsdw.markAsWillFail(rec, newErr)
-				vsdw.wr.Logger().Errorf("%v", newErr)
+				vsdw.wr.Logger().Error(newErr)
 				return
 			}
 			defer sourceQueryResultReader.Close(ctx)
@@ -427,7 +427,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := vterrors.Wrap(err, "TableScan(destination) failed")
 				vsdw.markAsWillFail(rec, newErr)
-				vsdw.wr.Logger().Errorf("%v", newErr)
+				vsdw.wr.Logger().Error(newErr)
 				return
 			}
 			defer destinationQueryResultReader.Close(ctx)
@@ -436,18 +436,18 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := vterrors.Wrap(err, "NewRowDiffer() failed")
 				vsdw.markAsWillFail(rec, newErr)
-				vsdw.wr.Logger().Errorf("%v", newErr)
+				vsdw.wr.Logger().Error(newErr)
 				return
 			}
 
 			report, err := differ.Go(vsdw.wr.Logger())
 			if err != nil {
-				vsdw.wr.Logger().Errorf("Differ.Go failed: %v", err)
+				vsdw.wr.Logger().Errorf2(err, "Differ.Go failed")
 			} else {
 				if report.HasDifferences() {
-					err := fmt.Errorf("Table %v has differences: %v", tableDefinition.Name, report.String())
+					err := fmt.Errorf("table %v has differences: %v", tableDefinition.Name, report.String())
 					vsdw.markAsWillFail(rec, err)
-					vsdw.wr.Logger().Errorf("%v", err)
+					vsdw.wr.Logger().Error(err)
 				} else {
 					vsdw.wr.Logger().Infof("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS)
 				}

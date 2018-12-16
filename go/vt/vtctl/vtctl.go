@@ -2206,7 +2206,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 
 	b, err := json2.MarshalIndentPB(vs, "  ")
 	if err != nil {
-		wr.Logger().Errorf("Failed to marshal VSchema for display: %v", err)
+		wr.Logger().Errorf2(err, "Failed to marshal VSchema for display")
 	} else {
 		wr.Logger().Printf("New VSchema object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", b)
 	}
