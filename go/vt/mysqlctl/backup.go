@@ -284,7 +284,7 @@ func Backup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.
 	if usable {
 		finishErr = bh.EndBackup(ctx)
 	} else {
-		logger.Errorf("backup is not usable, aborting it: %v", err)
+		logger.Errorf2(err, "backup is not usable, aborting it")
 		finishErr = bh.AbortBackup(ctx)
 	}
 	if err != nil {
@@ -292,7 +292,7 @@ func Backup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.
 			// We have a backup error, and we also failed
 			// to finish the backup: just log the backup
 			// finish error, return the backup error.
-			logger.Errorf("failed to finish backup: %v", finishErr)
+			logger.Errorf2(finishErr, "failed to finish backup: %v")
 		}
 		return err
 	}
@@ -493,7 +493,7 @@ func backupFile(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logu
 		if rerr := wc.Close(); rerr != nil {
 			if err != nil {
 				// We already have an error, just log this one.
-				logger.Errorf("failed to close file %v: %v", name, rerr)
+				logger.Errorf2(rerr, "failed to close file %v", name)
 			} else {
 				err = rerr
 			}

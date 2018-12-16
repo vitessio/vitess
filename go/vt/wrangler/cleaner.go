@@ -93,7 +93,7 @@ func (cleaner *Cleaner) CleanUp(wr *Wrangler) error {
 		if err != nil {
 			helper.err = err
 			rec.RecordError(err)
-			wr.Logger().Errorf("action %v failed on %v: %v", actionReference.name, actionReference.target, err)
+			wr.Logger().Errorf2(err, "action %v failed on %v", actionReference.name, actionReference.target)
 		} else {
 			wr.Logger().Infof("action %v successful on %v", actionReference.name, actionReference.target)
 		}
