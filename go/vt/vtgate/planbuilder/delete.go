@@ -56,27 +56,27 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 	if hasSubquery(del) {
 		return nil, errors.New("unsupported: subqueries in sharded DML")
 	}
-	var tableName sqlparser.TableName
-	for t := range pb.st.tables {
-		tableName = t
+	var vindexTable *vindexes.Table
+	for _, tval := range pb.st.tables {
+		vindexTable = tval.vindexTable
 	}
-	table, _, destTabletType, destTarget, err := vschema.FindTable(tableName)
-	if err != nil {
-		return nil, err
+	edel.Table = vindexTable
+	if edel.Table == nil {
+		return nil, errors.New("internal error: table.vindexTable is mysteriously nil")
 	}
-	edel.Table = table
+	var err error
 
 	directives := sqlparser.ExtractCommentDirectives(del.Comments)
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
 		edel.MultiShardAutocommit = true
 	}
 
-	if destTarget != nil {
-		if destTabletType != topodatapb.TabletType_MASTER {
+	if rb.ERoute.TargetDestination != nil {
+		if rb.ERoute.TargetTabletType != topodatapb.TabletType_MASTER {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: DELETE statement with a replica target")
 		}
 		edel.Opcode = engine.DeleteByDestination
-		edel.TargetDestination = destTarget
+		edel.TargetDestination = rb.ERoute.TargetDestination
 		return edel, nil
 	}
 	edel.Vindex, edel.Values, err = getDMLRouting(del.Where, edel.Table)
