@@ -37,8 +37,7 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) {
 
 		ki, err := fromTS.GetKeyspace(ctx, keyspace)
 		if err != nil {
-			log.Errorf("GetKeyspace(%v): %v", keyspace, err)
-			continue
+			log.Fatalf("GetKeyspace(%v): %v", keyspace, err)
 		}
 
 		if err := toTS.CreateKeyspace(ctx, keyspace, ki.Keyspace); err != nil {
