@@ -347,7 +347,12 @@ func benchmarkCellsGetAggregateStats(i int, b *testing.B) {
 	cellsToregions := make(map[string]string)
 	for j := 0; j < i; j++ {
 		cell := fmt.Sprintf("cell%v", j)
-		cellsToregions[cell] = "local"
+		// let's assume that there are few local cells
+		if j <= 4 {
+			cellsToregions[cell] = "local"
+		} else {
+			cellsToregions[cell] = "remote"
+		}
 	}
 
 	topo.UpdateCellsToRegionsForTests(cellsToregions)
