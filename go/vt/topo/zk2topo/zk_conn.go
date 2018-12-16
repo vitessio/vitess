@@ -31,7 +31,6 @@ import (
 	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -307,11 +306,7 @@ func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 
 // dialZk dials the server, and waits until connection.
 func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error) {
-	servers, err := resolveZkAddr(addr)
-	if err != nil {
-		return nil, nil, err
-	}
-
+	servers := strings.Split(addr, ",")
 	options := zk.WithDialer(net.DialTimeout)
 	// If TLS is enabled use a TLS enabled dialer option
 	if *certPath != "" && *keyPath != "" {
@@ -375,27 +370,4 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 			}
 		}
 	}
-}
-
-// resolveZkAddr takes a comma-separated list of host:port addresses,
-// and resolves the host to replace it with the IP address.
-// If a resolution fails, the host is skipped.
-// If no host can be resolved, an error is returned.
-// This is different from the Zookeeper library, that insists on resolving
-// *all* hosts successfully before it starts.
-func resolveZkAddr(zkAddr string) ([]string, error) {
-	parts := strings.Split(zkAddr, ",")
-	resolved := make([]string, 0, len(parts))
-	for _, part := range parts {
-		// The Zookeeper client cannot handle IPv6 addresses before version 3.4.x.
-		if r, err := netutil.ResolveIPv4Addrs(part); err != nil {
-			log.Warningf("cannot resolve %v, will not use it: %v", part, err)
-		} else {
-			resolved = append(resolved, r...)
-		}
-	}
-	if len(resolved) == 0 {
-		return nil, fmt.Errorf("no valid address found in %v", zkAddr)
-	}
-	return resolved, nil
 }
