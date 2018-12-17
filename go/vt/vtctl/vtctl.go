@@ -335,6 +335,9 @@ var commands = []commandGroup{
 			{"ListAllTablets", commandListAllTablets,
 				"<cell name>",
 				"Lists all tablets in an awk-friendly way."},
+			{"ListAllTabletsAllCells", commandListAllTabletsAllCells,
+				"",
+				"Lists all tablets in all cells an awk-friendly way."},
 			{"ListTablets", commandListTablets,
 				"<tablet alias> ...",
 				"Lists specified tablets in an awk-friendly way."},
@@ -1793,6 +1796,20 @@ func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		log.Warningf("action Validate doesn't take any parameter any more")
 	}
 	return wr.Validate(ctx, *pingTablets)
+}
+
+func commandListAllTabletsAllCells(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cells, err := wr.TopoServer().GetKnownCells(ctx)
+	if err != nil {
+		return err
+	}
+	for _, cell := range cells {
+		err := dumpAllTablets(ctx, wr, cell)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
