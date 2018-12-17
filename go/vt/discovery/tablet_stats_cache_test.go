@@ -27,8 +27,8 @@ import (
 
 // TestTabletStatsCache tests the functionality of the TabletStatsCache class.
 func TestTabletStatsCache(t *testing.T) {
-	defer topo.UpdateCellsToRegionsForTests(map[string]string{})
-	topo.UpdateCellsToRegionsForTests(map[string]string{
+	defer topo.SetRegionMap(map[string]string{})
+	topo.SetRegionMap(map[string]string{
 		"cell":  "region1",
 		"cell1": "region1",
 		"cell2": "region2",

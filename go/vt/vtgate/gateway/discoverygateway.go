@@ -109,6 +109,16 @@ func createDiscoveryGateway(hc discovery.HealthCheck, serv srvtopo.Server, cell 
 	// We set sendDownEvents=true because it's required by TabletStatsCache.
 	hc.SetListener(dg, true /* sendDownEvents */)
 
+	// Resolve the cell to region mapping at initialization time before
+	// loading any of the tablets.
+	if topoServer != nil {
+		log.Infof("loading region information for cells: %v", *cellsToWatch)
+		err := topo.InitRegions(context.Background(), topoServer, strings.Split(*cellsToWatch, ","))
+		if err != nil {
+			log.Exitf("cannot load regions for cells: %v", err)
+		}
+	}
+
 	log.Infof("loading tablets for cells: %v", *cellsToWatch)
 	for _, c := range strings.Split(*cellsToWatch, ",") {
 		if c == "" {

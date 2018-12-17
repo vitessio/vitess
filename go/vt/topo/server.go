@@ -133,12 +133,6 @@ type Server struct {
 	cells map[string]Conn
 }
 
-type cellsToRegionsMap struct {
-	mu sync.Mutex
-	// cellsToRegions contains all cell->region mappings
-	cellsToRegions map[string]string
-}
-
 var (
 	// topoImplementation is the flag for which implementation to use.
 	topoImplementation = flag.String("topo_implementation", "zookeeper", "the topology implementation to use")
@@ -153,10 +147,6 @@ var (
 
 	// factories has the factories for the Conn objects.
 	factories = make(map[string]Factory)
-
-	regions = cellsToRegionsMap{
-		cellsToRegions: make(map[string]string),
-	}
 )
 
 // RegisterFactory registers a Factory for an implementation for a Server.
@@ -263,32 +253,6 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	conn = NewStatsConn(cell, conn)
 	ts.cells[cell] = conn
 	return conn, nil
-}
-
-// GetRegionByCell returns the region group this `cell` belongs to, if there's none, it returns the `cell` as region.
-func GetRegionByCell(ctx context.Context, ts *Server, cell string) string {
-	regions.mu.Lock()
-	defer regions.mu.Unlock()
-	if region, ok := regions.cellsToRegions[cell]; ok {
-		return region
-	}
-	if ts != nil {
-		// lazily get the region from cell info if `regions.ts` is available
-		info, err := ts.GetCellInfo(ctx, cell, false)
-		if err == nil && info.Region != "" {
-			regions.cellsToRegions[cell] = info.Region
-			return info.Region
-		}
-	}
-	// for backward compatability
-	return cell
-}
-
-// UpdateCellsToRegionsForTests overwrites the global map built by topo server init, and is meant for testing purpose only.
-func UpdateCellsToRegionsForTests(cellsToRegions map[string]string) {
-	regions.mu.Lock()
-	defer regions.mu.Unlock()
-	regions.cellsToRegions = cellsToRegions
 }
 
 // Close will close all connections to underlying topo Server.

@@ -128,8 +128,8 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 }
 
 func TestShuffleTablets(t *testing.T) {
-	defer topo.UpdateCellsToRegionsForTests(map[string]string{})
-	topo.UpdateCellsToRegionsForTests(map[string]string{
+	defer topo.SetRegionMap(map[string]string{})
+	topo.SetRegionMap(map[string]string{
 		"cell1": "region1",
 		"cell2": "region1",
 	})
@@ -312,7 +312,7 @@ func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 	shard := "0"
 	hc := discovery.NewFakeHealthCheck()
 	dg := createDiscoveryGateway(hc, nil, "local", 2).(*discoveryGateway)
-	topo.UpdateCellsToRegionsForTests(map[string]string{
+	topo.SetRegionMap(map[string]string{
 		"local-west": "local",
 		"local-east": "local",
 		"local":      "local",

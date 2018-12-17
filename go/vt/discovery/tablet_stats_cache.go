@@ -20,7 +20,6 @@ import (
 	"math"
 	"sync"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -193,13 +192,10 @@ func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStat
 	return e
 }
 
-func (tc *TabletStatsCache) getRegionByCell(cell string) string {
-	return topo.GetRegionByCell(context.Background(), tc.ts, cell)
-}
-
 // StatsUpdate is part of the HealthCheckStatsListener interface.
 func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
-	if ts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Tablet.Alias.Cell != tc.cell && tc.getRegionByCell(ts.Tablet.Alias.Cell) != tc.getRegionByCell(tc.cell) {
+	if ts.Target.TabletType != topodatapb.TabletType_MASTER &&
+		topo.GetRegion(ts.Tablet.Alias.Cell) != topo.GetRegion(tc.cell) {
 		// this is for a non-master tablet in a different cell and a different region, drop it
 		return
 	}
