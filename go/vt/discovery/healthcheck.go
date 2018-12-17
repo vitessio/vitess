@@ -56,6 +56,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -110,7 +111,7 @@ const (
   </tr>
   {{range $i, $ts := .}}
   <tr>
-    <td>{{github_com_vitessio_vitess_vtctld_srv_cell $ts.Cell}}</td>
+    <td>{{github_com_vitessio_vitess_discovery_region_for_cell $ts.Cell}}{{github_com_vitessio_vitess_vtctld_srv_cell $ts.Cell}}</td>
     <td>{{github_com_vitessio_vitess_vtctld_srv_keyspace $ts.Cell $ts.Target.Keyspace}}</td>
     <td>{{$ts.Target.Shard}}</td>
     <td>{{$ts.Target.TabletType}}</td>
@@ -120,6 +121,10 @@ const (
 </table>
 `
 )
+
+var StatusFuncs = template.FuncMap{
+	"github_com_vitessio_vitess_discovery_region_for_cell": statusGetRegion,
+}
 
 func init() {
 	// Flags are not parsed at this point and the default value of the flag (just the hostname) will be used.
@@ -951,4 +956,15 @@ func TabletToMapKey(tablet *topodatapb.Tablet) string {
 	sort.Strings(parts)
 	parts = append([]string{tablet.Hostname}, parts...)
 	return strings.Join(parts, ",")
+}
+
+// statusGetRegion displays a region prefix in the debug UI
+// if the cell is actually part of a region (i.e. region != cell)
+func statusGetRegion(cell string) string {
+	region := topo.GetRegion(cell)
+	if region == cell {
+		return ""
+	}
+
+	return region + "/"
 }
