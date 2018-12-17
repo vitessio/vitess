@@ -653,6 +653,10 @@ func (l *listener) StatsUpdate(ts *TabletStats) {
 	l.output <- ts
 }
 
+func (l *listener) InStatsCache(keyspace, shard string, tabletType topodatapb.TabletType, key string) bool {
+	return false
+}
+
 func createFakeConn(tablet *topodatapb.Tablet, c chan *querypb.StreamHealthResponse) *fakeConn {
 	key := TabletToMapKey(tablet)
 	conn := &fakeConn{

@@ -47,6 +47,9 @@ func TestTabletStatsCache(t *testing.T) {
 	if len(a) != 0 {
 		t.Errorf("wrong result, expected empty list: %v", a)
 	}
+	if tsc.InStatsCache("k", "s", topodatapb.TabletType_REPLICA, "t1") {
+		t.Errorf("didn't expect ts1 to be in cache")
+	}
 
 	// add a tablet
 	tablet1 := topo.NewTablet(10, "cell", "host1")
@@ -69,6 +72,9 @@ func TestTabletStatsCache(t *testing.T) {
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
+	if !tsc.InStatsCache("k", "s", topodatapb.TabletType_REPLICA, "t1") {
+		t.Errorf("expected ts1 to be in cache")
+	}
 
 	// update stats with a change that won't change health array
 	stillHealthyTs1 := &TabletStats{
@@ -90,6 +96,9 @@ func TestTabletStatsCache(t *testing.T) {
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
+	if !tsc.InStatsCache("k", "s", topodatapb.TabletType_REPLICA, "t1") {
+		t.Errorf("expected ts1 to be in cache")
+	}
 
 	// update stats with a change that will change arrays
 	notHealthyTs1 := &TabletStats{
@@ -110,6 +119,9 @@ func TestTabletStatsCache(t *testing.T) {
 	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
 	if len(a) != 1 || !notHealthyTs1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
+	}
+	if !tsc.InStatsCache("k", "s", topodatapb.TabletType_REPLICA, "t1") {
+		t.Errorf("expected ts1 to be in cache")
 	}
 
 	// add a second tablet
@@ -146,6 +158,9 @@ func TestTabletStatsCache(t *testing.T) {
 		if !ts1.DeepEqual(&a[0]) || !ts2.DeepEqual(&a[1]) {
 			t.Errorf("unexpected result: %v", a)
 		}
+	}
+	if !tsc.InStatsCache("k", "s", topodatapb.TabletType_REPLICA, "t2") {
+		t.Errorf("expected ts2 to be in cache")
 	}
 
 	// one tablet goes unhealthy
@@ -235,6 +250,9 @@ func TestTabletStatsCache(t *testing.T) {
 	if len(a) != 1 {
 		t.Errorf("unexpected result: %v", a)
 	}
+	if !tsc.InStatsCache("k", "s", topodatapb.TabletType_REPLICA, "t3") {
+		t.Errorf("expected ts3 to be in cache")
+	}
 
 	// add a 4th slave tablet in a diff cell, diff region
 	tablet4 := topo.NewTablet(13, "cell2", "host4")
@@ -255,5 +273,8 @@ func TestTabletStatsCache(t *testing.T) {
 	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
 	if len(a) != 1 {
 		t.Errorf("unexpected result: %v", a)
+	}
+	if tsc.InStatsCache("k", "s", topodatapb.TabletType_REPLICA, "t4") {
+		t.Errorf("expected ts4 to not be in cache")
 	}
 }

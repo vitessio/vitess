@@ -148,6 +148,9 @@ type HealthCheckStatsListener interface {
 	//   If it is false, only one event is sent (ts.Up true on the new
 	//   type).
 	StatsUpdate(*TabletStats)
+	// InStatsCache indicates whether the tablet identified by the given
+	// key is being tracked by the underling healthcheck cache
+	InStatsCache(keyspace, shard string, tabletType topodatapb.TabletType, key string) bool
 }
 
 // TabletStats is returned when getting the set of tablets.
@@ -183,6 +186,9 @@ type TabletStats struct {
 	// LastError is the error we last saw when trying to get the
 	// tablet's healthcheck.
 	LastError error
+	// InStatsCache is set to true if this tablet is in the local
+	// stats cache that is used for serving.
+	InStatsCache bool
 }
 
 // String is defined because we want to print a []*TabletStats array nicely.
@@ -846,6 +852,11 @@ func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
 		if name == "" {
 			name = ts.GetTabletHostPort()
 		}
+		if ts.InStatsCache {
+			extra += " (In Cache)"
+		} else {
+			extra += " (Not In Cache)"
+		}
 		tLinks = append(tLinks, fmt.Sprintf(`<a href="%s" style="color:%v">%v</a>%v`, ts.getTabletDebugURL(), color, name, extra))
 	}
 	return template.HTML(strings.Join(tLinks, "<br>"))
@@ -897,6 +908,14 @@ func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
 			tcsMap[key] = tcs
 		}
 		stats := th.latestTabletStats
+		if hc.listener != nil {
+			stats.InStatsCache = hc.listener.InStatsCache(
+				th.latestTabletStats.Target.Keyspace,
+				th.latestTabletStats.Target.Shard,
+				th.latestTabletStats.Target.TabletType,
+				th.latestTabletStats.Key,
+			)
+		}
 		tcs.TabletsStats = append(tcs.TabletsStats, &stats)
 	}
 	return tcsMap

@@ -338,6 +338,23 @@ func (tc *TabletStatsCache) GetHealthyTabletStats(keyspace, shard string, tablet
 	return result
 }
 
+// InStatsCache returns true if the tablet with the given key is in the cache
+func (tc *TabletStatsCache) InStatsCache(keyspace, shard string, tabletType topodatapb.TabletType, key string) bool {
+	e := tc.getEntry(keyspace, shard, tabletType)
+	if e == nil {
+		return false
+	}
+
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	for _, ts := range e.healthy {
+		if ts.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
 // ResetForTesting is for use in tests only.
 func (tc *TabletStatsCache) ResetForTesting() {
 	tc.mu.Lock()

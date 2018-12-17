@@ -182,6 +182,12 @@ func (dg *discoveryGateway) StatsUpdate(ts *discovery.TabletStats) {
 	}
 }
 
+// InStatsCache is called by HealthCheck to determine if the given tablet is
+// in the cache
+func (dg *discoveryGateway) InStatsCache(keyspace, shard string, tabletType topodatapb.TabletType, key string) bool {
+	return dg.tsc.InStatsCache(keyspace, shard, tabletType, key)
+}
+
 // WaitForTablets is part of the gateway.Gateway interface.
 func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error {
 	// Skip waiting for tablets if we are not told to do so.
