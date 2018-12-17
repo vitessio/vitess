@@ -333,11 +333,8 @@ var commands = []commandGroup{
 				"[-ping-tablets]",
 				"Validates that all nodes reachable from the global replication graph and that all tablets in all discoverable cells are consistent."},
 			{"ListAllTablets", commandListAllTablets,
-				"<cell name>",
+				"<cell name1>, <cell name2>, ...",
 				"Lists all tablets in an awk-friendly way."},
-			{"ListAllTabletsAllCells", commandListAllTabletsAllCells,
-				"",
-				"Lists all tablets in all cells an awk-friendly way."},
 			{"ListTablets", commandListTablets,
 				"<tablet alias> ...",
 				"Lists specified tablets in an awk-friendly way."},
@@ -1798,11 +1795,21 @@ func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	return wr.Validate(ctx, *pingTablets)
 }
 
-func commandListAllTabletsAllCells(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	cells, err := wr.TopoServer().GetKnownCells(ctx)
-	if err != nil {
+func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
+	var cells []string
+	var err error
+	if subFlags.NArg() == 1 {
+		cells = strings.Split(subFlags.Arg(0), ",")
+	} else {
+		cells, err = wr.TopoServer().GetKnownCells(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
 	for _, cell := range cells {
 		err := dumpAllTablets(ctx, wr, cell)
 		if err != nil {
@@ -1810,18 +1817,6 @@ func commandListAllTabletsAllCells(ctx context.Context, wr *wrangler.Wrangler, s
 		}
 	}
 	return nil
-}
-
-func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <cell name> argument is required for the ListAllTablets command")
-	}
-
-	cell := subFlags.Arg(0)
-	return dumpAllTablets(ctx, wr, cell)
 }
 
 func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
