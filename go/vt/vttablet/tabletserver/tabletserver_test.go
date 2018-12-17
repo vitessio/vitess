@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"syscall"
@@ -633,6 +634,53 @@ func TestTabletServerStopWithPrepare(t *testing.T) {
 	}
 }
 
+func TestTabletServerMasterToReplica(t *testing.T) {
+	// Reuse code from tx_executor_test.
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	txid1, err := tsv.Begin(ctx, &target, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, nil); err != nil {
+		t.Error(err)
+	}
+	if err = tsv.Prepare(ctx, &target, txid1, "aa"); err != nil {
+		t.Error(err)
+	}
+	txid2, err := tsv.Begin(ctx, &target, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	// This makes txid2 busy
+	conn2, err := tsv.te.txPool.Get(txid2, "for query")
+	if err != nil {
+		t.Error(err)
+	}
+	ch := make(chan bool)
+	go func() {
+		tsv.SetServingType(topodatapb.TabletType_REPLICA, true, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+		ch <- true
+	}()
+
+	// SetServingType must rollback the prepared transaction,
+	// but it must wait for the unprepared (txid2) to become non-busy.
+	select {
+	case <-ch:
+		t.Fatal("ch should not fire")
+	case <-time.After(10 * time.Millisecond):
+	}
+	if tsv.te.txPool.activePool.Size() != 1 {
+		t.Errorf("len(tsv.te.txPool.activePool.Size()): %d, want 1", len(tsv.te.preparedPool.conns))
+	}
+
+	// Concluding conn2 will allow the transition to go through.
+	tsv.te.txPool.LocalConclude(ctx, conn2)
+	<-ch
+}
+
 func TestTabletServerReplicaToMaster(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t)
@@ -646,7 +694,77 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 	if len(tsv.te.preparedPool.conns) != 0 {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", len(tsv.te.preparedPool.conns))
 	}
-	tsv.SetServingType(topodatapb.TabletType_REPLICA, false, nil)
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+
+	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+			{Type: sqltypes.Uint64},
+			{Type: sqltypes.Uint64},
+			{Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarBinary("dtid0"),
+			sqltypes.NewInt64(RedoStatePrepared),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"),
+		}},
+	})
+	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
+	if len(tsv.te.preparedPool.conns) != 1 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
+	}
+	got := tsv.te.preparedPool.conns["dtid0"].Queries
+	want := []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Prepared queries: %v, want %v", got, want)
+	}
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+
+	tsv.te.txPool.lastID.Set(1)
+	// Ensure we continue past errors.
+	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+			{Type: sqltypes.Uint64},
+			{Type: sqltypes.Uint64},
+			{Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarBinary("bogus"),
+			sqltypes.NewInt64(RedoStatePrepared),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary("bogus"),
+		}, {
+			sqltypes.NewVarBinary("a:b:10"),
+			sqltypes.NewInt64(RedoStatePrepared),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"),
+		}, {
+			sqltypes.NewVarBinary("a:b:20"),
+			sqltypes.NewInt64(RedoStateFailed),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary("unused"),
+		}},
+	})
+	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
+	if len(tsv.te.preparedPool.conns) != 1 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
+	}
+	got = tsv.te.preparedPool.conns["a:b:10"].Queries
+	want = []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Prepared queries: %v, want %v", got, want)
+	}
+	wantFailed := map[string]error{"a:b:20": errPrepFailed}
+	if !reflect.DeepEqual(tsv.te.preparedPool.reserved, wantFailed) {
+		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
+	}
+	// Verify last id got adjusted.
+	if v := tsv.te.txPool.lastID.Get(); v != 20 {
+		t.Errorf("tsv.te.txPool.lastID.Get(): %d, want 20", v)
+	}
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 }
 
 func TestTabletServerCreateTransaction(t *testing.T) {
