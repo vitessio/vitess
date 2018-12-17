@@ -70,6 +70,8 @@ type tabletStatsCacheEntry struct {
 	healthy []*TabletStats
 	// aggregates has the per-cell aggregates.
 	aggregates map[string]*querypb.AggregateStats
+	// aggregatesPerRegion has the per-region aggregates.
+	aggregatesPerRegion map[string]*querypb.AggregateStats
 }
 
 func (e *tabletStatsCacheEntry) updateHealthyMapForMaster(ts *TabletStats) {
@@ -266,18 +268,21 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 	tc.updateAggregateMap(ts.Target.Keyspace, ts.Target.Shard, ts.Target.TabletType, e, allArray)
 }
 
-// MakeAggregateMap takes a list of TabletStats and builds a per-cell
+// makeAggregateMap takes a list of TabletStats and builds a per-cell
 // AggregateStats map.
-func MakeAggregateMap(stats []*TabletStats) map[string]*querypb.AggregateStats {
+func (tc *TabletStatsCache) makeAggregateMap(stats []*TabletStats, buildForRegion bool) map[string]*querypb.AggregateStats {
 	result := make(map[string]*querypb.AggregateStats)
 	for _, ts := range stats {
-		cell := ts.Tablet.Alias.Cell
-		agg, ok := result[cell]
+		cellOrRegion := ts.Tablet.Alias.Cell
+		if buildForRegion {
+			cellOrRegion = tc.getRegionByCell(cellOrRegion)
+		}
+		agg, ok := result[cellOrRegion]
 		if !ok {
 			agg = &querypb.AggregateStats{
 				SecondsBehindMasterMin: math.MaxUint32,
 			}
-			result[cell] = agg
+			result[cellOrRegion] = agg
 		}
 
 		if ts.Serving && ts.LastError == nil {
@@ -295,9 +300,9 @@ func MakeAggregateMap(stats []*TabletStats) map[string]*querypb.AggregateStats {
 	return result
 }
 
-// MakeAggregateMapDiff computes the entries that need to be broadcast
+// makeAggregateMapDiff computes the entries that need to be broadcast
 // when the map goes from oldMap to newMap.
-func MakeAggregateMapDiff(keyspace, shard string, tabletType topodatapb.TabletType, ter int64, oldMap map[string]*querypb.AggregateStats, newMap map[string]*querypb.AggregateStats) []*srvtopo.TargetStatsEntry {
+func makeAggregateMapDiff(keyspace, shard string, tabletType topodatapb.TabletType, ter int64, oldMap map[string]*querypb.AggregateStats, newMap map[string]*querypb.AggregateStats) []*srvtopo.TargetStatsEntry {
 	var result []*srvtopo.TargetStatsEntry
 	for cell, oldValue := range oldMap {
 		newValue, ok := newMap[cell]
@@ -360,8 +365,9 @@ func MakeAggregateMapDiff(keyspace, shard string, tabletType topodatapb.TabletTy
 func (tc *TabletStatsCache) updateAggregateMap(keyspace, shard string, tabletType topodatapb.TabletType, e *tabletStatsCacheEntry, stats []*TabletStats) {
 	// Save the new value
 	oldAgg := e.aggregates
-	newAgg := MakeAggregateMap(stats)
+	newAgg := tc.makeAggregateMap(stats /* buildForRegion */, false)
 	e.aggregates = newAgg
+	e.aggregatesPerRegion = tc.makeAggregateMap(stats /* buildForRegion */, true)
 
 	// And broadcast the change in the background, if we need to.
 	tc.mu.RLock()
@@ -376,7 +382,7 @@ func (tc *TabletStatsCache) updateAggregateMap(keyspace, shard string, tabletTyp
 	if len(stats) > 0 {
 		ter = stats[0].TabletExternallyReparentedTimestamp
 	}
-	diffs := MakeAggregateMapDiff(keyspace, shard, tabletType, ter, oldAgg, newAgg)
+	diffs := makeAggregateMapDiff(keyspace, shard, tabletType, ter, oldAgg, newAgg)
 	tc.aggregatesChan <- diffs
 }
 
@@ -498,7 +504,8 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 			return agg, nil
 		}
 	}
-	agg, ok := e.aggregates[target.Cell]
+	targetRegion := tc.getRegionByCell(target.Cell)
+	agg, ok := e.aggregatesPerRegion[targetRegion]
 	if !ok {
 		return nil, topo.NewError(topo.NoNode, topotools.TargetIdent(target))
 	}
