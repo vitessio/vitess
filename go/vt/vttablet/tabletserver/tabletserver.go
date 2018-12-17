@@ -518,8 +518,12 @@ func (tsv *TabletServer) fullStart() (err error) {
 }
 
 func (tsv *TabletServer) serveNewType() (err error) {
-	// Make sure to give transactions a chance to close up so we can start a new engine
-	tsv.te.Close(false)
+	// Wait for in-flight transactional requests to complete
+	// before rolling back everything. In this state new
+	// transactional requests are not allowed. So, we can
+	// be sure that the tx pool won't change after the wait.
+	tsv.beginRequests.Wait()
+	tsv.te.Close(true)
 	tsv.te.Open()
 
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
