@@ -273,6 +273,11 @@ func (vtg *VTGate) Gateway() gateway.Gateway {
 	return vtg.gw
 }
 
+// Executor returns the executor. Used for the debug status UI
+func (vtg *VTGate) Executor() *Executor {
+	return vtg.executor
+}
+
 // Execute executes a non-streaming query. This is a V3 function.
 func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
 	// In this context, we don't care if we can't fully parse destination

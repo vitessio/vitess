@@ -1225,6 +1225,11 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 	return e.vschema
 }
 
+// Cell returns the current Cell.
+func (e *Executor) Cell() string {
+	return e.cell
+}
+
 // SaveVSchema updates the vschema and stats
 func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 	e.mu.Lock()

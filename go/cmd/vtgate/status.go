@@ -29,8 +29,9 @@ import (
 var onStatusRegistered func()
 
 func addStatusParts(vtg *vtgate.VTGate) {
+	servenv.AddStatusFuncs(discovery.StatusFuncs)
 	servenv.AddStatusPart("Executor", vtgate.ExecutorTemplate, func() interface{} {
-		return nil
+		return vtg.Executor()
 	})
 	servenv.AddStatusPart("VSchema", vtgate.VSchemaTemplate, func() interface{} {
 		return vtg.VSchemaStats()
@@ -42,7 +43,6 @@ func addStatusParts(vtg *vtgate.VTGate) {
 	servenv.AddStatusPart("Gateway Status", gateway.StatusTemplate, func() interface{} {
 		return vtg.GetGatewayCacheStatus()
 	})
-	servenv.AddStatusFuncs(discovery.StatusFuncs)
 	servenv.AddStatusPart("Health Check Cache", discovery.HealthCheckTemplate, func() interface{} {
 		return healthCheck.CacheStatus()
 	})

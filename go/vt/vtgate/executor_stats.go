@@ -29,6 +29,8 @@ const (
 </td>
 
 <td width="50%" style="padding: 20px;">
+  <b>Cell:</b> {{github_com_vitessio_vitess_discovery_region_for_cell .Cell}}{{.Cell}}<br>
+  <br>
   <a href="/debug/health">Health</a><br>
   <a href="/debug/querylogz">Current Query Log</a><br>
   <a href="/debug/queryz">Query Plan Stats</a><br>
