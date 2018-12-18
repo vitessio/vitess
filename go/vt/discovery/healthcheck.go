@@ -122,6 +122,7 @@ const (
 `
 )
 
+// StatusFuncs are used to render the debug UI
 var StatusFuncs = template.FuncMap{
 	"github_com_vitessio_vitess_discovery_region_for_cell": statusGetRegion,
 }
