@@ -485,3 +485,24 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 	}
 	return formal, nil
 }
+
+// FindVindexForSharding searches through the given slice
+// to find the lowest cost unique vindex
+// primary vindex is always unique
+// if two have the same cost, use the one that occurs earlier in the definition
+// if the final result is too expensive, return nil
+func FindVindexForSharding(tableName string, colVindexes []*ColumnVindex) (*ColumnVindex, error) {
+	if len(colVindexes) == 0 {
+		return nil, fmt.Errorf("no vindex definition for table %v", tableName)
+	}
+	result := colVindexes[0]
+	for _, colVindex := range colVindexes {
+		if colVindex.Vindex.Cost() < result.Vindex.Cost() && colVindex.Vindex.IsUnique() {
+			result = colVindex
+		}
+	}
+	if result.Vindex.Cost() > 1 || !result.Vindex.IsUnique() {
+		return nil, fmt.Errorf("could not find a vindex to use for sharding table %v", tableName)
+	}
+	return result, nil
+}
