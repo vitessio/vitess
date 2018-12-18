@@ -805,6 +805,11 @@ func (shardSwap *shardSchemaSwap) StatsUpdate(newTabletStats *discovery.TabletSt
 	}
 }
 
+// InStatsCache is part of the discovery.HealthCheckStatsListener interface
+func (shardSwap *shardSchemaSwap) InStatsCache(keyspace, shard string, tabletType topodatapb.TabletType, key string) bool {
+	return false
+}
+
 // getTabletList returns the list of all known tablets in the shard so that the caller
 // could operate with it without holding the allTabletsLock.
 func (shardSwap *shardSchemaSwap) getTabletList() []discovery.TabletStats {

@@ -329,3 +329,8 @@ func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.TabletStats) {
 	}
 	ts.throttler.RecordReplicationLag(time.Now(), tabletStats)
 }
+
+// InStatsCache is part of the discovery.HealthCheckStatsListener interface
+func (ts *txThrottlerState) InStatsCache(keyspace, shard string, tabletType topodatapb.TabletType, key string) bool {
+	return false
+}

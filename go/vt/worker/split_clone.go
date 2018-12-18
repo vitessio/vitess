@@ -1165,6 +1165,11 @@ func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.TabletStats) {
 	}
 }
 
+// InStatsCache is part of the discovery.HealthCheckStatsListener interface
+func (scw *SplitCloneWorker) InStatsCache(keyspace, shard string, tabletType topodatapb.TabletType, key string) bool {
+	return false
+}
+
 func (scw *SplitCloneWorker) createThrottlers() error {
 	scw.throttlersMu.Lock()
 	defer scw.throttlersMu.Unlock()

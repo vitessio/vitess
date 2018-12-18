@@ -285,6 +285,11 @@ func (c *client) StatsUpdate(ts *discovery.TabletStats) {
 	c.throttler.RecordReplicationLag(time.Now(), ts)
 }
 
+// InStatsCache is part of the discovery.HealthCheckStatsListener interface
+func (c *client) InStatsCache(keyspace, shard string, tabletType topodatapb.TabletType, key string) bool {
+	return false
+}
+
 func main() {
 	flag.Parse()
 

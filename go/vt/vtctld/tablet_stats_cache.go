@@ -165,6 +165,11 @@ func (c *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
 	*ts = *stats
 }
 
+// InStatsCache is part of the HealthCheckStatsListener interface
+func (c *tabletStatsCache) InStatsCache(keyspace, shard string, tabletType topodatapb.TabletType, key string) bool {
+	return false
+}
+
 func tabletToMapKey(stats *discovery.TabletStats) string {
 	return stats.Tablet.Alias.String()
 }
