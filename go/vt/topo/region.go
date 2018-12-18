@@ -17,10 +17,13 @@ limitations under the License.
 package topo
 
 import (
+	"sync"
+
 	"golang.org/x/net/context"
 )
 
 type regionMap struct {
+	mu             sync.Mutex
 	cellsToRegions map[string]string
 }
 
@@ -35,6 +38,9 @@ var regions = regionMap{
 // By convention, if there is no region specified in the cell info,
 // we use the cell name itself as the region.
 func InitRegions(ctx context.Context, ts *Server, cells []string) error {
+	regions.mu.Lock()
+	defer regions.mu.Unlock()
+
 	for _, cell := range cells {
 		info, err := ts.GetCellInfo(ctx, cell, false)
 		switch {
@@ -56,6 +62,9 @@ func InitRegions(ctx context.Context, ts *Server, cells []string) error {
 
 // SetRegionMap is used only for tests.
 func SetRegionMap(cellsToRegions map[string]string) {
+	regions.mu.Lock()
+	defer regions.mu.Unlock()
+
 	regions.cellsToRegions = cellsToRegions
 }
 
@@ -69,6 +78,9 @@ func SetRegionMap(cellsToRegions map[string]string) {
 // initialization time so this mapping is safe to access
 // concurrently.
 func GetRegion(cell string) string {
+	regions.mu.Lock()
+	defer regions.mu.Unlock()
+
 	if region, ok := regions.cellsToRegions[cell]; ok {
 		return region
 	}
