@@ -594,7 +594,7 @@ func TestTemplate(t *testing.T) {
 		Target:       &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		TabletsStats: ts,
 	}
-	templ := template.New("").Funcs(status.StatusFuncs)
+	templ := template.New("").Funcs(status.StatusFuncs).Funcs(StatusFuncs)
 	templ, err := templ.Parse(HealthCheckTemplate)
 	if err != nil {
 		t.Fatalf("error parsing template: %v", err)
@@ -626,7 +626,7 @@ func TestDebugURLFormatting(t *testing.T) {
 		Target:       &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		TabletsStats: ts,
 	}
-	templ := template.New("").Funcs(status.StatusFuncs)
+	templ := template.New("").Funcs(status.StatusFuncs).Funcs(StatusFuncs)
 	templ, err := templ.Parse(HealthCheckTemplate)
 	if err != nil {
 		t.Fatalf("error parsing template: %v", err)
