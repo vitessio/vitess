@@ -430,7 +430,7 @@ func CompareRows(fields []*querypb.Field, compareCount int, left, right []sqltyp
 			r := rv.([]byte)
 			return bytes.Compare(l, r), nil
 		default:
-			return 0, fmt.Errorf("Unsuported type %T returned by mysql.proto.Convert", l)
+			return 0, fmt.Errorf("Unsupported type %T returned by mysql.proto.Convert", l)
 		}
 	}
 	return 0, nil
@@ -440,27 +440,27 @@ func CompareRows(fields []*querypb.Field, compareCount int, left, right []sqltyp
 // It assumes left and right are sorted by ascending primary key.
 // it will record errors if extra rows exist on either side.
 type RowDiffer struct {
-	left         *RowReader
-	right        *RowReader
-	pkFieldCount int
+	left            *RowReader
+	right           *RowReader
+	tableDefinition *tabletmanagerdatapb.TableDefinition
 }
 
 // NewRowDiffer returns a new RowDiffer
-func NewRowDiffer(left, right *QueryResultReader, tableDefinition *tabletmanagerdatapb.TableDefinition) (*RowDiffer, error) {
+func NewRowDiffer(left, right ResultReader, tableDefinition *tabletmanagerdatapb.TableDefinition) (*RowDiffer, error) {
 	leftFields := left.Fields()
 	rightFields := right.Fields()
 	if len(leftFields) != len(rightFields) {
-		return nil, fmt.Errorf("Cannot diff inputs with different types")
+		return nil, fmt.Errorf("[table=%v] Cannot diff inputs with different types", tableDefinition.Name)
 	}
 	for i, field := range leftFields {
 		if field.Type != rightFields[i].Type {
-			return nil, fmt.Errorf("Cannot diff inputs with different types: field %v types are %v and %v", i, field.Type, rightFields[i].Type)
+			return nil, fmt.Errorf("[table=%v] Cannot diff inputs with different types: field %v types are %v and %v", tableDefinition.Name, i, field.Type, rightFields[i].Type)
 		}
 	}
 	return &RowDiffer{
-		left:         NewRowReader(left),
-		right:        NewRowReader(right),
-		pkFieldCount: len(tableDefinition.PrimaryKeyColumns),
+		left:            NewRowReader(left),
+		right:           NewRowReader(right),
+		tableDefinition: tableDefinition,
 	}, nil
 }
 
@@ -529,10 +529,10 @@ func (rd *RowDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
 			continue
 		}
 
-		if f >= rd.pkFieldCount {
+		if f >= len(rd.tableDefinition.PrimaryKeyColumns) {
 			// rows have the same primary key, only content is different
 			if dr.mismatchedRows < 10 {
-				log.Errorf("Different content %v in same PK: %v != %v", dr.mismatchedRows, left, right)
+				log.Errorf("[table=%v] Different content %v in same PK: %v != %v", rd.tableDefinition.Name, dr.mismatchedRows, left, right)
 			}
 			dr.mismatchedRows++
 			advanceLeft = true
@@ -541,20 +541,20 @@ func (rd *RowDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
 		}
 
 		// have to find the 'smallest' row and advance it
-		c, err := CompareRows(rd.left.Fields(), rd.pkFieldCount, left, right)
+		c, err := CompareRows(rd.left.Fields(), len(rd.tableDefinition.PrimaryKeyColumns), left, right)
 		if err != nil {
 			return dr, err
 		}
 		if c < 0 {
 			if dr.extraRowsLeft < 10 {
-				log.Errorf("Extra row %v on left: %v", dr.extraRowsLeft, left)
+				log.Errorf("[table=%v] Extra row %v on left: %v", rd.tableDefinition.Name, dr.extraRowsLeft, left)
 			}
 			dr.extraRowsLeft++
 			advanceLeft = true
 			continue
 		} else if c > 0 {
 			if dr.extraRowsRight < 10 {
-				log.Errorf("Extra row %v on right: %v", dr.extraRowsRight, right)
+				log.Errorf("[table=%v] Extra row %v on right: %v", rd.tableDefinition.Name, dr.extraRowsRight, right)
 			}
 			dr.extraRowsRight++
 			advanceRight = true
@@ -565,7 +565,7 @@ func (rd *RowDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
 		// they're the same. Logging a regular difference
 		// then, and advancing both.
 		if dr.mismatchedRows < 10 {
-			log.Errorf("Different content %v in same PK: %v != %v", dr.mismatchedRows, left, right)
+			log.Errorf("[table=%v] Different content %v in same PK: %v != %v", rd.tableDefinition.Name, dr.mismatchedRows, left, right)
 		}
 		dr.mismatchedRows++
 		advanceLeft = true
