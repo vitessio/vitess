@@ -96,7 +96,7 @@ spec:
         shard: {{ $shardClean | quote }}
         type: {{ $tablet.type | quote }}
     spec:
-      terminationGracePeriodSeconds: 600
+      terminationGracePeriodSeconds: 60000000
 {{ include "pod-security" . | indent 6 }}
 {{ include "vttablet-affinity" (tuple $cellClean $keyspaceClean $shardClean $cell.region) | indent 6 }}
 
@@ -344,7 +344,7 @@ spec:
             # - use GTID_SUBTRACT
 
             RETRY_COUNT=0
-            MAX_RETRY_COUNT=5
+            MAX_RETRY_COUNT=100000
 
             # retry reparenting
             until [ $DONE_REPARENTING ]; do
