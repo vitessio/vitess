@@ -49,8 +49,8 @@ func CreateFakeServers(t *testing.T) (*tabletconntest.FakeQueryService, *topo.Se
 	f := tabletconntest.CreateFakeServer(t)
 	f.TestingGateway = true
 	f.StreamHealthResponse = &querypb.StreamHealthResponse{
-		Target:  tabletconntest.TestTarget,
-		Serving: true,
+		Target:                              tabletconntest.TestTarget,
+		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 1234589,
 		RealtimeStats: &querypb.RealtimeStats{
 			SecondsBehindMaster: 1,

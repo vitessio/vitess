@@ -255,8 +255,8 @@ func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard string,
 ) (*txThrottlerState, error) {
 	t, err := throttlerFactory(
 		TxThrottlerName,
-		"TPS", /* unit */
-		1,     /* threadCount */
+		"TPS",                           /* unit */
+		1,                               /* threadCount */
 		throttler.MaxRateModuleDisabled, /* maxRate */
 		config.throttlerConfig.MaxReplicationLagSec /* maxReplicationLag */)
 	if err != nil {

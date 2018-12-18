@@ -751,14 +751,14 @@ var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 		Shard:      "test_shard",
 		TabletType: topodatapb.TabletType_RDONLY,
 	},
-	Serving: true,
+	Serving:                             true,
 	TabletExternallyReparentedTimestamp: 1234589,
 	RealtimeStats: &querypb.RealtimeStats{
 		HealthError:                            "random error",
 		SecondsBehindMaster:                    234,
 		BinlogPlayersCount:                     1,
 		SecondsBehindMasterFilteredReplication: 2,
-		CpuUsage: 1.0,
+		CpuUsage:                               1.0,
 	},
 }
 

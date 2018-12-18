@@ -68,11 +68,11 @@ type VerticalSplitDiffWorker struct {
 // NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
 func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, minHealthyRdonlyTablets, parallelDiffsCount int, destintationTabletType topodatapb.TabletType) Worker {
 	return &VerticalSplitDiffWorker{
-		StatusWorker: NewStatusWorker(),
-		wr:           wr,
-		cell:         cell,
-		keyspace:     keyspace,
-		shard:        shard,
+		StatusWorker:            NewStatusWorker(),
+		wr:                      wr,
+		cell:                    cell,
+		keyspace:                keyspace,
+		shard:                   shard,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
 		destinationTabletType:   destintationTabletType,
 		parallelDiffsCount:      parallelDiffsCount,
