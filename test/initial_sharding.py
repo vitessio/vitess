@@ -28,7 +28,6 @@
 
 import logging
 import unittest
-
 from vtdb import keyrange_constants
 
 import base_sharding
@@ -577,23 +576,32 @@ index by_msg (msg)
                                   min_statements=1000, min_transactions=1000)
 
     # use vtworker to compare the data
-    logging.debug('Running vtworker SplitDiff for -80')
     for t in [shard_0_rdonly1, shard_1_rdonly1]:
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
-    utils.run_vtworker(['-cell', 'test_nj',
-                        '--use_v3_resharding_mode=false',
-                        'SplitDiff',
-                        '--min_healthy_rdonly_tablets', '1',
-                        'test_keyspace/-80'],
-                       auto_log=True)
 
-    logging.debug('Running vtworker SplitDiff for 80-')
-    utils.run_vtworker(['-cell', 'test_nj',
-                        '--use_v3_resharding_mode=false',
-                        'SplitDiff',
-                        '--min_healthy_rdonly_tablets', '1',
-                        'test_keyspace/80-'],
-                       auto_log=True)
+    if base_sharding.use_multi_split_diff:
+        logging.debug('Running vtworker MultiSplitDiff for 0')
+        utils.run_vtworker(['-cell', 'test_nj',
+                            '--use_v3_resharding_mode=false',
+                            'MultiSplitDiff',
+                            '--min_healthy_rdonly_tablets', '1',
+                            'test_keyspace/0'],
+                           auto_log=True)
+    else:
+        logging.debug('Running vtworker SplitDiff for -80')
+        utils.run_vtworker(['-cell', 'test_nj',
+                            '--use_v3_resharding_mode=false',
+                            'SplitDiff',
+                            '--min_healthy_rdonly_tablets', '1',
+                            'test_keyspace/-80'],
+                           auto_log=True)
+        logging.debug('Running vtworker SplitDiff for 80-')
+        utils.run_vtworker(['-cell', 'test_nj',
+                            '--use_v3_resharding_mode=false',
+                            'SplitDiff',
+                            '--min_healthy_rdonly_tablets', '1',
+                            'test_keyspace/80-'],
+                           auto_log=True)
 
     utils.pause('Good time to test vtworker for diffs')
 
