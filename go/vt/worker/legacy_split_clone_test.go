@@ -180,7 +180,7 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(sourceRdonly.RPCServer, &legacyTestQueryService{
-			t: tc.t,
+			t:                        tc.t,
 			StreamHealthQueryService: qs,
 		})
 	}

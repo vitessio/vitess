@@ -112,17 +112,17 @@ type TxSerializer struct {
 // New returns a TxSerializer object.
 func New(dryRun bool, maxQueueSize, maxGlobalQueueSize, concurrentTransactions int) *TxSerializer {
 	return &TxSerializer{
-		ConsolidatorCache:      sync2.NewConsolidatorCache(1000),
-		dryRun:                 dryRun,
-		maxQueueSize:           maxQueueSize,
-		maxGlobalQueueSize:     maxGlobalQueueSize,
-		concurrentTransactions: concurrentTransactions,
+		ConsolidatorCache:            sync2.NewConsolidatorCache(1000),
+		dryRun:                       dryRun,
+		maxQueueSize:                 maxQueueSize,
+		maxGlobalQueueSize:           maxGlobalQueueSize,
+		concurrentTransactions:       concurrentTransactions,
 		log:                          logutil.NewThrottledLogger("HotRowProtection", 5*time.Second),
 		logDryRun:                    logutil.NewThrottledLogger("HotRowProtection DryRun", 5*time.Second),
 		logWaitsDryRun:               logutil.NewThrottledLogger("HotRowProtection Waits DryRun", 5*time.Second),
 		logQueueExceededDryRun:       logutil.NewThrottledLogger("HotRowProtection QueueExceeded DryRun", 5*time.Second),
 		logGlobalQueueExceededDryRun: logutil.NewThrottledLogger("HotRowProtection GlobalQueueExceeded DryRun", 5*time.Second),
-		queues: make(map[string]*queue),
+		queues:                       make(map[string]*queue),
 	}
 }
 

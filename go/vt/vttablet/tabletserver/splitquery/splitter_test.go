@@ -459,7 +459,7 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 					" (id < :_splitquery_end_id or" +
 					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
 				BindVariables: map[string]*querypb.BindVariable{
-					"foo": sqltypes.Int64BindVariable(100),
+					"foo":                       sqltypes.Int64BindVariable(100),
 					"_splitquery_start_id":      sqltypes.Int64BindVariable(1),
 					"_splitquery_start_user_id": sqltypes.Int64BindVariable(2),
 					"_splitquery_end_id":        sqltypes.Int64BindVariable(1),
@@ -476,7 +476,7 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 					" (id < :_splitquery_end_id or" +
 					" (id = :_splitquery_end_id and user_id < :_splitquery_end_user_id))",
 				BindVariables: map[string]*querypb.BindVariable{
-					"foo": sqltypes.Int64BindVariable(100),
+					"foo":                       sqltypes.Int64BindVariable(100),
 					"_splitquery_start_id":      sqltypes.Int64BindVariable(1),
 					"_splitquery_start_user_id": sqltypes.Int64BindVariable(3),
 					"_splitquery_end_id":        sqltypes.Int64BindVariable(5),
@@ -490,7 +490,7 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 					" :_splitquery_start_id < id or" +
 					" (:_splitquery_start_id = id and :_splitquery_start_user_id <= user_id)",
 				BindVariables: map[string]*querypb.BindVariable{
-					"foo": sqltypes.Int64BindVariable(100),
+					"foo":                       sqltypes.Int64BindVariable(100),
 					"_splitquery_start_user_id": sqltypes.Int64BindVariable(1),
 					"_splitquery_start_id":      sqltypes.Int64BindVariable(5),
 				},

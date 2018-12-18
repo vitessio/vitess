@@ -1770,9 +1770,9 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 	target := tsv.target
 	tsv.mu.Unlock()
 	shr := &querypb.StreamHealthResponse{
-		Target:      &target,
-		TabletAlias: &tsv.alias,
-		Serving:     tsv.IsServing(),
+		Target:                              &target,
+		TabletAlias:                         &tsv.alias,
+		Serving:                             tsv.IsServing(),
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
 	}

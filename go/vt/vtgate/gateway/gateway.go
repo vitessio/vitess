@@ -148,7 +148,7 @@ func StreamHealthFromTargetStatsListener(ctx context.Context, l srvtopo.TargetSt
 	// Send all current entries.
 	for _, e := range entries {
 		shr := &querypb.StreamHealthResponse{
-			Target: e.Target,
+			Target:                              e.Target,
 			TabletExternallyReparentedTimestamp: e.TabletExternallyReparentedTimestamp,
 			AggregateStats:                      e.Stats,
 		}
@@ -168,7 +168,7 @@ func StreamHealthFromTargetStatsListener(ctx context.Context, l srvtopo.TargetSt
 				return fmt.Errorf("channel closed")
 			}
 			shr := &querypb.StreamHealthResponse{
-				Target: e.Target,
+				Target:                              e.Target,
 				TabletExternallyReparentedTimestamp: e.TabletExternallyReparentedTimestamp,
 				AggregateStats:                      e.Stats,
 			}
