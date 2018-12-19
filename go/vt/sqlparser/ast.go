@@ -3691,7 +3691,7 @@ mustEscape:
 }
 
 func compliantName(in string) string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	for i, c := range in {
 		if !isLetter(uint16(c)) {
 			if i == 0 || !isDigit(uint16(c)) {
