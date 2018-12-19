@@ -271,7 +271,7 @@ In addition, Vitess requires the software and libraries listed below.
 
     ``` sh
     # Remaining commands to build Vitess
-    . ./dev.env
+    source ./dev.env
     make build
     ```
 
