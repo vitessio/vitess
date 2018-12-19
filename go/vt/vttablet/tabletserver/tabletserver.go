@@ -208,6 +208,22 @@ func NewServer(topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletSer
 	return NewTabletServer(tabletenv.Config, topoServer, alias)
 }
 
+type TxEngineStateController interface {
+	// Stop will stop accepting any new transactions. If in RW mode, transactions are given
+	// a chance to finish before being rolled back. If in RO mode, transactions are
+	// immediately aborted.
+	Stop() error
+
+	// Will start accepting all transactions. If transitioning from RO mode, transactions
+	// might need to be rolled back before new transactions can be accepts.
+	AcceptReadWrite() error
+
+	// Will start accepting read-only transactions, but not full read and write transactions.
+	// If the engine is currently accepting full read and write transactions, they need to
+	// given a chance to clean up before they are forcefully rolled back.
+	AcceptReadOnly() error
+}
+
 var tsOnce sync.Once
 
 // NewTabletServerWithNilTopoServer is typically used in tests that

@@ -17,8 +17,11 @@ limitations under the License.
 package tabletserver
 
 import (
+	"fmt"
 	"sync"
 	"time"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
 
@@ -35,8 +38,45 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+type TxEngineState int
+
+// The TxEngine can be in any of these states
+const (
+	NotServing TxEngineState = iota
+	Transitioning
+	AcceptingReadAndWrite
+	AcceptReadOnly
+)
+
+func (state TxEngineState) String() string {
+	names := [...]string{
+		"NotServing",
+		"Transitioning",
+		"AcceptReadWrite",
+		"AcceptReadOnly"}
+
+	if state < NotServing || state > AcceptReadOnly {
+		return fmt.Sprintf("Unknown - %d", int(state))
+	}
+
+	return names[state]
+}
+
 // TxEngine handles transactions.
 type TxEngine struct {
+	// the following four fields are interconnected. `state` and `nextState` should be protected by the
+	// `stateLock`
+	//
+	// `nextState` is used when state is Transitioning. This means that in order to change the state of
+	// the transaction engine, we had to close transactions. `nextState` is the state we'll end up in
+	// once the transactions are closed
+	// while transitioning, `transitionSignal` will contain an open channel. Once the transition is
+	// over, the channel is closed to signal to any waiting goroutines that the state change is done.
+	stateLock        sync.Mutex
+	state            TxEngineState
+	nextState        TxEngineState
+	transitionSignal chan struct{}
+
 	dbconfigs *dbconfigs.DBConfigs
 
 	isOpen, twopcEnabled bool
@@ -103,7 +143,136 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 		checker,
 	)
 	te.twoPC = NewTwoPC(readPool)
+	te.transitionSignal = make(chan struct{})
+	// By immediately closing this channel, all state changes can simply be made blocking by issuing the
+	// state change desired, and then selecting on this channel. It will contain an open channel while
+	// transitioning.
+	close(te.transitionSignal)
+	te.nextState = -1
+	te.state = NotServing
 	return te
+}
+
+func (te *TxEngine) Stop() error {
+	te.stateLock.Lock()
+
+	switch te.state {
+	case NotServing:
+		// Nothing to do. We are already stopped or stopping
+		te.stateLock.Unlock()
+		return nil
+
+	case AcceptingReadAndWrite:
+		return te.transitionTo(NotServing)
+
+	case AcceptReadOnly:
+		// We are not master, so it's safe to kill all read-only transactions
+		te.Close(true)
+		te.stateLock.Unlock()
+		return nil
+
+	case Transitioning:
+		te.nextState = NotServing
+		te.stateLock.Unlock()
+		return nil
+
+	default:
+		te.stateLock.Unlock()
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown state %v", te.state)
+	}
+}
+
+func (te *TxEngine) AcceptReadWrite() error {
+	te.stateLock.Lock()
+	defer te.stateLock.Unlock()
+	switch te.state {
+	case AcceptingReadAndWrite:
+		// Nothing to do
+		return nil
+
+	case NotServing:
+		te.Open()
+		te.state = AcceptingReadAndWrite
+		return nil
+
+	case Transitioning:
+		te.nextState = AcceptingReadAndWrite
+		return nil
+
+	default:
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown state %v", te.state)
+	}
+}
+
+func (te *TxEngine) AcceptReadOnly() error {
+	te.stateLock.Lock()
+	switch te.state {
+	case AcceptReadOnly:
+		// Nothing to do
+		te.stateLock.Unlock()
+		return nil
+
+	case NotServing:
+		te.Open()
+		te.state = AcceptReadOnly
+		te.stateLock.Unlock()
+		return nil
+
+	case AcceptingReadAndWrite:
+		return te.transitionTo(AcceptReadOnly)
+
+	default:
+		te.stateLock.Unlock()
+		return vterrors.NewWithoutCode("not implemented yet")
+	}
+}
+
+// BlockUntilEndOfTransition blocks the current goroutine until it has finished transitioning into a new state.
+// If no transition is in progress, it returns immediately.
+func (te *TxEngine) BlockUntilEndOfTransition(ctx context.Context) error {
+	select {
+	case <-te.transitionSignal:
+		return nil
+	case <-ctx.Done():
+		return vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "transition did not finish in a timely fashion")
+	}
+}
+
+func (te *TxEngine) transitionTo(nextState TxEngineState) error {
+	te.state = Transitioning
+	te.nextState = nextState
+	te.transitionSignal = make(chan struct{})
+	te.stateLock.Unlock()
+
+	// We do this outside the lock so others can see our state while we close up waiting transactions
+	te.Close(false)
+
+	te.stateLock.Lock()
+	defer func() {
+		// we use a lambda to make it clear in which order things need to happen
+		te.stateLock.Unlock()
+		close(te.transitionSignal)
+	}()
+
+	if te.state != Transitioning {
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "this should never happen. the goroutine starting the transition should also finish it")
+	}
+
+	// Once we reach this point, it's as if our state is NotServing,
+	// and we need to decide what the next step is
+	switch te.nextState {
+	case AcceptingReadAndWrite, AcceptReadOnly:
+		te.Open()
+	case NotServing:
+		// nothing to do
+	case Transitioning:
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "this should never happen. nextState cannot be transitioning")
+	}
+
+	te.state = te.nextState
+	te.nextState = -1
+
+	return nil
 }
 
 // InitDBConfig must be called before Init.
