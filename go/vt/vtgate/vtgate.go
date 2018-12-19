@@ -118,7 +118,6 @@ type VTGate struct {
 	resolver *Resolver
 	txConn   *TxConn
 	gw       gateway.Gateway
-	l2vtgate *L2VTGate
 
 	// stats objects.
 	// TODO(sougou): This needs to be cleaned up. There
@@ -162,30 +161,12 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
 	var gw gateway.Gateway
-	var l2vtgate *L2VTGate
 	if !*disableLocalGateway {
 		gw = gateway.GetCreator()(hc, serv, cell, retryCount)
 		gw.RegisterStats()
 		if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
 			log.Fatalf("gateway.WaitForTablets failed: %v", err)
 		}
-
-		// l2vtgate gives access to the underlying Gateway
-		// from an exported QueryService interface.
-		if *enableForwarding {
-			l2vtgate = initL2VTGate(gw)
-		}
-	}
-
-	// If we have other vtgate pools to connect to, create a
-	// HybridGateway to perform the routing.
-	if len(l2vtgateAddrs) > 0 {
-		hgw, err := gateway.NewHybridGateway(gw, l2vtgateAddrs, retryCount)
-		if err != nil {
-			log.Fatalf("gateway.NewHybridGateway failed: %v", err)
-		}
-		hgw.RegisterStats()
-		gw = hgw
 	}
 
 	// Check we have something to do.
@@ -215,7 +196,6 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 		resolver: resolver,
 		txConn:   tc,
 		gw:       gw,
-		l2vtgate: l2vtgate,
 		timings: stats.NewMultiTimings(
 			"VtgateApi",
 			"VtgateApi timings",
@@ -293,11 +273,6 @@ func (vtg *VTGate) IsHealthy() error {
 // Gateway returns the current gateway implementation. Mostly used for tests.
 func (vtg *VTGate) Gateway() gateway.Gateway {
 	return vtg.gw
-}
-
-// L2VTGate returns the L2VTGate object. Mostly used for tests.
-func (vtg *VTGate) L2VTGate() *L2VTGate {
-	return vtg.l2vtgate
 }
 
 // Execute executes a non-streaming query. This is a V3 function.

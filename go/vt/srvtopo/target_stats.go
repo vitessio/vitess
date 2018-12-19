@@ -45,23 +45,6 @@ type TargetStats interface {
 	GetMasterCell(keyspace, shard string) (cell string, qs queryservice.QueryService, err error)
 }
 
-// TargetStatsListener is an interface used to propagate TargetStats changes.
-// - discovery.TabletStatsCache will implement this interface.
-// - the StreamHealth method in l2vtgate will use this interface to surface
-//   the health of its targets.
-type TargetStatsListener interface {
-	// Subscribe will return the current full state of the TargetStats,
-	// and a channel that will receive subsequent updates. The int returned
-	// is the channel id, and can be sent to unsubscribe to stop
-	// notifications.
-	Subscribe() (int, []TargetStatsEntry, <-chan (*TargetStatsEntry), error)
-
-	// Unsubscribe stops sending updates to the channel returned
-	// by Subscribe. The channel still needs to be drained to
-	// avoid deadlocks.
-	Unsubscribe(int) error
-}
-
 // TargetStatsEntry has the updated information for a Target.
 type TargetStatsEntry struct {
 	// Target is what this entry applies to.
