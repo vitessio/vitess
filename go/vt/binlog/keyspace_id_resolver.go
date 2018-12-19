@@ -134,18 +134,10 @@ func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspa
 			return -1, nil, fmt.Errorf("no vschema definition for table %v", table.Name)
 		}
 
-		// The primary vindex is most likely the sharding key,
-		// and has to be unique.
-		if len(tableSchema.ColumnVindexes) == 0 {
-			return -1, nil, fmt.Errorf("no vindex definition for table %v", table.Name)
-		}
-		colVindex := tableSchema.ColumnVindexes[0]
-		if colVindex.Vindex.Cost() > 1 {
-			return -1, nil, fmt.Errorf("primary vindex cost is too high for table %v", table.Name)
-		}
-		if !colVindex.Vindex.IsUnique() {
-			// This is impossible, but just checking anyway.
-			return -1, nil, fmt.Errorf("primary vindex is not unique for table %v", table.Name)
+		// use the lowest cost unique vindex as the sharding key
+		colVindex, err := vindexes.FindVindexForSharding(table.Name.String(), tableSchema.ColumnVindexes)
+		if err != nil {
+			return -1, nil, err
 		}
 
 		// TODO @rafael - when rewriting the mapping function, this will need to change.
