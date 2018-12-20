@@ -35,16 +35,6 @@ from vtdb import vtdb_logger
 from vtdb import vtgate_client
 from vtdb import vtgate_cursor
 
-# use_l2vtgate controls if we're adding a l2vtgate process in between
-# vtgate and the tablets.
-use_l2vtgate = False
-
-# l2vtgate is the L2VTGate object, if any
-l2vtgate = None
-
-# l2vtgate_addr is the address of the l2vtgate to send to vtgate
-l2vtgate_addr = None
-
 shard_0_master = tablet.Tablet()
 shard_0_replica1 = tablet.Tablet()
 shard_0_replica2 = tablet.Tablet()
@@ -154,8 +144,6 @@ def tearDownModule():
   logging.debug('Tearing down the servers and setup')
   if utils.vtgate:
     utils.vtgate.kill()
-  if l2vtgate:
-    l2vtgate.kill()
   tablet.kill_tablets([shard_0_master,
                        shard_0_replica1, shard_0_replica2,
                        shard_1_master,
@@ -184,7 +172,6 @@ def tearDownModule():
 
 def setup_tablets():
   """Start up a master mysql and vttablet."""
-  global l2vtgate, l2vtgate_addr
 
   logging.debug('Setting up tablets')
   utils.run_vtctl(['CreateKeyspace', KEYSPACE_NAME])
@@ -252,46 +239,22 @@ def setup_tablets():
       'Partitions(rdonly): -80 80-\n'
       'Partitions(replica): -80 80-\n')
 
-  if use_l2vtgate:
-    l2vtgate = utils.VtGate()
-    l2vtgate.start(extra_args=['--enable_forwarding'], tablets=
-                   [shard_0_master, shard_0_replica1, shard_0_replica2,
-                    shard_1_master, shard_1_replica1, shard_1_replica2])
-    _, l2vtgate_addr = l2vtgate.rpc_endpoint()
 
-    # Clear utils.vtgate, so it doesn't point to the previous l2vtgate.
-    utils.vtgate = None
-
-    # This vgate doesn't watch any local tablets, so we disable_local_gateway.
-    utils.VtGate().start(l2vtgates=[l2vtgate_addr,],
-                         extra_args=['-disable_local_gateway'])
-
-  else:
-    utils.VtGate().start(tablets=
-                         [shard_0_master, shard_0_replica1, shard_0_replica2,
-                          shard_1_master, shard_1_replica1, shard_1_replica2])
+  utils.VtGate().start(tablets=
+                       [shard_0_master, shard_0_replica1, shard_0_replica2,
+                        shard_1_master, shard_1_replica1, shard_1_replica2])
 
   wait_for_all_tablets()
 
 
 def restart_vtgate(port):
-  if use_l2vtgate:
-    utils.VtGate(port=port).start(l2vtgates=[l2vtgate_addr,],
-                                  extra_args=['-disable_local_gateway'])
-  else:
-    utils.VtGate(port=port).start(
-        tablets=[shard_0_master, shard_0_replica1, shard_0_replica2,
-                 shard_1_master, shard_1_replica1, shard_1_replica2])
+  utils.VtGate(port=port).start(
+      tablets=[shard_0_master, shard_0_replica1, shard_0_replica2,
+               shard_1_master, shard_1_replica1, shard_1_replica2])
 
 
 def wait_for_endpoints(name, count):
-  if use_l2vtgate:
-    # Wait for the l2vtgate to have a healthy connection.
-    l2vtgate.wait_for_endpoints(name, count)
-    # Also wait for vtgate to have received the remote healthy connection.
-    utils.vtgate.wait_for_endpoints(name, count, var='L2VtgateConnections')
-  else:
-    utils.vtgate.wait_for_endpoints(name, count)
+  utils.vtgate.wait_for_endpoints(name, count)
 
 
 def wait_for_all_tablets():
@@ -411,17 +374,12 @@ class TestCoreVTGateFunctions(BaseTestCase):
         self.assertIn(kid, SHARD_KID_MAP[SHARD_NAMES[shard_index]])
 
     # Do a cross shard range query and assert all rows are fetched.
-    # Use this test to also test the vtgate vars (and l2vtgate vars if
-    # applicable) are correctly updated.
+    # Use this test to also test the vtgate vars are correctly updated.
     v = utils.vtgate.get_vars()
     key0 = 'Execute.' + KEYSPACE_NAME + '.' + SHARD_NAMES[0] + '.master'
     key1 = 'Execute.' + KEYSPACE_NAME + '.' + SHARD_NAMES[1] + '.master'
     before0 = v['VttabletCall']['Histograms'][key0]['Count']
     before1 = v['VttabletCall']['Histograms'][key1]['Count']
-    if use_l2vtgate:
-      lv = l2vtgate.get_vars()
-      lbefore0 = lv['QueryServiceCall']['Histograms'][key0]['Count']
-      lbefore1 = lv['QueryServiceCall']['Histograms'][key1]['Count']
 
     cursor = vtgate_conn.cursor(
         tablet_type='master', keyspace=KEYSPACE_NAME,
@@ -435,12 +393,6 @@ class TestCoreVTGateFunctions(BaseTestCase):
     after1 = v['VttabletCall']['Histograms'][key1]['Count']
     self.assertEqual(after0 - before0, 1)
     self.assertEqual(after1 - before1, 1)
-    if use_l2vtgate:
-      lv = l2vtgate.get_vars()
-      lafter0 = lv['QueryServiceCall']['Histograms'][key0]['Count']
-      lafter1 = lv['QueryServiceCall']['Histograms'][key1]['Count']
-      self.assertEqual(lafter0 - lbefore0, 1)
-      self.assertEqual(lafter1 - lbefore1, 1)
 
   def test_rollback(self):
     vtgate_conn = get_connection()
