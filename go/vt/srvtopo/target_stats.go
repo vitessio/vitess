@@ -27,9 +27,6 @@ import (
 // routing of queries.
 // - discovery.TabletStatsCache will implement the discovery part of the
 //   interface, and discoverygateway will have the QueryService.
-// - hybridgateway will also implement this interface: for each l2vtgate pool,
-//   it will establish a StreamHealth connection, and store the returned
-//   health stats.
 type TargetStats interface {
 	// GetAggregateStats returns the aggregate stats for the given Target.
 	// The srvtopo module will use that information to route queries
