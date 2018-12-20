@@ -141,12 +141,10 @@ func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType topodatapb.TabletType, ce
 func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*topodatapb.SrvKeyspace_ServedFrom {
 	var result []*topodatapb.SrvKeyspace_ServedFrom
 	for _, ksf := range ki.ServedFroms {
-		if InCellList(cell, ksf.Cells) {
-			result = append(result, &topodatapb.SrvKeyspace_ServedFrom{
-				TabletType: ksf.TabletType,
-				Keyspace:   ksf.Keyspace,
-			})
-		}
+		result = append(result, &topodatapb.SrvKeyspace_ServedFrom{
+			TabletType: ksf.TabletType,
+			Keyspace:   ksf.Keyspace,
+		})
 	}
 	return result
 }

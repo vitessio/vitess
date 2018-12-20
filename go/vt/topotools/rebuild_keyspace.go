@@ -44,18 +44,13 @@ func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, k
 
 // findCellsForRebuild will find all the cells in the given keyspace
 // and create an entry if the map for them
-func findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[string]*topo.ShardInfo, cells []string, srvKeyspaceMap map[string]*topodatapb.SrvKeyspace) {
-	for _, si := range shardMap {
-		for _, cell := range si.Cells {
-			if !topo.InCellList(cell, cells) {
-				continue
-			}
-			if _, ok := srvKeyspaceMap[cell]; !ok {
-				srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
-					ShardingColumnName: ki.ShardingColumnName,
-					ShardingColumnType: ki.ShardingColumnType,
-					ServedFrom:         ki.ComputeCellServedFrom(cell),
-				}
+func findCellsForRebuild(ki *topo.KeyspaceInfo, cells []string, srvKeyspaceMap map[string]*topodatapb.SrvKeyspace) {
+	for _, cell := range cells {
+		if _, ok := srvKeyspaceMap[cell]; !ok {
+			srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
+				ShardingColumnName: ki.ShardingColumnName,
+				ShardingColumnType: ki.ShardingColumnType,
+				ServedFrom:         ki.ComputeCellServedFrom(cell),
 			}
 		}
 	}
@@ -90,16 +85,7 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 	//   key: cell
 	//   value: topo.SrvKeyspace object being built
 	srvKeyspaceMap := make(map[string]*topodatapb.SrvKeyspace)
-	findCellsForRebuild(ki, shards, cells, srvKeyspaceMap)
-
-	// Then we add the cells from the keyspaces we might be 'ServedFrom'.
-	for _, ksf := range ki.ServedFroms {
-		servedFromShards, err := ts.FindAllShardsInKeyspace(ctx, ksf.Keyspace)
-		if err != nil {
-			return err
-		}
-		findCellsForRebuild(ki, servedFromShards, cells, srvKeyspaceMap)
-	}
+	findCellsForRebuild(ki, cells, srvKeyspaceMap)
 
 	// for each entry in the srvKeyspaceMap map, we do the following:
 	// - get the Shard structures for each shard / cell

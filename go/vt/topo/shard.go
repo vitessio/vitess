@@ -496,9 +496,7 @@ func (si *ShardInfo) GetServedType(tabletType topodatapb.TabletType) *topodatapb
 func (si *ShardInfo) GetServedTypesPerCell(cell string) []topodatapb.TabletType {
 	result := make([]topodatapb.TabletType, 0, len(si.ServedTypes))
 	for _, st := range si.ServedTypes {
-		if InCellList(cell, st.Cells) {
-			result = append(result, st.TabletType)
-		}
+		result = append(result, st.TabletType)
 	}
 	return result
 }
