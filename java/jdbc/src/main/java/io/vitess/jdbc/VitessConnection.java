@@ -16,6 +16,14 @@
 
 package io.vitess.jdbc;
 
+import io.vitess.client.Context;
+import io.vitess.client.VTGateConnection;
+import io.vitess.client.VTSession;
+import io.vitess.proto.Query;
+import io.vitess.util.CommonUtils;
+import io.vitess.util.Constants;
+import io.vitess.util.MysqlDefs;
+
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
@@ -41,16 +49,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.Executor;
-import java.util.logging.Logger;
-
-import io.vitess.client.Context;
-import io.vitess.client.VTGateConnection;
-import io.vitess.client.VTSession;
-import io.vitess.proto.Query;
-import io.vitess.proto.Vtgate;
-import io.vitess.util.CommonUtils;
-import io.vitess.util.Constants;
-import io.vitess.util.MysqlDefs;
 
 /**
  * Created by harshit.gangal on 23/01/16.
@@ -58,7 +56,6 @@ import io.vitess.util.MysqlDefs;
 public class VitessConnection extends ConnectionProperties implements Connection {
 
     /* Get actual class name to be printed on */
-    private static Logger logger = Logger.getLogger(VitessConnection.class.getName());
     private static DatabaseMetaData databaseMetaData = null;
 
     /**
@@ -223,9 +220,8 @@ public class VitessConnection extends ConnectionProperties implements Connection
      * Return Connection state
      *
      * @return DatabaseMetadata Object
-     * @throws SQLException
      */
-    public boolean isClosed() throws SQLException {
+    public boolean isClosed() {
         return this.closed;
     }
 
@@ -486,9 +482,8 @@ public class VitessConnection extends ConnectionProperties implements Connection
      *
      * @param name - Property Name
      * @return Property Value
-     * @throws SQLException
      */
-    public String getClientInfo(String name) throws SQLException {
+    public String getClientInfo(String name) {
         return null;
     }
 
@@ -496,9 +491,8 @@ public class VitessConnection extends ConnectionProperties implements Connection
      * TODO: For Implementation Possibility
      *
      * @return - Property Object
-     * @throws SQLException
      */
-    public Properties getClientInfo() throws SQLException {
+    public Properties getClientInfo() {
         return null;
     }
 
@@ -818,11 +812,11 @@ public class VitessConnection extends ConnectionProperties implements Connection
 
         if (metadataNullOrClosed()) {
             String versionValue;
-            ResultSet resultSet = null;
-            VitessStatement vitessStatement = new VitessStatement(this);
-            try {
-                resultSet = vitessStatement.executeQuery(
-                    "SHOW VARIABLES WHERE VARIABLE_NAME IN (\'tx_isolation\',\'INNODB_VERSION\', \'lower_case_table_names\')");
+
+            try(VitessStatement vitessStatement = new VitessStatement(this);
+                ResultSet resultSet = vitessStatement.executeQuery(
+                    "SHOW VARIABLES WHERE VARIABLE_NAME IN (\'tx_isolation\',\'INNODB_VERSION\', \'lower_case_table_names\')")
+            ) {
                 while (resultSet.next()) {
                     dbVariables.put(resultSet.getString(1), resultSet.getString(2));
                 }
@@ -855,13 +849,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
                 }
                 this.dbProperties =
                     new DBProperties(productVersion, majorVersion, minorVersion, isolationLevel, lowerCaseTables);
-            } finally {
-                if (null != resultSet) {
-                    resultSet.close();
-                }
-                vitessStatement.close();
             }
-
         }
         return dbEngine;
     }

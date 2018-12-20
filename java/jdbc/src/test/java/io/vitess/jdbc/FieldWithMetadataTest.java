@@ -16,8 +16,6 @@
 
 package io.vitess.jdbc;
 
-import java.sql.SQLException;
-import java.sql.Types;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -30,6 +28,9 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import io.vitess.proto.Query;
 import io.vitess.util.MysqlDefs;
 import io.vitess.util.charset.CharsetMapping;
+
+import java.sql.SQLException;
+import java.sql.Types;
 
 @PrepareForTest(FieldWithMetadata.class)
 @RunWith(PowerMockRunner.class)
