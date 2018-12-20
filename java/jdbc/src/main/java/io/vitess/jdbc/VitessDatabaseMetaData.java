@@ -16,13 +16,13 @@
 
 package io.vitess.jdbc;
 
+import io.vitess.util.Constants;
+
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.logging.Logger;
-
-import io.vitess.util.Constants;
 
 /**
  * Created by harshit.gangal on 25/01/16.

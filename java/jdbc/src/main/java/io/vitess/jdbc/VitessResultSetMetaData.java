@@ -17,14 +17,15 @@
 package io.vitess.jdbc;
 
 import com.google.common.collect.ImmutableList;
+
+import io.vitess.proto.Query;
+import io.vitess.util.Constants;
+
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.List;
 import java.util.logging.Logger;
-
-import io.vitess.proto.Query;
-import io.vitess.util.Constants;
 
 
 /**

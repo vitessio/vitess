@@ -18,6 +18,15 @@ package io.vitess.jdbc;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
+
+import io.vitess.client.cursor.Cursor;
+import io.vitess.client.cursor.Row;
+import io.vitess.client.cursor.SimpleCursor;
+import io.vitess.proto.Query;
+import io.vitess.util.Constants;
+import io.vitess.util.StringUtils;
+
+import javax.sql.rowset.serial.SerialClob;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.Reader;
@@ -46,23 +55,11 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Logger;
-import javax.sql.rowset.serial.SerialClob;
-
-import io.vitess.client.cursor.Cursor;
-import io.vitess.client.cursor.Row;
-import io.vitess.client.cursor.SimpleCursor;
-import io.vitess.proto.Query;
-import io.vitess.util.Constants;
-import io.vitess.util.StringUtils;
 
 /**
  * Created by harshit.gangal on 23/01/16.
  */
 public class VitessResultSet implements ResultSet {
-
-    /* Get actual class name to be printed on */
-    private static Logger logger = Logger.getLogger(VitessResultSet.class.getName());
 
     private Cursor cursor;
     private List<FieldWithMetadata> fields;
@@ -765,7 +762,7 @@ public class VitessResultSet implements ResultSet {
         return getTimestamp(columnIndex, cal);
     }
 
-    public boolean isClosed() throws SQLException {
+    public boolean isClosed() {
         return this.closed;
     }
 

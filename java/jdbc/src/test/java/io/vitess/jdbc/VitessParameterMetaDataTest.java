@@ -16,9 +16,6 @@
 
 package io.vitess.jdbc;
 
-import java.sql.ParameterMetaData;
-import java.sql.SQLException;
-import java.sql.Types;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -26,6 +23,10 @@ import org.mockito.internal.verification.VerificationModeFactory;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+
+import java.sql.ParameterMetaData;
+import java.sql.SQLException;
+import java.sql.Types;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(VitessParameterMetaData.class)
