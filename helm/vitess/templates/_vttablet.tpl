@@ -513,7 +513,7 @@ spec:
 {{ define "cont-logrotate" }}
 
 - name: logrotate
-  image: vitess/logrotate:latest
+  image: vitess/logrotate:helm-1.0.3
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -527,7 +527,7 @@ spec:
 {{ define "cont-mysql-errorlog" }}
 
 - name: error-log
-  image: vitess/logtail:latest
+  image: vitess/logtail:helm-1.0.3
   imagePullPolicy: IfNotPresent
 
   env:
@@ -545,7 +545,7 @@ spec:
 {{ define "cont-mysql-slowlog" }}
 
 - name: slow-log
-  image: vitess/logtail:latest
+  image: vitess/logtail:helm-1.0.3
   imagePullPolicy: IfNotPresent
 
   env:
@@ -563,7 +563,7 @@ spec:
 {{ define "cont-mysql-generallog" }}
 
 - name: general-log
-  image: vitess/logtail:latest
+  image: vitess/logtail:helm-1.0.3
   imagePullPolicy: IfNotPresent
 
   env:
