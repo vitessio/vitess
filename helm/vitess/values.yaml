@@ -290,10 +290,6 @@ vttablet:
     # Size of the connection pool for dba connections
     dba_pool_size: 20
 
-    # size of a special pool that will be used if the client requests
-    # that statements be executed with the CLIENT_FOUND_ROWS option of MySQL.
-    client-found-rows-pool-size: 0
-
   # User secrets that will be mounted under /vt/usersecrets/{secretname}/
   secrets: []
 
