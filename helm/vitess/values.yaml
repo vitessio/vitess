@@ -177,7 +177,7 @@ etcd:
 # Default values for vtctld resources defined in 'topology'
 vtctld:
   serviceType: ClusterIP
-  vitessTag: latest
+  vitessTag: helm-1.0.3
   resources:
     # requests:
     #   cpu: 100m
@@ -188,7 +188,7 @@ vtctld:
 # Default values for vtgate resources defined in 'topology'
 vtgate:
   serviceType: ClusterIP
-  vitessTag: latest
+  vitessTag: helm-1.0.3
   resources:
     # requests:
     #   cpu: 500m
@@ -207,13 +207,13 @@ vtgate:
 
 # Default values for vtctlclient resources defined in 'topology'
 vtctlclient:
-  vitessTag: latest
+  vitessTag: helm-1.0.3
   extraFlags: {}
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 # Default values for vtworker resources defined in 'jobs'
 vtworker:
-  vitessTag: latest
+  vitessTag: helm-1.0.3
   extraFlags: {}
   resources:
     # requests:
@@ -224,7 +224,7 @@ vtworker:
 
 # Default values for vttablet resources defined in 'topology'
 vttablet:
-  vitessTag: latest
+  vitessTag: helm-1.0.3
 
   # valid values are
   # - mysql56 (for MySQL 8.0)
