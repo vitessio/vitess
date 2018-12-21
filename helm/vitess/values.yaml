@@ -177,7 +177,7 @@ etcd:
 # Default values for vtctld resources defined in 'topology'
 vtctld:
   serviceType: ClusterIP
-  vitessTag: latest
+  vitessTag: helm-1.0.3
   resources:
     # requests:
     #   cpu: 100m
@@ -188,23 +188,32 @@ vtctld:
 # Default values for vtgate resources defined in 'topology'
 vtgate:
   serviceType: ClusterIP
-  vitessTag: latest
+  vitessTag: helm-1.0.3
   resources:
     # requests:
     #   cpu: 500m
     #   memory: 512Mi
-  extraFlags: {}
+
+  # Additional flags that will be appended to the vtgate command.
+  # The options below are the most commonly adjusted, but any flag can be put here.
+  # run vtgate --help to see all available flags
+  extraFlags:
+    # MySQL server version to advertise. (default "5.5.10-Vitess")
+    # If running 8.0, you may need to use something like "8.0.13-Vitess"
+    # to prevent db clients from running deprecated queries on startup
+    mysql_server_version: "5.5.10-Vitess"
+
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 # Default values for vtctlclient resources defined in 'topology'
 vtctlclient:
-  vitessTag: latest
+  vitessTag: helm-1.0.3
   extraFlags: {}
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 # Default values for vtworker resources defined in 'jobs'
 vtworker:
-  vitessTag: latest
+  vitessTag: helm-1.0.3
   extraFlags: {}
   resources:
     # requests:
@@ -215,7 +224,7 @@ vtworker:
 
 # Default values for vttablet resources defined in 'topology'
 vttablet:
-  vitessTag: latest
+  vitessTag: helm-1.0.3
 
   # valid values are
   # - mysql56 (for MySQL 8.0)
@@ -248,8 +257,38 @@ vttablet:
   # If the value is "test", then mysql is instanitated with a smaller footprint.
   mysqlSize: prod
 
-  # Additional flags that will be appended to the vttablet command
-  extraFlags: {}
+  # Additional flags that will be appended to the vttablet command.
+  # The options below are the most commonly adjusted, but any flag can be put here.
+  # run vttablet --help to see all available flags
+  extraFlags:
+    # query server max result size, maximum number of rows allowed to return
+    # from vttablet for non-streaming queries.
+    queryserver-config-max-result-size: 10000
+
+    # query server query timeout (in seconds), this is the query timeout in vttablet side.
+    # If a query takes more than this timeout, it will be killed.
+    queryserver-config-query-timeout: 30
+
+    # query server connection pool size, connection pool is used by
+    # regular queries (non streaming, not in a transaction)
+    queryserver-config-pool-size: 24
+
+    # query server stream connection pool size, stream pool is used by stream queries:
+    # queries that return results to client in a streaming fashion
+    queryserver-config-stream-pool-size: 100
+
+    # query server transaction cap is the maximum number of transactions allowed to
+    # happen at any given point of a time for a single vttablet.
+    # e.g. by setting transaction cap to 100, there are at most 100 transactions
+    # will be processed by a vttablet and the 101th transaction will be blocked
+    # (and fail if it cannot get connection within specified timeout)
+    queryserver-config-transaction-cap: 300
+
+    # Size of the connection pool for app connections
+    app_pool_size: 40
+
+    # Size of the connection pool for dba connections
+    dba_pool_size: 20
 
   # User secrets that will be mounted under /vt/usersecrets/{secretname}/
   secrets: []
