@@ -378,7 +378,7 @@ func (si *ShardInfo) GetTabletControl(tabletType topodatapb.TabletType) *topodat
 //   because it's not used in the same context (vertical vs horizontal sharding)
 //
 // This function should be called while holding the keyspace lock.
-func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
+func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletType topodatapb.TabletType, remove bool, tables []string) error {
 	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
 		return err
 	}
@@ -395,7 +395,6 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 		// trying to add more constraints with no existing record
 		si.TabletControls = append(si.TabletControls, &topodatapb.Shard_TabletControl{
 			TabletType:          tabletType,
-			Cells:               cells,
 			DisableQueryService: false,
 			BlacklistedTables:   tables,
 		})
@@ -409,13 +408,11 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 	}
 
 	if remove {
-		si.removeCellsFromTabletControl(tc, tabletType, cells)
+		si.removeTabletControl(tc, tabletType)
 	} else {
 		if !reflect.DeepEqual(tc.BlacklistedTables, tables) {
 			return fmt.Errorf("trying to use two different sets of blacklisted tables for shard %v/%v: %v and %v", si.keyspace, si.shardName, tc.BlacklistedTables, tables)
 		}
-
-		tc.Cells = addCells(tc.Cells, cells)
 	}
 	return nil
 }
@@ -426,7 +423,7 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 // - we don't support DisableQueryService at the same time as BlacklistedTables,
 //   because it's not used in the same context (vertical vs horizontal sharding)
 // This function should be called while holding the keyspace lock.
-func (si *ShardInfo) UpdateDisableQueryService(ctx context.Context, tabletType topodatapb.TabletType, cells []string, disableQueryService bool) error {
+func (si *ShardInfo) UpdateDisableQueryService(ctx context.Context, tabletType topodatapb.TabletType, disableQueryService bool) error {
 	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
 		return err
 	}
@@ -436,7 +433,6 @@ func (si *ShardInfo) UpdateDisableQueryService(ctx context.Context, tabletType t
 		if disableQueryService {
 			si.TabletControls = append(si.TabletControls, &topodatapb.Shard_TabletControl{
 				TabletType:          tabletType,
-				Cells:               cells,
 				DisableQueryService: true,
 				BlacklistedTables:   nil,
 			})
@@ -454,31 +450,25 @@ func (si *ShardInfo) UpdateDisableQueryService(ctx context.Context, tabletType t
 		return fmt.Errorf("cannot safely alter DisableQueryService as DisableQueryService is not set, this record should not be there for shard %v/%v", si.keyspace, si.shardName)
 	}
 
-	if disableQueryService {
-		tc.Cells = addCells(tc.Cells, cells)
-	} else {
+	if !disableQueryService {
 		if tc.Frozen {
 			return fmt.Errorf("migrate has gone past the point of no return, cannot re-enable serving for %v/%v", si.keyspace, si.shardName)
 		}
-		si.removeCellsFromTabletControl(tc, tabletType, cells)
+		si.removeTabletControl(tc, tabletType)
+
 	}
 	return nil
 }
 
-func (si *ShardInfo) removeCellsFromTabletControl(tc *topodatapb.Shard_TabletControl, tabletType topodatapb.TabletType, cells []string) {
-	result, emptyList := removeCells(tc.Cells, cells, si.Cells)
-	if emptyList {
-		// we don't have any cell left, we need to clear this record
-		var tabletControls []*topodatapb.Shard_TabletControl
-		for _, tc := range si.TabletControls {
-			if tc.TabletType != tabletType {
-				tabletControls = append(tabletControls, tc)
-			}
+func (si *ShardInfo) removeTabletControl(tc *topodatapb.Shard_TabletControl, tabletType topodatapb.TabletType) {
+	// Remove tablet control from shard
+	var tabletControls []*topodatapb.Shard_TabletControl
+	for _, tc := range si.TabletControls {
+		if tc.TabletType != tabletType {
+			tabletControls = append(tabletControls, tc)
 		}
-		si.TabletControls = tabletControls
-	} else {
-		tc.Cells = result
 	}
+	si.TabletControls = tabletControls
 }
 
 // GetServedType returns the Shard_ServedType for a TabletType, or nil

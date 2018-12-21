@@ -59,14 +59,11 @@ func (ki *KeyspaceInfo) GetServedFrom(tabletType topodatapb.TabletType) *topodat
 }
 
 // CheckServedFromMigration makes sure a requested migration is safe
-func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType topodatapb.TabletType, cells []string, keyspace string, remove bool) error {
+func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType topodatapb.TabletType, keyspace string, remove bool) error {
 	// master is a special case with a few extra checks
 	if tabletType == topodatapb.TabletType_MASTER {
 		if !remove {
 			return fmt.Errorf("Cannot add master back to %v", ki.keyspace)
-		}
-		if len(cells) > 0 {
-			return fmt.Errorf("Cannot migrate only some cells for master removal in keyspace %v", ki.keyspace)
 		}
 		if len(ki.ServedFroms) > 1 {
 			return fmt.Errorf("Cannot migrate master into %v until everything else is migrated", ki.keyspace)
@@ -90,9 +87,9 @@ func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType topodatapb.TabletTyp
 
 // UpdateServedFromMap handles ServedFromMap. It can add or remove
 // records, cells, ...
-func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType topodatapb.TabletType, cells []string, keyspace string, remove bool, allCells []string) error {
+func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType topodatapb.TabletType, keyspace string, remove bool) error {
 	// check parameters to be sure
-	if err := ki.CheckServedFromMigration(tabletType, cells, keyspace, remove); err != nil {
+	if err := ki.CheckServedFromMigration(tabletType, keyspace, remove); err != nil {
 		return err
 	}
 
@@ -107,7 +104,6 @@ func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType topodatapb.TabletType, ce
 		} else {
 			ki.ServedFroms = append(ki.ServedFroms, &topodatapb.Keyspace_ServedFrom{
 				TabletType: tabletType,
-				Cells:      cells,
 				Keyspace:   keyspace,
 			})
 		}
@@ -115,24 +111,17 @@ func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType topodatapb.TabletType, ce
 	}
 
 	if remove {
-		result, emptyList := removeCells(ksf.Cells, cells, allCells)
-		if emptyList {
-			// we don't have any cell left, we need to clear this record
-			var newServedFroms []*topodatapb.Keyspace_ServedFrom
-			for _, k := range ki.ServedFroms {
-				if k != ksf {
-					newServedFroms = append(newServedFroms, k)
-				}
+		var newServedFroms []*topodatapb.Keyspace_ServedFrom
+		for _, k := range ki.ServedFroms {
+			if k != ksf {
+				newServedFroms = append(newServedFroms, k)
 			}
-			ki.ServedFroms = newServedFroms
-		} else {
-			ksf.Cells = result
 		}
+		ki.ServedFroms = newServedFroms
 	} else {
 		if ksf.Keyspace != keyspace {
 			return fmt.Errorf("cannot UpdateServedFromMap on existing record for keyspace %v, different keyspace: %v != %v", ki.keyspace, ksf.Keyspace, keyspace)
 		}
-		ksf.Cells = addCells(ksf.Cells, cells)
 	}
 	return nil
 }

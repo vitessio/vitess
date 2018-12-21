@@ -166,7 +166,7 @@ func setupMockWrangler(ctrl *gomock.Controller, keyspace string) *MockResharding
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_MASTER}
 	for _, servedType := range servedTypeParams {
-		mockWranglerInterface.EXPECT().MigrateServedTypes(gomock.Any(), keyspace, "0", nil /* cells */, servedType, false /* reverse */, false /* skipReFreshState */, wrangler.DefaultFilteredReplicationWaitTime, false /* reverseReplication */).Return(nil)
+		mockWranglerInterface.EXPECT().MigrateServedTypes(gomock.Any(), keyspace, "0", servedType, false /* reverse */, false /* skipReFreshState */, wrangler.DefaultFilteredReplicationWaitTime, false /* reverseReplication */).Return(nil)
 	}
 	return mockWranglerInterface
 }

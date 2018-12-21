@@ -915,7 +915,6 @@ func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 }
 
 func commandRefreshStateByShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells whose tablets are included. If empty, all cells are considered.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -932,11 +931,7 @@ func commandRefreshStateByShard(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 
-	var cells []string
-	if *cellsStr != "" {
-		cells = strings.Split(*cellsStr, ",")
-	}
-	return wr.RefreshTabletsByShard(ctx, si, nil /* tabletTypes */, cells)
+	return wr.RefreshTabletsByShard(ctx, si, nil /* tabletTypes */)
 }
 
 func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1621,7 +1616,6 @@ func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, 
 func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	source := subFlags.String("source", "", "Specifies the source keyspace name")
 	remove := subFlags.Bool("remove", false, "Indicates whether to add (default) or remove the served from record")
-	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to affect")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1633,12 +1627,7 @@ func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, su
 	if err != nil {
 		return err
 	}
-	var cells []string
-	if *cellsStr != "" {
-		cells = strings.Split(*cellsStr, ",")
-	}
-
-	return wr.SetKeyspaceServedFrom(ctx, keyspace, servedType, cells, *source, *remove)
+	return wr.SetKeyspaceServedFrom(ctx, keyspace, servedType, *source, *remove)
 }
 
 func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1681,7 +1670,6 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 }
 
 func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward. Use in case of trouble")
 	skipReFreshState := subFlags.Bool("skip-refresh-state", false, "Skips refreshing the state of the source tablets after the migration, meaning that the refresh will need to be done manually, replica and rdonly only)")
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations")
@@ -1704,16 +1692,11 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 	if servedType == topodatapb.TabletType_MASTER && *skipReFreshState {
 		return fmt.Errorf("the skip-refresh-state flag can only be specified for non-master migrations")
 	}
-	var cells []string
-	if *cellsStr != "" {
-		cells = strings.Split(*cellsStr, ",")
-	}
-	return wr.MigrateServedTypes(ctx, keyspace, shard, cells, servedType, *reverse, *skipReFreshState, *filteredReplicationWaitTime, *reverseReplication)
+	return wr.MigrateServedTypes(ctx, keyspace, shard, servedType, *reverse, *skipReFreshState, *filteredReplicationWaitTime, *reverseReplication)
 }
 
 func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward. Use in case of trouble")
-	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1730,11 +1713,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	var cells []string
-	if *cellsStr != "" {
-		cells = strings.Split(*cellsStr, ",")
-	}
-	return wr.MigrateServedFrom(ctx, keyspace, shard, servedType, cells, *reverse, *filteredReplicationWaitTime)
+	return wr.MigrateServedFrom(ctx, keyspace, shard, servedType, *reverse, *filteredReplicationWaitTime)
 }
 
 func commandCancelResharding(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

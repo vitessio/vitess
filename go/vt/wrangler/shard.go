@@ -112,11 +112,11 @@ func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard s
 	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 		if len(blacklistedTables) == 0 && !remove {
 			// we are setting the DisableQueryService flag only
-			return si.UpdateDisableQueryService(ctx, tabletType, cells, disableQueryService)
+			return si.UpdateDisableQueryService(ctx, tabletType, disableQueryService)
 		}
 
 		// we are setting / removing the blacklisted tables only
-		return si.UpdateSourceBlacklistedTables(ctx, tabletType, cells, remove, blacklistedTables)
+		return si.UpdateSourceBlacklistedTables(ctx, tabletType, remove, blacklistedTables)
 	})
 	return err
 }

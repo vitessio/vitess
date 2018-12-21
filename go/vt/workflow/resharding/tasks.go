@@ -120,5 +120,5 @@ func (hw *horizontalReshardingWorkflow) runMigrate(ctx context.Context, t *workf
 		return fmt.Errorf("wrong served type to be migrated: %v", servedTypeStr)
 	}
 
-	return hw.wr.MigrateServedTypes(ctx, keyspace, sourceShard, nil /* cells */, servedType, false /* reverse */, false /* skipReFreshState */, wrangler.DefaultFilteredReplicationWaitTime, false /* reverseReplication */)
+	return hw.wr.MigrateServedTypes(ctx, keyspace, sourceShard, servedType, false /* reverse */, false /* skipReFreshState */, wrangler.DefaultFilteredReplicationWaitTime, false /* reverseReplication */)
 }
