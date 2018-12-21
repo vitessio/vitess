@@ -20,7 +20,6 @@ package gateway
 
 import (
 	"flag"
-	"fmt"
 	"time"
 
 	"golang.org/x/net/context"
@@ -31,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -127,54 +125,4 @@ func WaitForTablets(gw Gateway, tabletTypesToWait []topodatapb.TabletType) error
 		// Nothing to do here, the caller will log.Fatalf.
 	}
 	return err
-}
-
-// StreamHealthFromTargetStatsListener responds to a StreamHealth
-// streaming RPC using a srvtopo.TargetStatsListener implementation.
-func StreamHealthFromTargetStatsListener(ctx context.Context, l srvtopo.TargetStatsListener, callback func(*querypb.StreamHealthResponse) error) error {
-	// Subscribe to the TargetStatsListener aggregate stats.
-	id, entries, c, err := l.Subscribe()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		// Unsubscribe so we don't receive more updates, and
-		// drain the channel.
-		l.Unsubscribe(id)
-		for range c {
-		}
-	}()
-
-	// Send all current entries.
-	for _, e := range entries {
-		shr := &querypb.StreamHealthResponse{
-			Target:                              e.Target,
-			TabletExternallyReparentedTimestamp: e.TabletExternallyReparentedTimestamp,
-			AggregateStats:                      e.Stats,
-		}
-		if err := callback(shr); err != nil {
-			return err
-		}
-	}
-
-	// Now listen for updates, or the end of the connection.
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case e, ok := <-c:
-			if !ok {
-				// Channel is closed, should never happen.
-				return fmt.Errorf("channel closed")
-			}
-			shr := &querypb.StreamHealthResponse{
-				Target:                              e.Target,
-				TabletExternallyReparentedTimestamp: e.TabletExternallyReparentedTimestamp,
-				AggregateStats:                      e.Stats,
-			}
-			if err := callback(shr); err != nil {
-				return err
-			}
-		}
-	}
 }
