@@ -498,7 +498,6 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 			return agg, nil
 		}
 	}
-
 	targetRegion := tc.getRegionByCell(target.Cell)
 	regionAggregateStats := &querypb.AggregateStats{SecondsBehindMasterMin: math.MaxUint32}
 	regionAggrFound := false
