@@ -19,7 +19,6 @@ package vterrors
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"testing"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -96,7 +95,7 @@ func TestAggregateVtGateErrors(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		out := Aggregate(tc.input)
-		if !reflect.DeepEqual(out, tc.expected) {
+		if !Equals(out, tc.expected) {
 			t.Errorf("AggregateVtGateErrors(%+v) = %+v \nwant: %+v",
 				tc.input, out, tc.expected)
 		}

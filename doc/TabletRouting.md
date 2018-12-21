@@ -93,36 +93,7 @@ There are two implementations of the Gateway interface:
   discovery section, one per cell) as a source of tablets, a HealthCheck module
   to watch their health, and a TabletStatsCache to collect all the health
   information. Based on this data, it can find the best tablet to use.
-* l2VTGateGateway: It keeps a map of l2vtgate processes to send queries to. See
-  next section for more details.
   
-## l2vtgate
-
-As we started increasing the number of tablets in a cell, it became clear that a
-bottleneck of the system was going to be how many tablets a single vtgate is
-connecting to. Since vtgate maintains a streaming health check connection per
-tablet, the number of these connections can grow to large numbers. It is common
-for vtgate to watch tablets in other cells, to be able to find the master
-tablet.
-
-So l2vtgate came to exist, based on very similar concepts and interfaces:
-
-* l2vtgate is an extra hop between a vtgate pool and tablets.
-* A l2vtgate pool connects to a subset of tablets, therefore it can have a
-  reasonable number of streaming health connections. Externally, it exposes the
-  QueryService RPC interface (that has the Target for the query, keyspace /
-  shard / tablet type). Internally, it uses a discoveryGateway, as usual.
-* vtgate connects to l2vtgate pools (using the l2VTGateGateway instead of the
-  discoveryGateway). It has a map of which keyspace / shard / tablet type needs
-  to go to wich l2vtgate pool. At this point, vtgate doesn't maintain any health
-  information about the tablets, it lets l2vtgate handle it.
-
-Note l2vtgate is not an ideal solution as it is now. For instance, if there are
-two cells, and the master for a shard can be in either, l2vtgate still has to
-watch the tablets in both cells, to know where the master is. Ideally, we'd want
-l2vtgate to be collocated with the tablets in a given cell, and not go
-cross-cell.
-
 # Extensions, work in progress
 
 ## Regions, cross-cell targeting
@@ -168,31 +139,6 @@ between vtgate and l2vtgate:
 
 This would also be a good time to merge the vtgate code that uses the VSchema
 with the code that doesn't for SrvKeyspace access.
-
-## Hybrid Gateway
-
-It would be nice to re-organize the code a bit inside vtgate to allow for an
-hybrid gateway, and get rid of l2vtgate alltogether:
-
-* vtgate would use the discoveryGateway to watch the tablets in the current cell
-  (and optionally to any other cell we still want to consider local).
-* vtgate would use l2vtgateGateway to watch the tablets in a different cell.
-* vtgate would expose the RPC APIs currently exposed by the l2vtgate process.
-
-So vtgate would watch the tablets in the local cell only, but also know what
-healthy tablets are in the other cells, and be able to send query to them
-through their vtgate. The extra hop to the other cell vtgate should be a small
-latency price to pay, compared to going cross-cell already.
-
-So queries would go one of two routes:
-
-* client(cell1) -> vtgate(cell1) -> tablet(cell1)
-* client(cell1) -> vtgate(cell1) -> vtgate(cell2) -> tablet(cell2)
-
-If the number of tablets in a given cell is still too high for the local vtgate
-pool, two or more pools can still be created, each of them knowing about a
-subset of the tablets. And they would just forward queries to each others when
-addressing the other tablet set.
 
 ## Config-based routing
 

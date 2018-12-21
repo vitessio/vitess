@@ -16,6 +16,8 @@
 
 package io.vitess.jdbc;
 
+import io.vitess.util.Constants;
+
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;
@@ -24,8 +26,6 @@ import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.Properties;
 import java.util.logging.Logger;
-
-import io.vitess.util.Constants;
 
 /**
  * VitessDriver is the official JDBC driver for Vitess.
@@ -37,9 +37,6 @@ import io.vitess.util.Constants;
  * Created by harshit.gangal on 23/01/16.
  */
 public class VitessDriver implements Driver {
-
-    /* Get actual class name to be printed on */
-    private static Logger logger = Logger.getLogger(VitessDriver.class.getName());
 
     static {
         try {
@@ -73,7 +70,7 @@ public class VitessDriver implements Driver {
      * TODO: Write a better regex
      */
     @Override
-    public boolean acceptsURL(String url) throws SQLException {
+    public boolean acceptsURL(String url) {
         return null != url && url.startsWith(Constants.URL_PREFIX);
     }
 

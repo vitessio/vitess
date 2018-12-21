@@ -308,8 +308,8 @@ func ShowIndexFromTableRow(table string, unique bool, keyName string, seqInIndex
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(columnName)),
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("A")), // Collation
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),   // Cardinality
-		sqltypes.NULL,                                       // Sub_part
-		sqltypes.NULL,                                       // Packed
+		sqltypes.NULL, // Sub_part
+		sqltypes.NULL, // Packed
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(nullableStr)),
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BTREE")), // Index_type
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),      // Comment

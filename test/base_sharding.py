@@ -28,6 +28,7 @@ import utils
 
 keyspace_id_type = keyrange_constants.KIT_UINT64
 use_rbr = False
+use_multi_split_diff = False
 pack_keyspace_id = struct.Struct('!Q').pack
 
 # fixed_parent_id is used as fixed value for the "parent_id" column in all rows.

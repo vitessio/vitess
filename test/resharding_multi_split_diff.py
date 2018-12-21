@@ -14,11 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Re-runs initial_sharding.py with a l2vtgate process."""
+"""Re-runs resharding.py with MultiSplitDiff."""
 
-import initial_sharding
+import base_sharding
+import resharding
 import utils
 
 if __name__ == '__main__':
-  initial_sharding.use_l2vtgate = True
-  utils.main(initial_sharding)
+    base_sharding.use_multi_split_diff = True
+    utils.main(resharding)

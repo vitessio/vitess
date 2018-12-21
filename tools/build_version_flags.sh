@@ -17,11 +17,24 @@
 DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $DIR/shell_functions.inc
 
+# Normal builds run directly against the git repo, but when packaging (for example with rpms)
+# a tar ball might be used, which will prevent the git metadata from being available.
+# Should this be the case then allow environment variables to be used to source
+# this information instead.
+_build_git_rev=$(git rev-parse --short HEAD)
+if [ -z "$_build_git_rev" ]; then
+    _build_git_rev="$BUILD_GIT_REV"
+fi
+_build_git_branch=$(git rev-parse --abbrev-ref HEAD)
+if [ -z "$_build_git_branch" ]; then
+    _build_git_branch="$BUILD_GIT_BRANCH"
+fi
+
 echo "\
   -X 'vitess.io/vitess/go/vt/servenv.buildHost=$(hostname)' \
   -X 'vitess.io/vitess/go/vt/servenv.buildUser=$(whoami)' \
-  -X 'vitess.io/vitess/go/vt/servenv.buildGitRev=$(git rev-parse --short HEAD)' \
-  -X 'vitess.io/vitess/go/vt/servenv.buildGitBranch=$(git rev-parse --abbrev-ref HEAD)' \
+  -X 'vitess.io/vitess/go/vt/servenv.buildGitRev=${_build_git_rev}' \
+  -X 'vitess.io/vitess/go/vt/servenv.buildGitBranch=${_build_git_branch}' \
   -X 'vitess.io/vitess/go/vt/servenv.buildTime=$(LC_ALL=C date)' \
   -X 'vitess.io/vitess/go/vt/servenv.jenkinsBuildNumberStr=${BUILD_NUMBER}' \
 "

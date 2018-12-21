@@ -16,13 +16,16 @@ limitations under the License.
 
 package fakecallinfo
 
-import "html/template"
+import (
+	"fmt"
+	"html/template"
+)
 
 // FakeCallInfo gives a fake Callinfo usable in callinfo
 type FakeCallInfo struct {
 	Remote string
+	Method string
 	User   string
-	Txt    string
 	Html   string
 }
 
@@ -38,7 +41,7 @@ func (fci *FakeCallInfo) Username() string {
 
 // Text returns the text.
 func (fci *FakeCallInfo) Text() string {
-	return fci.Txt
+	return fmt.Sprintf("%s:%s(fakeRPC)", fci.Remote, fci.Method)
 }
 
 // HTML returns the html.

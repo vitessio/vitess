@@ -50,6 +50,16 @@ func (cl *ConsoleLogger) Errorf(format string, v ...interface{}) {
 	cl.ErrorDepth(1, fmt.Sprintf(format, v...))
 }
 
+// Errorf2 is part of the Logger interface
+func (cl *ConsoleLogger) Errorf2(err error, format string, v ...interface{}) {
+	cl.ErrorDepth(1, fmt.Sprintf(format+": %+v", append(v, err)))
+}
+
+// Error is part of the Logger interface
+func (cl *ConsoleLogger) Error(err error) {
+	cl.ErrorDepth(1, fmt.Sprintf("%+v", err))
+}
+
 // Printf is part of the Logger interface
 func (cl *ConsoleLogger) Printf(format string, v ...interface{}) {
 	fmt.Printf(format, v...)

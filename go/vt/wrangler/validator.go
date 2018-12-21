@@ -49,7 +49,7 @@ func (wr *Wrangler) waitForResults(wg *sync.WaitGroup, results chan error) error
 	var finalErr error
 	for err := range results {
 		finalErr = errors.New("some validation errors - see log")
-		wr.Logger().Errorf("%v", err)
+		wr.Logger().Error(err)
 	}
 	return finalErr
 }

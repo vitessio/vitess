@@ -25,6 +25,8 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/history"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"vitess.io/vitess/go/vt/topo"
@@ -169,11 +171,24 @@ func TestInitTablet(t *testing.T) {
 		Cell: "cell1",
 		Uid:  1,
 	}
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQueryPattern(`(SET|CREATE|BEGIN|INSERT|COMMIT)\b.*`, &sqltypes.Result{})
+	/*
+		db.AddQuery("SET @@session.sql_log_bin = 0", &sqltypes.Result{})
+		db.AddQuery("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{})
+		db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.local_metadata.*`, &sqltypes.Result{})
+		db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.shard_metadata.*`, &sqltypes.Result{})
+		db.AddQuery("BEGIN", &sqltypes.Result{})
+		db.AddQueryPattern(`INSERT INTO _vt.local_metadata.*`, &sqltypes.Result{})
+		db.AddQueryPattern(`INSERT INTO _vt.shard_metadata.*`, &sqltypes.Result{})
+		db.AddQuery("COMMIT", &sqltypes.Result{})
+	*/
 
 	// start with a tablet record that doesn't exist
 	port := int32(1234)
 	gRPCPort := int32(3456)
-	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(nil)
+	mysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(db)
 	agent := &ActionAgent{
 		TopoServer:  ts,
 		TabletAlias: tabletAlias,
@@ -194,6 +209,7 @@ func TestInitTablet(t *testing.T) {
 	*initKeyspace = "test_keyspace"
 	*initShard = "-C0"
 	*initTabletType = "replica"
+	*initPopulateMetadata = true
 	tabletAlias = &topodatapb.TabletAlias{
 		Cell: "cell1",
 		Uid:  2,

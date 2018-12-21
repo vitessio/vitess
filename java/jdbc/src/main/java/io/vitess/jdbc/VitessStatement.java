@@ -16,16 +16,6 @@
 
 package io.vitess.jdbc;
 
-import java.sql.BatchUpdateException;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
-import java.sql.SQLWarning;
-import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.logging.Logger;
-
 import io.vitess.client.Context;
 import io.vitess.client.Proto;
 import io.vitess.client.VTGateConnection;
@@ -35,6 +25,15 @@ import io.vitess.proto.Query;
 import io.vitess.proto.Vtrpc;
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;
+
+import java.sql.BatchUpdateException;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.sql.SQLWarning;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by harshit.gangal on 19/01/16.
@@ -48,8 +47,6 @@ import io.vitess.util.StringUtils;
  */
 public class VitessStatement implements Statement {
     protected static final String[] ON_DUPLICATE_KEY_UPDATE_CLAUSE = new String[] { "ON", "DUPLICATE", "KEY", "UPDATE" };
-    /* Get actual class name to be printed on */
-    private static Logger logger = Logger.getLogger(VitessStatement.class.getName());
     protected VitessResultSet vitessResultSet;
     protected VitessConnection vitessConnection;
     protected boolean closed;
@@ -268,9 +265,8 @@ public class VitessStatement implements Statement {
     /**
      * Clear the warnings - Not saving Warnings
      *
-     * @throws SQLException
      */
-    public void clearWarnings() throws SQLException {
+    public void clearWarnings() {
         //no-op
     }
 
@@ -316,7 +312,7 @@ public class VitessStatement implements Statement {
         return vitessConnection;
     }
 
-    public boolean isClosed() throws SQLException {
+    public boolean isClosed() {
         return this.closed;
     }
 
@@ -376,15 +372,15 @@ public class VitessStatement implements Statement {
             }
         } else if (this.batchGeneratedKeys != null) {
             long totalAffected = 0;
-            for (int i = 0; i < this.batchGeneratedKeys.length; i++) {
-                long rowsAffected = this.batchGeneratedKeys[i][1];
+            for (long[] batchGeneratedKey : this.batchGeneratedKeys) {
+                long rowsAffected = batchGeneratedKey[1];
                 totalAffected += rowsAffected;
             }
             data = new String[(int) totalAffected][1];
             int idx = 0;
-            for (int i = 0; i < this.batchGeneratedKeys.length; i++) {
-                long insertId = this.batchGeneratedKeys[i][0];
-                long rowsAffected = this.batchGeneratedKeys[i][1];
+            for (long[] batchGeneratedKey : this.batchGeneratedKeys) {
+                long insertId = batchGeneratedKey[0];
+                long rowsAffected = batchGeneratedKey[1];
                 for (int j = 0; j < rowsAffected; j++) {
                     data[idx++][0] = String.valueOf(insertId + j);
                 }
@@ -591,7 +587,7 @@ public class VitessStatement implements Statement {
     protected int[] generateBatchUpdateResult(List<CursorWithError> cursorWithErrorList, List<String> batchedArgs)
         throws BatchUpdateException {
         int[] updateCounts = new int[cursorWithErrorList.size()];
-        ArrayList<long[]> generatedKeys = new ArrayList<long[]>();
+        ArrayList<long[]> generatedKeys = new ArrayList<>();
 
         Vtrpc.RPCError rpcError = null;
         String batchCommand = null;
@@ -663,7 +659,7 @@ public class VitessStatement implements Statement {
         if (!(this.vitessConnection.getAutoCommit() || this.vitessConnection.isInTransaction())) {
             Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
             VTGateConnection vtGateConn = this.vitessConnection.getVtGateConn();
-            Cursor cursor = vtGateConn.execute(context,"begin",null,this.vitessConnection.getVtSession()).checkedGet();
+            vtGateConn.execute(context,"begin",null,this.vitessConnection.getVtSession()).checkedGet();
         }
     }
 

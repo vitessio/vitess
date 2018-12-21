@@ -16,11 +16,6 @@
 
 package io.vitess.jdbc;
 
-import java.io.IOException;
-import java.lang.reflect.Field;
-import java.sql.SQLException;
-import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
 import org.joda.time.Duration;
 import org.junit.Assert;
 import org.junit.Test;
@@ -30,6 +25,12 @@ import io.vitess.client.RpcClient;
 import io.vitess.client.VTGateConnection;
 import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.proto.Vtrpc;
+
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.sql.SQLException;
+import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by naveen.nahata on 29/02/16.
