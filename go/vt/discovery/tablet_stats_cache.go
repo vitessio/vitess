@@ -266,7 +266,7 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 func (tc *TabletStatsCache) makeAggregateMap(stats []*TabletStats) map[string]*querypb.AggregateStats {
 	result := make(map[string]*querypb.AggregateStats)
 	for _, ts := range stats {
-		region := tc.getRegionByCell(ts.Tablet.Alias.Cell)
+		region := topo.GetRegion(ts.Tablet.Alias.Cell)
 		agg, ok := result[region]
 		if !ok {
 			agg = &querypb.AggregateStats{
@@ -376,7 +376,7 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 			return agg, nil
 		}
 	}
-	targetRegion := tc.getRegionByCell(target.Cell)
+	targetRegion := topo.GetRegion(target.Cell)
 	agg, ok := e.aggregates[targetRegion]
 	if !ok {
 		return nil, topo.NewError(topo.NoNode, topotools.TargetIdent(target))
