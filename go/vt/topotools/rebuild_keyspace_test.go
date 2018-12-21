@@ -105,6 +105,56 @@ func TestRebuildKeyspace(t *testing.T) {
 
 }
 
+func TestRebuildKeyspaceAllCells(t *testing.T) {
+	ts := createSetup(context.Background(), t)
+	// providing empty cells, rebuilds the keyspace in all known cells
+	err := RebuildKeyspace(
+		context.Background(),
+		logutil.NewConsoleLogger(),
+		ts,
+		"test_keyspace",
+		[]string{},
+	)
+
+	if err != nil {
+		t.Fatalf("Expected error to be nil got: %v", err)
+	}
+
+	expectedSrvKeyspace := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType: topodatapb.TabletType_MASTER,
+				ShardReferences: []*topodatapb.ShardReference{
+					&topodatapb.ShardReference{Name: "0"},
+				},
+			},
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType: topodatapb.TabletType_REPLICA,
+				ShardReferences: []*topodatapb.ShardReference{
+					&topodatapb.ShardReference{Name: "0"},
+				},
+			},
+			// Note: even though there are no rdonly tablets, this is
+			// a served type in the shard, so it should show up in the
+			// srvkeyspace
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType: topodatapb.TabletType_RDONLY,
+				ShardReferences: []*topodatapb.ShardReference{
+					&topodatapb.ShardReference{Name: "0"},
+				},
+			},
+		},
+	}
+
+	srvKeyspace, err := ts.GetSrvKeyspace(context.Background(), "test_cell", "test_keyspace")
+	if err != nil {
+		t.Fatalf("Expected error to be nil got: %v", err)
+	}
+	if !reflect.DeepEqual(srvKeyspace, expectedSrvKeyspace) {
+		t.Errorf("SrvKeyspace: invalid output expected %v, got :%v", srvKeyspace, expectedSrvKeyspace)
+	}
+}
+
 func createSetup(ctx context.Context, t *testing.T) *topo.Server {
 	// Create an in memory toposerver
 	ts := memorytopo.NewServer("test_cell", "test_cell_2")

@@ -353,7 +353,7 @@ func TestGetServedType(t *testing.T) {
 		&topodatapb.Shard{
 			ServedTypes: []*topodatapb.Shard_ServedType{
 				&topodatapb.Shard_ServedType{
-					TabletType: topodatapb.TabletType_RDONLY,
+					TabletType: topodatapb.TabletType_REPLICA,
 				},
 			},
 		},

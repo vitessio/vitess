@@ -78,6 +78,14 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 		return err
 	}
 
+	// Rebuild keyspace graph in all known cells if empty cells are provided
+	if len(cells) == 0 {
+		cells, err = ts.GetKnownCells(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Build the list of cells to work on: we get the union
 	// of all the Cells of all the Shards, limited to the provided cells.
 	//
