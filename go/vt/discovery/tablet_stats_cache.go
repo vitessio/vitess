@@ -265,21 +265,18 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 	tc.updateAggregateMap(ts.Target.Keyspace, ts.Target.Shard, ts.Target.TabletType, e, allArray)
 }
 
-// makeAggregateMap takes a list of TabletStats and builds a per-cell
+// makeAggregateMap takes a list of TabletStats and builds a per-region
 // AggregateStats map.
-func (tc *TabletStatsCache) makeAggregateMap(stats []*TabletStats, buildForRegion bool) map[string]*querypb.AggregateStats {
+func (tc *TabletStatsCache) makeAggregateMap(stats []*TabletStats) map[string]*querypb.AggregateStats {
 	result := make(map[string]*querypb.AggregateStats)
 	for _, ts := range stats {
-		cellOrRegion := ts.Tablet.Alias.Cell
-		if buildForRegion {
-			cellOrRegion = tc.getRegionByCell(cellOrRegion)
-		}
-		agg, ok := result[cellOrRegion]
+		region := tc.getRegionByCell(ts.Tablet.Alias.Cell)
+		agg, ok := result[region]
 		if !ok {
 			agg = &querypb.AggregateStats{
 				SecondsBehindMasterMin: math.MaxUint32,
 			}
-			result[cellOrRegion] = agg
+			result[region] = agg
 		}
 
 		if ts.Serving && ts.LastError == nil {
@@ -302,7 +299,7 @@ func (tc *TabletStatsCache) makeAggregateMap(stats []*TabletStats, buildForRegio
 // e.mu needs to be locked.
 func (tc *TabletStatsCache) updateAggregateMap(keyspace, shard string, tabletType topodatapb.TabletType, e *tabletStatsCacheEntry, stats []*TabletStats) {
 	// Save the new value
-	e.aggregates = tc.makeAggregateMap(stats /* buildForRegion */, true)
+	e.aggregates = tc.makeAggregateMap(stats)
 }
 
 // GetTabletStats returns the full list of available targets.
