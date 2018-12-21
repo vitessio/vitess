@@ -2497,8 +2497,8 @@ func TestTabletServerSplitQueryEqualSplitsOnStringColumn(t *testing.T) {
 		&querypb.BoundQuery{Sql: sql},
 		// EQUAL_SPLITS should not work on a string column.
 		[]string{"name_string"}, /* splitColumns */
-		10, /* splitCount */
-		0,  /* numRowsPerQueryPart */
+		10,                      /* splitCount */
+		0,                       /* numRowsPerQueryPart */
 		querypb.SplitQueryRequest_EQUAL_SPLITS)
 	want :=
 		"using the EQUAL_SPLITS algorithm in SplitQuery" +

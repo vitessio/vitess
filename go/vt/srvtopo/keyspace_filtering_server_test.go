@@ -36,15 +36,15 @@ var (
 	stockCtx       = context.Background()
 	stockFilters   = []string{"bar", "baz"}
 	stockKeyspaces = map[string]*topodatapb.SrvKeyspace{
-		"foo": &topodatapb.SrvKeyspace{ShardingColumnName: "foo"},
-		"bar": &topodatapb.SrvKeyspace{ShardingColumnName: "bar"},
-		"baz": &topodatapb.SrvKeyspace{ShardingColumnName: "baz"},
+		"foo": {ShardingColumnName: "foo"},
+		"bar": {ShardingColumnName: "bar"},
+		"baz": {ShardingColumnName: "baz"},
 	}
 	stockVSchema = &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
-			"foo": &vschemapb.Keyspace{Sharded: true},
-			"bar": &vschemapb.Keyspace{Sharded: true},
-			"baz": &vschemapb.Keyspace{Sharded: false},
+			"foo": {Sharded: true},
+			"bar": {Sharded: true},
+			"baz": {Sharded: false},
 		},
 	}
 )
