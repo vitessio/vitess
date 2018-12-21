@@ -345,3 +345,27 @@ func TestUpdateServedTypesMap(t *testing.T) {
 		t.Fatalf("expected empty map after removing all")
 	}
 }
+
+func TestGetServedType(t *testing.T) {
+	si := NewShardInfo(
+		"ks",
+		"sh",
+		&topodatapb.Shard{
+			ServedTypes: []*topodatapb.Shard_ServedType{
+				&topodatapb.Shard_ServedType{
+					TabletType: topodatapb.TabletType_RDONLY,
+				},
+			},
+		},
+		nil)
+
+	servedType := si.GetServedType(topodatapb.TabletType_BACKUP)
+	if servedType != nil {
+		t.Fatalf("expected servedType to be nil, got: %v", servedType)
+	}
+
+	servedType = si.GetServedType(topodatapb.TabletType_REPLICA)
+	if servedType == nil {
+		t.Fatalf("expected servedType to be TabletType_REPLICA, got: nil")
+	}
+}

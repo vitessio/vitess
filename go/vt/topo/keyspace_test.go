@@ -138,22 +138,25 @@ func TestComputeCellServedFrom(t *testing.T) {
 			ServedFroms: []*topodatapb.Keyspace_ServedFrom{
 				{
 					TabletType: topodatapb.TabletType_MASTER,
-					Cells:      nil,
 					Keyspace:   "source",
 				},
 				{
 					TabletType: topodatapb.TabletType_REPLICA,
-					Cells:      []string{"c1", "c2"},
 					Keyspace:   "source",
 				},
 			},
 		},
 	}
 
+	// Tablets are served from any cell
 	m := ki.ComputeCellServedFrom("c3")
 	if !reflect.DeepEqual(m, []*topodatapb.SrvKeyspace_ServedFrom{
 		{
 			TabletType: topodatapb.TabletType_MASTER,
+			Keyspace:   "source",
+		},
+		{
+			TabletType: topodatapb.TabletType_REPLICA,
 			Keyspace:   "source",
 		},
 	}) {
