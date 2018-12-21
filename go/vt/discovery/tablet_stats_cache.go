@@ -70,6 +70,7 @@ type tabletStatsCacheEntry struct {
 	healthy []*TabletStats
 	// aggregates has the per-cell aggregates.
 	aggregates map[string]*querypb.AggregateStats
+
 	// aggregatesPerRegion has the per-region aggregates.
 	aggregatesPerRegion map[string]*querypb.AggregateStats
 }
