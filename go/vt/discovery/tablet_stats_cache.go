@@ -318,7 +318,7 @@ func MakeAggregateMapDiff(keyspace, shard string, tabletType topodatapb.TabletTy
 					TabletType: tabletType,
 					Cell:       cell,
 				},
-				Stats: newValue,
+				Stats:                               newValue,
 				TabletExternallyReparentedTimestamp: ter,
 			})
 		} else {
@@ -347,7 +347,7 @@ func MakeAggregateMapDiff(keyspace, shard string, tabletType topodatapb.TabletTy
 				TabletType: tabletType,
 				Cell:       cell,
 			},
-			Stats: newValue,
+			Stats:                               newValue,
 			TabletExternallyReparentedTimestamp: ter,
 		})
 	}
@@ -460,7 +460,7 @@ func (tc *TabletStatsCache) Subscribe() (int, []srvtopo.TargetStatsEntry, <-chan
 							TabletType: tabletType,
 							Cell:       cell,
 						},
-						Stats: agg,
+						Stats:                               agg,
 						TabletExternallyReparentedTimestamp: ter,
 					})
 				}
