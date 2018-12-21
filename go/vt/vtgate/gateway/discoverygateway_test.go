@@ -238,7 +238,7 @@ func TestDiscoveryGatewayGetAggregateStatsRegion(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck()
 	dg := createDiscoveryGateway(hc, nil, "local-east", 2).(*discoveryGateway)
 
-	topo.UpdateCellsToRegionsForTests(map[string]string{
+	topo.SetRegionMap(map[string]string{
 		"local-west": "local",
 		"local-east": "local",
 		"remote":     "remote",
@@ -350,7 +350,7 @@ func benchmarkCellsGetAggregateStats(i int, b *testing.B) {
 		cellsToregions[cell] = "local"
 	}
 
-	topo.UpdateCellsToRegionsForTests(cellsToregions)
+	topo.SetRegionMap(cellsToregions)
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 
