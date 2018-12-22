@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 const (
@@ -724,9 +725,28 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		query := c.parseComQuery(data)
 		c.recycleReadPacket()
 
-		err := c.execQuery(query, handler)
-		if err != nil {
-			return err
+		var queries []string
+		if c.Capabilities&CapabilityClientMultiStatements != 0 {
+			queries, err = sqlparser.SplitStatementToPieces(query)
+			if err != nil {
+				log.Errorf("Conn %v: Error splitting query: %v", c, err)
+				if werr := c.writeErrorPacketFromError(err); werr != nil {
+					// If we can't even write the error, we're done.
+					log.Errorf("Conn %v: Error writing query error: %v", c, werr)
+					return werr
+				}
+			}
+		} else {
+			queries = []string{query}
+		}
+		for index, sql := range queries {
+			more := false
+			if index != len(queries)-1 {
+				more = true
+			}
+			if err := c.execQuery(sql, handler, more); err != nil {
+				return err
+			}
 		}
 
 		timings.Record(queryTimingKey, queryStart)
@@ -751,7 +771,9 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 	case ComSetOption:
-		if operation, ok := c.parseComSetOption(data); ok {
+		operation, ok := c.parseComSetOption(data)
+		c.recycleReadPacket()
+		if ok {
 			switch operation {
 			case 0:
 				c.Capabilities |= CapabilityClientMultiStatements
@@ -787,12 +809,16 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	return nil
 }
 
-func (c *Conn) execQuery(query string, handler Handler) error {
+func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 	fieldSent := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
 
 	err := handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
+		flag := c.StatusFlags
+		if more {
+			flag |= ServerMoreResultsExists
+		}
 		if sendFinished {
 			// Failsafe: Unreachable if server is well-behaved.
 			return io.EOF
@@ -810,7 +836,7 @@ func (c *Conn) execQuery(query string, handler Handler) error {
 				// We should not send any more packets after this, but make sure
 				// to extract the affected rows and last insert id from the result
 				// struct here since clients expect it.
-				return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, handler.WarningCount(c))
+				return c.writeOKPacket(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c))
 			}
 			if err := c.writeFields(qr); err != nil {
 				return err
@@ -843,7 +869,7 @@ func (c *Conn) execQuery(query string, handler Handler) error {
 		// In this case the affectedRows and lastInsertID are always 0 since it
 		// was a read operation.
 		if !sendFinished {
-			if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
+			if err := c.writeEndResult(more, 0, 0, handler.WarningCount(c)); err != nil {
 				log.Errorf("Error writing result to %s: %v", c, err)
 				return err
 			}

@@ -100,6 +100,9 @@ class TestMySQL(unittest.TestCase):
   """This test makes sure the MySQL server connector is correct.
   """
 
+  MYSQL_OPTION_MULTI_STATEMENTS_ON = 0
+  MYSQL_OPTION_MULTI_STATEMENTS_OFF = 1
+
   def test_mysql_connector(self):
     with open(table_acl_config, 'w') as fd:
       fd.write("""{
@@ -158,6 +161,29 @@ class TestMySQL(unittest.TestCase):
     conn = MySQLdb.Connect(**params)
     cursor = conn.cursor()
     cursor.execute('select * from vt_insert_test', {})
+    cursor.close()
+
+    # Test multi-statement support. It should only work when
+    # COM_SET_OPTION has set the options to 0
+    conn.set_server_option(self.MYSQL_OPTION_MULTI_STATEMENTS_ON)
+    cursor = conn.cursor()
+    cursor.execute("select 1; select 2")
+    self.assertEquals(((1L,),), cursor.fetchall())
+    self.assertEquals(1, cursor.nextset())
+    self.assertEquals(((2L,),), cursor.fetchall())
+    self.assertEquals(None, cursor.nextset())
+    cursor.close()
+    conn.set_server_option(self.MYSQL_OPTION_MULTI_STATEMENTS_OFF)
+
+    # Multi-statement support should not work without the
+    # option enabled
+    cursor = conn.cursor()
+    try:
+        cursor.execute("select 1; select 2")
+        self.fail('Execute went through')
+    except MySQLdb.OperationalError, e:
+      s = str(e)
+      self.assertIn('syntax error', s)
     cursor.close()
 
     # verify that queries work end-to-end with large grpc messages
