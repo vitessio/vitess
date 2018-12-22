@@ -21,7 +21,6 @@ We start with shards -80 and 80-. We then split 80- into 80-c0 and c0-.
 This test is the main resharding test. It not only tests the regular resharding
 workflow for an horizontal split, but also a lot of error cases and side
 effects, like:
-- migrating the traffic one cell at a time.
 - migrating rdonly traffic back and forth.
 - making sure we can't migrate the master until replica and rdonly are migrated.
 - has a background thread to insert data during migration.
@@ -965,32 +964,7 @@ primary key (name)
     # service is not running (if not healthy this would exception out)
     shard_3_master.get_healthz()
 
-    # now serve rdonly from the split shards, in test_nj only
-    utils.run_vtctl(['MigrateServedTypes', '--cells=test_nj',
-                     'test_keyspace/80-', 'rdonly'], auto_log=True)
-    utils.check_srv_keyspace('test_nj', 'test_keyspace',
-                             'Partitions(master): -80 80-\n'
-                             'Partitions(rdonly): -80 80-c0 c0-\n'
-                             'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type,
-                             sharding_column_name='custom_ksid_col')
-    utils.check_srv_keyspace('test_ny', 'test_keyspace',
-                             'Partitions(master): -80 80-\n'
-                             'Partitions(rdonly): -80 80-\n'
-                             'Partitions(replica): -80 80-\n',
-                             keyspace_id_type=base_sharding.keyspace_id_type,
-                             sharding_column_name='custom_ksid_col')
-    utils.check_tablet_query_service(self, shard_0_ny_rdonly, True, False)
-    utils.check_tablet_query_service(self, shard_1_ny_rdonly, True, False)
-    utils.check_tablet_query_service(self, shard_1_rdonly1, False, True)
-
-    # rerun migrate to ensure it doesn't fail
-    # skip refresh to make it go faster
-    utils.run_vtctl(['MigrateServedTypes', '--cells=test_nj',
-                     '-skip-refresh-state=true',
-                     'test_keyspace/80-', 'rdonly'], auto_log=True)
-
-    # now serve rdonly from the split shards, everywhere
+    # now serve rdonly from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'rdonly'],
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
