@@ -80,7 +80,7 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 
 	// Rebuild keyspace graph in all known cells if empty cells are provided
 	if len(cells) == 0 {
-		cells, err = ts.GetKnownCells(ctx)
+		cells, err = ts.GetCellInfoNames(ctx)
 		if err != nil {
 			return err
 		}
