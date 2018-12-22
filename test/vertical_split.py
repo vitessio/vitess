@@ -502,51 +502,6 @@ msg varchar(64)
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'master'],
                     expect_fail=True)
 
-    # migrate rdonly only in test_ny cell, make sure nothing is migrated
-    # in test_nj
-    utils.run_vtctl(['MigrateServedFrom', '--cells=test_ny',
-                     'destination_keyspace/0', 'rdonly'],
-                    auto_log=True)
-    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n'
-                             'ServedFrom(rdonly): source_keyspace\n'
-                             'ServedFrom(replica): source_keyspace\n')
-    self._check_blacklisted_tables(source_master, None)
-    self._check_blacklisted_tables(source_replica, None)
-    self._check_blacklisted_tables(source_rdonly1, None)
-    self._check_blacklisted_tables(source_rdonly2, None)
-
-    # migrate test_nj only, using command line manual fix command,
-    # and restore it back.
-    keyspace_json = utils.run_vtctl_json(
-        ['GetKeyspace', 'destination_keyspace'])
-    found = False
-    for ksf in keyspace_json['served_froms']:
-      if ksf['tablet_type'] == topodata_pb2.RDONLY:
-        found = True
-        self.assertEqual(ksf['cells'], ['test_nj'])
-    self.assertTrue(found)
-    utils.run_vtctl(['SetKeyspaceServedFrom', '-source=source_keyspace',
-                     '-remove', '-cells=test_nj', 'destination_keyspace',
-                     'rdonly'], auto_log=True)
-    keyspace_json = utils.run_vtctl_json(
-        ['GetKeyspace', 'destination_keyspace'])
-    found = False
-    for ksf in keyspace_json['served_froms']:
-      if ksf['tablet_type'] == topodata_pb2.RDONLY:
-        found = True
-    self.assertFalse(found)
-    utils.run_vtctl(['SetKeyspaceServedFrom', '-source=source_keyspace',
-                     'destination_keyspace', 'rdonly'],
-                    auto_log=True)
-    keyspace_json = utils.run_vtctl_json(
-        ['GetKeyspace', 'destination_keyspace'])
-    found = False
-    for ksf in keyspace_json['served_froms']:
-      if ksf['tablet_type'] == topodata_pb2.RDONLY:
-        found = True
-        self.assertTrue('cells' not in ksf or not ksf['cells'])
-    self.assertTrue(found)
-
     # now serve rdonly from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'rdonly'],
                     auto_log=True)

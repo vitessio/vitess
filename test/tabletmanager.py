@@ -140,8 +140,7 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['Ping', tablet_62344.tablet_alias])
     utils.run_vtctl(['RefreshState', tablet_62344.tablet_alias])
     utils.run_vtctl(['RefreshStateByShard', 'test_keyspace/0'])
-    utils.run_vtctl(['RefreshStateByShard', '--cells=test_nj',
-                     'test_keyspace/0'])
+    utils.run_vtctl(['RefreshStateByShard', 'test_keyspace/0'])
 
     # Quickly check basic actions.
     utils.run_vtctl(['SetReadOnly', tablet_62344.tablet_alias])

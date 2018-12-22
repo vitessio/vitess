@@ -19,6 +19,7 @@ package topotools
 import (
 	"golang.org/x/net/context"
 	"reflect"
+	"sort"
 	"testing"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -73,6 +74,9 @@ func TestRebuildKeyspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected error to be nil got: %v", err)
 	}
+	sort.Slice(srvKeyspace.Partitions, func(i, j int) bool {
+		return srvKeyspace.Partitions[i].ServedType > srvKeyspace.Partitions[i].ServedType
+	})
 	if !reflect.DeepEqual(srvKeyspace, expectedSrvKeyspace) {
 		t.Errorf("SrvKeyspace: invalid output expected %v, got :%v", srvKeyspace, expectedSrvKeyspace)
 	}
@@ -96,6 +100,9 @@ func TestRebuildKeyspace(t *testing.T) {
 
 	// It should generate srvkeyspace for cells that have no tablets
 	srvKeyspace, err = ts.GetSrvKeyspace(context.Background(), "test_cell_2", "test_keyspace")
+	sort.Slice(srvKeyspace.Partitions, func(i, j int) bool {
+		return srvKeyspace.Partitions[i].ServedType > srvKeyspace.Partitions[i].ServedType
+	})
 	if err != nil {
 		t.Fatalf("Expected error to be nil got: %v", err)
 	}
@@ -147,6 +154,9 @@ func TestRebuildKeyspaceAllCells(t *testing.T) {
 	}
 
 	srvKeyspace, err := ts.GetSrvKeyspace(context.Background(), "test_cell", "test_keyspace")
+	sort.Slice(srvKeyspace.Partitions, func(i, j int) bool {
+		return srvKeyspace.Partitions[i].ServedType > srvKeyspace.Partitions[i].ServedType
+	})
 	if err != nil {
 		t.Fatalf("Expected error to be nil got: %v", err)
 	}
