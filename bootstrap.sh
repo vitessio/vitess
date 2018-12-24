@@ -45,6 +45,7 @@ function fail() {
 [[ "$(dirname "$0")" = "." ]] || fail "bootstrap.sh must be run from its current directory"
 
 go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
+[[ "$(go version 2>&1)" =~ go1\.[1-9][1-9] ]] || fail "Go is not version 1.11+"
 
 # Set up the proper GOPATH for go get below.
 source ./dev.env
