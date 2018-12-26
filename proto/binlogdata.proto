@@ -114,6 +114,23 @@ message StreamTablesResponse {
   BinlogTransaction binlog_transaction = 1;
 }
 
+// Rule represents one rule.
+message Rule {
+  // match can be a table name or a regular expression
+  // delineated by '/' and '/'.
+  string match = 1;
+  // filter can be an empty string or keyrange if the match
+  // is a regular expression. Otherwise, it must be a select
+  // query.
+  string filter = 2;
+}
+
+// Filter represents a list of ordered rules. First match
+// wins.
+message Filter {
+  repeated Rule rules = 1;
+}
+
 // BinlogSource specifies the source  and filter parameters for
 // Filtered Replication. It currently supports a keyrange
 // or a list of tables.
@@ -132,4 +149,8 @@ message BinlogSource {
 
   // tables is set if the request is for a list of tables
   repeated string tables = 5;
+
+  // filter is set if we're using the generalized representation
+  // for the filter.
+  Filter filter = 6;
 }
