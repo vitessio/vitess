@@ -529,7 +529,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	}
 	tsv.hr.Init(tsv.target)
 	tsv.updateStreamList.Init()
-	tsv.te.Open()
+
 	return tsv.serveNewType()
 }
 
@@ -539,10 +539,9 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	// transactional requests are not allowed. So, we can
 	// be sure that the tx pool won't change after the wait.
 	tsv.beginRequests.Wait()
-	tsv.te.Close(true)
-	tsv.te.Open()
 
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
+		tsv.te.AcceptReadWrite()
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
 			return err
 		}
@@ -551,6 +550,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.hr.Close()
 		tsv.hw.Open()
 	} else {
+		tsv.te.AcceptReadOnly()
 		tsv.messager.Close()
 		tsv.hr.Open()
 		tsv.hw.Close()
@@ -605,7 +605,7 @@ func (tsv *TabletServer) waitForShutdown() {
 	// transactions.
 	tsv.beginRequests.Wait()
 	tsv.messager.Close()
-	tsv.te.Close(false)
+	tsv.te.Stop()
 	tsv.qe.streamQList.TerminateAll()
 	tsv.updateStreamList.Stop()
 	tsv.watcher.Close()
