@@ -45,7 +45,7 @@ const (
 	NotServing TxEngineState = iota
 	Transitioning
 	AcceptingReadAndWrite
-	AcceptReadOnly
+	AcceptingReadOnly
 )
 
 func (state TxEngineState) String() string {
@@ -53,9 +53,9 @@ func (state TxEngineState) String() string {
 		"NotServing",
 		"Transitioning",
 		"AcceptReadWrite",
-		"AcceptReadOnly"}
+		"AcceptingReadOnly"}
 
-	if state < NotServing || state > AcceptReadOnly {
+	if state < NotServing || state > AcceptingReadOnly {
 		return fmt.Sprintf("Unknown - %d", int(state))
 	}
 
@@ -165,9 +165,10 @@ func (te *TxEngine) Stop() error {
 	case AcceptingReadAndWrite:
 		return te.transitionTo(NotServing)
 
-	case AcceptReadOnly:
+	case AcceptingReadOnly:
 		// We are not master, so it's safe to kill all read-only transactions
 		te.Close(true)
+		te.state = NotServing
 		te.stateLock.Unlock()
 		return nil
 
@@ -199,6 +200,13 @@ func (te *TxEngine) AcceptReadWrite() error {
 		te.nextState = AcceptingReadAndWrite
 		return nil
 
+	case AcceptingReadOnly:
+		// We need to restart the tx-pool to make sure we handle 2PC correctly
+		te.Close(true)
+		te.Open()
+		te.state = AcceptingReadAndWrite
+		return nil
+
 	default:
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown state %v", te.state)
 	}
@@ -207,19 +215,19 @@ func (te *TxEngine) AcceptReadWrite() error {
 func (te *TxEngine) AcceptReadOnly() error {
 	te.stateLock.Lock()
 	switch te.state {
-	case AcceptReadOnly:
+	case AcceptingReadOnly:
 		// Nothing to do
 		te.stateLock.Unlock()
 		return nil
 
 	case NotServing:
 		te.Open()
-		te.state = AcceptReadOnly
+		te.state = AcceptingReadOnly
 		te.stateLock.Unlock()
 		return nil
 
 	case AcceptingReadAndWrite:
-		return te.transitionTo(AcceptReadOnly)
+		return te.transitionTo(AcceptingReadOnly)
 
 	default:
 		te.stateLock.Unlock()
@@ -261,7 +269,7 @@ func (te *TxEngine) transitionTo(nextState TxEngineState) error {
 	// Once we reach this point, it's as if our state is NotServing,
 	// and we need to decide what the next step is
 	switch te.nextState {
-	case AcceptingReadAndWrite, AcceptReadOnly:
+	case AcceptingReadAndWrite, AcceptingReadOnly:
 		te.Open()
 	case NotServing:
 		// nothing to do

@@ -17,6 +17,8 @@ limitations under the License.
 package tabletserver
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -136,197 +138,137 @@ func TestTxEngineClose(t *testing.T) {
 	}
 }
 
-func TestTxEngineStopMasterWithTx(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	te := setupTxEngine(db)
-
-	start := time.Now()
-
-	failIfError(t,
-		te.AcceptReadWrite())
-
-	startTransaction(te, t)
-
-	start = time.Now()
-	failIfError(t,
-		te.Stop())
-
-	go func() {
-		// Stop should be idempotent, so let's fire off a second stop request
-		time.Sleep(10 * time.Millisecond)
-		started := time.Now()
-		failIfError(t,
-			te.Stop())
-		assertWasInstant(started, t)
-	}()
-
-	assertTookMoreThan(start, t, 500*time.Millisecond)
+type StateChange struct {
+	newState      TxEngineState
+	timeAssertion func(startTime time.Time) error
 }
 
-func TestTxEngineStopWhenNotStarted(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	te := setupTxEngine(db)
-
-	// Closing down before even starting
-	start := time.Now()
-	failIfError(t, te.Stop())
-	assertWasInstant(start, t)
+type TestCase struct {
+	startState     TxEngineState
+	stateChanges   []StateChange
+	useTransaction bool
+	stateAssertion func(state TxEngineState) error
 }
 
-func TestTxEngineStopMasterWithNoTx(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	te := setupTxEngine(db)
+func (test TestCase) String() string {
+	var sb strings.Builder
+	sb.WriteString("start from ")
+	sb.WriteString(test.startState.String())
+	sb.WriteString(" with")
+	if !test.useTransaction {
+		sb.WriteString("out")
+	}
 
-	start := time.Now()
-	failIfError(t,
-		te.AcceptReadWrite())
+	sb.WriteString(" transaction")
 
-	start = time.Now()
-	failIfError(t,
-		te.Stop())
-	assertTookLessThan(start, t, 500*time.Millisecond)
+	for _, change := range test.stateChanges {
+		sb.WriteString(" change state to ")
+		sb.WriteString(change.newState.String())
+	}
+
+	return sb.String()
 }
 
-func TestTxEngineStopNonMasterNoTransactions(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	te := setupTxEngine(db)
-
-	start := time.Now()
-	failIfError(t,
-		te.AcceptReadOnly())
-
-	start = time.Now()
-	failIfError(t,
-		te.Stop())
-	assertTookLessThan(start, t, 500*time.Millisecond)
-}
-
-func TestTxEngineStopNonMasterWithTransaction(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	te := setupTxEngine(db)
-
-	start := time.Now()
-	failIfError(t,
-		te.AcceptReadOnly())
-
-	startTransaction(te, t)
-
-	start = time.Now()
-	failIfError(t,
-		te.Stop())
-	assertTookLessThan(start, t, 500*time.Millisecond)
-}
-
-func TestTxEngineTransitionFromMasterToNonMaster(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	te := setupTxEngine(db)
-
-	failIfError(t,
-		te.AcceptReadWrite())
-
-	start := time.Now()
-	failIfError(t,
-		te.AcceptReadOnly())
-
-	assertTookLessThan(start, t, 500*time.Millisecond)
-}
-
-func TestTxEngineTransitionFromMasterToNonMasterWithTransactions(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	te := setupTxEngine(db)
-
-	failIfError(t,
-		te.AcceptReadWrite())
-
-	startTransaction(te, t)
-
-	start := time.Now()
-	failIfError(t,
-		te.Stop())
-	assertTookMoreThan(start, t, 500*time.Millisecond)
-}
-
-func TestTxEngineTransitionFromRW2RO2NS(t *testing.T) {
-	// This test tries to test the situation when we have a
-	// RW engine being asked to go RO, and before that being has finished,
-	// is asked to stop serving. The expected end state is NotServing
-
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	te := setupTxEngine(db)
-
-	failIfError(t,
-		te.AcceptReadWrite())
-
-	startTransaction(te, t)
-
-	// In a different goroutine we'll fire the ReadOnly signal so we don't block the testing routine
-	go func() {
-		failIfError(t,
-			te.AcceptReadOnly())
-	}()
-
-	// We give the ReadOnly state change a chance to get started
-	time.Sleep(10*time.Millisecond)
-
-	failIfError(t,
-		te.Stop())
-
-	failIfError(t,
-		te.BlockUntilEndOfTransition(context.Background()))
-
-	if te.state != NotServing {
-		t.Errorf("expected the end state to be not serving, but it was %v", te.state)
-		t.FailNow()
+func changeState(te *TxEngine, state TxEngineState) error {
+	switch state {
+	case AcceptingReadAndWrite:
+		return te.AcceptReadWrite()
+	case AcceptingReadOnly:
+		return te.AcceptReadOnly()
+	case NotServing:
+		return te.Stop()
+	default:
+		return fmt.Errorf("don't know how to do that: %v", state)
 	}
 }
 
-func TestTxEngineTransitionFromRW2RO2RW(t *testing.T) {
-	// This test tries to test the situation when we have a
-	// RW engine being asked to go RO, and before that being has finished,
-	// is asked to start serving read/write transactions again. The expected
-	// end state is RW
+func TestWithInnerTests(outerT *testing.T) {
 
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	te := setupTxEngine(db)
+	const RW = AcceptingReadAndWrite
+	const RO = AcceptingReadOnly
+	const NS = NotServing
+	const WithTX = true
+	const NoTx = false
 
-	failIfError(t,
-		te.AcceptReadWrite())
+	tests := []TestCase{
+		// Start from RW and test all single hop transitions with and without tx
+		{RW, []StateChange{{NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
+		{RW, []StateChange{{RW, assertIsInstant()}}, NoTx, assertEndStateIs(RW),},
+		{RW, []StateChange{{RO, assertIsInstant()}}, NoTx, assertEndStateIs(RO),},
+		{RW, []StateChange{{NS, assertTakesTime()}}, WithTX, assertEndStateIs(NS),},
+		{RW, []StateChange{{RW, assertIsInstant()}}, WithTX, assertEndStateIs(RW),},
+		{RW, []StateChange{{RO, assertTakesTime()}}, WithTX, assertEndStateIs(RO),},
 
-	startTransaction(te, t)
+		// Start from RW and test all transitions with and without tx, plus a concurrent Stop()
+		{RW, []StateChange{{NS, assertIsInstant()}, {NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
+		{RW, []StateChange{{RW, assertIsInstant()}, {NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
+		{RW, []StateChange{{RO, assertIsInstant()}, {NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
+		{RW, []StateChange{{NS, assertTakesTime()}, {NS, assertTakesTime()}}, WithTX, assertEndStateIs(NS),},
+		{RW, []StateChange{{RW, assertIsInstant()}, {NS, assertTakesTime()}}, WithTX, assertEndStateIs(NS),},
+		{RW, []StateChange{{RO, assertTakesTime()}, {NS, assertTakesTime()}}, WithTX, assertEndStateIs(NS),},
 
-	// In a different goroutine we'll fire the ReadOnly signal so we don't block the testing routine
-	go func() {
-		failIfError(t,
-			te.AcceptReadOnly())
-	}()
+		// Start from RO and test all single hop transitions with and without tx
+		{RO, []StateChange{{NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
+		{RO, []StateChange{{RW, assertIsInstant()}}, NoTx, assertEndStateIs(RW),},
+		{RO, []StateChange{{RO, assertIsInstant()}}, NoTx, assertEndStateIs(RO),},
+		{RO, []StateChange{{NS, assertIsInstant()}}, WithTX, assertEndStateIs(NS),},
+		{RO, []StateChange{{RW, assertIsInstant()}}, WithTX, assertEndStateIs(RW),},
+		{RO, []StateChange{{RO, assertIsInstant()}}, WithTX, assertEndStateIs(RO),},
 
-	// We give the ReadOnly state change a chance to get started
-	time.Sleep(10*time.Millisecond)
-
-	failIfError(t,
-		te.AcceptReadWrite())
-
-	failIfError(t,
-		te.BlockUntilEndOfTransition(context.Background()))
-
-	if te.state != AcceptingReadAndWrite {
-		t.Errorf("expected the end state to be not serving, but it was %v", te.state)
-		t.FailNow()
+		// Start from RO and test all transitions with and without tx, plus a concurrent Stop()
+		{RO, []StateChange{{NS, assertIsInstant()}, {NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
+		{RO, []StateChange{{RW, assertIsInstant()}, {NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
+		{RO, []StateChange{{RO, assertIsInstant()}, {NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
+		{RO, []StateChange{{NS, assertIsInstant()}, {NS, assertIsInstant()}}, WithTX, assertEndStateIs(NS),},
+		{RO, []StateChange{{RW, assertIsInstant()}, {NS, assertIsInstant()}}, WithTX, assertEndStateIs(NS),},
+		{RO, []StateChange{{RO, assertIsInstant()}, {NS, assertIsInstant()}}, WithTX, assertEndStateIs(NS),},
 	}
-}
 
-func assertWasInstant(start time.Time, t *testing.T) {
-	if diff := time.Now().Sub(start); diff > 1*time.Millisecond {
-		t.Errorf("Close time: %v, must be under 1 ms", diff)
+	for _, test := range tests {
+		outerT.Run(test.String(), func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			te := setupTxEngine(db)
+
+			failIfError(t,
+				changeState(te, test.startState))
+
+			if test.useTransaction {
+				startTransaction(te, t)
+			}
+
+			for _, change := range test.stateChanges {
+				go func() {
+					start := time.Now()
+
+					failIfError(t,
+						changeState(te, change.newState))
+
+					ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second))
+
+					failIfError(t,
+						te.BlockUntilEndOfTransition(ctx))
+
+					cancel()
+
+					failIfError(t,
+						change.timeAssertion(start))
+				}()
+
+				// We give the state changes a chance to get started
+				time.Sleep(10 * time.Millisecond)
+			}
+
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second))
+
+			failIfError(t,
+				te.BlockUntilEndOfTransition(ctx))
+
+			cancel()
+
+			failIfError(t,
+				test.stateAssertion(te.state))
+		})
 	}
 }
 
@@ -349,14 +291,29 @@ func failIfError(t *testing.T, err error) {
 	}
 }
 
-func assertTookLessThan(start time.Time, t *testing.T, duration time.Duration) {
-	if diff := time.Now().Sub(start); diff > duration {
-		t.Errorf("Stop time: %v, must be under 0.5s", diff)
+func assertIsInstant() func(start time.Time) error {
+	return func(start time.Time) error {
+		if diff := time.Now().Sub(start); diff > time.Millisecond {
+			return fmt.Errorf("stop time: %v, must be instant", diff)
+		}
+		return nil
 	}
 }
-func assertTookMoreThan(start time.Time, t *testing.T, duration time.Duration) {
-	if diff := time.Now().Sub(start); diff < duration {
-		t.Errorf("Stop time: %v, must be over 0.5s", diff)
+func assertTakesTime() func(start time.Time) error {
+	return func(start time.Time) error {
+		if diff := time.Now().Sub(start); diff < 500*time.Millisecond {
+			return fmt.Errorf("stop time: %v, should take at least half a second", diff)
+		}
+		return nil
+	}
+}
+
+func assertEndStateIs(expected TxEngineState) func(actual TxEngineState) error {
+	return func(actual TxEngineState) error {
+		if actual != expected {
+			return fmt.Errorf("expected the end state to be %v, but it was %v", expected, actual)
+		}
+		return nil
 	}
 }
 
