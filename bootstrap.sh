@@ -165,6 +165,33 @@ function install_etcd() {
 command -v etcd && echo "etcd already installed" || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
 
+# Download and install k3s, link k3s binary into our root
+function install_k3s() {
+  local version="$1"
+  local dist="$2"
+
+  case $(uname) in
+    Linux)  local platform=linux;;
+    *)   echo "ERROR: unsupported platform. K3s only supports running on Linux"; exit 1;;
+  esac
+
+  case $(get_arch) in
+      aarch64)  local target="-arm64";;
+      x86_64)  local target="";;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
+  download_url=https://github.com/rancher/k3s/releases/download
+  file="k3s${target}"
+
+  local dest="$dist/k3s${target}-${version}-${platform}"
+  wget -O  $dest "$download_url/$version/$file"
+  chmod +x $dest
+  ln -snf  $dest "$VTROOT/bin/k3s"
+}
+command -v  k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
+
+
 # Download and install consul, link consul binary into our root.
 function install_consul() {
   local version="$1"

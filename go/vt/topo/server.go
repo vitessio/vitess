@@ -215,7 +215,7 @@ func OpenServer(implementation, serverAddress, root string) (*Server, error) {
 // Open returns a Server using the command line parameter flags
 // for implementation, address and root. It log.Exits out if an error occurs.
 func Open() *Server {
-	if *topoGlobalServerAddress == "" {
+	if *topoGlobalServerAddress == "" && *topoImplementation != "k8s" {
 		log.Exitf("topo_global_server_address must be configured")
 	}
 	ts, err := OpenServer(*topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot)
