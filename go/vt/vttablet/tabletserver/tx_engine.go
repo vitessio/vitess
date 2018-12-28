@@ -167,7 +167,7 @@ func (te *TxEngine) Stop() error {
 
 	case AcceptingReadOnly:
 		// We are not master, so it's safe to kill all read-only transactions
-		te.Close(true)
+		te.close(true)
 		te.state = NotServing
 		te.stateLock.Unlock()
 		return nil
@@ -179,7 +179,7 @@ func (te *TxEngine) Stop() error {
 
 	default:
 		te.stateLock.Unlock()
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown state %v", te.state)
+		return te.unknownStateError()
 	}
 }
 
@@ -202,13 +202,13 @@ func (te *TxEngine) AcceptReadWrite() error {
 
 	case AcceptingReadOnly:
 		// We need to restart the tx-pool to make sure we handle 2PC correctly
-		te.Close(true)
+		te.close(true)
 		te.Open()
 		te.state = AcceptingReadAndWrite
 		return nil
 
 	default:
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown state %v", te.state)
+		return te.unknownStateError()
 	}
 }
 
@@ -229,10 +229,19 @@ func (te *TxEngine) AcceptReadOnly() error {
 	case AcceptingReadAndWrite:
 		return te.transitionTo(AcceptingReadOnly)
 
+	case Transitioning:
+		te.nextState = AcceptingReadOnly
+		te.stateLock.Unlock()
+		return nil
+
 	default:
 		te.stateLock.Unlock()
-		return vterrors.NewWithoutCode("not implemented yet")
+		return te.unknownStateError()
 	}
+}
+
+func (te *TxEngine) unknownStateError() error {
+	return vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown state %v", te.state)
 }
 
 // BlockUntilEndOfTransition blocks the current goroutine until it has finished transitioning into a new state.
@@ -253,7 +262,7 @@ func (te *TxEngine) transitionTo(nextState TxEngineState) error {
 	te.stateLock.Unlock()
 
 	// We do this outside the lock so others can see our state while we close up waiting transactions
-	te.Close(false)
+	te.close(false)
 
 	te.stateLock.Lock()
 	defer func() {
@@ -321,13 +330,22 @@ func (te *TxEngine) Open() {
 	te.isOpen = true
 }
 
+// CloseRudely will disregard common rules for when to kill transactions
+// and forcefully abort everything as fast as possible
+func (te *TxEngine) CloseRudely() {
+	te.stateLock.Lock()
+	defer te.stateLock.Unlock()
+	te.close(true)
+	te.state = NotServing
+}
+
 // Close closes the TxEngine. If the immediate flag is on,
 // then all current transactions are immediately rolled back.
 // Otherwise, the function waits for all current transactions
 // to conclude. If a shutdown grace period was specified,
 // the transactions are rolled back if they're not resolved
 // by that time.
-func (te *TxEngine) Close(immediate bool) {
+func (te *TxEngine) close(immediate bool) {
 	if !te.isOpen {
 		return
 	}

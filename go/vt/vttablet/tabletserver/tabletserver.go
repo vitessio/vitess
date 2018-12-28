@@ -619,7 +619,7 @@ func (tsv *TabletServer) closeAll() {
 	tsv.messager.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
-	tsv.te.Close(true)
+	tsv.te.CloseRudely()
 	tsv.watcher.Close()
 	tsv.updateStreamList.Stop()
 	tsv.qe.Close()
@@ -1407,7 +1407,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		return nil
 	}
 
-	errCode := tsv.convertErrorCode(err)
+	errCode := convertErrorCode(err)
 	tabletenv.ErrorStats.Add(errCode.String(), 1)
 
 	callerID := ""
@@ -1507,7 +1507,7 @@ func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVa
 	return fmt.Sprintf("Sql: %q, %s", truncatedQuery, bv)
 }
 
-func (tsv *TabletServer) convertErrorCode(err error) vtrpcpb.Code {
+func convertErrorCode(err error) vtrpcpb.Code {
 	errCode := vterrors.Code(err)
 	sqlErr, ok := err.(*mysql.SQLError)
 	if !ok {

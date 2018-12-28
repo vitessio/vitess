@@ -45,7 +45,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close.
 	te.Open()
 	start := time.Now()
-	te.Close(false)
+	te.close(false)
 	if diff := time.Now().Sub(start); diff > 500*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.5s", diff)
 	}
@@ -58,7 +58,7 @@ func TestTxEngineClose(t *testing.T) {
 	}
 	c.Recycle()
 	start = time.Now()
-	te.Close(false)
+	te.close(false)
 	if diff := time.Now().Sub(start); diff < 500*time.Millisecond {
 		t.Errorf("Close time: %v, must be over 0.5s", diff)
 	}
@@ -71,7 +71,7 @@ func TestTxEngineClose(t *testing.T) {
 	}
 	c.Recycle()
 	start = time.Now()
-	te.Close(true)
+	te.close(true)
 	if diff := time.Now().Sub(start); diff > 500*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.5s", diff)
 	}
@@ -85,7 +85,7 @@ func TestTxEngineClose(t *testing.T) {
 	}
 	c.Recycle()
 	start = time.Now()
-	te.Close(false)
+	te.close(false)
 	if diff := time.Now().Sub(start); diff > 500*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.5s", diff)
 	}
@@ -110,7 +110,7 @@ func TestTxEngineClose(t *testing.T) {
 		te.txPool.LocalConclude(ctx, c)
 	}()
 	start = time.Now()
-	te.Close(false)
+	te.close(false)
 	if diff := time.Now().Sub(start); diff > 250*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.25s", diff)
 	}
@@ -129,7 +129,7 @@ func TestTxEngineClose(t *testing.T) {
 		te.txPool.LocalConclude(ctx, c)
 	}()
 	start = time.Now()
-	te.Close(true)
+	te.close(true)
 	if diff := time.Now().Sub(start); diff > 250*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.25s", diff)
 	}
@@ -207,6 +207,14 @@ func TestWithInnerTests(outerT *testing.T) {
 		{RW, []StateChange{{RW, assertIsInstant()}, {NS, assertTakesTime()}}, WithTX, assertEndStateIs(NS),},
 		{RW, []StateChange{{RO, assertTakesTime()}, {NS, assertTakesTime()}}, WithTX, assertEndStateIs(NS),},
 
+		// Start from RW and test all transitions with and without tx, plus a concurrent ReadOnly()
+		{RW, []StateChange{{NS, assertIsInstant()}, {RO, assertIsInstant()}}, NoTx, assertEndStateIs(RO),},
+		{RW, []StateChange{{RW, assertIsInstant()}, {RO, assertIsInstant()}}, NoTx, assertEndStateIs(RO),},
+		{RW, []StateChange{{RO, assertIsInstant()}, {RO, assertIsInstant()}}, NoTx, assertEndStateIs(RO),},
+		{RW, []StateChange{{NS, assertTakesTime()}, {RO, assertTakesTime()}}, WithTX, assertEndStateIs(RO),},
+		{RW, []StateChange{{RW, assertIsInstant()}, {RO, assertTakesTime()}}, WithTX, assertEndStateIs(RO),},
+		{RW, []StateChange{{RO, assertTakesTime()}, {RO, assertTakesTime()}}, WithTX, assertEndStateIs(RO),},
+
 		// Start from RO and test all single hop transitions with and without tx
 		{RO, []StateChange{{NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
 		{RO, []StateChange{{RW, assertIsInstant()}}, NoTx, assertEndStateIs(RW),},
@@ -222,6 +230,14 @@ func TestWithInnerTests(outerT *testing.T) {
 		{RO, []StateChange{{NS, assertIsInstant()}, {NS, assertIsInstant()}}, WithTX, assertEndStateIs(NS),},
 		{RO, []StateChange{{RW, assertIsInstant()}, {NS, assertIsInstant()}}, WithTX, assertEndStateIs(NS),},
 		{RO, []StateChange{{RO, assertIsInstant()}, {NS, assertIsInstant()}}, WithTX, assertEndStateIs(NS),},
+
+		// Start from RO and test all transitions with and without tx, plus a concurrent ReadWrite()
+		{RO, []StateChange{{NS, assertIsInstant()}, {RW, assertIsInstant()}}, NoTx, assertEndStateIs(RW),},
+		{RO, []StateChange{{RW, assertIsInstant()}, {RW, assertIsInstant()}}, NoTx, assertEndStateIs(RW),},
+		{RO, []StateChange{{RO, assertIsInstant()}, {RW, assertIsInstant()}}, NoTx, assertEndStateIs(RW),},
+		{RO, []StateChange{{NS, assertIsInstant()}, {RW, assertIsInstant()}}, WithTX, assertEndStateIs(RW),},
+		{RO, []StateChange{{RW, assertIsInstant()}, {RW, assertIsInstant()}}, WithTX, assertEndStateIs(RW),},
+		{RO, []StateChange{{RO, assertIsInstant()}, {RW, assertIsInstant()}}, WithTX, assertEndStateIs(RW),},
 	}
 
 	for _, test := range tests {
