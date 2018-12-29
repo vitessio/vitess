@@ -154,3 +154,41 @@ message BinlogSource {
   // for the filter.
   Filter filter = 6;
 }
+
+// VEventType enumerates the event types.
+enum VEventType {
+  UNKNOWN = 0;
+  GTID = 1;
+  BEGIN = 2;
+  COMMIT = 3;
+  ROLLBACK = 4;
+  DDL = 5;
+  INSERT = 6;
+  UPDATE = 7;
+  DELETE = 8;
+  SET = 9;
+}
+
+message RowEvent {
+  query.Row before = 1;
+  query.Row after = 2;
+}
+
+// VEvent represents a vstream event
+message VEvent {
+  VEventType type = 1;
+  string gtid = 2;
+  string ddl = 3;
+  repeated RowEvent row_events = 4;
+}
+
+// VStreamRequest is the payload for VStream
+message VStreamRequest {
+  string position = 1;
+  Filter filter = 2;
+}
+
+// VStreamResponse is the response from VStream
+message VStreamResponse {
+  repeated VEvent event = 1;
+}

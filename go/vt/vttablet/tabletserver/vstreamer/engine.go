@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -53,12 +54,13 @@ type Engine struct {
 	kschema     *vindexes.KeyspaceSchema
 
 	ts       srvtopo.Server
+	se       *schema.Engine
 	keyspace string
 	cell     string
 }
 
 // NewEngine creates a new Engine.
-func NewEngine(ts srvtopo.Server) *Engine {
+func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
 	vschemaErrors = stats.NewCounter("VSchemaErrors", "Count of VSchema errors")
 	return &Engine{
 		streamers: make(map[int]*vstreamer),
@@ -101,7 +103,7 @@ func (vse *Engine) Close() {
 }
 
 // Stream starts a new stream.
-func (vse *Engine) Stream(ctx context.Context, cp *mysql.ConnParams, startPos mysql.Position, filter *binlogdatapb.Filter, f func()) error {
+func (vse *Engine) Stream(ctx context.Context, cp *mysql.ConnParams, startPos mysql.Position, filter *binlogdatapb.Filter, send func(*binlogdatapb.VEvent) error) error {
 	// Ensure kschema is initialized and the watcher is started.
 	vse.watcherOnce.Do(vse.setWatch)
 
@@ -112,13 +114,10 @@ func (vse *Engine) Stream(ctx context.Context, cp *mysql.ConnParams, startPos my
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		streamer, err := newVStreamer(cp, startPos, filter, f)
-		if err != nil {
-			return nil, 0, err
-		}
+		streamer := newVStreamer(ctx, cp, vse.se, startPos, filter, vse.kschema, send)
 		idx := vse.streamIdx
-		vse.streamIdx++
 		vse.streamers[idx] = streamer
+		vse.streamIdx++
 		// Now that we've added the stream, increment wg.
 		// This must be done before releasing the lock.
 		vse.wg.Add(1)
@@ -137,7 +136,7 @@ func (vse *Engine) Stream(ctx context.Context, cp *mysql.ConnParams, startPos my
 	}()
 
 	// No lock is held while streaming, but wg is incremented.
-	return streamer.Stream(ctx)
+	return streamer.Stream()
 }
 
 func (vse *Engine) setWatch() {
