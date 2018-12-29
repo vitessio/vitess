@@ -156,6 +156,8 @@ message BinlogSource {
 }
 
 // VEventType enumerates the event types.
+// This list is comprehensive. Many of these types
+// will not be encountered in RBR mode.
 enum VEventType {
   UNKNOWN = 0;
   GTID = 1;
@@ -167,6 +169,7 @@ enum VEventType {
   UPDATE = 7;
   DELETE = 8;
   SET = 9;
+  ROW = 10;
 }
 
 message RowEvent {

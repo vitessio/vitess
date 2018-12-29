@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -37,6 +38,9 @@ var vschemaErrors *stats.Counter
 
 // Engine is the engine for handling vseplication streaming requests.
 type Engine struct {
+	// cp is initialized by InitDBConfig
+	cp *mysql.ConnParams
+
 	// mu protects isOpen, streamers, streamIdx and kschema.
 	mu sync.Mutex
 
@@ -67,6 +71,11 @@ func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
 		kschema:   &vindexes.KeyspaceSchema{},
 		ts:        ts,
 	}
+}
+
+// InitDBConfig performs saves the required info from dbconfigs for future use.
+func (vse *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
+	vse.cp = dbcfgs.DbaWithDB()
 }
 
 // Open starts the Engine service.
@@ -103,7 +112,7 @@ func (vse *Engine) Close() {
 }
 
 // Stream starts a new stream.
-func (vse *Engine) Stream(ctx context.Context, cp *mysql.ConnParams, startPos mysql.Position, filter *binlogdatapb.Filter, send func(*binlogdatapb.VEvent) error) error {
+func (vse *Engine) Stream(ctx context.Context, startPos mysql.Position, filter *binlogdatapb.Filter, send func(*binlogdatapb.VEvent) error) error {
 	// Ensure kschema is initialized and the watcher is started.
 	vse.watcherOnce.Do(vse.setWatch)
 
@@ -114,7 +123,7 @@ func (vse *Engine) Stream(ctx context.Context, cp *mysql.ConnParams, startPos my
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		streamer := newVStreamer(ctx, cp, vse.se, startPos, filter, vse.kschema, send)
+		streamer := newVStreamer(ctx, vse.cp, vse.se, startPos, filter, vse.kschema, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++
