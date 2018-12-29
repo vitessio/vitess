@@ -93,6 +93,8 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 	if plan.Vindex == nil {
 		return true, result, nil
 	}
+
+	// Filter by Vindex.
 	destinations, err := plan.Vindex.Map(nil, []sqltypes.Value{result[plan.VindexColumn]})
 	if err != nil {
 		return false, nil, err
@@ -154,6 +156,8 @@ func buildREPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter string) (*P
 	if len(table.ColumnVindexes) == 0 {
 		return nil, fmt.Errorf("table %s has no primary vindex", ti.Name)
 	}
+	// findColumn can be used here because result column list is same
+	// as source.
 	colnum, err := findColumn(ti, table.ColumnVindexes[0].Columns[0])
 	if err != nil {
 		return nil, err
@@ -208,11 +212,22 @@ func buildTablePlan(ti *Table, kschema *vindexes.KeyspaceSchema, query string) (
 			}
 			plan.ColExprs = append(plan.ColExprs, cExpr)
 		}
+	} else {
+		if len(sel.SelectExprs) != 1 {
+			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(sel))
+		}
+		plan.ColExprs = make([]ColExpr, len(ti.Columns))
+		for i, col := range ti.Columns {
+			plan.ColExprs[i].ColNum = i
+			plan.ColExprs[i].Alias = col.Name
+		}
 	}
 
 	if sel.Where == nil {
 		return plan, nil
 	}
+
+	// Filter by Vindex.
 	funcExpr, ok := sel.Where.Expr.(*sqlparser.FuncExpr)
 	if !ok {
 		return nil, fmt.Errorf("unexpected where clause: %v", sqlparser.String(sel.Where))

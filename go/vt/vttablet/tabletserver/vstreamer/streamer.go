@@ -136,11 +136,17 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			if !ok {
 				return fmt.Errorf("server EOF")
 			}
-			if err := vs.parseEvent(ev); err != nil {
+			vevents, err := vs.parseEvent(ev)
+			if err != nil {
 				return err
 			}
+			for _, vevent := range vevents {
+				if err := vs.send(vevent); err != nil {
+					return fmt.Errorf("error sending event: %v", err)
+				}
+			}
 		case vs.kschema = <-vs.kevents:
-			if err := vs.updatePlans(); err != nil {
+			if err := vs.rebuildPlans(); err != nil {
 				return err
 			}
 		case <-ctx.Done():
@@ -149,10 +155,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 }
 
-func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) error {
+func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, error) {
 	// Validate the buffer before reading fields from it.
 	if !ev.IsValid() {
-		return fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
+		return nil, fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
 	}
 
 	// We need to keep checking for FORMAT_DESCRIPTION_EVENT even after we've
@@ -162,9 +168,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) error {
 		var err error
 		vs.format, err = ev.Format()
 		if err != nil {
-			return fmt.Errorf("can't parse FORMAT_DESCRIPTION_EVENT: %v, event data: %#v", err, ev)
+			return nil, fmt.Errorf("can't parse FORMAT_DESCRIPTION_EVENT: %v, event data: %#v", err, ev)
 		}
-		return nil
+		return nil, nil
 	}
 
 	// We can't parse anything until we get a FORMAT_DESCRIPTION_EVENT that
@@ -174,82 +180,70 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) error {
 		// is a fake ROTATE_EVENT, which the master sends to tell us the name
 		// of the current log file.
 		if ev.IsRotate() {
-			return nil
+			return nil, nil
 		}
-		return fmt.Errorf("got a real event before FORMAT_DESCRIPTION_EVENT: %#v", ev)
+		return nil, fmt.Errorf("got a real event before FORMAT_DESCRIPTION_EVENT: %#v", ev)
 	}
 
 	// Strip the checksum, if any. We don't actually verify the checksum, so discard it.
 	ev, _, err := ev.StripChecksum(vs.format)
 	if err != nil {
-		return fmt.Errorf("can't strip checksum from binlog event: %v, event data: %#v", err, ev)
+		return nil, fmt.Errorf("can't strip checksum from binlog event: %v, event data: %#v", err, ev)
 	}
+	var vevents []*binlogdatapb.VEvent
 	switch {
 	case ev.IsPseudo() || ev.IsGTID():
 		gtid, hasBegin, err := ev.GTID(vs.format)
 		if err != nil {
-			return fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
-		}
-		vs.pos = mysql.AppendGTID(vs.pos, gtid)
-		vevent := &binlogdatapb.VEvent{
-			Type: binlogdatapb.VEventType_GTID,
-			Gtid: mysql.EncodePosition(vs.pos),
-		}
-		if err := vs.send(vevent); err != nil {
-			return fmt.Errorf("error sending GTID: %v", err)
+			return nil, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 		}
 		if hasBegin {
-			vevent := &binlogdatapb.VEvent{
+			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_BEGIN,
-			}
-			if err := vs.send(vevent); err != nil {
-				return fmt.Errorf("error sending BEGIN: %v", err)
-			}
+			})
 		}
+		vs.pos = mysql.AppendGTID(vs.pos, gtid)
+		vevents = append(vevents, &binlogdatapb.VEvent{
+			Type: binlogdatapb.VEventType_GTID,
+			Gtid: mysql.EncodePosition(vs.pos),
+		})
 	case ev.IsXID():
-		vevent := &binlogdatapb.VEvent{
+		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_COMMIT,
-		}
-		if err := vs.send(vevent); err != nil {
-			return fmt.Errorf("error sending COMMIT: %v", err)
-		}
+		})
 	case ev.IsQuery():
 		q, err := ev.Query(vs.format)
 		if err != nil {
-			return fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
+			return nil, fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
 		}
-		var vevent *binlogdatapb.VEvent
 		switch cat := getStatementCategory(q.SQL); cat {
 		case binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_ROLLBACK:
-			vevent = &binlogdatapb.VEvent{
+			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: cat,
-			}
+			})
 		case binlogdatapb.VEventType_DDL:
-			vevent = &binlogdatapb.VEvent{
+			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: cat,
 				Ddl:  q.SQL,
-			}
+			})
 		default:
-			return fmt.Errorf("unexpected event type %v in row-based replication: %#v", cat, ev)
-		}
-		if err := vs.send(vevent); err != nil {
-			return fmt.Errorf("error sending COMMIT: %v", err)
+			return nil, fmt.Errorf("unexpected event type %v in row-based replication: %#v", cat, ev)
 		}
 	case ev.IsTableMap():
 		id := ev.TableID(vs.format)
 		tm, err := ev.TableMap(vs.format)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if tm.Database != "" && tm.Database != vs.cp.DbName {
-			return nil
+			return nil, nil
 		}
 		ti := vs.se.GetTable(sqlparser.NewTableIdent(tm.Name))
 		if ti == nil {
-			return fmt.Errorf("unknown table %v in schema", tm.Name)
+			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
 		}
 		if len(ti.Columns) < len(tm.Types) {
-			return fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(ti.Columns), ev)
+			return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(ti.Columns), ev)
 		}
 		table := &Table{
 			TableMap: tm,
@@ -257,88 +251,35 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) error {
 		}
 		plan, err := buildPlan(table, vs.kschema, vs.filter)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if plan != nil {
 			vs.plans[id] = plan
 		}
-	case ev.IsWriteRows():
+	case ev.IsWriteRows() || ev.IsDeleteRows() || ev.IsUpdateRows():
+		// The existence of before and after images can be used to
+		// identify statememt types. It's also possible that the
+		// before and after images end up going to different shards.
+		// If so, an update will be treated as delete on one shard
+		// and insert on the other.
 		id := ev.TableID(vs.format)
 		plan, ok := vs.plans[id]
 		if !ok {
-			return nil
+			return nil, nil
 		}
 		rows, err := ev.Rows(vs.format, plan.Table.TableMap)
 		if err != nil {
-			return err
-		}
-		rowEvents := make([]*binlogdatapb.RowEvent, 0, len(rows.Rows))
-		for _, row := range rows.Rows {
-			ok, values, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				continue
-			}
-			encoded := sqltypes.RowToProto3(values)
-			rowEvents = append(rowEvents, &binlogdatapb.RowEvent{After: encoded})
-		}
-		vevent := &binlogdatapb.VEvent{
-			Type:      binlogdatapb.VEventType_INSERT,
-			RowEvents: rowEvents,
-		}
-		if err := vs.send(vevent); err != nil {
-			return fmt.Errorf("error sending INSERT: %v", err)
-		}
-	case ev.IsDeleteRows():
-		id := ev.TableID(vs.format)
-		plan, ok := vs.plans[id]
-		if !ok {
-			return nil
-		}
-		rows, err := ev.Rows(vs.format, plan.Table.TableMap)
-		if err != nil {
-			return err
-		}
-		rowEvents := make([]*binlogdatapb.RowEvent, 0, len(rows.Rows))
-		for _, row := range rows.Rows {
-			ok, values, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				continue
-			}
-			encoded := sqltypes.RowToProto3(values)
-			rowEvents = append(rowEvents, &binlogdatapb.RowEvent{Before: encoded})
-		}
-		vevent := &binlogdatapb.VEvent{
-			Type:      binlogdatapb.VEventType_DELETE,
-			RowEvents: rowEvents,
-		}
-		if err := vs.send(vevent); err != nil {
-			return fmt.Errorf("error sending DELETE: %v", err)
-		}
-	case ev.IsUpdateRows():
-		id := ev.TableID(vs.format)
-		plan, ok := vs.plans[id]
-		if !ok {
-			return nil
-		}
-		rows, err := ev.Rows(vs.format, plan.Table.TableMap)
-		if err != nil {
-			return err
+			return nil, err
 		}
 		rowEvents := make([]*binlogdatapb.RowEvent, 0, len(rows.Rows))
 		for _, row := range rows.Rows {
 			beforeOK, beforeValues, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if !beforeOK && !afterOK {
 				continue
@@ -352,18 +293,15 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) error {
 			}
 			rowEvents = append(rowEvents, rowEvent)
 		}
-		vevent := &binlogdatapb.VEvent{
-			Type:      binlogdatapb.VEventType_UPDATE,
+		vevents = append(vevents, &binlogdatapb.VEvent{
+			Type:      binlogdatapb.VEventType_ROW,
 			RowEvents: rowEvents,
-		}
-		if err := vs.send(vevent); err != nil {
-			return fmt.Errorf("error sending UPDATE: %v", err)
-		}
+		})
 	}
-	return nil
+	return vevents, nil
 }
 
-func (vs *vstreamer) updatePlans() error {
+func (vs *vstreamer) rebuildPlans() error {
 	for id, plan := range vs.plans {
 		newPlan, err := buildPlan(plan.Table, vs.kschema, vs.filter)
 		if err != nil {
@@ -375,12 +313,15 @@ func (vs *vstreamer) updatePlans() error {
 }
 
 func (vs *vstreamer) extractRowAndFilter(plan *Plan, data []byte, dataColumns, nullColumns mysql.Bitmap) (bool, []sqltypes.Value, error) {
+	if len(data) == 0 {
+		return false, nil, nil
+	}
 	values := make([]sqltypes.Value, dataColumns.Count())
 	valueIndex := 0
 	pos := 0
 	for colNum := 0; colNum < dataColumns.Count(); colNum++ {
 		if !dataColumns.Bit(colNum) {
-			continue
+			return false, nil, fmt.Errorf("partial row image encountered: ensure binlog_row_image is set to 'full'")
 		}
 		if nullColumns.Bit(valueIndex) {
 			valueIndex++
