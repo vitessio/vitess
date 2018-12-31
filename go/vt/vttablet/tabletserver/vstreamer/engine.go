@@ -34,7 +34,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-var vschemaErrors *stats.Counter
+var vschemaErrors = stats.NewCounter("VSchemaErrors", "Count of VSchema errors")
 
 // Engine is the engine for handling vseplication streaming requests.
 type Engine struct {
@@ -65,7 +65,6 @@ type Engine struct {
 
 // NewEngine creates a new Engine.
 func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
-	vschemaErrors = stats.NewCounter("VSchemaErrors", "Count of VSchema errors")
 	return &Engine{
 		streamers: make(map[int]*vstreamer),
 		kschema:   &vindexes.KeyspaceSchema{},
