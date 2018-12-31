@@ -345,6 +345,7 @@ spec:
 
             RETRY_COUNT=0
             MAX_RETRY_COUNT=100000
+            hostname=$(hostname -s)
 
             # retry reparenting
             until [ $DONE_REPARENTING ]; do
@@ -368,9 +369,20 @@ spec:
 
             done
 
+{{ if $orc.enabled }}
+            # tell orchestrator to refresh its view of this tablet
+            wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/refresh/$hostname.vttablet/3306"
+{{ end }}
+
             # delete the current tablet from topology. Not strictly necessary, but helps to prevent
             # edge cases where there are two masters
             /vt/bin/vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC DeleteTablet $current_alias
+
+
+{{ if $orc.enabled }}
+            # tell orchestrator to forget the tablet, to prevent confusion / race conditions while the tablet restarts
+            wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/forget/$hostname.vttablet/3306"
+{{ end }}
 
   command: ["bash"]
   args:
