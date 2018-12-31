@@ -63,6 +63,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -1268,6 +1269,40 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 	}
 	transactionID = 0
 	return int64(qr.RowsAffected), nil
+}
+
+// VStream streams VReplication events.
+func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, startPos mysql.Position, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	// This code is partially duplicated from execRequest. This is because
+	// is allowed even if the tablet is in non-serving state.
+	err := func() error {
+		tsv.mu.Lock()
+		defer tsv.mu.Unlock()
+
+		if target != nil {
+			// a valid target needs to be used
+			switch {
+			case target.Keyspace != tsv.target.Keyspace:
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
+			case target.Shard != tsv.target.Shard:
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
+			case target.TabletType != tsv.target.TabletType:
+				for _, otherType := range tsv.alsoAllow {
+					if target.TabletType == otherType {
+						return nil
+					}
+				}
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
+			}
+		} else if !tabletenv.IsLocalContext(ctx) {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
+		}
+		return nil
+	}()
+	if err != nil {
+		return err
+	}
+	return tsv.vstreamer.Stream(ctx, startPos, filter, send)
 }
 
 // SplitQuery splits a query + bind variables into smaller queries that return a
