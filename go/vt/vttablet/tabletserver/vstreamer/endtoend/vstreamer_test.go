@@ -18,10 +18,12 @@ package vstreamer
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -37,6 +39,10 @@ func TestStatements(t *testing.T) {
 		"create table stream1(id int, val varbinary(128), primary key(id))",
 		"create table stream2(id int, val varbinary(128), primary key(id))",
 	})
+	defer execStatements(t, []string{
+		"drop table stream1",
+		"drop table stream2",
+	})
 	framework.Server.ReloadSchema(context.Background())
 
 	filter := &binlogdatapb.Filter{
@@ -50,9 +56,11 @@ func TestStatements(t *testing.T) {
 			"insert into stream1 values (1, 'aaa')",
 			"update stream1 set val='bbb' where id = 1",
 		},
+		// MySQL issues GTID->BEGIN.
+		// MariaDB issues BEGIN->GTID.
 		output: [][]string{{
-			`gtid`,
-			`begin`,
+			`gtid|begin`,
+			`gtid|begin`,
 			`type:ROW row_event:<table_name:"stream1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 			`type:ROW row_event:<table_name:"stream1" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:1 lengths:3 values:"1bbb" > > > `,
 			`commit`,
@@ -80,8 +88,8 @@ func TestStatements(t *testing.T) {
 			"delete from stream1",
 		},
 		output: [][]string{{
-			`gtid`,
-			`begin`,
+			`gtid|begin`,
+			`gtid|begin`,
 			`type:ROW row_event:<table_name:"stream1" row_changes:<after:<lengths:1 lengths:3 values:"2bbb" > > > `,
 			`type:ROW row_event:<table_name:"stream2" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 			`type:ROW row_event:<table_name:"stream1" ` +
@@ -122,7 +130,8 @@ func TestStatements(t *testing.T) {
 }
 
 func TestDDLAddColumn(t *testing.T) {
-	execStatement(t, "create table ddl_test(id int, val varbinary(128), primary key(id))")
+	execStatement(t, "create table ddl_test1(id int, val1 varbinary(128), primary key(id))")
+	defer execStatement(t, "drop table ddl_test1")
 
 	// Record position before the next few statements.
 	pos, err := framework.Mysqld.MasterPosition()
@@ -130,10 +139,10 @@ func TestDDLAddColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 	execStatements(t, []string{
-		"insert into ddl_test values(1, 'aaa')",
+		"insert into ddl_test1 values(1, 'aaa')",
 		// Adding columns is allowed.
-		"alter table ddl_test add column val2 varbinary(128)",
-		"insert into ddl_test values(2, 'bbb', 'ccc')",
+		"alter table ddl_test1 add column val2 varbinary(128)",
+		"insert into ddl_test1 values(2, 'bbb', 'ccc')",
 	})
 	framework.Server.ReloadSchema(context.Background())
 
@@ -148,33 +157,67 @@ func TestDDLAddColumn(t *testing.T) {
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
-		err := framework.Server.VStream(ctx, &framework.Target, pos, filter, func(evs []*binlogdatapb.VEvent) error {
-			t.Logf("evs: %v\n", evs)
-			ch <- evs
-			return nil
-		})
-		if err != nil {
+		defer close(ch)
+		if err := vstream(ctx, pos, filter, ch); err != nil {
 			t.Fatal(err)
 		}
-		close(ch)
 	}()
-	expectLog(t, "ddls", ch, [][]string{{
+	expectLog(ctx, t, "ddls", ch, [][]string{{
 		// Current schema has 3 columns, but they'll be truncated to match the two columns in the event.
-		`gtid`,
-		`begin`,
-		`type:ROW row_event:<table_name:"ddl_test" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+		`gtid|begin`,
+		`gtid|begin`,
+		`type:ROW row_event:<table_name:"ddl_test1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 		`commit`,
 	}, {
 		`gtid`,
-		`type:DDL ddl:"alter table ddl_test add column val2 varbinary(128)" `,
+		`type:DDL ddl:"alter table ddl_test1 add column val2 varbinary(128)" `,
 	}, {
 		// The plan will be updated to now include the third column
 		// because the new table map will have three columns.
-		`gtid`,
-		`begin`,
-		`type:ROW row_event:<table_name:"ddl_test" row_changes:<after:<lengths:1 lengths:3 lengths:3 values:"2bbbccc" > > > `,
+		`gtid|begin`,
+		`gtid|begin`,
+		`type:ROW row_event:<table_name:"ddl_test1" row_changes:<after:<lengths:1 lengths:3 lengths:3 values:"2bbbccc" > > > `,
 		`commit`,
 	}})
+}
+
+func TestDDLDropColumn(t *testing.T) {
+	execStatement(t, "create table ddl_test2(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))")
+	defer execStatement(t, "drop table ddl_test2")
+
+	// Record position before the next few statements.
+	pos, err := framework.Mysqld.MasterPosition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	execStatements(t, []string{
+		"insert into ddl_test2 values(1, 'aaa', 'ccc')",
+		// Adding columns is allowed.
+		"alter table ddl_test2 drop column val2",
+		"insert into ddl_test2 values(2, 'bbb')",
+	})
+	framework.Server.ReloadSchema(context.Background())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*/",
+		}},
+	}
+
+	ch := make(chan []*binlogdatapb.VEvent)
+	go func() {
+		for range ch {
+		}
+	}()
+	defer close(ch)
+	err = vstream(ctx, pos, filter, ch)
+	want := "Column count doesn't match value"
+	if err == nil || strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain %s", err, want)
+	}
 }
 
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase) {
@@ -192,7 +235,7 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase) {
 		default:
 			t.Fatalf("unexpected input: %#v", input)
 		}
-		expectLog(t, tcase.input, ch, tcase.output)
+		expectLog(ctx, t, tcase.input, ch, tcase.output)
 	}
 	cancel()
 	if evs, ok := <-ch; ok {
@@ -200,23 +243,32 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase) {
 	}
 }
 
-func expectLog(t *testing.T, input interface{}, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
+func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
 	t.Helper()
 
 	for _, wantset := range output {
-		evs := <-ch
+		var evs []*binlogdatapb.VEvent
+		var ok bool
+		select {
+		case evs, ok = <-ch:
+			if !ok {
+				t.Fatal("stream ended early")
+			}
+		case <-ctx.Done():
+			t.Fatal("stream ended early")
+		}
 		if len(wantset) != len(evs) {
 			t.Fatalf("%v: evs\n%v, want\n%v", input, evs, wantset)
 		}
 		for i, want := range wantset {
 			switch want {
+			case "gtid|begin":
+				if evs[i].Type != binlogdatapb.VEventType_GTID && evs[i].Type != binlogdatapb.VEventType_BEGIN {
+					t.Fatalf("%v (%d): event: %v, want gtid or begin", input, i, evs[i])
+				}
 			case "gtid":
 				if evs[i].Type != binlogdatapb.VEventType_GTID {
 					t.Fatalf("%v (%d): event: %v, want gtid", input, i, evs[i])
-				}
-			case "begin":
-				if evs[i].Type != binlogdatapb.VEventType_BEGIN {
-					t.Fatalf("%v (%d): event: %v, want begin", input, i, evs[i])
 				}
 			case "commit":
 				if evs[i].Type != binlogdatapb.VEventType_COMMIT {
@@ -239,17 +291,23 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter)
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
-		err := framework.Server.VStream(ctx, &framework.Target, pos, filter, func(evs []*binlogdatapb.VEvent) error {
-			t.Logf("evs: %v\n", evs)
-			ch <- evs
-			return nil
-		})
-		if err != nil {
+		defer close(ch)
+		if err := vstream(ctx, pos, filter, ch); err != nil {
 			t.Fatal(err)
 		}
-		close(ch)
 	}()
 	return ch
+}
+
+func vstream(ctx context.Context, pos mysql.Position, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
+	return framework.Server.VStream(ctx, &framework.Target, pos, filter, func(evs []*binlogdatapb.VEvent) error {
+		select {
+		case ch <- evs:
+		case <-ctx.Done():
+			return fmt.Errorf("stream ended early")
+		}
+		return nil
+	})
 }
 
 func execTransaction(t *testing.T, queries []string) {
