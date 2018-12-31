@@ -213,6 +213,7 @@ func NewServer(topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletSer
 }
 
 var tsOnce sync.Once
+var srvTopoServer srvtopo.Server
 
 // NewTabletServerWithNilTopoServer is typically used in tests that
 // don't need a topoServer member.
@@ -242,12 +243,12 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
-	tsv.vstreamer = vstreamer.NewEngine(srvtopo.NewResilientServer(topoServer, "TabletSrvTopo"), tsv.se)
 	tsv.updateStreamList = &binlog.StreamList{}
 	// FIXME(alainjobart) could we move this to the Register method below?
 	// So that vtcombo doesn't even call it once, on the first tablet.
 	// And we can remove the tsOnce variable.
 	tsOnce.Do(func() {
+		srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo")
 		stats.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
 			tsv.mu.Lock()
 			state := tsv.state
@@ -265,6 +266,8 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 		stats.NewGaugeDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
 		stats.NewGaugeDurationFunc("BeginTimeout", "Tablet server begin timeout", tsv.BeginTimeout.Get)
 	})
+	// TODO(sougou): move this up once the stats naming problem is fixed.
+	tsv.vstreamer = vstreamer.NewEngine(srvTopoServer, tsv.se)
 	return tsv
 }
 
