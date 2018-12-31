@@ -70,6 +70,7 @@ func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
 		streamers: make(map[int]*vstreamer),
 		kschema:   &vindexes.KeyspaceSchema{},
 		ts:        ts,
+		se:        se,
 	}
 }
 
@@ -112,7 +113,7 @@ func (vse *Engine) Close() {
 }
 
 // Stream starts a new stream.
-func (vse *Engine) Stream(ctx context.Context, startPos mysql.Position, filter *binlogdatapb.Filter, send func(*binlogdatapb.VEvent) error) error {
+func (vse *Engine) Stream(ctx context.Context, startPos mysql.Position, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	// Ensure kschema is initialized and the watcher is started.
 	vse.watcherOnce.Do(vse.setWatch)
 

@@ -166,15 +166,24 @@ enum VEventType {
   ROLLBACK = 4;
   DDL = 5;
   INSERT = 6;
-  UPDATE = 7;
-  DELETE = 8;
-  SET = 9;
-  ROW = 10;
+  REPLACE = 7;
+  UPDATE = 8;
+  DELETE = 9;
+  SET = 10;
+  OTHER = 11;
+  ROW = 12;
 }
 
-message RowEvent {
+// RowChange represents one row change
+message RowChange {
   query.Row before = 1;
   query.Row after = 2;
+}
+
+// RowEvent represent row events for one table
+message RowEvent {
+  string table_name = 1;
+  repeated RowChange row_changes = 2;
 }
 
 // VEvent represents a vstream event
@@ -182,7 +191,7 @@ message VEvent {
   VEventType type = 1;
   string gtid = 2;
   string ddl = 3;
-  repeated RowEvent row_events = 4;
+  RowEvent row_event = 4;
 }
 
 // VStreamRequest is the payload for VStream

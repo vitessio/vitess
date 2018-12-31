@@ -18,8 +18,8 @@ package vstreamer
 
 import (
 	"context"
+	"flag"
 	"fmt"
-	"strings"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -32,29 +32,8 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-// statementPrefixes are normal sql statement prefixes.
-var statementPrefixes = map[string]binlogdatapb.VEventType{
-	"begin":    binlogdatapb.VEventType_BEGIN,
-	"commit":   binlogdatapb.VEventType_COMMIT,
-	"rollback": binlogdatapb.VEventType_ROLLBACK,
-	"insert":   binlogdatapb.VEventType_INSERT,
-	"update":   binlogdatapb.VEventType_UPDATE,
-	"delete":   binlogdatapb.VEventType_DELETE,
-	"create":   binlogdatapb.VEventType_DDL,
-	"alter":    binlogdatapb.VEventType_DDL,
-	"drop":     binlogdatapb.VEventType_DDL,
-	"truncate": binlogdatapb.VEventType_DDL,
-	"rename":   binlogdatapb.VEventType_DDL,
-	"set":      binlogdatapb.VEventType_SET,
-}
-
-// getStatementCategory returns the binlogdatapb.BL_* category for a SQL statement.
-func getStatementCategory(sql string) binlogdatapb.VEventType {
-	if i := strings.IndexByte(sql, byte(' ')); i >= 0 {
-		sql = sql[:i]
-	}
-	return statementPrefixes[strings.ToLower(sql)]
-}
+// PacketSize is exported for allowing tests to change this value.
+var PacketSize = flag.Int("vstream_packet_size", 10000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
 
 type vstreamer struct {
 	ctx    context.Context
@@ -64,7 +43,7 @@ type vstreamer struct {
 	se       *schema.Engine
 	startPos mysql.Position
 	filter   *binlogdatapb.Filter
-	send     func(*binlogdatapb.VEvent) error
+	send     func([]*binlogdatapb.VEvent) error
 
 	kevents chan *vindexes.KeyspaceSchema
 	kschema *vindexes.KeyspaceSchema
@@ -75,7 +54,7 @@ type vstreamer struct {
 	pos    mysql.Position
 }
 
-func newVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos mysql.Position, filter *binlogdatapb.Filter, kschema *vindexes.KeyspaceSchema, send func(*binlogdatapb.VEvent) error) *vstreamer {
+func newVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos mysql.Position, filter *binlogdatapb.Filter, kschema *vindexes.KeyspaceSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:      ctx,
@@ -130,18 +109,63 @@ func (vs *vstreamer) Stream() error {
 }
 
 func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent) error {
+	// bufferAndTransmit uses bufferedEvents and curSize to buffer events.
+	var bufferedEvents []*binlogdatapb.VEvent
+	var curSize int
+	bufferAndTransmit := func(vevent *binlogdatapb.VEvent) error {
+		switch vevent.Type {
+		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN:
+			// We never have to send GTID or BEGIN events on their own.
+			bufferedEvents = append(bufferedEvents, vevent)
+		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_ROLLBACK, binlogdatapb.VEventType_DDL:
+			// COMMIT, ROLLBACK and DDL are terminal. There may be no more events after
+			// these for a long time. So, we have to send whatever we have.
+			bufferedEvents = append(bufferedEvents, vevent)
+			vevents := bufferedEvents
+			bufferedEvents = nil
+			curSize = 0
+			return vs.send(vevents)
+		case binlogdatapb.VEventType_ROW:
+			// ROW events happen inside transactions. So, we can chunk them.
+			// Buffer everything until packet size is reached, and then send.
+			newSize := 0
+			for _, rowChange := range vevent.RowEvent.RowChanges {
+				if rowChange.Before != nil {
+					newSize += len(rowChange.Before.Values)
+				}
+				if rowChange.After != nil {
+					newSize += len(rowChange.After.Values)
+				}
+			}
+			if curSize+newSize > *PacketSize {
+				vevents := bufferedEvents
+				bufferedEvents = []*binlogdatapb.VEvent{vevent}
+				curSize = newSize
+				return vs.send(vevents)
+			}
+			bufferedEvents = append(bufferedEvents, vevent)
+		}
+		return nil
+	}
+
+	// Main loop: calls bufferAndTransmit as events arrive.
 	for {
 		select {
 		case ev, ok := <-events:
 			if !ok {
-				return fmt.Errorf("server EOF")
+				select {
+				case <-ctx.Done():
+					return nil
+				default:
+				}
+				return fmt.Errorf("unexpected server EOF")
 			}
 			vevents, err := vs.parseEvent(ev)
 			if err != nil {
 				return err
 			}
 			for _, vevent := range vevents {
-				if err := vs.send(vevent); err != nil {
+				if err := bufferAndTransmit(vevent); err != nil {
 					return fmt.Errorf("error sending event: %v", err)
 				}
 			}
@@ -150,7 +174,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				return err
 			}
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil
 		}
 	}
 }
@@ -216,26 +240,42 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
 		}
-		switch cat := getStatementCategory(q.SQL); cat {
-		case binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_ROLLBACK:
+		switch cat := sqlparser.Preview(q.SQL); cat {
+		case sqlparser.StmtBegin:
 			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type: cat,
+				Type: binlogdatapb.VEventType_BEGIN,
 			})
-		case binlogdatapb.VEventType_DDL:
+		case sqlparser.StmtCommit:
 			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type: cat,
+				Type: binlogdatapb.VEventType_COMMIT,
+			})
+		case sqlparser.StmtRollback:
+			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_ROLLBACK,
+			})
+		case sqlparser.StmtDDL:
+			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_DDL,
 				Ddl:  q.SQL,
 			})
+		case sqlparser.StmtOther:
+			// These are DBA statements like REPAIR that can be ignored.
 		default:
-			return nil, fmt.Errorf("unexpected event type %v in row-based replication: %#v", cat, ev)
+			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", sqlparser.StmtType(cat), q.SQL)
 		}
 	case ev.IsTableMap():
+		// This is very frequent. It precedes every row event.
 		id := ev.TableID(vs.format)
 		tm, err := ev.TableMap(vs.format)
 		if err != nil {
 			return nil, err
 		}
+		// We have to build a plan only for new ids.
+		if _, ok := vs.plans[id]; ok {
+			return nil, nil
+		}
 		if tm.Database != "" && tm.Database != vs.cp.DbName {
+			vs.plans[id] = nil
 			return nil, nil
 		}
 		ti := vs.se.GetTable(sqlparser.NewTableIdent(tm.Name))
@@ -253,9 +293,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, err
 		}
-		if plan != nil {
-			vs.plans[id] = plan
-		}
+		vs.plans[id] = plan
 	case ev.IsWriteRows() || ev.IsDeleteRows() || ev.IsUpdateRows():
 		// The existence of before and after images can be used to
 		// identify statememt types. It's also possible that the
@@ -271,7 +309,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, err
 		}
-		rowEvents := make([]*binlogdatapb.RowEvent, 0, len(rows.Rows))
+		rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
 		for _, row := range rows.Rows {
 			beforeOK, beforeValues, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
 			if err != nil {
@@ -284,18 +322,21 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			if !beforeOK && !afterOK {
 				continue
 			}
-			rowEvent := &binlogdatapb.RowEvent{}
+			rowChange := &binlogdatapb.RowChange{}
 			if beforeOK {
-				rowEvent.Before = sqltypes.RowToProto3(beforeValues)
+				rowChange.Before = sqltypes.RowToProto3(beforeValues)
 			}
 			if afterOK {
-				rowEvent.After = sqltypes.RowToProto3(afterValues)
+				rowChange.After = sqltypes.RowToProto3(afterValues)
 			}
-			rowEvents = append(rowEvents, rowEvent)
+			rowChanges = append(rowChanges, rowChange)
 		}
 		vevents = append(vevents, &binlogdatapb.VEvent{
-			Type:      binlogdatapb.VEventType_ROW,
-			RowEvents: rowEvents,
+			Type: binlogdatapb.VEventType_ROW,
+			RowEvent: &binlogdatapb.RowEvent{
+				TableName:  plan.Table.Name,
+				RowChanges: rowChanges,
+			},
 		})
 	}
 	return vevents, nil
@@ -303,6 +344,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 
 func (vs *vstreamer) rebuildPlans() error {
 	for id, plan := range vs.plans {
+		if plan == nil {
+			// If a table has no plan, a kschema change will not
+			// cause that to change.
+			continue
+		}
 		newPlan, err := buildPlan(plan.Table, vs.kschema, vs.filter)
 		if err != nil {
 			return err
@@ -341,7 +387,9 @@ func (vs *vstreamer) extractRowAndFilter(plan *Plan, data []byte, dataColumns, n
 func wrapError(err error, stopPos mysql.Position) error {
 	if err != nil {
 		err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
+		log.Error(err)
+		return err
 	}
-	log.Infof("stream ended @ %v, err: %v", stopPos, err)
-	return err
+	log.Infof("stream ended @ %v", stopPos)
+	return nil
 }
