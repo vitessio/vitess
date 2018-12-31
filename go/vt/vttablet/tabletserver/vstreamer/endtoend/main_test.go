@@ -68,10 +68,6 @@ func TestMain(m *testing.M) {
 			ExtraMyCnf: []string{path.Join(os.Getenv("VTTOP"), "config/mycnf/rbr.cnf")},
 			OnlyMySQL:  true,
 		}
-		if err := cfg.InitSchemas("vttest", testSchema, nil); err != nil {
-			fmt.Fprintf(os.Stderr, "InitSchemas failed: %v\n", err)
-			return 1
-		}
 		defer os.RemoveAll(cfg.SchemaDir)
 		cluster := vttest.LocalCluster{
 			Config: cfg,
@@ -126,6 +122,3 @@ func initTopo(keyspaceName string) (*topo.Server, error) {
 	}
 	return ts, nil
 }
-
-var testSchema = `create table stream1(id int, val varbinary(128), primary key(id));
-create table stream2(id int, val varbinary(128), primary key(id));`

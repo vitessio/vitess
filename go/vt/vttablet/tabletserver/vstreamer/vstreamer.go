@@ -258,6 +258,10 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_DDL,
 				Ddl:  q.SQL,
 			})
+			// Proactively reload schema.
+			// If the DDL adds a column, comparing with an older snapshot of the
+			// schema will make us think that a column was dropped and error out.
+			vs.se.Reload(vs.ctx)
 		case sqlparser.StmtOther:
 			// These are DBA statements like REPAIR that can be ignored.
 		default:
@@ -287,7 +291,8 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		}
 		table := &Table{
 			TableMap: tm,
-			Columns:  ti.Columns,
+			// Columns should be truncated to match those in tm.
+			Columns: ti.Columns[:len(tm.Types)],
 		}
 		plan, err := buildPlan(table, vs.kschema, vs.filter)
 		if err != nil {
