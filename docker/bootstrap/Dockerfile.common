@@ -52,7 +52,7 @@ ENV PKG_CONFIG_PATH $VTROOT/lib
 ENV USER vitess
 
 # Copy files needed for bootstrap
-COPY bootstrap.sh dev.env /vt/src/vitess.io/vitess/
+COPY bootstrap.sh dev.env build.env /vt/src/vitess.io/vitess/
 COPY config /vt/src/vitess.io/vitess/config
 COPY third_party /vt/src/vitess.io/vitess/third_party
 COPY tools /vt/src/vitess.io/vitess/tools
