@@ -82,7 +82,7 @@ func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
 	once.Do(func() {
 		vschemaErrors = stats.NewCounter("VSchemaErrors", "Count of VSchema errors")
 		vschemaUpdates = stats.NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors")
-		http.Handle("/debug/vschema", vse)
+		http.Handle("/debug/tablet_vschema", vse)
 	})
 	return vse
 }
