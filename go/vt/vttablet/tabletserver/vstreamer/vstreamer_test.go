@@ -468,14 +468,12 @@ func TestTypes(t *testing.T) {
 		"create table vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id))",
 		"create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb))",
 		"create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id))",
-		"create table vitess_json(id int default 1, val json, primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table vitess_ints",
 		"drop table vitess_fracts",
 		"drop table vitess_strings",
 		"drop table vitess_misc",
-		"drop table vitess_json",
 	})
 	engine.se.Reload(context.Background())
 
@@ -547,7 +545,23 @@ func TestTypes(t *testing.T) {
 				`" > > > `,
 			`commit`,
 		}},
-	}, {
+	}}
+	runCases(t, nil, testcases)
+}
+
+func TestJSON(t *testing.T) {
+	// JSON is supported only after mysql57.
+	if err := mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
+		// If it's a syntax error, MySQL is an older version. Skip this test.
+		if strings.Contains(err.Error(), "syntax") {
+			return
+		}
+		t.Fatal(err)
+	}
+	defer execStatement(t, "drop table vitess_json")
+	engine.se.Reload(context.Background())
+
+	testcases := []testcase{{
 		input: []string{
 			`insert into vitess_json values(1, '{"foo": "bar"}')`,
 		},
