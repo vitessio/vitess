@@ -32,8 +32,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-// PacketSize is exported for allowing tests to change this value.
-var PacketSize = flag.Int("vstream_packet_size", 10000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
+var packetSize = flag.Int("vstream_packet_size", 10000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
 
 type vstreamer struct {
 	ctx    context.Context
@@ -114,6 +113,11 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		bufferedEvents []*binlogdatapb.VEvent
 		curSize        int
 	)
+	// Buffering only takes row lenghts into consideration.
+	// Length of other events is considered negligible.
+	// If a new row event causes the packet size to be exceeded,
+	// all existing rows are sent without the new row.
+	// If a single row exceeds the packet size, it will be in its own packet.
 	bufferAndTransmit := func(vevent *binlogdatapb.VEvent) error {
 		switch vevent.Type {
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN:
@@ -139,12 +143,13 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					newSize += len(rowChange.After.Values)
 				}
 			}
-			if curSize+newSize > *PacketSize {
+			if curSize+newSize > *packetSize {
 				vevents := bufferedEvents
 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
 				curSize = newSize
 				return vs.send(vevents)
 			}
+			curSize += newSize
 			bufferedEvents = append(bufferedEvents, vevent)
 		}
 		return nil

@@ -24,7 +24,6 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -43,12 +42,14 @@ func TestStatements(t *testing.T) {
 		"drop table stream1",
 		"drop table stream2",
 	})
-	framework.Server.ReloadSchema(context.Background())
+	engine.se.Reload(context.Background())
 
 	testcases := []testcase{{
 		input: []string{
+			"begin",
 			"insert into stream1 values (1, 'aaa')",
 			"update stream1 set val='bbb' where id = 1",
+			"commit",
 		},
 		// MySQL issues GTID->BEGIN.
 		// MariaDB issues BEGIN->GTID.
@@ -76,10 +77,12 @@ func TestStatements(t *testing.T) {
 	}, {
 		// Multiple tables, and multiple rows changed per statement.
 		input: []string{
+			"begin",
 			"insert into stream1 values (2, 'bbb')",
 			"insert into stream2 values (1, 'aaa')",
 			"update stream1 set val='ccc'",
 			"delete from stream1",
+			"commit",
 		},
 		output: [][]string{{
 			`gtid|begin`,
@@ -132,7 +135,7 @@ func TestRegexp(t *testing.T) {
 		"drop table yes_stream",
 		"drop table no_stream",
 	})
-	framework.Server.ReloadSchema(context.Background())
+	engine.se.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -142,10 +145,12 @@ func TestRegexp(t *testing.T) {
 
 	testcases := []testcase{{
 		input: []string{
+			"begin",
 			"insert into yes_stream values (1, 'aaa')",
 			"insert into no_stream values (2, 'bbb')",
 			"update yes_stream set val='bbb' where id = 1",
 			"update no_stream set val='bbb' where id = 2",
+			"commit",
 		},
 		output: [][]string{{
 			`gtid|begin`,
@@ -165,7 +170,7 @@ func TestREKeyrange(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	framework.Server.ReloadSchema(context.Background())
+	engine.se.Reload(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -186,6 +191,7 @@ func TestREKeyrange(t *testing.T) {
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
 	input := []string{
+		"begin",
 		"insert into t1 values (1, 4, 'aaa')",
 		"insert into t1 values (4, 1, 'bbb')",
 		// Stay in shard.
@@ -194,8 +200,9 @@ func TestREKeyrange(t *testing.T) {
 		"update t1 set id1 = 6 where id1 = 2",
 		// Move from 80- to -80.
 		"update t1 set id1 = 3 where id1 = 4",
+		"commit",
 	}
-	execTransaction(t, input)
+	execStatements(t, input)
 	expectLog(ctx, t, input, ch, [][]string{{
 		`gtid|begin`,
 		`gtid|begin`,
@@ -231,10 +238,12 @@ func TestREKeyrange(t *testing.T) {
 
 	// Only the first insert should be sent.
 	input = []string{
+		"begin",
 		"insert into t1 values (4, 1, 'aaa')",
 		"insert into t1 values (1, 4, 'aaa')",
+		"commit",
 	}
-	execTransaction(t, input)
+	execStatements(t, input)
 	expectLog(ctx, t, input, ch, [][]string{{
 		`gtid|begin`,
 		`gtid|begin`,
@@ -250,7 +259,7 @@ func TestSelectFilter(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	framework.Server.ReloadSchema(context.Background())
+	engine.se.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -261,8 +270,10 @@ func TestSelectFilter(t *testing.T) {
 
 	testcases := []testcase{{
 		input: []string{
+			"begin",
 			"insert into t1 values (4, 1, 'aaa')",
 			"insert into t1 values (2, 4, 'aaa')",
+			"commit",
 		},
 		// MySQL issues GTID->BEGIN.
 		// MariaDB issues BEGIN->GTID.
@@ -281,7 +292,7 @@ func TestDDLAddColumn(t *testing.T) {
 	defer execStatement(t, "drop table ddl_test1")
 
 	// Record position before the next few statements.
-	pos, err := framework.Mysqld.MasterPosition()
+	pos, err := mysqld.MasterPosition()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +302,7 @@ func TestDDLAddColumn(t *testing.T) {
 		"alter table ddl_test1 add column val2 varbinary(128)",
 		"insert into ddl_test1 values(2, 'bbb', 'ccc')",
 	})
-	framework.Server.ReloadSchema(context.Background())
+	engine.se.Reload(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -327,7 +338,7 @@ func TestDDLDropColumn(t *testing.T) {
 	defer execStatement(t, "drop table ddl_test2")
 
 	// Record position before the next few statements.
-	pos, err := framework.Mysqld.MasterPosition()
+	pos, err := mysqld.MasterPosition()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +348,7 @@ func TestDDLDropColumn(t *testing.T) {
 		"alter table ddl_test2 drop column val2",
 		"insert into ddl_test2 values(2, 'bbb')",
 	})
-	framework.Server.ReloadSchema(context.Background())
+	engine.se.Reload(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -355,7 +366,203 @@ func TestDDLDropColumn(t *testing.T) {
 	}
 }
 
+func TestBuffering(t *testing.T) {
+	savedSize := *packetSize
+	*packetSize = 10
+	defer func() { *packetSize = savedSize }()
+
+	execStatement(t, "create table packet_test(id int, val varbinary(128), primary key(id))")
+	defer execStatement(t, "drop table packet_test")
+	engine.se.Reload(context.Background())
+
+	testcases := []testcase{{
+		// All rows in one packet.
+		input: []string{
+			"begin",
+			"insert into packet_test values (1, '123')",
+			"insert into packet_test values (2, '456')",
+			"commit",
+		},
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:3 values:"1123" > > > `,
+			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:3 values:"2456" > > > `,
+			`commit`,
+		}},
+	}, {
+		// A new row causes packet size to be exceeded.
+		// Also test deletes
+		input: []string{
+			"begin",
+			"insert into packet_test values (3, '123456')",
+			"insert into packet_test values (4, '789012')",
+			"delete from packet_test where id=3",
+			"delete from packet_test where id=4",
+			"commit",
+		},
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:6 values:"3123456" > > > `,
+		}, {
+			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:6 values:"4789012" > > > `,
+		}, {
+			`type:ROW row_event:<table_name:"packet_test" row_changes:<before:<lengths:1 lengths:6 values:"3123456" > > > `,
+		}, {
+			`type:ROW row_event:<table_name:"packet_test" row_changes:<before:<lengths:1 lengths:6 values:"4789012" > > > `,
+			`commit`,
+		}},
+	}, {
+		// A single row is itself bigger than the packet size.
+		input: []string{
+			"begin",
+			"insert into packet_test values (5, '123456')",
+			"insert into packet_test values (6, '12345678901')",
+			"insert into packet_test values (7, '23456')",
+			"commit",
+		},
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:6 values:"5123456" > > > `,
+		}, {
+			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:11 values:"612345678901" > > > `,
+		}, {
+			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:5 values:"723456" > > > `,
+			`commit`,
+		}},
+	}, {
+		// An update packet is bigger because it has a before and after image.
+		input: []string{
+			"begin",
+			"insert into packet_test values (8, '123')",
+			"update packet_test set val='456' where id=8",
+			"commit",
+		},
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:3 values:"8123" > > > `,
+		}, {
+			`type:ROW row_event:<table_name:"packet_test" row_changes:<before:<lengths:1 lengths:3 values:"8123" > after:<lengths:1 lengths:3 values:"8456" > > > `,
+			`commit`,
+		}},
+	}, {
+		// DDL is in its own packet
+		input: []string{
+			"alter table packet_test change val val varchar(128)",
+		},
+		output: [][]string{{
+			`gtid`,
+			`type:DDL ddl:"alter table packet_test change val val varchar(128)" `,
+		}},
+	}}
+	runCases(t, nil, testcases)
+}
+
+func TestTypes(t *testing.T) {
+	// Modeled after vttablet endtoend compatibility tests.
+	execStatements(t, []string{
+		"create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny))",
+		"create table vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id))",
+		"create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb))",
+		"create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id))",
+		"create table vitess_json(id int default 1, val json, primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table vitess_ints",
+		"drop table vitess_fracts",
+		"drop table vitess_strings",
+		"drop table vitess_misc",
+		"drop table vitess_json",
+	})
+	engine.se.Reload(context.Background())
+
+	testcases := []testcase{{
+		input: []string{
+			"insert into vitess_ints values(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012)",
+		},
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:ROW row_event:<table_name:"vitess_ints" row_changes:<after:<lengths:4 lengths:3 lengths:6 lengths:5 lengths:8 lengths:8 lengths:11 lengths:10 lengths:20 lengths:20 lengths:4 values:"` +
+				`-128` +
+				`255` +
+				`-32768` +
+				`65535` +
+				`-8388608` +
+				`16777215` +
+				`-2147483648` +
+				`4294967295` +
+				`-9223372036854775808` +
+				`18446744073709551615` +
+				`2012` +
+				`" > > > `,
+			`commit`,
+		}},
+	}, {
+		input: []string{
+			"insert into vitess_fracts values(1, 1.99, 2.99, 3.99, 4.99)",
+		},
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:ROW row_event:<table_name:"vitess_fracts" row_changes:<after:<lengths:1 lengths:4 lengths:4 lengths:8 lengths:8 values:"` +
+				`1` +
+				`1.99` +
+				`2.99` +
+				`3.99E+00` +
+				`4.99E+00` +
+				`" > > > `,
+			`commit`,
+		}},
+	}, {
+		// TODO(sougou): validate that binary and char data generate correct DMLs on the other end.
+		input: []string{
+			"insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
+		},
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
+				`values:"abcdefgh13" > > > `,
+			`commit`,
+		}},
+	}, {
+		// TODO(sougou): validate that the geometry value generates the correct DMLs on the other end.
+		input: []string{
+			"insert into vitess_misc values(1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2))",
+		},
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:ROW row_event:<table_name:"vitess_misc" row_changes:<after:<lengths:1 lengths:1 lengths:10 lengths:19 lengths:8 lengths:25 values:"` +
+				`1` +
+				`\001` +
+				`2012-01-01` +
+				`2012-01-01 15:45:45` +
+				`15:45:45` +
+				`\000\000\000\000\001\001\000\000\000\000\000\000\000\000\000\360?\000\000\000\000\000\000\000@` +
+				`" > > > `,
+			`commit`,
+		}},
+	}, {
+		input: []string{
+			`insert into vitess_json values(1, '{"foo": "bar"}')`,
+		},
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:ROW row_event:<table_name:"vitess_json" row_changes:<after:<lengths:1 lengths:24 values:"1JSON_OBJECT('foo','bar')" > > > `,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases)
+}
+
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -364,7 +571,7 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase) {
 	for _, tcase := range testcases {
 		switch input := tcase.input.(type) {
 		case []string:
-			execTransaction(t, input)
+			execStatements(t, input)
 		case string:
 			execStatement(t, input)
 		default:
@@ -419,7 +626,7 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 }
 
 func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter) <-chan []*binlogdatapb.VEvent {
-	pos, err := framework.Mysqld.MasterPosition()
+	pos, err := mysqld.MasterPosition()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -442,7 +649,7 @@ func vstream(ctx context.Context, t *testing.T, pos mysql.Position, filter *binl
 			}},
 		}
 	}
-	return framework.Server.VStream(ctx, &framework.Target, pos, filter, func(evs []*binlogdatapb.VEvent) error {
+	return engine.Stream(ctx, pos, filter, func(evs []*binlogdatapb.VEvent) error {
 		t.Logf("Received events: %v", evs)
 		select {
 		case ch <- evs:
@@ -453,33 +660,16 @@ func vstream(ctx context.Context, t *testing.T, pos mysql.Position, filter *binl
 	})
 }
 
-func execTransaction(t *testing.T, queries []string) {
-	t.Helper()
-
-	client := framework.NewClient()
-	if err := client.Begin(false); err != nil {
-		t.Fatal(err)
-	}
-	for _, query := range queries {
-		if _, err := client.Execute(query, nil); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := client.Commit(); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func execStatement(t *testing.T, query string) {
 	t.Helper()
-	if err := framework.Mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
+	if err := mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
-	if err := framework.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
+	if err := mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
 		t.Fatal(err)
 	}
 }
