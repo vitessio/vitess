@@ -45,12 +45,6 @@ func TestStatements(t *testing.T) {
 	})
 	framework.Server.ReloadSchema(context.Background())
 
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match: "/.*/",
-		}},
-	}
-
 	testcases := []testcase{{
 		input: []string{
 			"insert into stream1 values (1, 'aaa')",
@@ -126,6 +120,159 @@ func TestStatements(t *testing.T) {
 	}, {
 		input: "describe stream1",
 	}}
+	runCases(t, nil, testcases)
+}
+
+func TestRegexp(t *testing.T) {
+	execStatements(t, []string{
+		"create table yes_stream(id int, val varbinary(128), primary key(id))",
+		"create table no_stream(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table yes_stream",
+		"drop table no_stream",
+	})
+	framework.Server.ReloadSchema(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/yes.*/",
+		}},
+	}
+
+	testcases := []testcase{{
+		input: []string{
+			"insert into yes_stream values (1, 'aaa')",
+			"insert into no_stream values (2, 'bbb')",
+			"update yes_stream set val='bbb' where id = 1",
+			"update no_stream set val='bbb' where id = 2",
+		},
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:ROW row_event:<table_name:"yes_stream" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			`type:ROW row_event:<table_name:"yes_stream" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:1 lengths:3 values:"1bbb" > > > `,
+			`commit`,
+		}},
+	}}
+	runCases(t, filter, testcases)
+}
+
+func TestREKeyrange(t *testing.T) {
+	execStatements(t, []string{
+		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	framework.Server.ReloadSchema(context.Background())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "/.*/",
+			Filter: "-80",
+		}},
+	}
+	ch := startStream(ctx, t, filter)
+
+	if err := setVSchema(shardedVSchema); err != nil {
+		t.Fatal(err)
+	}
+	defer setVSchema("{}")
+
+	// 1, 2, 3 and 5 are in shard -80.
+	// 4 and 6 are in shard 80-.
+	input := []string{
+		"insert into t1 values (1, 4, 'aaa')",
+		"insert into t1 values (4, 1, 'bbb')",
+		// Stay in shard.
+		"update t1 set id1 = 2 where id1 = 1",
+		// Move from -80 to 80-.
+		"update t1 set id1 = 6 where id1 = 2",
+		// Move from 80- to -80.
+		"update t1 set id1 = 3 where id1 = 4",
+	}
+	execTransaction(t, input)
+	expectLog(ctx, t, input, ch, [][]string{{
+		`gtid|begin`,
+		`gtid|begin`,
+		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"14aaa" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 values:"14aaa" > after:<lengths:1 lengths:1 lengths:3 values:"24aaa" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 values:"24aaa" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"31bbb" > > > `,
+		`commit`,
+	}})
+
+	// Switch the vschema to make id2 the primary vindex.
+	altVSchema := `{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    }
+  },
+  "tables": {
+    "t1": {
+      "column_vindexes": [
+        {
+          "column": "id2",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+}`
+	if err := setVSchema(altVSchema); err != nil {
+		t.Fatal(err)
+	}
+
+	// Only the first insert should be sent.
+	input = []string{
+		"insert into t1 values (4, 1, 'aaa')",
+		"insert into t1 values (1, 4, 'aaa')",
+	}
+	execTransaction(t, input)
+	expectLog(ctx, t, input, ch, [][]string{{
+		`gtid|begin`,
+		`gtid|begin`,
+		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"41aaa" > > > `,
+		`commit`,
+	}})
+}
+
+func TestSelectFilter(t *testing.T) {
+	execStatements(t, []string{
+		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	framework.Server.ReloadSchema(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select id2, val from t1 where in_keyrange(id2, 'hash', '-80')",
+		}},
+	}
+
+	testcases := []testcase{{
+		input: []string{
+			"insert into t1 values (4, 1, 'aaa')",
+			"insert into t1 values (2, 4, 'aaa')",
+		},
+		// MySQL issues GTID->BEGIN.
+		// MariaDB issues BEGIN->GTID.
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			`commit`,
+		}},
+	}}
 	runCases(t, filter, testcases)
 }
 
@@ -149,16 +296,10 @@ func TestDDLAddColumn(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match: "/.*/",
-		}},
-	}
-
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
 		defer close(ch)
-		if err := vstream(ctx, pos, filter, ch); err != nil {
+		if err := vstream(ctx, t, pos, nil, ch); err != nil {
 			t.Fatal(err)
 		}
 	}()
@@ -201,19 +342,13 @@ func TestDDLDropColumn(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match: "/.*/",
-		}},
-	}
-
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
 		for range ch {
 		}
 	}()
 	defer close(ch)
-	err = vstream(ctx, pos, filter, ch)
+	err = vstream(ctx, t, pos, nil, ch)
 	want := "Column count doesn't match value"
 	if err == nil || strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
@@ -292,15 +427,23 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter)
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
 		defer close(ch)
-		if err := vstream(ctx, pos, filter, ch); err != nil {
+		if err := vstream(ctx, t, pos, filter, ch); err != nil {
 			t.Fatal(err)
 		}
 	}()
 	return ch
 }
 
-func vstream(ctx context.Context, pos mysql.Position, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
+func vstream(ctx context.Context, t *testing.T, pos mysql.Position, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
+	if filter == nil {
+		filter = &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match: "/.*/",
+			}},
+		}
+	}
 	return framework.Server.VStream(ctx, &framework.Target, pos, filter, func(evs []*binlogdatapb.VEvent) error {
+		t.Logf("Received events: %v", evs)
 		select {
 		case ch <- evs:
 		case <-ctx.Done():

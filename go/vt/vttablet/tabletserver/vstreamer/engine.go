@@ -17,10 +17,14 @@ limitations under the License.
 package vstreamer
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
 	"sync"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -34,7 +38,11 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-var vschemaErrors = stats.NewCounter("VSchemaErrors", "Count of VSchema errors")
+var (
+	once           sync.Once
+	vschemaErrors  *stats.Counter
+	vschemaUpdates *stats.Counter
+)
 
 // Engine is the engine for handling vseplication streaming requests.
 type Engine struct {
@@ -65,12 +73,24 @@ type Engine struct {
 
 // NewEngine creates a new Engine.
 func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
-	return &Engine{
+	vse := &Engine{
 		streamers: make(map[int]*vstreamer),
 		kschema:   &vindexes.KeyspaceSchema{},
 		ts:        ts,
 		se:        se,
 	}
+	once.Do(func() {
+		vschemaErrors = stats.NewCounter("VSchemaErrors", "Count of VSchema errors")
+		vschemaUpdates = stats.NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors")
+		http.Handle("/debug/vschema", vse)
+	})
+	return vse
+}
+
+func (vse *Engine) vschema() *vindexes.KeyspaceSchema {
+	vse.mu.Lock()
+	defer vse.mu.Unlock()
+	return vse.kschema
 }
 
 // InitDBConfig performs saves the required info from dbconfigs for future use.
@@ -148,6 +168,27 @@ func (vse *Engine) Stream(ctx context.Context, startPos mysql.Position, filter *
 	return streamer.Stream()
 }
 
+// ServeHTTP shows the current VSchema.
+func (vse *Engine) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
+		acl.SendError(response, err)
+		return
+	}
+	response.Header().Set("Content-Type", "application/json; charset=utf-8")
+	vs := vse.vschema()
+	if vs == nil || vs.Keyspace == nil {
+		response.Write([]byte("{}"))
+	}
+	b, err := json.MarshalIndent(vs, "", "  ")
+	if err != nil {
+		response.Write([]byte(err.Error()))
+		return
+	}
+	buf := bytes.NewBuffer(nil)
+	json.HTMLEscape(buf, b)
+	response.Write(buf.Bytes())
+}
+
 func (vse *Engine) setWatch() {
 	// WatchSrvVSchema does not return until the inner func has been called at least once.
 	vse.ts.WatchSrvVSchema(context.TODO(), vse.cell, func(v *vschemapb.SrvVSchema, err error) {
@@ -161,19 +202,30 @@ func (vse *Engine) setWatch() {
 				return
 			}
 		case topo.IsErrType(err, topo.NoNode):
-			kschema = &vindexes.KeyspaceSchema{}
+			// No-op.
 		default:
 			log.Errorf("Error fetching vschema %s: %v", vse.keyspace, err)
 			vschemaErrors.Add(1)
 			return
 		}
 
+		if kschema == nil {
+			kschema = &vindexes.KeyspaceSchema{
+				Keyspace: &vindexes.Keyspace{
+					Name: vse.keyspace,
+				},
+			}
+		}
+
 		// Broadcast the change to all streamers.
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
 		vse.kschema = kschema
+		b, _ := json.MarshalIndent(kschema, "", "  ")
+		log.Infof("Updated KSchema: %s", b)
 		for _, s := range vse.streamers {
 			s.SetKSchema(kschema)
 		}
+		vschemaUpdates.Add(1)
 	})
 }

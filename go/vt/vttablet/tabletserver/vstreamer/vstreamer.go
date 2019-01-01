@@ -110,8 +110,10 @@ func (vs *vstreamer) Stream() error {
 
 func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent) error {
 	// bufferAndTransmit uses bufferedEvents and curSize to buffer events.
-	var bufferedEvents []*binlogdatapb.VEvent
-	var curSize int
+	var (
+		bufferedEvents []*binlogdatapb.VEvent
+		curSize        int
+	)
 	bufferAndTransmit := func(vevent *binlogdatapb.VEvent) error {
 		switch vevent.Type {
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN:
@@ -306,8 +308,8 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		// If so, an update will be treated as delete on one shard
 		// and insert on the other.
 		id := ev.TableID(vs.format)
-		plan, ok := vs.plans[id]
-		if !ok {
+		plan := vs.plans[id]
+		if plan == nil {
 			return nil, nil
 		}
 		rows, err := ev.Rows(vs.format, plan.Table.TableMap)
@@ -336,13 +338,15 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			}
 			rowChanges = append(rowChanges, rowChange)
 		}
-		vevents = append(vevents, &binlogdatapb.VEvent{
-			Type: binlogdatapb.VEventType_ROW,
-			RowEvent: &binlogdatapb.RowEvent{
-				TableName:  plan.Table.Name,
-				RowChanges: rowChanges,
-			},
-		})
+		if len(rowChanges) != 0 {
+			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_ROW,
+				RowEvent: &binlogdatapb.RowEvent{
+					TableName:  plan.Table.Name,
+					RowChanges: rowChanges,
+				},
+			})
+		}
 	}
 	return vevents, nil
 }

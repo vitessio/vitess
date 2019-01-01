@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -41,6 +42,9 @@ import (
 var (
 	connParams         mysql.ConnParams
 	connAppDebugParams mysql.ConnParams
+	topoServ           *topo.Server
+	keyspaceName       = "vttest"
+	cells              = []string{"cell1"}
 )
 
 func TestMain(m *testing.M) {
@@ -78,9 +82,8 @@ func TestMain(m *testing.M) {
 		}
 		defer cluster.TearDown()
 
-		keyspaceName := "vttest"
-		ts, err := initTopo(keyspaceName)
-		if err != nil {
+		// initTopo initializes topoServ.
+		if err := initTopo(); err != nil {
 			fmt.Fprintf(os.Stderr, "topo init failed: %v\n", err)
 			return 1
 		}
@@ -89,7 +92,7 @@ func TestMain(m *testing.M) {
 
 		connParams = cluster.MySQLConnParams()
 		connAppDebugParams = cluster.MySQLAppDebugConnParams()
-		if err := framework.StartFullServer(ts, config, connParams, connAppDebugParams, cluster.DbName(), keyspaceName, "cell1-100"); err != nil {
+		if err := framework.StartFullServer(topoServ, config, connParams, connAppDebugParams, cluster.DbName(), keyspaceName, "cell1-100"); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}
@@ -100,25 +103,30 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func initTopo(keyspaceName string) (*topo.Server, error) {
+func initTopo() error {
+	ctx := context.Background()
+
+	topoServ = memorytopo.NewServer(cells...)
+	if err := topoServ.CreateKeyspace(ctx, keyspaceName, &topodatapb.Keyspace{}); err != nil {
+		return err
+	}
+	// The first vschema should not be empty. Leads to Node not found error.
+	// TODO(sougou): need to fix the bug.
+	return setVSchema(`{"sharded": true}`)
+}
+
+func setVSchema(vs string) error {
 	ctx := context.Background()
 	logger := logutil.NewConsoleLogger()
-
-	cells := []string{"cell1"}
-	ts := memorytopo.NewServer(cells...)
-
-	if err := ts.CreateKeyspace(ctx, keyspaceName, &topodatapb.Keyspace{}); err != nil {
-		return nil, fmt.Errorf("CreateKeyspace failed: %v", err)
+	var kspb vschemapb.Keyspace
+	if err := json2.Unmarshal([]byte(vs), &kspb); err != nil {
+		return fmt.Errorf("Unmarshal failed: %v", err)
 	}
-
-	ks := &vschemapb.Keyspace{
-		Sharded: true,
+	if err := topoServ.SaveVSchema(ctx, keyspaceName, &kspb); err != nil {
+		return fmt.Errorf("SaveVSchema failed: %v", err)
 	}
-	if err := ts.SaveVSchema(ctx, keyspaceName, ks); err != nil {
-		return nil, fmt.Errorf("SaveVSchema failed: %v", err)
+	if err := topotools.RebuildVSchema(ctx, logger, topoServ, cells); err != nil {
+		return fmt.Errorf("RebuildVSchema failed: %v", err)
 	}
-	if err := topotools.RebuildVSchema(ctx, logger, ts, cells); err != nil {
-		return nil, fmt.Errorf("RebuildVSchema failed: %v", err)
-	}
-	return ts, nil
+	return nil
 }
