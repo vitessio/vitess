@@ -350,8 +350,18 @@ spec:
             # retry reparenting
             until [ $DONE_REPARENTING ]; do
 
+{{ if $orc.enabled }}
+              # tell orchestrator to not attempt a recovery for 10 seconds while we are in the middle of reparenting
+              wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/begin-downtime/$hostname.vttablet/3306/preStopHook/VitessPlannedReparent/10s"
+{{ end }}
+
               # reparent before shutting down
               /vt/bin/vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC PlannedReparentShard -keyspace_shard={{ $keyspace.name }}/{{ $shard.name }} -avoid_master=$current_alias
+
+{{ if $orc.enabled }}
+              # let orchestrator attempt recoveries now
+              wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/end-downtime/$hostname.vttablet/3306"
+{{ end }}
 
               # if PlannedReparentShard succeeded, then don't retry
               if [ $? -eq 0 ]; then
