@@ -17,11 +17,11 @@ limitations under the License.
 package vstreamer
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
-
-	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -61,21 +61,12 @@ func TestUpdateVSchema(t *testing.T) {
 	_ = startStream(ctx, t, filter)
 	cancel()
 
-	startCount := framework.FetchInt(framework.DebugVars(), "VSchemaUpdates")
-	if startCount == 0 {
-		t.Errorf("startCount: %d, want non-zero", startCount)
-	}
+	startCount := expectUpdateCount(t, 1)
 
 	if err := setVSchema(shardedVSchema); err != nil {
 		t.Fatal(err)
 	}
-
-	// Looks like memorytopo instantly transmits the watch.
-	// No need to wait for vschema to propagate.
-	endCount := framework.FetchInt(framework.DebugVars(), "VSchemaUpdates")
-	if endCount != startCount+1 {
-		t.Errorf("endCount: %d, want %d", endCount, startCount+1)
-	}
+	expectUpdateCount(t, startCount+1)
 
 	want := `{
   "sharded": true,
@@ -108,7 +99,25 @@ func TestUpdateVSchema(t *testing.T) {
     "hash": {}
   }
 }`
-	if got := framework.FetchURL("/debug/vschema"); got != want {
+	b, err := json.MarshalIndent(engine.vschema(), "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(b); got != want {
 		t.Errorf("vschema:\n%s, want:\n%s", got, want)
 	}
+}
+
+func expectUpdateCount(t *testing.T, wantCount int64) int64 {
+	for i := 0; i < 10; i++ {
+		gotCount := vschemaUpdates.Get()
+		if gotCount >= wantCount {
+			return gotCount
+		}
+		if i == 9 {
+			t.Fatalf("update count: %d, want %d", gotCount, wantCount)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	panic("unreachable")
 }

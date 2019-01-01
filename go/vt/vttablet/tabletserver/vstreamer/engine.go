@@ -87,12 +87,6 @@ func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
 	return vse
 }
 
-func (vse *Engine) vschema() *vindexes.KeyspaceSchema {
-	vse.mu.Lock()
-	defer vse.mu.Unlock()
-	return vse.kschema
-}
-
 // InitDBConfig performs saves the required info from dbconfigs for future use.
 func (vse *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 	vse.cp = dbcfgs.DbaWithDB()
@@ -129,6 +123,12 @@ func (vse *Engine) Close() {
 	// Wait only after releasing the lock because the end of every
 	// stream will use the lock to remove the entry from streamers.
 	vse.wg.Wait()
+}
+
+func (vse *Engine) vschema() *vindexes.KeyspaceSchema {
+	vse.mu.Lock()
+	defer vse.mu.Unlock()
+	return vse.kschema
 }
 
 // Stream starts a new stream.

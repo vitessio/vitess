@@ -26,11 +26,15 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttest"
 
@@ -40,12 +44,20 @@ import (
 )
 
 var (
+	engine             *Engine
+	mysqld             *mysqlctl.Mysqld
 	connParams         mysql.ConnParams
 	connAppDebugParams mysql.ConnParams
 	topoServ           *topo.Server
 	keyspaceName       = "vttest"
 	cells              = []string{"cell1"}
 )
+
+type checker struct{}
+
+var _ = connpool.MySQLChecker(checker{})
+
+func (checker) CheckMySQL() {}
 
 func TestMain(m *testing.M) {
 	flag.Parse() // Do not remove this comment, import into google3 depends on it
@@ -83,24 +95,33 @@ func TestMain(m *testing.M) {
 		defer cluster.TearDown()
 
 		// initTopo initializes topoServ.
-		if err := initTopo(); err != nil {
-			fmt.Fprintf(os.Stderr, "topo init failed: %v\n", err)
-			return 1
-		}
-		config := tabletenv.DefaultQsConfig
-		config.EnableAutoCommit = true
-
-		connParams = cluster.MySQLConnParams()
-		connAppDebugParams = cluster.MySQLAppDebugConnParams()
-		if err := framework.StartFullServer(topoServ, config, connParams, connAppDebugParams, cluster.DbName(), keyspaceName, "cell1-100"); err != nil {
+		if err := initEngine(&cluster); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}
-		defer framework.StopServer()
+		defer engine.Close()
 
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func initEngine(cluster *vttest.LocalCluster) error {
+	if err := initTopo(); err != nil {
+		return err
+	}
+
+	se := schema.NewEngine(checker{}, tabletenv.DefaultQsConfig)
+	srvTopoServer := srvtopo.NewResilientServer(topoServ, "TestTopo")
+	engine = NewEngine(srvTopoServer, se)
+
+	dbcfgs := dbconfigs.NewTestDBConfigs(cluster.MySQLConnParams(), cluster.MySQLAppDebugConnParams(), cluster.DbName())
+	mysqld = mysqlctl.NewMysqld(dbcfgs)
+	se.InitDBConfig(dbcfgs)
+	engine.InitDBConfig(dbcfgs)
+
+	engine.Open(keyspaceName, cells[0])
+	return nil
 }
 
 func initTopo() error {
