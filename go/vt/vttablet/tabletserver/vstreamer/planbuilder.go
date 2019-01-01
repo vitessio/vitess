@@ -200,7 +200,7 @@ func buildTablePlan(ti *Table, kschema *vindexes.KeyspaceSchema, query string) (
 	if fromTable.IsEmpty() {
 		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(sel))
 	}
-	if fromTable.String() == ti.Name {
+	if fromTable.String() != ti.Name {
 		return nil, fmt.Errorf("unexpected: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name)
 	}
 
