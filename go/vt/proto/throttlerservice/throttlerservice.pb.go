@@ -255,10 +255,10 @@ var _Throttler_serviceDesc = grpc.ServiceDesc{
 }
 
 func init() {
-	proto.RegisterFile("throttlerservice.proto", fileDescriptor_throttlerservice_151ce3faa7ac0b15)
+	proto.RegisterFile("throttlerservice.proto", fileDescriptor_throttlerservice_8b1d9f2a5de89835)
 }
 
-var fileDescriptor_throttlerservice_151ce3faa7ac0b15 = []byte{
+var fileDescriptor_throttlerservice_8b1d9f2a5de89835 = []byte{
 	// 241 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x92, 0x3d, 0x4b, 0xc4, 0x40,
 	0x10, 0x86, 0x05, 0x41, 0x74, 0xaa, 0x63, 0x0f, 0x2c, 0xae, 0xf0, 0xab, 0x50, 0x4f, 0x30, 0x0b,
