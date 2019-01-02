@@ -44,7 +44,7 @@ var (
 	vschemaUpdates *stats.Counter
 )
 
-// Engine is the engine for handling vseplication streaming requests.
+// Engine is the engine for handling vreplication streaming requests.
 type Engine struct {
 	// cp is initialized by InitDBConfig
 	cp *mysql.ConnParams
@@ -54,6 +54,7 @@ type Engine struct {
 
 	isOpen bool
 	// wg is incremented for every Stream, and decremented on end.
+	// Close waits for all current streams to end by waiting on wg.
 	wg        sync.WaitGroup
 	streamers map[int]*vstreamer
 	streamIdx int
@@ -65,6 +66,7 @@ type Engine struct {
 	watcherOnce sync.Once
 	kschema     *vindexes.KeyspaceSchema
 
+	// The following members are initialized once at the beginning.
 	ts       srvtopo.Server
 	se       *schema.Engine
 	keyspace string
@@ -72,6 +74,8 @@ type Engine struct {
 }
 
 // NewEngine creates a new Engine.
+// Initialization sequence is: NewEngine->InitDBConfig->Open.
+// Open and Close can be called multiple times and are idempotent.
 func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
 	vse := &Engine{
 		streamers: make(map[int]*vstreamer),

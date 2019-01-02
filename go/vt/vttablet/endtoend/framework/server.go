@@ -22,9 +22,6 @@ import (
 	"net/http"
 	"time"
 
-	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -49,29 +46,12 @@ var (
 	ServerAddress string
 	// ResolveChan is the channel that sends dtids that are to be resolved.
 	ResolveChan = make(chan string, 1)
-	// Mysqld is for sending direct commands to mysql
-	Mysqld *mysqlctl.Mysqld
 )
 
-// StartServer starts the server with configs set for endtoend testing.
+// StartServer starts the server and initializes
+// all the global variables. This function should only be called
+// once at the beginning of the test.
 func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string) error {
-	config := tabletenv.DefaultQsConfig
-	config.EnableAutoCommit = true
-	config.StrictTableACL = true
-	config.TwoPCEnable = true
-	config.TwoPCAbandonAge = 1
-	config.TwoPCCoordinatorAddress = "fake"
-	config.EnableHotRowProtection = true
-
-	return startServer(nil, config, connParams, connAppDebugParams, dbName, "", "")
-}
-
-// StartFullServer is like StartServer, but with more configurable options.
-func StartFullServer(ts *topo.Server, config tabletenv.TabletConfig, connParams, connAppDebugParams mysql.ConnParams, dbName, keyspaceName, alias string) error {
-	return startServer(ts, config, connParams, connAppDebugParams, dbName, keyspaceName, alias)
-}
-
-func startServer(ts *topo.Server, config tabletenv.TabletConfig, connParams, connAppDebugParams mysql.ConnParams, dbName, keyspaceName, alias string) error {
 	// Setup a fake vtgate server.
 	protocol := "resolveTest"
 	*vtgateconn.VtgateProtocol = protocol
@@ -82,26 +62,25 @@ func startServer(ts *topo.Server, config tabletenv.TabletConfig, connParams, con
 	})
 
 	dbcfgs := dbconfigs.NewTestDBConfigs(connParams, connAppDebugParams, dbName)
-	Mysqld = mysqlctl.NewMysqld(dbcfgs)
+
+	config := tabletenv.DefaultQsConfig
+	config.EnableAutoCommit = true
+	config.StrictTableACL = true
+	config.TwoPCEnable = true
+	config.TwoPCAbandonAge = 1
+	config.TwoPCCoordinatorAddress = "fake"
+	config.EnableHotRowProtection = true
 
 	Target = querypb.Target{
-		Keyspace:   keyspaceName,
+		Keyspace:   "vttest",
 		Shard:      "0",
 		TabletType: topodatapb.TabletType_MASTER,
 	}
 
-	if ts == nil {
-		Server = tabletserver.NewTabletServerWithNilTopoServer(config)
-	} else {
-		talias, err := topoproto.ParseTabletAlias(alias)
-		if err != nil {
-			return err
-		}
-		Server = tabletserver.NewTabletServer(config, ts, *talias)
-	}
-
+	Server = tabletserver.NewTabletServerWithNilTopoServer(config)
 	Server.Register()
-	if err := Server.StartService(Target, dbcfgs); err != nil {
+	err := Server.StartService(Target, dbcfgs)
+	if err != nil {
 		return vterrors.Wrap(err, "could not start service")
 	}
 
@@ -125,7 +104,6 @@ func startServer(ts *topo.Server, config tabletenv.TabletConfig, connParams, con
 
 // StopServer must be called once all the tests are done.
 func StopServer() {
-	Mysqld.Close()
 	Server.StopService()
 }
 

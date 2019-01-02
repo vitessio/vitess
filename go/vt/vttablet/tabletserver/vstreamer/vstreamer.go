@@ -45,6 +45,7 @@ type vstreamer struct {
 	filter   *binlogdatapb.Filter
 	send     func([]*binlogdatapb.VEvent) error
 
+	// A kschema is a VSchema for just one keyspace.
 	kevents chan *vindexes.KeyspaceSchema
 	kschema *vindexes.KeyspaceSchema
 	plans   map[uint64]*Plan
@@ -70,6 +71,7 @@ func newVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, 
 	}
 }
 
+// SetKSchema updates all existing against the new kschema.
 func (vs *vstreamer) SetKSchema(kschema *vindexes.KeyspaceSchema) {
 	// Since vs.Stream is a single-threaded loop. We just send an event to
 	// that thread, which helps us avoid mutexes to update the plans.
