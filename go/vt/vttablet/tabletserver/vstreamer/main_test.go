@@ -61,7 +61,10 @@ func (checker) CheckMySQL() {}
 
 func TestMain(m *testing.M) {
 	flag.Parse() // Do not remove this comment, import into google3 depends on it
-	tabletenv.Init()
+
+	if testing.Short() {
+		os.Exit(m.Run())
+	}
 
 	exitCode := func() int {
 		// Launch MySQL.
@@ -71,7 +74,7 @@ func TestMain(m *testing.M) {
 			Topology: &vttestpb.VTTestTopology{
 				Keyspaces: []*vttestpb.Keyspace{
 					{
-						Name: "vttest",
+						Name: keyspaceName,
 						Shards: []*vttestpb.Shard{
 							{
 								Name:           "0",

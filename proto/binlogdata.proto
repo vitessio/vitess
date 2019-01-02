@@ -172,6 +172,7 @@ enum VEventType {
   SET = 10;
   OTHER = 11;
   ROW = 12;
+  FIELD = 13;
 }
 
 // RowChange represents one row change
@@ -186,12 +187,18 @@ message RowEvent {
   repeated RowChange row_changes = 2;
 }
 
+message FieldEvent {
+  string table_name = 1;
+  repeated query.Field fields = 2;
+}
+
 // VEvent represents a vstream event
 message VEvent {
   VEventType type = 1;
   string gtid = 2;
   string ddl = 3;
   RowEvent row_event = 4;
+  FieldEvent field_event = 5;
 }
 
 // VStreamRequest is the payload for VStream

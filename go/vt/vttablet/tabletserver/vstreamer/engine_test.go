@@ -46,6 +46,10 @@ var shardedVSchema = `{
 }`
 
 func TestUpdateVSchema(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	defer setVSchema("{}")
 
 	// We have to start at least one stream to start the vschema watcher.
