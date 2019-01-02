@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var packetSize = flag.Int("vstream_packet_size", 10000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
@@ -120,8 +121,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	// If a single row exceeds the packet size, it will be in its own packet.
 	bufferAndTransmit := func(vevent *binlogdatapb.VEvent) error {
 		switch vevent.Type {
-		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN:
-			// We never have to send GTID or BEGIN events on their own.
+		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD:
+			// We never have to send GTID, BEGIN or FIELD events on their own.
 			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_ROLLBACK, binlogdatapb.VEventType_DDL:
 			// COMMIT, ROLLBACK and DDL are terminal. There may be no more events after
@@ -151,6 +152,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			curSize += newSize
 			bufferedEvents = append(bufferedEvents, vevent)
+		default:
+			return fmt.Errorf("unexpected event: %v", vevent)
 		}
 		return nil
 	}
@@ -306,6 +309,23 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, err
 		}
 		vs.plans[id] = plan
+		if plan == nil {
+			return nil, nil
+		}
+		fields := make([]*querypb.Field, len(plan.ColExprs))
+		for i, ce := range plan.ColExprs {
+			fields[i] = &querypb.Field{
+				Name: ce.Alias.String(),
+				Type: ce.Type,
+			}
+		}
+		vevents = append(vevents, &binlogdatapb.VEvent{
+			Type: binlogdatapb.VEventType_FIELD,
+			FieldEvent: &binlogdatapb.FieldEvent{
+				TableName: plan.Table.Name,
+				Fields:    fields,
+			},
+		})
 	case ev.IsWriteRows() || ev.IsDeleteRows() || ev.IsUpdateRows():
 		// The existence of before and after images can be used to
 		// identify statememt types. It's also possible that the

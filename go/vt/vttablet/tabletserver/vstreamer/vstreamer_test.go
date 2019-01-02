@@ -34,6 +34,10 @@ type testcase struct {
 }
 
 func TestStatements(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	execStatements(t, []string{
 		"create table stream1(id int, val varbinary(128), primary key(id))",
 		"create table stream2(id int, val varbinary(128), primary key(id))",
@@ -56,6 +60,7 @@ func TestStatements(t *testing.T) {
 		output: [][]string{{
 			`gtid|begin`,
 			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"stream1" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"stream1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 			`type:ROW row_event:<table_name:"stream1" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:1 lengths:3 values:"1bbb" > > > `,
 			`commit`,
@@ -87,7 +92,9 @@ func TestStatements(t *testing.T) {
 		output: [][]string{{
 			`gtid|begin`,
 			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"stream1" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"stream1" row_changes:<after:<lengths:1 lengths:3 values:"2bbb" > > > `,
+			`type:FIELD field_event:<table_name:"stream2" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"stream2" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 			`type:ROW row_event:<table_name:"stream1" ` +
 				`row_changes:<before:<lengths:1 lengths:3 values:"1bbb" > after:<lengths:1 lengths:3 values:"1ccc" > > ` +
@@ -127,6 +134,10 @@ func TestStatements(t *testing.T) {
 }
 
 func TestRegexp(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	execStatements(t, []string{
 		"create table yes_stream(id int, val varbinary(128), primary key(id))",
 		"create table no_stream(id int, val varbinary(128), primary key(id))",
@@ -155,6 +166,7 @@ func TestRegexp(t *testing.T) {
 		output: [][]string{{
 			`gtid|begin`,
 			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"yes_stream" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"yes_stream" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 			`type:ROW row_event:<table_name:"yes_stream" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:1 lengths:3 values:"1bbb" > > > `,
 			`commit`,
@@ -164,6 +176,10 @@ func TestRegexp(t *testing.T) {
 }
 
 func TestREKeyrange(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	execStatements(t, []string{
 		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
 	})
@@ -206,6 +222,7 @@ func TestREKeyrange(t *testing.T) {
 	expectLog(ctx, t, input, ch, [][]string{{
 		`gtid|begin`,
 		`gtid|begin`,
+		`type:FIELD field_event:<table_name:"t1" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"14aaa" > > > `,
 		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 values:"14aaa" > after:<lengths:1 lengths:1 lengths:3 values:"24aaa" > > > `,
 		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 values:"24aaa" > > > `,
@@ -253,6 +270,10 @@ func TestREKeyrange(t *testing.T) {
 }
 
 func TestSelectFilter(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	execStatements(t, []string{
 		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
 	})
@@ -280,6 +301,7 @@ func TestSelectFilter(t *testing.T) {
 		output: [][]string{{
 			`gtid|begin`,
 			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"t1" fields:<name:"id2" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 			`commit`,
 		}},
@@ -287,9 +309,69 @@ func TestSelectFilter(t *testing.T) {
 	runCases(t, filter, testcases)
 }
 
+func TestSelectExpressions(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table expr_test(id int, val bigint, primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table expr_test",
+	})
+	engine.se.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "expr_test",
+			Filter: "select id, val, month(val), day(val), hour(val) from expr_test",
+		}},
+	}
+
+	testcases := []testcase{{
+		input: []string{
+			"begin",
+			"insert into expr_test values (1, 1546392881)",
+			"commit",
+		},
+		// MySQL issues GTID->BEGIN.
+		// MariaDB issues BEGIN->GTID.
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"expr_test" ` +
+				`fields:<name:"id" type:INT32 > ` +
+				`fields:<name:"val" type:INT64 > ` +
+				`fields:<name:"month(val)" type:VARBINARY > ` +
+				`fields:<name:"day(val)" type:VARBINARY > ` +
+				`fields:<name:"hour(val)" type:VARBINARY > > `,
+			`type:ROW row_event:<table_name:"expr_test" row_changes:<after:<lengths:1 lengths:10 lengths:6 lengths:8 lengths:10 values:"` +
+				`1` +
+				`1546392881` +
+				`201901` +
+				`20190102` +
+				`2019010201` +
+				`" > > > `,
+			`commit`,
+		}},
+	}}
+	runCases(t, filter, testcases)
+}
+
 func TestDDLAddColumn(t *testing.T) {
-	execStatement(t, "create table ddl_test1(id int, val1 varbinary(128), primary key(id))")
-	defer execStatement(t, "drop table ddl_test1")
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table ddl_test1(id int, val1 varbinary(128), primary key(id))",
+		"create table ddl_test2(id int, val1 varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table ddl_test1",
+		"drop table ddl_test2",
+	})
 
 	// Record position before the next few statements.
 	pos, err := mysqld.MasterPosition()
@@ -297,20 +379,37 @@ func TestDDLAddColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 	execStatements(t, []string{
+		"begin",
 		"insert into ddl_test1 values(1, 'aaa')",
+		"insert into ddl_test2 values(1, 'aaa')",
+		"commit",
 		// Adding columns is allowed.
 		"alter table ddl_test1 add column val2 varbinary(128)",
+		"alter table ddl_test2 add column val2 varbinary(128)",
+		"begin",
 		"insert into ddl_test1 values(2, 'bbb', 'ccc')",
+		"insert into ddl_test2 values(2, 'bbb', 'ccc')",
+		"commit",
 	})
 	engine.se.Reload(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Test RE as well as select-based filters.
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "ddl_test2",
+			Filter: "select * from ddl_test2",
+		}, {
+			Match: "/.*/",
+		}},
+	}
+
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
 		defer close(ch)
-		if err := vstream(ctx, t, pos, nil, ch); err != nil {
+		if err := vstream(ctx, t, pos, filter, ch); err != nil {
 			t.Fatal(err)
 		}
 	}()
@@ -318,22 +417,35 @@ func TestDDLAddColumn(t *testing.T) {
 		// Current schema has 3 columns, but they'll be truncated to match the two columns in the event.
 		`gtid|begin`,
 		`gtid|begin`,
+		`type:FIELD field_event:<table_name:"ddl_test1" fields:<name:"id" type:INT32 > fields:<name:"val1" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"ddl_test1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+		`type:FIELD field_event:<table_name:"ddl_test2" fields:<name:"id" type:INT32 > fields:<name:"val1" type:VARBINARY > > `,
+		`type:ROW row_event:<table_name:"ddl_test2" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 		`commit`,
 	}, {
 		`gtid`,
 		`type:DDL ddl:"alter table ddl_test1 add column val2 varbinary(128)" `,
 	}, {
+		`gtid`,
+		`type:DDL ddl:"alter table ddl_test2 add column val2 varbinary(128)" `,
+	}, {
 		// The plan will be updated to now include the third column
 		// because the new table map will have three columns.
 		`gtid|begin`,
 		`gtid|begin`,
+		`type:FIELD field_event:<table_name:"ddl_test1" fields:<name:"id" type:INT32 > fields:<name:"val1" type:VARBINARY > fields:<name:"val2" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"ddl_test1" row_changes:<after:<lengths:1 lengths:3 lengths:3 values:"2bbbccc" > > > `,
+		`type:FIELD field_event:<table_name:"ddl_test2" fields:<name:"id" type:INT32 > fields:<name:"val1" type:VARBINARY > fields:<name:"val2" type:VARBINARY > > `,
+		`type:ROW row_event:<table_name:"ddl_test2" row_changes:<after:<lengths:1 lengths:3 lengths:3 values:"2bbbccc" > > > `,
 		`commit`,
 	}})
 }
 
 func TestDDLDropColumn(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	execStatement(t, "create table ddl_test2(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))")
 	defer execStatement(t, "drop table ddl_test2")
 
@@ -360,13 +472,17 @@ func TestDDLDropColumn(t *testing.T) {
 	}()
 	defer close(ch)
 	err = vstream(ctx, t, pos, nil, ch)
-	want := "Column count doesn't match value"
-	if err == nil || strings.Contains(err.Error(), want) {
+	want := "cannot determine table columns"
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
 }
 
 func TestBuffering(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	savedSize := *packetSize
 	*packetSize = 10
 	defer func() { *packetSize = savedSize }()
@@ -386,6 +502,7 @@ func TestBuffering(t *testing.T) {
 		output: [][]string{{
 			`gtid|begin`,
 			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"packet_test" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:3 values:"1123" > > > `,
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:3 values:"2456" > > > `,
 			`commit`,
@@ -462,18 +579,24 @@ func TestBuffering(t *testing.T) {
 }
 
 func TestTypes(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	// Modeled after vttablet endtoend compatibility tests.
 	execStatements(t, []string{
 		"create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny))",
 		"create table vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id))",
 		"create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb))",
 		"create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id))",
+		"create table vitess_null(id int, val varbinary(128), primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table vitess_ints",
 		"drop table vitess_fracts",
 		"drop table vitess_strings",
 		"drop table vitess_misc",
+		"drop table vitess_null",
 	})
 	engine.se.Reload(context.Background())
 
@@ -484,6 +607,18 @@ func TestTypes(t *testing.T) {
 		output: [][]string{{
 			`gtid|begin`,
 			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"vitess_ints" ` +
+				`fields:<name:"tiny" type:INT8 > ` +
+				`fields:<name:"tinyu" type:UINT8 > ` +
+				`fields:<name:"small" type:INT16 > ` +
+				`fields:<name:"smallu" type:UINT16 > ` +
+				`fields:<name:"medium" type:INT24 > ` +
+				`fields:<name:"mediumu" type:UINT24 > ` +
+				`fields:<name:"normal" type:INT32 > ` +
+				`fields:<name:"normalu" type:UINT32 > ` +
+				`fields:<name:"big" type:INT64 > ` +
+				`fields:<name:"bigu" type:UINT64 > ` +
+				`fields:<name:"y" type:YEAR > > `,
 			`type:ROW row_event:<table_name:"vitess_ints" row_changes:<after:<lengths:4 lengths:3 lengths:6 lengths:5 lengths:8 lengths:8 lengths:11 lengths:10 lengths:20 lengths:20 lengths:4 values:"` +
 				`-128` +
 				`255` +
@@ -506,6 +641,12 @@ func TestTypes(t *testing.T) {
 		output: [][]string{{
 			`gtid|begin`,
 			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"vitess_fracts" ` +
+				`fields:<name:"id" type:INT32 > ` +
+				`fields:<name:"deci" type:DECIMAL > ` +
+				`fields:<name:"num" type:DECIMAL > ` +
+				`fields:<name:"f" type:FLOAT32 > ` +
+				`fields:<name:"d" type:FLOAT64 > > `,
 			`type:ROW row_event:<table_name:"vitess_fracts" row_changes:<after:<lengths:1 lengths:4 lengths:4 lengths:8 lengths:8 values:"` +
 				`1` +
 				`1.99` +
@@ -523,6 +664,17 @@ func TestTypes(t *testing.T) {
 		output: [][]string{{
 			`gtid|begin`,
 			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"vitess_strings" ` +
+				`fields:<name:"vb" type:VARBINARY > ` +
+				`fields:<name:"c" type:CHAR > ` +
+				`fields:<name:"vc" type:VARCHAR > ` +
+				`fields:<name:"b" type:BINARY > ` +
+				`fields:<name:"tb" type:BLOB > ` +
+				`fields:<name:"bl" type:BLOB > ` +
+				`fields:<name:"ttx" type:TEXT > ` +
+				`fields:<name:"tx" type:TEXT > ` +
+				`fields:<name:"en" type:ENUM > ` +
+				`fields:<name:"s" type:SET > > `,
 			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
 				`values:"abcdefgh13" > > > `,
 			`commit`,
@@ -535,6 +687,13 @@ func TestTypes(t *testing.T) {
 		output: [][]string{{
 			`gtid|begin`,
 			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"vitess_misc" ` +
+				`fields:<name:"id" type:INT32 > ` +
+				`fields:<name:"b" type:BIT > ` +
+				`fields:<name:"d" type:DATE > ` +
+				`fields:<name:"dt" type:DATETIME > ` +
+				`fields:<name:"t" type:TIME > ` +
+				`fields:<name:"g" type:GEOMETRY > > `,
 			`type:ROW row_event:<table_name:"vitess_misc" row_changes:<after:<lengths:1 lengths:1 lengths:10 lengths:19 lengths:8 lengths:25 values:"` +
 				`1` +
 				`\001` +
@@ -545,11 +704,26 @@ func TestTypes(t *testing.T) {
 				`" > > > `,
 			`commit`,
 		}},
+	}, {
+		input: []string{
+			"insert into vitess_null values(1, null)",
+		},
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"vitess_null" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
+			`type:ROW row_event:<table_name:"vitess_null" row_changes:<after:<lengths:1 lengths:-1 values:"1" > > > `,
+			`commit`,
+		}},
 	}}
 	runCases(t, nil, testcases)
 }
 
 func TestJSON(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	// JSON is supported only after mysql57.
 	if err := mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
 		// If it's a syntax error, MySQL is an older version. Skip this test.
@@ -568,11 +742,126 @@ func TestJSON(t *testing.T) {
 		output: [][]string{{
 			`gtid|begin`,
 			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"vitess_json" fields:<name:"id" type:INT32 > fields:<name:"val" type:JSON > > `,
 			`type:ROW row_event:<table_name:"vitess_json" row_changes:<after:<lengths:1 lengths:24 values:"1JSON_OBJECT('foo','bar')" > > > `,
 			`commit`,
 		}},
 	}}
 	runCases(t, nil, testcases)
+}
+
+func TestExternalTable(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create database external",
+		"create table external.ext(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop database external",
+	})
+	engine.se.Reload(context.Background())
+
+	testcases := []testcase{{
+		input: []string{
+			"begin",
+			"insert into external.ext values (1, 'aaa')",
+			"commit",
+		},
+		// External table events don't get sent.
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases)
+}
+
+func TestMinimalMode(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))",
+		"insert into t1 values(1, 'aaa', 'bbb')",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	// Record position before the next few statements.
+	pos, err := mysqld.MasterPosition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	execStatements(t, []string{
+		"set @@session.binlog_row_image='minimal'",
+		"update t1 set val1='bbb' where id=1",
+		"set @@session.binlog_row_image='full'",
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan []*binlogdatapb.VEvent)
+	go func() {
+		for evs := range ch {
+			t.Errorf("received: %v", evs)
+		}
+	}()
+	defer close(ch)
+	err = vstream(ctx, t, pos, nil, ch)
+	want := "partial row image encountered"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain '%s'", err, want)
+	}
+}
+
+func TestStatementMode(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))",
+		"insert into t1 values(1, 'aaa', 'bbb')",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	// Record position before the next few statements.
+	pos, err := mysqld.MasterPosition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	execStatements(t, []string{
+		"set @@session.binlog_format='statement'",
+		"update t1 set val1='bbb' where id=1",
+		"set @@session.binlog_format='row'",
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan []*binlogdatapb.VEvent)
+	go func() {
+		for evs := range ch {
+			t.Errorf("received: %v", evs)
+		}
+	}()
+	defer close(ch)
+	err = vstream(ctx, t, pos, nil, ch)
+	want := "unexpected statement type"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain '%s'", err, want)
+	}
 }
 
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase) {

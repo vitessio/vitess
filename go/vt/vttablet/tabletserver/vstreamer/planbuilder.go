@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -46,6 +47,7 @@ type Plan struct {
 type ColExpr struct {
 	ColNum    int
 	Alias     sqlparser.ColIdent
+	Type      querypb.Type
 	Operation Operation
 }
 
@@ -55,7 +57,7 @@ type Operation int
 // The following are the supported operations on a column.
 const (
 	OpNone = Operation(iota)
-	OpYearMonth
+	OpMonth
 	OpDay
 	OpHour
 )
@@ -71,19 +73,19 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 	result := make([]sqltypes.Value, len(plan.ColExprs))
 	for i, colExpr := range plan.ColExprs {
 		switch colExpr.Operation {
-		case OpYearMonth:
+		case OpMonth:
 			v, _ := sqltypes.ToInt64(values[colExpr.ColNum])
-			t := time.Unix(v, 0)
+			t := time.Unix(v, 0).UTC()
 			s := fmt.Sprintf("%d%02d", t.Year(), t.Month())
 			result[i] = sqltypes.NewVarBinary(s)
 		case OpDay:
 			v, _ := sqltypes.ToInt64(values[colExpr.ColNum])
-			t := time.Unix(v, 0)
+			t := time.Unix(v, 0).UTC()
 			s := fmt.Sprintf("%d%02d%02d", t.Year(), t.Month(), t.Day())
 			result[i] = sqltypes.NewVarBinary(s)
 		case OpHour:
 			v, _ := sqltypes.ToInt64(values[colExpr.ColNum])
-			t := time.Unix(v, 0)
+			t := time.Unix(v, 0).UTC()
 			s := fmt.Sprintf("%d%02d%02d%02d", t.Year(), t.Month(), t.Day(), t.Hour())
 			result[i] = sqltypes.NewVarBinary(s)
 		default:
@@ -140,6 +142,7 @@ func buildREPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter string) (*P
 	for i, col := range ti.Columns {
 		plan.ColExprs[i].ColNum = i
 		plan.ColExprs[i].Alias = col.Name
+		plan.ColExprs[i].Type = col.Type
 	}
 	if filter == "" {
 		return plan, nil
@@ -187,7 +190,7 @@ func buildTablePlan(ti *Table, kschema *vindexes.KeyspaceSchema, query string) (
 	}
 	sel, ok := statement.(*sqlparser.Select)
 	if !ok {
-		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(sel))
+		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(statement))
 	}
 	if len(sel.From) > 1 {
 		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(sel))
@@ -220,6 +223,7 @@ func buildTablePlan(ti *Table, kschema *vindexes.KeyspaceSchema, query string) (
 		for i, col := range ti.Columns {
 			plan.ColExprs[i].ColNum = i
 			plan.ColExprs[i].Alias = col.Name
+			plan.ColExprs[i].Type = col.Type
 		}
 	}
 
@@ -265,6 +269,9 @@ func buildTablePlan(ti *Table, kschema *vindexes.KeyspaceSchema, query string) (
 	if err != nil {
 		return nil, err
 	}
+	if !plan.Vindex.IsUnique() || !plan.Vindex.IsFunctional() {
+		return nil, fmt.Errorf("vindex must be Unique and Functional to be used for VReplication: %s", vtype)
+	}
 	kr, err := selString(funcExpr.Exprs[2])
 	if err != nil {
 		return nil, err
@@ -291,13 +298,13 @@ func analyzeExpr(ti *Table, expr sqlparser.SelectExpr) (cExpr ColExpr, err error
 		if err != nil {
 			return ColExpr{}, err
 		}
-		return ColExpr{ColNum: colnum, Alias: expr.Name}, nil
+		return ColExpr{ColNum: colnum, Alias: expr.Name, Type: ti.Columns[colnum].Type}, nil
 	case *sqlparser.FuncExpr:
 		if expr.Distinct || len(expr.Exprs) != 1 {
 			return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
 		}
 		switch fname := expr.Name.Lowered(); fname {
-		case "yearmonth", "day", "hour":
+		case "month", "day", "hour":
 			aInner, ok := expr.Exprs[0].(*sqlparser.AliasedExpr)
 			if !ok {
 				return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
@@ -306,20 +313,21 @@ func analyzeExpr(ti *Table, expr sqlparser.SelectExpr) (cExpr ColExpr, err error
 			if !ok {
 				return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
 			}
-			if aInner.As.IsEmpty() {
-				return ColExpr{}, fmt.Errorf("need alias for expression: %v", sqlparser.String(expr))
+			as := aexpr.As
+			if as.IsEmpty() {
+				as = sqlparser.NewColIdent(sqlparser.String(expr))
 			}
 			colnum, err := findColumn(ti, innerCol.Name)
 			if err != nil {
 				return ColExpr{}, err
 			}
 			switch fname {
-			case "yearmonth":
-				return ColExpr{ColNum: colnum, Alias: aInner.As, Operation: OpYearMonth}, nil
+			case "month":
+				return ColExpr{ColNum: colnum, Alias: as, Type: sqltypes.VarBinary, Operation: OpMonth}, nil
 			case "day":
-				return ColExpr{ColNum: colnum, Alias: aInner.As, Operation: OpDay}, nil
+				return ColExpr{ColNum: colnum, Alias: as, Type: sqltypes.VarBinary, Operation: OpDay}, nil
 			case "hour":
-				return ColExpr{ColNum: colnum, Alias: aInner.As, Operation: OpHour}, nil
+				return ColExpr{ColNum: colnum, Alias: as, Type: sqltypes.VarBinary, Operation: OpHour}, nil
 			default:
 				panic("unreachable")
 			}
