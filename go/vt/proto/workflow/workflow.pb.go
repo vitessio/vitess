@@ -45,7 +45,7 @@ func (x WorkflowState) String() string {
 	return proto.EnumName(WorkflowState_name, int32(x))
 }
 func (WorkflowState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_workflow_cc5eebeb403313d8, []int{0}
+	return fileDescriptor_workflow_daba593a7423a6c7, []int{0}
 }
 
 type TaskState int32
@@ -71,7 +71,7 @@ func (x TaskState) String() string {
 	return proto.EnumName(TaskState_name, int32(x))
 }
 func (TaskState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_workflow_cc5eebeb403313d8, []int{1}
+	return fileDescriptor_workflow_daba593a7423a6c7, []int{1}
 }
 
 // Workflow is the persisted state of a long-running workflow.
@@ -119,7 +119,7 @@ func (m *Workflow) Reset()         { *m = Workflow{} }
 func (m *Workflow) String() string { return proto.CompactTextString(m) }
 func (*Workflow) ProtoMessage()    {}
 func (*Workflow) Descriptor() ([]byte, []int) {
-	return fileDescriptor_workflow_cc5eebeb403313d8, []int{0}
+	return fileDescriptor_workflow_daba593a7423a6c7, []int{0}
 }
 func (m *Workflow) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Workflow.Unmarshal(m, b)
@@ -223,7 +223,7 @@ func (m *WorkflowCheckpoint) Reset()         { *m = WorkflowCheckpoint{} }
 func (m *WorkflowCheckpoint) String() string { return proto.CompactTextString(m) }
 func (*WorkflowCheckpoint) ProtoMessage()    {}
 func (*WorkflowCheckpoint) Descriptor() ([]byte, []int) {
-	return fileDescriptor_workflow_cc5eebeb403313d8, []int{1}
+	return fileDescriptor_workflow_daba593a7423a6c7, []int{1}
 }
 func (m *WorkflowCheckpoint) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_WorkflowCheckpoint.Unmarshal(m, b)
@@ -279,7 +279,7 @@ func (m *Task) Reset()         { *m = Task{} }
 func (m *Task) String() string { return proto.CompactTextString(m) }
 func (*Task) ProtoMessage()    {}
 func (*Task) Descriptor() ([]byte, []int) {
-	return fileDescriptor_workflow_cc5eebeb403313d8, []int{2}
+	return fileDescriptor_workflow_daba593a7423a6c7, []int{2}
 }
 func (m *Task) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Task.Unmarshal(m, b)
@@ -338,9 +338,9 @@ func init() {
 	proto.RegisterEnum("workflow.TaskState", TaskState_name, TaskState_value)
 }
 
-func init() { proto.RegisterFile("workflow.proto", fileDescriptor_workflow_cc5eebeb403313d8) }
+func init() { proto.RegisterFile("workflow.proto", fileDescriptor_workflow_daba593a7423a6c7) }
 
-var fileDescriptor_workflow_cc5eebeb403313d8 = []byte{
+var fileDescriptor_workflow_daba593a7423a6c7 = []byte{
 	// 517 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x53, 0x6f, 0x8b, 0xd3, 0x4e,
 	0x10, 0xfe, 0x25, 0x6d, 0xae, 0xe9, 0xa4, 0x97, 0x2b, 0xf3, 0x3b, 0x30, 0x16, 0xd4, 0x5a, 0x94,

@@ -48,7 +48,7 @@ func (x KeyspaceIdType) String() string {
 	return proto.EnumName(KeyspaceIdType_name, int32(x))
 }
 func (KeyspaceIdType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{0}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{0}
 }
 
 // TabletType represents the type of a given tablet.
@@ -117,7 +117,7 @@ func (x TabletType) String() string {
 	return proto.EnumName(TabletType_name, int32(x))
 }
 func (TabletType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{1}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{1}
 }
 
 // KeyRange describes a range of sharding keys, when range-based
@@ -134,7 +134,7 @@ func (m *KeyRange) Reset()         { *m = KeyRange{} }
 func (m *KeyRange) String() string { return proto.CompactTextString(m) }
 func (*KeyRange) ProtoMessage()    {}
 func (*KeyRange) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{0}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{0}
 }
 func (m *KeyRange) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_KeyRange.Unmarshal(m, b)
@@ -184,7 +184,7 @@ func (m *TabletAlias) Reset()         { *m = TabletAlias{} }
 func (m *TabletAlias) String() string { return proto.CompactTextString(m) }
 func (*TabletAlias) ProtoMessage()    {}
 func (*TabletAlias) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{1}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{1}
 }
 func (m *TabletAlias) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TabletAlias.Unmarshal(m, b)
@@ -260,7 +260,7 @@ func (m *Tablet) Reset()         { *m = Tablet{} }
 func (m *Tablet) String() string { return proto.CompactTextString(m) }
 func (*Tablet) ProtoMessage()    {}
 func (*Tablet) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{2}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{2}
 }
 func (m *Tablet) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Tablet.Unmarshal(m, b)
@@ -394,7 +394,7 @@ func (m *Shard) Reset()         { *m = Shard{} }
 func (m *Shard) String() string { return proto.CompactTextString(m) }
 func (*Shard) ProtoMessage()    {}
 func (*Shard) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{3}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{3}
 }
 func (m *Shard) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Shard.Unmarshal(m, b)
@@ -469,7 +469,7 @@ func (m *Shard_ServedType) Reset()         { *m = Shard_ServedType{} }
 func (m *Shard_ServedType) String() string { return proto.CompactTextString(m) }
 func (*Shard_ServedType) ProtoMessage()    {}
 func (*Shard_ServedType) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{3, 0}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{3, 0}
 }
 func (m *Shard_ServedType) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Shard_ServedType.Unmarshal(m, b)
@@ -526,7 +526,7 @@ func (m *Shard_SourceShard) Reset()         { *m = Shard_SourceShard{} }
 func (m *Shard_SourceShard) String() string { return proto.CompactTextString(m) }
 func (*Shard_SourceShard) ProtoMessage()    {}
 func (*Shard_SourceShard) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{3, 1}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{3, 1}
 }
 func (m *Shard_SourceShard) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Shard_SourceShard.Unmarshal(m, b)
@@ -601,7 +601,7 @@ func (m *Shard_TabletControl) Reset()         { *m = Shard_TabletControl{} }
 func (m *Shard_TabletControl) String() string { return proto.CompactTextString(m) }
 func (*Shard_TabletControl) ProtoMessage()    {}
 func (*Shard_TabletControl) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{3, 2}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{3, 2}
 }
 func (m *Shard_TabletControl) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Shard_TabletControl.Unmarshal(m, b)
@@ -676,7 +676,7 @@ func (m *Keyspace) Reset()         { *m = Keyspace{} }
 func (m *Keyspace) String() string { return proto.CompactTextString(m) }
 func (*Keyspace) ProtoMessage()    {}
 func (*Keyspace) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{4}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{4}
 }
 func (m *Keyspace) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Keyspace.Unmarshal(m, b)
@@ -735,7 +735,7 @@ func (m *Keyspace_ServedFrom) Reset()         { *m = Keyspace_ServedFrom{} }
 func (m *Keyspace_ServedFrom) String() string { return proto.CompactTextString(m) }
 func (*Keyspace_ServedFrom) ProtoMessage()    {}
 func (*Keyspace_ServedFrom) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{4, 0}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{4, 0}
 }
 func (m *Keyspace_ServedFrom) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Keyspace_ServedFrom.Unmarshal(m, b)
@@ -791,7 +791,7 @@ func (m *ShardReplication) Reset()         { *m = ShardReplication{} }
 func (m *ShardReplication) String() string { return proto.CompactTextString(m) }
 func (*ShardReplication) ProtoMessage()    {}
 func (*ShardReplication) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{5}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{5}
 }
 func (m *ShardReplication) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ShardReplication.Unmarshal(m, b)
@@ -830,7 +830,7 @@ func (m *ShardReplication_Node) Reset()         { *m = ShardReplication_Node{} }
 func (m *ShardReplication_Node) String() string { return proto.CompactTextString(m) }
 func (*ShardReplication_Node) ProtoMessage()    {}
 func (*ShardReplication_Node) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{5, 0}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{5, 0}
 }
 func (m *ShardReplication_Node) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ShardReplication_Node.Unmarshal(m, b)
@@ -871,7 +871,7 @@ func (m *ShardReference) Reset()         { *m = ShardReference{} }
 func (m *ShardReference) String() string { return proto.CompactTextString(m) }
 func (*ShardReference) ProtoMessage()    {}
 func (*ShardReference) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{6}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{6}
 }
 func (m *ShardReference) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ShardReference.Unmarshal(m, b)
@@ -922,7 +922,7 @@ func (m *SrvKeyspace) Reset()         { *m = SrvKeyspace{} }
 func (m *SrvKeyspace) String() string { return proto.CompactTextString(m) }
 func (*SrvKeyspace) ProtoMessage()    {}
 func (*SrvKeyspace) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{7}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{7}
 }
 func (m *SrvKeyspace) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SrvKeyspace.Unmarshal(m, b)
@@ -984,7 +984,7 @@ func (m *SrvKeyspace_KeyspacePartition) Reset()         { *m = SrvKeyspace_Keysp
 func (m *SrvKeyspace_KeyspacePartition) String() string { return proto.CompactTextString(m) }
 func (*SrvKeyspace_KeyspacePartition) ProtoMessage()    {}
 func (*SrvKeyspace_KeyspacePartition) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{7, 0}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{7, 0}
 }
 func (m *SrvKeyspace_KeyspacePartition) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SrvKeyspace_KeyspacePartition.Unmarshal(m, b)
@@ -1034,7 +1034,7 @@ func (m *SrvKeyspace_ServedFrom) Reset()         { *m = SrvKeyspace_ServedFrom{}
 func (m *SrvKeyspace_ServedFrom) String() string { return proto.CompactTextString(m) }
 func (*SrvKeyspace_ServedFrom) ProtoMessage()    {}
 func (*SrvKeyspace_ServedFrom) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{7, 1}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{7, 1}
 }
 func (m *SrvKeyspace_ServedFrom) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SrvKeyspace_ServedFrom.Unmarshal(m, b)
@@ -1092,7 +1092,7 @@ func (m *CellInfo) Reset()         { *m = CellInfo{} }
 func (m *CellInfo) String() string { return proto.CompactTextString(m) }
 func (*CellInfo) ProtoMessage()    {}
 func (*CellInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_topodata_23985cc74c86747c, []int{8}
+	return fileDescriptor_topodata_693bf5422a92a7f4, []int{8}
 }
 func (m *CellInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CellInfo.Unmarshal(m, b)
@@ -1156,9 +1156,9 @@ func init() {
 	proto.RegisterEnum("topodata.TabletType", TabletType_name, TabletType_value)
 }
 
-func init() { proto.RegisterFile("topodata.proto", fileDescriptor_topodata_23985cc74c86747c) }
+func init() { proto.RegisterFile("topodata.proto", fileDescriptor_topodata_693bf5422a92a7f4) }
 
-var fileDescriptor_topodata_23985cc74c86747c = []byte{
+var fileDescriptor_topodata_693bf5422a92a7f4 = []byte{
 	// 1162 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x56, 0x6f, 0x8f, 0xda, 0x46,
 	0x13, 0x7f, 0x0c, 0x86, 0x33, 0x63, 0x8e, 0x38, 0xfb, 0x24, 0x95, 0xe5, 0x2a, 0x2a, 0x42, 0x8a,

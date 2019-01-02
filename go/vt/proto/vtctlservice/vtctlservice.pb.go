@@ -123,9 +123,9 @@ var _Vtctl_serviceDesc = grpc.ServiceDesc{
 	Metadata: "vtctlservice.proto",
 }
 
-func init() { proto.RegisterFile("vtctlservice.proto", fileDescriptor_vtctlservice_a3582c3eb674ce30) }
+func init() { proto.RegisterFile("vtctlservice.proto", fileDescriptor_vtctlservice_af4114a311e29c50) }
 
-var fileDescriptor_vtctlservice_a3582c3eb674ce30 = []byte{
+var fileDescriptor_vtctlservice_af4114a311e29c50 = []byte{
 	// 146 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x2a, 0x2b, 0x49, 0x2e,
 	0xc9, 0x29, 0x4e, 0x2d, 0x2a, 0xcb, 0x4c, 0x4e, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2,
