@@ -218,7 +218,7 @@ spec:
       trap : TERM INT; sleep infinity & wait
 
 - name: pmm-client-metrics-log
-  image: vitess/logtail:helm-1.0.3
+  image: vitess/logtail:helm-1.0.4
   imagePullPolicy: IfNotPresent
   env:
   - name: TAIL_FILEPATH
