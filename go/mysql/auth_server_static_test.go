@@ -42,17 +42,53 @@ func TestJsonConfigParser(t *testing.T) {
 		t.Fatalf("mysql_user config size should be equal to 1")
 	}
 	// works with new format
-	jsonConfig = "{\"mysql_user\":[{\"Password\":\"123\", \"UserData\":\"dummy\", \"SourceHost\": \"localhost\"}, {\"Password\": \"123\", \"UserData\": \"mysql_user_all\"}]}"
+	jsonConfig = `{"mysql_user":[
+		{"Password":"123", "UserData":"dummy", "SourceHost": "localhost"},
+		{"Password": "123", "UserData": "mysql_user_all"},
+		{"Password": "456", "UserData": "mysql_user_with_groups", "Groups": ["user_group"]}
+	]}`
 	err = parseConfig([]byte(jsonConfig), &config)
 	if err != nil {
 		t.Fatalf("should not get an error, but got: %v", err)
 	}
-	if len(config["mysql_user"]) != 2 {
-		t.Fatalf("mysql_user config size should be equal to 2")
+	if len(config["mysql_user"]) != 3 {
+		t.Fatalf("mysql_user config size should be equal to 3")
 	}
 
 	if config["mysql_user"][0].SourceHost != "localhost" {
-		t.Fatalf("SourceHost should be equal localhost")
+		t.Fatalf("SourceHost should be equal to localhost")
+	}
+
+	if len(config["mysql_user"][2].Groups) != 1 || config["mysql_user"][2].Groups[0] != "user_group" {
+		t.Fatalf("Groups should be equal to [\"user_group\"]")
+	}
+}
+
+func TestValidateHashGetter(t *testing.T) {
+	jsonConfig := `{"mysql_user": [{"Password": "password", "UserData": "user.name", "Groups": ["user_group"]}]}`
+
+	auth := NewAuthServerStatic()
+	auth.loadConfigFromParams("", jsonConfig)
+	ip := net.ParseIP("127.0.0.1")
+	addr := &net.IPAddr{IP: ip, Zone: ""}
+
+	salt, err := NewSalt()
+	if err != nil {
+		t.Fatalf("error generating salt: %v", err)
+	}
+
+	scrambled := ScramblePassword(salt, []byte("password"))
+	getter, err := auth.ValidateHash(salt, "mysql_user", scrambled, addr)
+	if err != nil {
+		t.Fatalf("error validating password: %v", err)
+	}
+
+	callerId := getter.Get()
+	if callerId.Username != "user.name" {
+		t.Fatalf("getter username incorrect, expected \"user.name\", got %v", callerId.Username)
+	}
+	if len(callerId.Groups) != 1 || callerId.Groups[0] != "user_group" {
+		t.Fatalf("getter groups incorrect, expected [\"user_group\"], got %v", callerId.Groups)
 	}
 }
 
