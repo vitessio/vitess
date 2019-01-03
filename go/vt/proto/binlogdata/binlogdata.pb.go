@@ -65,7 +65,7 @@ func (x BinlogTransaction_Statement_Category) String() string {
 	return proto.EnumName(BinlogTransaction_Statement_Category_name, int32(x))
 }
 func (BinlogTransaction_Statement_Category) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{1, 0, 0}
+	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{1, 0, 0}
 }
 
 // Charset is the per-statement charset info from a QUERY_EVENT binlog entry.
@@ -85,7 +85,7 @@ func (m *Charset) Reset()         { *m = Charset{} }
 func (m *Charset) String() string { return proto.CompactTextString(m) }
 func (*Charset) ProtoMessage()    {}
 func (*Charset) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{0}
+	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{0}
 }
 func (m *Charset) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Charset.Unmarshal(m, b)
@@ -142,7 +142,7 @@ func (m *BinlogTransaction) Reset()         { *m = BinlogTransaction{} }
 func (m *BinlogTransaction) String() string { return proto.CompactTextString(m) }
 func (*BinlogTransaction) ProtoMessage()    {}
 func (*BinlogTransaction) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{1}
+	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{1}
 }
 func (m *BinlogTransaction) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BinlogTransaction.Unmarshal(m, b)
@@ -192,7 +192,7 @@ func (m *BinlogTransaction_Statement) Reset()         { *m = BinlogTransaction_S
 func (m *BinlogTransaction_Statement) String() string { return proto.CompactTextString(m) }
 func (*BinlogTransaction_Statement) ProtoMessage()    {}
 func (*BinlogTransaction_Statement) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{1, 0}
+	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{1, 0}
 }
 func (m *BinlogTransaction_Statement) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BinlogTransaction_Statement.Unmarshal(m, b)
@@ -250,7 +250,7 @@ func (m *StreamKeyRangeRequest) Reset()         { *m = StreamKeyRangeRequest{} }
 func (m *StreamKeyRangeRequest) String() string { return proto.CompactTextString(m) }
 func (*StreamKeyRangeRequest) ProtoMessage()    {}
 func (*StreamKeyRangeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{2}
+	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{2}
 }
 func (m *StreamKeyRangeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamKeyRangeRequest.Unmarshal(m, b)
@@ -303,7 +303,7 @@ func (m *StreamKeyRangeResponse) Reset()         { *m = StreamKeyRangeResponse{}
 func (m *StreamKeyRangeResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamKeyRangeResponse) ProtoMessage()    {}
 func (*StreamKeyRangeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{3}
+	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{3}
 }
 func (m *StreamKeyRangeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamKeyRangeResponse.Unmarshal(m, b)
@@ -347,7 +347,7 @@ func (m *StreamTablesRequest) Reset()         { *m = StreamTablesRequest{} }
 func (m *StreamTablesRequest) String() string { return proto.CompactTextString(m) }
 func (*StreamTablesRequest) ProtoMessage()    {}
 func (*StreamTablesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{4}
+	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{4}
 }
 func (m *StreamTablesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamTablesRequest.Unmarshal(m, b)
@@ -400,7 +400,7 @@ func (m *StreamTablesResponse) Reset()         { *m = StreamTablesResponse{} }
 func (m *StreamTablesResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamTablesResponse) ProtoMessage()    {}
 func (*StreamTablesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{5}
+	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{5}
 }
 func (m *StreamTablesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamTablesResponse.Unmarshal(m, b)
@@ -450,7 +450,7 @@ func (m *BinlogSource) Reset()         { *m = BinlogSource{} }
 func (m *BinlogSource) String() string { return proto.CompactTextString(m) }
 func (*BinlogSource) ProtoMessage()    {}
 func (*BinlogSource) Descriptor() ([]byte, []int) {
-	return fileDescriptor_binlogdata_ac14f15f6b19a931, []int{6}
+	return fileDescriptor_binlogdata_599cd600856cd9fe, []int{6}
 }
 func (m *BinlogSource) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BinlogSource.Unmarshal(m, b)
@@ -517,9 +517,9 @@ func init() {
 	proto.RegisterEnum("binlogdata.BinlogTransaction_Statement_Category", BinlogTransaction_Statement_Category_name, BinlogTransaction_Statement_Category_value)
 }
 
-func init() { proto.RegisterFile("binlogdata.proto", fileDescriptor_binlogdata_ac14f15f6b19a931) }
+func init() { proto.RegisterFile("binlogdata.proto", fileDescriptor_binlogdata_599cd600856cd9fe) }
 
-var fileDescriptor_binlogdata_ac14f15f6b19a931 = []byte{
+var fileDescriptor_binlogdata_599cd600856cd9fe = []byte{
 	// 640 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x54, 0xcd, 0x6e, 0xda, 0x4a,
 	0x14, 0xbe, 0xc6, 0x40, 0xec, 0xe3, 0xdc, 0x64, 0x98, 0xfc, 0x08, 0x21, 0x5d, 0x09, 0xb1, 0x09,

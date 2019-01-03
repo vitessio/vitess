@@ -1545,10 +1545,10 @@ var _TabletManager_serviceDesc = grpc.ServiceDesc{
 }
 
 func init() {
-	proto.RegisterFile("tabletmanagerservice.proto", fileDescriptor_tabletmanagerservice_a64e2f6154f58360)
+	proto.RegisterFile("tabletmanagerservice.proto", fileDescriptor_tabletmanagerservice_f4d7827db0506c7d)
 }
 
-var fileDescriptor_tabletmanagerservice_a64e2f6154f58360 = []byte{
+var fileDescriptor_tabletmanagerservice_f4d7827db0506c7d = []byte{
 	// 956 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x98, 0xdf, 0x8f, 0x1b, 0x35,
 	0x10, 0xc7, 0x89, 0x04, 0x95, 0x30, 0x3f, 0x6b, 0x21, 0x8a, 0x0e, 0x09, 0x28, 0x6d, 0xf9, 0xd1,
