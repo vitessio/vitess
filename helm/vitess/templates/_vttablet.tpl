@@ -359,6 +359,9 @@ spec:
               /vt/bin/vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC PlannedReparentShard -keyspace_shard={{ $keyspace.name }}/{{ $shard.name }} -avoid_master=$current_alias
 
 {{ if $orc.enabled }}
+              # tell orchestrator to refresh its view of this tablet
+              wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/refresh/$hostname.vttablet/3306"
+
               # let orchestrator attempt recoveries now
               wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/end-downtime/$hostname.vttablet/3306"
 {{ end }}
@@ -378,11 +381,6 @@ spec:
               fi
 
             done
-
-{{ if $orc.enabled }}
-            # tell orchestrator to refresh its view of this tablet
-            wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/refresh/$hostname.vttablet/3306"
-{{ end }}
 
             # delete the current tablet from topology. Not strictly necessary, but helps to prevent
             # edge cases where there are two masters
@@ -535,7 +533,7 @@ spec:
 {{ define "cont-logrotate" }}
 
 - name: logrotate
-  image: vitess/logrotate:helm-1.0.3
+  image: vitess/logrotate:helm-1.0.4
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -549,7 +547,7 @@ spec:
 {{ define "cont-mysql-errorlog" }}
 
 - name: error-log
-  image: vitess/logtail:helm-1.0.3
+  image: vitess/logtail:helm-1.0.4
   imagePullPolicy: IfNotPresent
 
   env:
@@ -567,7 +565,7 @@ spec:
 {{ define "cont-mysql-slowlog" }}
 
 - name: slow-log
-  image: vitess/logtail:helm-1.0.3
+  image: vitess/logtail:helm-1.0.4
   imagePullPolicy: IfNotPresent
 
   env:
@@ -585,7 +583,7 @@ spec:
 {{ define "cont-mysql-generallog" }}
 
 - name: general-log
-  image: vitess/logtail:helm-1.0.3
+  image: vitess/logtail:helm-1.0.4
   imagePullPolicy: IfNotPresent
 
   env:
