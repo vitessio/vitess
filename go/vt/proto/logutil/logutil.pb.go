@@ -49,7 +49,7 @@ func (x Level) String() string {
 	return proto.EnumName(Level_name, int32(x))
 }
 func (Level) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_logutil_39c26af5691dd7cd, []int{0}
+	return fileDescriptor_logutil_1922c06158165cc5, []int{0}
 }
 
 // Time represents a time stamp in nanoseconds. In go, use logutil library
@@ -66,7 +66,7 @@ func (m *Time) Reset()         { *m = Time{} }
 func (m *Time) String() string { return proto.CompactTextString(m) }
 func (*Time) ProtoMessage()    {}
 func (*Time) Descriptor() ([]byte, []int) {
-	return fileDescriptor_logutil_39c26af5691dd7cd, []int{0}
+	return fileDescriptor_logutil_1922c06158165cc5, []int{0}
 }
 func (m *Time) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Time.Unmarshal(m, b)
@@ -116,7 +116,7 @@ func (m *Event) Reset()         { *m = Event{} }
 func (m *Event) String() string { return proto.CompactTextString(m) }
 func (*Event) ProtoMessage()    {}
 func (*Event) Descriptor() ([]byte, []int) {
-	return fileDescriptor_logutil_39c26af5691dd7cd, []int{1}
+	return fileDescriptor_logutil_1922c06158165cc5, []int{1}
 }
 func (m *Event) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Event.Unmarshal(m, b)
@@ -177,9 +177,9 @@ func init() {
 	proto.RegisterEnum("logutil.Level", Level_name, Level_value)
 }
 
-func init() { proto.RegisterFile("logutil.proto", fileDescriptor_logutil_39c26af5691dd7cd) }
+func init() { proto.RegisterFile("logutil.proto", fileDescriptor_logutil_1922c06158165cc5) }
 
-var fileDescriptor_logutil_39c26af5691dd7cd = []byte{
+var fileDescriptor_logutil_1922c06158165cc5 = []byte{
 	// 260 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x4c, 0x90, 0x41, 0x4b, 0xfb, 0x40,
 	0x10, 0xc5, 0xff, 0xdb, 0x64, 0xff, 0xb1, 0x13, 0x5a, 0xc2, 0xe0, 0x21, 0xc7, 0x58, 0x8a, 0x04,
