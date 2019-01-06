@@ -72,6 +72,7 @@ type AuthServerStaticEntry struct {
 	Password            string
 	UserData            string
 	SourceHost          string
+	Groups              []string
 }
 
 // InitAuthServerStatic Handles initializing the AuthServerStatic if necessary.
@@ -204,24 +205,24 @@ func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse [
 	a.mu.Unlock()
 
 	if !ok {
-		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	for _, entry := range entries {
 		if entry.MysqlNativePassword != "" {
 			isPass := isPassScrambleMysqlNativePassword(authResponse, salt, entry.MysqlNativePassword)
 			if matchSourceHost(remoteAddr, entry.SourceHost) && isPass {
-				return &StaticUserData{entry.UserData}, nil
+				return &StaticUserData{entry.UserData, entry.Groups}, nil
 			}
 		} else {
 			computedAuthResponse := ScramblePassword(salt, []byte(entry.Password))
 			// Validate the password.
 			if matchSourceHost(remoteAddr, entry.SourceHost) && bytes.Compare(authResponse, computedAuthResponse) == 0 {
-				return &StaticUserData{entry.UserData}, nil
+				return &StaticUserData{entry.UserData, entry.Groups}, nil
 			}
 		}
 	}
-	return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+	return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 }
 
 // Negotiate is part of the AuthServer interface.
@@ -239,15 +240,15 @@ func (a *AuthServerStatic) Negotiate(c *Conn, user string, remoteAddr net.Addr) 
 	a.mu.Unlock()
 
 	if !ok {
-		return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 	for _, entry := range entries {
 		// Validate the password.
 		if matchSourceHost(remoteAddr, entry.SourceHost) && entry.Password == password {
-			return &StaticUserData{entry.UserData}, nil
+			return &StaticUserData{entry.UserData, entry.Groups}, nil
 		}
 	}
-	return &StaticUserData{""}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+	return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 }
 
 func matchSourceHost(remoteAddr net.Addr, targetSourceHost string) bool {
@@ -264,12 +265,13 @@ func matchSourceHost(remoteAddr net.Addr, targetSourceHost string) bool {
 	return false
 }
 
-// StaticUserData holds the username
+// StaticUserData holds the username and groups
 type StaticUserData struct {
-	value string
+	username string
+	groups   []string
 }
 
-// Get returns the wrapped username
+// Get returns the wrapped username and groups
 func (sud *StaticUserData) Get() *querypb.VTGateCallerID {
-	return &querypb.VTGateCallerID{Username: sud.value}
+	return &querypb.VTGateCallerID{Username: sud.username, Groups: sud.groups}
 }
