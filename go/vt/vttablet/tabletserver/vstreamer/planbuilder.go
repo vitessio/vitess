@@ -293,12 +293,12 @@ func buildTablePlan(ti *Table, kschema *vindexes.KeyspaceSchema, query string) (
 	return plan, nil
 }
 
-func analyzeExpr(ti *Table, expr sqlparser.SelectExpr) (cExpr ColExpr, err error) {
-	aexpr, ok := expr.(*sqlparser.AliasedExpr)
+func analyzeExpr(ti *Table, selExpr sqlparser.SelectExpr) (cExpr ColExpr, err error) {
+	aliased, ok := selExpr.(*sqlparser.AliasedExpr)
 	if !ok {
-		return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+		return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(selExpr))
 	}
-	switch expr := aexpr.Expr.(type) {
+	switch expr := aliased.Expr.(type) {
 	case *sqlparser.ColName:
 		colnum, err := findColumn(ti, expr.Name)
 		if err != nil {
@@ -319,7 +319,7 @@ func analyzeExpr(ti *Table, expr sqlparser.SelectExpr) (cExpr ColExpr, err error
 			if !ok {
 				return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
 			}
-			as := aexpr.As
+			as := aliased.As
 			if as.IsEmpty() {
 				as = sqlparser.NewColIdent(sqlparser.String(expr))
 			}

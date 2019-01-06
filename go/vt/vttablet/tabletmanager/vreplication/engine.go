@@ -200,7 +200,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	}
 	defer vre.updateStats()
 
-	plan, err := getPlan(query)
+	plan, err := buildControllerPlan(query)
 	if err != nil {
 		return nil, err
 	}
