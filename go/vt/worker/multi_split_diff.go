@@ -19,26 +19,21 @@ package worker
 import (
 	"fmt"
 	"html/template"
-	"sync"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"golang.org/x/net/context"
-
-	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/wrangler"
-
 	"sort"
-
+	"sync"
 	"time"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/wrangler"
 )
 
 // MultiSplitDiffWorker executes a diff between a destination shard and its
@@ -631,7 +626,9 @@ func (msdw *MultiSplitDiffWorker) gatherSchemaInfo(ctx context.Context) ([]*tabl
 			destinationSchemaDefinition, err := msdw.wr.GetSchema(
 				shortCtx, destinationAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
 			cancel()
-			msdw.markAsWillFail(rec, err)
+			if err != nil {
+				msdw.markAsWillFail(rec, err)
+			}
 			destinationSchemaDefinitions[i] = destinationSchemaDefinition
 			msdw.wr.Logger().Infof("Got schema from destination %v", destinationAlias)
 			wg.Done()
@@ -644,7 +641,9 @@ func (msdw *MultiSplitDiffWorker) gatherSchemaInfo(ctx context.Context) ([]*tabl
 		sourceSchemaDefinition, err = msdw.wr.GetSchema(
 			shortCtx, msdw.sourceAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
 		cancel()
-		msdw.markAsWillFail(rec, err)
+		if err != nil {
+			msdw.markAsWillFail(rec, err)
+		}
 		msdw.wr.Logger().Infof("Got schema from source %v", msdw.sourceAlias)
 		wg.Done()
 	}()
