@@ -330,8 +330,8 @@ func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.Stream
 		fields = v3Fields
 	}
 	return &testQueryService{
-		t:      t,
-		target: target,
+		t:                        t,
+		target:                   target,
 		StreamHealthQueryService: shqs,
 		shardIndex:               shardIndex,
 		shardCount:               shardCount,

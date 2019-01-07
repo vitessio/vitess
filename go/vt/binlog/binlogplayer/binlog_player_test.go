@@ -37,8 +37,8 @@ var (
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"),    // pos
-				sqltypes.NULL,                                // stop_pos
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
+				sqltypes.NULL, // stop_pos
 				sqltypes.NewVarBinary("9223372036854775807"), // max_tps
 				sqltypes.NewVarBinary("9223372036854775807"), // max_replication_lag
 			},

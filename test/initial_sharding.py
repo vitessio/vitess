@@ -28,23 +28,12 @@
 
 import logging
 import unittest
-
 from vtdb import keyrange_constants
 
 import base_sharding
 import environment
 import tablet
 import utils
-
-# use_l2vtgate is set if we want to use l2vtgate processes.
-# We'll set them up to have:
-# l2vtgate1: covers the initial shard, and -80
-# l2vtgate2: covers 80-
-use_l2vtgate = False
-
-# the l2vtgate processes, if applicable
-l2vtgate1 = None
-l2vtgate2 = None
 
 # initial shard, covers everything
 shard_master = tablet.Tablet()
@@ -218,8 +207,6 @@ index by_msg (msg)
                         should_be_here=False)
 
   def test_resharding(self):
-    global l2vtgate1, l2vtgate2
-
     # create the keyspace with just one shard
     shard_master.init_tablet(
         'replica',
@@ -281,33 +268,12 @@ index by_msg (msg)
     # We must start vtgate after tablets are up, or else wait until 1min refresh
     # (that is the tablet_refresh_interval parameter for discovery gateway)
     # we want cache_ttl at zero so we re-read the topology for every test query.
-    if use_l2vtgate:
-      l2vtgate1 = utils.VtGate()
-      l2vtgate1.start(extra_args=['--enable_forwarding'], tablets=
-                      [shard_master, shard_replica, shard_rdonly1])
-      l2vtgate1.wait_for_endpoints('test_keyspace.0.master', 1)
-      l2vtgate1.wait_for_endpoints('test_keyspace.0.replica', 1)
-      l2vtgate1.wait_for_endpoints('test_keyspace.0.rdonly', 1)
 
-      _, l2vtgate1_addr = l2vtgate1.rpc_endpoint()
-
-      # Clear utils.vtgate, so it doesn't point to the previous l2vtgate1.
-      utils.vtgate = None
-      utils.VtGate().start(cache_ttl='0', l2vtgates=[l2vtgate1_addr,],
-                           extra_args=['-disable_local_gateway'])
-      utils.vtgate.wait_for_endpoints('test_keyspace.0.master', 1,
-                                      var='L2VtgateConnections')
-      utils.vtgate.wait_for_endpoints('test_keyspace.0.replica', 1,
-                                      var='L2VtgateConnections')
-      utils.vtgate.wait_for_endpoints('test_keyspace.0.rdonly', 1,
-                                      var='L2VtgateConnections')
-
-    else:
-      utils.VtGate().start(cache_ttl='0', tablets=[
-          shard_master, shard_replica, shard_rdonly1])
-      utils.vtgate.wait_for_endpoints('test_keyspace.0.master', 1)
-      utils.vtgate.wait_for_endpoints('test_keyspace.0.replica', 1)
-      utils.vtgate.wait_for_endpoints('test_keyspace.0.rdonly', 1)
+    utils.VtGate().start(cache_ttl='0', tablets=[
+        shard_master, shard_replica, shard_rdonly1])
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.master', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.replica', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.rdonly', 1)
 
     # check the Map Reduce API works correctly, should use ExecuteShards,
     # as we're not sharded yet.
@@ -392,62 +358,13 @@ index by_msg (msg)
     # must restart vtgate after tablets are up, or else wait until 1min refresh
     # we want cache_ttl at zero so we re-read the topology for every test query.
     utils.vtgate.kill()
-    if use_l2vtgate:
-      l2vtgate1.kill()
 
-      l2vtgate1 = utils.VtGate()
-      l2vtgate1.start(extra_args=['--enable_forwarding',
-                                  '-tablet_filters',
-                                  'test_keyspace|0,test_keyspace|-80'],
-                      tablets=[shard_master, shard_replica, shard_rdonly1,
-                               shard_0_master, shard_0_replica,
-                               shard_0_rdonly1])
-      l2vtgate1.wait_for_endpoints('test_keyspace.0.master', 1)
-      l2vtgate1.wait_for_endpoints('test_keyspace.0.replica', 1)
-      l2vtgate1.wait_for_endpoints('test_keyspace.0.rdonly', 1)
-      l2vtgate1.wait_for_endpoints('test_keyspace.-80.master', 1)
-      l2vtgate1.wait_for_endpoints('test_keyspace.-80.replica', 1)
-      l2vtgate1.wait_for_endpoints('test_keyspace.-80.rdonly', 1)
-      l2vtgate1.verify_no_endpoint('test_keyspace.80-.master')
-      l2vtgate1.verify_no_endpoint('test_keyspace.80-.replica')
-      l2vtgate1.verify_no_endpoint('test_keyspace.80-.rdonly')
-
-      # FIXME(alainjobart) we clear tablet_types_to_wait, as this
-      # l2vtgate2 doesn't serve the current test_keyspace shard, which
-      # is test_keyspace.0. This is not ideal, we should re-work
-      # which keyspace/shard a l2vtgate can wait for, as the ones
-      # filtered by tablet_filters.
-      l2vtgate2 = utils.VtGate()
-      l2vtgate2.start(extra_args=['--enable_forwarding',
-                                  '-tablet_filters',
-                                  'test_keyspace|80-'], tablets=
-                      [shard_1_master, shard_1_replica, shard_1_rdonly1],
-                      tablet_types_to_wait='')
-      l2vtgate2.wait_for_endpoints('test_keyspace.80-.master', 1)
-      l2vtgate2.wait_for_endpoints('test_keyspace.80-.replica', 1)
-      l2vtgate2.wait_for_endpoints('test_keyspace.80-.rdonly', 1)
-      l2vtgate2.verify_no_endpoint('test_keyspace.0.master')
-      l2vtgate2.verify_no_endpoint('test_keyspace.0.replica')
-      l2vtgate2.verify_no_endpoint('test_keyspace.0.rdonly')
-      l2vtgate2.verify_no_endpoint('test_keyspace.-80.master')
-      l2vtgate2.verify_no_endpoint('test_keyspace.-80.replica')
-      l2vtgate2.verify_no_endpoint('test_keyspace.-80.rdonly')
-
-      _, l2vtgate1_addr = l2vtgate1.rpc_endpoint()
-      _, l2vtgate2_addr = l2vtgate2.rpc_endpoint()
-      utils.vtgate = None
-      utils.VtGate().start(cache_ttl='0', l2vtgates=[l2vtgate1_addr,
-                                                     l2vtgate2_addr,],
-                           extra_args=['-disable_local_gateway'])
-      var = 'L2VtgateConnections'
-
-    else:
-      utils.vtgate = None
-      utils.VtGate().start(cache_ttl='0', tablets=[
-          shard_master, shard_replica, shard_rdonly1,
-          shard_0_master, shard_0_replica, shard_0_rdonly1,
-          shard_1_master, shard_1_replica, shard_1_rdonly1])
-      var = None
+    utils.vtgate = None
+    utils.VtGate().start(cache_ttl='0', tablets=[
+        shard_master, shard_replica, shard_rdonly1,
+        shard_0_master, shard_0_replica, shard_0_rdonly1,
+        shard_1_master, shard_1_replica, shard_1_rdonly1])
+    var = None
 
     # Wait for the endpoints, either local or remote.
     utils.vtgate.wait_for_endpoints('test_keyspace.0.master', 1, var=var)
@@ -577,23 +494,32 @@ index by_msg (msg)
                                   min_statements=1000, min_transactions=1000)
 
     # use vtworker to compare the data
-    logging.debug('Running vtworker SplitDiff for -80')
     for t in [shard_0_rdonly1, shard_1_rdonly1]:
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
-    utils.run_vtworker(['-cell', 'test_nj',
-                        '--use_v3_resharding_mode=false',
-                        'SplitDiff',
-                        '--min_healthy_rdonly_tablets', '1',
-                        'test_keyspace/-80'],
-                       auto_log=True)
 
-    logging.debug('Running vtworker SplitDiff for 80-')
-    utils.run_vtworker(['-cell', 'test_nj',
-                        '--use_v3_resharding_mode=false',
-                        'SplitDiff',
-                        '--min_healthy_rdonly_tablets', '1',
-                        'test_keyspace/80-'],
-                       auto_log=True)
+    if base_sharding.use_multi_split_diff:
+        logging.debug('Running vtworker MultiSplitDiff for 0')
+        utils.run_vtworker(['-cell', 'test_nj',
+                            '--use_v3_resharding_mode=false',
+                            'MultiSplitDiff',
+                            '--min_healthy_rdonly_tablets', '1',
+                            'test_keyspace/0'],
+                           auto_log=True)
+    else:
+        logging.debug('Running vtworker SplitDiff for -80')
+        utils.run_vtworker(['-cell', 'test_nj',
+                            '--use_v3_resharding_mode=false',
+                            'SplitDiff',
+                            '--min_healthy_rdonly_tablets', '1',
+                            'test_keyspace/-80'],
+                           auto_log=True)
+        logging.debug('Running vtworker SplitDiff for 80-')
+        utils.run_vtworker(['-cell', 'test_nj',
+                            '--use_v3_resharding_mode=false',
+                            'SplitDiff',
+                            '--min_healthy_rdonly_tablets', '1',
+                            'test_keyspace/80-'],
+                           auto_log=True)
 
     utils.pause('Good time to test vtworker for diffs')
 
@@ -618,12 +544,9 @@ index by_msg (msg)
     # make sure rdonly tablets are back to serving before hitting vtgate.
     for t in [shard_0_rdonly1, shard_1_rdonly1]:
       t.wait_for_vttablet_state('SERVING')
-    if use_l2vtgate:
-      l2vtgate1.wait_for_endpoints('test_keyspace.-80.rdonly', 1)
-      l2vtgate2.wait_for_endpoints('test_keyspace.80-.rdonly', 1)
-    else:
-      utils.vtgate.wait_for_endpoints('test_keyspace.-80.rdonly', 1)
-      utils.vtgate.wait_for_endpoints('test_keyspace.80-.rdonly', 1)
+
+    utils.vtgate.wait_for_endpoints('test_keyspace.-80.rdonly', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.80-.rdonly', 1)
 
     # check the Map Reduce API works correctly, should use ExecuteKeyRanges
     # on both destination shards now.

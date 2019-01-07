@@ -38,7 +38,10 @@ type Logger interface {
 	Warningf(format string, v ...interface{})
 	// Errorf logs at ERROR level. A newline is appended if missing.
 	Errorf(format string, v ...interface{})
+	// Errorf2 logs an error with stack traces at ERROR level. A newline is appended if missing.
+	Errorf2(e error, message string, v ...interface{})
 
+	Error(e error)
 	// Printf will just display information on stdout when possible.
 	// No newline is appended.
 	Printf(format string, v ...interface{})
@@ -181,6 +184,16 @@ func (cl *CallbackLogger) Errorf(format string, v ...interface{}) {
 	cl.ErrorDepth(1, fmt.Sprintf(format, v...))
 }
 
+// Errorf2 is part of the Logger interface
+func (cl *CallbackLogger) Errorf2(err error, format string, v ...interface{}) {
+	cl.ErrorDepth(1, fmt.Sprintf(format+": %+v", append(v, err)))
+}
+
+// Error is part of the Logger interface
+func (cl *CallbackLogger) Error(err error) {
+	cl.ErrorDepth(1, fmt.Sprintf("%+v", err))
+}
+
 // Printf is part of the Logger interface.
 func (cl *CallbackLogger) Printf(format string, v ...interface{}) {
 	file, line := fileAndLine(2)
@@ -319,6 +332,16 @@ func (tl *TeeLogger) Warningf(format string, v ...interface{}) {
 // Errorf is part of the Logger interface
 func (tl *TeeLogger) Errorf(format string, v ...interface{}) {
 	tl.ErrorDepth(1, fmt.Sprintf(format, v...))
+}
+
+// Errorf2 is part of the Logger interface
+func (tl *TeeLogger) Errorf2(err error, format string, v ...interface{}) {
+	tl.ErrorDepth(1, fmt.Sprintf(format+": %+v", append(v, err)))
+}
+
+// Error is part of the Logger interface
+func (tl *TeeLogger) Error(err error) {
+	tl.ErrorDepth(1, fmt.Sprintf("%+v", err))
 }
 
 // Printf is part of the Logger interface

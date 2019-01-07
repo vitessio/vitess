@@ -16,6 +16,11 @@
 
 package io.vitess.jdbc;
 
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata;
+import io.vitess.util.Constants;
+import io.vitess.util.StringUtils;
+
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.sql.DriverPropertyInfo;
@@ -26,11 +31,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-
-import io.vitess.proto.Query;
-import io.vitess.proto.Topodata;
-import io.vitess.util.Constants;
-import io.vitess.util.StringUtils;
 
 public class ConnectionProperties {
 

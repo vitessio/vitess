@@ -131,13 +131,13 @@ func (sdw *SplitDiffWorker) Run(ctx context.Context) error {
 	cerr := sdw.cleaner.CleanUp(sdw.wr)
 	if cerr != nil {
 		if err != nil {
-			sdw.wr.Logger().Errorf("CleanUp failed in addition to job error: %v", cerr)
+			sdw.wr.Logger().Errorf2(cerr, "CleanUp failed in addition to job error")
 		} else {
 			err = cerr
 		}
 	}
 	if err != nil {
-		sdw.wr.Logger().Errorf("Run() error: %v", err)
+		sdw.wr.Logger().Errorf2(err, "Run() error")
 		sdw.SetState(WorkerStateError)
 		return err
 	}
@@ -504,7 +504,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := vterrors.Wrap(err, "TableScan(ByKeyRange?)(source) failed")
 				sdw.markAsWillFail(rec, newErr)
-				sdw.wr.Logger().Errorf("%v", newErr)
+				sdw.wr.Logger().Error(newErr)
 				return
 			}
 			defer sourceQueryResultReader.Close(ctx)
@@ -520,7 +520,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := vterrors.Wrap(err, "TableScan(ByKeyRange?)(destination) failed")
 				sdw.markAsWillFail(rec, newErr)
-				sdw.wr.Logger().Errorf("%v", newErr)
+				sdw.wr.Logger().Error(newErr)
 				return
 			}
 			defer destinationQueryResultReader.Close(ctx)
@@ -530,7 +530,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := vterrors.Wrap(err, "NewRowDiffer() failed")
 				sdw.markAsWillFail(rec, newErr)
-				sdw.wr.Logger().Errorf("%v", newErr)
+				sdw.wr.Logger().Error(newErr)
 				return
 			}
 
@@ -539,7 +539,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			if err != nil {
 				newErr := fmt.Errorf("Differ.Go failed: %v", err.Error())
 				sdw.markAsWillFail(rec, newErr)
-				sdw.wr.Logger().Errorf("%v", newErr)
+				sdw.wr.Logger().Error(newErr)
 			} else {
 				if report.HasDifferences() {
 					err := fmt.Errorf("Table %v has differences: %v", tableDefinition.Name, report.String())

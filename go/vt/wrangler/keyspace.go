@@ -607,11 +607,11 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 
 func (wr *Wrangler) cancelMasterMigrateServedTypes(ctx context.Context, sourceShards []*topo.ShardInfo) {
 	if err := wr.updateShardRecords(ctx, sourceShards, nil, topodatapb.TabletType_MASTER, false); err != nil {
-		wr.Logger().Errorf("failed to re-enable source masters: %v", err)
+		wr.Logger().Errorf2(err, "failed to re-enable source masters")
 		return
 	}
 	if err := wr.refreshMasters(ctx, sourceShards); err != nil {
-		wr.Logger().Errorf("failed to refresh source masters: %v", err)
+		wr.Logger().Errorf2(err, "failed to refresh source masters")
 	}
 }
 

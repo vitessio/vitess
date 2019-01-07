@@ -32,8 +32,8 @@ import (
 // the serving graph read-only calls used by clients to resolve
 // serving addresses, and to get VSchema.
 type Server interface {
-	// GetTopoServer returns the full topo.Server instance
-	GetTopoServer() *topo.Server
+	// GetTopoServer returns the full topo.Server instance.
+	GetTopoServer() (*topo.Server, error)
 
 	// GetSrvKeyspaceNames returns the list of keyspaces served in
 	// the provided cell.

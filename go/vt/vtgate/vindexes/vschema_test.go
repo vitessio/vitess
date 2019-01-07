@@ -468,6 +468,123 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		wantjson, _ := json.Marshal(want)
 		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
 	}
+
+}
+
+func TestFindVindexForSharding(t *testing.T) {
+	ks := &Keyspace{
+		Name:    "sharded",
+		Sharded: true,
+	}
+	vindex1 := &stFU{
+		name: "stfu1",
+		Params: map[string]string{
+			"stfu1": "1",
+		},
+	}
+	vindex2 := &stLN{name: "stln1"}
+	t1 := &Table{
+		Name:     sqlparser.NewTableIdent("t1"),
+		Keyspace: ks,
+		ColumnVindexes: []*ColumnVindex{
+			{
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stfu",
+				Name:    "stfu1",
+				Vindex:  vindex1,
+			},
+			{
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Type:    "stln",
+				Name:    "stln1",
+				Owned:   true,
+				Vindex:  vindex2,
+			},
+		},
+	}
+	res, err := FindVindexForSharding(t1.Name.String(), t1.ColumnVindexes)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(res, t1.ColumnVindexes[0]) {
+		t.Errorf("FindVindexForSharding:\n got\n%v, want\n%v", res, t1.ColumnVindexes[0])
+	}
+}
+
+func TestFindVindexForShardingError(t *testing.T) {
+	ks := &Keyspace{
+		Name:    "sharded",
+		Sharded: true,
+	}
+	vindex1 := &stLU{name: "stlu1"}
+	vindex2 := &stLN{name: "stln1"}
+	t1 := &Table{
+		Name:     sqlparser.NewTableIdent("t1"),
+		Keyspace: ks,
+		ColumnVindexes: []*ColumnVindex{
+			{
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stlu",
+				Name:    "stlu1",
+				Vindex:  vindex1,
+			},
+			{
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Type:    "stln",
+				Name:    "stln1",
+				Owned:   true,
+				Vindex:  vindex2,
+			},
+		},
+	}
+	res, err := FindVindexForSharding(t1.Name.String(), t1.ColumnVindexes)
+	want := `could not find a vindex to use for sharding table t1`
+	if err == nil || err.Error() != want {
+		t.Errorf("FindVindexForSharding: %v, want %v", err, want)
+	}
+	if res != nil {
+		t.Errorf("FindVindexForSharding:\n got\n%v, want\n%v", res, nil)
+	}
+}
+
+func TestFindVindexForSharding2(t *testing.T) {
+	ks := &Keyspace{
+		Name:    "sharded",
+		Sharded: true,
+	}
+	vindex1 := &stLU{name: "stlu1"}
+	vindex2 := &stFU{
+		name: "stfu1",
+		Params: map[string]string{
+			"stfu1": "1",
+		},
+	}
+	t1 := &Table{
+		Name:     sqlparser.NewTableIdent("t1"),
+		Keyspace: ks,
+		ColumnVindexes: []*ColumnVindex{
+			{
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:    "stlu",
+				Name:    "stlu1",
+				Vindex:  vindex1,
+			},
+			{
+				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Type:    "stfu",
+				Name:    "stfu1",
+				Owned:   true,
+				Vindex:  vindex2,
+			},
+		},
+	}
+	res, err := FindVindexForSharding(t1.Name.String(), t1.ColumnVindexes)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(res, t1.ColumnVindexes[1]) {
+		t.Errorf("FindVindexForSharding:\n got\n%v, want\n%v", res, t1.ColumnVindexes[1])
+	}
 }
 
 func TestShardedVSchemaMultiColumnVindex(t *testing.T) {

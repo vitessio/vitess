@@ -168,13 +168,13 @@ func (stats *LogStats) ErrorStr() string {
 	return ""
 }
 
-// RemoteAddrUsername returns some parts of CallInfo if set
-func (stats *LogStats) RemoteAddrUsername() (string, string) {
+// CallInfo returns some parts of CallInfo if set
+func (stats *LogStats) CallInfo() (string, string) {
 	ci, ok := callinfo.FromContext(stats.Ctx)
 	if !ok {
 		return "", ""
 	}
-	return ci.RemoteAddr(), ci.Username()
+	return ci.Text(), ci.Username()
 }
 
 // Logf formats the log record to the given writer, either as
@@ -195,7 +195,7 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	}
 
 	// TODO: remove username here we fully enforce immediate caller id
-	remoteAddr, username := stats.RemoteAddrUsername()
+	callInfo, username := stats.CallInfo()
 
 	// Valid options for the QueryLogFormat are text or json
 	var fmtString string
@@ -203,14 +203,14 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	case streamlog.QueryLogFormatText:
 		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%q\t\n"
 	case streamlog.QueryLogFormatJSON:
-		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanType\": %q, \"OriginalSQL\": %q, \"BindVars\": %v, \"Queries\": %v, \"RewrittenSQL\": %q, \"QuerySources\": %q, \"MysqlTime\": %.6f, \"ConnWaitTime\": %.6f, \"RowsAffected\": %v, \"ResponseSize\": %v, \"Error\": %q}\n"
+		fmtString = "{\"Method\": %q, \"CallInfo\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanType\": %q, \"OriginalSQL\": %q, \"BindVars\": %v, \"Queries\": %v, \"RewrittenSQL\": %q, \"QuerySources\": %q, \"MysqlTime\": %.6f, \"ConnWaitTime\": %.6f, \"RowsAffected\": %v, \"ResponseSize\": %v, \"Error\": %q}\n"
 	}
 
 	_, err := fmt.Fprintf(
 		w,
 		fmtString,
 		stats.Method,
-		remoteAddr,
+		callInfo,
 		username,
 		stats.ImmediateCaller(),
 		stats.EffectiveCaller(),

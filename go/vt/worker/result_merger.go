@@ -68,11 +68,9 @@ func NewResultMerger(inputs []ResultReader, pkFieldCount int) (*ResultMerger, er
 		return nil, err
 	}
 
-	for i := 0; i < pkFieldCount; i++ {
-		typ := fields[i].Type
-		if !sqltypes.IsIntegral(typ) && !sqltypes.IsFloat(typ) && !sqltypes.IsBinary(typ) {
-			return nil, fmt.Errorf("unsupported type: %v cannot compare fields with this type. Use the vtworker LegacySplitClone command instead", typ)
-		}
+	err := CheckValidTypesForResultMerger(fields, pkFieldCount)
+	if err != nil {
+		return nil, fmt.Errorf("invalid PK types for ResultMerger. Use the vtworker LegacySplitClone command instead. %v", err.Error())
 	}
 
 	// Initialize the priority queue with all input ResultReader which have at
@@ -98,6 +96,17 @@ func NewResultMerger(inputs []ResultReader, pkFieldCount int) (*ResultMerger, er
 	}
 	rm.reset()
 	return rm, nil
+}
+
+// CheckValidTypesForResultMerger returns an error if the provided fields are not compatible with how ResultMerger works
+func CheckValidTypesForResultMerger(fields []*querypb.Field, pkFieldCount int) error {
+	for i := 0; i < pkFieldCount; i++ {
+		typ := fields[i].Type
+		if !sqltypes.IsIntegral(typ) && !sqltypes.IsFloat(typ) && !sqltypes.IsBinary(typ) {
+			return fmt.Errorf("unsupported type: %v cannot compare fields with this type", typ)
+		}
+	}
+	return nil
 }
 
 // Fields returns the field information for the columns in the result.
