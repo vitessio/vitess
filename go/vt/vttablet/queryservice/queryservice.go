@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -98,6 +99,9 @@ type QueryService interface {
 
 	// UpdateStream streams updates from the provided position or timestamp.
 	UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error
+
+	// VStream streams VReplication events based on the specified filter.
+	VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
 
 	// StreamHealth streams health status.
 	StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error

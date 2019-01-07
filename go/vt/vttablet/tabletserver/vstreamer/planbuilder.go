@@ -298,13 +298,17 @@ func analyzeExpr(ti *Table, selExpr sqlparser.SelectExpr) (cExpr ColExpr, err er
 	if !ok {
 		return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(selExpr))
 	}
+	as := aliased.As
+	if as.IsEmpty() {
+		as = sqlparser.NewColIdent(sqlparser.String(aliased.Expr))
+	}
 	switch expr := aliased.Expr.(type) {
 	case *sqlparser.ColName:
 		colnum, err := findColumn(ti, expr.Name)
 		if err != nil {
 			return ColExpr{}, err
 		}
-		return ColExpr{ColNum: colnum, Alias: expr.Name, Type: ti.Columns[colnum].Type}, nil
+		return ColExpr{ColNum: colnum, Alias: as, Type: ti.Columns[colnum].Type}, nil
 	case *sqlparser.FuncExpr:
 		if expr.Distinct || len(expr.Exprs) != 1 {
 			return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
@@ -318,10 +322,6 @@ func analyzeExpr(ti *Table, selExpr sqlparser.SelectExpr) (cExpr ColExpr, err er
 			innerCol, ok := aInner.Expr.(*sqlparser.ColName)
 			if !ok {
 				return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
-			}
-			as := aliased.As
-			if as.IsEmpty() {
-				as = sqlparser.NewColIdent(sqlparser.String(expr))
 			}
 			colnum, err := findColumn(ti, innerCol.Name)
 			if err != nil {

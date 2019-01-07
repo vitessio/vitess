@@ -41,7 +41,7 @@ type vstreamer struct {
 
 	cp       *mysql.ConnParams
 	se       *schema.Engine
-	startPos mysql.Position
+	startPos string
 	filter   *binlogdatapb.Filter
 	send     func([]*binlogdatapb.VEvent) error
 
@@ -55,7 +55,7 @@ type vstreamer struct {
 	pos    mysql.Position
 }
 
-func newVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos mysql.Position, filter *binlogdatapb.Filter, kschema *vindexes.KeyspaceSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
+func newVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, kschema *vindexes.KeyspaceSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:      ctx,
@@ -88,7 +88,12 @@ func (vs *vstreamer) Cancel() {
 // Stream runs a single-threaded loop.
 func (vs *vstreamer) Stream() error {
 	defer vs.cancel()
-	vs.pos = vs.startPos
+
+	pos, err := mysql.DecodePosition(vs.startPos)
+	if err != nil {
+		return err
+	}
+	vs.pos = pos
 
 	// Ensure se is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
@@ -374,6 +379,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				},
 			})
 		}
+	}
+	for _, vevent := range vevents {
+		vevent.Timestamp = int64(ev.Timestamp())
 	}
 	return vevents, nil
 }

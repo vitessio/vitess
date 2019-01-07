@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -661,6 +662,50 @@ func (conn *gRPCQueryClient) UpdateStream(ctx context.Context, target *querypb.T
 		}
 		if err := callback(r.Event); err != nil {
 			if err == nil || err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+// VStream starts a VReplication stream.
+func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target, position string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	stream, err := func() (queryservicepb.Query_VStreamClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &binlogdatapb.VStreamRequest{
+			Target:            target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Position:          position,
+			Filter:            filter,
+		}
+		stream, err := conn.c.VStream(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
+	}
+	for {
+		r, err := stream.Recv()
+		if err != nil {
+			return tabletconn.ErrorFromGRPC(err)
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+		if err := send(r.Events); err != nil {
+			if err == io.EOF {
 				return nil
 			}
 			return err

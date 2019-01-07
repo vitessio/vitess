@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -469,6 +470,12 @@ func (itc *internalTabletConn) StreamHealth(ctx context.Context, callback func(*
 // UpdateStream is part of queryservice.QueryService.
 func (itc *internalTabletConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
 	err := itc.tablet.qsc.QueryService().UpdateStream(ctx, target, position, timestamp, callback)
+	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
+// VStream is part of queryservice.QueryService.
+func (itc *internalTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	err := itc.tablet.qsc.QueryService().VStream(ctx, target, startPos, filter, send)
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 

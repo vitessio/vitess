@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type playerPlan struct {
@@ -31,9 +32,13 @@ type playerPlan struct {
 }
 
 type tablePlan struct {
+	name       string
 	colExprs   []*colExpr
 	onInsert   insertType
 	updateCols []int
+
+	fields []*querypb.Field
+	pkCols []*colExpr
 }
 
 func (tp *tablePlan) findCol(name sqlparser.ColIdent) *colExpr {
@@ -113,15 +118,16 @@ func buildTablePlan(rule *binlogdatapb.Rule) (*binlogdatapb.Rule, *tablePlan, er
 	if fromTable.IsEmpty() {
 		return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(sel))
 	}
-	if fromTable.String() != rule.Match {
-		return nil, nil, fmt.Errorf("unexpected: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), rule.Match)
-	}
 
 	if _, ok := sel.SelectExprs[0].(*sqlparser.StarExpr); ok {
 		if len(sel.SelectExprs) != 1 {
 			return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(sel))
 		}
-		return rule, nil, nil
+		sendRule := &binlogdatapb.Rule{
+			Match:  fromTable.String(),
+			Filter: rule.Filter,
+		}
+		return sendRule, &tablePlan{name: rule.Match}, nil
 	}
 
 	tplan := &tablePlan{}
@@ -158,9 +164,13 @@ func analyzeExpr(selExpr sqlparser.SelectExpr) (sqlparser.SelectExpr, *colExpr, 
 	if !ok {
 		return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(selExpr))
 	}
+	as := aliased.As
+	if as.IsEmpty() {
+		as = sqlparser.NewColIdent(sqlparser.String(aliased.Expr))
+	}
 	switch expr := aliased.Expr.(type) {
 	case *sqlparser.ColName:
-		return selExpr, &colExpr{colname: expr.Name}, nil
+		return selExpr, &colExpr{colname: as}, nil
 	case *sqlparser.FuncExpr:
 		if expr.Distinct || len(expr.Exprs) != 1 {
 			return nil, nil, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
@@ -170,12 +180,12 @@ func analyzeExpr(selExpr sqlparser.SelectExpr) (sqlparser.SelectExpr, *colExpr, 
 		}
 		switch fname := expr.Name.Lowered(); fname {
 		case "month", "day", "hour":
-			return selExpr, &colExpr{colname: aliased.As}, nil
+			return selExpr, &colExpr{colname: as}, nil
 		case "count":
 			if _, ok := expr.Exprs[0].(*sqlparser.StarExpr); !ok {
 				return nil, nil, fmt.Errorf("only count(*) is supported: %v", sqlparser.String(expr))
 			}
-			return nil, &colExpr{colname: aliased.As, op: opCount}, nil
+			return nil, &colExpr{colname: as, op: opCount}, nil
 		case "sum":
 			aInner, ok := expr.Exprs[0].(*sqlparser.AliasedExpr)
 			if !ok {
@@ -185,7 +195,7 @@ func analyzeExpr(selExpr sqlparser.SelectExpr) (sqlparser.SelectExpr, *colExpr, 
 			if !ok {
 				return nil, nil, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
 			}
-			return &sqlparser.AliasedExpr{Expr: innerCol}, &colExpr{colname: aliased.As, op: opSum}, nil
+			return &sqlparser.AliasedExpr{Expr: innerCol}, &colExpr{colname: as, op: opSum}, nil
 		default:
 			return nil, nil, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
 		}
