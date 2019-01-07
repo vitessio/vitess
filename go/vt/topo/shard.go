@@ -56,6 +56,18 @@ func addCells(left, right []string) []string {
 	return left
 }
 
+// removeCellsFromList will remove the cells from the provided list. It returns
+// the new list, and a boolean that indicates the returned list is empty.
+func removeCellsFromList(cells, toRemove []string) []string {
+	leftoverCells := make([]string, 0, len(cells))
+	for _, cell := range cells {
+		if !InCellList(cell, toRemove) {
+			leftoverCells = append(leftoverCells, cell)
+		}
+	}
+	return leftoverCells
+}
+
 // removeCells will remove the cells from the provided list. It returns
 // the new list, and a boolean that indicates the returned list is empty.
 func removeCells(cells, toRemove, fullList []string) ([]string, bool) {
@@ -160,11 +172,6 @@ func (si *ShardInfo) HasMaster() bool {
 	return !topoproto.TabletAliasIsZero(si.Shard.MasterAlias)
 }
 
-// HasCell returns true if the cell is listed in the Cells for the shard.
-func (si *ShardInfo) HasCell(cell string) bool {
-	return topoproto.ShardHasCell(si.Shard, cell)
-}
-
 // GetShard is a high level function to read shard data.
 // It generates trace spans.
 func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardInfo, error) {
@@ -265,16 +272,14 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		return err
 	}
 
-	// start the shard with all serving types. If it overlaps with
-	// other shards for some serving types, remove them.
-	servedTypes := map[topodatapb.TabletType]bool{
-		topodatapb.TabletType_MASTER:  true,
-		topodatapb.TabletType_REPLICA: true,
-		topodatapb.TabletType_RDONLY:  true,
-	}
 	value := &topodatapb.Shard{
 		KeyRange: keyRange,
 	}
+
+	isMasterServing := true
+
+	// start the shard IsMasterServing. If it overlaps with
+	// other shards for some serving types, remove them.
 
 	if IsShardUsingRangeBasedSharding(name) {
 		// if we are using range-based sharding, we don't want
@@ -285,18 +290,12 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		}
 		for _, si := range sis {
 			if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
-				for _, st := range si.ServedTypes {
-					delete(servedTypes, st.TabletType)
-				}
+				isMasterServing = false
 			}
 		}
 	}
 
-	for st := range servedTypes {
-		value.ServedTypes = append(value.ServedTypes, &topodatapb.Shard_ServedType{
-			TabletType: st,
-		})
-	}
+	value.IsMasterServing = isMasterServing
 
 	// Marshal and save.
 	data, err := proto.Marshal(value)
@@ -394,20 +393,14 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 
 		// trying to add more constraints with no existing record
 		si.TabletControls = append(si.TabletControls, &topodatapb.Shard_TabletControl{
-			TabletType:          tabletType,
-			Cells:               cells,
-			DisableQueryService: false,
-			BlacklistedTables:   tables,
+			TabletType:        tabletType,
+			Cells:             cells,
+			BlacklistedTables: tables,
 		})
 		return nil
 	}
 
 	// we have an existing record, check table lists matches and
-	// DisableQueryService is not set
-	if tc.DisableQueryService {
-		return fmt.Errorf("cannot safely alter BlacklistedTables as DisableQueryService is set for shard %v/%v", si.keyspace, si.shardName)
-	}
-
 	if remove {
 		si.removeCellsFromTabletControl(tc, tabletType, cells)
 	} else {
@@ -420,54 +413,9 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 	return nil
 }
 
-// UpdateDisableQueryService will make sure the disableQueryService is
-// set appropriately in the shard record. Note we don't support a lot
-// of the corner cases:
-// - we don't support DisableQueryService at the same time as BlacklistedTables,
-//   because it's not used in the same context (vertical vs horizontal sharding)
-// This function should be called while holding the keyspace lock.
-func (si *ShardInfo) UpdateDisableQueryService(ctx context.Context, tabletType topodatapb.TabletType, cells []string, disableQueryService bool) error {
-	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
-		return err
-	}
-	tc := si.GetTabletControl(tabletType)
-	if tc == nil {
-		// handle the case where the TabletControl object is new
-		if disableQueryService {
-			si.TabletControls = append(si.TabletControls, &topodatapb.Shard_TabletControl{
-				TabletType:          tabletType,
-				Cells:               cells,
-				DisableQueryService: true,
-				BlacklistedTables:   nil,
-			})
-		}
-		return nil
-	}
-
-	// we have an existing record, check table list is empty and
-	// DisableQueryService is set
-	if len(tc.BlacklistedTables) > 0 {
-		return fmt.Errorf("cannot safely alter DisableQueryService as BlacklistedTables is set")
-	}
-	if !tc.DisableQueryService {
-		// This code is unreachable because we always delete the control record when we enable QueryService.
-		return fmt.Errorf("cannot safely alter DisableQueryService as DisableQueryService is not set, this record should not be there for shard %v/%v", si.keyspace, si.shardName)
-	}
-
-	if disableQueryService {
-		tc.Cells = addCells(tc.Cells, cells)
-	} else {
-		if tc.Frozen {
-			return fmt.Errorf("migrate has gone past the point of no return, cannot re-enable serving for %v/%v", si.keyspace, si.shardName)
-		}
-		si.removeCellsFromTabletControl(tc, tabletType, cells)
-	}
-	return nil
-}
-
 func (si *ShardInfo) removeCellsFromTabletControl(tc *topodatapb.Shard_TabletControl, tabletType topodatapb.TabletType, cells []string) {
-	result, emptyList := removeCells(tc.Cells, cells, si.Cells)
-	if emptyList {
+	result := removeCellsFromList(tc.Cells, cells)
+	if len(result) == 0 {
 		// we don't have any cell left, we need to clear this record
 		var tabletControls []*topodatapb.Shard_TabletControl
 		for _, tc := range si.TabletControls {
@@ -481,64 +429,42 @@ func (si *ShardInfo) removeCellsFromTabletControl(tc *topodatapb.Shard_TabletCon
 	}
 }
 
-// GetServedType returns the Shard_ServedType for a TabletType, or nil
-func (si *ShardInfo) GetServedType(tabletType topodatapb.TabletType) *topodatapb.Shard_ServedType {
-	for _, st := range si.ServedTypes {
-		if st.TabletType == tabletType {
-			return st
-		}
-	}
-	return nil
-}
-
-// GetServedTypesPerCell returns the list of types this shard is serving
-// in the provided cell.
-func (si *ShardInfo) GetServedTypesPerCell(cell string) []topodatapb.TabletType {
-	result := make([]topodatapb.TabletType, 0, len(si.ServedTypes))
-	for _, st := range si.ServedTypes {
-		if InCellList(cell, st.Cells) {
-			result = append(result, st.TabletType)
-		}
-	}
-	return result
-}
-
 // UpdateServedTypesMap handles ServedTypesMap. It can add or remove cells.
-func (si *ShardInfo) UpdateServedTypesMap(tabletType topodatapb.TabletType, cells []string, remove bool) error {
-	sst := si.GetServedType(tabletType)
+// func (si *ShardInfo) UpdateServedTypesMap(tabletType topodatapb.TabletType, cells []string, remove bool) error {
+// 	sst := si.GetServedType(tabletType)
 
-	if remove {
-		if sst == nil {
-			// nothing to remove
-			return nil
-		}
-		result, emptyList := removeCells(sst.Cells, cells, si.Cells)
-		if emptyList {
-			// we don't have any cell left, we need to clear this record
-			var servedTypes []*topodatapb.Shard_ServedType
-			for _, st := range si.ServedTypes {
-				if st.TabletType != tabletType {
-					servedTypes = append(servedTypes, st)
-				}
-			}
-			si.ServedTypes = servedTypes
-			return nil
-		}
-		sst.Cells = result
-		return nil
-	}
+// 	if remove {
+// 		if sst == nil {
+// 			// nothing to remove
+// 			return nil
+// 		}
+// 		result, emptyList := removeCells(sst.Cells, cells, si.Cells)
+// 		if emptyList {
+// 			// we don't have any cell left, we need to clear this record
+// 			var servedTypes []*topodatapb.Shard_ServedType
+// 			for _, st := range si.ServedTypes {
+// 				if st.TabletType != tabletType {
+// 					servedTypes = append(servedTypes, st)
+// 				}
+// 			}
+// 			si.ServedTypes = servedTypes
+// 			return nil
+// 		}
+// 		sst.Cells = result
+// 		return nil
+// 	}
 
-	// add
-	if sst == nil {
-		si.ServedTypes = append(si.ServedTypes, &topodatapb.Shard_ServedType{
-			TabletType: tabletType,
-			Cells:      cells,
-		})
-		return nil
-	}
-	sst.Cells = addCells(sst.Cells, cells)
-	return nil
-}
+// 	// add
+// 	if sst == nil {
+// 		si.ServedTypes = append(si.ServedTypes, &topodatapb.Shard_ServedType{
+// 			TabletType: tabletType,
+// 			Cells:      cells,
+// 		})
+// 		return nil
+// 	}
+// 	sst.Cells = addCells(sst.Cells, cells)
+// 	return nil
+// }
 
 //
 // Utility functions for shards
@@ -602,25 +528,41 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	wg := sync.WaitGroup{}
 	mutex := sync.Mutex{}
 	rec := concurrency.AllErrorRecorder{}
-	for _, cell := range si.Cells {
-		if !InCellList(cell, cells) {
-			continue
+	result := make([]*topodatapb.TabletAlias, 0, len(resultAsMap))
+	for _, cell := range cells {
+		srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
+		if err != nil {
+			return result, err
 		}
-		wg.Add(1)
-		go func(cell string) {
-			defer wg.Done()
-			sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
-			if err != nil {
-				rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
-				return
-			}
 
-			mutex.Lock()
-			for _, node := range sri.Nodes {
-				resultAsMap[topoproto.TabletAliasString(node.TabletAlias)] = node.TabletAlias
+		shardInCell := func() bool {
+			for _, partition := range srvKeyspace.GetPartitions() {
+				for _, shardReference := range partition.ShardReferences {
+					if shardReference.GetName() == shard {
+						return true
+					}
+				}
 			}
-			mutex.Unlock()
-		}(cell)
+			return false
+		}()
+
+		if shardInCell {
+			wg.Add(1)
+			go func(cell string) {
+				defer wg.Done()
+				sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
+				if err != nil {
+					rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
+					return
+				}
+
+				mutex.Lock()
+				for _, node := range sri.Nodes {
+					resultAsMap[topoproto.TabletAliasString(node.TabletAlias)] = node.TabletAlias
+				}
+				mutex.Unlock()
+			}(cell)
+		}
 	}
 	wg.Wait()
 	err = nil
@@ -629,7 +571,6 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 		err = NewError(PartialResult, shard)
 	}
 
-	result := make([]*topodatapb.TabletAlias, 0, len(resultAsMap))
 	for _, a := range resultAsMap {
 		v := *a
 		result = append(result, &v)

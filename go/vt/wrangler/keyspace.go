@@ -145,9 +145,7 @@ func (wr *Wrangler) printShards(ctx context.Context, si []*topo.ShardInfo) error
 				wr.Logger().Printf("        %v\n", row)
 			}
 		}
-		if len(si.ServedTypes) != 0 {
-			wr.Logger().Printf("      Served Types: %v\n", si.ServedTypes)
-		}
+		wr.Logger().Printf("      Served Types: %v\n", si.IsMasterServing)
 		if len(si.TabletControls) != 0 {
 			wr.Logger().Printf("      Tablet Controls: %v\n", si.TabletControls)
 		}
@@ -191,9 +189,18 @@ func (wr *Wrangler) cancelHorizontalResharding(ctx context.Context, keyspace, sh
 	if err != nil {
 		return err
 	}
+
+	// get srvKeyspaces in all cells to check if they are already serving this shard
+	srvKeyspaces, err := wr.ts.GetSrvKeyspaceAllCells(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
 	for _, si := range destinationShards {
-		if len(si.ServedTypes) != 0 {
-			return fmt.Errorf("some served types have migrated for %v/%v, please undo them before canceling", keyspace, shard)
+		for _, srvKeyspace := range srvKeyspaces {
+			if topo.ShardIsServing(srvKeyspace, si.Shard) {
+				return fmt.Errorf("some served types have migrated for %v/%v, please undo them before canceling", keyspace, shard)
+			}
 		}
 	}
 	for i, si := range destinationShards {
@@ -491,14 +498,26 @@ func (wr *Wrangler) replicaMigrateServedType(ctx context.Context, keyspace strin
 // masterMigrateServedType operates with the keyspace locked
 func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string, sourceShards, destinationShards []*topo.ShardInfo, filteredReplicationWaitTime time.Duration, reverseReplication bool) (err error) {
 	// Ensure other served types have migrated.
-	if si := sourceShards[0]; len(si.ServedTypes) > 1 {
+	srvKeyspaces, err := wr.ts.GetSrvKeyspaceAllCells(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
+	si := sourceShards[0]
+	for _, srvKeyspace := range srvKeyspaces {
 		var types []string
-		for _, servedType := range si.ServedTypes {
-			if servedType.TabletType != topodatapb.TabletType_MASTER {
-				types = append(types, servedType.TabletType.String())
+		for _, partition := range srvKeyspace.GetPartitions() {
+			if partition.GetServedType() != topodatapb.TabletType_MASTER {
+				for _, shardReference := range partition.GetShardReferences() {
+					if shardReference.GetKeyRange() == si.GetKeyRange() {
+						types = append(types, partition.GetServedType().String())
+					}
+				}
 			}
 		}
-		return fmt.Errorf("cannot migrate MASTER away from %v/%v until everything else is migrated. Make sure that the following types are migrated first: %v", si.Keyspace(), si.ShardName(), strings.Join(types, ", "))
+		if len(types) > 0 {
+			return fmt.Errorf("cannot migrate MASTER away from %v/%v until everything else is migrated. Make sure that the following types are migrated first: %v", si.Keyspace(), si.ShardName(), strings.Join(types, ", "))
+		}
 	}
 
 	ev := &events.MigrateServedTypes{
@@ -577,19 +596,14 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		}
 		// Similar to updateShardRecords, but we also remove SourceShards.
 		destinationShards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
-			if err := si.UpdateServedTypesMap(topodatapb.TabletType_MASTER, nil, false); err != nil {
-				return err
-			}
-			if err := si.UpdateDisableQueryService(ctx, topodatapb.TabletType_MASTER, nil, false); err != nil {
-				return err
-			}
-
 			si.SourceShards = nil
 			return nil
 		})
 		if err != nil {
 			return err
 		}
+		wr.ts.UpdateDisableQueryService(ctx, si, topodatapb.TabletType_MASTER, nil, false)
+
 	}
 
 	event.DispatchUpdate(ev, "setting destination masters read-write")
@@ -700,15 +714,20 @@ func (wr *Wrangler) startReverseReplication(ctx context.Context, sourceShards []
 // updateShardRecords updates the shard records based on 'from' or 'to' direction.
 func (wr *Wrangler) updateShardRecords(ctx context.Context, shards []*topo.ShardInfo, cells []string, servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool) (err error) {
 	for i, si := range shards {
+
+		err := wr.ts.UpdateDisableQueryService(ctx, si, servedType, cells, isFrom /* disable */)
+
+		if err != nil {
+			return err
+		}
+
 		shards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
 			if clearSourceShards {
 				si.SourceShards = nil
 			}
-			if err := si.UpdateServedTypesMap(servedType, cells, isFrom /* remove */); err != nil {
-				return err
-			}
-			return si.UpdateDisableQueryService(ctx, servedType, cells, isFrom /* disable */)
+			return nil
 		})
+
 		if err != nil {
 			return err
 		}
@@ -747,13 +766,13 @@ func (wr *Wrangler) updateFrozenFlag(ctx context.Context, shards []*topo.ShardIn
 // be observed.
 func (wr *Wrangler) WaitForDrain(ctx context.Context, cells []string, keyspace, shard string, servedType topodatapb.TabletType,
 	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
+	var err error
 	if len(cells) == 0 {
 		// Retrieve list of cells for the shard from the topology.
-		shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
+		cells, err = wr.ts.GetCellInfoNames(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to retrieve list of all cells. GetShard() failed: %v", err)
+			return fmt.Errorf("failed to retrieve list of all cells. GetCellInfoNames() failed: %v", err)
 		}
-		cells = shardInfo.Cells
 	}
 
 	// Check all cells in parallel.
@@ -976,7 +995,8 @@ func (wr *Wrangler) migrateServedFromLocked(ctx context.Context, ki *topo.Keyspa
 	if reverse {
 		ki.UpdateServedFromMap(servedType, cells, destinationShard.SourceShards[0].Keyspace, false, nil)
 	} else {
-		ki.UpdateServedFromMap(servedType, cells, destinationShard.SourceShards[0].Keyspace, true, destinationShard.Cells)
+		// Check with Sugi, I think in this world, there is no longer the concept of a destinationShard.Cells, so it must be think as all cells all the time.
+		ki.UpdateServedFromMap(servedType, cells, destinationShard.SourceShards[0].Keyspace, true, nil)
 	}
 
 	// re-read and check the destination shard

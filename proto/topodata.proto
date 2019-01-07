@@ -173,16 +173,6 @@ message Shard {
   // Once set at creation time, it is never changed.
   KeyRange key_range = 2;
 
-  // ServedType is an entry in the served_types
-  message ServedType {
-    TabletType tablet_type = 1;
-    repeated string cells = 2;
-  }
-
-  // served_types has at most one entry per TabletType
-  // The keyspace lock is always taken when changing this.
-  repeated ServedType served_types = 3;
-
   // SourceShard represents a data source for filtered replication
   // accross shards. When this is used in a destination shard, the master
   // of that shard will run filtered replication.
@@ -208,18 +198,15 @@ message Shard {
   // The keyspace lock is always taken when changing this.
   repeated SourceShard source_shards = 4;
 
-  // Cells is the list of cells that contain tablets for this shard.
-  // No lock is necessary to update this field.
-  repeated string cells = 5;
-
   // TabletControl controls tablet's behavior
   message TabletControl {
     // which tablet type is affected
     TabletType tablet_type = 1;
     repeated string cells = 2;
 
-    // what to do
-    bool disable_query_service = 3;
+    // OBSOLETE: disable_query_service 3
+    reserved 3;
+
     repeated string blacklisted_tables = 4;
 
     // frozen is set if we've started failing over traffic for
@@ -230,6 +217,13 @@ message Shard {
   // tablet_controls has at most one entry per TabletType.
   // The keyspace lock is always taken when changing this.
   repeated TabletControl tablet_controls = 6;
+
+  // is_master_serving sets whether this shard master is serving traffic or not.
+  // The keyspace lock is always taken when changing this.
+  bool is_master_serving = 7;
+
+  // OBSOLETE fields: served_types (3), cells (5)
+  reserved 3, 5;
 }
 
 // A Keyspace contains data about a keyspace.
@@ -282,6 +276,16 @@ message ShardReference {
   // Copied from Shard.
   string name = 1;
   KeyRange key_range = 2;
+  // Disable query serving in this shard
+}
+
+// ShardTabletControl is used as a pointer from a SrvKeyspace to a Shard
+message ShardTabletControl {
+  // Copied from Shard.
+  string name = 1;
+  KeyRange key_range = 2;
+  // Disable query serving in this shard
+  bool query_service_disabled = 3;
 }
 
 // SrvKeyspace is a rollup node for the keyspace itself.
@@ -292,6 +296,9 @@ message SrvKeyspace {
 
     // List of non-overlapping continuous shards sorted by range.
     repeated ShardReference shard_references = 2;
+
+    // List of shard tablet controls
+    repeated ShardTabletControl shard_tablet_controls = 3;
   }
 
   // The partitions this keyspace is serving, per tablet type.

@@ -122,22 +122,6 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		}
 	}
 
-	// See if we need to add the tablet's cell to the shard's cell list.
-	if !si.HasCell(agent.TabletAlias.Cell) {
-		if err := agent.withRetry(ctx, "updating Cells list in Shard if necessary", func() error {
-			si, err = agent.TopoServer.UpdateShardFields(ctx, *initKeyspace, shard, func(si *topo.ShardInfo) error {
-				if si.HasCell(agent.TabletAlias.Cell) {
-					// Someone else already did it.
-					return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
-				}
-				si.Cells = append(si.Cells, agent.TabletAlias.Cell)
-				return nil
-			})
-			return err
-		}); err != nil {
-			return vterrors.Wrap(err, "couldn't add tablet's cell to shard record")
-		}
-	}
 	log.Infof("Initializing the tablet for type %v", tabletType)
 
 	// figure out the hostname
