@@ -18,6 +18,8 @@ package mysql
 
 import (
 	"bufio"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -981,4 +983,11 @@ func ParseErrorPacket(data []byte) error {
 	msg := string(data[pos:])
 
 	return NewSQLError(int(code), string(sqlState), "%v", msg)
+}
+
+func (conn *Conn) GetTLSClientCerts() []*x509.Certificate {
+	if tlsConn, ok := conn.conn.(*tls.Conn); ok {
+		return tlsConn.ConnectionState().PeerCertificates
+	}
+	return nil
 }
