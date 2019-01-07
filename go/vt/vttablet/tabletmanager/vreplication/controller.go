@@ -131,7 +131,7 @@ func (ct *controller) run(ctx context.Context) {
 			return
 		default:
 		}
-		log.Warningf("stream %v: %v, retrying after %v", ct.id, err, *retryDelay)
+		log.Errorf("stream %v: %v, retrying after %v", ct.id, err, *retryDelay)
 		time.Sleep(*retryDelay)
 	}
 }

@@ -355,7 +355,7 @@ func TestUpdateVReplicationPos(t *testing.T) {
 		"set pos='MariaDB/0-1-8283', time_updated=88822 " +
 		"where id=78522"
 
-	got := updateVReplicationPos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0)
+	got := GenerateUpdatePos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0)
 	if got != want {
 		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
 	}
@@ -367,7 +367,7 @@ func TestUpdateVReplicationTimestamp(t *testing.T) {
 		"set pos='MariaDB/0-2-582', time_updated=88822, transaction_timestamp=481828 " +
 		"where id=78522"
 
-	got := updateVReplicationPos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828)
+	got := GenerateUpdatePos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828)
 	if got != want {
 		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
 	}

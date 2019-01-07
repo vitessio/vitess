@@ -374,10 +374,7 @@ func TestDDLAddColumn(t *testing.T) {
 	})
 
 	// Record position before the next few statements.
-	pos, err := mysqld.MasterPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	pos := masterPosition(t)
 	execStatements(t, []string{
 		"begin",
 		"insert into ddl_test1 values(1, 'aaa')",
@@ -450,10 +447,7 @@ func TestDDLDropColumn(t *testing.T) {
 	defer execStatement(t, "drop table ddl_test2")
 
 	// Record position before the next few statements.
-	pos, err := mysqld.MasterPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	pos := masterPosition(t)
 	execStatements(t, []string{
 		"insert into ddl_test2 values(1, 'aaa', 'ccc')",
 		// Adding columns is allowed.
@@ -471,7 +465,7 @@ func TestDDLDropColumn(t *testing.T) {
 		}
 	}()
 	defer close(ch)
-	err = vstream(ctx, t, pos, nil, ch)
+	err := vstream(ctx, t, pos, nil, ch)
 	want := "cannot determine table columns"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
@@ -795,10 +789,7 @@ func TestMinimalMode(t *testing.T) {
 	engine.se.Reload(context.Background())
 
 	// Record position before the next few statements.
-	pos, err := mysqld.MasterPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	pos := masterPosition(t)
 	execStatements(t, []string{
 		"set @@session.binlog_row_image='minimal'",
 		"update t1 set val1='bbb' where id=1",
@@ -815,7 +806,7 @@ func TestMinimalMode(t *testing.T) {
 		}
 	}()
 	defer close(ch)
-	err = vstream(ctx, t, pos, nil, ch)
+	err := vstream(ctx, t, pos, nil, ch)
 	want := "partial row image encountered"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain '%s'", err, want)
@@ -837,10 +828,7 @@ func TestStatementMode(t *testing.T) {
 	engine.se.Reload(context.Background())
 
 	// Record position before the next few statements.
-	pos, err := mysqld.MasterPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	pos := masterPosition(t)
 	execStatements(t, []string{
 		"set @@session.binlog_format='statement'",
 		"update t1 set val1='bbb' where id=1",
@@ -857,7 +845,7 @@ func TestStatementMode(t *testing.T) {
 		}
 	}()
 	defer close(ch)
-	err = vstream(ctx, t, pos, nil, ch)
+	err := vstream(ctx, t, pos, nil, ch)
 	want := "unexpected statement type"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain '%s'", err, want)
@@ -920,6 +908,10 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 					t.Fatalf("%v (%d): event: %v, want commit", input, i, evs[i])
 				}
 			default:
+				if evs[i].Timestamp == 0 {
+					t.Fatalf("evs[%d].Timestamp: 0, want non-zero", i)
+				}
+				evs[i].Timestamp = 0
 				if got := fmt.Sprintf("%v", evs[i]); got != want {
 					t.Fatalf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
 				}
@@ -929,10 +921,7 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 }
 
 func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter) <-chan []*binlogdatapb.VEvent {
-	pos, err := mysqld.MasterPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	pos := masterPosition(t)
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
@@ -944,7 +933,7 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter)
 	return ch
 }
 
-func vstream(ctx context.Context, t *testing.T, pos mysql.Position, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
+func vstream(ctx context.Context, t *testing.T, pos string, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -975,4 +964,13 @@ func execStatements(t *testing.T, queries []string) {
 	if err := mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func masterPosition(t *testing.T) string {
+	t.Helper()
+	pos, err := mysqld.MasterPosition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mysql.EncodePosition(pos)
 }

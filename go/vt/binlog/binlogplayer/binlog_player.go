@@ -170,7 +170,7 @@ func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables 
 // If an error is encountered, it updates the vreplication state to "Error".
 // If a stop position was specifed, and reached, the state is updated to "Stopped".
 func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
-	if err := setVReplicationState(blp.dbClient, blp.uid, BlpRunning, ""); err != nil {
+	if err := SetVReplicationState(blp.dbClient, blp.uid, BlpRunning, ""); err != nil {
 		log.Errorf("Error writing Running state: %v", err)
 	}
 
@@ -180,7 +180,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 			Time:    time.Now(),
 			Message: msg,
 		})
-		if err := setVReplicationState(blp.dbClient, blp.uid, BlpError, msg); err != nil {
+		if err := SetVReplicationState(blp.dbClient, blp.uid, BlpError, msg); err != nil {
 			log.Errorf("Error writing stop state: %v", err)
 		}
 		return err
@@ -191,7 +191,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 // applyEvents returns a recordable status message on termination or an error otherwise.
 func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 	// Read starting values for vreplication.
-	pos, stopPos, maxTPS, maxReplicationLag, err := readVRSettings(blp.dbClient, blp.uid)
+	pos, stopPos, maxTPS, maxReplicationLag, err := ReadVRSettings(blp.dbClient, blp.uid)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -244,14 +244,14 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		case blp.position.Equal(blp.stopPosition):
 			msg := fmt.Sprintf("not starting BinlogPlayer, we're already at the desired position %v", blp.stopPosition)
 			log.Info(msg)
-			if err := setVReplicationState(blp.dbClient, blp.uid, BlpStopped, msg); err != nil {
+			if err := SetVReplicationState(blp.dbClient, blp.uid, BlpStopped, msg); err != nil {
 				log.Errorf("Error writing stop state: %v", err)
 			}
 			return nil
 		case blp.position.AtLeast(blp.stopPosition):
 			msg := fmt.Sprintf("starting point %v greater than stopping point %v", blp.position, blp.stopPosition)
 			log.Error(msg)
-			if err := setVReplicationState(blp.dbClient, blp.uid, BlpStopped, msg); err != nil {
+			if err := SetVReplicationState(blp.dbClient, blp.uid, BlpStopped, msg); err != nil {
 				log.Errorf("Error writing stop state: %v", err)
 			}
 			// Don't return an error. Otherwise, it will keep retrying.
@@ -351,7 +351,7 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 					if blp.position.AtLeast(blp.stopPosition) {
 						msg := "Reached stopping position, done playing logs"
 						log.Info(msg)
-						if err := setVReplicationState(blp.dbClient, blp.uid, BlpStopped, msg); err != nil {
+						if err := SetVReplicationState(blp.dbClient, blp.uid, BlpStopped, msg); err != nil {
 							log.Errorf("Error writing stop state: %v", err)
 						}
 						return nil
@@ -447,7 +447,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	}
 
 	now := time.Now().Unix()
-	updateRecovery := updateVReplicationPos(blp.uid, position, now, tx.EventToken.Timestamp)
+	updateRecovery := GenerateUpdatePos(blp.uid, position, now, tx.EventToken.Timestamp)
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
@@ -503,8 +503,8 @@ func CreateVReplicationTable() []string {
 ) ENGINE=InnoDB`}
 }
 
-// setVReplicationState updates the state in the _vt.vreplication table.
-func setVReplicationState(dbClient DBClient, uid uint32, state, message string) error {
+// SetVReplicationState updates the state in the _vt.vreplication table.
+func SetVReplicationState(dbClient DBClient, uid uint32, state, message string) error {
 	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(message), uid)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
@@ -512,9 +512,9 @@ func setVReplicationState(dbClient DBClient, uid uint32, state, message string) 
 	return nil
 }
 
-// readVRSettings retrieves the throttler settings for
+// ReadVRSettings retrieves the throttler settings for
 // vreplication from the checkpoint table.
-func readVRSettings(dbClient DBClient, uid uint32) (pos, stopPos string, maxTPS, maxReplicationLag int64, err error) {
+func ReadVRSettings(dbClient DBClient, uid uint32) (pos, stopPos string, maxTPS, maxReplicationLag int64, err error) {
 	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
@@ -554,9 +554,9 @@ func CreateVReplicationStopped(workflow string, source *binlogdatapb.BinlogSourc
 		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), BlpStopped)
 }
 
-// updateVReplicationPos returns a statement to update a value in the
+// GenerateUpdatePos returns a statement to update a value in the
 // _vt.vreplication table.
-func updateVReplicationPos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64) string {
+func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64) string {
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
 			"update _vt.vreplication set pos=%v, time_updated=%v, transaction_timestamp=%v where id=%v",
