@@ -71,7 +71,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 	}
 
 	// update the shard record if needed
-	if err := wr.updateShardCellsAndMaster(ctx, si, tablet.Alias, tablet.Type, allowMasterOverride); err != nil {
+	if err := wr.updateShardMaster(ctx, si, tablet.Alias, tablet.Type, allowMasterOverride); err != nil {
 		return err
 	}
 

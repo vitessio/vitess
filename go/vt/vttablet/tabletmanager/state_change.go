@@ -217,12 +217,25 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 					disallowQueryReason = "master tablet with filtered replication on"
 				}
 			}
+			srvKeyspace, err := agent.TopoServer.GetSrvKeyspace(ctx, newTablet.Alias.Cell, newTablet.Keyspace)
+			if err != nil {
+				log.Error("Fail to get SrvKeyspace")
+			} else {
+
+				for _, partition := range srvKeyspace.GetPartitions() {
+					for _, tabletControl := range partition.GetShardTabletControls() {
+						if tabletControl.Name == newTablet.Shard {
+							if tabletControl.QueryServiceDisabled {
+								allowQuery = false
+								disallowQueryReason = "SrvKeyspace.QueryServiceEnabled set to false"
+							}
+						}
+					}
+				}
+			}
 			if tc := shardInfo.GetTabletControl(newTablet.Type); tc != nil {
 				if topo.InCellList(newTablet.Alias.Cell, tc.Cells) {
-					if tc.DisableQueryService {
-						allowQuery = false
-						disallowQueryReason = "TabletControl.DisableQueryService set"
-					}
+
 					blacklistedTables = tc.BlacklistedTables
 				}
 			}

@@ -136,24 +136,14 @@ func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update 
 // DeleteCellInfo deletes the specified CellInfo.
 // We first make sure no Shard record points to the cell.
 func (ts *Server) DeleteCellInfo(ctx context.Context, cell string) error {
-	// Get all keyspaces.
-	keyspaces, err := ts.GetKeyspaces(ctx)
+	srvKeyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 	if err != nil {
-		return fmt.Errorf("GetKeyspaces() failed: %v", err)
+		return fmt.Errorf("GetSrvKeyspaceNames() failed: %v", err)
 	}
 
-	// For each keyspace, make sure no shard points at the cell.
-	for _, keyspace := range keyspaces {
-		shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
-		if err != nil {
-			return fmt.Errorf("FindAllShardsInKeyspace(%v) failed: %v", keyspace, err)
-		}
-
-		for shard, si := range shards {
-			if si.HasCell(cell) {
-				return fmt.Errorf("cell %v is used by shard %v/%v, cannot remove it. Use 'vtctl RemoveShardCell' to remove unused cells in a Shard", cell, keyspace, shard)
-			}
-		}
+	if len(srvKeyspaces) != 0 {
+		// TODO @rafael - implement this function and expose it via a vtctld command
+		return fmt.Errorf("cell %v has serving keyspaces. Before deleting, delete serving keyspace with: DeleteSrvKeyspaces", cell)
 	}
 
 	filePath := pathForCellInfo(cell)

@@ -61,13 +61,3 @@ func SourceShardAsHTML(source *topodatapb.Shard_SourceShard) template.HTML {
 	}
 	return template.HTML(result)
 }
-
-// ShardHasCell returns true if the cell is listed in the Cells for the shard.
-func ShardHasCell(shard *topodatapb.Shard, cell string) bool {
-	for _, c := range shard.Cells {
-		if c == cell {
-			return true
-		}
-	}
-	return false
-}
