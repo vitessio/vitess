@@ -165,7 +165,7 @@ type TabletServer struct {
 	se               *schema.Engine
 	qe               *QueryEngine
 	te               *TxEngine
-	teCtrl           TxEngineStateController
+	teCtrl           TxPoolController
 	hw               *heartbeat.Writer
 	hr               *heartbeat.Reader
 	messager         *messager.Engine
@@ -208,7 +208,7 @@ func NewServer(topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletSer
 	return NewTabletServer(tabletenv.Config, topoServer, alias)
 }
 
-type TxEngineStateController interface {
+type TxPoolController interface {
 	// Stop will stop accepting any new transactions. If in RW mode, transactions are given
 	// a chance to finish before being rolled back. If in RO mode, transactions are
 	// immediately aborted.
@@ -223,15 +223,25 @@ type TxEngineStateController interface {
 	// given a chance to clean up before they are forcefully rolled back.
 	AcceptReadOnly() error
 
+	// InitDBConfig must be called before Init.
   InitDBConfig(dbcfgs *dbconfigs.DBConfigs)
-  Init() error
+
+	// Init must be called once when vttablet starts for setting
+	// up the metadata tables.
+	Init() error
 
 	// StopImmediately will change the state to NotServing immediately, without waiting
 	// for transactions to wrap up
 	StopImmediately()
 
+	// Begin begins a transaction, and returns the associated transaction id.
+	// Subsequent statements can access the connection through the transaction id.
 	Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, error)
+
+	// Commit commits the specified transaction.
 	Commit(ctx context.Context, transactionID int64, mc messageCommitter) error
+
+	// Rollback rolls back the specified transaction.
 	Rollback(ctx context.Context, transactionID int64) error
 }
 
