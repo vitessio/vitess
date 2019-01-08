@@ -77,6 +77,10 @@ type TxEngine struct {
 	nextState        TxEngineState
 	transitionSignal chan struct{}
 
+	// beginRequests is used to make sure that we do not make a state
+	// transition while creating new transactions
+	beginRequests    sync.WaitGroup
+
 	dbconfigs *dbconfigs.DBConfigs
 
 	isOpen, twopcEnabled bool
@@ -154,6 +158,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 }
 
 func (te *TxEngine) Stop() error {
+	te.beginRequests.Wait()
 	te.stateLock.Lock()
 
 	switch te.state {
@@ -184,6 +189,7 @@ func (te *TxEngine) Stop() error {
 }
 
 func (te *TxEngine) AcceptReadWrite() error {
+	te.beginRequests.Wait()
 	te.stateLock.Lock()
 	defer te.stateLock.Unlock()
 	switch te.state {
@@ -213,6 +219,7 @@ func (te *TxEngine) AcceptReadWrite() error {
 }
 
 func (te *TxEngine) AcceptReadOnly() error {
+	te.beginRequests.Wait()
 	te.stateLock.Lock()
 	switch te.state {
 	case AcceptingReadOnly:
@@ -241,6 +248,8 @@ func (te *TxEngine) AcceptReadOnly() error {
 }
 
 func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, error) {
+	te.beginRequests.Add(1)
+	defer te.beginRequests.Done()
 	return te.txPool.Begin(ctx, options)
 }
 

@@ -155,7 +155,6 @@ type TabletServer struct {
 	target        querypb.Target
 	alsoAllow     []topodatapb.TabletType
 	requests      sync.WaitGroup
-	beginRequests sync.WaitGroup
 
 	// The following variables should be initialized only once
 	// before starting the tabletserver.
@@ -551,8 +550,6 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	// before rolling back everything. In this state new
 	// transactional requests are not allowed. So, we can
 	// be sure that the tx pool won't change after the wait.
-	tsv.beginRequests.Wait()
-
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
 		tsv.teCtrl.AcceptReadWrite()
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
@@ -616,7 +613,6 @@ func (tsv *TabletServer) waitForShutdown() {
 	// we have the assurance that only non-begin transactional calls
 	// will be allowed. They will enable the conclusion of outstanding
 	// transactions.
-	tsv.beginRequests.Wait()
 	tsv.messager.Close()
 	tsv.teCtrl.Stop()
 	tsv.qe.streamQList.TerminateAll()
@@ -1920,20 +1916,12 @@ verifyTarget:
 
 ok:
 	tsv.requests.Add(1)
-	// If it's a begin, we should make the shutdown code
-	// wait for the call to end before it waits for tx empty.
-	if isBegin {
-		tsv.beginRequests.Add(1)
-	}
 	return nil
 }
 
 // endRequest unregisters the current request (a waitgroup) as done.
 func (tsv *TabletServer) endRequest(isBegin bool) {
 	tsv.requests.Done()
-	if isBegin {
-		tsv.beginRequests.Done()
-	}
 }
 
 func (tsv *TabletServer) registerDebugHealthHandler() {
