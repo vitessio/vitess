@@ -74,6 +74,14 @@
       <artifactId>junit</artifactId>
       <scope>test</scope>
     </dependency>
+
+    <dependency>
+      <groupId>javax.annotation</groupId>
+      <artifactId>javax.annotation-api</artifactId>
+      <version>1.2</version>
+      <scope>compile</scope>
+    </dependency>
+
   </dependencies>
 
   <build>
@@ -94,7 +102,7 @@
 		  <useManifestOnlyJar>false</useManifestOnlyJar>
 		  <useSystemClassLoader>true</useSystemClassLoader>
         </configuration>
-      </plugin>	  
+      </plugin>
       <plugin>
         <groupId>org.xolstice.maven.plugins</groupId>
         <artifactId>protobuf-maven-plugin</artifactId>
