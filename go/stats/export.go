@@ -41,7 +41,7 @@ import (
 
 var emitStats = flag.Bool("emit_stats", false, "true iff we should emit stats to push-based monitoring/stats backends")
 var statsEmitPeriod = flag.Duration("stats_emit_period", time.Duration(60*time.Second), "Interval between emitting stats to all registered backends")
-var statsBackend = flag.String("stats_backend", "influxdb", "The name of the registered push-based monitoring/stats backend to use")
+var statsBackend = flag.String("stats_backend", "", "The name of the registered push-based monitoring/stats backend to use")
 
 // NewVarHook is the type of a hook to export variables in a different way
 type NewVarHook func(name string, v expvar.Var)
