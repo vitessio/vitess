@@ -1047,7 +1047,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		return nil, err
 	}
 	defer tsv.endRequest(false)
-	defer tsv.handlePanicAndSendLogStats("batch", nil, &err, nil)
+	defer tsv.handlePanicAndSendLogStats("batch", nil, nil)
 
 	if asTransaction {
 		transactionID, err = tsv.Begin(ctx, target, options)
@@ -1250,7 +1250,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 		return 0, err
 	}
 	defer tsv.endRequest(true)
-	defer tsv.handlePanicAndSendLogStats("ack", nil, &err, nil)
+	defer tsv.handlePanicAndSendLogStats("ack", nil, nil)
 
 	query, bv, err := queryGenerator()
 	if err != nil {
@@ -1308,7 +1308,6 @@ func (tsv *TabletServer) SplitQuery(
 			if err := validateSplitQueryParameters(
 				target,
 				query,
-				splitColumns,
 				splitCount,
 				numRowsPerQueryPart,
 				algorithm,
@@ -1356,7 +1355,7 @@ func (tsv *TabletServer) execRequest(
 	logStats.Target = target
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = bindVariables
-	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, &err, logStats)
+	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
 	if err = tsv.startRequest(ctx, target, isBegin, allowOnShutdown); err != nil {
 		return err
 	}
@@ -1377,7 +1376,6 @@ func (tsv *TabletServer) execRequest(
 func (tsv *TabletServer) handlePanicAndSendLogStats(
 	sql string,
 	bindVariables map[string]*querypb.BindVariable,
-	err *error,
 	logStats *tabletenv.LogStats,
 ) {
 	if x := recover(); x != nil {
@@ -1388,7 +1386,6 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 			tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
 		log.Errorf(errorMessage)
 		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", errorMessage)
-		*err = terr
 		tabletenv.InternalErrors.Add("Panic", 1)
 		if logStats != nil {
 			logStats.Error = terr
@@ -1586,7 +1583,6 @@ func convertErrorCode(err error) vtrpcpb.Code {
 func validateSplitQueryParameters(
 	target *querypb.Target,
 	query *querypb.BoundQuery,
-	splitColumns []string,
 	splitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm,

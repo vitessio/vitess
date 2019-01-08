@@ -2506,11 +2506,10 @@ func TestTabletServerSplitQueryEqualSplitsOnStringColumn(t *testing.T) {
 func TestHandleExecUnknownError(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "TestHandleExecError")
-	var err error
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServerWithNilTopoServer(config)
-	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, &err, logStats)
+	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, logStats)
 	panic("unknown exec error")
 }
 
