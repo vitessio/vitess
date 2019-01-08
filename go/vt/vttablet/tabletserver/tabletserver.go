@@ -166,6 +166,7 @@ type TabletServer struct {
 	se               *schema.Engine
 	qe               *QueryEngine
 	te               *TxEngine
+	teCtrl           TxEngineStateController
 	hw               *heartbeat.Writer
 	hr               *heartbeat.Reader
 	messager         *messager.Engine
@@ -222,6 +223,17 @@ type TxEngineStateController interface {
 	// If the engine is currently accepting full read and write transactions, they need to
 	// given a chance to clean up before they are forcefully rolled back.
 	AcceptReadOnly() error
+
+  InitDBConfig(dbcfgs *dbconfigs.DBConfigs)
+  Init() error
+
+	// StopImmediately will change the state to NotServing immediately, without waiting
+	// for transactions to wrap up
+	StopImmediately()
+
+	Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, error)
+	Commit(ctx context.Context, transactionID int64, mc messageCommitter) error
+	Rollback(ctx context.Context, transactionID int64) error
 }
 
 var tsOnce sync.Once
@@ -249,6 +261,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	tsv.se = schema.NewEngine(tsv, config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
+	tsv.teCtrl = tsv.te
 	tsv.hw = heartbeat.NewWriter(tsv, alias, config)
 	tsv.hr = heartbeat.NewReader(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
@@ -359,7 +372,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 
 	tsv.se.InitDBConfig(tsv.dbconfigs)
 	tsv.qe.InitDBConfig(tsv.dbconfigs)
-	tsv.te.InitDBConfig(tsv.dbconfigs)
+	tsv.teCtrl.InitDBConfig(tsv.dbconfigs)
 	tsv.hw.InitDBConfig(tsv.dbconfigs)
 	tsv.hr.InitDBConfig(tsv.dbconfigs)
 	tsv.messager.InitDBConfig(tsv.dbconfigs)
@@ -521,7 +534,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.qe.Open(); err != nil {
 		return err
 	}
-	if err := tsv.te.Init(); err != nil {
+	if err := tsv.teCtrl.Init(); err != nil {
 		return err
 	}
 	if err := tsv.hw.Init(tsv.target); err != nil {
@@ -541,7 +554,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	tsv.beginRequests.Wait()
 
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
-		tsv.te.AcceptReadWrite()
+		tsv.teCtrl.AcceptReadWrite()
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
 			return err
 		}
@@ -550,7 +563,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.hr.Close()
 		tsv.hw.Open()
 	} else {
-		tsv.te.AcceptReadOnly()
+		tsv.teCtrl.AcceptReadOnly()
 		tsv.messager.Close()
 		tsv.hr.Open()
 		tsv.hw.Close()
@@ -605,7 +618,7 @@ func (tsv *TabletServer) waitForShutdown() {
 	// transactions.
 	tsv.beginRequests.Wait()
 	tsv.messager.Close()
-	tsv.te.Stop()
+	tsv.teCtrl.Stop()
 	tsv.qe.streamQList.TerminateAll()
 	tsv.updateStreamList.Stop()
 	tsv.watcher.Close()
@@ -619,7 +632,7 @@ func (tsv *TabletServer) closeAll() {
 	tsv.messager.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
-	tsv.te.CloseRudely()
+	tsv.teCtrl.StopImmediately()
 	tsv.watcher.Close()
 	tsv.updateStreamList.Stop()
 	tsv.qe.Close()
@@ -751,7 +764,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 				// TODO(erez): I think this should be RESOURCE_EXHAUSTED.
 				return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "Transaction throttled")
 			}
-			transactionID, err = tsv.te.txPool.Begin(ctx, options)
+			transactionID, err = tsv.teCtrl.Begin(ctx, options)
 			logStats.TransactionID = transactionID
 			return err
 		},
@@ -768,7 +781,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tabletenv.QueryStats.Record("COMMIT", time.Now())
 			logStats.TransactionID = transactionID
-			return tsv.te.txPool.Commit(ctx, transactionID, tsv.messager)
+			return tsv.teCtrl.Commit(ctx, transactionID, tsv.messager)
 		},
 	)
 }
@@ -782,7 +795,7 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tabletenv.QueryStats.Record("ROLLBACK", time.Now())
 			logStats.TransactionID = transactionID
-			return tsv.te.txPool.Rollback(ctx, transactionID)
+			return tsv.teCtrl.Rollback(ctx, transactionID)
 		},
 	)
 }

@@ -240,6 +240,18 @@ func (te *TxEngine) AcceptReadOnly() error {
 	}
 }
 
+func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, error) {
+	return te.txPool.Begin(ctx, options)
+}
+
+func (te *TxEngine) Commit(ctx context.Context, transactionID int64, mc messageCommitter) error {
+	return te.txPool.Commit(ctx, transactionID, mc)
+}
+
+func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) error {
+	return te.txPool.Rollback(ctx, transactionID)
+}
+
 func (te *TxEngine) unknownStateError() error {
 	return vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown state %v", te.state)
 }
@@ -332,7 +344,7 @@ func (te *TxEngine) Open() {
 
 // CloseRudely will disregard common rules for when to kill transactions
 // and forcefully abort everything as fast as possible
-func (te *TxEngine) CloseRudely() {
+func (te *TxEngine) StopImmediately() {
 	te.stateLock.Lock()
 	defer te.stateLock.Unlock()
 	te.close(true)
