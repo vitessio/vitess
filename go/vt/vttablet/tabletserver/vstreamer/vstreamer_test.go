@@ -199,10 +199,10 @@ func TestREKeyrange(t *testing.T) {
 	}
 	ch := startStream(ctx, t, filter)
 
-	if err := setVSchema(shardedVSchema); err != nil {
+	if err := env.SetVSchema(shardedVSchema); err != nil {
 		t.Fatal(err)
 	}
-	defer setVSchema("{}")
+	defer env.SetVSchema("{}")
 
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
@@ -249,7 +249,7 @@ func TestREKeyrange(t *testing.T) {
     }
   }
 }`
-	if err := setVSchema(altVSchema); err != nil {
+	if err := env.SetVSchema(altVSchema); err != nil {
 		t.Fatal(err)
 	}
 
@@ -719,7 +719,7 @@ func TestJSON(t *testing.T) {
 	}
 
 	// JSON is supported only after mysql57.
-	if err := mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
+	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
 		// If it's a syntax error, MySQL is an older version. Skip this test.
 		if strings.Contains(err.Error(), "syntax") {
 			return
@@ -954,21 +954,21 @@ func vstream(ctx context.Context, t *testing.T, pos string, filter *binlogdatapb
 
 func execStatement(t *testing.T, query string) {
 	t.Helper()
-	if err := mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
+	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
-	if err := mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
+	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func masterPosition(t *testing.T) string {
 	t.Helper()
-	pos, err := mysqld.MasterPosition()
+	pos, err := env.Mysqld.MasterPosition()
 	if err != nil {
 		t.Fatal(err)
 	}
