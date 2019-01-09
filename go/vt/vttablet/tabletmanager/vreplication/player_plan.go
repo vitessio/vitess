@@ -32,10 +32,9 @@ type playerPlan struct {
 }
 
 type tablePlan struct {
-	name       string
-	colExprs   []*colExpr
-	onInsert   insertType
-	updateCols []int
+	name     string
+	colExprs []*colExpr
+	onInsert insertType
 
 	fields []*querypb.Field
 	pkCols []*colExpr
@@ -51,9 +50,10 @@ func (tp *tablePlan) findCol(name sqlparser.ColIdent) *colExpr {
 }
 
 type colExpr struct {
-	colname sqlparser.ColIdent
-	colnum  int
-	op      operation
+	colname   sqlparser.ColIdent
+	colnum    int
+	op        operation
+	isGrouped bool
 }
 
 type operation int
@@ -62,7 +62,6 @@ const (
 	opNone = operation(iota)
 	opCount
 	opSum
-	opExclude
 )
 
 type insertType int
@@ -151,6 +150,13 @@ func buildTablePlan(rule *binlogdatapb.Rule) (*binlogdatapb.Rule, *tablePlan, er
 		if err := analyzeGroupBy(sel.GroupBy, tplan); err != nil {
 			return nil, nil, err
 		}
+		tplan.onInsert = insertIgnore
+		for _, cExpr := range tplan.colExprs {
+			if !cExpr.isGrouped {
+				tplan.onInsert = insertOndup
+				break
+			}
+		}
 	}
 	sendRule := &binlogdatapb.Rule{
 		Match:  rule.Match,
@@ -217,7 +223,7 @@ func analyzeGroupBy(groupBy sqlparser.GroupBy, tplan *tablePlan) error {
 		if cExpr.op != opNone {
 			return fmt.Errorf("group by expression is not allowed to reference an aggregate expression: %v", sqlparser.String(expr))
 		}
-		cExpr.op = opExclude
+		cExpr.isGrouped = true
 	}
 	return nil
 }
