@@ -412,6 +412,35 @@ func TestIsAggregate(t *testing.T) {
 	}
 }
 
+func TestIsImpossible(t *testing.T) {
+	f := ComparisonExpr{
+		Operator: NotEqualStr,
+		Left:     newIntVal("1"),
+		Right:    newIntVal("1"),
+	}
+	if !f.IsImpossible() {
+		t.Error("IsImpossible: false, want true")
+	}
+
+	f = ComparisonExpr{
+		Operator: EqualStr,
+		Left:     newIntVal("1"),
+		Right:    newIntVal("1"),
+	}
+	if f.IsImpossible() {
+		t.Error("IsImpossible: true, want false")
+	}
+
+	f = ComparisonExpr{
+		Operator: NotEqualStr,
+		Left:     newIntVal("1"),
+		Right:    newIntVal("2"),
+	}
+	if f.IsImpossible() {
+		t.Error("IsImpossible: true, want false")
+	}
+}
+
 func TestReplaceExpr(t *testing.T) {
 	tcases := []struct {
 		in, out string
