@@ -1015,6 +1015,31 @@ options:PassthroughDMLs
   ]
 }
 
+# message multi-value upsert
+"insert into msg(time_scheduled, id, message) values(1, 2, 'aa'), (3, 4, 'bb') on duplicate key update message = values(message)"
+{
+  "PlanID": "INSERT_MESSAGE",
+  "TableName": "msg",
+  "Permissions": [
+    {
+      "TableName": "msg",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "insert into msg(time_scheduled, id, message) values (1, 2, 'aa'), (3, 4, 'bb') on duplicate key update message = values(message)",
+  "OuterQuery": "insert into msg(time_scheduled, id, message, time_next, time_created, epoch) values (1, 2, 'aa', 1, :#time_now, 0), (3, 4, 'bb', 3, :#time_now, 0) on duplicate key update message = values(message)",
+  "PKValues": [
+    [
+      1,
+      3
+    ],
+    [
+      2,
+      4
+    ]
+  ]
+}
+
 # message insert subquery
 "insert into msg(time_scheduled, id, message) select * from a"
 "subquery not allowed for message table: msg"
