@@ -1019,9 +1019,13 @@ options:PassthroughDMLs
 "insert into msg(time_scheduled, id, message) select * from a"
 "subquery not allowed for message table: msg"
 
-# message insert upsert key
-"insert into msg(time_scheduled, id, message) Values(1, 2, 'aa') on duplicate key update message='bb'"
-"'on duplicate key' construct not allowed for message table: msg"
+# message insert upsert time_scheduled
+"insert into msg(time_scheduled, id, message) Values(1, 2, 'aa') on duplicate key update time_scheduled=123"
+"'on duplicate key' cannot reference time_scheduled or id for message table: msg"
+
+# message insert upsert id
+"insert into msg(time_scheduled, id, message) Values(1, 2, 'aa') on duplicate key update id=123"
+"'on duplicate key' cannot reference time_scheduled or id for message table: msg"
 
 # message insert without column list
 "insert into msg values(1)"
