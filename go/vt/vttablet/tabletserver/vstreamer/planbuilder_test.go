@@ -60,7 +60,7 @@ func init() {
 	if err := json2.Unmarshal([]byte(input), &kspb); err != nil {
 		panic(fmt.Errorf("Unmarshal failed: %v", err))
 	}
-	kschema, err := vindexes.BuildKeyspaceSchema(&kspb, keyspaceName)
+	kschema, err := vindexes.BuildKeyspaceSchema(&kspb, "ks")
 	if err != nil {
 		panic(err)
 	}
