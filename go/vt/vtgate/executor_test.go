@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
 	"reflect"
 	"sort"
@@ -589,7 +590,7 @@ func TestExecutorLegacyAutocommit(t *testing.T) {
 }
 
 func TestExecutorShow(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
+	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
 	for _, query := range []string{"show databases", "show vitess_keyspaces"} {
@@ -624,6 +625,49 @@ func TestExecutorShow(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show tables", nil)
+	if err != errNoKeyspace {
+		t.Errorf("'show tables' should fail without a keyspace")
+	}
+
+	if len(sbclookup.Queries) != 0 {
+		t.Errorf("sbclookup unexpectedly has queries already")
+	}
+
+	showResults := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "Tables_in_keyspace", Type: sqltypes.VarChar},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar("some_table"),
+		}},
+	}
+	sbclookup.SetResults([]*sqltypes.Result{showResults})
+
+	query := fmt.Sprintf("show tables from %v", KsTestUnsharded)
+	qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(sbclookup.Queries) != 1 {
+		t.Errorf("Tablet should have recieved one 'show' query. Instead received: %v", sbclookup.Queries)
+	} else {
+		lastQuery := sbclookup.Queries[len(sbclookup.Queries)-1].Sql
+		want := "show tables"
+		if lastQuery != want {
+			t.Errorf("Got: %v, want %v", lastQuery, want)
+		}
+	}
+
+	wantqr := showResults
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
+	}
+
 	for _, query := range []string{"show charset", "show charset like '%foo'", "show character set", "show character set like '%foo'"} {
 		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
 		if err != nil {
@@ -648,11 +692,11 @@ func TestExecutorShow(t *testing.T) {
 			t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
 		}
 	}
-	qr, err := executor.Execute(context.Background(), "TestExecute", session, "show engines", nil)
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show engines", nil)
 	if err != nil {
 		t.Error(err)
 	}
-	wantqr := &sqltypes.Result{
+	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints"),
 		Rows: [][]sqltypes.Value{
 			buildVarCharRow(
