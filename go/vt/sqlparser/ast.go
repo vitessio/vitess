@@ -2379,6 +2379,32 @@ func (node *ComparisonExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Left, &node.Right, &node.Escape)
 }
 
+// IsImpossible returns true if the comparison in the expression can never evaluate to true.
+// Note that this is not currently exhaustive to ALL impossible comparisons.
+func (node *ComparisonExpr) IsImpossible() bool {
+	var left, right *SQLVal
+	var ok bool
+	if left, ok = node.Left.(*SQLVal); !ok {
+		return false
+	}
+	if right, ok = node.Right.(*SQLVal); !ok {
+		return false
+	}
+	if node.Operator == NotEqualStr && left.Type == right.Type {
+		if len(left.Val) != len(right.Val) {
+			return false
+		}
+
+		for i := range left.Val {
+			if left.Val[i] != right.Val[i] {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
 // RangeCond represents a BETWEEN or a NOT BETWEEN expression.
 type RangeCond struct {
 	Operator string

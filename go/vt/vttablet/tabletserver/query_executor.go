@@ -106,6 +106,17 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execDDL()
 	case planbuilder.PlanNextval:
 		return qre.execNextval()
+	case planbuilder.PlanSelectImpossible:
+		if qre.plan.Fields != nil {
+			return &sqltypes.Result{
+				Fields:       qre.plan.Fields,
+				RowsAffected: 0,
+				InsertID:     0,
+				Rows:         nil,
+				Extras:       nil,
+			}, nil
+		}
+		break
 	}
 
 	if qre.transactionID != 0 {
@@ -137,7 +148,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return qre.execUpsertPK(conn)
 		case planbuilder.PlanSet:
 			return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, nil, true, true)
-		case planbuilder.PlanPassSelect, planbuilder.PlanSelectLock:
+		case planbuilder.PlanPassSelect, planbuilder.PlanSelectLock, planbuilder.PlanSelectImpossible:
 			return qre.execDirect(conn)
 		default:
 			// handled above:
@@ -151,7 +162,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		}
 	} else {
 		switch qre.plan.PlanID {
-		case planbuilder.PlanPassSelect:
+		case planbuilder.PlanPassSelect, planbuilder.PlanSelectImpossible:
 			return qre.execSelect()
 		case planbuilder.PlanSelectLock:
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
