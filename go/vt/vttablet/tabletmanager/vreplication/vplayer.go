@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -38,7 +40,7 @@ import (
 
 type vplayer struct {
 	id           uint32
-	filter       *binlogdatapb.Filter
+	source       *binlogdatapb.BinlogSource
 	sourceTablet *topodatapb.Tablet
 	stats        *binlogplayer.Stats
 	dbClient     binlogplayer.DBClient
@@ -52,10 +54,10 @@ type vplayer struct {
 	retryDelay time.Duration
 }
 
-func newVStreamer(id uint32, filter *binlogdatapb.Filter, sourceTablet *topodatapb.Tablet, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld *mysqlctl.Mysqld) *vplayer {
+func newVPlayer(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topodatapb.Tablet, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld *mysqlctl.Mysqld) *vplayer {
 	return &vplayer{
 		id:           id,
-		filter:       filter,
+		source:       source,
 		sourceTablet: sourceTablet,
 		stats:        stats,
 		dbClient:     dbClient,
@@ -101,7 +103,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 	}
 	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, source: %v", vp.id, startPos, vp.stopPos, vp.sourceTablet)
 
-	plan, err := buildPlayerPlan(vp.filter)
+	plan, err := buildPlayerPlan(vp.source.Filter)
 	if err != nil {
 		return err
 	}
@@ -149,10 +151,8 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
 			return err
 		}
 	case binlogdatapb.VEventType_COMMIT:
-		updatePos := binlogplayer.GenerateUpdatePos(vp.id, vp.pos, time.Now().Unix(), event.Timestamp)
-		if _, err := vp.dbClient.ExecuteFetch(updatePos, 0); err != nil {
-			_ = vp.dbClient.Rollback()
-			return fmt.Errorf("error %v updating position", err)
+		if err := vp.updatePos(event.Timestamp); err != nil {
+			return err
 		}
 		if err := vp.dbClient.Commit(); err != nil {
 			return err
@@ -161,8 +161,50 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
 		// This code is unreachable. It's just here as failsafe.
 		_ = vp.dbClient.Rollback()
 	case binlogdatapb.VEventType_FIELD:
-		if err := vp.updatePlans(event.FieldEvent); err != nil {
+		if err := vp.updatePlan(event.FieldEvent); err != nil {
 			return err
+		}
+	case binlogdatapb.VEventType_ROW:
+		if err := vp.applyRowEvent(event.RowEvent); err != nil {
+			return err
+		}
+	case binlogdatapb.VEventType_DDL:
+		switch vp.source.OnDdl {
+		case binlogdatapb.OnDDLAction_IGNORE:
+			if err := vp.updatePos(event.Timestamp); err != nil {
+				return err
+			}
+			if err := vp.dbClient.Commit(); err != nil {
+				return err
+			}
+		case binlogdatapb.OnDDLAction_STOP:
+			if err := vp.updatePos(event.Timestamp); err != nil {
+				return err
+			}
+			vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("stopped at DDL %s", event.Ddl))
+			if err := vp.dbClient.Commit(); err != nil {
+				return err
+			}
+		case binlogdatapb.OnDDLAction_EXEC:
+			if err := vp.updatePos(event.Timestamp); err != nil {
+				return err
+			}
+			if err := vp.exec(event.Ddl); err != nil {
+				return err
+			}
+			if err := vp.dbClient.Commit(); err != nil {
+				return err
+			}
+		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
+			if err := vp.updatePos(event.Timestamp); err != nil {
+				return err
+			}
+			if err := vp.exec(event.Ddl); err != nil {
+				log.Infof("Ignoring error: %v for DDL: %s", err, event.Ddl)
+			}
+			if err := vp.dbClient.Commit(); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -174,7 +216,7 @@ func (vp *vplayer) setState(state, message string) {
 	}
 }
 
-func (vp *vplayer) updatePlans(fieldEvent *binlogdatapb.FieldEvent) error {
+func (vp *vplayer) updatePlan(fieldEvent *binlogdatapb.FieldEvent) error {
 	prelim := vp.pplan.tablePlans[fieldEvent.TableName]
 	tplan := &tablePlan{
 		name: fieldEvent.TableName,
@@ -233,4 +275,174 @@ func (vp *vplayer) updatePlans(fieldEvent *binlogdatapb.FieldEvent) error {
 	}
 	vp.tplans[fieldEvent.TableName] = tplan
 	return nil
+}
+
+func (vp *vplayer) applyRowEvent(rowEvent *binlogdatapb.RowEvent) error {
+	tplan := vp.tplans[rowEvent.TableName]
+	if tplan != nil {
+		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
+	}
+	for _, change := range rowEvent.RowChanges {
+		if err := vp.applyRowChange(tplan, change); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (vp *vplayer) applyRowChange(tplan *tablePlan, rowChange *binlogdatapb.RowChange) error {
+	// MakeRowTrusted is needed here because because Proto3ToResult is not convenient.
+	var before, after []sqltypes.Value
+	if rowChange.Before != nil {
+		before = sqltypes.MakeRowTrusted(tplan.fields, rowChange.Before)
+	}
+	if rowChange.After != nil {
+		after = sqltypes.MakeRowTrusted(tplan.fields, rowChange.After)
+	}
+	var query string
+	switch {
+	case before == nil && after != nil:
+		query = vp.generateInsert(tplan, after)
+	case before != nil && after != nil:
+		query = vp.generateUpdate(tplan, before, after)
+	case before != nil && after == nil:
+		query = vp.generateDelete(tplan, before)
+	case before == nil && after == nil:
+		// unreachable
+	}
+	return vp.exec(query)
+}
+
+func (vp *vplayer) generateInsert(tplan *tablePlan, after []sqltypes.Value) string {
+	sql := sqlparser.NewTrackedBuffer(nil)
+	if tplan.onInsert == insertIgnore {
+		sql.Myprintf("insert ignore into %s set ", sqlparser.NewTableIdent(tplan.name))
+	} else {
+		sql.Myprintf("insert into %s set ", sqlparser.NewTableIdent(tplan.name))
+	}
+	vp.writeInsertValues(sql, tplan, after)
+	if tplan.onInsert == insertOndup {
+		sql.Myprintf(" on duplicate key update ")
+		vp.writeUpdateValues(sql, tplan, nil, after)
+	}
+	return sql.String()
+}
+
+func (vp *vplayer) generateUpdate(tplan *tablePlan, before, after []sqltypes.Value) string {
+	if tplan.onInsert == insertIgnore {
+		return ""
+	}
+	sql := sqlparser.NewTrackedBuffer(nil)
+	sql.Myprintf("update %v set ", sqlparser.NewTableIdent(tplan.name))
+	vp.writeUpdateValues(sql, tplan, before, after)
+	sql.Myprintf(" where ")
+	vp.writeWhereValues(sql, tplan, before)
+	return sql.String()
+}
+
+func (vp *vplayer) generateDelete(tplan *tablePlan, before []sqltypes.Value) string {
+	sql := sqlparser.NewTrackedBuffer(nil)
+	if tplan.onInsert == insertNormal {
+		sql.Myprintf("delete from %v where ", sqlparser.NewTableIdent(tplan.name))
+		vp.writeWhereValues(sql, tplan, before)
+		return sql.String()
+	}
+	sql.Myprintf("update %v set ", sqlparser.NewTableIdent(tplan.name))
+	vp.writeUpdateValues(sql, tplan, before, nil)
+	sql.Myprintf(" where ")
+	vp.writeWhereValues(sql, tplan, before)
+	return sql.String()
+}
+
+func (vp *vplayer) writeInsertValues(sql *sqlparser.TrackedBuffer, tplan *tablePlan, after []sqltypes.Value) {
+	separator := ""
+	for _, cExpr := range tplan.colExprs {
+		sql.Myprintf("%s%s=", separator, cExpr.colname)
+		if separator == "" {
+			separator = ", "
+		}
+		if cExpr.op == opCount {
+			sql.WriteString("1")
+		} else {
+			encodeValue(sql, after[cExpr.colnum])
+		}
+	}
+}
+
+func (vp *vplayer) writeUpdateValues(sql *sqlparser.TrackedBuffer, tplan *tablePlan, before, after []sqltypes.Value) {
+	separator := ""
+	for _, cExpr := range tplan.colExprs {
+		if cExpr.isGrouped {
+			continue
+		}
+		sql.Myprintf("%s%s=", separator, cExpr.colname)
+		if separator == "" {
+			separator = ", "
+		}
+		if cExpr.op == opCount || cExpr.op == opSum {
+			sql.Myprintf("%s", cExpr.colname)
+		}
+		if len(before) != 0 {
+			switch cExpr.op {
+			case opNone:
+				if len(after) == 0 {
+					sql.WriteString("NULL")
+				}
+			case opCount:
+				sql.WriteString("-1")
+			case opSum:
+				sql.WriteString("-")
+				encodeValue(sql, before[cExpr.colnum])
+			}
+		}
+		if len(after) != 0 {
+			switch cExpr.op {
+			case opNone:
+				encodeValue(sql, after[cExpr.colnum])
+			case opCount:
+				sql.WriteString("+1")
+			case opSum:
+				sql.WriteString("+")
+				encodeValue(sql, after[cExpr.colnum])
+			}
+		}
+	}
+}
+
+func (vp *vplayer) writeWhereValues(sql *sqlparser.TrackedBuffer, tplan *tablePlan, before []sqltypes.Value) {
+	separator := ""
+	for _, cExpr := range tplan.pkCols {
+		sql.Myprintf("%s%s=", separator, cExpr.colname)
+		if separator == "" {
+			separator = " AND "
+		}
+		encodeValue(sql, before[cExpr.colnum])
+	}
+}
+func (vp *vplayer) updatePos(ts int64) error {
+	updatePos := binlogplayer.GenerateUpdatePos(vp.id, vp.pos, time.Now().Unix(), ts)
+	if _, err := vp.dbClient.ExecuteFetch(updatePos, 0); err != nil {
+		_ = vp.dbClient.Rollback()
+		return fmt.Errorf("error %v updating position", err)
+	}
+	return nil
+}
+
+func (vp *vplayer) exec(sql string) error {
+	vp.stats.Timings.Record("query", time.Now())
+	_, err := vp.dbClient.ExecuteFetch(sql, 0)
+	return err
+}
+
+func encodeValue(sql *sqlparser.TrackedBuffer, value sqltypes.Value) {
+	if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.ToBytes(), mysql.ZeroTimestamp) {
+		// Values in the binary log are UTC. Let's convert them
+		// to whatever timezone the connection is using,
+		// so MySQL properly converts them back to UTC.
+		sql.WriteString("convert_tz(")
+		value.EncodeSQL(sql)
+		sql.WriteString(", '+00:00', @@session.time_zone)")
+	} else {
+		value.EncodeSQL(sql)
+	}
 }

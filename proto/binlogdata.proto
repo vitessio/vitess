@@ -132,6 +132,14 @@ message Filter {
   repeated Rule rules = 1;
 }
 
+// OnDDLAction lists the possible actions for DDLs.
+enum OnDDLAction {
+  IGNORE = 0;
+  STOP = 1;
+  EXEC = 2;
+  EXEC_IGNORE = 3;
+}
+
 // BinlogSource specifies the source  and filter parameters for
 // Filtered Replication. It currently supports a keyrange
 // or a list of tables.
@@ -154,6 +162,9 @@ message BinlogSource {
   // filter is set if we're using the generalized representation
   // for the filter.
   Filter filter = 6;
+
+  // on_ddl specifies the action to be taken when a DDL is encountered.
+  OnDDLAction on_ddl = 7;
 }
 
 // VEventType enumerates the event types.
