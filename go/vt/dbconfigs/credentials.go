@@ -26,7 +26,10 @@ import (
 	"errors"
 	"flag"
 	"io/ioutil"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
@@ -126,4 +129,16 @@ func WithCredentials(cp *mysql.ConnParams) (*mysql.ConnParams, error) {
 
 func init() {
 	AllCredentialsServers["file"] = &FileCredentialsServer{}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGHUP)
+	go func() {
+		for {
+			<-sigChan
+			fcs, ok := AllCredentialsServers["file"].(*FileCredentialsServer)
+			if ok {
+				fcs.dbCredentials = nil
+			}
+		}
+	}()
 }
