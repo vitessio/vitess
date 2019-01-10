@@ -18,6 +18,8 @@ package vreplication
 
 import (
 	"flag"
+	"fmt"
+	"os"
 	"reflect"
 	"testing"
 
@@ -27,47 +29,81 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-const (
-	testCell     = "cell"
-	testKeyspace = "ks"
-	testShard    = "0"
+var (
+	engine    *vstreamer.Engine
+	env       *testenv.Env
+	globalFBC = &fakeBinlogClient{}
 )
 
-// This file provides support functions for tests.
-// It's capable of creating a single unsharded keyspace
-// and allows you to add various tablet types.
+func init() {
+	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+		return &fakeTabletConn{
+			QueryService: fakes.ErrorQueryService,
+			tablet:       tablet,
+		}, nil
+	})
+	flag.Set("tablet_protocol", "test")
+
+	binlogplayer.RegisterClientFactory("test", func() binlogplayer.Client { return globalFBC })
+	flag.Set("binlog_player_protocol", "test")
+}
+
+func TestMain(m *testing.M) {
+	flag.Parse() // Do not remove this comment, import into google3 depends on it
+
+	if testing.Short() {
+		os.Exit(m.Run())
+	}
+
+	exitCode := func() int {
+		var err error
+		env, err = testenv.Init()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+		defer env.Close()
+
+		// engine cannot be initialized in testenv because it introduces
+		// circular dependencies.
+		engine = vstreamer.NewEngine(env.SrvTopo, env.SchemaEngine)
+		engine.InitDBConfig(env.Dbcfgs)
+		engine.Open(env.KeyspaceName, env.Cells[0])
+		defer engine.Close()
+
+		return m.Run()
+	}()
+	os.Exit(exitCode)
+}
+
+func resetBinlogClient() {
+	globalFBC = &fakeBinlogClient{}
+}
 
 //--------------------------------------
 // Topos and tablets
 
-func createTopo() *topo.Server {
-	ts := memorytopo.NewServer(testCell)
-	ctx := context.Background()
-	if err := ts.CreateKeyspace(ctx, testKeyspace, &topodatapb.Keyspace{}); err != nil {
-		panic(err)
-	}
-	if err := ts.CreateShard(ctx, testKeyspace, testShard); err != nil {
-		panic(err)
-	}
-	return ts
-}
-
-func addTablet(ts *topo.Server, id int, shard string, tabletType topodatapb.TabletType, serving, healthy bool) *topodatapb.Tablet {
+func addTablet(id int, shard string, tabletType topodatapb.TabletType, serving, healthy bool) *topodatapb.Tablet {
 	t := newTablet(id, shard, tabletType, serving, healthy)
-	if err := ts.CreateTablet(context.Background(), t); err != nil {
+	if err := env.TopoServ.CreateTablet(context.Background(), t); err != nil {
 		panic(err)
 	}
 	return t
+}
+
+func deleteTablet(t *topodatapb.Tablet) {
+	env.TopoServ.DeleteTablet(context.Background(), t.Alias)
 }
 
 func newTablet(id int, shard string, tabletType topodatapb.TabletType, serving, healthy bool) *topodatapb.Tablet {
@@ -85,11 +121,11 @@ func newTablet(id int, shard string, tabletType topodatapb.TabletType, serving, 
 	}
 	return &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
-			Cell: testCell,
+			Cell: env.Cells[0],
 			Uid:  uint32(id),
 		},
-		Keyspace: testKeyspace,
-		Shard:    testShard,
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
 		KeyRange: kr,
 		Type:     tabletType,
 		Tags: map[string]string{
@@ -132,6 +168,11 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*quer
 	return nil
 }
 
+// VStream directly calls into the pre-initialized engine.
+func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	return engine.Stream(ctx, startPos, filter, send)
+}
+
 //--------------------------------------
 // Binlog Client to TabletManager
 
@@ -143,11 +184,6 @@ type fakeBinlogClient struct {
 	lastTables   []string
 	lastKeyRange *topodatapb.KeyRange
 	lastCharset  *binlogdatapb.Charset
-}
-
-func newFakeBinlogClient() *fakeBinlogClient {
-	globalFBC = &fakeBinlogClient{}
-	return globalFBC
 }
 
 func (fbc *fakeBinlogClient) Dial(tablet *topodatapb.Tablet) error {
@@ -198,37 +234,18 @@ func (t *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
 	return nil, t.ctx.Err()
 }
 
-func expectFBCRequest(t *testing.T, fbc *fakeBinlogClient, tablet *topodatapb.Tablet, pos string, tables []string, kr *topodatapb.KeyRange) {
+func expectFBCRequest(t *testing.T, tablet *topodatapb.Tablet, pos string, tables []string, kr *topodatapb.KeyRange) {
 	t.Helper()
-	if !proto.Equal(tablet, fbc.lastTablet) {
-		t.Errorf("Request tablet: %v, want %v", fbc.lastTablet, tablet)
+	if !proto.Equal(tablet, globalFBC.lastTablet) {
+		t.Errorf("Request tablet: %v, want %v", globalFBC.lastTablet, tablet)
 	}
-	if pos != fbc.lastPos {
-		t.Errorf("Request pos: %v, want %v", fbc.lastPos, pos)
+	if pos != globalFBC.lastPos {
+		t.Errorf("Request pos: %v, want %v", globalFBC.lastPos, pos)
 	}
-	if !reflect.DeepEqual(tables, fbc.lastTables) {
-		t.Errorf("Request tables: %v, want %v", fbc.lastTables, tables)
+	if !reflect.DeepEqual(tables, globalFBC.lastTables) {
+		t.Errorf("Request tables: %v, want %v", globalFBC.lastTables, tables)
 	}
-	if !proto.Equal(kr, fbc.lastKeyRange) {
-		t.Errorf("Request KeyRange: %v, want %v", fbc.lastKeyRange, kr)
+	if !proto.Equal(kr, globalFBC.lastKeyRange) {
+		t.Errorf("Request KeyRange: %v, want %v", globalFBC.lastKeyRange, kr)
 	}
-}
-
-//--------------------------------------
-// init
-
-// globalFBC is set by newFakeBinlogClient, which is then returned by the client factory below.
-var globalFBC *fakeBinlogClient
-
-func init() {
-	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
-		return &fakeTabletConn{
-			QueryService: fakes.ErrorQueryService,
-			tablet:       tablet,
-		}, nil
-	})
-	flag.Set("tablet_protocol", "test")
-
-	binlogplayer.RegisterClientFactory("test", func() binlogplayer.Client { return globalFBC })
-	flag.Set("binlog_player_protocol", "test")
 }

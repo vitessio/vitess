@@ -138,6 +138,9 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			vevents := bufferedEvents
 			bufferedEvents = nil
 			curSize = 0
+			if len(vevents) == 3 && vevents[0].Type == binlogdatapb.VEventType_GTID && vevents[1].Type == binlogdatapb.VEventType_BEGIN && vevents[2].Type == binlogdatapb.VEventType_COMMIT {
+				vevents = vevents[:1]
+			}
 			return vs.send(vevents)
 		case binlogdatapb.VEventType_ROW:
 			// ROW events happen inside transactions. So, we can chunk them.

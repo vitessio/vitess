@@ -46,6 +46,7 @@ type Env struct {
 	cluster *vttest.LocalCluster
 
 	KeyspaceName string
+	ShardName    string
 	Cells        []string
 
 	TopoServ     *topo.Server
@@ -65,6 +66,7 @@ func (checker) CheckMySQL() {}
 func Init() (*Env, error) {
 	te := &Env{
 		KeyspaceName: "vttest",
+		ShardName:    "0",
 		Cells:        []string{"cell1"},
 	}
 
@@ -72,6 +74,9 @@ func Init() (*Env, error) {
 	te.TopoServ = memorytopo.NewServer(te.Cells...)
 	if err := te.TopoServ.CreateKeyspace(ctx, te.KeyspaceName, &topodatapb.Keyspace{}); err != nil {
 		return nil, err
+	}
+	if err := te.TopoServ.CreateShard(ctx, te.KeyspaceName, te.ShardName); err != nil {
+		panic(err)
 	}
 	te.SrvTopo = srvtopo.NewResilientServer(te.TopoServ, "TestTopo")
 
