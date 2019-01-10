@@ -326,6 +326,11 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed due to rule: %s", desc)
 	}
 
+	// Skip ACL check for queries against the dummy dual table
+	if qre.plan.TableName().String() == "dual" {
+		return nil
+	}
+
 	// Skip the ACL check if the connecting user is an exempted superuser.
 	// Necessary to whitelist e.g. direct vtworker access.
 	if qre.tsv.qe.exemptACL != nil && qre.tsv.qe.exemptACL.IsMember(&querypb.VTGateCallerID{Username: username}) {

@@ -1706,6 +1706,53 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
+	tableacl.Register(aclName, &simpleacl.Factory{})
+	tableacl.SetDefaultACL(aclName)
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	username := "Sleve McDichael"
+	callerID := &querypb.VTGateCallerID{
+		Username: username,
+	}
+	ctx := callerid.NewContext(context.Background(), nil, callerID)
+
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{},
+	}
+
+	if err := tableacl.InitFromProto(config); err != nil {
+		t.Fatalf("unable to load tableacl config, error: %v", err)
+	}
+
+	// enable Config.StrictTableAcl
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	query := "select * from test_table where 1 != 1"
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	defer tsv.StopService()
+	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	// query should fail because nobody has read access to test_table
+	_, err := qre.Execute()
+	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
+		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
+	}
+	wanterr := "table acl error"
+	if !strings.Contains(err.Error(), wanterr) {
+		t.Fatalf("qre.Execute: %v, want %s", err, wanterr)
+	}
+
+	// table acl should be ignored when querying against dual table
+	query = "select @@version_comment from dual limit 1"
+	ctx = callerid.NewContext(context.Background(), nil, callerID)
+	qre = newTestQueryExecutor(ctx, tsv, query, 0)
+	_, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute: %v, want: nil", err)
+	}
+}
+
 func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
 	tableacl.Register(aclName, &simpleacl.Factory{})
@@ -2110,6 +2157,20 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("0")},
+			},
+		},
+		"select @@version_comment from dual where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.VarChar,
+			}},
+		},
+		"select @@version_comment from dual limit 1": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.VarChar,
+			}},
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{sqltypes.NewVarBinary("fakedb server")},
 			},
 		},
 		"show variables like 'binlog_format'": {
