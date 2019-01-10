@@ -19,8 +19,10 @@ package tabletserver
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -188,53 +190,53 @@ func TestWithInnerTests(outerT *testing.T) {
 	const RO = AcceptingReadOnly
 	const NS = NotServing
 	const WithTX = true
-	const NoTx = false
+	const SansTX = false
 
 	tests := []TestCase{
 		// Start from RW and test all single hop transitions with and without tx
-		{RW, []StateChange{{NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
-		{RW, []StateChange{{RW, assertIsInstant()}}, NoTx, assertEndStateIs(RW),},
-		{RW, []StateChange{{RO, assertIsInstant()}}, NoTx, assertEndStateIs(RO),},
+		{RW, []StateChange{{NS, assertIsInstant()}}, SansTX, assertEndStateIs(NS),},
+		{RW, []StateChange{{RW, assertIsInstant()}}, SansTX, assertEndStateIs(RW),},
+		{RW, []StateChange{{RO, assertIsInstant()}}, SansTX, assertEndStateIs(RO),},
 		{RW, []StateChange{{NS, assertTakesTime()}}, WithTX, assertEndStateIs(NS),},
 		{RW, []StateChange{{RW, assertIsInstant()}}, WithTX, assertEndStateIs(RW),},
 		{RW, []StateChange{{RO, assertTakesTime()}}, WithTX, assertEndStateIs(RO),},
 
 		// Start from RW and test all transitions with and without tx, plus a concurrent Stop()
-		{RW, []StateChange{{NS, assertIsInstant()}, {NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
-		{RW, []StateChange{{RW, assertIsInstant()}, {NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
-		{RW, []StateChange{{RO, assertIsInstant()}, {NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
+		{RW, []StateChange{{NS, assertIsInstant()}, {NS, assertIsInstant()}}, SansTX, assertEndStateIs(NS),},
+		{RW, []StateChange{{RW, assertIsInstant()}, {NS, assertIsInstant()}}, SansTX, assertEndStateIs(NS),},
+		{RW, []StateChange{{RO, assertIsInstant()}, {NS, assertIsInstant()}}, SansTX, assertEndStateIs(NS),},
 		{RW, []StateChange{{NS, assertTakesTime()}, {NS, assertTakesTime()}}, WithTX, assertEndStateIs(NS),},
 		{RW, []StateChange{{RW, assertIsInstant()}, {NS, assertTakesTime()}}, WithTX, assertEndStateIs(NS),},
 		{RW, []StateChange{{RO, assertTakesTime()}, {NS, assertTakesTime()}}, WithTX, assertEndStateIs(NS),},
 
 		// Start from RW and test all transitions with and without tx, plus a concurrent ReadOnly()
-		{RW, []StateChange{{NS, assertIsInstant()}, {RO, assertIsInstant()}}, NoTx, assertEndStateIs(RO),},
-		{RW, []StateChange{{RW, assertIsInstant()}, {RO, assertIsInstant()}}, NoTx, assertEndStateIs(RO),},
-		{RW, []StateChange{{RO, assertIsInstant()}, {RO, assertIsInstant()}}, NoTx, assertEndStateIs(RO),},
+		{RW, []StateChange{{NS, assertIsInstant()}, {RO, assertIsInstant()}}, SansTX, assertEndStateIs(RO),},
+		{RW, []StateChange{{RW, assertIsInstant()}, {RO, assertIsInstant()}}, SansTX, assertEndStateIs(RO),},
+		{RW, []StateChange{{RO, assertIsInstant()}, {RO, assertIsInstant()}}, SansTX, assertEndStateIs(RO),},
 		{RW, []StateChange{{NS, assertTakesTime()}, {RO, assertTakesTime()}}, WithTX, assertEndStateIs(RO),},
 		{RW, []StateChange{{RW, assertIsInstant()}, {RO, assertTakesTime()}}, WithTX, assertEndStateIs(RO),},
 		{RW, []StateChange{{RO, assertTakesTime()}, {RO, assertTakesTime()}}, WithTX, assertEndStateIs(RO),},
 
 		// Start from RO and test all single hop transitions with and without tx
-		{RO, []StateChange{{NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
-		{RO, []StateChange{{RW, assertIsInstant()}}, NoTx, assertEndStateIs(RW),},
-		{RO, []StateChange{{RO, assertIsInstant()}}, NoTx, assertEndStateIs(RO),},
+		{RO, []StateChange{{NS, assertIsInstant()}}, SansTX, assertEndStateIs(NS),},
+		{RO, []StateChange{{RW, assertIsInstant()}}, SansTX, assertEndStateIs(RW),},
+		{RO, []StateChange{{RO, assertIsInstant()}}, SansTX, assertEndStateIs(RO),},
 		{RO, []StateChange{{NS, assertIsInstant()}}, WithTX, assertEndStateIs(NS),},
 		{RO, []StateChange{{RW, assertIsInstant()}}, WithTX, assertEndStateIs(RW),},
 		{RO, []StateChange{{RO, assertIsInstant()}}, WithTX, assertEndStateIs(RO),},
 
 		// Start from RO and test all transitions with and without tx, plus a concurrent Stop()
-		{RO, []StateChange{{NS, assertIsInstant()}, {NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
-		{RO, []StateChange{{RW, assertIsInstant()}, {NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
-		{RO, []StateChange{{RO, assertIsInstant()}, {NS, assertIsInstant()}}, NoTx, assertEndStateIs(NS),},
+		{RO, []StateChange{{NS, assertIsInstant()}, {NS, assertIsInstant()}}, SansTX, assertEndStateIs(NS),},
+		{RO, []StateChange{{RW, assertIsInstant()}, {NS, assertIsInstant()}}, SansTX, assertEndStateIs(NS),},
+		{RO, []StateChange{{RO, assertIsInstant()}, {NS, assertIsInstant()}}, SansTX, assertEndStateIs(NS),},
 		{RO, []StateChange{{NS, assertIsInstant()}, {NS, assertIsInstant()}}, WithTX, assertEndStateIs(NS),},
 		{RO, []StateChange{{RW, assertIsInstant()}, {NS, assertIsInstant()}}, WithTX, assertEndStateIs(NS),},
 		{RO, []StateChange{{RO, assertIsInstant()}, {NS, assertIsInstant()}}, WithTX, assertEndStateIs(NS),},
 
 		// Start from RO and test all transitions with and without tx, plus a concurrent ReadWrite()
-		{RO, []StateChange{{NS, assertIsInstant()}, {RW, assertIsInstant()}}, NoTx, assertEndStateIs(RW),},
-		{RO, []StateChange{{RW, assertIsInstant()}, {RW, assertIsInstant()}}, NoTx, assertEndStateIs(RW),},
-		{RO, []StateChange{{RO, assertIsInstant()}, {RW, assertIsInstant()}}, NoTx, assertEndStateIs(RW),},
+		{RO, []StateChange{{NS, assertIsInstant()}, {RW, assertIsInstant()}}, SansTX, assertEndStateIs(RW),},
+		{RO, []StateChange{{RW, assertIsInstant()}, {RW, assertIsInstant()}}, SansTX, assertEndStateIs(RW),},
+		{RO, []StateChange{{RO, assertIsInstant()}, {RW, assertIsInstant()}}, SansTX, assertEndStateIs(RW),},
 		{RO, []StateChange{{NS, assertIsInstant()}, {RW, assertIsInstant()}}, WithTX, assertEndStateIs(RW),},
 		{RO, []StateChange{{RW, assertIsInstant()}, {RW, assertIsInstant()}}, WithTX, assertEndStateIs(RW),},
 		{RO, []StateChange{{RO, assertIsInstant()}, {RW, assertIsInstant()}}, WithTX, assertEndStateIs(RW),},
@@ -242,6 +244,7 @@ func TestWithInnerTests(outerT *testing.T) {
 
 	for _, test := range tests {
 		outerT.Run(test.String(), func(t *testing.T) {
+
 			db := setUpQueryExecutorTest(t)
 			defer db.Close()
 			te := setupTxEngine(db)
@@ -253,19 +256,15 @@ func TestWithInnerTests(outerT *testing.T) {
 				startTransaction(te, t)
 			}
 
+			wg := sync.WaitGroup{}
 			for _, change := range test.stateChanges {
+				wg.Add(1)
 				go func() {
+					defer wg.Done()
 					start := time.Now()
 
 					failIfError(t,
 						changeState(te, change.newState))
-
-					ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second))
-
-					failIfError(t,
-						te.BlockUntilEndOfTransition(ctx))
-
-					cancel()
 
 					failIfError(t,
 						change.timeAssertion(start))
@@ -275,12 +274,8 @@ func TestWithInnerTests(outerT *testing.T) {
 				time.Sleep(10 * time.Millisecond)
 			}
 
-			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second))
-
-			failIfError(t,
-				te.BlockUntilEndOfTransition(ctx))
-
-			cancel()
+			// Let's wait for all transitions to wrap up
+			wg.Wait()
 
 			failIfError(t,
 				test.stateAssertion(te.state))

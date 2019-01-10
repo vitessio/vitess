@@ -180,6 +180,7 @@ func (te *TxEngine) Stop() error {
 	case Transitioning:
 		te.nextState = NotServing
 		te.stateLock.Unlock()
+		te.blockUntilEndOfTransition()
 		return nil
 
 	default:
@@ -191,19 +192,23 @@ func (te *TxEngine) Stop() error {
 func (te *TxEngine) AcceptReadWrite() error {
 	te.beginRequests.Wait()
 	te.stateLock.Lock()
-	defer te.stateLock.Unlock()
+
 	switch te.state {
 	case AcceptingReadAndWrite:
 		// Nothing to do
+		te.stateLock.Unlock()
 		return nil
 
 	case NotServing:
 		te.Open()
 		te.state = AcceptingReadAndWrite
+		te.stateLock.Unlock()
 		return nil
 
 	case Transitioning:
 		te.nextState = AcceptingReadAndWrite
+		te.stateLock.Unlock()
+		te.blockUntilEndOfTransition()
 		return nil
 
 	case AcceptingReadOnly:
@@ -211,6 +216,7 @@ func (te *TxEngine) AcceptReadWrite() error {
 		te.close(true)
 		te.Open()
 		te.state = AcceptingReadAndWrite
+		te.stateLock.Unlock()
 		return nil
 
 	default:
@@ -239,6 +245,7 @@ func (te *TxEngine) AcceptReadOnly() error {
 	case Transitioning:
 		te.nextState = AcceptingReadOnly
 		te.stateLock.Unlock()
+		te.blockUntilEndOfTransition()
 		return nil
 
 	default:
@@ -277,14 +284,10 @@ func (te *TxEngine) unknownStateError() error {
 	return vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown state %v", te.state)
 }
 
-// BlockUntilEndOfTransition blocks the current goroutine until it has finished transitioning into a new state.
-// If no transition is in progress, it returns immediately.
-func (te *TxEngine) BlockUntilEndOfTransition(ctx context.Context) error {
+func (te *TxEngine) blockUntilEndOfTransition() error {
 	select {
 	case <-te.transitionSignal:
 		return nil
-	case <-ctx.Done():
-		return vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "transition did not finish in a timely fashion")
 	}
 }
 
