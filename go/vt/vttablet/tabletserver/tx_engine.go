@@ -79,15 +79,15 @@ type TxEngine struct {
 
 	// beginRequests is used to make sure that we do not make a state
 	// transition while creating new transactions
-	beginRequests    sync.WaitGroup
+	beginRequests sync.WaitGroup
 
 	dbconfigs *dbconfigs.DBConfigs
 
-	isOpen, twopcEnabled bool
-	shutdownGracePeriod  time.Duration
-	coordinatorAddress   string
-	abandonAge           time.Duration
-	ticks                *timer.Timer
+	twopcEnabled        bool
+	shutdownGracePeriod time.Duration
+	coordinatorAddress  string
+	abandonAge          time.Duration
+	ticks               *timer.Timer
 
 	txPool       *TxPool
 	preparedPool *TxPreparedPool
@@ -342,25 +342,20 @@ func (te *TxEngine) Init() error {
 // Open opens the TxEngine. If 2pc is enabled, it restores
 // all previously prepared transactions from the redo log.
 func (te *TxEngine) Open() {
-	if te.isOpen {
-		return
-	}
 	te.txPool.Open(te.dbconfigs.AppWithDB(), te.dbconfigs.DbaWithDB(), te.dbconfigs.AppDebugWithDB())
-	if !te.twopcEnabled {
-		te.isOpen = true
-		return
-	}
 
-	te.twoPC.Open(te.dbconfigs)
-	if err := te.prepareFromRedo(); err != nil {
-		// If this operation fails, we choose to raise an alert and
-		// continue anyway. Serving traffic is considered more important
-		// than blocking everything for the sake of a few transactions.
-		tabletenv.InternalErrors.Add("TwopcResurrection", 1)
-		log.Errorf("Could not prepare transactions: %v", err)
+	if te.twopcEnabled {
+
+		te.twoPC.Open(te.dbconfigs)
+		if err := te.prepareFromRedo(); err != nil {
+			// If this operation fails, we choose to raise an alert and
+			// continue anyway. Serving traffic is considered more important
+			// than blocking everything for the sake of a few transactions.
+			tabletenv.InternalErrors.Add("TwopcResurrection", 1)
+			log.Errorf("Could not prepare transactions: %v", err)
+		}
+		te.startWatchdog()
 	}
-	te.startWatchdog()
-	te.isOpen = true
 }
 
 // CloseRudely will disregard common rules for when to kill transactions
@@ -379,9 +374,6 @@ func (te *TxEngine) StopImmediately() {
 // the transactions are rolled back if they're not resolved
 // by that time.
 func (te *TxEngine) close(immediate bool) {
-	if !te.isOpen {
-		return
-	}
 	// Shut down functions are idempotent.
 	// No need to check if 2pc is enabled.
 	te.stopWatchdog()
@@ -428,7 +420,6 @@ func (te *TxEngine) close(immediate bool) {
 
 	te.txPool.Close()
 	te.twoPC.Close()
-	te.isOpen = false
 }
 
 // prepareFromRedo replays and prepares the transactions
