@@ -69,6 +69,7 @@ type MysqlDaemon interface {
 
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
+	GetPrimaryKeyColumns(dbName, table string) ([]string, error)
 	PreflightSchemaChange(dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
 	ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 

@@ -92,7 +92,7 @@ func buildPlayerPlan(filter *binlogdatapb.Filter) (*playerPlan, error) {
 			continue
 		}
 		plan.vstreamFilter.Rules[i] = sendRule
-		plan.tablePlans[rule.Match] = tplan
+		plan.tablePlans[sendRule.Match] = tplan
 	}
 	return plan, nil
 }
@@ -129,7 +129,9 @@ func buildTablePlan(rule *binlogdatapb.Rule) (*binlogdatapb.Rule, *tablePlan, er
 		return sendRule, &tablePlan{name: rule.Match}, nil
 	}
 
-	tplan := &tablePlan{}
+	tplan := &tablePlan{
+		name: rule.Match,
+	}
 	sendSelect := &sqlparser.Select{
 		From:  sel.From,
 		Where: sel.Where,
@@ -159,7 +161,7 @@ func buildTablePlan(rule *binlogdatapb.Rule) (*binlogdatapb.Rule, *tablePlan, er
 		}
 	}
 	sendRule := &binlogdatapb.Rule{
-		Match:  rule.Match,
+		Match:  fromTable.String(),
 		Filter: sqlparser.String(sendSelect),
 	}
 	return sendRule, tplan, nil

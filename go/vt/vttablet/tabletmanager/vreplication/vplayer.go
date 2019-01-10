@@ -44,7 +44,7 @@ type vplayer struct {
 	sourceTablet *topodatapb.Tablet
 	stats        *binlogplayer.Stats
 	dbClient     binlogplayer.DBClient
-	mysqld       *mysqlctl.Mysqld
+	mysqld       mysqlctl.MysqlDaemon
 
 	pos     mysql.Position
 	stopPos mysql.Position
@@ -54,7 +54,7 @@ type vplayer struct {
 	retryDelay time.Duration
 }
 
-func newVPlayer(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topodatapb.Tablet, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld *mysqlctl.Mysqld) *vplayer {
+func newVPlayer(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topodatapb.Tablet, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon) *vplayer {
 	return &vplayer{
 		id:           id,
 		source:       source,
@@ -63,6 +63,7 @@ func newVPlayer(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topo
 		dbClient:     dbClient,
 		mysqld:       mysqld,
 		retryDelay:   1 * time.Second,
+		tplans:       make(map[string]*tablePlan),
 	}
 }
 
@@ -107,6 +108,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	vp.pplan = plan
 
 	vsClient, err := tabletconn.GetDialer()(vp.sourceTablet, grpcclient.FailFast(false))
 	if err != nil {
@@ -133,6 +135,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 }
 
 func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
+	fmt.Printf("applying: %v\n", event)
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		pos, err := mysql.DecodePosition(event.Gtid)
@@ -279,7 +282,7 @@ func (vp *vplayer) updatePlan(fieldEvent *binlogdatapb.FieldEvent) error {
 
 func (vp *vplayer) applyRowEvent(rowEvent *binlogdatapb.RowEvent) error {
 	tplan := vp.tplans[rowEvent.TableName]
-	if tplan != nil {
+	if tplan == nil {
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
 	for _, change := range rowEvent.RowChanges {
@@ -316,9 +319,9 @@ func (vp *vplayer) applyRowChange(tplan *tablePlan, rowChange *binlogdatapb.RowC
 func (vp *vplayer) generateInsert(tplan *tablePlan, after []sqltypes.Value) string {
 	sql := sqlparser.NewTrackedBuffer(nil)
 	if tplan.onInsert == insertIgnore {
-		sql.Myprintf("insert ignore into %s set ", sqlparser.NewTableIdent(tplan.name))
+		sql.Myprintf("insert ignore into %v set ", sqlparser.NewTableIdent(tplan.name))
 	} else {
-		sql.Myprintf("insert into %s set ", sqlparser.NewTableIdent(tplan.name))
+		sql.Myprintf("insert into %v set ", sqlparser.NewTableIdent(tplan.name))
 	}
 	vp.writeInsertValues(sql, tplan, after)
 	if tplan.onInsert == insertOndup {
@@ -357,7 +360,7 @@ func (vp *vplayer) generateDelete(tplan *tablePlan, before []sqltypes.Value) str
 func (vp *vplayer) writeInsertValues(sql *sqlparser.TrackedBuffer, tplan *tablePlan, after []sqltypes.Value) {
 	separator := ""
 	for _, cExpr := range tplan.colExprs {
-		sql.Myprintf("%s%s=", separator, cExpr.colname)
+		sql.Myprintf("%s%v=", separator, cExpr.colname)
 		if separator == "" {
 			separator = ", "
 		}
@@ -375,7 +378,7 @@ func (vp *vplayer) writeUpdateValues(sql *sqlparser.TrackedBuffer, tplan *tableP
 		if cExpr.isGrouped {
 			continue
 		}
-		sql.Myprintf("%s%s=", separator, cExpr.colname)
+		sql.Myprintf("%s%v=", separator, cExpr.colname)
 		if separator == "" {
 			separator = ", "
 		}
@@ -412,7 +415,7 @@ func (vp *vplayer) writeUpdateValues(sql *sqlparser.TrackedBuffer, tplan *tableP
 func (vp *vplayer) writeWhereValues(sql *sqlparser.TrackedBuffer, tplan *tablePlan, before []sqltypes.Value) {
 	separator := ""
 	for _, cExpr := range tplan.pkCols {
-		sql.Myprintf("%s%s=", separator, cExpr.colname)
+		sql.Myprintf("%s%v=", separator, cExpr.colname)
 		if separator == "" {
 			separator = " AND "
 		}
