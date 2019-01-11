@@ -266,7 +266,7 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 		return 0, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can't accept new transactions in state %v", te.state)
 	}
 
-	isWriteTransaction := options.TransactionIsolation != querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
+	isWriteTransaction := options == nil || options.TransactionIsolation != querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
 	if te.state == AcceptingReadOnly && isWriteTransaction {
 		te.stateLock.Unlock()
 		return 0, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can only accept read-only transactions in current state")
