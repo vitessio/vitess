@@ -86,7 +86,15 @@ func (agent *ActionAgent) LockTables(ctx context.Context) error {
 func (agent *ActionAgent) lockTablesUsingLockTables(conn *dbconnpool.DBConnection) error {
 	glog.Warningf("failed to lock tables with FTWRL - falling back to LOCK TABLES")
 
-	tables := agent.QueryServiceControl.SchemaEngine().GetSchema()
+	// Ensure schema engine is Open. If vttablet came up in a non_serving role,
+	// the schema engine may not have been initialized. Open() is idempotent, so this
+	// is always safe
+	se := agent.QueryServiceControl.SchemaEngine()
+	if err := se.Open(); err != nil {
+		return err
+	}
+
+	tables := se.GetSchema()
 	tableNames := make([]string, 0, len(tables))
 	for name := range tables {
 		if name == "dual" {
