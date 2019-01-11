@@ -40,7 +40,7 @@ var (
 	dbCredentialsServer = flag.String("db-credentials-server", "file", "db credentials server type (use 'file' for the file implementation)")
 
 	// 'file' implementation flags
-	dbCredentialsFile = flag.String("db-credentials-file", "", "db credentials file")
+	dbCredentialsFile = flag.String("db-credentials-file", "", "db credentials file; send SIGHUP to reload this file")
 
 	// ErrUnknownUser is returned by credential server when the
 	// user doesn't exist
@@ -137,7 +137,9 @@ func init() {
 			<-sigChan
 			fcs, ok := AllCredentialsServers["file"].(*FileCredentialsServer)
 			if ok {
+				fcs.mu.Lock()
 				fcs.dbCredentials = nil
+				fcs.mu.Unlock()
 			}
 		}
 	}()
