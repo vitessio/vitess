@@ -329,7 +329,6 @@ func assertEndStateIs(expected TxEngineState) func(actual TxEngineState) error {
 }
 
 func startTransaction(te *TxEngine, t *testing.T) {
-	c, err := te.txPool.LocalBegin(context.Background(), &querypb.ExecuteOptions{})
+	_, err := te.Begin(context.Background(), &querypb.ExecuteOptions{})
 	failIfError(t, err)
-	c.Recycle()
 }

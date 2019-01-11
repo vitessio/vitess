@@ -62,7 +62,9 @@ func (state TxEngineState) String() string {
 	return names[state]
 }
 
-// TxEngine handles transactions.
+// TxEngine is responsible for handling the tx-pool and keeping read-write, read-only or not-serving
+// states. It will start and shut down the underlying tx-pool as required.
+// It does this in a concurrently safe way.
 type TxEngine struct {
 	// the following four fields are interconnected. `state` and `nextState` should be protected by the
 	// `stateLock`
