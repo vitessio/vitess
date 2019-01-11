@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -149,17 +150,22 @@ type TxType int
 
 const (
 	NoTx TxType = iota
-	ReTx
-	WrTx
+	ReadOnlyAccepted
+	WriteAccepted
+	ReadOnlyRejected
+	WriteRejected
 )
 
 func (t TxType) String() string {
 	names := [...]string{
-		"no",
-		"read only",
-		"write",}
+		"no transaction",
+		"read only transaction accepted",
+		"write transaction accepted",
+		"read only transaction rejected",
+		"write transaction rejected",
+	}
 
-	if t < NoTx || t > WrTx {
+	if t < NoTx || t > WriteRejected {
 		return "unknown"
 	}
 
@@ -179,8 +185,6 @@ func (test TestCase) String() string {
 	sb.WriteString(test.startState.String())
 	sb.WriteString(" with ")
 	sb.WriteString(test.tx.String())
-
-	sb.WriteString(" transaction")
 
 	for _, change := range test.stateChanges {
 		sb.WriteString(" change state to ")
@@ -221,15 +225,27 @@ func TestWithInnerTests(outerT *testing.T) {
 
 		{AcceptingReadAndWrite, []StateChange{
 			{NotServing, assertTakesTime()}},
-		WrTx, assertEndStateIs(NotServing),},
+			WriteAccepted, assertEndStateIs(NotServing),},
 
 		{AcceptingReadAndWrite, []StateChange{
 			{AcceptingReadAndWrite, assertIsInstant()}},
-		WrTx, assertEndStateIs(AcceptingReadAndWrite),},
+			WriteAccepted, assertEndStateIs(AcceptingReadAndWrite),},
 
 		{AcceptingReadAndWrite, []StateChange{
 			{AcceptingReadOnly, assertTakesTime()}},
-		WrTx, assertEndStateIs(AcceptingReadOnly),},
+			WriteAccepted, assertEndStateIs(AcceptingReadOnly),},
+
+		{AcceptingReadAndWrite, []StateChange{
+			{NotServing, assertTakesTime()}},
+			ReadOnlyAccepted, assertEndStateIs(NotServing),},
+
+		{AcceptingReadAndWrite, []StateChange{
+			{AcceptingReadAndWrite, assertIsInstant()}},
+			ReadOnlyAccepted, assertEndStateIs(AcceptingReadAndWrite),},
+
+		{AcceptingReadAndWrite, []StateChange{
+			{AcceptingReadOnly, assertTakesTime()}},
+			ReadOnlyAccepted, assertEndStateIs(AcceptingReadOnly),},
 
 
 		// Start from RW and test all transitions with and without tx, plus a concurrent Stop()
@@ -251,17 +267,17 @@ func TestWithInnerTests(outerT *testing.T) {
 		{AcceptingReadAndWrite, []StateChange{
 			{NotServing, assertTakesTime()},
 			{NotServing, assertTakesTime()}},
-		WrTx, assertEndStateIs(NotServing),},
+			WriteAccepted, assertEndStateIs(NotServing),},
 
 		{AcceptingReadAndWrite, []StateChange{
 			{AcceptingReadAndWrite, assertIsInstant()},
 			{NotServing, assertTakesTime()}},
-		WrTx, assertEndStateIs(NotServing),},
+			WriteAccepted, assertEndStateIs(NotServing),},
 
 		{AcceptingReadAndWrite, []StateChange{
 			{AcceptingReadOnly, assertTakesTime()},
 			{NotServing, assertTakesTime()}},
-		WrTx, assertEndStateIs(NotServing),},
+			WriteAccepted, assertEndStateIs(NotServing),},
 
 
 		// Start from RW and test all transitions with and without tx, plus a concurrent ReadOnly()
@@ -283,17 +299,17 @@ func TestWithInnerTests(outerT *testing.T) {
 		{AcceptingReadAndWrite, []StateChange{
 			{NotServing, assertTakesTime()},
 			{AcceptingReadOnly, assertTakesTime()}},
-		WrTx, assertEndStateIs(AcceptingReadOnly),},
+			WriteAccepted, assertEndStateIs(AcceptingReadOnly),},
 
 		{AcceptingReadAndWrite, []StateChange{
 			{AcceptingReadAndWrite, assertIsInstant()},
 			{AcceptingReadOnly, assertTakesTime()}},
-		WrTx, assertEndStateIs(AcceptingReadOnly),},
+			WriteAccepted, assertEndStateIs(AcceptingReadOnly),},
 
 		{AcceptingReadAndWrite, []StateChange{
 			{AcceptingReadOnly, assertTakesTime()},
 			{AcceptingReadOnly, assertTakesTime()}},
-		WrTx, assertEndStateIs(AcceptingReadOnly),},
+			WriteAccepted, assertEndStateIs(AcceptingReadOnly),},
 
 
 		// Start from RO and test all single hop transitions with and without tx
@@ -311,15 +327,15 @@ func TestWithInnerTests(outerT *testing.T) {
 
 		{AcceptingReadOnly, []StateChange{
 			{NotServing, assertIsInstant()}},
-		WrTx, assertEndStateIs(NotServing),},
+			WriteRejected, assertEndStateIs(NotServing),},
 
 		{AcceptingReadOnly, []StateChange{
 			{AcceptingReadAndWrite, assertIsInstant()}},
-		WrTx, assertEndStateIs(AcceptingReadAndWrite),},
+			WriteRejected, assertEndStateIs(AcceptingReadAndWrite),},
 
 		{AcceptingReadOnly, []StateChange{
 			{AcceptingReadOnly, assertIsInstant()}},
-		WrTx, assertEndStateIs(AcceptingReadOnly),},
+			WriteRejected, assertEndStateIs(AcceptingReadOnly),},
 
 
 		// Start from RO and test all transitions with and without tx, plus a concurrent Stop()
@@ -341,18 +357,17 @@ func TestWithInnerTests(outerT *testing.T) {
 		{AcceptingReadOnly, []StateChange{
 			{NotServing, assertIsInstant()},
 			{NotServing, assertIsInstant()}},
-		WrTx, assertEndStateIs(NotServing),},
+			WriteRejected, assertEndStateIs(NotServing),},
 
 		{AcceptingReadOnly, []StateChange{
 			{AcceptingReadAndWrite, assertIsInstant()},
 			{NotServing, assertIsInstant()}},
-		WrTx, assertEndStateIs(NotServing),},
+			WriteRejected, assertEndStateIs(NotServing),},
 
 		{AcceptingReadOnly, []StateChange{
 			{AcceptingReadOnly, assertIsInstant()},
 			{NotServing, assertIsInstant()}},
-		WrTx, assertEndStateIs(NotServing),},
-
+			WriteRejected, assertEndStateIs(NotServing),},
 
 		// Start from RO and test all transitions with and without tx, plus a concurrent ReadWrite()
 		{AcceptingReadOnly, []StateChange{
@@ -373,24 +388,32 @@ func TestWithInnerTests(outerT *testing.T) {
 		{AcceptingReadOnly, []StateChange{
 			{NotServing, assertIsInstant()},
 			{AcceptingReadAndWrite, assertIsInstant()}},
-		WrTx, assertEndStateIs(AcceptingReadAndWrite),},
+			WriteRejected, assertEndStateIs(AcceptingReadAndWrite),},
 
 		{AcceptingReadOnly, []StateChange{
 			{AcceptingReadAndWrite, assertIsInstant()},
 			{AcceptingReadAndWrite, assertIsInstant()}},
-		WrTx, assertEndStateIs(AcceptingReadAndWrite),},
+			WriteRejected, assertEndStateIs(AcceptingReadAndWrite),},
 
 		{AcceptingReadOnly, []StateChange{
 			{AcceptingReadOnly, assertIsInstant()},
 			{AcceptingReadAndWrite, assertIsInstant()}},
-		WrTx, assertEndStateIs(AcceptingReadAndWrite),},
+			WriteRejected, assertEndStateIs(AcceptingReadAndWrite),},
 
+		// Make sure that all transactions are rejected when we are not serving
+		{NotServing, []StateChange{},
+			WriteRejected, assertEndStateIs(NotServing),},
+
+		{NotServing, []StateChange{},
+			ReadOnlyRejected, assertEndStateIs(NotServing),},
 	}
 
 	for _, test := range tests {
 		outerT.Run(test.String(), func(t *testing.T) {
 
 			db := setUpQueryExecutorTest(t)
+			db.AddQuery("set transaction isolation level REPEATABLE READ", &sqltypes.Result{})
+			db.AddQuery("start transaction with consistent snapshot, read only", &sqltypes.Result{})
 			defer db.Close()
 			te := setupTxEngine(db)
 
@@ -400,10 +423,24 @@ func TestWithInnerTests(outerT *testing.T) {
 			switch test.tx {
 			case NoTx:
 				// nothing to do
-			case WrTx:
-				startTransaction(te, t, true)
-			case ReTx:
-				startTransaction(te, t, false)
+			case WriteAccepted:
+				failIfError(t,
+					startTransaction(te, t, true))
+			case ReadOnlyAccepted:
+				failIfError(t,
+					startTransaction(te, t, false))
+			case WriteRejected:
+				err := startTransaction(te, t, true)
+				if err == nil {
+					t.Fatalf("expected an error to be returned when opening write transaction, but got nil")
+				}
+			case ReadOnlyRejected:
+				err := startTransaction(te, t, false)
+				if err == nil {
+					t.Fatalf("expected an error to be returned when opening read transaction, but got nil")
+				}
+			default:
+				  t.Fatalf("don't know how to [%v]", test.tx)
 			}
 
 			wg := sync.WaitGroup{}
@@ -478,7 +515,7 @@ func assertEndStateIs(expected TxEngineState) func(actual TxEngineState) error {
 	}
 }
 
-func startTransaction(te *TxEngine, t *testing.T, writeTransaction bool) {
+func startTransaction(te *TxEngine, t *testing.T, writeTransaction bool) error {
 	options := &querypb.ExecuteOptions{}
 	if writeTransaction {
 		options.TransactionIsolation = querypb.ExecuteOptions_DEFAULT
@@ -486,5 +523,5 @@ func startTransaction(te *TxEngine, t *testing.T, writeTransaction bool) {
 		options.TransactionIsolation = querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
 	}
 	_, err := te.Begin(context.Background(), options)
-	failIfError(t, err)
+	return err
 }
