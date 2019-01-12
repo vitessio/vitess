@@ -69,6 +69,12 @@ type Table struct {
 	Columns []schema.TableColumn
 }
 
+// The filter function needs the ability to perform expression evaluations. This is
+// because the consumer of vstream is not just VPlayer. It can also be a dumb client
+// like a mysql client that's subscribing to changes. This ability to allow users
+// to directly pull events by sending a complex select query. The same reasoning
+// applies to where clauses. For now, only simple functions like hour are supported,
+// but this can be expanded in the future.
 func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error) {
 	result := make([]sqltypes.Value, len(plan.ColExprs))
 	for i, colExpr := range plan.ColExprs {
