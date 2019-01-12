@@ -1,6 +1,6 @@
 #!/bin/bash
 
-version_tag=1.0.4
+version_tag=1.0.5
 
 docker pull vitess/k8s:latest
 docker tag vitess/k8s:latest vitess/k8s:helm-$version_tag
