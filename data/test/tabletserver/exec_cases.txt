@@ -1015,13 +1015,42 @@ options:PassthroughDMLs
   ]
 }
 
+# message multi-value upsert
+"insert into msg(time_scheduled, id, message) values(1, 2, 'aa'), (3, 4, 'bb') on duplicate key update message = values(message)"
+{
+  "PlanID": "INSERT_MESSAGE",
+  "TableName": "msg",
+  "Permissions": [
+    {
+      "TableName": "msg",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "insert into msg(time_scheduled, id, message) values (1, 2, 'aa'), (3, 4, 'bb') on duplicate key update message = values(message)",
+  "OuterQuery": "insert into msg(time_scheduled, id, message, time_next, time_created, epoch) values (1, 2, 'aa', 1, :#time_now, 0), (3, 4, 'bb', 3, :#time_now, 0) on duplicate key update message = values(message)",
+  "PKValues": [
+    [
+      1,
+      3
+    ],
+    [
+      2,
+      4
+    ]
+  ]
+}
+
 # message insert subquery
 "insert into msg(time_scheduled, id, message) select * from a"
 "subquery not allowed for message table: msg"
 
-# message insert upsert key
-"insert into msg(time_scheduled, id, message) Values(1, 2, 'aa') on duplicate key update message='bb'"
-"'on duplicate key' construct not allowed for message table: msg"
+# message insert upsert time_scheduled
+"insert into msg(time_scheduled, id, message) Values(1, 2, 'aa') on duplicate key update time_scheduled=123"
+"'on duplicate key' cannot reference time_scheduled or id for message table: msg"
+
+# message insert upsert id
+"insert into msg(time_scheduled, id, message) Values(1, 2, 'aa') on duplicate key update id=123"
+"'on duplicate key' cannot reference time_scheduled or id for message table: msg"
 
 # message insert without column list
 "insert into msg values(1)"
