@@ -140,11 +140,21 @@ func TestClientServer(t *testing.T) {
 		serverConn.Close()
 	}()
 
-	if _, err = tls.Dial("tcp", addr, badClientConfig); err == nil {
-		t.Fatalf("Dial was expected to fail")
+	// When using TLS 1.2, the Dial will fail.
+	// With TLS 1.3, the Dial will succeed and the first Read will fail.
+	clientConn, err := tls.Dial("tcp", addr, badClientConfig)
+	if err != nil {
+		if !strings.Contains(err.Error(), "bad certificate") {
+			t.Errorf("Wrong error returned: %v", err)
+		}
+		return
+	}
+	data := make([]byte, 1)
+	_, err = clientConn.Read(data)
+	if err == nil {
+		t.Fatalf("Dial or first Read was expected to fail")
 	}
 	if !strings.Contains(err.Error(), "bad certificate") {
 		t.Errorf("Wrong error returned: %v", err)
 	}
-	t.Logf("Dial returned: %v", err)
 }
