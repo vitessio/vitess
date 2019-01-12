@@ -138,6 +138,8 @@ func (vse *Engine) vschema() *vindexes.KeyspaceSchema {
 // Stream starts a new stream.
 func (vse *Engine) Stream(ctx context.Context, startPos mysql.Position, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	// Ensure kschema is initialized and the watcher is started.
+	// Starting of the watcher has to be delayed till the first call to Stream
+	// because this overhead should be incurred only if someone uses this feature.
 	vse.watcherOnce.Do(vse.setWatch)
 
 	// Create stream and add it to the map.
