@@ -32,8 +32,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for Throttler service
-
+// ThrottlerClient is the client API for Throttler service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type ThrottlerClient interface {
 	// MaxRates returns the current max rate for each throttler of the process.
 	MaxRates(ctx context.Context, in *throttlerdata.MaxRatesRequest, opts ...grpc.CallOption) (*throttlerdata.MaxRatesResponse, error)
@@ -65,7 +66,7 @@ func NewThrottlerClient(cc *grpc.ClientConn) ThrottlerClient {
 
 func (c *throttlerClient) MaxRates(ctx context.Context, in *throttlerdata.MaxRatesRequest, opts ...grpc.CallOption) (*throttlerdata.MaxRatesResponse, error) {
 	out := new(throttlerdata.MaxRatesResponse)
-	err := grpc.Invoke(ctx, "/throttlerservice.Throttler/MaxRates", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/throttlerservice.Throttler/MaxRates", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +75,7 @@ func (c *throttlerClient) MaxRates(ctx context.Context, in *throttlerdata.MaxRat
 
 func (c *throttlerClient) SetMaxRate(ctx context.Context, in *throttlerdata.SetMaxRateRequest, opts ...grpc.CallOption) (*throttlerdata.SetMaxRateResponse, error) {
 	out := new(throttlerdata.SetMaxRateResponse)
-	err := grpc.Invoke(ctx, "/throttlerservice.Throttler/SetMaxRate", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/throttlerservice.Throttler/SetMaxRate", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +84,7 @@ func (c *throttlerClient) SetMaxRate(ctx context.Context, in *throttlerdata.SetM
 
 func (c *throttlerClient) GetConfiguration(ctx context.Context, in *throttlerdata.GetConfigurationRequest, opts ...grpc.CallOption) (*throttlerdata.GetConfigurationResponse, error) {
 	out := new(throttlerdata.GetConfigurationResponse)
-	err := grpc.Invoke(ctx, "/throttlerservice.Throttler/GetConfiguration", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/throttlerservice.Throttler/GetConfiguration", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +93,7 @@ func (c *throttlerClient) GetConfiguration(ctx context.Context, in *throttlerdat
 
 func (c *throttlerClient) UpdateConfiguration(ctx context.Context, in *throttlerdata.UpdateConfigurationRequest, opts ...grpc.CallOption) (*throttlerdata.UpdateConfigurationResponse, error) {
 	out := new(throttlerdata.UpdateConfigurationResponse)
-	err := grpc.Invoke(ctx, "/throttlerservice.Throttler/UpdateConfiguration", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/throttlerservice.Throttler/UpdateConfiguration", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -101,15 +102,14 @@ func (c *throttlerClient) UpdateConfiguration(ctx context.Context, in *throttler
 
 func (c *throttlerClient) ResetConfiguration(ctx context.Context, in *throttlerdata.ResetConfigurationRequest, opts ...grpc.CallOption) (*throttlerdata.ResetConfigurationResponse, error) {
 	out := new(throttlerdata.ResetConfigurationResponse)
-	err := grpc.Invoke(ctx, "/throttlerservice.Throttler/ResetConfiguration", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/throttlerservice.Throttler/ResetConfiguration", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// Server API for Throttler service
-
+// ThrottlerServer is the server API for Throttler service.
 type ThrottlerServer interface {
 	// MaxRates returns the current max rate for each throttler of the process.
 	MaxRates(context.Context, *throttlerdata.MaxRatesRequest) (*throttlerdata.MaxRatesResponse, error)
@@ -255,10 +255,10 @@ var _Throttler_serviceDesc = grpc.ServiceDesc{
 }
 
 func init() {
-	proto.RegisterFile("throttlerservice.proto", fileDescriptor_throttlerservice_151ce3faa7ac0b15)
+	proto.RegisterFile("throttlerservice.proto", fileDescriptor_throttlerservice_8b1d9f2a5de89835)
 }
 
-var fileDescriptor_throttlerservice_151ce3faa7ac0b15 = []byte{
+var fileDescriptor_throttlerservice_8b1d9f2a5de89835 = []byte{
 	// 241 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x92, 0x3d, 0x4b, 0xc4, 0x40,
 	0x10, 0x86, 0x05, 0x41, 0x74, 0xaa, 0x63, 0x0f, 0x2c, 0xae, 0xf0, 0xab, 0x50, 0x4f, 0x30, 0x0b,

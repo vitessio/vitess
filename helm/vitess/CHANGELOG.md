@@ -1,3 +1,11 @@
+## 1.0.5 - 2019-01-12
+
+### Changes
+* Set FailMasterPromotionIfSQLThreadNotUpToDate = true in Orchestrator config, to prevent
+lagging replicas from being promoted to master and causing errant GTID problems.
+
+**NOTE:** You need to manually restart your Orchestrator pods for this change to take effect
+
 ## 1.0.4 - 2019-01-01
 
 ### Changes

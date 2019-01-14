@@ -31,6 +31,7 @@ import (
 )
 
 // These constants are used to identify the SQL statement type.
+// Changing this list will require reviewing all calls to Preview.
 const (
 	StmtSelect = iota
 	StmtStream

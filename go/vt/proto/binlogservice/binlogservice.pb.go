@@ -32,8 +32,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for UpdateStream service
-
+// UpdateStreamClient is the client API for UpdateStream service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type UpdateStreamClient interface {
 	// StreamKeyRange returns the binlog transactions related to
 	// the specified Keyrange.
@@ -52,7 +53,7 @@ func NewUpdateStreamClient(cc *grpc.ClientConn) UpdateStreamClient {
 }
 
 func (c *updateStreamClient) StreamKeyRange(ctx context.Context, in *binlogdata.StreamKeyRangeRequest, opts ...grpc.CallOption) (UpdateStream_StreamKeyRangeClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_UpdateStream_serviceDesc.Streams[0], c.cc, "/binlogservice.UpdateStream/StreamKeyRange", opts...)
+	stream, err := c.cc.NewStream(ctx, &_UpdateStream_serviceDesc.Streams[0], "/binlogservice.UpdateStream/StreamKeyRange", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +85,7 @@ func (x *updateStreamStreamKeyRangeClient) Recv() (*binlogdata.StreamKeyRangeRes
 }
 
 func (c *updateStreamClient) StreamTables(ctx context.Context, in *binlogdata.StreamTablesRequest, opts ...grpc.CallOption) (UpdateStream_StreamTablesClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_UpdateStream_serviceDesc.Streams[1], c.cc, "/binlogservice.UpdateStream/StreamTables", opts...)
+	stream, err := c.cc.NewStream(ctx, &_UpdateStream_serviceDesc.Streams[1], "/binlogservice.UpdateStream/StreamTables", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -115,8 +116,7 @@ func (x *updateStreamStreamTablesClient) Recv() (*binlogdata.StreamTablesRespons
 	return m, nil
 }
 
-// Server API for UpdateStream service
-
+// UpdateStreamServer is the server API for UpdateStream service.
 type UpdateStreamServer interface {
 	// StreamKeyRange returns the binlog transactions related to
 	// the specified Keyrange.
@@ -191,9 +191,9 @@ var _UpdateStream_serviceDesc = grpc.ServiceDesc{
 	Metadata: "binlogservice.proto",
 }
 
-func init() { proto.RegisterFile("binlogservice.proto", fileDescriptor_binlogservice_0e1eb8b2f97a2dc1) }
+func init() { proto.RegisterFile("binlogservice.proto", fileDescriptor_binlogservice_bfebf84e565603b8) }
 
-var fileDescriptor_binlogservice_0e1eb8b2f97a2dc1 = []byte{
+var fileDescriptor_binlogservice_bfebf84e565603b8 = []byte{
 	// 177 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x4e, 0xca, 0xcc, 0xcb,
 	0xc9, 0x4f, 0x2f, 0x4e, 0x2d, 0x2a, 0xcb, 0x4c, 0x4e, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17,

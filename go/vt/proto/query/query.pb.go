@@ -95,7 +95,7 @@ func (x MySqlFlag) String() string {
 	return proto.EnumName(MySqlFlag_name, int32(x))
 }
 func (MySqlFlag) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{0}
+	return fileDescriptor_query_b0bca749772b6512, []int{0}
 }
 
 // Flag allows us to qualify types by their common properties.
@@ -134,7 +134,7 @@ func (x Flag) String() string {
 	return proto.EnumName(Flag_name, int32(x))
 }
 func (Flag) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{1}
+	return fileDescriptor_query_b0bca749772b6512, []int{1}
 }
 
 // Type defines the various supported data types in bind vars
@@ -315,7 +315,7 @@ func (x Type) String() string {
 	return proto.EnumName(Type_name, int32(x))
 }
 func (Type) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{2}
+	return fileDescriptor_query_b0bca749772b6512, []int{2}
 }
 
 // TransactionState represents the state of a distributed transaction.
@@ -345,7 +345,7 @@ func (x TransactionState) String() string {
 	return proto.EnumName(TransactionState_name, int32(x))
 }
 func (TransactionState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{3}
+	return fileDescriptor_query_b0bca749772b6512, []int{3}
 }
 
 type ExecuteOptions_IncludedFields int32
@@ -371,7 +371,7 @@ func (x ExecuteOptions_IncludedFields) String() string {
 	return proto.EnumName(ExecuteOptions_IncludedFields_name, int32(x))
 }
 func (ExecuteOptions_IncludedFields) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{6, 0}
+	return fileDescriptor_query_b0bca749772b6512, []int{6, 0}
 }
 
 type ExecuteOptions_Workload int32
@@ -400,7 +400,7 @@ func (x ExecuteOptions_Workload) String() string {
 	return proto.EnumName(ExecuteOptions_Workload_name, int32(x))
 }
 func (ExecuteOptions_Workload) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{6, 1}
+	return fileDescriptor_query_b0bca749772b6512, []int{6, 1}
 }
 
 type ExecuteOptions_TransactionIsolation int32
@@ -437,7 +437,7 @@ func (x ExecuteOptions_TransactionIsolation) String() string {
 	return proto.EnumName(ExecuteOptions_TransactionIsolation_name, int32(x))
 }
 func (ExecuteOptions_TransactionIsolation) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{6, 2}
+	return fileDescriptor_query_b0bca749772b6512, []int{6, 2}
 }
 
 // The category of one statement.
@@ -464,7 +464,7 @@ func (x StreamEvent_Statement_Category) String() string {
 	return proto.EnumName(StreamEvent_Statement_Category_name, int32(x))
 }
 func (StreamEvent_Statement_Category) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{12, 0, 0}
+	return fileDescriptor_query_b0bca749772b6512, []int{12, 0, 0}
 }
 
 type SplitQueryRequest_Algorithm int32
@@ -487,18 +487,18 @@ func (x SplitQueryRequest_Algorithm) String() string {
 	return proto.EnumName(SplitQueryRequest_Algorithm_name, int32(x))
 }
 func (SplitQueryRequest_Algorithm) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{50, 0}
+	return fileDescriptor_query_b0bca749772b6512, []int{50, 0}
 }
 
 // Target describes what the client expects the tablet is.
 // If the tablet does not match, an error is returned.
 type Target struct {
-	Keyspace   string              `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
-	Shard      string              `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
-	TabletType topodata.TabletType `protobuf:"varint,3,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	Keyspace   string              `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	Shard      string              `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,3,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// cell is used for routing queries between vtgate and vttablets. It
 	// is not used when Target is part of the Session sent by the client.
-	Cell                 string   `protobuf:"bytes,4,opt,name=cell" json:"cell,omitempty"`
+	Cell                 string   `protobuf:"bytes,4,opt,name=cell,proto3" json:"cell,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -508,7 +508,7 @@ func (m *Target) Reset()         { *m = Target{} }
 func (m *Target) String() string { return proto.CompactTextString(m) }
 func (*Target) ProtoMessage()    {}
 func (*Target) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{0}
+	return fileDescriptor_query_b0bca749772b6512, []int{0}
 }
 func (m *Target) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Target.Unmarshal(m, b)
@@ -565,8 +565,8 @@ func (m *Target) GetCell() string {
 // structure, which is not secure at all, because it is provided
 // by the Vitess client.
 type VTGateCallerID struct {
-	Username             string   `protobuf:"bytes,1,opt,name=username" json:"username,omitempty"`
-	Groups               []string `protobuf:"bytes,2,rep,name=groups" json:"groups,omitempty"`
+	Username             string   `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	Groups               []string `protobuf:"bytes,2,rep,name=groups,proto3" json:"groups,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -576,7 +576,7 @@ func (m *VTGateCallerID) Reset()         { *m = VTGateCallerID{} }
 func (m *VTGateCallerID) String() string { return proto.CompactTextString(m) }
 func (*VTGateCallerID) ProtoMessage()    {}
 func (*VTGateCallerID) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{1}
+	return fileDescriptor_query_b0bca749772b6512, []int{1}
 }
 func (m *VTGateCallerID) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VTGateCallerID.Unmarshal(m, b)
@@ -616,13 +616,13 @@ func (m *VTGateCallerID) GetGroups() []string {
 // is also sent with the replication streams from the binlog service.
 type EventToken struct {
 	// timestamp is the MySQL timestamp of the statements. Seconds since Epoch.
-	Timestamp int64 `protobuf:"varint,1,opt,name=timestamp" json:"timestamp,omitempty"`
+	Timestamp int64 `protobuf:"varint,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// The shard name that applied the statements. Note this is not set when
 	// streaming from a vttablet. It is only used on the client -> vtgate link.
-	Shard string `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
+	Shard string `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
 	// The position on the replication stream after this statement was applied.
 	// It is not the transaction ID / GTID, but the position / GTIDSet.
-	Position             string   `protobuf:"bytes,3,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,3,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -632,7 +632,7 @@ func (m *EventToken) Reset()         { *m = EventToken{} }
 func (m *EventToken) String() string { return proto.CompactTextString(m) }
 func (*EventToken) ProtoMessage()    {}
 func (*EventToken) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{2}
+	return fileDescriptor_query_b0bca749772b6512, []int{2}
 }
 func (m *EventToken) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EventToken.Unmarshal(m, b)
@@ -675,7 +675,7 @@ func (m *EventToken) GetPosition() string {
 
 // Value represents a typed value.
 type Value struct {
-	Type                 Type     `protobuf:"varint,1,opt,name=type,enum=query.Type" json:"type,omitempty"`
+	Type                 Type     `protobuf:"varint,1,opt,name=type,proto3,enum=query.Type" json:"type,omitempty"`
 	Value                []byte   `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -686,7 +686,7 @@ func (m *Value) Reset()         { *m = Value{} }
 func (m *Value) String() string { return proto.CompactTextString(m) }
 func (*Value) ProtoMessage()    {}
 func (*Value) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{3}
+	return fileDescriptor_query_b0bca749772b6512, []int{3}
 }
 func (m *Value) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Value.Unmarshal(m, b)
@@ -722,10 +722,10 @@ func (m *Value) GetValue() []byte {
 
 // BindVariable represents a single bind variable in a Query.
 type BindVariable struct {
-	Type  Type   `protobuf:"varint,1,opt,name=type,enum=query.Type" json:"type,omitempty"`
+	Type  Type   `protobuf:"varint,1,opt,name=type,proto3,enum=query.Type" json:"type,omitempty"`
 	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	// values are set if type is TUPLE.
-	Values               []*Value `protobuf:"bytes,3,rep,name=values" json:"values,omitempty"`
+	Values               []*Value `protobuf:"bytes,3,rep,name=values,proto3" json:"values,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -735,7 +735,7 @@ func (m *BindVariable) Reset()         { *m = BindVariable{} }
 func (m *BindVariable) String() string { return proto.CompactTextString(m) }
 func (*BindVariable) ProtoMessage()    {}
 func (*BindVariable) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{4}
+	return fileDescriptor_query_b0bca749772b6512, []int{4}
 }
 func (m *BindVariable) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BindVariable.Unmarshal(m, b)
@@ -779,10 +779,10 @@ func (m *BindVariable) GetValues() []*Value {
 // BoundQuery is a query with its bind variables
 type BoundQuery struct {
 	// sql is the SQL query to execute
-	Sql string `protobuf:"bytes,1,opt,name=sql" json:"sql,omitempty"`
+	Sql string `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
 	// bind_variables is a map of all bind variables to expand in the query.
 	// nil values are not allowed. Use NULL_TYPE to express a NULL value.
-	BindVariables        map[string]*BindVariable `protobuf:"bytes,2,rep,name=bind_variables,json=bindVariables" json:"bind_variables,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	BindVariables        map[string]*BindVariable `protobuf:"bytes,2,rep,name=bind_variables,json=bindVariables,proto3" json:"bind_variables,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
 	XXX_unrecognized     []byte                   `json:"-"`
 	XXX_sizecache        int32                    `json:"-"`
@@ -792,7 +792,7 @@ func (m *BoundQuery) Reset()         { *m = BoundQuery{} }
 func (m *BoundQuery) String() string { return proto.CompactTextString(m) }
 func (*BoundQuery) ProtoMessage()    {}
 func (*BoundQuery) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{5}
+	return fileDescriptor_query_b0bca749772b6512, []int{5}
 }
 func (m *BoundQuery) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BoundQuery.Unmarshal(m, b)
@@ -829,19 +829,19 @@ func (m *BoundQuery) GetBindVariables() map[string]*BindVariable {
 // ExecuteOptions is passed around for all Execute calls.
 type ExecuteOptions struct {
 	// If set, we will try to include an EventToken with the responses.
-	IncludeEventToken bool `protobuf:"varint,2,opt,name=include_event_token,json=includeEventToken" json:"include_event_token,omitempty"`
+	IncludeEventToken bool `protobuf:"varint,2,opt,name=include_event_token,json=includeEventToken,proto3" json:"include_event_token,omitempty"`
 	// If set, the fresher field may be set as a result comparison to this token.
 	// This is a shortcut so the application doesn't need to care about
 	// comparing EventTokens.
-	CompareEventToken *EventToken `protobuf:"bytes,3,opt,name=compare_event_token,json=compareEventToken" json:"compare_event_token,omitempty"`
+	CompareEventToken *EventToken `protobuf:"bytes,3,opt,name=compare_event_token,json=compareEventToken,proto3" json:"compare_event_token,omitempty"`
 	// Controls what fields are returned in Field message responses from mysql, i.e.
 	// field name, table name, etc. This is an optimization for high-QPS queries where
 	// the client knows what it's getting
-	IncludedFields ExecuteOptions_IncludedFields `protobuf:"varint,4,opt,name=included_fields,json=includedFields,enum=query.ExecuteOptions_IncludedFields" json:"included_fields,omitempty"`
+	IncludedFields ExecuteOptions_IncludedFields `protobuf:"varint,4,opt,name=included_fields,json=includedFields,proto3,enum=query.ExecuteOptions_IncludedFields" json:"included_fields,omitempty"`
 	// client_rows_found specifies if rows_affected should return
 	// rows found instead of rows affected. Behavior is defined
 	// by MySQL's CLIENT_FOUND_ROWS flag.
-	ClientFoundRows bool `protobuf:"varint,5,opt,name=client_found_rows,json=clientFoundRows" json:"client_found_rows,omitempty"`
+	ClientFoundRows bool `protobuf:"varint,5,opt,name=client_found_rows,json=clientFoundRows,proto3" json:"client_found_rows,omitempty"`
 	// workload specifies the type of workload:
 	// OLTP: DMLs allowed, results have row count limit, and
 	// query timeouts are shorter.
@@ -849,14 +849,14 @@ type ExecuteOptions struct {
 	// can be as high as desired.
 	// DBA: no limit on rowcount or timeout, all queries allowed
 	// but intended for long DMLs and DDLs.
-	Workload ExecuteOptions_Workload `protobuf:"varint,6,opt,name=workload,enum=query.ExecuteOptions_Workload" json:"workload,omitempty"`
+	Workload ExecuteOptions_Workload `protobuf:"varint,6,opt,name=workload,proto3,enum=query.ExecuteOptions_Workload" json:"workload,omitempty"`
 	// sql_select_limit sets an implicit limit on all select statements. Since
 	// vitess also sets a rowcount limit on queries, the smallest value wins.
-	SqlSelectLimit       int64                               `protobuf:"varint,8,opt,name=sql_select_limit,json=sqlSelectLimit" json:"sql_select_limit,omitempty"`
-	TransactionIsolation ExecuteOptions_TransactionIsolation `protobuf:"varint,9,opt,name=transaction_isolation,json=transactionIsolation,enum=query.ExecuteOptions_TransactionIsolation" json:"transaction_isolation,omitempty"`
+	SqlSelectLimit       int64                               `protobuf:"varint,8,opt,name=sql_select_limit,json=sqlSelectLimit,proto3" json:"sql_select_limit,omitempty"`
+	TransactionIsolation ExecuteOptions_TransactionIsolation `protobuf:"varint,9,opt,name=transaction_isolation,json=transactionIsolation,proto3,enum=query.ExecuteOptions_TransactionIsolation" json:"transaction_isolation,omitempty"`
 	// skip_query_plan_cache specifies if the query plan shoud be cached by vitess.
 	// By default all query plans are cached.
-	SkipQueryPlanCache   bool     `protobuf:"varint,10,opt,name=skip_query_plan_cache,json=skipQueryPlanCache" json:"skip_query_plan_cache,omitempty"`
+	SkipQueryPlanCache   bool     `protobuf:"varint,10,opt,name=skip_query_plan_cache,json=skipQueryPlanCache,proto3" json:"skip_query_plan_cache,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -866,7 +866,7 @@ func (m *ExecuteOptions) Reset()         { *m = ExecuteOptions{} }
 func (m *ExecuteOptions) String() string { return proto.CompactTextString(m) }
 func (*ExecuteOptions) ProtoMessage()    {}
 func (*ExecuteOptions) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{6}
+	return fileDescriptor_query_b0bca749772b6512, []int{6}
 }
 func (m *ExecuteOptions) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteOptions.Unmarshal(m, b)
@@ -945,24 +945,24 @@ func (m *ExecuteOptions) GetSkipQueryPlanCache() bool {
 // Field describes a single column returned by a query
 type Field struct {
 	// name of the field as returned by mysql C API
-	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// vitess-defined type. Conversion function is in sqltypes package.
-	Type Type `protobuf:"varint,2,opt,name=type,enum=query.Type" json:"type,omitempty"`
+	Type Type `protobuf:"varint,2,opt,name=type,proto3,enum=query.Type" json:"type,omitempty"`
 	// Remaining fields from mysql C API.
 	// These fields are only populated when ExecuteOptions.included_fields
 	// is set to IncludedFields.ALL.
-	Table    string `protobuf:"bytes,3,opt,name=table" json:"table,omitempty"`
-	OrgTable string `protobuf:"bytes,4,opt,name=org_table,json=orgTable" json:"org_table,omitempty"`
-	Database string `protobuf:"bytes,5,opt,name=database" json:"database,omitempty"`
-	OrgName  string `protobuf:"bytes,6,opt,name=org_name,json=orgName" json:"org_name,omitempty"`
+	Table    string `protobuf:"bytes,3,opt,name=table,proto3" json:"table,omitempty"`
+	OrgTable string `protobuf:"bytes,4,opt,name=org_table,json=orgTable,proto3" json:"org_table,omitempty"`
+	Database string `protobuf:"bytes,5,opt,name=database,proto3" json:"database,omitempty"`
+	OrgName  string `protobuf:"bytes,6,opt,name=org_name,json=orgName,proto3" json:"org_name,omitempty"`
 	// column_length is really a uint32. All 32 bits can be used.
-	ColumnLength uint32 `protobuf:"varint,7,opt,name=column_length,json=columnLength" json:"column_length,omitempty"`
+	ColumnLength uint32 `protobuf:"varint,7,opt,name=column_length,json=columnLength,proto3" json:"column_length,omitempty"`
 	// charset is actually a uint16. Only the lower 16 bits are used.
-	Charset uint32 `protobuf:"varint,8,opt,name=charset" json:"charset,omitempty"`
+	Charset uint32 `protobuf:"varint,8,opt,name=charset,proto3" json:"charset,omitempty"`
 	// decimals is actualy a uint8. Only the lower 8 bits are used.
-	Decimals uint32 `protobuf:"varint,9,opt,name=decimals" json:"decimals,omitempty"`
+	Decimals uint32 `protobuf:"varint,9,opt,name=decimals,proto3" json:"decimals,omitempty"`
 	// flags is actually a uint16. Only the lower 16 bits are used.
-	Flags                uint32   `protobuf:"varint,10,opt,name=flags" json:"flags,omitempty"`
+	Flags                uint32   `protobuf:"varint,10,opt,name=flags,proto3" json:"flags,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -972,7 +972,7 @@ func (m *Field) Reset()         { *m = Field{} }
 func (m *Field) String() string { return proto.CompactTextString(m) }
 func (*Field) ProtoMessage()    {}
 func (*Field) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{7}
+	return fileDescriptor_query_b0bca749772b6512, []int{7}
 }
 func (m *Field) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Field.Unmarshal(m, b)
@@ -1068,7 +1068,7 @@ type Row struct {
 	// A length of -1 means that the field is NULL. While
 	// reading values, you have to accummulate the length
 	// to know the offset where the next value begins in values.
-	Lengths []int64 `protobuf:"zigzag64,1,rep,packed,name=lengths" json:"lengths,omitempty"`
+	Lengths []int64 `protobuf:"zigzag64,1,rep,packed,name=lengths,proto3" json:"lengths,omitempty"`
 	// values contains a concatenation of all values in the row.
 	Values               []byte   `protobuf:"bytes,2,opt,name=values,proto3" json:"values,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -1080,7 +1080,7 @@ func (m *Row) Reset()         { *m = Row{} }
 func (m *Row) String() string { return proto.CompactTextString(m) }
 func (*Row) ProtoMessage()    {}
 func (*Row) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{8}
+	return fileDescriptor_query_b0bca749772b6512, []int{8}
 }
 func (m *Row) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Row.Unmarshal(m, b)
@@ -1119,10 +1119,10 @@ func (m *Row) GetValues() []byte {
 type ResultExtras struct {
 	// event_token is populated if the include_event_token flag is set
 	// in ExecuteOptions.
-	EventToken *EventToken `protobuf:"bytes,1,opt,name=event_token,json=eventToken" json:"event_token,omitempty"`
+	EventToken *EventToken `protobuf:"bytes,1,opt,name=event_token,json=eventToken,proto3" json:"event_token,omitempty"`
 	// If set, it means the data returned with this result is fresher
 	// than the compare_token passed in the ExecuteOptions.
-	Fresher              bool     `protobuf:"varint,2,opt,name=fresher" json:"fresher,omitempty"`
+	Fresher              bool     `protobuf:"varint,2,opt,name=fresher,proto3" json:"fresher,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1132,7 +1132,7 @@ func (m *ResultExtras) Reset()         { *m = ResultExtras{} }
 func (m *ResultExtras) String() string { return proto.CompactTextString(m) }
 func (*ResultExtras) ProtoMessage()    {}
 func (*ResultExtras) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{9}
+	return fileDescriptor_query_b0bca749772b6512, []int{9}
 }
 func (m *ResultExtras) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ResultExtras.Unmarshal(m, b)
@@ -1176,11 +1176,11 @@ func (m *ResultExtras) GetFresher() bool {
 // len(QueryResult[0].fields) is always equal to len(row) (for each
 // row in rows for each QueryResult in QueryResult[1:]).
 type QueryResult struct {
-	Fields               []*Field      `protobuf:"bytes,1,rep,name=fields" json:"fields,omitempty"`
-	RowsAffected         uint64        `protobuf:"varint,2,opt,name=rows_affected,json=rowsAffected" json:"rows_affected,omitempty"`
-	InsertId             uint64        `protobuf:"varint,3,opt,name=insert_id,json=insertId" json:"insert_id,omitempty"`
-	Rows                 []*Row        `protobuf:"bytes,4,rep,name=rows" json:"rows,omitempty"`
-	Extras               *ResultExtras `protobuf:"bytes,5,opt,name=extras" json:"extras,omitempty"`
+	Fields               []*Field      `protobuf:"bytes,1,rep,name=fields,proto3" json:"fields,omitempty"`
+	RowsAffected         uint64        `protobuf:"varint,2,opt,name=rows_affected,json=rowsAffected,proto3" json:"rows_affected,omitempty"`
+	InsertId             uint64        `protobuf:"varint,3,opt,name=insert_id,json=insertId,proto3" json:"insert_id,omitempty"`
+	Rows                 []*Row        `protobuf:"bytes,4,rep,name=rows,proto3" json:"rows,omitempty"`
+	Extras               *ResultExtras `protobuf:"bytes,5,opt,name=extras,proto3" json:"extras,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
 	XXX_unrecognized     []byte        `json:"-"`
 	XXX_sizecache        int32         `json:"-"`
@@ -1190,7 +1190,7 @@ func (m *QueryResult) Reset()         { *m = QueryResult{} }
 func (m *QueryResult) String() string { return proto.CompactTextString(m) }
 func (*QueryResult) ProtoMessage()    {}
 func (*QueryResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{10}
+	return fileDescriptor_query_b0bca749772b6512, []int{10}
 }
 func (m *QueryResult) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_QueryResult.Unmarshal(m, b)
@@ -1248,8 +1248,8 @@ func (m *QueryResult) GetExtras() *ResultExtras {
 // QueryWarning is used to convey out of band query execution warnings
 // by storing in the vtgate.Session
 type QueryWarning struct {
-	Code                 uint32   `protobuf:"varint,1,opt,name=code" json:"code,omitempty"`
-	Message              string   `protobuf:"bytes,2,opt,name=message" json:"message,omitempty"`
+	Code                 uint32   `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
+	Message              string   `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1259,7 +1259,7 @@ func (m *QueryWarning) Reset()         { *m = QueryWarning{} }
 func (m *QueryWarning) String() string { return proto.CompactTextString(m) }
 func (*QueryWarning) ProtoMessage()    {}
 func (*QueryWarning) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{11}
+	return fileDescriptor_query_b0bca749772b6512, []int{11}
 }
 func (m *QueryWarning) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_QueryWarning.Unmarshal(m, b)
@@ -1298,9 +1298,9 @@ func (m *QueryWarning) GetMessage() string {
 // Update Stream calls.
 type StreamEvent struct {
 	// The statements in this transaction.
-	Statements []*StreamEvent_Statement `protobuf:"bytes,1,rep,name=statements" json:"statements,omitempty"`
+	Statements []*StreamEvent_Statement `protobuf:"bytes,1,rep,name=statements,proto3" json:"statements,omitempty"`
 	// The Event Token for this event.
-	EventToken           *EventToken `protobuf:"bytes,2,opt,name=event_token,json=eventToken" json:"event_token,omitempty"`
+	EventToken           *EventToken `protobuf:"bytes,2,opt,name=event_token,json=eventToken,proto3" json:"event_token,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
 	XXX_unrecognized     []byte      `json:"-"`
 	XXX_sizecache        int32       `json:"-"`
@@ -1310,7 +1310,7 @@ func (m *StreamEvent) Reset()         { *m = StreamEvent{} }
 func (m *StreamEvent) String() string { return proto.CompactTextString(m) }
 func (*StreamEvent) ProtoMessage()    {}
 func (*StreamEvent) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{12}
+	return fileDescriptor_query_b0bca749772b6512, []int{12}
 }
 func (m *StreamEvent) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamEvent.Unmarshal(m, b)
@@ -1346,11 +1346,11 @@ func (m *StreamEvent) GetEventToken() *EventToken {
 
 // One individual Statement in a transaction.
 type StreamEvent_Statement struct {
-	Category StreamEvent_Statement_Category `protobuf:"varint,1,opt,name=category,enum=query.StreamEvent_Statement_Category" json:"category,omitempty"`
+	Category StreamEvent_Statement_Category `protobuf:"varint,1,opt,name=category,proto3,enum=query.StreamEvent_Statement_Category" json:"category,omitempty"`
 	// table_name, primary_key_fields and primary_key_values are set for DML.
-	TableName        string   `protobuf:"bytes,2,opt,name=table_name,json=tableName" json:"table_name,omitempty"`
-	PrimaryKeyFields []*Field `protobuf:"bytes,3,rep,name=primary_key_fields,json=primaryKeyFields" json:"primary_key_fields,omitempty"`
-	PrimaryKeyValues []*Row   `protobuf:"bytes,4,rep,name=primary_key_values,json=primaryKeyValues" json:"primary_key_values,omitempty"`
+	TableName        string   `protobuf:"bytes,2,opt,name=table_name,json=tableName,proto3" json:"table_name,omitempty"`
+	PrimaryKeyFields []*Field `protobuf:"bytes,3,rep,name=primary_key_fields,json=primaryKeyFields,proto3" json:"primary_key_fields,omitempty"`
+	PrimaryKeyValues []*Row   `protobuf:"bytes,4,rep,name=primary_key_values,json=primaryKeyValues,proto3" json:"primary_key_values,omitempty"`
 	// sql is set for all queries.
 	// FIXME(alainjobart) we may not need it for DMLs.
 	Sql                  []byte   `protobuf:"bytes,5,opt,name=sql,proto3" json:"sql,omitempty"`
@@ -1363,7 +1363,7 @@ func (m *StreamEvent_Statement) Reset()         { *m = StreamEvent_Statement{} }
 func (m *StreamEvent_Statement) String() string { return proto.CompactTextString(m) }
 func (*StreamEvent_Statement) ProtoMessage()    {}
 func (*StreamEvent_Statement) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{12, 0}
+	return fileDescriptor_query_b0bca749772b6512, []int{12, 0}
 }
 func (m *StreamEvent_Statement) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamEvent_Statement.Unmarshal(m, b)
@@ -1420,12 +1420,12 @@ func (m *StreamEvent_Statement) GetSql() []byte {
 
 // ExecuteRequest is the payload to Execute
 type ExecuteRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	Query                *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
-	TransactionId        int64           `protobuf:"varint,5,opt,name=transaction_id,json=transactionId" json:"transaction_id,omitempty"`
-	Options              *ExecuteOptions `protobuf:"bytes,6,opt,name=options" json:"options,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Query                *BoundQuery     `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	TransactionId        int64           `protobuf:"varint,5,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Options              *ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -1435,7 +1435,7 @@ func (m *ExecuteRequest) Reset()         { *m = ExecuteRequest{} }
 func (m *ExecuteRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteRequest) ProtoMessage()    {}
 func (*ExecuteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{13}
+	return fileDescriptor_query_b0bca749772b6512, []int{13}
 }
 func (m *ExecuteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteRequest.Unmarshal(m, b)
@@ -1499,7 +1499,7 @@ func (m *ExecuteRequest) GetOptions() *ExecuteOptions {
 
 // ExecuteResponse is the returned value from Execute
 type ExecuteResponse struct {
-	Result               *QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
 	XXX_unrecognized     []byte       `json:"-"`
 	XXX_sizecache        int32        `json:"-"`
@@ -1509,7 +1509,7 @@ func (m *ExecuteResponse) Reset()         { *m = ExecuteResponse{} }
 func (m *ExecuteResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteResponse) ProtoMessage()    {}
 func (*ExecuteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{14}
+	return fileDescriptor_query_b0bca749772b6512, []int{14}
 }
 func (m *ExecuteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteResponse.Unmarshal(m, b)
@@ -1541,9 +1541,9 @@ func (m *ExecuteResponse) GetResult() *QueryResult {
 // TODO: To be used in ExecuteBatchResponse and BeginExecuteBatchResponse.
 type ResultWithError struct {
 	// error contains an query level error, only set if result is unset.
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result               *QueryResult `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
+	Result               *QueryResult `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
 	XXX_unrecognized     []byte       `json:"-"`
 	XXX_sizecache        int32        `json:"-"`
@@ -1553,7 +1553,7 @@ func (m *ResultWithError) Reset()         { *m = ResultWithError{} }
 func (m *ResultWithError) String() string { return proto.CompactTextString(m) }
 func (*ResultWithError) ProtoMessage()    {}
 func (*ResultWithError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{15}
+	return fileDescriptor_query_b0bca749772b6512, []int{15}
 }
 func (m *ResultWithError) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ResultWithError.Unmarshal(m, b)
@@ -1589,13 +1589,13 @@ func (m *ResultWithError) GetResult() *QueryResult {
 
 // ExecuteBatchRequest is the payload to ExecuteBatch
 type ExecuteBatchRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	Queries              []*BoundQuery   `protobuf:"bytes,4,rep,name=queries" json:"queries,omitempty"`
-	AsTransaction        bool            `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction" json:"as_transaction,omitempty"`
-	TransactionId        int64           `protobuf:"varint,6,opt,name=transaction_id,json=transactionId" json:"transaction_id,omitempty"`
-	Options              *ExecuteOptions `protobuf:"bytes,7,opt,name=options" json:"options,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Queries              []*BoundQuery   `protobuf:"bytes,4,rep,name=queries,proto3" json:"queries,omitempty"`
+	AsTransaction        bool            `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction,proto3" json:"as_transaction,omitempty"`
+	TransactionId        int64           `protobuf:"varint,6,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Options              *ExecuteOptions `protobuf:"bytes,7,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -1605,7 +1605,7 @@ func (m *ExecuteBatchRequest) Reset()         { *m = ExecuteBatchRequest{} }
 func (m *ExecuteBatchRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteBatchRequest) ProtoMessage()    {}
 func (*ExecuteBatchRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{16}
+	return fileDescriptor_query_b0bca749772b6512, []int{16}
 }
 func (m *ExecuteBatchRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteBatchRequest.Unmarshal(m, b)
@@ -1676,7 +1676,7 @@ func (m *ExecuteBatchRequest) GetOptions() *ExecuteOptions {
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch
 type ExecuteBatchResponse struct {
-	Results              []*QueryResult `protobuf:"bytes,1,rep,name=results" json:"results,omitempty"`
+	Results              []*QueryResult `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
 	XXX_unrecognized     []byte         `json:"-"`
 	XXX_sizecache        int32          `json:"-"`
@@ -1686,7 +1686,7 @@ func (m *ExecuteBatchResponse) Reset()         { *m = ExecuteBatchResponse{} }
 func (m *ExecuteBatchResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteBatchResponse) ProtoMessage()    {}
 func (*ExecuteBatchResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{17}
+	return fileDescriptor_query_b0bca749772b6512, []int{17}
 }
 func (m *ExecuteBatchResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteBatchResponse.Unmarshal(m, b)
@@ -1715,12 +1715,12 @@ func (m *ExecuteBatchResponse) GetResults() []*QueryResult {
 
 // StreamExecuteRequest is the payload to StreamExecute
 type StreamExecuteRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	Query                *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
-	Options              *ExecuteOptions `protobuf:"bytes,5,opt,name=options" json:"options,omitempty"`
-	TransactionId        int64           `protobuf:"varint,6,opt,name=transaction_id,json=transactionId" json:"transaction_id,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Query                *BoundQuery     `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	Options              *ExecuteOptions `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
+	TransactionId        int64           `protobuf:"varint,6,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -1730,7 +1730,7 @@ func (m *StreamExecuteRequest) Reset()         { *m = StreamExecuteRequest{} }
 func (m *StreamExecuteRequest) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteRequest) ProtoMessage()    {}
 func (*StreamExecuteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{18}
+	return fileDescriptor_query_b0bca749772b6512, []int{18}
 }
 func (m *StreamExecuteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamExecuteRequest.Unmarshal(m, b)
@@ -1794,7 +1794,7 @@ func (m *StreamExecuteRequest) GetTransactionId() int64 {
 
 // StreamExecuteResponse is the returned value from StreamExecute
 type StreamExecuteResponse struct {
-	Result               *QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
 	XXX_unrecognized     []byte       `json:"-"`
 	XXX_sizecache        int32        `json:"-"`
@@ -1804,7 +1804,7 @@ func (m *StreamExecuteResponse) Reset()         { *m = StreamExecuteResponse{} }
 func (m *StreamExecuteResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteResponse) ProtoMessage()    {}
 func (*StreamExecuteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{19}
+	return fileDescriptor_query_b0bca749772b6512, []int{19}
 }
 func (m *StreamExecuteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamExecuteResponse.Unmarshal(m, b)
@@ -1833,10 +1833,10 @@ func (m *StreamExecuteResponse) GetResult() *QueryResult {
 
 // BeginRequest is the payload to Begin
 type BeginRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	Options              *ExecuteOptions `protobuf:"bytes,4,opt,name=options" json:"options,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Options              *ExecuteOptions `protobuf:"bytes,4,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -1846,7 +1846,7 @@ func (m *BeginRequest) Reset()         { *m = BeginRequest{} }
 func (m *BeginRequest) String() string { return proto.CompactTextString(m) }
 func (*BeginRequest) ProtoMessage()    {}
 func (*BeginRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{20}
+	return fileDescriptor_query_b0bca749772b6512, []int{20}
 }
 func (m *BeginRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BeginRequest.Unmarshal(m, b)
@@ -1896,7 +1896,7 @@ func (m *BeginRequest) GetOptions() *ExecuteOptions {
 
 // BeginResponse is the returned value from Begin
 type BeginResponse struct {
-	TransactionId        int64    `protobuf:"varint,1,opt,name=transaction_id,json=transactionId" json:"transaction_id,omitempty"`
+	TransactionId        int64    `protobuf:"varint,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1906,7 +1906,7 @@ func (m *BeginResponse) Reset()         { *m = BeginResponse{} }
 func (m *BeginResponse) String() string { return proto.CompactTextString(m) }
 func (*BeginResponse) ProtoMessage()    {}
 func (*BeginResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{21}
+	return fileDescriptor_query_b0bca749772b6512, []int{21}
 }
 func (m *BeginResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BeginResponse.Unmarshal(m, b)
@@ -1935,10 +1935,10 @@ func (m *BeginResponse) GetTransactionId() int64 {
 
 // CommitRequest is the payload to Commit
 type CommitRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId" json:"transaction_id,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -1948,7 +1948,7 @@ func (m *CommitRequest) Reset()         { *m = CommitRequest{} }
 func (m *CommitRequest) String() string { return proto.CompactTextString(m) }
 func (*CommitRequest) ProtoMessage()    {}
 func (*CommitRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{22}
+	return fileDescriptor_query_b0bca749772b6512, []int{22}
 }
 func (m *CommitRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommitRequest.Unmarshal(m, b)
@@ -2007,7 +2007,7 @@ func (m *CommitResponse) Reset()         { *m = CommitResponse{} }
 func (m *CommitResponse) String() string { return proto.CompactTextString(m) }
 func (*CommitResponse) ProtoMessage()    {}
 func (*CommitResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{23}
+	return fileDescriptor_query_b0bca749772b6512, []int{23}
 }
 func (m *CommitResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommitResponse.Unmarshal(m, b)
@@ -2029,10 +2029,10 @@ var xxx_messageInfo_CommitResponse proto.InternalMessageInfo
 
 // RollbackRequest is the payload to Rollback
 type RollbackRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId" json:"transaction_id,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -2042,7 +2042,7 @@ func (m *RollbackRequest) Reset()         { *m = RollbackRequest{} }
 func (m *RollbackRequest) String() string { return proto.CompactTextString(m) }
 func (*RollbackRequest) ProtoMessage()    {}
 func (*RollbackRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{24}
+	return fileDescriptor_query_b0bca749772b6512, []int{24}
 }
 func (m *RollbackRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RollbackRequest.Unmarshal(m, b)
@@ -2101,7 +2101,7 @@ func (m *RollbackResponse) Reset()         { *m = RollbackResponse{} }
 func (m *RollbackResponse) String() string { return proto.CompactTextString(m) }
 func (*RollbackResponse) ProtoMessage()    {}
 func (*RollbackResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{25}
+	return fileDescriptor_query_b0bca749772b6512, []int{25}
 }
 func (m *RollbackResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RollbackResponse.Unmarshal(m, b)
@@ -2123,11 +2123,11 @@ var xxx_messageInfo_RollbackResponse proto.InternalMessageInfo
 
 // PrepareRequest is the payload to Prepare
 type PrepareRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId" json:"transaction_id,omitempty"`
-	Dtid                 string          `protobuf:"bytes,5,opt,name=dtid" json:"dtid,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Dtid                 string          `protobuf:"bytes,5,opt,name=dtid,proto3" json:"dtid,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -2137,7 +2137,7 @@ func (m *PrepareRequest) Reset()         { *m = PrepareRequest{} }
 func (m *PrepareRequest) String() string { return proto.CompactTextString(m) }
 func (*PrepareRequest) ProtoMessage()    {}
 func (*PrepareRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{26}
+	return fileDescriptor_query_b0bca749772b6512, []int{26}
 }
 func (m *PrepareRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepareRequest.Unmarshal(m, b)
@@ -2203,7 +2203,7 @@ func (m *PrepareResponse) Reset()         { *m = PrepareResponse{} }
 func (m *PrepareResponse) String() string { return proto.CompactTextString(m) }
 func (*PrepareResponse) ProtoMessage()    {}
 func (*PrepareResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{27}
+	return fileDescriptor_query_b0bca749772b6512, []int{27}
 }
 func (m *PrepareResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepareResponse.Unmarshal(m, b)
@@ -2225,10 +2225,10 @@ var xxx_messageInfo_PrepareResponse proto.InternalMessageInfo
 
 // CommitPreparedRequest is the payload to CommitPrepared
 type CommitPreparedRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	Dtid                 string          `protobuf:"bytes,4,opt,name=dtid" json:"dtid,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Dtid                 string          `protobuf:"bytes,4,opt,name=dtid,proto3" json:"dtid,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -2238,7 +2238,7 @@ func (m *CommitPreparedRequest) Reset()         { *m = CommitPreparedRequest{} }
 func (m *CommitPreparedRequest) String() string { return proto.CompactTextString(m) }
 func (*CommitPreparedRequest) ProtoMessage()    {}
 func (*CommitPreparedRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{28}
+	return fileDescriptor_query_b0bca749772b6512, []int{28}
 }
 func (m *CommitPreparedRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommitPreparedRequest.Unmarshal(m, b)
@@ -2297,7 +2297,7 @@ func (m *CommitPreparedResponse) Reset()         { *m = CommitPreparedResponse{}
 func (m *CommitPreparedResponse) String() string { return proto.CompactTextString(m) }
 func (*CommitPreparedResponse) ProtoMessage()    {}
 func (*CommitPreparedResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{29}
+	return fileDescriptor_query_b0bca749772b6512, []int{29}
 }
 func (m *CommitPreparedResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommitPreparedResponse.Unmarshal(m, b)
@@ -2319,11 +2319,11 @@ var xxx_messageInfo_CommitPreparedResponse proto.InternalMessageInfo
 
 // RollbackPreparedRequest is the payload to RollbackPrepared
 type RollbackPreparedRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId" json:"transaction_id,omitempty"`
-	Dtid                 string          `protobuf:"bytes,5,opt,name=dtid" json:"dtid,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Dtid                 string          `protobuf:"bytes,5,opt,name=dtid,proto3" json:"dtid,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -2333,7 +2333,7 @@ func (m *RollbackPreparedRequest) Reset()         { *m = RollbackPreparedRequest
 func (m *RollbackPreparedRequest) String() string { return proto.CompactTextString(m) }
 func (*RollbackPreparedRequest) ProtoMessage()    {}
 func (*RollbackPreparedRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{30}
+	return fileDescriptor_query_b0bca749772b6512, []int{30}
 }
 func (m *RollbackPreparedRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RollbackPreparedRequest.Unmarshal(m, b)
@@ -2399,7 +2399,7 @@ func (m *RollbackPreparedResponse) Reset()         { *m = RollbackPreparedRespon
 func (m *RollbackPreparedResponse) String() string { return proto.CompactTextString(m) }
 func (*RollbackPreparedResponse) ProtoMessage()    {}
 func (*RollbackPreparedResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{31}
+	return fileDescriptor_query_b0bca749772b6512, []int{31}
 }
 func (m *RollbackPreparedResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RollbackPreparedResponse.Unmarshal(m, b)
@@ -2421,11 +2421,11 @@ var xxx_messageInfo_RollbackPreparedResponse proto.InternalMessageInfo
 
 // CreateTransactionRequest is the payload to CreateTransaction
 type CreateTransactionRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	Dtid                 string          `protobuf:"bytes,4,opt,name=dtid" json:"dtid,omitempty"`
-	Participants         []*Target       `protobuf:"bytes,5,rep,name=participants" json:"participants,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Dtid                 string          `protobuf:"bytes,4,opt,name=dtid,proto3" json:"dtid,omitempty"`
+	Participants         []*Target       `protobuf:"bytes,5,rep,name=participants,proto3" json:"participants,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -2435,7 +2435,7 @@ func (m *CreateTransactionRequest) Reset()         { *m = CreateTransactionReque
 func (m *CreateTransactionRequest) String() string { return proto.CompactTextString(m) }
 func (*CreateTransactionRequest) ProtoMessage()    {}
 func (*CreateTransactionRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{32}
+	return fileDescriptor_query_b0bca749772b6512, []int{32}
 }
 func (m *CreateTransactionRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CreateTransactionRequest.Unmarshal(m, b)
@@ -2501,7 +2501,7 @@ func (m *CreateTransactionResponse) Reset()         { *m = CreateTransactionResp
 func (m *CreateTransactionResponse) String() string { return proto.CompactTextString(m) }
 func (*CreateTransactionResponse) ProtoMessage()    {}
 func (*CreateTransactionResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{33}
+	return fileDescriptor_query_b0bca749772b6512, []int{33}
 }
 func (m *CreateTransactionResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CreateTransactionResponse.Unmarshal(m, b)
@@ -2523,11 +2523,11 @@ var xxx_messageInfo_CreateTransactionResponse proto.InternalMessageInfo
 
 // StartCommitRequest is the payload to StartCommit
 type StartCommitRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId" json:"transaction_id,omitempty"`
-	Dtid                 string          `protobuf:"bytes,5,opt,name=dtid" json:"dtid,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Dtid                 string          `protobuf:"bytes,5,opt,name=dtid,proto3" json:"dtid,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -2537,7 +2537,7 @@ func (m *StartCommitRequest) Reset()         { *m = StartCommitRequest{} }
 func (m *StartCommitRequest) String() string { return proto.CompactTextString(m) }
 func (*StartCommitRequest) ProtoMessage()    {}
 func (*StartCommitRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{34}
+	return fileDescriptor_query_b0bca749772b6512, []int{34}
 }
 func (m *StartCommitRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StartCommitRequest.Unmarshal(m, b)
@@ -2603,7 +2603,7 @@ func (m *StartCommitResponse) Reset()         { *m = StartCommitResponse{} }
 func (m *StartCommitResponse) String() string { return proto.CompactTextString(m) }
 func (*StartCommitResponse) ProtoMessage()    {}
 func (*StartCommitResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{35}
+	return fileDescriptor_query_b0bca749772b6512, []int{35}
 }
 func (m *StartCommitResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StartCommitResponse.Unmarshal(m, b)
@@ -2625,11 +2625,11 @@ var xxx_messageInfo_StartCommitResponse proto.InternalMessageInfo
 
 // SetRollbackRequest is the payload to SetRollback
 type SetRollbackRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId" json:"transaction_id,omitempty"`
-	Dtid                 string          `protobuf:"bytes,5,opt,name=dtid" json:"dtid,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Dtid                 string          `protobuf:"bytes,5,opt,name=dtid,proto3" json:"dtid,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -2639,7 +2639,7 @@ func (m *SetRollbackRequest) Reset()         { *m = SetRollbackRequest{} }
 func (m *SetRollbackRequest) String() string { return proto.CompactTextString(m) }
 func (*SetRollbackRequest) ProtoMessage()    {}
 func (*SetRollbackRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{36}
+	return fileDescriptor_query_b0bca749772b6512, []int{36}
 }
 func (m *SetRollbackRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetRollbackRequest.Unmarshal(m, b)
@@ -2705,7 +2705,7 @@ func (m *SetRollbackResponse) Reset()         { *m = SetRollbackResponse{} }
 func (m *SetRollbackResponse) String() string { return proto.CompactTextString(m) }
 func (*SetRollbackResponse) ProtoMessage()    {}
 func (*SetRollbackResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{37}
+	return fileDescriptor_query_b0bca749772b6512, []int{37}
 }
 func (m *SetRollbackResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetRollbackResponse.Unmarshal(m, b)
@@ -2727,10 +2727,10 @@ var xxx_messageInfo_SetRollbackResponse proto.InternalMessageInfo
 
 // ConcludeTransactionRequest is the payload to ConcludeTransaction
 type ConcludeTransactionRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	Dtid                 string          `protobuf:"bytes,4,opt,name=dtid" json:"dtid,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Dtid                 string          `protobuf:"bytes,4,opt,name=dtid,proto3" json:"dtid,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -2740,7 +2740,7 @@ func (m *ConcludeTransactionRequest) Reset()         { *m = ConcludeTransactionR
 func (m *ConcludeTransactionRequest) String() string { return proto.CompactTextString(m) }
 func (*ConcludeTransactionRequest) ProtoMessage()    {}
 func (*ConcludeTransactionRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{38}
+	return fileDescriptor_query_b0bca749772b6512, []int{38}
 }
 func (m *ConcludeTransactionRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ConcludeTransactionRequest.Unmarshal(m, b)
@@ -2799,7 +2799,7 @@ func (m *ConcludeTransactionResponse) Reset()         { *m = ConcludeTransaction
 func (m *ConcludeTransactionResponse) String() string { return proto.CompactTextString(m) }
 func (*ConcludeTransactionResponse) ProtoMessage()    {}
 func (*ConcludeTransactionResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{39}
+	return fileDescriptor_query_b0bca749772b6512, []int{39}
 }
 func (m *ConcludeTransactionResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ConcludeTransactionResponse.Unmarshal(m, b)
@@ -2821,10 +2821,10 @@ var xxx_messageInfo_ConcludeTransactionResponse proto.InternalMessageInfo
 
 // ReadTransactionRequest is the payload to ReadTransaction
 type ReadTransactionRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	Dtid                 string          `protobuf:"bytes,4,opt,name=dtid" json:"dtid,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Dtid                 string          `protobuf:"bytes,4,opt,name=dtid,proto3" json:"dtid,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -2834,7 +2834,7 @@ func (m *ReadTransactionRequest) Reset()         { *m = ReadTransactionRequest{}
 func (m *ReadTransactionRequest) String() string { return proto.CompactTextString(m) }
 func (*ReadTransactionRequest) ProtoMessage()    {}
 func (*ReadTransactionRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{40}
+	return fileDescriptor_query_b0bca749772b6512, []int{40}
 }
 func (m *ReadTransactionRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ReadTransactionRequest.Unmarshal(m, b)
@@ -2884,7 +2884,7 @@ func (m *ReadTransactionRequest) GetDtid() string {
 
 // ReadTransactionResponse is the returned value from ReadTransaction
 type ReadTransactionResponse struct {
-	Metadata             *TransactionMetadata `protobuf:"bytes,1,opt,name=metadata" json:"metadata,omitempty"`
+	Metadata             *TransactionMetadata `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
 	XXX_unrecognized     []byte               `json:"-"`
 	XXX_sizecache        int32                `json:"-"`
@@ -2894,7 +2894,7 @@ func (m *ReadTransactionResponse) Reset()         { *m = ReadTransactionResponse
 func (m *ReadTransactionResponse) String() string { return proto.CompactTextString(m) }
 func (*ReadTransactionResponse) ProtoMessage()    {}
 func (*ReadTransactionResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{41}
+	return fileDescriptor_query_b0bca749772b6512, []int{41}
 }
 func (m *ReadTransactionResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ReadTransactionResponse.Unmarshal(m, b)
@@ -2923,11 +2923,11 @@ func (m *ReadTransactionResponse) GetMetadata() *TransactionMetadata {
 
 // BeginExecuteRequest is the payload to BeginExecute
 type BeginExecuteRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	Query                *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
-	Options              *ExecuteOptions `protobuf:"bytes,5,opt,name=options" json:"options,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Query                *BoundQuery     `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	Options              *ExecuteOptions `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -2937,7 +2937,7 @@ func (m *BeginExecuteRequest) Reset()         { *m = BeginExecuteRequest{} }
 func (m *BeginExecuteRequest) String() string { return proto.CompactTextString(m) }
 func (*BeginExecuteRequest) ProtoMessage()    {}
 func (*BeginExecuteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{42}
+	return fileDescriptor_query_b0bca749772b6512, []int{42}
 }
 func (m *BeginExecuteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BeginExecuteRequest.Unmarshal(m, b)
@@ -2997,10 +2997,10 @@ type BeginExecuteResponse struct {
 	// error contains an application level error if necessary. Note the
 	// transaction_id may be set, even when an error is returned, if the begin
 	// worked but the execute failed.
-	Error  *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Result *QueryResult    `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
+	Error  *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	Result *QueryResult    `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`
 	// transaction_id might be non-zero even if an error is present.
-	TransactionId        int64    `protobuf:"varint,3,opt,name=transaction_id,json=transactionId" json:"transaction_id,omitempty"`
+	TransactionId        int64    `protobuf:"varint,3,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3010,7 +3010,7 @@ func (m *BeginExecuteResponse) Reset()         { *m = BeginExecuteResponse{} }
 func (m *BeginExecuteResponse) String() string { return proto.CompactTextString(m) }
 func (*BeginExecuteResponse) ProtoMessage()    {}
 func (*BeginExecuteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{43}
+	return fileDescriptor_query_b0bca749772b6512, []int{43}
 }
 func (m *BeginExecuteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BeginExecuteResponse.Unmarshal(m, b)
@@ -3053,12 +3053,12 @@ func (m *BeginExecuteResponse) GetTransactionId() int64 {
 
 // BeginExecuteBatchRequest is the payload to BeginExecuteBatch
 type BeginExecuteBatchRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	Queries              []*BoundQuery   `protobuf:"bytes,4,rep,name=queries" json:"queries,omitempty"`
-	AsTransaction        bool            `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction" json:"as_transaction,omitempty"`
-	Options              *ExecuteOptions `protobuf:"bytes,6,opt,name=options" json:"options,omitempty"`
+	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Queries              []*BoundQuery   `protobuf:"bytes,4,rep,name=queries,proto3" json:"queries,omitempty"`
+	AsTransaction        bool            `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction,proto3" json:"as_transaction,omitempty"`
+	Options              *ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -3068,7 +3068,7 @@ func (m *BeginExecuteBatchRequest) Reset()         { *m = BeginExecuteBatchReque
 func (m *BeginExecuteBatchRequest) String() string { return proto.CompactTextString(m) }
 func (*BeginExecuteBatchRequest) ProtoMessage()    {}
 func (*BeginExecuteBatchRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{44}
+	return fileDescriptor_query_b0bca749772b6512, []int{44}
 }
 func (m *BeginExecuteBatchRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BeginExecuteBatchRequest.Unmarshal(m, b)
@@ -3135,10 +3135,10 @@ type BeginExecuteBatchResponse struct {
 	// error contains an application level error if necessary. Note the
 	// transaction_id may be set, even when an error is returned, if the begin
 	// worked but the execute failed.
-	Error   *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Results []*QueryResult  `protobuf:"bytes,2,rep,name=results" json:"results,omitempty"`
+	Error   *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	Results []*QueryResult  `protobuf:"bytes,2,rep,name=results,proto3" json:"results,omitempty"`
 	// transaction_id might be non-zero even if an error is present.
-	TransactionId        int64    `protobuf:"varint,3,opt,name=transaction_id,json=transactionId" json:"transaction_id,omitempty"`
+	TransactionId        int64    `protobuf:"varint,3,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3148,7 +3148,7 @@ func (m *BeginExecuteBatchResponse) Reset()         { *m = BeginExecuteBatchResp
 func (m *BeginExecuteBatchResponse) String() string { return proto.CompactTextString(m) }
 func (*BeginExecuteBatchResponse) ProtoMessage()    {}
 func (*BeginExecuteBatchResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{45}
+	return fileDescriptor_query_b0bca749772b6512, []int{45}
 }
 func (m *BeginExecuteBatchResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BeginExecuteBatchResponse.Unmarshal(m, b)
@@ -3191,11 +3191,11 @@ func (m *BeginExecuteBatchResponse) GetTransactionId() int64 {
 
 // MessageStreamRequest is the request payload for MessageStream.
 type MessageStreamRequest struct {
-	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
 	// name is the message table name.
-	Name                 string   `protobuf:"bytes,4,opt,name=name" json:"name,omitempty"`
+	Name                 string   `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3205,7 +3205,7 @@ func (m *MessageStreamRequest) Reset()         { *m = MessageStreamRequest{} }
 func (m *MessageStreamRequest) String() string { return proto.CompactTextString(m) }
 func (*MessageStreamRequest) ProtoMessage()    {}
 func (*MessageStreamRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{46}
+	return fileDescriptor_query_b0bca749772b6512, []int{46}
 }
 func (m *MessageStreamRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_MessageStreamRequest.Unmarshal(m, b)
@@ -3255,7 +3255,7 @@ func (m *MessageStreamRequest) GetName() string {
 
 // MessageStreamResponse is a response for MessageStream.
 type MessageStreamResponse struct {
-	Result               *QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
 	XXX_unrecognized     []byte       `json:"-"`
 	XXX_sizecache        int32        `json:"-"`
@@ -3265,7 +3265,7 @@ func (m *MessageStreamResponse) Reset()         { *m = MessageStreamResponse{} }
 func (m *MessageStreamResponse) String() string { return proto.CompactTextString(m) }
 func (*MessageStreamResponse) ProtoMessage()    {}
 func (*MessageStreamResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{47}
+	return fileDescriptor_query_b0bca749772b6512, []int{47}
 }
 func (m *MessageStreamResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_MessageStreamResponse.Unmarshal(m, b)
@@ -3294,12 +3294,12 @@ func (m *MessageStreamResponse) GetResult() *QueryResult {
 
 // MessageAckRequest is the request payload for MessageAck.
 type MessageAckRequest struct {
-	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
 	// name is the message table name.
-	Name                 string   `protobuf:"bytes,4,opt,name=name" json:"name,omitempty"`
-	Ids                  []*Value `protobuf:"bytes,5,rep,name=ids" json:"ids,omitempty"`
+	Name                 string   `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	Ids                  []*Value `protobuf:"bytes,5,rep,name=ids,proto3" json:"ids,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3309,7 +3309,7 @@ func (m *MessageAckRequest) Reset()         { *m = MessageAckRequest{} }
 func (m *MessageAckRequest) String() string { return proto.CompactTextString(m) }
 func (*MessageAckRequest) ProtoMessage()    {}
 func (*MessageAckRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{48}
+	return fileDescriptor_query_b0bca749772b6512, []int{48}
 }
 func (m *MessageAckRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_MessageAckRequest.Unmarshal(m, b)
@@ -3369,7 +3369,7 @@ type MessageAckResponse struct {
 	// result contains the result of the ack operation.
 	// Since this acts like a DML, only
 	// RowsAffected is returned in the result.
-	Result               *QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
 	XXX_unrecognized     []byte       `json:"-"`
 	XXX_sizecache        int32        `json:"-"`
@@ -3379,7 +3379,7 @@ func (m *MessageAckResponse) Reset()         { *m = MessageAckResponse{} }
 func (m *MessageAckResponse) String() string { return proto.CompactTextString(m) }
 func (*MessageAckResponse) ProtoMessage()    {}
 func (*MessageAckResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{49}
+	return fileDescriptor_query_b0bca749772b6512, []int{49}
 }
 func (m *MessageAckResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_MessageAckResponse.Unmarshal(m, b)
@@ -3409,15 +3409,15 @@ func (m *MessageAckResponse) GetResult() *QueryResult {
 // SplitQueryRequest is the payload for SplitQuery sent by VTGate to a VTTablet.
 // See vtgate.SplitQueryRequest for more details.
 type SplitQueryRequest struct {
-	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
-	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
-	SplitColumn       []string        `protobuf:"bytes,5,rep,name=split_column,json=splitColumn" json:"split_column,omitempty"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	SplitColumn       []string        `protobuf:"bytes,5,rep,name=split_column,json=splitColumn,proto3" json:"split_column,omitempty"`
 	// Exactly one of the following must be nonzero.
-	SplitCount           int64                       `protobuf:"varint,6,opt,name=split_count,json=splitCount" json:"split_count,omitempty"`
-	NumRowsPerQueryPart  int64                       `protobuf:"varint,8,opt,name=num_rows_per_query_part,json=numRowsPerQueryPart" json:"num_rows_per_query_part,omitempty"`
-	Algorithm            SplitQueryRequest_Algorithm `protobuf:"varint,9,opt,name=algorithm,enum=query.SplitQueryRequest_Algorithm" json:"algorithm,omitempty"`
+	SplitCount           int64                       `protobuf:"varint,6,opt,name=split_count,json=splitCount,proto3" json:"split_count,omitempty"`
+	NumRowsPerQueryPart  int64                       `protobuf:"varint,8,opt,name=num_rows_per_query_part,json=numRowsPerQueryPart,proto3" json:"num_rows_per_query_part,omitempty"`
+	Algorithm            SplitQueryRequest_Algorithm `protobuf:"varint,9,opt,name=algorithm,proto3,enum=query.SplitQueryRequest_Algorithm" json:"algorithm,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                    `json:"-"`
 	XXX_unrecognized     []byte                      `json:"-"`
 	XXX_sizecache        int32                       `json:"-"`
@@ -3427,7 +3427,7 @@ func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }
 func (m *SplitQueryRequest) String() string { return proto.CompactTextString(m) }
 func (*SplitQueryRequest) ProtoMessage()    {}
 func (*SplitQueryRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{50}
+	return fileDescriptor_query_b0bca749772b6512, []int{50}
 }
 func (m *SplitQueryRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SplitQueryRequest.Unmarshal(m, b)
@@ -3506,9 +3506,9 @@ func (m *SplitQueryRequest) GetAlgorithm() SplitQueryRequest_Algorithm {
 // QuerySplit represents one query to execute on the tablet
 type QuerySplit struct {
 	// query is the query to execute
-	Query *BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	Query *BoundQuery `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
 	// row_count is the approximate row count the query will return
-	RowCount             int64    `protobuf:"varint,2,opt,name=row_count,json=rowCount" json:"row_count,omitempty"`
+	RowCount             int64    `protobuf:"varint,2,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3518,7 +3518,7 @@ func (m *QuerySplit) Reset()         { *m = QuerySplit{} }
 func (m *QuerySplit) String() string { return proto.CompactTextString(m) }
 func (*QuerySplit) ProtoMessage()    {}
 func (*QuerySplit) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{51}
+	return fileDescriptor_query_b0bca749772b6512, []int{51}
 }
 func (m *QuerySplit) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_QuerySplit.Unmarshal(m, b)
@@ -3555,7 +3555,7 @@ func (m *QuerySplit) GetRowCount() int64 {
 // SplitQueryResponse is returned by SplitQuery and represents all the queries
 // to execute in order to get the entire data set.
 type SplitQueryResponse struct {
-	Queries              []*QuerySplit `protobuf:"bytes,1,rep,name=queries" json:"queries,omitempty"`
+	Queries              []*QuerySplit `protobuf:"bytes,1,rep,name=queries,proto3" json:"queries,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
 	XXX_unrecognized     []byte        `json:"-"`
 	XXX_sizecache        int32         `json:"-"`
@@ -3565,7 +3565,7 @@ func (m *SplitQueryResponse) Reset()         { *m = SplitQueryResponse{} }
 func (m *SplitQueryResponse) String() string { return proto.CompactTextString(m) }
 func (*SplitQueryResponse) ProtoMessage()    {}
 func (*SplitQueryResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{52}
+	return fileDescriptor_query_b0bca749772b6512, []int{52}
 }
 func (m *SplitQueryResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SplitQueryResponse.Unmarshal(m, b)
@@ -3603,7 +3603,7 @@ func (m *StreamHealthRequest) Reset()         { *m = StreamHealthRequest{} }
 func (m *StreamHealthRequest) String() string { return proto.CompactTextString(m) }
 func (*StreamHealthRequest) ProtoMessage()    {}
 func (*StreamHealthRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{53}
+	return fileDescriptor_query_b0bca749772b6512, []int{53}
 }
 func (m *StreamHealthRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamHealthRequest.Unmarshal(m, b)
@@ -3629,30 +3629,30 @@ type RealtimeStats struct {
 	// health_error is the last error we got from health check,
 	// or empty is the server is healthy. This is used for subset selection,
 	// we do not send queries to servers that are not healthy.
-	HealthError string `protobuf:"bytes,1,opt,name=health_error,json=healthError" json:"health_error,omitempty"`
+	HealthError string `protobuf:"bytes,1,opt,name=health_error,json=healthError,proto3" json:"health_error,omitempty"`
 	// seconds_behind_master is populated for slaves only. It indicates
 	// how far behind on (MySQL) replication a slave currently is.  It is used
 	// by clients for subset selection (so we don't try to send traffic
 	// to tablets that are too far behind).
 	// NOTE: This field must not be evaluated if "health_error" is not empty.
 	// TODO(mberlin): Let's switch it to int64 instead?
-	SecondsBehindMaster uint32 `protobuf:"varint,2,opt,name=seconds_behind_master,json=secondsBehindMaster" json:"seconds_behind_master,omitempty"`
+	SecondsBehindMaster uint32 `protobuf:"varint,2,opt,name=seconds_behind_master,json=secondsBehindMaster,proto3" json:"seconds_behind_master,omitempty"`
 	// bin_log_players_count is the number of currently running binlog players.
 	// if the value is 0, it means that filtered replication is currently not
 	// running on the tablet. If >0, filtered replication is running.
 	// NOTE: This field must not be evaluated if "health_error" is not empty.
-	BinlogPlayersCount int32 `protobuf:"varint,3,opt,name=binlog_players_count,json=binlogPlayersCount" json:"binlog_players_count,omitempty"`
+	BinlogPlayersCount int32 `protobuf:"varint,3,opt,name=binlog_players_count,json=binlogPlayersCount,proto3" json:"binlog_players_count,omitempty"`
 	// seconds_behind_master_filtered_replication is populated for the receiving
 	// master of an ongoing filtered replication only.
 	// It specifies how far the receiving master lags behind the sending master.
 	// NOTE: This field must not be evaluated if "health_error" is not empty.
 	// NOTE: This field must not be evaluated if "bin_log_players_count" is 0.
-	SecondsBehindMasterFilteredReplication int64 `protobuf:"varint,4,opt,name=seconds_behind_master_filtered_replication,json=secondsBehindMasterFilteredReplication" json:"seconds_behind_master_filtered_replication,omitempty"`
+	SecondsBehindMasterFilteredReplication int64 `protobuf:"varint,4,opt,name=seconds_behind_master_filtered_replication,json=secondsBehindMasterFilteredReplication,proto3" json:"seconds_behind_master_filtered_replication,omitempty"`
 	// cpu_usage is used for load-based balancing
-	CpuUsage float64 `protobuf:"fixed64,5,opt,name=cpu_usage,json=cpuUsage" json:"cpu_usage,omitempty"`
+	CpuUsage float64 `protobuf:"fixed64,5,opt,name=cpu_usage,json=cpuUsage,proto3" json:"cpu_usage,omitempty"`
 	// qps is the average QPS (queries per second) rate in the last XX seconds
 	// where XX is usually 60 (See query_service_stats.go).
-	Qps                  float64  `protobuf:"fixed64,6,opt,name=qps" json:"qps,omitempty"`
+	Qps                  float64  `protobuf:"fixed64,6,opt,name=qps,proto3" json:"qps,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3662,7 +3662,7 @@ func (m *RealtimeStats) Reset()         { *m = RealtimeStats{} }
 func (m *RealtimeStats) String() string { return proto.CompactTextString(m) }
 func (*RealtimeStats) ProtoMessage()    {}
 func (*RealtimeStats) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{54}
+	return fileDescriptor_query_b0bca749772b6512, []int{54}
 }
 func (m *RealtimeStats) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RealtimeStats.Unmarshal(m, b)
@@ -3730,17 +3730,17 @@ func (m *RealtimeStats) GetQps() float64 {
 // layer.
 type AggregateStats struct {
 	// healthy_tablet_count is the number of healthy tablets in the group.
-	HealthyTabletCount int32 `protobuf:"varint,1,opt,name=healthy_tablet_count,json=healthyTabletCount" json:"healthy_tablet_count,omitempty"`
+	HealthyTabletCount int32 `protobuf:"varint,1,opt,name=healthy_tablet_count,json=healthyTabletCount,proto3" json:"healthy_tablet_count,omitempty"`
 	// unhealthy_tablet_count is the number of unhealthy tablets in the group.
-	UnhealthyTabletCount int32 `protobuf:"varint,2,opt,name=unhealthy_tablet_count,json=unhealthyTabletCount" json:"unhealthy_tablet_count,omitempty"`
+	UnhealthyTabletCount int32 `protobuf:"varint,2,opt,name=unhealthy_tablet_count,json=unhealthyTabletCount,proto3" json:"unhealthy_tablet_count,omitempty"`
 	// seconds_behind_master_min is the minimum of the
 	// seconds_behind_master values of the healthy tablets. It is unset
 	// if the tablet type is master.
-	SecondsBehindMasterMin uint32 `protobuf:"varint,3,opt,name=seconds_behind_master_min,json=secondsBehindMasterMin" json:"seconds_behind_master_min,omitempty"`
+	SecondsBehindMasterMin uint32 `protobuf:"varint,3,opt,name=seconds_behind_master_min,json=secondsBehindMasterMin,proto3" json:"seconds_behind_master_min,omitempty"`
 	// seconds_behind_master_max is the maximum of the
 	// seconds_behind_master values of the healthy tablets. It is unset
 	// if the tablet type is master.
-	SecondsBehindMasterMax uint32   `protobuf:"varint,4,opt,name=seconds_behind_master_max,json=secondsBehindMasterMax" json:"seconds_behind_master_max,omitempty"`
+	SecondsBehindMasterMax uint32   `protobuf:"varint,4,opt,name=seconds_behind_master_max,json=secondsBehindMasterMax,proto3" json:"seconds_behind_master_max,omitempty"`
 	XXX_NoUnkeyedLiteral   struct{} `json:"-"`
 	XXX_unrecognized       []byte   `json:"-"`
 	XXX_sizecache          int32    `json:"-"`
@@ -3750,7 +3750,7 @@ func (m *AggregateStats) Reset()         { *m = AggregateStats{} }
 func (m *AggregateStats) String() string { return proto.CompactTextString(m) }
 func (*AggregateStats) ProtoMessage()    {}
 func (*AggregateStats) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{55}
+	return fileDescriptor_query_b0bca749772b6512, []int{55}
 }
 func (m *AggregateStats) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_AggregateStats.Unmarshal(m, b)
@@ -3810,11 +3810,11 @@ func (m *AggregateStats) GetSecondsBehindMasterMax() uint32 {
 type StreamHealthResponse struct {
 	// target is the current server type. Only queries with that exact Target
 	// record will be accepted (the cell may not match, however).
-	Target *Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+	Target *Target `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
 	// serving is true iff the tablet is serving. A tablet may not be serving
 	// if filtered replication is enabled on a master for instance,
 	// or if a replica should not be used because the keyspace is being resharded.
-	Serving bool `protobuf:"varint,2,opt,name=serving" json:"serving,omitempty"`
+	Serving bool `protobuf:"varint,2,opt,name=serving,proto3" json:"serving,omitempty"`
 	// tablet_externally_reparented_timestamp can be interpreted as the
 	// last time we knew that this tablet was the MASTER of this shard
 	// (if StreamHealthResponse describes a group of tablets, between
@@ -3841,18 +3841,18 @@ type StreamHealthResponse struct {
 	//    topology (see go/vt/vttablet/tabletmanager/init_tablet.go)
 	// OR
 	// d) 0 if the vttablet was never a MASTER.
-	TabletExternallyReparentedTimestamp int64 `protobuf:"varint,3,opt,name=tablet_externally_reparented_timestamp,json=tabletExternallyReparentedTimestamp" json:"tablet_externally_reparented_timestamp,omitempty"`
+	TabletExternallyReparentedTimestamp int64 `protobuf:"varint,3,opt,name=tablet_externally_reparented_timestamp,json=tabletExternallyReparentedTimestamp,proto3" json:"tablet_externally_reparented_timestamp,omitempty"`
 	// realtime_stats contains information about the tablet status.
 	// It is only filled in if the information is about a tablet.
-	RealtimeStats *RealtimeStats `protobuf:"bytes,4,opt,name=realtime_stats,json=realtimeStats" json:"realtime_stats,omitempty"`
+	RealtimeStats *RealtimeStats `protobuf:"bytes,4,opt,name=realtime_stats,json=realtimeStats,proto3" json:"realtime_stats,omitempty"`
 	// AggregateStats constains information about the group of tablet status.
 	// It is only filled in if the information is about a group of tablets.
-	AggregateStats *AggregateStats `protobuf:"bytes,6,opt,name=aggregate_stats,json=aggregateStats" json:"aggregate_stats,omitempty"`
+	AggregateStats *AggregateStats `protobuf:"bytes,6,opt,name=aggregate_stats,json=aggregateStats,proto3" json:"aggregate_stats,omitempty"`
 	// tablet_alias is the alias of the sending tablet. The discovery/healthcheck.go
 	// code uses it to verify that it's talking to the correct tablet and that it
 	// hasn't changed in the meantime e.g. due to tablet restarts where ports or
 	// ips have been reused but assigned differently.
-	TabletAlias          *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias" json:"tablet_alias,omitempty"`
+	TabletAlias          *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -3862,7 +3862,7 @@ func (m *StreamHealthResponse) Reset()         { *m = StreamHealthResponse{} }
 func (m *StreamHealthResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamHealthResponse) ProtoMessage()    {}
 func (*StreamHealthResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{56}
+	return fileDescriptor_query_b0bca749772b6512, []int{56}
 }
 func (m *StreamHealthResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamHealthResponse.Unmarshal(m, b)
@@ -3928,15 +3928,15 @@ func (m *StreamHealthResponse) GetTabletAlias() *topodata.TabletAlias {
 // position and timestamp can be set. If neither is set, we will start
 // streaming from the current binlog position.
 type UpdateStreamRequest struct {
-	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId" json:"immediate_caller_id,omitempty"`
-	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
 	// If position is set, we will start the streaming from that replication
 	// position. Incompatible with timestamp.
-	Position string `protobuf:"bytes,4,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,4,opt,name=position,proto3" json:"position,omitempty"`
 	// If timestamp is set, we will start the streaming from the first
 	// event in the binlogs that have that timestamp. Incompatible with position.
-	Timestamp            int64    `protobuf:"varint,5,opt,name=timestamp" json:"timestamp,omitempty"`
+	Timestamp            int64    `protobuf:"varint,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3946,7 +3946,7 @@ func (m *UpdateStreamRequest) Reset()         { *m = UpdateStreamRequest{} }
 func (m *UpdateStreamRequest) String() string { return proto.CompactTextString(m) }
 func (*UpdateStreamRequest) ProtoMessage()    {}
 func (*UpdateStreamRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{57}
+	return fileDescriptor_query_b0bca749772b6512, []int{57}
 }
 func (m *UpdateStreamRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UpdateStreamRequest.Unmarshal(m, b)
@@ -4003,7 +4003,7 @@ func (m *UpdateStreamRequest) GetTimestamp() int64 {
 
 // UpdateStreamResponse is returned by UpdateStream
 type UpdateStreamResponse struct {
-	Event                *StreamEvent `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+	Event                *StreamEvent `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
 	XXX_unrecognized     []byte       `json:"-"`
 	XXX_sizecache        int32        `json:"-"`
@@ -4013,7 +4013,7 @@ func (m *UpdateStreamResponse) Reset()         { *m = UpdateStreamResponse{} }
 func (m *UpdateStreamResponse) String() string { return proto.CompactTextString(m) }
 func (*UpdateStreamResponse) ProtoMessage()    {}
 func (*UpdateStreamResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{58}
+	return fileDescriptor_query_b0bca749772b6512, []int{58}
 }
 func (m *UpdateStreamResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UpdateStreamResponse.Unmarshal(m, b)
@@ -4042,10 +4042,10 @@ func (m *UpdateStreamResponse) GetEvent() *StreamEvent {
 
 // TransactionMetadata contains the metadata for a distributed transaction.
 type TransactionMetadata struct {
-	Dtid                 string           `protobuf:"bytes,1,opt,name=dtid" json:"dtid,omitempty"`
-	State                TransactionState `protobuf:"varint,2,opt,name=state,enum=query.TransactionState" json:"state,omitempty"`
-	TimeCreated          int64            `protobuf:"varint,3,opt,name=time_created,json=timeCreated" json:"time_created,omitempty"`
-	Participants         []*Target        `protobuf:"bytes,4,rep,name=participants" json:"participants,omitempty"`
+	Dtid                 string           `protobuf:"bytes,1,opt,name=dtid,proto3" json:"dtid,omitempty"`
+	State                TransactionState `protobuf:"varint,2,opt,name=state,proto3,enum=query.TransactionState" json:"state,omitempty"`
+	TimeCreated          int64            `protobuf:"varint,3,opt,name=time_created,json=timeCreated,proto3" json:"time_created,omitempty"`
+	Participants         []*Target        `protobuf:"bytes,4,rep,name=participants,proto3" json:"participants,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
 	XXX_unrecognized     []byte           `json:"-"`
 	XXX_sizecache        int32            `json:"-"`
@@ -4055,7 +4055,7 @@ func (m *TransactionMetadata) Reset()         { *m = TransactionMetadata{} }
 func (m *TransactionMetadata) String() string { return proto.CompactTextString(m) }
 func (*TransactionMetadata) ProtoMessage()    {}
 func (*TransactionMetadata) Descriptor() ([]byte, []int) {
-	return fileDescriptor_query_2032c2d49afa5e53, []int{59}
+	return fileDescriptor_query_b0bca749772b6512, []int{59}
 }
 func (m *TransactionMetadata) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TransactionMetadata.Unmarshal(m, b)
@@ -4177,9 +4177,9 @@ func init() {
 	proto.RegisterEnum("query.SplitQueryRequest_Algorithm", SplitQueryRequest_Algorithm_name, SplitQueryRequest_Algorithm_value)
 }
 
-func init() { proto.RegisterFile("query.proto", fileDescriptor_query_2032c2d49afa5e53) }
+func init() { proto.RegisterFile("query.proto", fileDescriptor_query_b0bca749772b6512) }
 
-var fileDescriptor_query_2032c2d49afa5e53 = []byte{
+var fileDescriptor_query_b0bca749772b6512 = []byte{
 	// 3259 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xec, 0x5a, 0xcd, 0x73, 0x1b, 0xc9,
 	0x75, 0xd7, 0xe0, 0x8b, 0xc0, 0x03, 0x01, 0x36, 0x1b, 0xa4, 0x84, 0xe5, 0x7e, 0xd1, 0x63, 0xaf,

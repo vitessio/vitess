@@ -22,9 +22,9 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 // Keyspace is the vschema for a keyspace.
 type Keyspace struct {
 	// If sharded is false, vindexes and tables are ignored.
-	Sharded              bool               `protobuf:"varint,1,opt,name=sharded" json:"sharded,omitempty"`
-	Vindexes             map[string]*Vindex `protobuf:"bytes,2,rep,name=vindexes" json:"vindexes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Tables               map[string]*Table  `protobuf:"bytes,3,rep,name=tables" json:"tables,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Sharded              bool               `protobuf:"varint,1,opt,name=sharded,proto3" json:"sharded,omitempty"`
+	Vindexes             map[string]*Vindex `protobuf:"bytes,2,rep,name=vindexes,proto3" json:"vindexes,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Tables               map[string]*Table  `protobuf:"bytes,3,rep,name=tables,proto3" json:"tables,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -34,7 +34,7 @@ func (m *Keyspace) Reset()         { *m = Keyspace{} }
 func (m *Keyspace) String() string { return proto.CompactTextString(m) }
 func (*Keyspace) ProtoMessage()    {}
 func (*Keyspace) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{0}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{0}
 }
 func (m *Keyspace) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Keyspace.Unmarshal(m, b)
@@ -79,17 +79,17 @@ func (m *Keyspace) GetTables() map[string]*Table {
 type Vindex struct {
 	// The type must match one of the predefined
 	// (or plugged in) vindex names.
-	Type string `protobuf:"bytes,1,opt,name=type" json:"type,omitempty"`
+	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
 	// params is a map of attribute value pairs
 	// that must be defined as required by the
 	// vindex constructors. The values can only
 	// be strings.
-	Params map[string]string `protobuf:"bytes,2,rep,name=params" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Params map[string]string `protobuf:"bytes,2,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// A lookup vindex can have an owner table defined.
 	// If so, rows in the lookup table are created or
 	// deleted in sync with corresponding rows in the
 	// owner table.
-	Owner                string   `protobuf:"bytes,3,opt,name=owner" json:"owner,omitempty"`
+	Owner                string   `protobuf:"bytes,3,opt,name=owner,proto3" json:"owner,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -99,7 +99,7 @@ func (m *Vindex) Reset()         { *m = Vindex{} }
 func (m *Vindex) String() string { return proto.CompactTextString(m) }
 func (*Vindex) ProtoMessage()    {}
 func (*Vindex) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{1}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{1}
 }
 func (m *Vindex) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Vindex.Unmarshal(m, b)
@@ -144,23 +144,23 @@ func (m *Vindex) GetOwner() string {
 type Table struct {
 	// If the table is a sequence, type must be
 	// "sequence". Otherwise, it should be empty.
-	Type string `protobuf:"bytes,1,opt,name=type" json:"type,omitempty"`
+	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
 	// column_vindexes associates columns to vindexes.
-	ColumnVindexes []*ColumnVindex `protobuf:"bytes,2,rep,name=column_vindexes,json=columnVindexes" json:"column_vindexes,omitempty"`
+	ColumnVindexes []*ColumnVindex `protobuf:"bytes,2,rep,name=column_vindexes,json=columnVindexes,proto3" json:"column_vindexes,omitempty"`
 	// auto_increment is specified if a column needs
 	// to be associated with a sequence.
-	AutoIncrement *AutoIncrement `protobuf:"bytes,3,opt,name=auto_increment,json=autoIncrement" json:"auto_increment,omitempty"`
+	AutoIncrement *AutoIncrement `protobuf:"bytes,3,opt,name=auto_increment,json=autoIncrement,proto3" json:"auto_increment,omitempty"`
 	// columns lists the columns for the table.
-	Columns []*Column `protobuf:"bytes,4,rep,name=columns" json:"columns,omitempty"`
+	Columns []*Column `protobuf:"bytes,4,rep,name=columns,proto3" json:"columns,omitempty"`
 	// pinned pins an unsharded table to a specific
 	// shard, as dictated by the keyspace id.
 	// The keyspace id is represened in hex form
 	// like in keyranges.
-	Pinned string `protobuf:"bytes,5,opt,name=pinned" json:"pinned,omitempty"`
+	Pinned string `protobuf:"bytes,5,opt,name=pinned,proto3" json:"pinned,omitempty"`
 	// column_list_authoritative is set to true if columns is
 	// an authoritative list for the table. This allows
 	// us to expand 'select *' expressions.
-	ColumnListAuthoritative bool     `protobuf:"varint,6,opt,name=column_list_authoritative,json=columnListAuthoritative" json:"column_list_authoritative,omitempty"`
+	ColumnListAuthoritative bool     `protobuf:"varint,6,opt,name=column_list_authoritative,json=columnListAuthoritative,proto3" json:"column_list_authoritative,omitempty"`
 	XXX_NoUnkeyedLiteral    struct{} `json:"-"`
 	XXX_unrecognized        []byte   `json:"-"`
 	XXX_sizecache           int32    `json:"-"`
@@ -170,7 +170,7 @@ func (m *Table) Reset()         { *m = Table{} }
 func (m *Table) String() string { return proto.CompactTextString(m) }
 func (*Table) ProtoMessage()    {}
 func (*Table) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{2}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{2}
 }
 func (m *Table) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Table.Unmarshal(m, b)
@@ -235,11 +235,11 @@ func (m *Table) GetColumnListAuthoritative() bool {
 // ColumnVindex is used to associate a column to a vindex.
 type ColumnVindex struct {
 	// Legacy implemenation, moving forward all vindexes should define a list of columns.
-	Column string `protobuf:"bytes,1,opt,name=column" json:"column,omitempty"`
+	Column string `protobuf:"bytes,1,opt,name=column,proto3" json:"column,omitempty"`
 	// The name must match a vindex defined in Keyspace.
-	Name string `protobuf:"bytes,2,opt,name=name" json:"name,omitempty"`
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	// List of columns that define this Vindex
-	Columns              []string `protobuf:"bytes,3,rep,name=columns" json:"columns,omitempty"`
+	Columns              []string `protobuf:"bytes,3,rep,name=columns,proto3" json:"columns,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -249,7 +249,7 @@ func (m *ColumnVindex) Reset()         { *m = ColumnVindex{} }
 func (m *ColumnVindex) String() string { return proto.CompactTextString(m) }
 func (*ColumnVindex) ProtoMessage()    {}
 func (*ColumnVindex) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{3}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{3}
 }
 func (m *ColumnVindex) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ColumnVindex.Unmarshal(m, b)
@@ -292,9 +292,9 @@ func (m *ColumnVindex) GetColumns() []string {
 
 // Autoincrement is used to designate a column as auto-inc.
 type AutoIncrement struct {
-	Column string `protobuf:"bytes,1,opt,name=column" json:"column,omitempty"`
+	Column string `protobuf:"bytes,1,opt,name=column,proto3" json:"column,omitempty"`
 	// The sequence must match a table of type SEQUENCE.
-	Sequence             string   `protobuf:"bytes,2,opt,name=sequence" json:"sequence,omitempty"`
+	Sequence             string   `protobuf:"bytes,2,opt,name=sequence,proto3" json:"sequence,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -304,7 +304,7 @@ func (m *AutoIncrement) Reset()         { *m = AutoIncrement{} }
 func (m *AutoIncrement) String() string { return proto.CompactTextString(m) }
 func (*AutoIncrement) ProtoMessage()    {}
 func (*AutoIncrement) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{4}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{4}
 }
 func (m *AutoIncrement) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_AutoIncrement.Unmarshal(m, b)
@@ -340,8 +340,8 @@ func (m *AutoIncrement) GetSequence() string {
 
 // Column describes a column.
 type Column struct {
-	Name                 string     `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	Type                 query.Type `protobuf:"varint,2,opt,name=type,enum=query.Type" json:"type,omitempty"`
+	Name                 string     `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Type                 query.Type `protobuf:"varint,2,opt,name=type,proto3,enum=query.Type" json:"type,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
 	XXX_unrecognized     []byte     `json:"-"`
 	XXX_sizecache        int32      `json:"-"`
@@ -351,7 +351,7 @@ func (m *Column) Reset()         { *m = Column{} }
 func (m *Column) String() string { return proto.CompactTextString(m) }
 func (*Column) ProtoMessage()    {}
 func (*Column) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{5}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{5}
 }
 func (m *Column) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Column.Unmarshal(m, b)
@@ -388,7 +388,7 @@ func (m *Column) GetType() query.Type {
 // SrvVSchema is the roll-up of all the Keyspace schema for a cell.
 type SrvVSchema struct {
 	// keyspaces is a map of keyspace name -> Keyspace object.
-	Keyspaces            map[string]*Keyspace `protobuf:"bytes,1,rep,name=keyspaces" json:"keyspaces,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Keyspaces            map[string]*Keyspace `protobuf:"bytes,1,rep,name=keyspaces,proto3" json:"keyspaces,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
 	XXX_unrecognized     []byte               `json:"-"`
 	XXX_sizecache        int32                `json:"-"`
@@ -398,7 +398,7 @@ func (m *SrvVSchema) Reset()         { *m = SrvVSchema{} }
 func (m *SrvVSchema) String() string { return proto.CompactTextString(m) }
 func (*SrvVSchema) ProtoMessage()    {}
 func (*SrvVSchema) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{6}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{6}
 }
 func (m *SrvVSchema) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SrvVSchema.Unmarshal(m, b)
@@ -439,9 +439,9 @@ func init() {
 	proto.RegisterMapType((map[string]*Keyspace)(nil), "vschema.SrvVSchema.KeyspacesEntry")
 }
 
-func init() { proto.RegisterFile("vschema.proto", fileDescriptor_vschema_5ecfaf46981fe072) }
+func init() { proto.RegisterFile("vschema.proto", fileDescriptor_vschema_58a865bec489dd60) }
 
-var fileDescriptor_vschema_5ecfaf46981fe072 = []byte{
+var fileDescriptor_vschema_58a865bec489dd60 = []byte{
 	// 562 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x54, 0x41, 0x6f, 0xd3, 0x4c,
 	0x10, 0x95, 0x93, 0xc6, 0x4d, 0xc6, 0x5f, 0xd2, 0x8f, 0x55, 0x29, 0xc6, 0x08, 0x35, 0xb2, 0x0a,

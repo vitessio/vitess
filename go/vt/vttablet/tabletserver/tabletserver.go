@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -60,7 +61,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -149,12 +152,12 @@ type TabletServer struct {
 	// for health checks. This does not affect how queries are served.
 	// target specifies the primary target type, and also allow specifies
 	// secondary types that should be additionally allowed.
-	mu            sync.Mutex
-	state         int64
-	lameduck      sync2.AtomicInt32
-	target        querypb.Target
-	alsoAllow     []topodatapb.TabletType
-	requests      sync.WaitGroup
+	mu        sync.Mutex
+	state     int64
+	lameduck  sync2.AtomicInt32
+	target    querypb.Target
+	alsoAllow []topodatapb.TabletType
+	requests  sync.WaitGroup
 
 	// The following variables should be initialized only once
 	// before starting the tabletserver.
@@ -170,6 +173,7 @@ type TabletServer struct {
 	hr               *heartbeat.Reader
 	messager         *messager.Engine
 	watcher          *ReplicationWatcher
+	vstreamer        *vstreamer.Engine
 	updateStreamList *binlog.StreamList
 
 	// checkMySQLThrottler is used to throttle the number of
@@ -224,7 +228,7 @@ type TxPoolController interface {
 	AcceptReadOnly() error
 
 	// InitDBConfig must be called before Init.
-  InitDBConfig(dbcfgs *dbconfigs.DBConfigs)
+	InitDBConfig(dbcfgs *dbconfigs.DBConfigs)
 
 	// Init must be called once when vttablet starts for setting
 	// up the metadata tables.
@@ -246,6 +250,7 @@ type TxPoolController interface {
 }
 
 var tsOnce sync.Once
+var srvTopoServer srvtopo.Server
 
 // NewTabletServerWithNilTopoServer is typically used in tests that
 // don't need a topoServer member.
@@ -281,6 +286,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	// So that vtcombo doesn't even call it once, on the first tablet.
 	// And we can remove the tsOnce variable.
 	tsOnce.Do(func() {
+		srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo")
 		stats.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
 			tsv.mu.Lock()
 			state := tsv.state
@@ -298,6 +304,8 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 		stats.NewGaugeDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
 		stats.NewGaugeDurationFunc("BeginTimeout", "Tablet server begin timeout", tsv.BeginTimeout.Get)
 	})
+	// TODO(sougou): move this up once the stats naming problem is fixed.
+	tsv.vstreamer = vstreamer.NewEngine(srvTopoServer, tsv.se)
 	return tsv
 }
 
@@ -386,6 +394,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.hr.InitDBConfig(tsv.dbconfigs)
 	tsv.messager.InitDBConfig(tsv.dbconfigs)
 	tsv.watcher.InitDBConfig(tsv.dbconfigs)
+	tsv.vstreamer.InitDBConfig(tsv.dbconfigs)
 	return nil
 }
 
@@ -551,7 +560,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	}
 	tsv.hr.Init(tsv.target)
 	tsv.updateStreamList.Init()
-
+	tsv.vstreamer.Open(tsv.target.Keyspace, tsv.alias.Cell)
 	return tsv.serveNewType()
 }
 
@@ -609,6 +618,7 @@ func (tsv *TabletServer) StopService() {
 
 	log.Infof("Executing complete shutdown.")
 	tsv.waitForShutdown()
+	tsv.vstreamer.Close()
 	tsv.qe.Close()
 	tsv.se.Close()
 	tsv.hw.Close()
@@ -1297,6 +1307,40 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 	}
 	transactionID = 0
 	return int64(qr.RowsAffected), nil
+}
+
+// VStream streams VReplication events.
+func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, startPos mysql.Position, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	// This code is partially duplicated from startRequest. This is because
+	// is allowed even if the tablet is in non-serving state.
+	err := func() error {
+		tsv.mu.Lock()
+		defer tsv.mu.Unlock()
+
+		if target != nil {
+			// a valid target needs to be used
+			switch {
+			case target.Keyspace != tsv.target.Keyspace:
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
+			case target.Shard != tsv.target.Shard:
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
+			case target.TabletType != tsv.target.TabletType:
+				for _, otherType := range tsv.alsoAllow {
+					if target.TabletType == otherType {
+						return nil
+					}
+				}
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
+			}
+		} else if !tabletenv.IsLocalContext(ctx) {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
+		}
+		return nil
+	}()
+	if err != nil {
+		return err
+	}
+	return tsv.vstreamer.Stream(ctx, startPos, filter, send)
 }
 
 // SplitQuery splits a query + bind variables into smaller queries that return a

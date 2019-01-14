@@ -168,7 +168,7 @@ func (x Code) String() string {
 	return proto.EnumName(Code_name, int32(x))
 }
 func (Code) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_vtrpc_63266364cf161411, []int{0}
+	return fileDescriptor_vtrpc_88a14d8f1bc03cf5, []int{0}
 }
 
 // LegacyErrorCode is the enum values for Errors. This type is deprecated.
@@ -276,7 +276,7 @@ func (x LegacyErrorCode) String() string {
 	return proto.EnumName(LegacyErrorCode_name, int32(x))
 }
 func (LegacyErrorCode) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_vtrpc_63266364cf161411, []int{1}
+	return fileDescriptor_vtrpc_88a14d8f1bc03cf5, []int{1}
 }
 
 // CallerID is passed along RPCs to identify the originating client
@@ -293,15 +293,15 @@ type CallerID struct {
 	// came from an automated job or another system component.
 	// If the request comes directly from the Internet, or if the Vitess client
 	// takes action on its own accord, it is okay for this field to be absent.
-	Principal string `protobuf:"bytes,1,opt,name=principal" json:"principal,omitempty"`
+	Principal string `protobuf:"bytes,1,opt,name=principal,proto3" json:"principal,omitempty"`
 	// component describes the running process of the effective caller.
 	// It can for instance be the hostname:port of the servlet initiating the
 	// database call, or the container engine ID used by the servlet.
-	Component string `protobuf:"bytes,2,opt,name=component" json:"component,omitempty"`
+	Component string `protobuf:"bytes,2,opt,name=component,proto3" json:"component,omitempty"`
 	// subcomponent describes a component inisde the immediate caller which
 	// is responsible for generating is request. Suggested values are a
 	// servlet name or an API endpoint name.
-	Subcomponent         string   `protobuf:"bytes,3,opt,name=subcomponent" json:"subcomponent,omitempty"`
+	Subcomponent         string   `protobuf:"bytes,3,opt,name=subcomponent,proto3" json:"subcomponent,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -311,7 +311,7 @@ func (m *CallerID) Reset()         { *m = CallerID{} }
 func (m *CallerID) String() string { return proto.CompactTextString(m) }
 func (*CallerID) ProtoMessage()    {}
 func (*CallerID) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vtrpc_63266364cf161411, []int{0}
+	return fileDescriptor_vtrpc_88a14d8f1bc03cf5, []int{0}
 }
 func (m *CallerID) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CallerID.Unmarshal(m, b)
@@ -357,9 +357,9 @@ func (m *CallerID) GetSubcomponent() string {
 // We use this so the clients don't have to parse the error messages,
 // but instead can depend on the value of the code.
 type RPCError struct {
-	LegacyCode           LegacyErrorCode `protobuf:"varint,1,opt,name=legacy_code,json=legacyCode,enum=vtrpc.LegacyErrorCode" json:"legacy_code,omitempty"`
-	Message              string          `protobuf:"bytes,2,opt,name=message" json:"message,omitempty"`
-	Code                 Code            `protobuf:"varint,3,opt,name=code,enum=vtrpc.Code" json:"code,omitempty"`
+	LegacyCode           LegacyErrorCode `protobuf:"varint,1,opt,name=legacy_code,json=legacyCode,proto3,enum=vtrpc.LegacyErrorCode" json:"legacy_code,omitempty"`
+	Message              string          `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Code                 Code            `protobuf:"varint,3,opt,name=code,proto3,enum=vtrpc.Code" json:"code,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -369,7 +369,7 @@ func (m *RPCError) Reset()         { *m = RPCError{} }
 func (m *RPCError) String() string { return proto.CompactTextString(m) }
 func (*RPCError) ProtoMessage()    {}
 func (*RPCError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vtrpc_63266364cf161411, []int{1}
+	return fileDescriptor_vtrpc_88a14d8f1bc03cf5, []int{1}
 }
 func (m *RPCError) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RPCError.Unmarshal(m, b)
@@ -417,9 +417,9 @@ func init() {
 	proto.RegisterEnum("vtrpc.LegacyErrorCode", LegacyErrorCode_name, LegacyErrorCode_value)
 }
 
-func init() { proto.RegisterFile("vtrpc.proto", fileDescriptor_vtrpc_63266364cf161411) }
+func init() { proto.RegisterFile("vtrpc.proto", fileDescriptor_vtrpc_88a14d8f1bc03cf5) }
 
-var fileDescriptor_vtrpc_63266364cf161411 = []byte{
+var fileDescriptor_vtrpc_88a14d8f1bc03cf5 = []byte{
 	// 605 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x93, 0x4d, 0x4f, 0x1b, 0x3b,
 	0x14, 0x86, 0xc9, 0x07, 0xf9, 0x38, 0x13, 0x88, 0x31, 0x5f, 0xe1, 0x5e, 0xae, 0xee, 0x55, 0x56,

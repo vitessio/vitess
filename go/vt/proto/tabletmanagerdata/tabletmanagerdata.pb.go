@@ -24,19 +24,19 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type TableDefinition struct {
 	// the table name
-	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// the SQL to run to create the table
-	Schema string `protobuf:"bytes,2,opt,name=schema" json:"schema,omitempty"`
+	Schema string `protobuf:"bytes,2,opt,name=schema,proto3" json:"schema,omitempty"`
 	// the columns in the order that will be used to dump and load the data
-	Columns []string `protobuf:"bytes,3,rep,name=columns" json:"columns,omitempty"`
+	Columns []string `protobuf:"bytes,3,rep,name=columns,proto3" json:"columns,omitempty"`
 	// the primary key columns in the primary key order
-	PrimaryKeyColumns []string `protobuf:"bytes,4,rep,name=primary_key_columns,json=primaryKeyColumns" json:"primary_key_columns,omitempty"`
+	PrimaryKeyColumns []string `protobuf:"bytes,4,rep,name=primary_key_columns,json=primaryKeyColumns,proto3" json:"primary_key_columns,omitempty"`
 	// type is either mysqlctl.TableBaseTable or mysqlctl.TableView
-	Type string `protobuf:"bytes,5,opt,name=type" json:"type,omitempty"`
+	Type string `protobuf:"bytes,5,opt,name=type,proto3" json:"type,omitempty"`
 	// how much space the data file takes.
-	DataLength uint64 `protobuf:"varint,6,opt,name=data_length,json=dataLength" json:"data_length,omitempty"`
+	DataLength uint64 `protobuf:"varint,6,opt,name=data_length,json=dataLength,proto3" json:"data_length,omitempty"`
 	// approximate number of rows
-	RowCount             uint64   `protobuf:"varint,7,opt,name=row_count,json=rowCount" json:"row_count,omitempty"`
+	RowCount             uint64   `protobuf:"varint,7,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -46,7 +46,7 @@ func (m *TableDefinition) Reset()         { *m = TableDefinition{} }
 func (m *TableDefinition) String() string { return proto.CompactTextString(m) }
 func (*TableDefinition) ProtoMessage()    {}
 func (*TableDefinition) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{0}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{0}
 }
 func (m *TableDefinition) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TableDefinition.Unmarshal(m, b)
@@ -116,9 +116,9 @@ func (m *TableDefinition) GetRowCount() uint64 {
 }
 
 type SchemaDefinition struct {
-	DatabaseSchema       string             `protobuf:"bytes,1,opt,name=database_schema,json=databaseSchema" json:"database_schema,omitempty"`
-	TableDefinitions     []*TableDefinition `protobuf:"bytes,2,rep,name=table_definitions,json=tableDefinitions" json:"table_definitions,omitempty"`
-	Version              string             `protobuf:"bytes,3,opt,name=version" json:"version,omitempty"`
+	DatabaseSchema       string             `protobuf:"bytes,1,opt,name=database_schema,json=databaseSchema,proto3" json:"database_schema,omitempty"`
+	TableDefinitions     []*TableDefinition `protobuf:"bytes,2,rep,name=table_definitions,json=tableDefinitions,proto3" json:"table_definitions,omitempty"`
+	Version              string             `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -128,7 +128,7 @@ func (m *SchemaDefinition) Reset()         { *m = SchemaDefinition{} }
 func (m *SchemaDefinition) String() string { return proto.CompactTextString(m) }
 func (*SchemaDefinition) ProtoMessage()    {}
 func (*SchemaDefinition) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{1}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{1}
 }
 func (m *SchemaDefinition) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SchemaDefinition.Unmarshal(m, b)
@@ -171,9 +171,9 @@ func (m *SchemaDefinition) GetVersion() string {
 
 type SchemaChangeResult struct {
 	// before_schema holds the schema before each change.
-	BeforeSchema *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema,json=beforeSchema" json:"before_schema,omitempty"`
+	BeforeSchema *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema,json=beforeSchema,proto3" json:"before_schema,omitempty"`
 	// after_schema holds the schema after each change.
-	AfterSchema          *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema,json=afterSchema" json:"after_schema,omitempty"`
+	AfterSchema          *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -183,7 +183,7 @@ func (m *SchemaChangeResult) Reset()         { *m = SchemaChangeResult{} }
 func (m *SchemaChangeResult) String() string { return proto.CompactTextString(m) }
 func (*SchemaChangeResult) ProtoMessage()    {}
 func (*SchemaChangeResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{2}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{2}
 }
 func (m *SchemaChangeResult) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SchemaChangeResult.Unmarshal(m, b)
@@ -221,10 +221,10 @@ func (m *SchemaChangeResult) GetAfterSchema() *SchemaDefinition {
 // Primary key is Host+User
 // PasswordChecksum is the crc64 of the password, for security reasons
 type UserPermission struct {
-	Host                 string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
-	User                 string            `protobuf:"bytes,2,opt,name=user" json:"user,omitempty"`
-	PasswordChecksum     uint64            `protobuf:"varint,3,opt,name=password_checksum,json=passwordChecksum" json:"password_checksum,omitempty"`
-	Privileges           map[string]string `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Host                 string            `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	User                 string            `protobuf:"bytes,2,opt,name=user,proto3" json:"user,omitempty"`
+	PasswordChecksum     uint64            `protobuf:"varint,3,opt,name=password_checksum,json=passwordChecksum,proto3" json:"password_checksum,omitempty"`
+	Privileges           map[string]string `protobuf:"bytes,4,rep,name=privileges,proto3" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -234,7 +234,7 @@ func (m *UserPermission) Reset()         { *m = UserPermission{} }
 func (m *UserPermission) String() string { return proto.CompactTextString(m) }
 func (*UserPermission) ProtoMessage()    {}
 func (*UserPermission) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{3}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{3}
 }
 func (m *UserPermission) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UserPermission.Unmarshal(m, b)
@@ -285,10 +285,10 @@ func (m *UserPermission) GetPrivileges() map[string]string {
 // DbPermission describes a single row in the mysql.db table
 // Primary key is Host+Db+User
 type DbPermission struct {
-	Host                 string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
-	Db                   string            `protobuf:"bytes,2,opt,name=db" json:"db,omitempty"`
-	User                 string            `protobuf:"bytes,3,opt,name=user" json:"user,omitempty"`
-	Privileges           map[string]string `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Host                 string            `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	Db                   string            `protobuf:"bytes,2,opt,name=db,proto3" json:"db,omitempty"`
+	User                 string            `protobuf:"bytes,3,opt,name=user,proto3" json:"user,omitempty"`
+	Privileges           map[string]string `protobuf:"bytes,4,rep,name=privileges,proto3" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -298,7 +298,7 @@ func (m *DbPermission) Reset()         { *m = DbPermission{} }
 func (m *DbPermission) String() string { return proto.CompactTextString(m) }
 func (*DbPermission) ProtoMessage()    {}
 func (*DbPermission) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{4}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{4}
 }
 func (m *DbPermission) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DbPermission.Unmarshal(m, b)
@@ -349,8 +349,8 @@ func (m *DbPermission) GetPrivileges() map[string]string {
 // Permissions have all the rows in mysql.{user,db} tables,
 // (all rows are sorted by primary key)
 type Permissions struct {
-	UserPermissions      []*UserPermission `protobuf:"bytes,1,rep,name=user_permissions,json=userPermissions" json:"user_permissions,omitempty"`
-	DbPermissions        []*DbPermission   `protobuf:"bytes,2,rep,name=db_permissions,json=dbPermissions" json:"db_permissions,omitempty"`
+	UserPermissions      []*UserPermission `protobuf:"bytes,1,rep,name=user_permissions,json=userPermissions,proto3" json:"user_permissions,omitempty"`
+	DbPermissions        []*DbPermission   `protobuf:"bytes,2,rep,name=db_permissions,json=dbPermissions,proto3" json:"db_permissions,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -360,7 +360,7 @@ func (m *Permissions) Reset()         { *m = Permissions{} }
 func (m *Permissions) String() string { return proto.CompactTextString(m) }
 func (*Permissions) ProtoMessage()    {}
 func (*Permissions) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{5}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{5}
 }
 func (m *Permissions) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Permissions.Unmarshal(m, b)
@@ -395,7 +395,7 @@ func (m *Permissions) GetDbPermissions() []*DbPermission {
 }
 
 type PingRequest struct {
-	Payload              string   `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
+	Payload              string   `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -405,7 +405,7 @@ func (m *PingRequest) Reset()         { *m = PingRequest{} }
 func (m *PingRequest) String() string { return proto.CompactTextString(m) }
 func (*PingRequest) ProtoMessage()    {}
 func (*PingRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{6}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{6}
 }
 func (m *PingRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PingRequest.Unmarshal(m, b)
@@ -433,7 +433,7 @@ func (m *PingRequest) GetPayload() string {
 }
 
 type PingResponse struct {
-	Payload              string   `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
+	Payload              string   `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -443,7 +443,7 @@ func (m *PingResponse) Reset()         { *m = PingResponse{} }
 func (m *PingResponse) String() string { return proto.CompactTextString(m) }
 func (*PingResponse) ProtoMessage()    {}
 func (*PingResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{7}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{7}
 }
 func (m *PingResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PingResponse.Unmarshal(m, b)
@@ -472,7 +472,7 @@ func (m *PingResponse) GetPayload() string {
 
 type SleepRequest struct {
 	// duration is in nanoseconds
-	Duration             int64    `protobuf:"varint,1,opt,name=duration" json:"duration,omitempty"`
+	Duration             int64    `protobuf:"varint,1,opt,name=duration,proto3" json:"duration,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -482,7 +482,7 @@ func (m *SleepRequest) Reset()         { *m = SleepRequest{} }
 func (m *SleepRequest) String() string { return proto.CompactTextString(m) }
 func (*SleepRequest) ProtoMessage()    {}
 func (*SleepRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{8}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{8}
 }
 func (m *SleepRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SleepRequest.Unmarshal(m, b)
@@ -519,7 +519,7 @@ func (m *SleepResponse) Reset()         { *m = SleepResponse{} }
 func (m *SleepResponse) String() string { return proto.CompactTextString(m) }
 func (*SleepResponse) ProtoMessage()    {}
 func (*SleepResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{9}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{9}
 }
 func (m *SleepResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SleepResponse.Unmarshal(m, b)
@@ -540,9 +540,9 @@ func (m *SleepResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SleepResponse proto.InternalMessageInfo
 
 type ExecuteHookRequest struct {
-	Name                 string            `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	Parameters           []string          `protobuf:"bytes,2,rep,name=parameters" json:"parameters,omitempty"`
-	ExtraEnv             map[string]string `protobuf:"bytes,3,rep,name=extra_env,json=extraEnv" json:"extra_env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Name                 string            `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Parameters           []string          `protobuf:"bytes,2,rep,name=parameters,proto3" json:"parameters,omitempty"`
+	ExtraEnv             map[string]string `protobuf:"bytes,3,rep,name=extra_env,json=extraEnv,proto3" json:"extra_env,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -552,7 +552,7 @@ func (m *ExecuteHookRequest) Reset()         { *m = ExecuteHookRequest{} }
 func (m *ExecuteHookRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteHookRequest) ProtoMessage()    {}
 func (*ExecuteHookRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{10}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{10}
 }
 func (m *ExecuteHookRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteHookRequest.Unmarshal(m, b)
@@ -594,9 +594,9 @@ func (m *ExecuteHookRequest) GetExtraEnv() map[string]string {
 }
 
 type ExecuteHookResponse struct {
-	ExitStatus           int64    `protobuf:"varint,1,opt,name=exit_status,json=exitStatus" json:"exit_status,omitempty"`
-	Stdout               string   `protobuf:"bytes,2,opt,name=stdout" json:"stdout,omitempty"`
-	Stderr               string   `protobuf:"bytes,3,opt,name=stderr" json:"stderr,omitempty"`
+	ExitStatus           int64    `protobuf:"varint,1,opt,name=exit_status,json=exitStatus,proto3" json:"exit_status,omitempty"`
+	Stdout               string   `protobuf:"bytes,2,opt,name=stdout,proto3" json:"stdout,omitempty"`
+	Stderr               string   `protobuf:"bytes,3,opt,name=stderr,proto3" json:"stderr,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -606,7 +606,7 @@ func (m *ExecuteHookResponse) Reset()         { *m = ExecuteHookResponse{} }
 func (m *ExecuteHookResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteHookResponse) ProtoMessage()    {}
 func (*ExecuteHookResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{11}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{11}
 }
 func (m *ExecuteHookResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteHookResponse.Unmarshal(m, b)
@@ -648,9 +648,9 @@ func (m *ExecuteHookResponse) GetStderr() string {
 }
 
 type GetSchemaRequest struct {
-	Tables               []string `protobuf:"bytes,1,rep,name=tables" json:"tables,omitempty"`
-	IncludeViews         bool     `protobuf:"varint,2,opt,name=include_views,json=includeViews" json:"include_views,omitempty"`
-	ExcludeTables        []string `protobuf:"bytes,3,rep,name=exclude_tables,json=excludeTables" json:"exclude_tables,omitempty"`
+	Tables               []string `protobuf:"bytes,1,rep,name=tables,proto3" json:"tables,omitempty"`
+	IncludeViews         bool     `protobuf:"varint,2,opt,name=include_views,json=includeViews,proto3" json:"include_views,omitempty"`
+	ExcludeTables        []string `protobuf:"bytes,3,rep,name=exclude_tables,json=excludeTables,proto3" json:"exclude_tables,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -660,7 +660,7 @@ func (m *GetSchemaRequest) Reset()         { *m = GetSchemaRequest{} }
 func (m *GetSchemaRequest) String() string { return proto.CompactTextString(m) }
 func (*GetSchemaRequest) ProtoMessage()    {}
 func (*GetSchemaRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{12}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{12}
 }
 func (m *GetSchemaRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetSchemaRequest.Unmarshal(m, b)
@@ -702,7 +702,7 @@ func (m *GetSchemaRequest) GetExcludeTables() []string {
 }
 
 type GetSchemaResponse struct {
-	SchemaDefinition     *SchemaDefinition `protobuf:"bytes,1,opt,name=schema_definition,json=schemaDefinition" json:"schema_definition,omitempty"`
+	SchemaDefinition     *SchemaDefinition `protobuf:"bytes,1,opt,name=schema_definition,json=schemaDefinition,proto3" json:"schema_definition,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -712,7 +712,7 @@ func (m *GetSchemaResponse) Reset()         { *m = GetSchemaResponse{} }
 func (m *GetSchemaResponse) String() string { return proto.CompactTextString(m) }
 func (*GetSchemaResponse) ProtoMessage()    {}
 func (*GetSchemaResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{13}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{13}
 }
 func (m *GetSchemaResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetSchemaResponse.Unmarshal(m, b)
@@ -749,7 +749,7 @@ func (m *GetPermissionsRequest) Reset()         { *m = GetPermissionsRequest{} }
 func (m *GetPermissionsRequest) String() string { return proto.CompactTextString(m) }
 func (*GetPermissionsRequest) ProtoMessage()    {}
 func (*GetPermissionsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{14}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{14}
 }
 func (m *GetPermissionsRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetPermissionsRequest.Unmarshal(m, b)
@@ -770,7 +770,7 @@ func (m *GetPermissionsRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_GetPermissionsRequest proto.InternalMessageInfo
 
 type GetPermissionsResponse struct {
-	Permissions          *Permissions `protobuf:"bytes,1,opt,name=permissions" json:"permissions,omitempty"`
+	Permissions          *Permissions `protobuf:"bytes,1,opt,name=permissions,proto3" json:"permissions,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
 	XXX_unrecognized     []byte       `json:"-"`
 	XXX_sizecache        int32        `json:"-"`
@@ -780,7 +780,7 @@ func (m *GetPermissionsResponse) Reset()         { *m = GetPermissionsResponse{}
 func (m *GetPermissionsResponse) String() string { return proto.CompactTextString(m) }
 func (*GetPermissionsResponse) ProtoMessage()    {}
 func (*GetPermissionsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{15}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{15}
 }
 func (m *GetPermissionsResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetPermissionsResponse.Unmarshal(m, b)
@@ -817,7 +817,7 @@ func (m *SetReadOnlyRequest) Reset()         { *m = SetReadOnlyRequest{} }
 func (m *SetReadOnlyRequest) String() string { return proto.CompactTextString(m) }
 func (*SetReadOnlyRequest) ProtoMessage()    {}
 func (*SetReadOnlyRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{16}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{16}
 }
 func (m *SetReadOnlyRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetReadOnlyRequest.Unmarshal(m, b)
@@ -847,7 +847,7 @@ func (m *SetReadOnlyResponse) Reset()         { *m = SetReadOnlyResponse{} }
 func (m *SetReadOnlyResponse) String() string { return proto.CompactTextString(m) }
 func (*SetReadOnlyResponse) ProtoMessage()    {}
 func (*SetReadOnlyResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{17}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{17}
 }
 func (m *SetReadOnlyResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetReadOnlyResponse.Unmarshal(m, b)
@@ -877,7 +877,7 @@ func (m *SetReadWriteRequest) Reset()         { *m = SetReadWriteRequest{} }
 func (m *SetReadWriteRequest) String() string { return proto.CompactTextString(m) }
 func (*SetReadWriteRequest) ProtoMessage()    {}
 func (*SetReadWriteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{18}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{18}
 }
 func (m *SetReadWriteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetReadWriteRequest.Unmarshal(m, b)
@@ -907,7 +907,7 @@ func (m *SetReadWriteResponse) Reset()         { *m = SetReadWriteResponse{} }
 func (m *SetReadWriteResponse) String() string { return proto.CompactTextString(m) }
 func (*SetReadWriteResponse) ProtoMessage()    {}
 func (*SetReadWriteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{19}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{19}
 }
 func (m *SetReadWriteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetReadWriteResponse.Unmarshal(m, b)
@@ -928,7 +928,7 @@ func (m *SetReadWriteResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SetReadWriteResponse proto.InternalMessageInfo
 
 type ChangeTypeRequest struct {
-	TabletType           topodata.TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	TabletType           topodata.TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
 	XXX_unrecognized     []byte              `json:"-"`
 	XXX_sizecache        int32               `json:"-"`
@@ -938,7 +938,7 @@ func (m *ChangeTypeRequest) Reset()         { *m = ChangeTypeRequest{} }
 func (m *ChangeTypeRequest) String() string { return proto.CompactTextString(m) }
 func (*ChangeTypeRequest) ProtoMessage()    {}
 func (*ChangeTypeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{20}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{20}
 }
 func (m *ChangeTypeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ChangeTypeRequest.Unmarshal(m, b)
@@ -975,7 +975,7 @@ func (m *ChangeTypeResponse) Reset()         { *m = ChangeTypeResponse{} }
 func (m *ChangeTypeResponse) String() string { return proto.CompactTextString(m) }
 func (*ChangeTypeResponse) ProtoMessage()    {}
 func (*ChangeTypeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{21}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{21}
 }
 func (m *ChangeTypeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ChangeTypeResponse.Unmarshal(m, b)
@@ -1005,7 +1005,7 @@ func (m *RefreshStateRequest) Reset()         { *m = RefreshStateRequest{} }
 func (m *RefreshStateRequest) String() string { return proto.CompactTextString(m) }
 func (*RefreshStateRequest) ProtoMessage()    {}
 func (*RefreshStateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{22}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{22}
 }
 func (m *RefreshStateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RefreshStateRequest.Unmarshal(m, b)
@@ -1035,7 +1035,7 @@ func (m *RefreshStateResponse) Reset()         { *m = RefreshStateResponse{} }
 func (m *RefreshStateResponse) String() string { return proto.CompactTextString(m) }
 func (*RefreshStateResponse) ProtoMessage()    {}
 func (*RefreshStateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{23}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{23}
 }
 func (m *RefreshStateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RefreshStateResponse.Unmarshal(m, b)
@@ -1065,7 +1065,7 @@ func (m *RunHealthCheckRequest) Reset()         { *m = RunHealthCheckRequest{} }
 func (m *RunHealthCheckRequest) String() string { return proto.CompactTextString(m) }
 func (*RunHealthCheckRequest) ProtoMessage()    {}
 func (*RunHealthCheckRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{24}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{24}
 }
 func (m *RunHealthCheckRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RunHealthCheckRequest.Unmarshal(m, b)
@@ -1095,7 +1095,7 @@ func (m *RunHealthCheckResponse) Reset()         { *m = RunHealthCheckResponse{}
 func (m *RunHealthCheckResponse) String() string { return proto.CompactTextString(m) }
 func (*RunHealthCheckResponse) ProtoMessage()    {}
 func (*RunHealthCheckResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{25}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{25}
 }
 func (m *RunHealthCheckResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RunHealthCheckResponse.Unmarshal(m, b)
@@ -1116,7 +1116,7 @@ func (m *RunHealthCheckResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_RunHealthCheckResponse proto.InternalMessageInfo
 
 type IgnoreHealthErrorRequest struct {
-	Pattern              string   `protobuf:"bytes,1,opt,name=pattern" json:"pattern,omitempty"`
+	Pattern              string   `protobuf:"bytes,1,opt,name=pattern,proto3" json:"pattern,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1126,7 +1126,7 @@ func (m *IgnoreHealthErrorRequest) Reset()         { *m = IgnoreHealthErrorReque
 func (m *IgnoreHealthErrorRequest) String() string { return proto.CompactTextString(m) }
 func (*IgnoreHealthErrorRequest) ProtoMessage()    {}
 func (*IgnoreHealthErrorRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{26}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{26}
 }
 func (m *IgnoreHealthErrorRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_IgnoreHealthErrorRequest.Unmarshal(m, b)
@@ -1163,7 +1163,7 @@ func (m *IgnoreHealthErrorResponse) Reset()         { *m = IgnoreHealthErrorResp
 func (m *IgnoreHealthErrorResponse) String() string { return proto.CompactTextString(m) }
 func (*IgnoreHealthErrorResponse) ProtoMessage()    {}
 func (*IgnoreHealthErrorResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{27}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{27}
 }
 func (m *IgnoreHealthErrorResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_IgnoreHealthErrorResponse.Unmarshal(m, b)
@@ -1187,7 +1187,7 @@ type ReloadSchemaRequest struct {
 	// wait_position allows scheduling a schema reload to occur after a
 	// given DDL has replicated to this slave, by specifying a replication
 	// position to wait for. Leave empty to trigger the reload immediately.
-	WaitPosition         string   `protobuf:"bytes,1,opt,name=wait_position,json=waitPosition" json:"wait_position,omitempty"`
+	WaitPosition         string   `protobuf:"bytes,1,opt,name=wait_position,json=waitPosition,proto3" json:"wait_position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1197,7 +1197,7 @@ func (m *ReloadSchemaRequest) Reset()         { *m = ReloadSchemaRequest{} }
 func (m *ReloadSchemaRequest) String() string { return proto.CompactTextString(m) }
 func (*ReloadSchemaRequest) ProtoMessage()    {}
 func (*ReloadSchemaRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{28}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{28}
 }
 func (m *ReloadSchemaRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ReloadSchemaRequest.Unmarshal(m, b)
@@ -1234,7 +1234,7 @@ func (m *ReloadSchemaResponse) Reset()         { *m = ReloadSchemaResponse{} }
 func (m *ReloadSchemaResponse) String() string { return proto.CompactTextString(m) }
 func (*ReloadSchemaResponse) ProtoMessage()    {}
 func (*ReloadSchemaResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{29}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{29}
 }
 func (m *ReloadSchemaResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ReloadSchemaResponse.Unmarshal(m, b)
@@ -1255,7 +1255,7 @@ func (m *ReloadSchemaResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_ReloadSchemaResponse proto.InternalMessageInfo
 
 type PreflightSchemaRequest struct {
-	Changes              []string `protobuf:"bytes,1,rep,name=changes" json:"changes,omitempty"`
+	Changes              []string `protobuf:"bytes,1,rep,name=changes,proto3" json:"changes,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1265,7 +1265,7 @@ func (m *PreflightSchemaRequest) Reset()         { *m = PreflightSchemaRequest{}
 func (m *PreflightSchemaRequest) String() string { return proto.CompactTextString(m) }
 func (*PreflightSchemaRequest) ProtoMessage()    {}
 func (*PreflightSchemaRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{30}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{30}
 }
 func (m *PreflightSchemaRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PreflightSchemaRequest.Unmarshal(m, b)
@@ -1295,7 +1295,7 @@ func (m *PreflightSchemaRequest) GetChanges() []string {
 type PreflightSchemaResponse struct {
 	// change_results has for each change the schema before and after it.
 	// The number of elements is identical to the length of "changes" in the request.
-	ChangeResults        []*SchemaChangeResult `protobuf:"bytes,1,rep,name=change_results,json=changeResults" json:"change_results,omitempty"`
+	ChangeResults        []*SchemaChangeResult `protobuf:"bytes,1,rep,name=change_results,json=changeResults,proto3" json:"change_results,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -1305,7 +1305,7 @@ func (m *PreflightSchemaResponse) Reset()         { *m = PreflightSchemaResponse
 func (m *PreflightSchemaResponse) String() string { return proto.CompactTextString(m) }
 func (*PreflightSchemaResponse) ProtoMessage()    {}
 func (*PreflightSchemaResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{31}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{31}
 }
 func (m *PreflightSchemaResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PreflightSchemaResponse.Unmarshal(m, b)
@@ -1333,11 +1333,11 @@ func (m *PreflightSchemaResponse) GetChangeResults() []*SchemaChangeResult {
 }
 
 type ApplySchemaRequest struct {
-	Sql                  string            `protobuf:"bytes,1,opt,name=sql" json:"sql,omitempty"`
-	Force                bool              `protobuf:"varint,2,opt,name=force" json:"force,omitempty"`
-	AllowReplication     bool              `protobuf:"varint,3,opt,name=allow_replication,json=allowReplication" json:"allow_replication,omitempty"`
-	BeforeSchema         *SchemaDefinition `protobuf:"bytes,4,opt,name=before_schema,json=beforeSchema" json:"before_schema,omitempty"`
-	AfterSchema          *SchemaDefinition `protobuf:"bytes,5,opt,name=after_schema,json=afterSchema" json:"after_schema,omitempty"`
+	Sql                  string            `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
+	Force                bool              `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"`
+	AllowReplication     bool              `protobuf:"varint,3,opt,name=allow_replication,json=allowReplication,proto3" json:"allow_replication,omitempty"`
+	BeforeSchema         *SchemaDefinition `protobuf:"bytes,4,opt,name=before_schema,json=beforeSchema,proto3" json:"before_schema,omitempty"`
+	AfterSchema          *SchemaDefinition `protobuf:"bytes,5,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -1347,7 +1347,7 @@ func (m *ApplySchemaRequest) Reset()         { *m = ApplySchemaRequest{} }
 func (m *ApplySchemaRequest) String() string { return proto.CompactTextString(m) }
 func (*ApplySchemaRequest) ProtoMessage()    {}
 func (*ApplySchemaRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{32}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{32}
 }
 func (m *ApplySchemaRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ApplySchemaRequest.Unmarshal(m, b)
@@ -1403,8 +1403,8 @@ func (m *ApplySchemaRequest) GetAfterSchema() *SchemaDefinition {
 }
 
 type ApplySchemaResponse struct {
-	BeforeSchema         *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema,json=beforeSchema" json:"before_schema,omitempty"`
-	AfterSchema          *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema,json=afterSchema" json:"after_schema,omitempty"`
+	BeforeSchema         *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema,json=beforeSchema,proto3" json:"before_schema,omitempty"`
+	AfterSchema          *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -1414,7 +1414,7 @@ func (m *ApplySchemaResponse) Reset()         { *m = ApplySchemaResponse{} }
 func (m *ApplySchemaResponse) String() string { return proto.CompactTextString(m) }
 func (*ApplySchemaResponse) ProtoMessage()    {}
 func (*ApplySchemaResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{33}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{33}
 }
 func (m *ApplySchemaResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ApplySchemaResponse.Unmarshal(m, b)
@@ -1458,7 +1458,7 @@ func (m *LockTablesRequest) Reset()         { *m = LockTablesRequest{} }
 func (m *LockTablesRequest) String() string { return proto.CompactTextString(m) }
 func (*LockTablesRequest) ProtoMessage()    {}
 func (*LockTablesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{34}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{34}
 }
 func (m *LockTablesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LockTablesRequest.Unmarshal(m, b)
@@ -1488,7 +1488,7 @@ func (m *LockTablesResponse) Reset()         { *m = LockTablesResponse{} }
 func (m *LockTablesResponse) String() string { return proto.CompactTextString(m) }
 func (*LockTablesResponse) ProtoMessage()    {}
 func (*LockTablesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{35}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{35}
 }
 func (m *LockTablesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LockTablesResponse.Unmarshal(m, b)
@@ -1518,7 +1518,7 @@ func (m *UnlockTablesRequest) Reset()         { *m = UnlockTablesRequest{} }
 func (m *UnlockTablesRequest) String() string { return proto.CompactTextString(m) }
 func (*UnlockTablesRequest) ProtoMessage()    {}
 func (*UnlockTablesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{36}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{36}
 }
 func (m *UnlockTablesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UnlockTablesRequest.Unmarshal(m, b)
@@ -1548,7 +1548,7 @@ func (m *UnlockTablesResponse) Reset()         { *m = UnlockTablesResponse{} }
 func (m *UnlockTablesResponse) String() string { return proto.CompactTextString(m) }
 func (*UnlockTablesResponse) ProtoMessage()    {}
 func (*UnlockTablesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{37}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{37}
 }
 func (m *UnlockTablesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UnlockTablesResponse.Unmarshal(m, b)
@@ -1570,10 +1570,10 @@ var xxx_messageInfo_UnlockTablesResponse proto.InternalMessageInfo
 
 type ExecuteFetchAsDbaRequest struct {
 	Query                []byte   `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
-	DbName               string   `protobuf:"bytes,2,opt,name=db_name,json=dbName" json:"db_name,omitempty"`
-	MaxRows              uint64   `protobuf:"varint,3,opt,name=max_rows,json=maxRows" json:"max_rows,omitempty"`
-	DisableBinlogs       bool     `protobuf:"varint,4,opt,name=disable_binlogs,json=disableBinlogs" json:"disable_binlogs,omitempty"`
-	ReloadSchema         bool     `protobuf:"varint,5,opt,name=reload_schema,json=reloadSchema" json:"reload_schema,omitempty"`
+	DbName               string   `protobuf:"bytes,2,opt,name=db_name,json=dbName,proto3" json:"db_name,omitempty"`
+	MaxRows              uint64   `protobuf:"varint,3,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
+	DisableBinlogs       bool     `protobuf:"varint,4,opt,name=disable_binlogs,json=disableBinlogs,proto3" json:"disable_binlogs,omitempty"`
+	ReloadSchema         bool     `protobuf:"varint,5,opt,name=reload_schema,json=reloadSchema,proto3" json:"reload_schema,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1583,7 +1583,7 @@ func (m *ExecuteFetchAsDbaRequest) Reset()         { *m = ExecuteFetchAsDbaReque
 func (m *ExecuteFetchAsDbaRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsDbaRequest) ProtoMessage()    {}
 func (*ExecuteFetchAsDbaRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{38}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{38}
 }
 func (m *ExecuteFetchAsDbaRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteFetchAsDbaRequest.Unmarshal(m, b)
@@ -1639,7 +1639,7 @@ func (m *ExecuteFetchAsDbaRequest) GetReloadSchema() bool {
 }
 
 type ExecuteFetchAsDbaResponse struct {
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -1649,7 +1649,7 @@ func (m *ExecuteFetchAsDbaResponse) Reset()         { *m = ExecuteFetchAsDbaResp
 func (m *ExecuteFetchAsDbaResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsDbaResponse) ProtoMessage()    {}
 func (*ExecuteFetchAsDbaResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{39}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{39}
 }
 func (m *ExecuteFetchAsDbaResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteFetchAsDbaResponse.Unmarshal(m, b)
@@ -1678,9 +1678,9 @@ func (m *ExecuteFetchAsDbaResponse) GetResult() *query.QueryResult {
 
 type ExecuteFetchAsAllPrivsRequest struct {
 	Query                []byte   `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
-	DbName               string   `protobuf:"bytes,2,opt,name=db_name,json=dbName" json:"db_name,omitempty"`
-	MaxRows              uint64   `protobuf:"varint,3,opt,name=max_rows,json=maxRows" json:"max_rows,omitempty"`
-	ReloadSchema         bool     `protobuf:"varint,4,opt,name=reload_schema,json=reloadSchema" json:"reload_schema,omitempty"`
+	DbName               string   `protobuf:"bytes,2,opt,name=db_name,json=dbName,proto3" json:"db_name,omitempty"`
+	MaxRows              uint64   `protobuf:"varint,3,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
+	ReloadSchema         bool     `protobuf:"varint,4,opt,name=reload_schema,json=reloadSchema,proto3" json:"reload_schema,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1690,7 +1690,7 @@ func (m *ExecuteFetchAsAllPrivsRequest) Reset()         { *m = ExecuteFetchAsAll
 func (m *ExecuteFetchAsAllPrivsRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsAllPrivsRequest) ProtoMessage()    {}
 func (*ExecuteFetchAsAllPrivsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{40}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{40}
 }
 func (m *ExecuteFetchAsAllPrivsRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteFetchAsAllPrivsRequest.Unmarshal(m, b)
@@ -1739,7 +1739,7 @@ func (m *ExecuteFetchAsAllPrivsRequest) GetReloadSchema() bool {
 }
 
 type ExecuteFetchAsAllPrivsResponse struct {
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -1749,7 +1749,7 @@ func (m *ExecuteFetchAsAllPrivsResponse) Reset()         { *m = ExecuteFetchAsAl
 func (m *ExecuteFetchAsAllPrivsResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsAllPrivsResponse) ProtoMessage()    {}
 func (*ExecuteFetchAsAllPrivsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{41}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{41}
 }
 func (m *ExecuteFetchAsAllPrivsResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteFetchAsAllPrivsResponse.Unmarshal(m, b)
@@ -1778,7 +1778,7 @@ func (m *ExecuteFetchAsAllPrivsResponse) GetResult() *query.QueryResult {
 
 type ExecuteFetchAsAppRequest struct {
 	Query                []byte   `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
-	MaxRows              uint64   `protobuf:"varint,2,opt,name=max_rows,json=maxRows" json:"max_rows,omitempty"`
+	MaxRows              uint64   `protobuf:"varint,2,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1788,7 +1788,7 @@ func (m *ExecuteFetchAsAppRequest) Reset()         { *m = ExecuteFetchAsAppReque
 func (m *ExecuteFetchAsAppRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsAppRequest) ProtoMessage()    {}
 func (*ExecuteFetchAsAppRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{42}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{42}
 }
 func (m *ExecuteFetchAsAppRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteFetchAsAppRequest.Unmarshal(m, b)
@@ -1823,7 +1823,7 @@ func (m *ExecuteFetchAsAppRequest) GetMaxRows() uint64 {
 }
 
 type ExecuteFetchAsAppResponse struct {
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -1833,7 +1833,7 @@ func (m *ExecuteFetchAsAppResponse) Reset()         { *m = ExecuteFetchAsAppResp
 func (m *ExecuteFetchAsAppResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsAppResponse) ProtoMessage()    {}
 func (*ExecuteFetchAsAppResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{43}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{43}
 }
 func (m *ExecuteFetchAsAppResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteFetchAsAppResponse.Unmarshal(m, b)
@@ -1870,7 +1870,7 @@ func (m *SlaveStatusRequest) Reset()         { *m = SlaveStatusRequest{} }
 func (m *SlaveStatusRequest) String() string { return proto.CompactTextString(m) }
 func (*SlaveStatusRequest) ProtoMessage()    {}
 func (*SlaveStatusRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{44}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{44}
 }
 func (m *SlaveStatusRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SlaveStatusRequest.Unmarshal(m, b)
@@ -1891,7 +1891,7 @@ func (m *SlaveStatusRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_SlaveStatusRequest proto.InternalMessageInfo
 
 type SlaveStatusResponse struct {
-	Status               *replicationdata.Status `protobuf:"bytes,1,opt,name=status" json:"status,omitempty"`
+	Status               *replicationdata.Status `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
 	XXX_sizecache        int32                   `json:"-"`
@@ -1901,7 +1901,7 @@ func (m *SlaveStatusResponse) Reset()         { *m = SlaveStatusResponse{} }
 func (m *SlaveStatusResponse) String() string { return proto.CompactTextString(m) }
 func (*SlaveStatusResponse) ProtoMessage()    {}
 func (*SlaveStatusResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{45}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{45}
 }
 func (m *SlaveStatusResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SlaveStatusResponse.Unmarshal(m, b)
@@ -1938,7 +1938,7 @@ func (m *MasterPositionRequest) Reset()         { *m = MasterPositionRequest{} }
 func (m *MasterPositionRequest) String() string { return proto.CompactTextString(m) }
 func (*MasterPositionRequest) ProtoMessage()    {}
 func (*MasterPositionRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{46}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{46}
 }
 func (m *MasterPositionRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_MasterPositionRequest.Unmarshal(m, b)
@@ -1959,7 +1959,7 @@ func (m *MasterPositionRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_MasterPositionRequest proto.InternalMessageInfo
 
 type MasterPositionResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1969,7 +1969,7 @@ func (m *MasterPositionResponse) Reset()         { *m = MasterPositionResponse{}
 func (m *MasterPositionResponse) String() string { return proto.CompactTextString(m) }
 func (*MasterPositionResponse) ProtoMessage()    {}
 func (*MasterPositionResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{47}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{47}
 }
 func (m *MasterPositionResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_MasterPositionResponse.Unmarshal(m, b)
@@ -2006,7 +2006,7 @@ func (m *StopSlaveRequest) Reset()         { *m = StopSlaveRequest{} }
 func (m *StopSlaveRequest) String() string { return proto.CompactTextString(m) }
 func (*StopSlaveRequest) ProtoMessage()    {}
 func (*StopSlaveRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{48}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{48}
 }
 func (m *StopSlaveRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopSlaveRequest.Unmarshal(m, b)
@@ -2036,7 +2036,7 @@ func (m *StopSlaveResponse) Reset()         { *m = StopSlaveResponse{} }
 func (m *StopSlaveResponse) String() string { return proto.CompactTextString(m) }
 func (*StopSlaveResponse) ProtoMessage()    {}
 func (*StopSlaveResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{49}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{49}
 }
 func (m *StopSlaveResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopSlaveResponse.Unmarshal(m, b)
@@ -2057,8 +2057,8 @@ func (m *StopSlaveResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_StopSlaveResponse proto.InternalMessageInfo
 
 type StopSlaveMinimumRequest struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
-	WaitTimeout          int64    `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout" json:"wait_timeout,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
+	WaitTimeout          int64    `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout,proto3" json:"wait_timeout,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2068,7 +2068,7 @@ func (m *StopSlaveMinimumRequest) Reset()         { *m = StopSlaveMinimumRequest
 func (m *StopSlaveMinimumRequest) String() string { return proto.CompactTextString(m) }
 func (*StopSlaveMinimumRequest) ProtoMessage()    {}
 func (*StopSlaveMinimumRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{50}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{50}
 }
 func (m *StopSlaveMinimumRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopSlaveMinimumRequest.Unmarshal(m, b)
@@ -2103,7 +2103,7 @@ func (m *StopSlaveMinimumRequest) GetWaitTimeout() int64 {
 }
 
 type StopSlaveMinimumResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2113,7 +2113,7 @@ func (m *StopSlaveMinimumResponse) Reset()         { *m = StopSlaveMinimumRespon
 func (m *StopSlaveMinimumResponse) String() string { return proto.CompactTextString(m) }
 func (*StopSlaveMinimumResponse) ProtoMessage()    {}
 func (*StopSlaveMinimumResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{51}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{51}
 }
 func (m *StopSlaveMinimumResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopSlaveMinimumResponse.Unmarshal(m, b)
@@ -2150,7 +2150,7 @@ func (m *StartSlaveRequest) Reset()         { *m = StartSlaveRequest{} }
 func (m *StartSlaveRequest) String() string { return proto.CompactTextString(m) }
 func (*StartSlaveRequest) ProtoMessage()    {}
 func (*StartSlaveRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{52}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{52}
 }
 func (m *StartSlaveRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StartSlaveRequest.Unmarshal(m, b)
@@ -2180,7 +2180,7 @@ func (m *StartSlaveResponse) Reset()         { *m = StartSlaveResponse{} }
 func (m *StartSlaveResponse) String() string { return proto.CompactTextString(m) }
 func (*StartSlaveResponse) ProtoMessage()    {}
 func (*StartSlaveResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{53}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{53}
 }
 func (m *StartSlaveResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StartSlaveResponse.Unmarshal(m, b)
@@ -2201,8 +2201,8 @@ func (m *StartSlaveResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_StartSlaveResponse proto.InternalMessageInfo
 
 type StartSlaveUntilAfterRequest struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
-	WaitTimeout          int64    `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout" json:"wait_timeout,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
+	WaitTimeout          int64    `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout,proto3" json:"wait_timeout,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2212,7 +2212,7 @@ func (m *StartSlaveUntilAfterRequest) Reset()         { *m = StartSlaveUntilAfte
 func (m *StartSlaveUntilAfterRequest) String() string { return proto.CompactTextString(m) }
 func (*StartSlaveUntilAfterRequest) ProtoMessage()    {}
 func (*StartSlaveUntilAfterRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{54}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{54}
 }
 func (m *StartSlaveUntilAfterRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StartSlaveUntilAfterRequest.Unmarshal(m, b)
@@ -2256,7 +2256,7 @@ func (m *StartSlaveUntilAfterResponse) Reset()         { *m = StartSlaveUntilAft
 func (m *StartSlaveUntilAfterResponse) String() string { return proto.CompactTextString(m) }
 func (*StartSlaveUntilAfterResponse) ProtoMessage()    {}
 func (*StartSlaveUntilAfterResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{55}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{55}
 }
 func (m *StartSlaveUntilAfterResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StartSlaveUntilAfterResponse.Unmarshal(m, b)
@@ -2280,7 +2280,7 @@ type TabletExternallyReparentedRequest struct {
 	// external_id is an string value that may be provided by an external
 	// agent for tracking purposes. The tablet will emit this string in
 	// events triggered by TabletExternallyReparented, such as VitessReparent.
-	ExternalId           string   `protobuf:"bytes,1,opt,name=external_id,json=externalId" json:"external_id,omitempty"`
+	ExternalId           string   `protobuf:"bytes,1,opt,name=external_id,json=externalId,proto3" json:"external_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2290,7 +2290,7 @@ func (m *TabletExternallyReparentedRequest) Reset()         { *m = TabletExterna
 func (m *TabletExternallyReparentedRequest) String() string { return proto.CompactTextString(m) }
 func (*TabletExternallyReparentedRequest) ProtoMessage()    {}
 func (*TabletExternallyReparentedRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{56}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{56}
 }
 func (m *TabletExternallyReparentedRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TabletExternallyReparentedRequest.Unmarshal(m, b)
@@ -2327,7 +2327,7 @@ func (m *TabletExternallyReparentedResponse) Reset()         { *m = TabletExtern
 func (m *TabletExternallyReparentedResponse) String() string { return proto.CompactTextString(m) }
 func (*TabletExternallyReparentedResponse) ProtoMessage()    {}
 func (*TabletExternallyReparentedResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{57}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{57}
 }
 func (m *TabletExternallyReparentedResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TabletExternallyReparentedResponse.Unmarshal(m, b)
@@ -2357,7 +2357,7 @@ func (m *TabletExternallyElectedRequest) Reset()         { *m = TabletExternally
 func (m *TabletExternallyElectedRequest) String() string { return proto.CompactTextString(m) }
 func (*TabletExternallyElectedRequest) ProtoMessage()    {}
 func (*TabletExternallyElectedRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{58}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{58}
 }
 func (m *TabletExternallyElectedRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TabletExternallyElectedRequest.Unmarshal(m, b)
@@ -2387,7 +2387,7 @@ func (m *TabletExternallyElectedResponse) Reset()         { *m = TabletExternall
 func (m *TabletExternallyElectedResponse) String() string { return proto.CompactTextString(m) }
 func (*TabletExternallyElectedResponse) ProtoMessage()    {}
 func (*TabletExternallyElectedResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{59}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{59}
 }
 func (m *TabletExternallyElectedResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TabletExternallyElectedResponse.Unmarshal(m, b)
@@ -2417,7 +2417,7 @@ func (m *GetSlavesRequest) Reset()         { *m = GetSlavesRequest{} }
 func (m *GetSlavesRequest) String() string { return proto.CompactTextString(m) }
 func (*GetSlavesRequest) ProtoMessage()    {}
 func (*GetSlavesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{60}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{60}
 }
 func (m *GetSlavesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetSlavesRequest.Unmarshal(m, b)
@@ -2438,7 +2438,7 @@ func (m *GetSlavesRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_GetSlavesRequest proto.InternalMessageInfo
 
 type GetSlavesResponse struct {
-	Addrs                []string `protobuf:"bytes,1,rep,name=addrs" json:"addrs,omitempty"`
+	Addrs                []string `protobuf:"bytes,1,rep,name=addrs,proto3" json:"addrs,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2448,7 +2448,7 @@ func (m *GetSlavesResponse) Reset()         { *m = GetSlavesResponse{} }
 func (m *GetSlavesResponse) String() string { return proto.CompactTextString(m) }
 func (*GetSlavesResponse) ProtoMessage()    {}
 func (*GetSlavesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{61}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{61}
 }
 func (m *GetSlavesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetSlavesResponse.Unmarshal(m, b)
@@ -2485,7 +2485,7 @@ func (m *ResetReplicationRequest) Reset()         { *m = ResetReplicationRequest
 func (m *ResetReplicationRequest) String() string { return proto.CompactTextString(m) }
 func (*ResetReplicationRequest) ProtoMessage()    {}
 func (*ResetReplicationRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{62}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{62}
 }
 func (m *ResetReplicationRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ResetReplicationRequest.Unmarshal(m, b)
@@ -2515,7 +2515,7 @@ func (m *ResetReplicationResponse) Reset()         { *m = ResetReplicationRespon
 func (m *ResetReplicationResponse) String() string { return proto.CompactTextString(m) }
 func (*ResetReplicationResponse) ProtoMessage()    {}
 func (*ResetReplicationResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{63}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{63}
 }
 func (m *ResetReplicationResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ResetReplicationResponse.Unmarshal(m, b)
@@ -2536,7 +2536,7 @@ func (m *ResetReplicationResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_ResetReplicationResponse proto.InternalMessageInfo
 
 type VReplicationExecRequest struct {
-	Query                string   `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	Query                string   `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2546,7 +2546,7 @@ func (m *VReplicationExecRequest) Reset()         { *m = VReplicationExecRequest
 func (m *VReplicationExecRequest) String() string { return proto.CompactTextString(m) }
 func (*VReplicationExecRequest) ProtoMessage()    {}
 func (*VReplicationExecRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{64}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{64}
 }
 func (m *VReplicationExecRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VReplicationExecRequest.Unmarshal(m, b)
@@ -2574,7 +2574,7 @@ func (m *VReplicationExecRequest) GetQuery() string {
 }
 
 type VReplicationExecResponse struct {
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -2584,7 +2584,7 @@ func (m *VReplicationExecResponse) Reset()         { *m = VReplicationExecRespon
 func (m *VReplicationExecResponse) String() string { return proto.CompactTextString(m) }
 func (*VReplicationExecResponse) ProtoMessage()    {}
 func (*VReplicationExecResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{65}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{65}
 }
 func (m *VReplicationExecResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VReplicationExecResponse.Unmarshal(m, b)
@@ -2612,8 +2612,8 @@ func (m *VReplicationExecResponse) GetResult() *query.QueryResult {
 }
 
 type VReplicationWaitForPosRequest struct {
-	Id                   int64    `protobuf:"varint,1,opt,name=id" json:"id,omitempty"`
-	Position             string   `protobuf:"bytes,2,opt,name=position" json:"position,omitempty"`
+	Id                   int64    `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Position             string   `protobuf:"bytes,2,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2623,7 +2623,7 @@ func (m *VReplicationWaitForPosRequest) Reset()         { *m = VReplicationWaitF
 func (m *VReplicationWaitForPosRequest) String() string { return proto.CompactTextString(m) }
 func (*VReplicationWaitForPosRequest) ProtoMessage()    {}
 func (*VReplicationWaitForPosRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{66}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{66}
 }
 func (m *VReplicationWaitForPosRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VReplicationWaitForPosRequest.Unmarshal(m, b)
@@ -2667,7 +2667,7 @@ func (m *VReplicationWaitForPosResponse) Reset()         { *m = VReplicationWait
 func (m *VReplicationWaitForPosResponse) String() string { return proto.CompactTextString(m) }
 func (*VReplicationWaitForPosResponse) ProtoMessage()    {}
 func (*VReplicationWaitForPosResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{67}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{67}
 }
 func (m *VReplicationWaitForPosResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VReplicationWaitForPosResponse.Unmarshal(m, b)
@@ -2697,7 +2697,7 @@ func (m *InitMasterRequest) Reset()         { *m = InitMasterRequest{} }
 func (m *InitMasterRequest) String() string { return proto.CompactTextString(m) }
 func (*InitMasterRequest) ProtoMessage()    {}
 func (*InitMasterRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{68}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{68}
 }
 func (m *InitMasterRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_InitMasterRequest.Unmarshal(m, b)
@@ -2718,7 +2718,7 @@ func (m *InitMasterRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_InitMasterRequest proto.InternalMessageInfo
 
 type InitMasterResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2728,7 +2728,7 @@ func (m *InitMasterResponse) Reset()         { *m = InitMasterResponse{} }
 func (m *InitMasterResponse) String() string { return proto.CompactTextString(m) }
 func (*InitMasterResponse) ProtoMessage()    {}
 func (*InitMasterResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{69}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{69}
 }
 func (m *InitMasterResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_InitMasterResponse.Unmarshal(m, b)
@@ -2756,10 +2756,10 @@ func (m *InitMasterResponse) GetPosition() string {
 }
 
 type PopulateReparentJournalRequest struct {
-	TimeCreatedNs        int64                 `protobuf:"varint,1,opt,name=time_created_ns,json=timeCreatedNs" json:"time_created_ns,omitempty"`
-	ActionName           string                `protobuf:"bytes,2,opt,name=action_name,json=actionName" json:"action_name,omitempty"`
-	MasterAlias          *topodata.TabletAlias `protobuf:"bytes,3,opt,name=master_alias,json=masterAlias" json:"master_alias,omitempty"`
-	ReplicationPosition  string                `protobuf:"bytes,4,opt,name=replication_position,json=replicationPosition" json:"replication_position,omitempty"`
+	TimeCreatedNs        int64                 `protobuf:"varint,1,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
+	ActionName           string                `protobuf:"bytes,2,opt,name=action_name,json=actionName,proto3" json:"action_name,omitempty"`
+	MasterAlias          *topodata.TabletAlias `protobuf:"bytes,3,opt,name=master_alias,json=masterAlias,proto3" json:"master_alias,omitempty"`
+	ReplicationPosition  string                `protobuf:"bytes,4,opt,name=replication_position,json=replicationPosition,proto3" json:"replication_position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -2769,7 +2769,7 @@ func (m *PopulateReparentJournalRequest) Reset()         { *m = PopulateReparent
 func (m *PopulateReparentJournalRequest) String() string { return proto.CompactTextString(m) }
 func (*PopulateReparentJournalRequest) ProtoMessage()    {}
 func (*PopulateReparentJournalRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{70}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{70}
 }
 func (m *PopulateReparentJournalRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PopulateReparentJournalRequest.Unmarshal(m, b)
@@ -2827,7 +2827,7 @@ func (m *PopulateReparentJournalResponse) Reset()         { *m = PopulateReparen
 func (m *PopulateReparentJournalResponse) String() string { return proto.CompactTextString(m) }
 func (*PopulateReparentJournalResponse) ProtoMessage()    {}
 func (*PopulateReparentJournalResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{71}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{71}
 }
 func (m *PopulateReparentJournalResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PopulateReparentJournalResponse.Unmarshal(m, b)
@@ -2848,9 +2848,9 @@ func (m *PopulateReparentJournalResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_PopulateReparentJournalResponse proto.InternalMessageInfo
 
 type InitSlaveRequest struct {
-	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
-	ReplicationPosition  string                `protobuf:"bytes,2,opt,name=replication_position,json=replicationPosition" json:"replication_position,omitempty"`
-	TimeCreatedNs        int64                 `protobuf:"varint,3,opt,name=time_created_ns,json=timeCreatedNs" json:"time_created_ns,omitempty"`
+	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	ReplicationPosition  string                `protobuf:"bytes,2,opt,name=replication_position,json=replicationPosition,proto3" json:"replication_position,omitempty"`
+	TimeCreatedNs        int64                 `protobuf:"varint,3,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -2860,7 +2860,7 @@ func (m *InitSlaveRequest) Reset()         { *m = InitSlaveRequest{} }
 func (m *InitSlaveRequest) String() string { return proto.CompactTextString(m) }
 func (*InitSlaveRequest) ProtoMessage()    {}
 func (*InitSlaveRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{72}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{72}
 }
 func (m *InitSlaveRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_InitSlaveRequest.Unmarshal(m, b)
@@ -2911,7 +2911,7 @@ func (m *InitSlaveResponse) Reset()         { *m = InitSlaveResponse{} }
 func (m *InitSlaveResponse) String() string { return proto.CompactTextString(m) }
 func (*InitSlaveResponse) ProtoMessage()    {}
 func (*InitSlaveResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{73}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{73}
 }
 func (m *InitSlaveResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_InitSlaveResponse.Unmarshal(m, b)
@@ -2941,7 +2941,7 @@ func (m *DemoteMasterRequest) Reset()         { *m = DemoteMasterRequest{} }
 func (m *DemoteMasterRequest) String() string { return proto.CompactTextString(m) }
 func (*DemoteMasterRequest) ProtoMessage()    {}
 func (*DemoteMasterRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{74}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{74}
 }
 func (m *DemoteMasterRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DemoteMasterRequest.Unmarshal(m, b)
@@ -2962,7 +2962,7 @@ func (m *DemoteMasterRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_DemoteMasterRequest proto.InternalMessageInfo
 
 type DemoteMasterResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2972,7 +2972,7 @@ func (m *DemoteMasterResponse) Reset()         { *m = DemoteMasterResponse{} }
 func (m *DemoteMasterResponse) String() string { return proto.CompactTextString(m) }
 func (*DemoteMasterResponse) ProtoMessage()    {}
 func (*DemoteMasterResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{75}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{75}
 }
 func (m *DemoteMasterResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DemoteMasterResponse.Unmarshal(m, b)
@@ -3000,7 +3000,7 @@ func (m *DemoteMasterResponse) GetPosition() string {
 }
 
 type PromoteSlaveWhenCaughtUpRequest struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3010,7 +3010,7 @@ func (m *PromoteSlaveWhenCaughtUpRequest) Reset()         { *m = PromoteSlaveWhe
 func (m *PromoteSlaveWhenCaughtUpRequest) String() string { return proto.CompactTextString(m) }
 func (*PromoteSlaveWhenCaughtUpRequest) ProtoMessage()    {}
 func (*PromoteSlaveWhenCaughtUpRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{76}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{76}
 }
 func (m *PromoteSlaveWhenCaughtUpRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PromoteSlaveWhenCaughtUpRequest.Unmarshal(m, b)
@@ -3038,7 +3038,7 @@ func (m *PromoteSlaveWhenCaughtUpRequest) GetPosition() string {
 }
 
 type PromoteSlaveWhenCaughtUpResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3048,7 +3048,7 @@ func (m *PromoteSlaveWhenCaughtUpResponse) Reset()         { *m = PromoteSlaveWh
 func (m *PromoteSlaveWhenCaughtUpResponse) String() string { return proto.CompactTextString(m) }
 func (*PromoteSlaveWhenCaughtUpResponse) ProtoMessage()    {}
 func (*PromoteSlaveWhenCaughtUpResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{77}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{77}
 }
 func (m *PromoteSlaveWhenCaughtUpResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PromoteSlaveWhenCaughtUpResponse.Unmarshal(m, b)
@@ -3085,7 +3085,7 @@ func (m *SlaveWasPromotedRequest) Reset()         { *m = SlaveWasPromotedRequest
 func (m *SlaveWasPromotedRequest) String() string { return proto.CompactTextString(m) }
 func (*SlaveWasPromotedRequest) ProtoMessage()    {}
 func (*SlaveWasPromotedRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{78}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{78}
 }
 func (m *SlaveWasPromotedRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SlaveWasPromotedRequest.Unmarshal(m, b)
@@ -3115,7 +3115,7 @@ func (m *SlaveWasPromotedResponse) Reset()         { *m = SlaveWasPromotedRespon
 func (m *SlaveWasPromotedResponse) String() string { return proto.CompactTextString(m) }
 func (*SlaveWasPromotedResponse) ProtoMessage()    {}
 func (*SlaveWasPromotedResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{79}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{79}
 }
 func (m *SlaveWasPromotedResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SlaveWasPromotedResponse.Unmarshal(m, b)
@@ -3136,9 +3136,9 @@ func (m *SlaveWasPromotedResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SlaveWasPromotedResponse proto.InternalMessageInfo
 
 type SetMasterRequest struct {
-	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
-	TimeCreatedNs        int64                 `protobuf:"varint,2,opt,name=time_created_ns,json=timeCreatedNs" json:"time_created_ns,omitempty"`
-	ForceStartSlave      bool                  `protobuf:"varint,3,opt,name=force_start_slave,json=forceStartSlave" json:"force_start_slave,omitempty"`
+	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	TimeCreatedNs        int64                 `protobuf:"varint,2,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
+	ForceStartSlave      bool                  `protobuf:"varint,3,opt,name=force_start_slave,json=forceStartSlave,proto3" json:"force_start_slave,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -3148,7 +3148,7 @@ func (m *SetMasterRequest) Reset()         { *m = SetMasterRequest{} }
 func (m *SetMasterRequest) String() string { return proto.CompactTextString(m) }
 func (*SetMasterRequest) ProtoMessage()    {}
 func (*SetMasterRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{80}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{80}
 }
 func (m *SetMasterRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetMasterRequest.Unmarshal(m, b)
@@ -3199,7 +3199,7 @@ func (m *SetMasterResponse) Reset()         { *m = SetMasterResponse{} }
 func (m *SetMasterResponse) String() string { return proto.CompactTextString(m) }
 func (*SetMasterResponse) ProtoMessage()    {}
 func (*SetMasterResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{81}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{81}
 }
 func (m *SetMasterResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetMasterResponse.Unmarshal(m, b)
@@ -3221,7 +3221,7 @@ var xxx_messageInfo_SetMasterResponse proto.InternalMessageInfo
 
 type SlaveWasRestartedRequest struct {
 	// the parent alias the tablet should have
-	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
+	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -3231,7 +3231,7 @@ func (m *SlaveWasRestartedRequest) Reset()         { *m = SlaveWasRestartedReque
 func (m *SlaveWasRestartedRequest) String() string { return proto.CompactTextString(m) }
 func (*SlaveWasRestartedRequest) ProtoMessage()    {}
 func (*SlaveWasRestartedRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{82}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{82}
 }
 func (m *SlaveWasRestartedRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SlaveWasRestartedRequest.Unmarshal(m, b)
@@ -3268,7 +3268,7 @@ func (m *SlaveWasRestartedResponse) Reset()         { *m = SlaveWasRestartedResp
 func (m *SlaveWasRestartedResponse) String() string { return proto.CompactTextString(m) }
 func (*SlaveWasRestartedResponse) ProtoMessage()    {}
 func (*SlaveWasRestartedResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{83}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{83}
 }
 func (m *SlaveWasRestartedResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SlaveWasRestartedResponse.Unmarshal(m, b)
@@ -3298,7 +3298,7 @@ func (m *StopReplicationAndGetStatusRequest) Reset()         { *m = StopReplicat
 func (m *StopReplicationAndGetStatusRequest) String() string { return proto.CompactTextString(m) }
 func (*StopReplicationAndGetStatusRequest) ProtoMessage()    {}
 func (*StopReplicationAndGetStatusRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{84}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{84}
 }
 func (m *StopReplicationAndGetStatusRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopReplicationAndGetStatusRequest.Unmarshal(m, b)
@@ -3319,7 +3319,7 @@ func (m *StopReplicationAndGetStatusRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_StopReplicationAndGetStatusRequest proto.InternalMessageInfo
 
 type StopReplicationAndGetStatusResponse struct {
-	Status               *replicationdata.Status `protobuf:"bytes,1,opt,name=status" json:"status,omitempty"`
+	Status               *replicationdata.Status `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
 	XXX_sizecache        int32                   `json:"-"`
@@ -3329,7 +3329,7 @@ func (m *StopReplicationAndGetStatusResponse) Reset()         { *m = StopReplica
 func (m *StopReplicationAndGetStatusResponse) String() string { return proto.CompactTextString(m) }
 func (*StopReplicationAndGetStatusResponse) ProtoMessage()    {}
 func (*StopReplicationAndGetStatusResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{85}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{85}
 }
 func (m *StopReplicationAndGetStatusResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StopReplicationAndGetStatusResponse.Unmarshal(m, b)
@@ -3366,7 +3366,7 @@ func (m *PromoteSlaveRequest) Reset()         { *m = PromoteSlaveRequest{} }
 func (m *PromoteSlaveRequest) String() string { return proto.CompactTextString(m) }
 func (*PromoteSlaveRequest) ProtoMessage()    {}
 func (*PromoteSlaveRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{86}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{86}
 }
 func (m *PromoteSlaveRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PromoteSlaveRequest.Unmarshal(m, b)
@@ -3387,7 +3387,7 @@ func (m *PromoteSlaveRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_PromoteSlaveRequest proto.InternalMessageInfo
 
 type PromoteSlaveResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3397,7 +3397,7 @@ func (m *PromoteSlaveResponse) Reset()         { *m = PromoteSlaveResponse{} }
 func (m *PromoteSlaveResponse) String() string { return proto.CompactTextString(m) }
 func (*PromoteSlaveResponse) ProtoMessage()    {}
 func (*PromoteSlaveResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{87}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{87}
 }
 func (m *PromoteSlaveResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PromoteSlaveResponse.Unmarshal(m, b)
@@ -3425,7 +3425,7 @@ func (m *PromoteSlaveResponse) GetPosition() string {
 }
 
 type BackupRequest struct {
-	Concurrency          int64    `protobuf:"varint,1,opt,name=concurrency" json:"concurrency,omitempty"`
+	Concurrency          int64    `protobuf:"varint,1,opt,name=concurrency,proto3" json:"concurrency,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3435,7 +3435,7 @@ func (m *BackupRequest) Reset()         { *m = BackupRequest{} }
 func (m *BackupRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupRequest) ProtoMessage()    {}
 func (*BackupRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{88}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{88}
 }
 func (m *BackupRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BackupRequest.Unmarshal(m, b)
@@ -3463,7 +3463,7 @@ func (m *BackupRequest) GetConcurrency() int64 {
 }
 
 type BackupResponse struct {
-	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
 	XXX_unrecognized     []byte         `json:"-"`
 	XXX_sizecache        int32          `json:"-"`
@@ -3473,7 +3473,7 @@ func (m *BackupResponse) Reset()         { *m = BackupResponse{} }
 func (m *BackupResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupResponse) ProtoMessage()    {}
 func (*BackupResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{89}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{89}
 }
 func (m *BackupResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BackupResponse.Unmarshal(m, b)
@@ -3510,7 +3510,7 @@ func (m *RestoreFromBackupRequest) Reset()         { *m = RestoreFromBackupReque
 func (m *RestoreFromBackupRequest) String() string { return proto.CompactTextString(m) }
 func (*RestoreFromBackupRequest) ProtoMessage()    {}
 func (*RestoreFromBackupRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{90}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{90}
 }
 func (m *RestoreFromBackupRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RestoreFromBackupRequest.Unmarshal(m, b)
@@ -3531,7 +3531,7 @@ func (m *RestoreFromBackupRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_RestoreFromBackupRequest proto.InternalMessageInfo
 
 type RestoreFromBackupResponse struct {
-	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
 	XXX_unrecognized     []byte         `json:"-"`
 	XXX_sizecache        int32          `json:"-"`
@@ -3541,7 +3541,7 @@ func (m *RestoreFromBackupResponse) Reset()         { *m = RestoreFromBackupResp
 func (m *RestoreFromBackupResponse) String() string { return proto.CompactTextString(m) }
 func (*RestoreFromBackupResponse) ProtoMessage()    {}
 func (*RestoreFromBackupResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tabletmanagerdata_5e8c65344c7320a6, []int{91}
+	return fileDescriptor_tabletmanagerdata_9e0123608316bc1a, []int{91}
 }
 func (m *RestoreFromBackupResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RestoreFromBackupResponse.Unmarshal(m, b)
@@ -3667,10 +3667,10 @@ func init() {
 }
 
 func init() {
-	proto.RegisterFile("tabletmanagerdata.proto", fileDescriptor_tabletmanagerdata_5e8c65344c7320a6)
+	proto.RegisterFile("tabletmanagerdata.proto", fileDescriptor_tabletmanagerdata_9e0123608316bc1a)
 }
 
-var fileDescriptor_tabletmanagerdata_5e8c65344c7320a6 = []byte{
+var fileDescriptor_tabletmanagerdata_9e0123608316bc1a = []byte{
 	// 2050 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xcc, 0x59, 0x5b, 0x6f, 0x1b, 0xc7,
 	0x15, 0x06, 0x49, 0x49, 0x96, 0x0e, 0x2f, 0x22, 0x97, 0x94, 0x48, 0xc9, 0x8d, 0x24, 0xaf, 0x9d,

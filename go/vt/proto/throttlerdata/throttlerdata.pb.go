@@ -29,7 +29,7 @@ func (m *MaxRatesRequest) Reset()         { *m = MaxRatesRequest{} }
 func (m *MaxRatesRequest) String() string { return proto.CompactTextString(m) }
 func (*MaxRatesRequest) ProtoMessage()    {}
 func (*MaxRatesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{0}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{0}
 }
 func (m *MaxRatesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_MaxRatesRequest.Unmarshal(m, b)
@@ -53,7 +53,7 @@ var xxx_messageInfo_MaxRatesRequest proto.InternalMessageInfo
 type MaxRatesResponse struct {
 	// max_rates returns the max rate for each throttler. It's keyed by the
 	// throttler name.
-	Rates                map[string]int64 `protobuf:"bytes,1,rep,name=rates" json:"rates,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	Rates                map[string]int64 `protobuf:"bytes,1,rep,name=rates,proto3" json:"rates,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
 	XXX_unrecognized     []byte           `json:"-"`
 	XXX_sizecache        int32            `json:"-"`
@@ -63,7 +63,7 @@ func (m *MaxRatesResponse) Reset()         { *m = MaxRatesResponse{} }
 func (m *MaxRatesResponse) String() string { return proto.CompactTextString(m) }
 func (*MaxRatesResponse) ProtoMessage()    {}
 func (*MaxRatesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{1}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{1}
 }
 func (m *MaxRatesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_MaxRatesResponse.Unmarshal(m, b)
@@ -92,7 +92,7 @@ func (m *MaxRatesResponse) GetRates() map[string]int64 {
 
 // SetMaxRateRequest is the payload for the SetMaxRate RPC.
 type SetMaxRateRequest struct {
-	Rate                 int64    `protobuf:"varint,1,opt,name=rate" json:"rate,omitempty"`
+	Rate                 int64    `protobuf:"varint,1,opt,name=rate,proto3" json:"rate,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -102,7 +102,7 @@ func (m *SetMaxRateRequest) Reset()         { *m = SetMaxRateRequest{} }
 func (m *SetMaxRateRequest) String() string { return proto.CompactTextString(m) }
 func (*SetMaxRateRequest) ProtoMessage()    {}
 func (*SetMaxRateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{2}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{2}
 }
 func (m *SetMaxRateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetMaxRateRequest.Unmarshal(m, b)
@@ -132,7 +132,7 @@ func (m *SetMaxRateRequest) GetRate() int64 {
 // SetMaxRateResponse is returned by the SetMaxRate RPC.
 type SetMaxRateResponse struct {
 	// names is the list of throttler names which were updated.
-	Names                []string `protobuf:"bytes,1,rep,name=names" json:"names,omitempty"`
+	Names                []string `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -142,7 +142,7 @@ func (m *SetMaxRateResponse) Reset()         { *m = SetMaxRateResponse{} }
 func (m *SetMaxRateResponse) String() string { return proto.CompactTextString(m) }
 func (*SetMaxRateResponse) ProtoMessage()    {}
 func (*SetMaxRateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{3}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{3}
 }
 func (m *SetMaxRateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetMaxRateResponse.Unmarshal(m, b)
@@ -178,7 +178,7 @@ type Configuration struct {
 	// If it is within the target, it tries to increase the throttler
 	// rate, otherwise it will lower it based on an educated guess of the
 	// slave throughput.
-	TargetReplicationLagSec int64 `protobuf:"varint,1,opt,name=target_replication_lag_sec,json=targetReplicationLagSec" json:"target_replication_lag_sec,omitempty"`
+	TargetReplicationLagSec int64 `protobuf:"varint,1,opt,name=target_replication_lag_sec,json=targetReplicationLagSec,proto3" json:"target_replication_lag_sec,omitempty"`
 	// max_replication_lag_sec is meant as a last resort.
 	// By default, the module tries to find out the system maximum capacity while
 	// trying to keep the replication lag around "target_replication_lag_sec".
@@ -187,9 +187,9 @@ type Configuration struct {
 	// But if the lag goes above this field's value we will go into an "emergency"
 	// state and throttle more aggressively (see "emergency_decrease" below).
 	// This is the only way to ensure that the system will recover.
-	MaxReplicationLagSec int64 `protobuf:"varint,2,opt,name=max_replication_lag_sec,json=maxReplicationLagSec" json:"max_replication_lag_sec,omitempty"`
+	MaxReplicationLagSec int64 `protobuf:"varint,2,opt,name=max_replication_lag_sec,json=maxReplicationLagSec,proto3" json:"max_replication_lag_sec,omitempty"`
 	// initial_rate is the rate at which the module will start.
-	InitialRate int64 `protobuf:"varint,3,opt,name=initial_rate,json=initialRate" json:"initial_rate,omitempty"`
+	InitialRate int64 `protobuf:"varint,3,opt,name=initial_rate,json=initialRate,proto3" json:"initial_rate,omitempty"`
 	// max_increase defines by how much we will increase the rate
 	// e.g. 0.05 increases the rate by 5% while 1.0 by 100%.
 	// Note that any increase will let the system wait for at least
@@ -198,20 +198,20 @@ type Configuration struct {
 	// (If the system was already at its maximum capacity (e.g. 1k QPS) and we
 	// increase the rate by e.g. 5% to 1050 QPS, it will take 20 seconds until
 	// 1000 extra queries are buffered and the lag increases by 1 second.)
-	MaxIncrease float64 `protobuf:"fixed64,4,opt,name=max_increase,json=maxIncrease" json:"max_increase,omitempty"`
+	MaxIncrease float64 `protobuf:"fixed64,4,opt,name=max_increase,json=maxIncrease,proto3" json:"max_increase,omitempty"`
 	// emergency_decrease defines by how much we will decrease the current rate
 	// if the observed replication lag is above "max_replication_lag_sec".
 	// E.g. 0.50 decreases the current rate by 50%.
-	EmergencyDecrease float64 `protobuf:"fixed64,5,opt,name=emergency_decrease,json=emergencyDecrease" json:"emergency_decrease,omitempty"`
+	EmergencyDecrease float64 `protobuf:"fixed64,5,opt,name=emergency_decrease,json=emergencyDecrease,proto3" json:"emergency_decrease,omitempty"`
 	// min_duration_between_increases_sec specifies how long we'll wait at least
 	// for the last rate increase to have an effect on the system.
-	MinDurationBetweenIncreasesSec int64 `protobuf:"varint,6,opt,name=min_duration_between_increases_sec,json=minDurationBetweenIncreasesSec" json:"min_duration_between_increases_sec,omitempty"`
+	MinDurationBetweenIncreasesSec int64 `protobuf:"varint,6,opt,name=min_duration_between_increases_sec,json=minDurationBetweenIncreasesSec,proto3" json:"min_duration_between_increases_sec,omitempty"`
 	// max_duration_between_increases_sec specifies how long we'll wait at most
 	// for the last rate increase to have an effect on the system.
-	MaxDurationBetweenIncreasesSec int64 `protobuf:"varint,7,opt,name=max_duration_between_increases_sec,json=maxDurationBetweenIncreasesSec" json:"max_duration_between_increases_sec,omitempty"`
+	MaxDurationBetweenIncreasesSec int64 `protobuf:"varint,7,opt,name=max_duration_between_increases_sec,json=maxDurationBetweenIncreasesSec,proto3" json:"max_duration_between_increases_sec,omitempty"`
 	// min_duration_between_decreases_sec specifies how long we'll wait at least
 	// for the last rate decrease to have an effect on the system.
-	MinDurationBetweenDecreasesSec int64 `protobuf:"varint,8,opt,name=min_duration_between_decreases_sec,json=minDurationBetweenDecreasesSec" json:"min_duration_between_decreases_sec,omitempty"`
+	MinDurationBetweenDecreasesSec int64 `protobuf:"varint,8,opt,name=min_duration_between_decreases_sec,json=minDurationBetweenDecreasesSec,proto3" json:"min_duration_between_decreases_sec,omitempty"`
 	// spread_backlog_across_sec is used when we set the throttler rate after
 	// we guessed the rate of a slave and determined its backlog.
 	// For example, at a guessed rate of 100 QPS and a lag of 10s, the replica has
@@ -222,16 +222,16 @@ type Configuration struct {
 	// For example, for a backlog of 1000 queries spread over 5s means that we
 	// have to further reduce the rate by 200 QPS or the backlog will not be
 	// processed within the 5 seconds.
-	SpreadBacklogAcrossSec int64 `protobuf:"varint,9,opt,name=spread_backlog_across_sec,json=spreadBacklogAcrossSec" json:"spread_backlog_across_sec,omitempty"`
+	SpreadBacklogAcrossSec int64 `protobuf:"varint,9,opt,name=spread_backlog_across_sec,json=spreadBacklogAcrossSec,proto3" json:"spread_backlog_across_sec,omitempty"`
 	// ignore_n_slowest_replicas will ignore replication lag updates from the
 	// N slowest REPLICA tablets. Under certain circumstances, replicas are still
 	// considered e.g. a) if the lag is at most max_replication_lag_sec, b) there
 	// are less than N+1 replicas or c) the lag increased on each replica such
 	// that all replicas were ignored in a row.
-	IgnoreNSlowestReplicas int32 `protobuf:"varint,10,opt,name=ignore_n_slowest_replicas,json=ignoreNSlowestReplicas" json:"ignore_n_slowest_replicas,omitempty"`
+	IgnoreNSlowestReplicas int32 `protobuf:"varint,10,opt,name=ignore_n_slowest_replicas,json=ignoreNSlowestReplicas,proto3" json:"ignore_n_slowest_replicas,omitempty"`
 	// ignore_n_slowest_rdonlys does the same thing as ignore_n_slowest_replicas
 	// but for RDONLY tablets. Note that these two settings are independent.
-	IgnoreNSlowestRdonlys int32 `protobuf:"varint,11,opt,name=ignore_n_slowest_rdonlys,json=ignoreNSlowestRdonlys" json:"ignore_n_slowest_rdonlys,omitempty"`
+	IgnoreNSlowestRdonlys int32 `protobuf:"varint,11,opt,name=ignore_n_slowest_rdonlys,json=ignoreNSlowestRdonlys,proto3" json:"ignore_n_slowest_rdonlys,omitempty"`
 	// age_bad_rate_after_sec is the duration after which an unchanged bad rate
 	// will "age out" and increase by "bad_rate_increase".
 	// Bad rates are tracked by the code in memory.go and serve as an upper bound
@@ -239,17 +239,17 @@ type Configuration struct {
 	// try known too high (bad) rates over and over again.
 	// To avoid that temporary degradations permanently reduce the maximum rate,
 	// a stable bad rate "ages out" after "age_bad_rate_after_sec".
-	AgeBadRateAfterSec int64 `protobuf:"varint,12,opt,name=age_bad_rate_after_sec,json=ageBadRateAfterSec" json:"age_bad_rate_after_sec,omitempty"`
+	AgeBadRateAfterSec int64 `protobuf:"varint,12,opt,name=age_bad_rate_after_sec,json=ageBadRateAfterSec,proto3" json:"age_bad_rate_after_sec,omitempty"`
 	// bad_rate_increase defines the percentage by which a bad rate will be
 	// increased when it's aging out.
-	BadRateIncrease float64 `protobuf:"fixed64,13,opt,name=bad_rate_increase,json=badRateIncrease" json:"bad_rate_increase,omitempty"`
+	BadRateIncrease float64 `protobuf:"fixed64,13,opt,name=bad_rate_increase,json=badRateIncrease,proto3" json:"bad_rate_increase,omitempty"`
 	// max_rate_approach_threshold is the fraction of the current rate limit that the actual
 	// rate must exceed for the throttler to increase the limit when the replication lag
 	// is below target_replication_lag_sec. For example, assuming the actual replication lag
 	// is below target_replication_lag_sec, if the current rate limit is 100, then the actual
 	// rate must exceed 100*max_rate_approach_threshold for the throttler to increase the current
 	// limit.
-	MaxRateApproachThreshold float64  `protobuf:"fixed64,14,opt,name=max_rate_approach_threshold,json=maxRateApproachThreshold" json:"max_rate_approach_threshold,omitempty"`
+	MaxRateApproachThreshold float64  `protobuf:"fixed64,14,opt,name=max_rate_approach_threshold,json=maxRateApproachThreshold,proto3" json:"max_rate_approach_threshold,omitempty"`
 	XXX_NoUnkeyedLiteral     struct{} `json:"-"`
 	XXX_unrecognized         []byte   `json:"-"`
 	XXX_sizecache            int32    `json:"-"`
@@ -259,7 +259,7 @@ func (m *Configuration) Reset()         { *m = Configuration{} }
 func (m *Configuration) String() string { return proto.CompactTextString(m) }
 func (*Configuration) ProtoMessage()    {}
 func (*Configuration) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{4}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{4}
 }
 func (m *Configuration) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Configuration.Unmarshal(m, b)
@@ -381,7 +381,7 @@ func (m *Configuration) GetMaxRateApproachThreshold() float64 {
 type GetConfigurationRequest struct {
 	// throttler_name specifies which throttler to select. If empty, all active
 	// throttlers will be selected.
-	ThrottlerName        string   `protobuf:"bytes,1,opt,name=throttler_name,json=throttlerName" json:"throttler_name,omitempty"`
+	ThrottlerName        string   `protobuf:"bytes,1,opt,name=throttler_name,json=throttlerName,proto3" json:"throttler_name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -391,7 +391,7 @@ func (m *GetConfigurationRequest) Reset()         { *m = GetConfigurationRequest
 func (m *GetConfigurationRequest) String() string { return proto.CompactTextString(m) }
 func (*GetConfigurationRequest) ProtoMessage()    {}
 func (*GetConfigurationRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{5}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{5}
 }
 func (m *GetConfigurationRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetConfigurationRequest.Unmarshal(m, b)
@@ -422,7 +422,7 @@ func (m *GetConfigurationRequest) GetThrottlerName() string {
 type GetConfigurationResponse struct {
 	// max_rates returns the configurations for each throttler.
 	// It's keyed by the throttler name.
-	Configurations       map[string]*Configuration `protobuf:"bytes,1,rep,name=configurations" json:"configurations,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Configurations       map[string]*Configuration `protobuf:"bytes,1,rep,name=configurations,proto3" json:"configurations,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}                  `json:"-"`
 	XXX_unrecognized     []byte                    `json:"-"`
 	XXX_sizecache        int32                     `json:"-"`
@@ -432,7 +432,7 @@ func (m *GetConfigurationResponse) Reset()         { *m = GetConfigurationRespon
 func (m *GetConfigurationResponse) String() string { return proto.CompactTextString(m) }
 func (*GetConfigurationResponse) ProtoMessage()    {}
 func (*GetConfigurationResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{6}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{6}
 }
 func (m *GetConfigurationResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetConfigurationResponse.Unmarshal(m, b)
@@ -463,12 +463,12 @@ func (m *GetConfigurationResponse) GetConfigurations() map[string]*Configuration
 type UpdateConfigurationRequest struct {
 	// throttler_name specifies which throttler to update. If empty, all active
 	// throttlers will be updated.
-	ThrottlerName string `protobuf:"bytes,1,opt,name=throttler_name,json=throttlerName" json:"throttler_name,omitempty"`
+	ThrottlerName string `protobuf:"bytes,1,opt,name=throttler_name,json=throttlerName,proto3" json:"throttler_name,omitempty"`
 	// configuration is the new (partial) configuration.
-	Configuration *Configuration `protobuf:"bytes,2,opt,name=configuration" json:"configuration,omitempty"`
+	Configuration *Configuration `protobuf:"bytes,2,opt,name=configuration,proto3" json:"configuration,omitempty"`
 	// copy_zero_values specifies whether fields with zero values should be copied
 	// as well.
-	CopyZeroValues       bool     `protobuf:"varint,3,opt,name=copy_zero_values,json=copyZeroValues" json:"copy_zero_values,omitempty"`
+	CopyZeroValues       bool     `protobuf:"varint,3,opt,name=copy_zero_values,json=copyZeroValues,proto3" json:"copy_zero_values,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -478,7 +478,7 @@ func (m *UpdateConfigurationRequest) Reset()         { *m = UpdateConfigurationR
 func (m *UpdateConfigurationRequest) String() string { return proto.CompactTextString(m) }
 func (*UpdateConfigurationRequest) ProtoMessage()    {}
 func (*UpdateConfigurationRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{7}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{7}
 }
 func (m *UpdateConfigurationRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UpdateConfigurationRequest.Unmarshal(m, b)
@@ -522,7 +522,7 @@ func (m *UpdateConfigurationRequest) GetCopyZeroValues() bool {
 // UpdateConfigurationResponse is returned by the UpdateConfiguration RPC.
 type UpdateConfigurationResponse struct {
 	// names is the list of throttler names which were updated.
-	Names                []string `protobuf:"bytes,1,rep,name=names" json:"names,omitempty"`
+	Names                []string `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -532,7 +532,7 @@ func (m *UpdateConfigurationResponse) Reset()         { *m = UpdateConfiguration
 func (m *UpdateConfigurationResponse) String() string { return proto.CompactTextString(m) }
 func (*UpdateConfigurationResponse) ProtoMessage()    {}
 func (*UpdateConfigurationResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{8}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{8}
 }
 func (m *UpdateConfigurationResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UpdateConfigurationResponse.Unmarshal(m, b)
@@ -563,7 +563,7 @@ func (m *UpdateConfigurationResponse) GetNames() []string {
 type ResetConfigurationRequest struct {
 	// throttler_name specifies which throttler to reset. If empty, all active
 	// throttlers will be reset.
-	ThrottlerName        string   `protobuf:"bytes,1,opt,name=throttler_name,json=throttlerName" json:"throttler_name,omitempty"`
+	ThrottlerName        string   `protobuf:"bytes,1,opt,name=throttler_name,json=throttlerName,proto3" json:"throttler_name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -573,7 +573,7 @@ func (m *ResetConfigurationRequest) Reset()         { *m = ResetConfigurationReq
 func (m *ResetConfigurationRequest) String() string { return proto.CompactTextString(m) }
 func (*ResetConfigurationRequest) ProtoMessage()    {}
 func (*ResetConfigurationRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{9}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{9}
 }
 func (m *ResetConfigurationRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ResetConfigurationRequest.Unmarshal(m, b)
@@ -603,7 +603,7 @@ func (m *ResetConfigurationRequest) GetThrottlerName() string {
 // ResetConfigurationResponse is returned by the ResetConfiguration RPC.
 type ResetConfigurationResponse struct {
 	// names is the list of throttler names which were updated.
-	Names                []string `protobuf:"bytes,1,rep,name=names" json:"names,omitempty"`
+	Names                []string `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -613,7 +613,7 @@ func (m *ResetConfigurationResponse) Reset()         { *m = ResetConfigurationRe
 func (m *ResetConfigurationResponse) String() string { return proto.CompactTextString(m) }
 func (*ResetConfigurationResponse) ProtoMessage()    {}
 func (*ResetConfigurationResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{10}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{10}
 }
 func (m *ResetConfigurationResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ResetConfigurationResponse.Unmarshal(m, b)
@@ -656,9 +656,9 @@ func init() {
 	proto.RegisterType((*ResetConfigurationResponse)(nil), "throttlerdata.ResetConfigurationResponse")
 }
 
-func init() { proto.RegisterFile("throttlerdata.proto", fileDescriptor_throttlerdata_7d084fd3a7704c85) }
+func init() { proto.RegisterFile("throttlerdata.proto", fileDescriptor_throttlerdata_d10a8d735853021e) }
 
-var fileDescriptor_throttlerdata_7d084fd3a7704c85 = []byte{
+var fileDescriptor_throttlerdata_d10a8d735853021e = []byte{
 	// 734 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x55, 0x5f, 0x4f, 0x03, 0x45,
 	0x10, 0xcf, 0x51, 0x8a, 0x30, 0xa5, 0x40, 0x17, 0x84, 0xa3, 0x18, 0x53, 0x2f, 0x31, 0x36, 0x8d,

@@ -32,8 +32,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for Automation service
-
+// AutomationClient is the client API for Automation service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type AutomationClient interface {
 	// Start a cluster operation.
 	EnqueueClusterOperation(ctx context.Context, in *automation.EnqueueClusterOperationRequest, opts ...grpc.CallOption) (*automation.EnqueueClusterOperationResponse, error)
@@ -52,7 +53,7 @@ func NewAutomationClient(cc *grpc.ClientConn) AutomationClient {
 
 func (c *automationClient) EnqueueClusterOperation(ctx context.Context, in *automation.EnqueueClusterOperationRequest, opts ...grpc.CallOption) (*automation.EnqueueClusterOperationResponse, error) {
 	out := new(automation.EnqueueClusterOperationResponse)
-	err := grpc.Invoke(ctx, "/automationservice.Automation/EnqueueClusterOperation", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/automationservice.Automation/EnqueueClusterOperation", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -61,15 +62,14 @@ func (c *automationClient) EnqueueClusterOperation(ctx context.Context, in *auto
 
 func (c *automationClient) GetClusterOperationDetails(ctx context.Context, in *automation.GetClusterOperationDetailsRequest, opts ...grpc.CallOption) (*automation.GetClusterOperationDetailsResponse, error) {
 	out := new(automation.GetClusterOperationDetailsResponse)
-	err := grpc.Invoke(ctx, "/automationservice.Automation/GetClusterOperationDetails", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/automationservice.Automation/GetClusterOperationDetails", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// Server API for Automation service
-
+// AutomationServer is the server API for Automation service.
 type AutomationServer interface {
 	// Start a cluster operation.
 	EnqueueClusterOperation(context.Context, *automation.EnqueueClusterOperationRequest) (*automation.EnqueueClusterOperationResponse, error)
@@ -136,10 +136,10 @@ var _Automation_serviceDesc = grpc.ServiceDesc{
 }
 
 func init() {
-	proto.RegisterFile("automationservice.proto", fileDescriptor_automationservice_42ff8d484b987c6f)
+	proto.RegisterFile("automationservice.proto", fileDescriptor_automationservice_5369cb995212ce22)
 }
 
-var fileDescriptor_automationservice_42ff8d484b987c6f = []byte{
+var fileDescriptor_automationservice_5369cb995212ce22 = []byte{
 	// 178 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x4f, 0x2c, 0x2d, 0xc9,
 	0xcf, 0x4d, 0x2c, 0xc9, 0xcc, 0xcf, 0x2b, 0x4e, 0x2d, 0x2a, 0xcb, 0x4c, 0x4e, 0xd5, 0x2b, 0x28,

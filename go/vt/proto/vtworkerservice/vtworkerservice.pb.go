@@ -32,8 +32,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for Vtworker service
-
+// VtworkerClient is the client API for Vtworker service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type VtworkerClient interface {
 	// ExecuteVtworkerCommand allows to run a vtworker command by specifying the
 	// same arguments as on the command line.
@@ -49,7 +50,7 @@ func NewVtworkerClient(cc *grpc.ClientConn) VtworkerClient {
 }
 
 func (c *vtworkerClient) ExecuteVtworkerCommand(ctx context.Context, in *vtworkerdata.ExecuteVtworkerCommandRequest, opts ...grpc.CallOption) (Vtworker_ExecuteVtworkerCommandClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_Vtworker_serviceDesc.Streams[0], c.cc, "/vtworkerservice.Vtworker/ExecuteVtworkerCommand", opts...)
+	stream, err := c.cc.NewStream(ctx, &_Vtworker_serviceDesc.Streams[0], "/vtworkerservice.Vtworker/ExecuteVtworkerCommand", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -80,8 +81,7 @@ func (x *vtworkerExecuteVtworkerCommandClient) Recv() (*vtworkerdata.ExecuteVtwo
 	return m, nil
 }
 
-// Server API for Vtworker service
-
+// VtworkerServer is the server API for Vtworker service.
 type VtworkerServer interface {
 	// ExecuteVtworkerCommand allows to run a vtworker command by specifying the
 	// same arguments as on the command line.
@@ -128,10 +128,10 @@ var _Vtworker_serviceDesc = grpc.ServiceDesc{
 }
 
 func init() {
-	proto.RegisterFile("vtworkerservice.proto", fileDescriptor_vtworkerservice_0d36cb3c7cfddd2b)
+	proto.RegisterFile("vtworkerservice.proto", fileDescriptor_vtworkerservice_4efa3310356e3c00)
 }
 
-var fileDescriptor_vtworkerservice_0d36cb3c7cfddd2b = []byte{
+var fileDescriptor_vtworkerservice_4efa3310356e3c00 = []byte{
 	// 151 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x2d, 0x2b, 0x29, 0xcf,
 	0x2f, 0xca, 0x4e, 0x2d, 0x2a, 0x4e, 0x2d, 0x2a, 0xcb, 0x4c, 0x4e, 0xd5, 0x2b, 0x28, 0xca, 0x2f,
