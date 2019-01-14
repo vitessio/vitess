@@ -472,6 +472,33 @@ func TestDDLDropColumn(t *testing.T) {
 	}
 }
 
+func TestUnsentDDL(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatement(t, "create table unsent(id int, val varbinary(128), primary key(id))")
+
+	testcases := []testcase{{
+		input: []string{
+			"drop table unsent",
+		},
+		// An unsent DDL is sent as an empty transaction.
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`commit`,
+		}},
+	}}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/none/",
+		}},
+	}
+	runCases(t, filter, testcases)
+}
+
 func TestBuffering(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
