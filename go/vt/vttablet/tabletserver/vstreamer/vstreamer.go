@@ -138,9 +138,6 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			vevents := bufferedEvents
 			bufferedEvents = nil
 			curSize = 0
-			if len(vevents) == 3 && vevents[0].Type == binlogdatapb.VEventType_GTID && vevents[1].Type == binlogdatapb.VEventType_BEGIN && vevents[2].Type == binlogdatapb.VEventType_COMMIT {
-				vevents = vevents[:1]
-			}
 			return vs.send(vevents)
 		case binlogdatapb.VEventType_ROW:
 			// ROW events happen inside transactions. So, we can chunk them.
@@ -236,7 +233,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 	}
 	var vevents []*binlogdatapb.VEvent
 	switch {
-	case ev.IsPseudo() || ev.IsGTID():
+	case ev.IsGTID():
 		gtid, hasBegin, err := ev.GTID(vs.format)
 		if err != nil {
 			return nil, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
@@ -274,10 +271,20 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_ROLLBACK,
 			})
 		case sqlparser.StmtDDL:
-			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type: binlogdatapb.VEventType_DDL,
-				Ddl:  q.SQL,
-			})
+			if mustSendDDL(q, vs.cp.DbName, vs.filter) {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_DDL,
+					Ddl:  q.SQL,
+				})
+			} else {
+				vevents = append(vevents,
+					&binlogdatapb.VEvent{
+						Type: binlogdatapb.VEventType_BEGIN,
+					},
+					&binlogdatapb.VEvent{
+						Type: binlogdatapb.VEventType_COMMIT,
+					})
+			}
 			// Proactively reload schema.
 			// If the DDL adds a column, comparing with an older snapshot of the
 			// schema will make us think that a column was dropped and error out.

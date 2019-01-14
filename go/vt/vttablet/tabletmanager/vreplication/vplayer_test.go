@@ -18,15 +18,10 @@ package vreplication
 
 import (
 	"fmt"
-	"strings"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -44,37 +39,62 @@ func TestSimple(t *testing.T) {
 		"drop table t2",
 	})
 	env.SchemaEngine.Reload(context.Background())
-	vre := NewEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory)
-	vre.Open(context.Background())
-	defer vre.Close()
 
-	bls := &binlogdatapb.BinlogSource{
-		Keyspace: env.KeyspaceName,
-		Shard:    env.ShardName,
-		Filter: &binlogdatapb.Filter{
-			Rules: []*binlogdatapb.Rule{{
-				Match:  "t2",
-				Filter: "select * from t1",
-			}},
-		},
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t2",
+			Filter: "select * from t1",
+		}},
 	}
-	pos := masterPosition(t)
-	query := fmt.Sprintf(`insert into _vt.vreplication`+
-		`(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state)`+
-		`values('test', '%v', '%s', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running')`,
-		bls, pos,
-	)
-	if _, err := vre.Exec(query); err != nil {
-		t.Fatal(err)
-	}
+	cancel := startVReplication(t, playerEngine, filter, "")
+	defer cancel()
+
 	execStatements(t, []string{"insert into t1 values(1, 'aaa')"})
-	time.Sleep(1 * time.Second)
+	expectDBClientQueries(t, []string{
+		"update _vt.vreplication set state='Running'.*",
+		"begin",
+		"update _vt.vreplication set pos=.*",
+		"commit",
+		"begin",
+		"insert into t2 set id=1, val='aaa'",
+		"update _vt.vreplication set pos=.*",
+		"commit",
+	})
 }
 
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
 	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func startVReplication(t *testing.T, pe *Engine, filter *binlogdatapb.Filter, pos string) (cancelFunc func()) {
+	t.Helper()
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+	}
+	if pos == "" {
+		pos = masterPosition(t)
+	}
+	query := fmt.Sprintf(`insert into _vt.vreplication`+
+		`(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state)`+
+		`values('test', '%v', '%s', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running')`,
+		bls, pos,
+	)
+	qr, err := pe.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resetDBClient()
+	return func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := pe.Exec(query); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -85,41 +105,4 @@ func masterPosition(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return mysql.EncodePosition(pos)
-}
-
-func realDBClientFactory() binlogplayer.DBClient {
-	return realDBClient{}
-}
-
-type realDBClient struct{}
-
-func (dbc realDBClient) DBName() string {
-	return env.KeyspaceName
-}
-
-func (dbc realDBClient) Connect() error {
-	return nil
-}
-
-func (dbc realDBClient) Begin() error {
-	return env.Mysqld.ExecuteSuperQueryList(context.Background(), []string{"begin"})
-}
-
-func (dbc realDBClient) Commit() error {
-	return env.Mysqld.ExecuteSuperQueryList(context.Background(), []string{"commit"})
-}
-
-func (dbc realDBClient) Rollback() error {
-	return env.Mysqld.ExecuteSuperQueryList(context.Background(), []string{"rollback"})
-}
-
-func (dbc realDBClient) Close() {
-}
-
-func (dbc realDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
-	fmt.Printf("executing: %v\n", query)
-	if strings.HasPrefix(query, "use") {
-		return nil, nil
-	}
-	return env.Mysqld.FetchSuperQuery(context.Background(), query)
 }

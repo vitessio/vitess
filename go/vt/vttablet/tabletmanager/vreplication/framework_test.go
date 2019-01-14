@@ -21,11 +21,15 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
@@ -41,9 +45,11 @@ import (
 )
 
 var (
-	engine    *vstreamer.Engine
-	env       *testenv.Env
-	globalFBC = &fakeBinlogClient{}
+	playerEngine   *Engine
+	streamerEngine *vstreamer.Engine
+	env            *testenv.Env
+	globalFBC      = &fakeBinlogClient{}
+	globalDBClient = &realDBClient{}
 )
 
 func init() {
@@ -75,12 +81,16 @@ func TestMain(m *testing.M) {
 		}
 		defer env.Close()
 
-		// engine cannot be initialized in testenv because it introduces
+		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
-		engine = vstreamer.NewEngine(env.SrvTopo, env.SchemaEngine)
-		engine.InitDBConfig(env.Dbcfgs)
-		engine.Open(env.KeyspaceName, env.Cells[0])
-		defer engine.Close()
+		streamerEngine = vstreamer.NewEngine(env.SrvTopo, env.SchemaEngine)
+		streamerEngine.InitDBConfig(env.Dbcfgs)
+		streamerEngine.Open(env.KeyspaceName, env.Cells[0])
+		defer streamerEngine.Close()
+
+		playerEngine = NewEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory)
+		playerEngine.Open(context.Background())
+		defer playerEngine.Close()
 
 		return m.Run()
 	}()
@@ -170,7 +180,7 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*quer
 
 // VStream directly calls into the pre-initialized engine.
 func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return engine.Stream(ctx, startPos, filter, send)
+	return streamerEngine.Stream(ctx, startPos, filter, send)
 }
 
 //--------------------------------------
@@ -247,5 +257,80 @@ func expectFBCRequest(t *testing.T, tablet *topodatapb.Tablet, pos string, table
 	}
 	if !proto.Equal(kr, globalFBC.lastKeyRange) {
 		t.Errorf("Request KeyRange: %v, want %v", globalFBC.lastKeyRange, kr)
+	}
+}
+
+//--------------------------------------
+// DBCLient wrapper
+
+func resetDBClient() {
+	globalDBClient.queries = make(chan string, 1000)
+}
+
+func realDBClientFactory() binlogplayer.DBClient {
+	resetDBClient()
+	return globalDBClient
+}
+
+type realDBClient struct {
+	queries chan string
+}
+
+func (dbc *realDBClient) DBName() string {
+	return env.KeyspaceName
+}
+
+func (dbc *realDBClient) Connect() error {
+	return nil
+}
+
+func (dbc *realDBClient) Begin() error {
+	dbc.queries <- "begin"
+	return env.Mysqld.ExecuteSuperQueryList(context.Background(), []string{"begin"})
+}
+
+func (dbc *realDBClient) Commit() error {
+	dbc.queries <- "commit"
+	return env.Mysqld.ExecuteSuperQueryList(context.Background(), []string{"commit"})
+}
+
+func (dbc *realDBClient) Rollback() error {
+	panic("rollback should never be called")
+}
+
+func (dbc *realDBClient) Close() {
+}
+
+func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
+	if !strings.HasPrefix(query, "select") {
+		dbc.queries <- query
+	}
+	if strings.HasPrefix(query, "use") {
+		return nil, nil
+	}
+	return env.Mysqld.FetchSuperQuery(context.Background(), query)
+}
+
+func expectDBClientQueries(t *testing.T, queries []string) {
+	t.Helper()
+	for i, query := range queries {
+		var got string
+		select {
+		case got = <-globalDBClient.queries:
+			match, err := regexp.MatchString(query, got)
+			if err != nil {
+				panic(err)
+			}
+			if !match {
+				t.Fatalf("query:\n%s, does not match query %d:\n%s", got, i, query)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no query received, expecting %s", query)
+		}
+	}
+	select {
+	case got := <-globalDBClient.queries:
+		t.Fatalf("unexpected query: %s", got)
+	default:
 	}
 }

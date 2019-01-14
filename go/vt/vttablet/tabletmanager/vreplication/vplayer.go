@@ -135,7 +135,6 @@ func (vp *vplayer) play(ctx context.Context) error {
 }
 
 func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
-	fmt.Printf("applying: %v\n", event)
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		pos, err := mysql.DecodePosition(event.Gtid)
@@ -174,13 +173,11 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
 	case binlogdatapb.VEventType_DDL:
 		switch vp.source.OnDdl {
 		case binlogdatapb.OnDDLAction_IGNORE:
-			if err := vp.updatePos(event.Timestamp); err != nil {
-				return err
-			}
-			if err := vp.dbClient.Commit(); err != nil {
-				return err
-			}
+			// no-op
 		case binlogdatapb.OnDDLAction_STOP:
+			if err := vp.dbClient.Begin(); err != nil {
+				return err
+			}
 			if err := vp.updatePos(event.Timestamp); err != nil {
 				return err
 			}
@@ -189,23 +186,17 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
 				return err
 			}
 		case binlogdatapb.OnDDLAction_EXEC:
-			if err := vp.updatePos(event.Timestamp); err != nil {
-				return err
-			}
 			if err := vp.exec(event.Ddl); err != nil {
 				return err
 			}
-			if err := vp.dbClient.Commit(); err != nil {
+			if err := vp.savePos(event.Timestamp); err != nil {
 				return err
 			}
 		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
-			if err := vp.updatePos(event.Timestamp); err != nil {
-				return err
-			}
 			if err := vp.exec(event.Ddl); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Ddl)
 			}
-			if err := vp.dbClient.Commit(); err != nil {
+			if err := vp.savePos(event.Timestamp); err != nil {
 				return err
 			}
 		}
@@ -214,6 +205,8 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
 }
 
 func (vp *vplayer) setState(state, message string) {
+	if state == binlogplayer.BlpStopped {
+	}
 	if err := binlogplayer.SetVReplicationState(vp.dbClient, vp.id, state, message); err != nil {
 		log.Errorf("Error writing state: %s, msg: %s, err: %v", state, message, err)
 	}
@@ -422,6 +415,18 @@ func (vp *vplayer) writeWhereValues(sql *sqlparser.TrackedBuffer, tplan *tablePl
 		encodeValue(sql, before[cExpr.colnum])
 	}
 }
+
+// savePos performs an updatePos in its own transaction.
+func (vp *vplayer) savePos(ts int64) error {
+	if err := vp.dbClient.Begin(); err != nil {
+		return err
+	}
+	if err := vp.updatePos(ts); err != nil {
+		return err
+	}
+	return vp.dbClient.Commit()
+}
+
 func (vp *vplayer) updatePos(ts int64) error {
 	updatePos := binlogplayer.GenerateUpdatePos(vp.id, vp.pos, time.Now().Unix(), ts)
 	if _, err := vp.dbClient.ExecuteFetch(updatePos, 0); err != nil {
