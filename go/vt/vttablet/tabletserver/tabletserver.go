@@ -212,6 +212,9 @@ func NewServer(topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletSer
 	return NewTabletServer(tabletenv.Config, topoServer, alias)
 }
 
+// TxPoolController is how the tablet server interacts with the tx-pool.
+// It is responsible for keeping it's own state - knowing when different types
+// of transactions are allowed, and how to do state transitions.
 type TxPoolController interface {
 	// Stop will stop accepting any new transactions. If in RW mode, transactions are given
 	// a chance to finish before being rolled back. If in RO mode, transactions are
