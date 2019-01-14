@@ -390,6 +390,13 @@ class TestBuffer(TestBufferBase):
     # will ignore subsequent failovers.
     start_vtgate()
 
+  def test_buffer_planned_reparent(self):
+    def planned_reparent():
+      utils.run_vtctl(['PlannedReparentShard', '-keyspace_shard',
+                       '%s/%s' % (KEYSPACE, SHARD),
+                       '-new_master', replica.tablet_alias])
+    self._test_buffer(planned_reparent)
+
   def test_buffer_external_reparent(self):
     self._test_buffer(self.external_reparent)
 
