@@ -466,7 +466,14 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "subquery not allowed for message table: %s", table.Name.String())
 	}
 	if ins.OnDup != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "'on duplicate key' construct not allowed for message table: %s", table.Name.String())
+		// only allow 'on duplicate key' where time_scheduled and id are not referenced
+		ts := sqlparser.NewColIdent("time_scheduled")
+		id := sqlparser.NewColIdent("id")
+		for _, updateExpr := range ins.OnDup {
+			if updateExpr.Name.Name.Equal(ts) || updateExpr.Name.Name.Equal(id) {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "'on duplicate key' cannot reference time_scheduled or id for message table: %s", table.Name.String())
+			}
+		}
 	}
 	if len(ins.Columns) == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column list must be specified for message table insert: %s", table.Name.String())
