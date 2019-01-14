@@ -149,10 +149,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			return err
 		}
 		rb, st := newRoute(sel, nil, nil)
-		rb.ERoute = &engine.Route{
-			Opcode:   engine.SelectDBA,
-			Keyspace: ks,
-		}
+		rb.ERoute = engine.NewSimpleRoute(engine.SelectDBA, ks)
 		pb.bldr, pb.st = rb, st
 		return nil
 	}
@@ -172,28 +169,20 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 	_ = st.AddVindexTable(alias, table, rb)
 
 	if !table.Keyspace.Sharded {
-		rb.ERoute = &engine.Route{
-			Opcode:   engine.SelectUnsharded,
-			Keyspace: table.Keyspace,
-		}
+		rb.ERoute = engine.NewSimpleRoute(engine.SelectUnsharded, table.Keyspace)
 		return nil
 	}
 	if table.Pinned == nil {
-		rb.ERoute = &engine.Route{
-			Opcode:            engine.SelectScatter,
-			Keyspace:          table.Keyspace,
-			TargetDestination: destTarget,
-			TargetTabletType:  destTableType,
-		}
+		rb.ERoute = engine.NewSimpleRoute(engine.SelectScatter, table.Keyspace)
+		rb.ERoute.TargetDestination = destTarget
+		rb.ERoute.TargetTabletType = destTableType
+
 		return nil
 	}
 	// Pinned tables have their keyspace ids already assigned.
 	// Use the Binary vindex, which is the identity function
 	// for keyspace id. Currently only dual tables are pinned.
-	eRoute := &engine.Route{
-		Opcode:   engine.SelectEqualUnique,
-		Keyspace: table.Keyspace,
-	}
+	eRoute := engine.NewSimpleRoute(engine.SelectEqualUnique, table.Keyspace)
 	eRoute.Vindex, _ = vindexes.NewBinary("binary", nil)
 	eRoute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, table.Pinned)}}
 	rb.ERoute = eRoute
