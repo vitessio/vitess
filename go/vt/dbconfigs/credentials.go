@@ -133,10 +133,8 @@ func init() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGHUP)
 	go func() {
-		for {
-			<-sigChan
-			fcs, ok := AllCredentialsServers["file"].(*FileCredentialsServer)
-			if ok {
+		for range sigChan {
+			if fcs, ok := AllCredentialsServers["file"].(*FileCredentialsServer); ok {
 				fcs.mu.Lock()
 				fcs.dbCredentials = nil
 				fcs.mu.Unlock()
