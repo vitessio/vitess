@@ -168,10 +168,10 @@ func (t TxType) String() string {
 }
 
 type TestCase struct {
-	startState     TxEngineState
-	TxEngineStates []TxEngineState
+	startState     txEngineState
+	TxEngineStates []txEngineState
 	tx             TxType
-	stateAssertion func(state TxEngineState) error
+	stateAssertion func(state txEngineState) error
 }
 
 func (test TestCase) String() string {
@@ -189,7 +189,7 @@ func (test TestCase) String() string {
 	return sb.String()
 }
 
-func changeState(te *TxEngine, state TxEngineState) error {
+func changeState(te *TxEngine, state txEngineState) error {
 	switch state {
 	case AcceptingReadAndWrite:
 		return te.AcceptReadWrite()
@@ -206,196 +206,196 @@ func TestWithInnerTests(outerT *testing.T) {
 
 	tests := []TestCase{
 		// Start from RW and test all single hop transitions with and without tx
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			NotServing},
 			NoTx, assertEndStateIs(NotServing)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadAndWrite},
 			NoTx, assertEndStateIs(AcceptingReadAndWrite)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadOnly},
 			NoTx, assertEndStateIs(AcceptingReadOnly)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			NotServing},
 			WriteAccepted, assertEndStateIs(NotServing)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadAndWrite},
 			WriteAccepted, assertEndStateIs(AcceptingReadAndWrite)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadOnly},
 			WriteAccepted, assertEndStateIs(AcceptingReadOnly)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			NotServing},
 			ReadOnlyAccepted, assertEndStateIs(NotServing)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadAndWrite},
 			ReadOnlyAccepted, assertEndStateIs(AcceptingReadAndWrite)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadOnly},
 			ReadOnlyAccepted, assertEndStateIs(AcceptingReadOnly)},
 
 		// Start from RW and test all transitions with and without tx, plus a concurrent Stop()
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			NotServing,
 			NotServing},
 			NoTx, assertEndStateIs(NotServing)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadAndWrite,
 			NotServing},
 			NoTx, assertEndStateIs(NotServing)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadOnly,
 			NotServing},
 			NoTx, assertEndStateIs(NotServing)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			NotServing,
 			NotServing},
 			WriteAccepted, assertEndStateIs(NotServing)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadAndWrite,
 			NotServing},
 			WriteAccepted, assertEndStateIs(NotServing)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadOnly,
 			NotServing},
 			WriteAccepted, assertEndStateIs(NotServing)},
 
 		// Start from RW and test all transitions with and without tx, plus a concurrent ReadOnly()
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			NotServing,
 			AcceptingReadOnly},
 			NoTx, assertEndStateIs(AcceptingReadOnly)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadAndWrite,
 			AcceptingReadOnly},
 			NoTx, assertEndStateIs(AcceptingReadOnly)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadOnly,
 			AcceptingReadOnly},
 			NoTx, assertEndStateIs(AcceptingReadOnly)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			NotServing,
 			AcceptingReadOnly},
 			WriteAccepted, assertEndStateIs(AcceptingReadOnly)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadAndWrite,
 			AcceptingReadOnly},
 			WriteAccepted, assertEndStateIs(AcceptingReadOnly)},
 
-		{AcceptingReadAndWrite, []TxEngineState{
+		{AcceptingReadAndWrite, []txEngineState{
 			AcceptingReadOnly,
 			AcceptingReadOnly},
 			WriteAccepted, assertEndStateIs(AcceptingReadOnly)},
 
 		// Start from RO and test all single hop transitions with and without tx
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			NotServing},
 			NoTx, assertEndStateIs(NotServing)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadAndWrite},
 			NoTx, assertEndStateIs(AcceptingReadAndWrite)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadOnly},
 			NoTx, assertEndStateIs(AcceptingReadOnly)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			NotServing},
 			WriteRejected, assertEndStateIs(NotServing)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadAndWrite},
 			WriteRejected, assertEndStateIs(AcceptingReadAndWrite)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadOnly},
 			WriteRejected, assertEndStateIs(AcceptingReadOnly)},
 
 		// Start from RO and test all transitions with and without tx, plus a concurrent Stop()
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			NotServing,
 			NotServing},
 			NoTx, assertEndStateIs(NotServing)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadAndWrite,
 			NotServing},
 			NoTx, assertEndStateIs(NotServing)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadOnly,
 			NotServing},
 			NoTx, assertEndStateIs(NotServing)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			NotServing,
 			NotServing},
 			WriteRejected, assertEndStateIs(NotServing)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadAndWrite,
 			NotServing},
 			WriteRejected, assertEndStateIs(NotServing)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadOnly,
 			NotServing},
 			WriteRejected, assertEndStateIs(NotServing)},
 
 		// Start from RO and test all transitions with and without tx, plus a concurrent ReadWrite()
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			NotServing,
 			AcceptingReadAndWrite},
 			NoTx, assertEndStateIs(AcceptingReadAndWrite)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadAndWrite,
 			AcceptingReadAndWrite},
 			NoTx, assertEndStateIs(AcceptingReadAndWrite)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadOnly,
 			AcceptingReadAndWrite},
 			NoTx, assertEndStateIs(AcceptingReadAndWrite)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			NotServing,
 			AcceptingReadAndWrite},
 			WriteRejected, assertEndStateIs(AcceptingReadAndWrite)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadAndWrite,
 			AcceptingReadAndWrite},
 			WriteRejected, assertEndStateIs(AcceptingReadAndWrite)},
 
-		{AcceptingReadOnly, []TxEngineState{
+		{AcceptingReadOnly, []txEngineState{
 			AcceptingReadOnly,
 			AcceptingReadAndWrite},
 			WriteRejected, assertEndStateIs(AcceptingReadAndWrite)},
 
 		// Make sure that all transactions are rejected when we are not serving
-		{NotServing, []TxEngineState{},
+		{NotServing, []txEngineState{},
 			WriteRejected, assertEndStateIs(NotServing)},
 
-		{NotServing, []TxEngineState{},
+		{NotServing, []txEngineState{},
 			ReadOnlyRejected, assertEndStateIs(NotServing)},
 	}
 
@@ -476,8 +476,8 @@ func failIfError(t *testing.T, err error) {
 	}
 }
 
-func assertEndStateIs(expected TxEngineState) func(actual TxEngineState) error {
-	return func(actual TxEngineState) error {
+func assertEndStateIs(expected txEngineState) func(actual txEngineState) error {
+	return func(actual txEngineState) error {
 		if actual != expected {
 			return fmt.Errorf("expected the end state to be %v, but it was %v", expected, actual)
 		}

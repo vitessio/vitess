@@ -39,17 +39,17 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-type TxEngineState int
+type txEngineState int
 
 // The TxEngine can be in any of these states
 const (
-	NotServing TxEngineState = iota
+	NotServing txEngineState = iota
 	Transitioning
 	AcceptingReadAndWrite
 	AcceptingReadOnly
 )
 
-func (state TxEngineState) String() string {
+func (state txEngineState) String() string {
 	names := [...]string{
 		"NotServing",
 		"Transitioning",
@@ -76,8 +76,8 @@ type TxEngine struct {
 	// while transitioning, `transitionSignal` will contain an open channel. Once the transition is
 	// over, the channel is closed to signal to any waiting goroutines that the state change is done.
 	stateLock        sync.Mutex
-	state            TxEngineState
-	nextState        TxEngineState
+	state            txEngineState
+	nextState        txEngineState
 	transitionSignal chan struct{}
 
 	// beginRequests is used to make sure that we do not make a state
@@ -160,6 +160,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 	return te
 }
 
+// Stop will stop accepting any new transactions. Transactions are immediately aborted.
 func (te *TxEngine) Stop() error {
 	te.beginRequests.Wait()
 	te.stateLock.Lock()
@@ -192,6 +193,9 @@ func (te *TxEngine) Stop() error {
 	}
 }
 
+// AcceptReadWrite will start accepting all transactions.
+// If transitioning from RO mode, transactions might need to be
+// rolled back before new transactions can be accepts.
 func (te *TxEngine) AcceptReadWrite() error {
 	te.beginRequests.Wait()
 	te.stateLock.Lock()
@@ -227,6 +231,9 @@ func (te *TxEngine) AcceptReadWrite() error {
 	}
 }
 
+// AcceptReadOnly will start accepting read-only transactions, but not full read and write transactions.
+// If the engine is currently accepting full read and write transactions, they need to
+// be rolled back.
 func (te *TxEngine) AcceptReadOnly() error {
 	te.beginRequests.Wait()
 	te.stateLock.Lock()
@@ -257,6 +264,8 @@ func (te *TxEngine) AcceptReadOnly() error {
 	}
 }
 
+// Begin begins a transaction, and returns the associated transaction id.
+// Subsequent statements can access the connection through the transaction id.
 func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, error) {
 	te.stateLock.Lock()
 
@@ -282,10 +291,12 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 	return te.txPool.Begin(ctx, options)
 }
 
+// Commit commits the specified transaction.
 func (te *TxEngine) Commit(ctx context.Context, transactionID int64, mc messageCommitter) error {
 	return te.txPool.Commit(ctx, transactionID, mc)
 }
 
+// Rollback rolls back the specified transaction.
 func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) error {
 	return te.txPool.Rollback(ctx, transactionID)
 }
@@ -301,7 +312,7 @@ func (te *TxEngine) blockUntilEndOfTransition() error {
 	}
 }
 
-func (te *TxEngine) transitionTo(nextState TxEngineState) error {
+func (te *TxEngine) transitionTo(nextState txEngineState) error {
 	te.state = Transitioning
 	te.nextState = nextState
 	te.transitionSignal = make(chan struct{})
@@ -371,8 +382,8 @@ func (te *TxEngine) Open() {
 	}
 }
 
-// CloseRudely will disregard common rules for when to kill transactions
-// and forcefully abort everything as fast as possible
+// StopGently will disregard common rules for when to kill transactions
+// and wait forever for transactions to wrap up
 func (te *TxEngine) StopGently() {
 	te.stateLock.Lock()
 	defer te.stateLock.Unlock()
