@@ -153,6 +153,21 @@ type Conn struct {
 	// currentEphemeralBuffer for tracking allocated temporary buffer for writes and reads respectively.
 	// It can be allocated from bufPool or heap and should be recycled in the same manner.
 	currentEphemeralBuffer *[]byte
+
+	StatementID uint32
+
+	PrepareData map[uint32]*prepareData
+}
+
+// prepareData is a buffer used for store prepare statement meta data
+type prepareData struct {
+	StatementID uint32
+	PrepareStmt string
+	ParsedStmt  *sqlparser.Statement
+	ParamsCount uint16
+	ParamsType  []int32
+	ColumnNames []string
+	BindVars    map[string]*querypb.BindVariable
 }
 
 // bufPool is used to allocate and free buffers in an efficient way.
@@ -178,9 +193,10 @@ func newConn(conn net.Conn) *Conn {
 // size for reads.
 func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	c := &Conn{
-		conn:     conn,
-		listener: listener,
-		closed:   sync2.NewAtomicBool(false),
+		conn:        conn,
+		listener:    listener,
+		closed:      sync2.NewAtomicBool(false),
+		PrepareData: make(map[uint32]*prepareData),
 	}
 	if listener.connReadBufferSize > 0 {
 		c.bufferedReader = bufio.NewReaderSize(conn, listener.connReadBufferSize)
@@ -796,6 +812,65 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				log.Errorf("Error writing error packet to client: %v", err)
 				return err
 			}
+		}
+	case ComPrepare:
+		query := c.parseComPrepare(data)
+		c.recycleReadPacket()
+
+		var queries []string
+		if c.Capabilities&CapabilityClientMultiStatements != 0 {
+			queries, err = sqlparser.SplitStatementToPieces(query)
+			if err != nil {
+				log.Errorf("Conn %v: Error splitting query: %v", c, err)
+				if werr := c.writeErrorPacketFromError(err); werr != nil {
+					// If we can't even write the error, we're done.
+					log.Errorf("Conn %v: Error writing query error: %v", c, werr)
+					return werr
+				}
+			}
+		} else {
+			queries = []string{query}
+		}
+
+		if len(queries) != 1 {
+			return fmt.Errorf("can not prepare multiple statements")
+		}
+
+		c.StatementID++
+		prepare := &prepareData{
+			StatementID: c.StatementID,
+			PrepareStmt: queries[0],
+		}
+
+		c.PrepareData[c.StatementID] = prepare
+
+		fieldSent := false
+		// sendFinished is set if the response should just be an OK packet.
+		sendFinished := false
+		err := handler.ComPrepare(c, queries[0], func(qr *sqltypes.Result) error {
+			if sendFinished {
+				// Failsafe: Unreachable if server is well-behaved.
+				return io.EOF
+			}
+
+			if !fieldSent {
+				fieldSent = true
+				if err := c.writePrepare(qr, c.PrepareData[c.StatementID]); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		})
+		if err != nil {
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
+				return werr
+			}
+
+			delete(c.PrepareData, c.StatementID)
+			return nil
 		}
 	default:
 		log.Errorf("Got unhandled packet from %s, returning error: %v", c, data)
