@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -307,7 +308,7 @@ func (te *TxEngine) transitionTo(nextState TxEngineState) error {
 	te.stateLock.Unlock()
 
 	// We do this outside the lock so others can see our state while we close up waiting transactions
-	te.close(false)
+	te.close(true)
 
 	te.stateLock.Lock()
 	defer func() {
@@ -372,10 +373,10 @@ func (te *TxEngine) Open() {
 
 // CloseRudely will disregard common rules for when to kill transactions
 // and forcefully abort everything as fast as possible
-func (te *TxEngine) StopImmediately() {
+func (te *TxEngine) StopGently() {
 	te.stateLock.Lock()
 	defer te.stateLock.Unlock()
-	te.close(true)
+	te.close(false)
 	te.state = NotServing
 }
 

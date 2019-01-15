@@ -216,9 +216,7 @@ func NewServer(topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletSer
 // It is responsible for keeping it's own state - knowing when different types
 // of transactions are allowed, and how to do state transitions.
 type TxPoolController interface {
-	// Stop will stop accepting any new transactions. If in RW mode, transactions are given
-	// a chance to finish before being rolled back. If in RO mode, transactions are
-	// immediately aborted.
+	// Stop will stop accepting any new transactions. Transactions are immediately aborted.
 	Stop() error
 
 	// Will start accepting all transactions. If transitioning from RO mode, transactions
@@ -237,9 +235,8 @@ type TxPoolController interface {
 	// up the metadata tables.
 	Init() error
 
-	// StopImmediately will change the state to NotServing immediately, without waiting
-	// for transactions to wrap up
-	StopImmediately()
+	// StopGently will change the state to NotServing but first wait for transactions to wrap up
+	StopGently()
 
 	// Begin begins a transaction, and returns the associated transaction id.
 	// Subsequent statements can access the connection through the transaction id.
@@ -651,7 +648,7 @@ func (tsv *TabletServer) closeAll() {
 	tsv.messager.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
-	tsv.teCtrl.StopImmediately()
+	tsv.teCtrl.StopGently()
 	tsv.watcher.Close()
 	tsv.updateStreamList.Stop()
 	tsv.qe.Close()
