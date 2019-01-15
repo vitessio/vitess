@@ -136,6 +136,10 @@ func (mh *proxyHandler) WarningCount(c *mysql.Conn) uint16 {
 	return 0
 }
 
+func (mh *proxyHandler) ComPrepare(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
 var mysqlListener *mysql.Listener
 var mysqlUnixListener *mysql.Listener
 

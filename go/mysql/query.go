@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -510,6 +511,10 @@ func (c *Conn) parseComSetOption(data []byte) (uint16, bool) {
 	return val, ok
 }
 
+func (c *Conn) parseComPrepare(data []byte) string {
+	return string(data[1:])
+}
+
 func (c *Conn) parseComInitDB(data []byte) string {
 	return string(data[1:])
 }
@@ -654,4 +659,72 @@ func (c *Conn) writeEndResult(more bool, affectedRows, lastInsertID uint64, warn
 	}
 
 	return nil
+}
+
+// writePrepare writes a prepare query response to the wire.
+func (c *Conn) writePrepare(result *sqltypes.Result, prepare *prepareData) error {
+	paramsCount := prepare.ParamsCount
+	columnCount := 0
+	if result != nil {
+		columnCount = len(result.Fields)
+	}
+	if columnCount > 0 {
+		prepare.ColumnNames = make([]string, columnCount)
+	}
+
+	data := c.startEphemeralPacket(12)
+	pos := 0
+
+	pos = writeByte(data, pos, 0x00)
+	pos = writeUint32(data, pos, uint32(prepare.StatementID))
+	pos = writeUint16(data, pos, uint16(columnCount))
+	pos = writeUint16(data, pos, uint16(paramsCount))
+	pos = writeByte(data, pos, 0x00)
+	pos = writeUint16(data, pos, 0x0000)
+
+	if err := c.writeEphemeralPacket(); err != nil {
+		return err
+	}
+
+	if paramsCount > 0 {
+		for i := uint16(0); i < paramsCount; i++ {
+			if err := c.writeColumnDefinition(&querypb.Field{
+				Name:    "?",
+				Type:    sqltypes.VarBinary,
+				Charset: 63}); err != nil {
+				return err
+			}
+		}
+
+		// Now send an EOF packet.
+		if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+			// With CapabilityClientDeprecateEOF, we do not send this EOF.
+			if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+				return err
+			}
+		}
+	}
+
+	if result != nil {
+		// Now send each Field.
+		for i, field := range result.Fields {
+			field.Name = strings.Replace(field.Name, "'?'", "?", -1)
+			prepare.ColumnNames[i] = field.Name
+			if err := c.writeColumnDefinition(field); err != nil {
+				return err
+			}
+		}
+
+		if columnCount > 0 {
+			// Now send an EOF packet.
+			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+				// With CapabilityClientDeprecateEOF, we do not send this EOF.
+				if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return c.flush()
 }
