@@ -5,7 +5,10 @@
 
 package log
 
-import "github.com/golang/glog"
+import (
+	"flag"
+	"github.com/golang/glog"
+)
 
 // Level is used with V() to test log verbosity.
 type Level = glog.Level
@@ -52,3 +55,7 @@ var (
 	// FatalDepth formats arguments like fmt.Print and uses depth to choose which call frame to log.
 	FatalDepth = glog.FatalDepth
 )
+
+func init() {
+	flag.Uint64Var(&glog.MaxSize, "log_rotate_max_size", glog.MaxSize, "size in bytes at which logs are rotated (glog.MaxSize)")
+}
