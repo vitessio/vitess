@@ -148,8 +148,7 @@ func (a *AuthServerStatic) installSignalHandlers() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGHUP)
 	go func() {
-		for {
-			<-sigChan
+		for range sigChan {
 			a.loadConfigFromParams(*mysqlAuthServerStaticFile, "")
 		}
 	}()
