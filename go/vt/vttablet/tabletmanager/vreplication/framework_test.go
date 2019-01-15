@@ -311,6 +311,18 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.R
 	return env.Mysqld.FetchSuperQuery(context.Background(), query)
 }
 
+func printQueries(t *testing.T) {
+	t.Helper()
+	for {
+		select {
+		case got := <-globalDBClient.queries:
+			t.Errorf("%s", got)
+		default:
+			return
+		}
+	}
+}
+
 func expectDBClientQueries(t *testing.T, queries []string) {
 	t.Helper()
 	for i, query := range queries {
@@ -322,15 +334,18 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 				panic(err)
 			}
 			if !match {
-				t.Fatalf("query:\n%s, does not match query %d:\n%s", got, i, query)
+				t.Errorf("query:\n%s, does not match query %d:\n%s", got, i, query)
 			}
 		case <-time.After(5 * time.Second):
 			t.Fatalf("no query received, expecting %s", query)
 		}
 	}
-	select {
-	case got := <-globalDBClient.queries:
-		t.Fatalf("unexpected query: %s", got)
-	default:
+	for {
+		select {
+		case got := <-globalDBClient.queries:
+			t.Errorf("unexpected query: %s", got)
+		default:
+			return
+		}
 	}
 }
