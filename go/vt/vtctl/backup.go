@@ -103,8 +103,10 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	var secondsBehind uint32
 
 	for i := range tablets {
-		// don't run a backup on a non-slave type
-		if !tablets[i].IsSlaveType() {
+		// only run a backup on a replica, rdonly or spare tablet type
+		switch tablets[i].Type {
+		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE:
+		default:
 			continue
 		}
 
