@@ -19,7 +19,6 @@ package vreplication
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"time"
 
 	"golang.org/x/net/context"
@@ -46,10 +45,13 @@ type vplayer struct {
 	dbClient     binlogplayer.DBClient
 	mysqld       mysqlctl.MysqlDaemon
 
-	pos     mysql.Position
-	stopPos mysql.Position
-	pplan   *playerPlan
-	tplans  map[string]*tablePlan
+	pos            mysql.Position
+	stopPos        mysql.Position
+	externalizePos []mysql.Position
+	mustCommit     bool
+
+	pplan  *playerPlan
+	tplans map[string]*tablePlan
 
 	retryDelay time.Duration
 }
@@ -114,24 +116,69 @@ func (vp *vplayer) play(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("error dialing tablet: %v", err)
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	relay := newRelayLog(ctx, 10, 10)
+	go vp.applyEvents(relay)
+
 	target := &querypb.Target{
 		Keyspace:   vp.sourceTablet.Keyspace,
 		Shard:      vp.sourceTablet.Shard,
 		TabletType: vp.sourceTablet.Type,
 	}
 	return vsClient.VStream(ctx, target, startPos, plan.vstreamFilter, func(events []*binlogdatapb.VEvent) error {
-		for _, event := range events {
-			select {
-			case <-ctx.Done():
-				return io.EOF
-			default:
+		return relay.Send(events)
+	})
+}
+
+func (vp *vplayer) applyEvents(relay *relayLog) {
+	for {
+		items, err := relay.Fetch()
+		if err != nil {
+			return
+		}
+		events := linearizeEvents(items)
+		for i, event := range events {
+			switch event.Type {
+			case binlogdatapb.VEventType_COMMIT:
+				if vp.pos.Equal(vp.stopPos) {
+					break
+				}
+				// Check for externalizePos
+				foundAnotherCommit := false
+			searchCommit:
+				for j := i + 1; j < len(events); j++ {
+					switch event.Type {
+					case binlogdatapb.VEventType_COMMIT:
+						foundAnotherCommit = true
+						break searchCommit
+					case binlogdatapb.VEventType_ROLLBACK, binlogdatapb.VEventType_DDL:
+						break searchCommit
+					}
+				}
+				if foundAnotherCommit {
+					continue
+				}
 			}
 			if err := vp.applyEvent(event); err != nil {
-				return err
+				relay.SetError(err)
+				return
 			}
 		}
-		return nil
-	})
+	}
+}
+
+func linearizeEvents(items [][]*binlogdatapb.VEvent) []*binlogdatapb.VEvent {
+	length := 0
+	for _, events := range items {
+		length += len(events)
+	}
+	linear := make([]*binlogdatapb.VEvent, 0, length)
+	for _, events := range items {
+		linear = append(linear, events...)
+	}
+	return linear
 }
 
 func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
@@ -149,28 +196,46 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
 			return fmt.Errorf("next event position %v exceeds stop pos %v, exiting without applying", vp.pos, vp.stopPos)
 		}
 	case binlogdatapb.VEventType_BEGIN:
-		if err := vp.dbClient.Begin(); err != nil {
-			return err
-		}
+		// No-op: begin is called as needed.
 	case binlogdatapb.VEventType_COMMIT:
+		if !vp.mustCommit {
+			return nil
+		}
 		if err := vp.updatePos(event.Timestamp); err != nil {
 			return err
 		}
 		if err := vp.dbClient.Commit(); err != nil {
 			return err
 		}
+		vp.mustCommit = false
 	case binlogdatapb.VEventType_ROLLBACK:
 		// This code is unreachable. It's just here as failsafe.
+		vp.mustCommit = false
 		_ = vp.dbClient.Rollback()
 	case binlogdatapb.VEventType_FIELD:
+		if !vp.mustCommit {
+			if err := vp.dbClient.Begin(); err != nil {
+				return err
+			}
+			vp.mustCommit = true
+		}
 		if err := vp.updatePlan(event.FieldEvent); err != nil {
 			return err
 		}
 	case binlogdatapb.VEventType_ROW:
+		if !vp.mustCommit {
+			if err := vp.dbClient.Begin(); err != nil {
+				return err
+			}
+			vp.mustCommit = true
+		}
 		if err := vp.applyRowEvent(event.RowEvent); err != nil {
 			return err
 		}
 	case binlogdatapb.VEventType_DDL:
+		if vp.mustCommit {
+			return fmt.Errorf("unexpected state: DDL encountered in the middle of a transaction: %v", event.Ddl)
+		}
 		switch vp.source.OnDdl {
 		case binlogdatapb.OnDDLAction_IGNORE:
 			// no-op
@@ -189,14 +254,14 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
 			if err := vp.exec(event.Ddl); err != nil {
 				return err
 			}
-			if err := vp.savePos(event.Timestamp); err != nil {
+			if err := vp.updatePos(event.Timestamp); err != nil {
 				return err
 			}
 		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
 			if err := vp.exec(event.Ddl); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Ddl)
 			}
-			if err := vp.savePos(event.Timestamp); err != nil {
+			if err := vp.updatePos(event.Timestamp); err != nil {
 				return err
 			}
 		}
@@ -414,17 +479,6 @@ func (vp *vplayer) writeWhereValues(sql *sqlparser.TrackedBuffer, tplan *tablePl
 		}
 		encodeValue(sql, before[cExpr.colnum])
 	}
-}
-
-// savePos performs an updatePos in its own transaction.
-func (vp *vplayer) savePos(ts int64) error {
-	if err := vp.dbClient.Begin(); err != nil {
-		return err
-	}
-	if err := vp.updatePos(ts); err != nil {
-		return err
-	}
-	return vp.dbClient.Commit()
 }
 
 func (vp *vplayer) updatePos(ts int64) error {
