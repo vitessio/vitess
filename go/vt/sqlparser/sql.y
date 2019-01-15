@@ -3276,7 +3276,6 @@ non_reserved_keyword:
 | COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
-| DESC
 | DATE
 | DATETIME
 | DECIMAL
