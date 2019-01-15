@@ -561,6 +561,8 @@ func TestTabletServerTarget(t *testing.T) {
 
 func TestBeginOnReplica(t *testing.T) {
 	db := setUpTabletServerTest(t)
+	db.AddQuery("set transaction isolation level REPEATABLE READ", &sqltypes.Result{})
+	db.AddQuery("start transaction with consistent snapshot, read only", &sqltypes.Result{})
 	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
@@ -579,7 +581,10 @@ func TestBeginOnReplica(t *testing.T) {
 
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 	ctx := context.Background()
-	txID, err := tsv.Begin(ctx, &target1, nil)
+	options := querypb.ExecuteOptions{
+		TransactionIsolation: querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY,
+	}
+	txID, err := tsv.Begin(ctx, &target1, &options)
 
 	if err != nil {
 		t.Errorf("err: %v, failed to create read only tx on replica", err)
@@ -588,6 +593,16 @@ func TestBeginOnReplica(t *testing.T) {
 	err = tsv.Rollback(ctx, &target1, txID)
 	if err != nil {
 		t.Errorf("err: %v, failed to rollback read only tx", err)
+	}
+
+	// test that RW transactions are refused
+	options = querypb.ExecuteOptions{
+		TransactionIsolation: querypb.ExecuteOptions_DEFAULT,
+	}
+	_, err = tsv.Begin(ctx, &target1, &options)
+
+	if err == nil {
+		t.Error("expected write tx to be refused")
 	}
 }
 
