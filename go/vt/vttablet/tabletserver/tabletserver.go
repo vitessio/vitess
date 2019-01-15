@@ -383,8 +383,7 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGHUP)
 	go func() {
-		for {
-			<-sigChan
+		for range sigChan {
 			tsv.initACL(tableACLConfigFile, enforceTableACLConfig)
 		}
 	}()
