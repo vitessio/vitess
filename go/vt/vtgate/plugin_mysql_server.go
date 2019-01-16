@@ -294,11 +294,6 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		}
 	}()
 
-	//if c.LastInsertID > 0 {
-	//	c.PrevLastInsertID = c.LastInsertID
-	//	c.LastInsertID = 0
-	//}
-
 	if c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
