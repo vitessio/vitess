@@ -795,6 +795,13 @@ func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, r
 			continue
 		}
 
+		// exclude float column as identifier for where condition,
+		// as it is approximate value and it will make the update fails
+		if (value.Type() == querypb.Type_FLOAT32) || (value.Type() == querypb.Type_FLOAT64) {
+			valueIndex++
+			continue
+		}
+
 		// Print a separator if needed, then print the name.
 		if valueIndex > 0 {
 			sql.WriteString(" AND ")
