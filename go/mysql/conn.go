@@ -156,11 +156,11 @@ type Conn struct {
 
 	StatementID uint32
 
-	PrepareData map[uint32]*prepareData
+	PrepareData map[uint32]*PrepareData
 }
 
-// prepareData is a buffer used for store prepare statement meta data
-type prepareData struct {
+// PrepareData is a buffer used for store prepare statement meta data
+type PrepareData struct {
 	StatementID uint32
 	PrepareStmt string
 	ParsedStmt  *sqlparser.Statement
@@ -196,7 +196,7 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 		conn:        conn,
 		listener:    listener,
 		closed:      sync2.NewAtomicBool(false),
-		PrepareData: make(map[uint32]*prepareData),
+		PrepareData: make(map[uint32]*PrepareData),
 	}
 	if listener.connReadBufferSize > 0 {
 		c.bufferedReader = bufio.NewReaderSize(conn, listener.connReadBufferSize)
@@ -837,7 +837,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 
 		c.StatementID++
-		prepare := &prepareData{
+		prepare := &PrepareData{
 			StatementID: c.StatementID,
 			PrepareStmt: queries[0],
 		}
@@ -871,6 +871,164 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 			delete(c.PrepareData, c.StatementID)
 			return nil
+		}
+	case ComStmtExecute:
+		queryStart := time.Now()
+		stmtID, _, err := c.parseComStmtExecute(c.PrepareData, data)
+		c.recycleReadPacket()
+		if err != nil {
+			if stmtID != uint32(0) {
+				prepare := c.PrepareData[stmtID]
+				if prepare.BindVars != nil {
+					for k := range prepare.BindVars {
+						prepare.BindVars[k] = nil
+					}
+				}
+			}
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
+				return werr
+			}
+			return nil
+		}
+
+		fieldSent := false
+		// sendFinished is set if the response should just be an OK packet.
+		sendFinished := false
+		prepare := c.PrepareData[stmtID]
+		err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
+			if sendFinished {
+				// Failsafe: Unreachable if server is well-behaved.
+				return io.EOF
+			}
+
+			if !fieldSent {
+				fieldSent = true
+
+				if len(qr.Fields) == 0 {
+					sendFinished = true
+					// We should not send any more packets after this.
+					return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+				}
+				if err := c.writeFields(qr); err != nil {
+					return err
+				}
+			}
+
+			return c.writeBinaryRows(qr)
+		})
+
+		if prepare.BindVars != nil {
+			for k := range prepare.BindVars {
+				prepare.BindVars[k] = nil
+			}
+		}
+
+		// If no field was sent, we expect an error.
+		if !fieldSent {
+			// This is just a failsafe. Should never happen.
+			if err == nil || err == io.EOF {
+				err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+			}
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Errorf("Error writing query error to %s: %v", c, werr)
+				return werr
+			}
+		} else {
+			if err != nil {
+				// We can't send an error in the middle of a stream.
+				// All we can do is abort the send, which will cause a 2013.
+				log.Errorf("Error in the middle of a stream to %s: %v", c, err)
+				return err
+			}
+
+			// Send the end packet only sendFinished is false (results were streamed).
+			// In this case the affectedRows and lastInsertID are always 0 since it
+			// was a read operation.
+			if !sendFinished {
+				if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
+					log.Errorf("Error writing result to %s: %v", c, err)
+					return err
+				}
+			}
+		}
+
+		timings.Record(queryTimingKey, queryStart)
+	case ComStmtSendLongData:
+		stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
+		c.recycleReadPacket()
+		if !ok {
+			err := fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
+			log.Error(err.Error())
+			return err
+		}
+
+		prepare, ok := c.PrepareData[stmtID]
+		if !ok {
+			err := fmt.Errorf("got wrong statement id from client %v, statement ID(%v) is not found from record", c.ConnectionID, stmtID)
+			log.Error(err.Error())
+			return err
+		}
+
+		if prepare.BindVars == nil ||
+			prepare.ParamsCount == uint16(0) ||
+			paramID >= prepare.ParamsCount {
+			err := fmt.Errorf("invalid parameter Number from client %v, statement: %v", c.ConnectionID, prepare.PrepareStmt)
+			log.Error(err.Error())
+			return err
+		}
+
+		chunk := make([]byte, len(chunkData))
+		copy(chunk, chunkData)
+
+		key := fmt.Sprintf("v%d", paramID+1)
+		if val, ok := prepare.BindVars[key]; ok {
+			val.Value = append(val.Value, chunk...)
+		} else {
+			v, err := sqltypes.InterfaceToValue(chunk)
+			if err != nil {
+				log.Error("build converted parameter value failed: %v", err)
+				return err
+			}
+			prepare.BindVars[key] = sqltypes.ValueBindVariable(v)
+		}
+	case ComStmtClose:
+		stmtID, ok := c.parseComStmtClose(data)
+		c.recycleReadPacket()
+		if ok {
+			delete(c.PrepareData, stmtID)
+		}
+	case ComStmtReset:
+		stmtID, ok := c.parseComStmtReset(data)
+		c.recycleReadPacket()
+		if !ok {
+			log.Error("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
+			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
+				log.Error("Error writing error packet to client: %v", err)
+				return err
+			}
+		}
+
+		prepare, ok := c.PrepareData[stmtID]
+		if !ok {
+			log.Error("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data)
+			if err := c.writeErrorPacket(CRCommandsOutOfSync, SSUnknownComError, "commands were executed in an improper order: %v", data); err != nil {
+				log.Error("Error writing error packet to client: %v", err)
+				return err
+			}
+		}
+
+		if prepare.BindVars != nil {
+			for k := range prepare.BindVars {
+				prepare.BindVars[k] = nil
+			}
+		}
+
+		if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
+			log.Error("Error writing ComStmtReset OK packet to client %v: %v", c.ConnectionID, err)
+			return err
 		}
 	default:
 		log.Errorf("Got unhandled packet from %s, returning error: %v", c, data)

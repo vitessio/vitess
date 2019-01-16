@@ -140,6 +140,10 @@ func (mh *proxyHandler) ComPrepare(c *mysql.Conn, query string, callback func(*s
 	return nil
 }
 
+func (mh *proxyHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
 var mysqlListener *mysql.Listener
 var mysqlUnixListener *mysql.Listener
 
