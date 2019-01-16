@@ -437,6 +437,11 @@ func (db *DB) ComPrepare(c *mysql.Conn, query string, callback func(*sqltypes.Re
 	return nil
 }
 
+// ComStmtExecute is part of the mysql.Handler interface.
+func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
 //
 // Methods to add expected queries and results.
 //

@@ -97,6 +97,10 @@ type Handler interface {
 	// statement query.
 	ComPrepare(c *Conn, query string, callback func(*sqltypes.Result) error) error
 
+	// ComStmtExecute is called when a connection receives a statement
+	// execute query.
+	ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error
+
 	// WarningCount is called at the end of each query to obtain
 	// the value to be returned to the client in the EOF packet.
 	// Note that this will be called either in the context of the
