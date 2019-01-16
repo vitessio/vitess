@@ -795,6 +795,12 @@ func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, r
 			continue
 		}
 
+		// We have real data.
+		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Columns[c].Type)
+		if err != nil {
+			return keyspaceIDCell, nil, err
+		}
+
 		// exclude float column as identifier for where condition,
 		// as it is approximate value and it will make the update fails
 		if (value.Type() == querypb.Type_FLOAT32) || (value.Type() == querypb.Type_FLOAT64) {
@@ -816,11 +822,6 @@ func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, r
 		}
 		sql.WriteByte('=')
 
-		// We have real data.
-		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Columns[c].Type)
-		if err != nil {
-			return keyspaceIDCell, nil, err
-		}
 		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.ToBytes(), mysql.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
