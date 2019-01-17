@@ -735,6 +735,9 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
 	}
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	if len(tsv.te.preparedPool.conns) != 0 {
+		t.Fatal("fail")
+	}
 
 	tsv.te.txPool.lastID.Set(1)
 	// Ensure we continue past errors.
@@ -780,6 +783,9 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 		t.Errorf("tsv.te.txPool.lastID.Get(): %d, want 20", v)
 	}
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	if len(tsv.te.preparedPool.conns) != 0 {
+		t.Fatal("fail")
+	}
 }
 
 func TestTabletServerCreateTransaction(t *testing.T) {

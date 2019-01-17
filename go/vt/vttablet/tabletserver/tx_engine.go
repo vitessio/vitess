@@ -421,6 +421,7 @@ func (te *TxEngine) close(immediate bool) {
 		}
 		if te.shutdownGracePeriod <= 0 {
 			// No grace period was specified. Never rollback.
+			te.rollbackPrepared()
 			log.Info("No grace period specified: performing normal wait.")
 			return
 		}
@@ -428,9 +429,8 @@ func (te *TxEngine) close(immediate bool) {
 		defer tmr.Stop()
 		select {
 		case <-tmr.C:
-			// The grace period has passed. Rollback, but don't touch the 2pc transactions.
-			log.Info("Grace period exceeded: rolling back non-2pc transactions now.")
-			te.txPool.RollbackNonBusy(tabletenv.LocalContext())
+			log.Info("Grace period exceeded: rolling back now.")
+			te.rollbackTransactions()
 		case <-poolEmpty:
 			// The pool cleared before the timer kicked in. Just return.
 			log.Info("Transactions completed before grace period: shutting down.")
@@ -511,11 +511,18 @@ outer:
 // serving type.
 func (te *TxEngine) rollbackTransactions() {
 	ctx := tabletenv.LocalContext()
+	for _, c := range te.preparedPool.FetchAll() {
+		te.txPool.LocalConclude(ctx, c)
+	}
 	// The order of rollbacks is currently not material because
 	// we don't allow new statements or commits during
 	// this function. In case of any such change, this will
 	// have to be revisited.
 	te.txPool.RollbackNonBusy(ctx)
+}
+
+func (te *TxEngine) rollbackPrepared() {
+	ctx := tabletenv.LocalContext()
 	for _, c := range te.preparedPool.FetchAll() {
 		te.txPool.LocalConclude(ctx, c)
 	}
