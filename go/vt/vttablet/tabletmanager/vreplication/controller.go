@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/golang/protobuf/proto"
@@ -46,6 +47,9 @@ type controller struct {
 	dbClientFactory func() binlogplayer.DBClient
 	mysqld          mysqlctl.MysqlDaemon
 	blpStats        *binlogplayer.Stats
+
+	// vplayer is set only if we launch vplayer.
+	vplayer *vplayer
 
 	id           uint32
 	source       binlogdatapb.BinlogSource
@@ -183,10 +187,16 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		player := binlogplayer.NewBinlogPlayerKeyRange(dbClient, tablet, ct.source.KeyRange, ct.id, ct.blpStats)
 		return player.ApplyBinlogEvents(ctx)
 	case ct.source.Filter != nil:
-		player := newVPlayer(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld)
-		return player.Play(ctx)
+		ct.vplayer = newVPlayer(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld)
+		return ct.vplayer.Play(ctx)
 	}
 	return fmt.Errorf("missing source")
+}
+
+func (ct *controller) exportPosition(pos mysql.Position) {
+	if ct.vplayer != nil {
+		ct.vplayer.exportPosition(pos)
+	}
 }
 
 func (ct *controller) Stop() {
