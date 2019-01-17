@@ -28,14 +28,14 @@ import (
 )
 
 func TestInsertUnsharded(t *testing.T) {
-	ins := &Insert{
-		Opcode: InsertUnsharded,
-		Keyspace: &vindexes.Keyspace{
+	ins := NewQueryInsert(
+		InsertUnsharded,
+		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
 		},
-		Query: "dummy_insert",
-	}
+		"dummy_insert",
+	)
 
 	vc := &loggingVCursor{
 		shards: []string{"0"},
@@ -64,27 +64,27 @@ func TestInsertUnsharded(t *testing.T) {
 }
 
 func TestInsertUnshardedGenerate(t *testing.T) {
-	ins := &Insert{
-		Opcode: InsertUnsharded,
-		Keyspace: &vindexes.Keyspace{
+	ins := NewQueryInsert(
+		InsertUnsharded,
+		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
 		},
-		Query: "dummy_insert",
-		Generate: &Generate{
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks2",
-				Sharded: false,
-			},
-			Query: "dummy_generate",
-			Values: sqltypes.PlanValue{
-				Values: []sqltypes.PlanValue{
-					{Value: sqltypes.NewInt64(1)},
-					{Value: sqltypes.NULL},
-					{Value: sqltypes.NewInt64(2)},
-					{Value: sqltypes.NULL},
-					{Value: sqltypes.NewInt64(3)},
-				},
+		"dummy_insert",
+	)
+	ins.Generate = &Generate{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks2",
+			Sharded: false,
+		},
+		Query: "dummy_generate",
+		Values: sqltypes.PlanValue{
+			Values: []sqltypes.PlanValue{
+				{Value: sqltypes.NewInt64(1)},
+				{Value: sqltypes.NULL},
+				{Value: sqltypes.NewInt64(2)},
+				{Value: sqltypes.NULL},
+				{Value: sqltypes.NewInt64(3)},
 			},
 		},
 	}
@@ -147,10 +147,10 @@ func TestInsertShardedSimple(t *testing.T) {
 	ks := vs.Keyspaces["sharded"]
 
 	// A single row insert should be autocommitted
-	ins := &Insert{
-		Opcode:   InsertSharded,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins := NewInsert(
+		InsertSharded,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// 3 rows.
@@ -159,11 +159,11 @@ func TestInsertShardedSimple(t *testing.T) {
 				}},
 			}},
 		}},
-		Table:  ks.Tables["t1"],
-		Prefix: "prefix",
-		Mid:    []string{" mid1"},
-		Suffix: " suffix",
-	}
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1"},
+		" suffix",
+	)
 	vc := &loggingVCursor{
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"20-", "-20", "20-"},
@@ -182,10 +182,10 @@ func TestInsertShardedSimple(t *testing.T) {
 	})
 
 	// Multiple rows are not autocommitted by default
-	ins = &Insert{
-		Opcode:   InsertSharded,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins = NewInsert(
+		InsertSharded,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// 3 rows.
@@ -198,11 +198,11 @@ func TestInsertShardedSimple(t *testing.T) {
 				}},
 			}},
 		}},
-		Table:  ks.Tables["t1"],
-		Prefix: "prefix",
-		Mid:    []string{" mid1", " mid2", " mid3"},
-		Suffix: " suffix",
-	}
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
 	vc = &loggingVCursor{
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"20-", "-20", "20-"},
@@ -222,10 +222,10 @@ func TestInsertShardedSimple(t *testing.T) {
 	})
 
 	// Optional flag overrides autocommit
-	ins = &Insert{
-		Opcode:   InsertSharded,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins = NewInsert(
+		InsertSharded,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// 3 rows.
@@ -238,12 +238,13 @@ func TestInsertShardedSimple(t *testing.T) {
 				}},
 			}},
 		}},
-		Table:                ks.Tables["t1"],
-		Prefix:               "prefix",
-		Mid:                  []string{" mid1", " mid2", " mid3"},
-		Suffix:               " suffix",
-		MultiShardAutocommit: true,
-	}
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
+	ins.MultiShardAutocommit = true
+
 	vc = &loggingVCursor{
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"20-", "-20", "20-"},
@@ -295,10 +296,10 @@ func TestInsertShardedFail(t *testing.T) {
 	}
 	ks := vs.Keyspaces["sharded"]
 
-	ins := &Insert{
-		Opcode:   InsertSharded,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins := NewInsert(
+		InsertSharded,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// 1 row
@@ -307,11 +308,11 @@ func TestInsertShardedFail(t *testing.T) {
 				}},
 			}},
 		}},
-		Table:  ks.Tables["t1"],
-		Prefix: "prefix",
-		Mid:    []string{" mid1", " mid2", " mid3"},
-		Suffix: " suffix",
-	}
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
 
 	vc := &loggingVCursor{}
 
@@ -347,10 +348,10 @@ func TestInsertShardedGenerate(t *testing.T) {
 	}
 	ks := vs.Keyspaces["sharded"]
 
-	ins := &Insert{
-		Opcode:   InsertSharded,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins := NewInsert(
+		InsertSharded,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// 3 rows.
@@ -363,24 +364,25 @@ func TestInsertShardedGenerate(t *testing.T) {
 				}},
 			}},
 		}},
-		Table: ks.Tables["t1"],
-		Generate: &Generate{
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks2",
-				Sharded: false,
-			},
-			Query: "dummy_generate",
-			Values: sqltypes.PlanValue{
-				Values: []sqltypes.PlanValue{
-					{Value: sqltypes.NewInt64(1)},
-					{Value: sqltypes.NULL},
-					{Value: sqltypes.NewInt64(2)},
-				},
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
+
+	ins.Generate = &Generate{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks2",
+			Sharded: false,
+		},
+		Query: "dummy_generate",
+		Values: sqltypes.PlanValue{
+			Values: []sqltypes.PlanValue{
+				{Value: sqltypes.NewInt64(1)},
+				{Value: sqltypes.NULL},
+				{Value: sqltypes.NewInt64(2)},
 			},
 		},
-		Prefix: "prefix",
-		Mid:    []string{" mid1", " mid2", " mid3"},
-		Suffix: " suffix",
 	}
 
 	vc := &loggingVCursor{
@@ -472,10 +474,10 @@ func TestInsertShardedOwned(t *testing.T) {
 	}
 	ks := vs.Keyspaces["sharded"]
 
-	ins := &Insert{
-		Opcode:   InsertSharded,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins := NewInsert(
+		InsertSharded,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -521,11 +523,11 @@ func TestInsertShardedOwned(t *testing.T) {
 				}},
 			}},
 		}},
-		Table:  ks.Tables["t1"],
-		Prefix: "prefix",
-		Mid:    []string{" mid1", " mid2", " mid3"},
-		Suffix: " suffix",
-	}
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
 
 	vc := &loggingVCursor{
 		shards:       []string{"-20", "20-"},
@@ -599,10 +601,10 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 	}
 	ks := vs.Keyspaces["sharded"]
 
-	ins := &Insert{
-		Opcode:   InsertSharded,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins := NewInsert(
+		InsertSharded,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -619,11 +621,11 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 				}},
 			}},
 		}},
-		Table:  ks.Tables["t1"],
-		Prefix: "prefix",
-		Mid:    []string{" mid1", " mid2", " mid3"},
-		Suffix: " suffix",
-	}
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
 
 	vc := &loggingVCursor{
 		shards:       []string{"-20", "20-"},
@@ -698,10 +700,10 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 	}
 	ks := vs.Keyspaces["sharded"]
 
-	ins := &Insert{
-		Opcode:   InsertShardedIgnore,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins := NewInsert(
+		InsertShardedIgnore,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -755,11 +757,11 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 				}},
 			}},
 		}},
-		Table:  ks.Tables["t1"],
-		Prefix: "prefix",
-		Mid:    []string{" mid1", " mid2", " mid3", " mid4"},
-		Suffix: " suffix",
-	}
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3", " mid4"},
+		" suffix",
+	)
 
 	ksid0 := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -872,10 +874,10 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 	}
 	ks := vs.Keyspaces["sharded"]
 
-	ins := &Insert{
-		Opcode:   InsertShardedIgnore,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins := NewInsert(
+		InsertShardedIgnore,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -892,11 +894,11 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 				}},
 			}},
 		}},
-		Table:  ks.Tables["t1"],
-		Prefix: "prefix",
-		Mid:    []string{" mid1", " mid2", " mid3", " mid4"},
-		Suffix: " suffix",
-	}
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3", " mid4"},
+		" suffix",
+	)
 
 	ksid0 := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -978,10 +980,10 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 	}
 	ks := vs.Keyspaces["sharded"]
 
-	ins := &Insert{
-		Opcode:   InsertSharded,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins := NewInsert(
+		InsertSharded,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -1027,11 +1029,11 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 				}},
 			}},
 		}},
-		Table:  ks.Tables["t1"],
-		Prefix: "prefix",
-		Mid:    []string{" mid1", " mid2", " mid3"},
-		Suffix: " suffix",
-	}
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
 
 	// nonemptyResult will cause the lookup verify queries to succeed.
 	nonemptyResult := sqltypes.MakeTestResult(
@@ -1122,10 +1124,10 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 	}
 	ks := vs.Keyspaces["sharded"]
 
-	ins := &Insert{
-		Opcode:   InsertShardedIgnore,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins := NewInsert(
+		InsertShardedIgnore,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -1150,11 +1152,11 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 				}},
 			}},
 		}},
-		Table:  ks.Tables["t1"],
-		Prefix: "prefix",
-		Mid:    []string{" mid1", " mid2", " mid3"},
-		Suffix: " suffix",
-	}
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
 
 	// nonemptyResult will cause the lookup verify queries to succeed.
 	nonemptyResult := sqltypes.MakeTestResult(
@@ -1236,10 +1238,10 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 	}
 	ks := vs.Keyspaces["sharded"]
 
-	ins := &Insert{
-		Opcode:   InsertSharded,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins := NewInsert(
+		InsertSharded,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -1256,11 +1258,11 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 				}},
 			}},
 		}},
-		Table:  ks.Tables["t1"],
-		Prefix: "prefix",
-		Mid:    []string{" mid1", " mid2", " mid3"},
-		Suffix: " suffix",
-	}
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
 
 	vc := &loggingVCursor{
 		shards: []string{"-20", "20-"},
@@ -1318,10 +1320,10 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 	}
 	ks := vs.Keyspaces["sharded"]
 
-	ins := &Insert{
-		Opcode:   InsertSharded,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins := NewInsert(
+		InsertSharded,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -1367,11 +1369,11 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 				}},
 			}},
 		}},
-		Table:  ks.Tables["t1"],
-		Prefix: "prefix",
-		Mid:    []string{" mid1", " mid2", " mid3"},
-		Suffix: " suffix",
-	}
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
 
 	// nonemptyResult will cause the lookup verify queries to succeed.
 	nonemptyResult := sqltypes.MakeTestResult(
@@ -1448,10 +1450,10 @@ func TestInsertShardedUnownedReverseMapFail(t *testing.T) {
 	}
 	ks := vs.Keyspaces["sharded"]
 
-	ins := &Insert{
-		Opcode:   InsertSharded,
-		Keyspace: ks.Keyspace,
-		VindexValues: []sqltypes.PlanValue{{
+	ins := NewInsert(
+		InsertSharded,
+		ks.Keyspace,
+		[]sqltypes.PlanValue{{
 			// colVindex columns: id
 			Values: []sqltypes.PlanValue{{
 				// rows for id
@@ -1468,11 +1470,11 @@ func TestInsertShardedUnownedReverseMapFail(t *testing.T) {
 				}},
 			}},
 		}},
-		Table:  ks.Tables["t1"],
-		Prefix: "prefix",
-		Mid:    []string{" mid1", " mid2", " mid3"},
-		Suffix: " suffix",
-	}
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
 
 	vc := &loggingVCursor{
 		shards: []string{"-20", "20-"},
