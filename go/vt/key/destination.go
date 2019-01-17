@@ -19,6 +19,7 @@ package key
 import (
 	"bytes"
 	"encoding/hex"
+	"math/rand"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -26,6 +27,9 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// AnyShardPicker makes a choice on what shard to use when any shard will do. Used for testing.
+var AnyShardPicker DestinationAnyShardPicker = DestinationAnyShardPickerRandomShard{}
 
 // Destination is an interface definition for a query destination,
 // within a given Keyspace / Tablet Type. It is meant to be an internal
@@ -369,12 +373,25 @@ func (d DestinationKeyspaceIDs) String() string {
 	return buffer.String()
 }
 
+// DestinationAnyShardPicker exposes an interface that will pick an index given a number of available shards.
+type DestinationAnyShardPicker interface {
+	// PickShard picks a shard given a number of shards
+	PickShard(shardCount int) int
+}
+
+// DestinationAnyShardPickerRandomShard picks a random shard.
+type DestinationAnyShardPickerRandomShard struct{}
+
+// PickShard is DestinationAnyShardPickerRandomShard's implmentation.
+func (dp DestinationAnyShardPickerRandomShard) PickShard(shardCount int) int {
+	return rand.Intn(shardCount)
+}
+
 //
 // DestinationAnyShard
 //
 
-// DestinationAnyShard is the destination for any one shard in the
-// keyspace. This usually maps to the first one in the list.
+// DestinationAnyShard is the destination for any one shard in the keyspace.
 // It implements the Destination interface.
 type DestinationAnyShard struct{}
 
@@ -388,7 +405,7 @@ func (d DestinationAnyShard) Resolve(allShards []*topodatapb.ShardReference, add
 	if len(allShards) == 0 {
 		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no shard in keyspace")
 	}
-	return addShard(allShards[0].Name)
+	return addShard(allShards[AnyShardPicker.PickShard(len(allShards))].Name)
 }
 
 // String is part of the Destination interface.
