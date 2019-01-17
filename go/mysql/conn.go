@@ -154,8 +154,10 @@ type Conn struct {
 	// It can be allocated from bufPool or heap and should be recycled in the same manner.
 	currentEphemeralBuffer *[]byte
 
+	// StatementID is the prepared statement ID.
 	StatementID uint32
 
+	// PrepareData is the map to use a prepared statement.
 	PrepareData map[uint32]*PrepareData
 }
 
