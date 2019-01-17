@@ -131,8 +131,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD:
 			// We never have to send GTID, BEGIN or FIELD events on their own.
 			bufferedEvents = append(bufferedEvents, vevent)
-		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_ROLLBACK, binlogdatapb.VEventType_DDL:
-			// COMMIT, ROLLBACK and DDL are terminal. There may be no more events after
+		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL:
+			// COMMIT and DDL are terminal. There may be no more events after
 			// these for a long time. So, we have to send whatever we have.
 			bufferedEvents = append(bufferedEvents, vevent)
 			vevents := bufferedEvents
@@ -265,10 +265,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		case sqlparser.StmtCommit:
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_COMMIT,
-			})
-		case sqlparser.StmtRollback:
-			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type: binlogdatapb.VEventType_ROLLBACK,
 			})
 		case sqlparser.StmtDDL:
 			if mustSendDDL(q, vs.cp.DbName, vs.filter) {

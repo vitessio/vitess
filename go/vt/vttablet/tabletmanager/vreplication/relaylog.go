@@ -19,9 +19,11 @@ package vreplication
 import (
 	"io"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/sync2"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -39,7 +41,7 @@ type relayLog struct {
 	err     error
 	// canAccept is true if: curSize<=maxSize, len(items)<maxItems, err==nil and ctx is not Done.
 	canAccept sync.Cond
-	// hasItems is true if len(items)>0, err==nil and ctx is not Done.
+	// hasItems is true if len(items)>0, err==nil, ctx is not Done, and call has not timedout.
 	hasItems sync.Cond
 }
 
@@ -92,10 +94,26 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
 	if err := rl.checkDone(); err != nil {
 		return nil, err
 	}
+	timer := time.NewTimer(idleTimeout)
+	defer timer.Stop()
+	var timedout sync2.AtomicBool
+	go func() {
+		select {
+		case <-timer.C:
+			rl.mu.Lock()
+			defer rl.mu.Unlock()
+			timedout.Set(true)
+			rl.hasItems.Broadcast()
+		default:
+		}
+	}()
 	for len(rl.items) == 0 {
 		rl.hasItems.Wait()
 		if err := rl.checkDone(); err != nil {
 			return nil, err
+		}
+		if timedout.Get() {
+			return nil, nil
 		}
 	}
 	items := rl.items
