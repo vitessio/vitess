@@ -207,8 +207,8 @@ func (te *TxEngine) AcceptReadWrite() error {
 		return nil
 
 	case NotServing:
-		te.Open()
 		te.state = AcceptingReadAndWrite
+		te.open()
 		te.stateLock.Unlock()
 		return nil
 
@@ -221,8 +221,8 @@ func (te *TxEngine) AcceptReadWrite() error {
 	case AcceptingReadOnly:
 		// We need to restart the tx-pool to make sure we handle 2PC correctly
 		te.close(true)
-		te.Open()
 		te.state = AcceptingReadAndWrite
+		te.open()
 		te.stateLock.Unlock()
 		return nil
 
@@ -244,8 +244,8 @@ func (te *TxEngine) AcceptReadOnly() error {
 		return nil
 
 	case NotServing:
-		te.Open()
 		te.state = AcceptingReadOnly
+		te.open()
 		te.stateLock.Unlock()
 		return nil
 
@@ -336,14 +336,14 @@ func (te *TxEngine) transitionTo(nextState txEngineState) error {
 	// and we need to decide what the next step is
 	switch te.nextState {
 	case AcceptingReadAndWrite, AcceptingReadOnly:
-		te.Open()
+		te.state = te.nextState
+		te.open()
 	case NotServing:
-		// nothing to do
+		te.state = NotServing
 	case Transitioning:
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "this should never happen. nextState cannot be transitioning")
 	}
 
-	te.state = te.nextState
 	te.nextState = -1
 
 	return nil
@@ -363,13 +363,13 @@ func (te *TxEngine) Init() error {
 	return nil
 }
 
-// Open opens the TxEngine. If 2pc is enabled, it restores
+// open opens the TxEngine. If 2pc is enabled, it restores
 // all previously prepared transactions from the redo log.
-func (te *TxEngine) Open() {
+// this should only be called when the state is already locked
+func (te *TxEngine) open() {
 	te.txPool.Open(te.dbconfigs.AppWithDB(), te.dbconfigs.DbaWithDB(), te.dbconfigs.AppDebugWithDB())
 
-	if te.twopcEnabled {
-
+	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
 		te.twoPC.Open(te.dbconfigs)
 		if err := te.prepareFromRedo(); err != nil {
 			// If this operation fails, we choose to raise an alert and
