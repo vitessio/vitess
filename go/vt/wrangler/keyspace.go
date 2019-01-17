@@ -552,12 +552,14 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 	// Always setup reverse replication. We'll start it later if reverseReplication was specified.
 	// This will allow someone to reverse the replication later if they change their mind.
 	if err := wr.setupReverseReplication(ctx, sourceShards, destinationShards); err != nil {
+		wr.Logger().Errorf("Problem setup reverse replication error: %v", err)
 		// It's safe to unfreeze if reverse replication setup fails.
-		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
 		unfreezeErr := wr.updateFrozenFlag(ctx, sourceShards, false)
 		if unfreezeErr != nil {
 			wr.Logger().Errorf("Problem recovering for failed reverse replication: %v", unfreezeErr)
+			return
 		}
+		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
 
 		return err
 	}

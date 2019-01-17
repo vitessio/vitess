@@ -238,7 +238,7 @@ func (ts *Server) UpdateShardFields(ctx context.Context, keyspace, shard string,
 		}
 		if err = update(si); err != nil {
 			if IsErrType(err, NoUpdateNeeded) {
-				return nil, nil
+				return si, nil
 			}
 			return nil, err
 		}
