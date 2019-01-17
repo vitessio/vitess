@@ -16,7 +16,15 @@ if ! cd go/vt/sqlparser/ ; then
 fi
 
 mv $CUR $TMP
-goyacc -o $CUR sql.y
+output=`goyacc -o $CUR sql.y`
+
+if [ -n "$output" ]; then
+    echo "Expected empty output from goyacc, got:"
+    echo $output
+    mv $TMP $CUR
+    exit 1
+fi
+
 gofmt -w $CUR
 
 if ! diff -q $CUR $TMP > /dev/null ; then

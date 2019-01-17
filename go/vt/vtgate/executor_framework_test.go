@@ -267,6 +267,12 @@ var unshardedVSchema = `
 }
 `
 
+type DestinationAnyShardPickerFirstShard struct{}
+
+func (dp DestinationAnyShardPickerFirstShard) PickShard(shardCount int) int {
+	return 0
+}
+
 // keyRangeLookuper is for testing a lookup that returns a keyrange.
 type keyRangeLookuper struct {
 }
@@ -353,6 +359,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
 	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
+	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
 }
 
