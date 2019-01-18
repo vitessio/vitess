@@ -69,7 +69,7 @@ func (hw *horizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *wo
 	keyspace := t.Attributes["keyspace"]
 	sourceShard := t.Attributes["source_shard"]
 	worker := t.Attributes["vtworker"]
-	minHealthyRdonlyTablets := t.Attributes["min_healthy_rdonly_tablets"]
+	minHealthyTablets := t.Attributes["min_healthy_tablets"]
 	splitCmd := t.Attributes["split_cmd"]
 
 	sourceKeyspaceShard := topoproto.KeyspaceShardString(keyspace, sourceShard)
@@ -79,7 +79,7 @@ func (hw *horizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *wo
 		return err
 	}
 
-	args := []string{splitCmd, "--min_healthy_rdonly_tablets=" + minHealthyRdonlyTablets, sourceKeyspaceShard}
+	args := []string{splitCmd, "--min_healthy_tablets=" + minHealthyTablets, sourceKeyspaceShard}
 	_, err := automation.ExecuteVtworker(hw.ctx, worker, args)
 	return err
 }

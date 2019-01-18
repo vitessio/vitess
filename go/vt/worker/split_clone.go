@@ -191,7 +191,7 @@ func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, 
 		return nil, fmt.Errorf("destination_writer_count must be > 0: %v", destinationWriterCount)
 	}
 	if minHealthyTablets < 0 {
-		return nil, fmt.Errorf("min_healthy_rdonly_tablets must be >= 0: %v", minHealthyTablets)
+		return nil, fmt.Errorf("min_healthy_tablets must be >= 0: %v", minHealthyTablets)
 	}
 	if maxTPS != throttler.MaxRateModuleDisabled {
 		wr.Logger().Infof("throttling enabled and set to a max of %v transactions/second", maxTPS)

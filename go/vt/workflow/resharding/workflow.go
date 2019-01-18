@@ -74,7 +74,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	vtworkersStr := subFlags.String("vtworkers", "", "A comma-separated list of vtworker addresses")
 	sourceShardsStr := subFlags.String("source_shards", "", "A comma-separated list of source shards")
 	destinationShardsStr := subFlags.String("destination_shards", "", "A comma-separated list of destination shards")
-	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "1", "Minimum number of healthy RDONLY tablets required in source shards")
+	minHealthyTablets := subFlags.String("min_healthy_tablets", "1", "Minimum number of healthy tablets required in source shards")
 	splitCmd := subFlags.String("split_cmd", "SplitClone", "Split command to use to perform horizontal resharding (either SplitClone or LegacySplitClone)")
 	splitDiffDestTabletType := subFlags.String("split_diff_dest_tablet_type", "RDONLY", "Specifies tablet type to use in destination shards while performing SplitDiff operation")
 	phaseEnaableApprovalsDesc := fmt.Sprintf("Comma separated phases that require explicit approval in the UI to execute. Phase names are: %v", strings.Join(WorkflowPhases(), ","))
@@ -83,7 +83,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if *keyspace == "" || *vtworkersStr == "" || *minHealthyRdonlyTablets == "" || *splitCmd == "" {
+	if *keyspace == "" || *vtworkersStr == "" || *minHealthyTablets == "" || *splitCmd == "" {
 		return fmt.Errorf("Keyspace name, min healthy rdonly tablets, split command, and vtworkers information must be provided for horizontal resharding")
 	}
 
@@ -103,13 +103,13 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 		}
 	}
 
-	err := validateWorkflow(m, *keyspace, vtworkers, sourceShards, destinationShards, *minHealthyRdonlyTablets)
+	err := validateWorkflow(m, *keyspace, vtworkers, sourceShards, destinationShards, *minHealthyTablets)
 	if err != nil {
 		return err
 	}
 
 	w.Name = fmt.Sprintf("Reshard shards %v into shards %v of keyspace %v.", *keyspace, *sourceShardsStr, *destinationShardsStr)
-	checkpoint, err := initCheckpoint(*keyspace, vtworkers, sourceShards, destinationShards, *minHealthyRdonlyTablets, *splitCmd, *splitDiffDestTabletType)
+	checkpoint, err := initCheckpoint(*keyspace, vtworkers, sourceShards, destinationShards, *minHealthyTablets, *splitCmd, *splitDiffDestTabletType)
 	if err != nil {
 		return err
 	}
@@ -268,7 +268,7 @@ func validateWorkflow(m *workflow.Manager, keyspace string, vtworkers, sourceSha
 }
 
 // initCheckpoint initialize the checkpoint for the horizontal workflow.
-func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string) (*workflowpb.WorkflowCheckpoint, error) {
+func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyTablets, splitCmd, splitDiffDestTabletType string) (*workflowpb.WorkflowCheckpoint, error) {
 	tasks := make(map[string]*workflowpb.Task)
 	initTasks(tasks, phaseCopySchema, destinationShards, func(i int, shard string) map[string]string {
 		return map[string]string{
@@ -279,11 +279,11 @@ func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards 
 	})
 	initTasks(tasks, phaseClone, sourceShards, func(i int, shard string) map[string]string {
 		return map[string]string{
-			"keyspace":                   keyspace,
-			"source_shard":               shard,
-			"min_healthy_rdonly_tablets": minHealthyRdonlyTablets,
-			"split_cmd":                  splitCmd,
-			"vtworker":                   vtworkers[i],
+			"keyspace":            keyspace,
+			"source_shard":        shard,
+			"min_healthy_tablets": minHealthyTablets,
+			"split_cmd":           splitCmd,
+			"vtworker":            vtworkers[i],
 		}
 	})
 	initTasks(tasks, phaseWaitForFilteredReplication, destinationShards, func(i int, shard string) map[string]string {

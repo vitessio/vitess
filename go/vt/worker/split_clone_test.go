@@ -576,7 +576,7 @@ func TestSplitCloneV2_Offline_RestartStreamingQuery(t *testing.T) {
 
 	// Run the vtworker command.
 	// We require only 1 instead of the default 2 replicas.
-	args := []string{"SplitClone", "--min_healthy_rdonly_tablets", "1"}
+	args := []string{"SplitClone", "--min_healthy_tablets", "1"}
 	args = append(args, tc.defaultWorkerArgs[1:]...)
 	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
 		t.Fatal(err)
@@ -615,7 +615,7 @@ func TestSplitCloneV2_Offline_FailOverStreamingQuery_NotAllowed(t *testing.T) {
 	defer tc.rightMasterFakeDb.DeleteAllEntries()
 
 	// Run the vtworker command.
-	args := []string{"SplitClone", "--min_healthy_rdonly_tablets", "1"}
+	args := []string{"SplitClone", "--min_healthy_tablets", "1"}
 	args = append(args, tc.defaultWorkerArgs[1:]...)
 	if err := runCommand(t, tc.wi, tc.wi.wr, args); err == nil || !strings.Contains(err.Error(), "first retry to restart the streaming query on the same tablet failed. We're failing at this point") {
 		t.Fatalf("worker should have failed because all tablets became unavailable and it gave up retrying. err: %v", err)
@@ -662,7 +662,7 @@ func TestSplitCloneV2_Online_FailOverStreamingQuery(t *testing.T) {
 	args := []string{"SplitClone",
 		"-offline=false",
 		// We require only 1 instead of the default 2 replicas.
-		"--min_healthy_rdonly_tablets", "1"}
+		"--min_healthy_tablets", "1"}
 	args = append(args, tc.defaultWorkerArgs[2:]...)
 	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
 		t.Fatal(err)
@@ -719,7 +719,7 @@ func TestSplitCloneV2_Online_TabletsUnavailableDuringRestart(t *testing.T) {
 	args := []string{"SplitClone",
 		"-offline=false",
 		// We require only 1 instead of the default 2 replicas.
-		"--min_healthy_rdonly_tablets", "1"}
+		"--min_healthy_tablets", "1"}
 	args = append(args, tc.defaultWorkerArgs[2:]...)
 	if err := runCommand(t, tc.wi, tc.wi.wr, args); err == nil || !strings.Contains(err.Error(), "failed to restart the streaming connection") {
 		t.Fatalf("worker should have failed because all tablets became unavailable and it gave up retrying. err: %v", err)
