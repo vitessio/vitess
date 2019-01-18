@@ -18,8 +18,8 @@ package vreplication
 
 import (
 	"fmt"
+	"strings"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
@@ -32,44 +32,65 @@ func TestSimple(t *testing.T) {
 	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
 
 	execStatements(t, []string{
-		"create table t1(id int, val varbinary(128), primary key(id))",
-		"create table t2(id int, val varbinary(128), primary key(id))",
+		"create table src1(id int, val varbinary(128), primary key(id))",
+		"create table dst1(id int, val varbinary(128), primary key(id))",
+		"create table src2(id int, val1 int, val2 int, primary key(id))",
+		"create table dst2(id int, val1 int, sval2 int, rcount int, primary key(id))",
 	})
 	defer execStatements(t, []string{
-		"drop table t1",
-		"drop table t2",
+		"drop table src1",
+		"drop table dst1",
+		"drop table src2",
+		//"drop table dst2",
 	})
 	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
-			Match:  "t2",
-			Filter: "select * from t1",
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}, {
+			Match:  "dst2",
+			Filter: "select id, val1, sum(val2) as sval2, count(*) as rcount from src2 group by id",
 		}},
 	}
 	cancel := startVReplication(t, playerEngine, filter, "")
 	defer cancel()
 
-	execStatements(t, []string{
-		"insert into t1 values(1, 'aaa')",
-		"insert into t1 values(2, 'aaa')",
-		"insert into t1 values(3, 'aaa')",
-		"insert into t1 values(4, 'aaa')",
-	})
-	time.Sleep(1 * time.Second)
-	printQueries(t)
-	/*
+	testcases := []struct {
+		input  string
+		output string
+	}{{
+		input:  "insert into src1 values(1, 'aaa')",
+		output: "insert into dst1 set id=1, val='aaa'",
+	}, {
+		input:  "update src1 set val='bbb'",
+		output: "update dst1 set id=1, val='bbb' where id=1",
+	}, {
+		input:  "delete from src1 where id=1",
+		output: "delete from dst1 where id=1",
+	}, {
+		input:  "insert into src2 values(1, 2, 3)",
+		output: "insert into dst2 set id=1, val1=2, sval2=3, rcount=1 on duplicate key update val1=2, sval2=sval2+3, rcount=rcount+1",
+	}, {
+		input:  "update src2 set val1=5, val2=1 where id=1",
+		output: "update dst2 set val1=5, sval2=sval2-3+1, rcount=rcount-1+1 where id=1",
+	}, {
+		input:  "delete from src2 where id=1",
+		output: "update dst2 set val1=NULL, sval2=sval2-1, rcount=rcount-1 where id=1",
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{
+			tcases.input,
+		})
 		expectDBClientQueries(t, []string{
-			"update _vt.vreplication set state='Running'.*",
 			"begin",
-			"update _vt.vreplication set pos=.*",
-			"commit",
-			"begin",
-			"insert into t2 set id=1, val='aaa'",
-			"update _vt.vreplication set pos=.*",
+			tcases.output,
+			"/update _vt.vreplication set pos=.*",
 			"commit",
 		})
-	*/
+	}
 }
 
 func execStatements(t *testing.T, queries []string) {
@@ -99,7 +120,12 @@ func startVReplication(t *testing.T, pe *Engine, filter *binlogdatapb.Filter, po
 	if err != nil {
 		t.Fatal(err)
 	}
-	resetDBClient()
+	// Eat all the initialization queries
+	for q := range globalDBQueries {
+		if strings.HasPrefix(q, "update") {
+			break
+		}
+	}
 	return func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
 		if _, err := pe.Exec(query); err != nil {

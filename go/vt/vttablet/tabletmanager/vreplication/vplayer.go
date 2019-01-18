@@ -125,7 +125,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 			return vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.pos, vp.stopPos))
 		}
 	}
-	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, source: %v", vp.id, startPos, vp.stopPos, vp.sourceTablet)
+	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, source: %v, filter: %v", vp.id, startPos, vp.stopPos, vp.sourceTablet, vp.source)
 
 	plan, err := buildPlayerPlan(vp.source.Filter)
 	if err != nil {
@@ -141,24 +141,40 @@ func (vp *vplayer) play(ctx context.Context) error {
 	defer cancel()
 
 	relay := newRelayLog(ctx, 10, 10)
-	go vp.applyEvents(relay)
 
 	target := &querypb.Target{
 		Keyspace:   vp.sourceTablet.Keyspace,
 		Shard:      vp.sourceTablet.Shard,
 		TabletType: vp.sourceTablet.Type,
 	}
-	return vsClient.VStream(ctx, target, startPos, plan.vstreamFilter, func(events []*binlogdatapb.VEvent) error {
-		return relay.Send(events)
-	})
+	log.Infof("Sending vstream command: %v", plan.vstreamFilter)
+	streamErr := make(chan error, 1)
+	go func() {
+		streamErr <- vsClient.VStream(ctx, target, startPos, plan.vstreamFilter, func(events []*binlogdatapb.VEvent) error {
+			return relay.Send(events)
+		})
+	}()
+
+	applyErr := make(chan error, 1)
+	go func() {
+		applyErr <- vp.applyEvents(relay)
+	}()
+
+	select {
+	case err = <-applyErr:
+	case err = <-streamErr:
+	}
+	if err == io.EOF {
+		return nil
+	}
+	return err
 }
 
-func (vp *vplayer) applyEvents(relay *relayLog) {
+func (vp *vplayer) applyEvents(relay *relayLog) error {
 	for {
 		items, err := relay.Fetch()
 		if err != nil {
-			relay.SetError(err)
-			return
+			return err
 		}
 		// This covers two situations:
 		// 1. Fetch was idle for idleTimeout.
@@ -167,8 +183,7 @@ func (vp *vplayer) applyEvents(relay *relayLog) {
 		// to prevent us from falling behind on tracking the source binlog position.
 		if time.Now().Sub(vp.timeLastSaved) >= idleTimeout && vp.unsavedGTID != nil {
 			if err := vp.updatePos(vp.unsavedGTID.Timestamp); err != nil {
-				relay.SetError(err)
-				return
+				return err
 			}
 		}
 		for i, events := range items {
@@ -187,8 +202,7 @@ func (vp *vplayer) applyEvents(relay *relayLog) {
 					}
 				}
 				if err := vp.applyEvent(event); err != nil {
-					relay.SetError(err)
-					return
+					return err
 				}
 			}
 		}
@@ -354,25 +368,15 @@ func (vp *vplayer) updatePlan(fieldEvent *binlogdatapb.FieldEvent) error {
 			}
 		}
 	} else {
-		if len(tplan.fields) != len(tplan.colExprs) {
-			return fmt.Errorf("columns received from vreplication: %v, do not match expected: %v", tplan.fields, tplan.colExprs)
-		}
-		for i, field := range tplan.fields {
-			if tplan.colExprs[i].colname.EqualString(field.Name) {
-				return fmt.Errorf("column name from vreplication field %d: %s, does not match expected: %s", i, field.Name, tplan.colExprs[i].colname)
+		for _, cExpr := range tplan.colExprs {
+			if cExpr.colnum >= len(tplan.fields) {
+				// Unreachable code.
+				return fmt.Errorf("columns received from vreplication: %v, do not match expected: %v", tplan.fields, tplan.colExprs)
 			}
 		}
 	}
 
-	qr, err := vp.dbClient.ExecuteFetch("select database()", 1)
-	if err != nil {
-		return err
-	}
-	if len(qr.Rows) == 0 || len(qr.Rows[0]) == 0 {
-		return fmt.Errorf("unexpected result from 'select database()': %v", qr)
-	}
-	dbname := qr.Rows[0][0].ToString()
-	pkcols, err := vp.mysqld.GetPrimaryKeyColumns(dbname, tplan.name)
+	pkcols, err := vp.mysqld.GetPrimaryKeyColumns(vp.dbClient.DBName(), tplan.name)
 	if err != nil {
 		return fmt.Errorf("error fetching pk columns for %s: %v", tplan.name, err)
 	}
@@ -499,7 +503,7 @@ func (vp *vplayer) writeUpdateValues(sql *sqlparser.TrackedBuffer, tplan *tableP
 			separator = ", "
 		}
 		if cExpr.op == opCount || cExpr.op == opSum {
-			sql.Myprintf("%s", cExpr.colname)
+			sql.Myprintf("%v", cExpr.colname)
 		}
 		if len(before) != 0 {
 			switch cExpr.op {
