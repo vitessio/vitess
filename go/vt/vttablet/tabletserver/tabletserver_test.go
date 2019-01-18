@@ -659,14 +659,22 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	defer db.Close()
 	defer tsv.StopService()
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+
+	turnOnTxEngine := func() {
+		tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
+	}
+	turnOffTxEngine := func() {
+		tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	}
+
 	tpc := tsv.te.twoPC
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{})
-	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
+	turnOnTxEngine()
 	if len(tsv.te.preparedPool.conns) != 0 {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", len(tsv.te.preparedPool.conns))
 	}
-	tsv.SetServingType(topodatapb.TabletType_MASTER, false, nil)
+	turnOffTxEngine()
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -682,7 +690,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 			sqltypes.NewVarBinary("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"),
 		}},
 	})
-	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
+	turnOnTxEngine()
 	if len(tsv.te.preparedPool.conns) != 1 {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
@@ -691,7 +699,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
 	}
-	tsv.SetServingType(topodatapb.TabletType_MASTER, false, nil)
+	turnOffTxEngine()
 	if v := len(tsv.te.preparedPool.conns); v != 0 {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", v)
 	}
@@ -722,7 +730,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 			sqltypes.NewVarBinary("unused"),
 		}},
 	})
-	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
+	turnOnTxEngine()
 	if len(tsv.te.preparedPool.conns) != 1 {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
@@ -739,7 +747,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	if v := tsv.te.txPool.lastID.Get(); v != 20 {
 		t.Errorf("tsv.te.txPool.lastID.Get(): %d, want 20", v)
 	}
-	tsv.SetServingType(topodatapb.TabletType_MASTER, false, nil)
+	turnOffTxEngine()
 	if v := len(tsv.te.preparedPool.conns); v != 0 {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", v)
 	}
