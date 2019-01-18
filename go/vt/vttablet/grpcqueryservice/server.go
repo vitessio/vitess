@@ -75,7 +75,7 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
+	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})

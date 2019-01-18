@@ -458,7 +458,7 @@ func (stc *ScatterConn) StreamExecute(
 	fieldSent := false
 
 	allErrors := stc.multiGo(ctx, "StreamExecute", rss, tabletType, func(rs *srvtopo.ResolvedShard, i int) error {
-		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars, options, func(qr *sqltypes.Result) error {
+		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars, 0, options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
@@ -484,7 +484,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	fieldSent := false
 
 	allErrors := stc.multiGo(ctx, "StreamExecute", rss, tabletType, func(rs *srvtopo.ResolvedShard, i int) error {
-		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars[i], options, func(qr *sqltypes.Result) error {
+		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars[i], 0, options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})

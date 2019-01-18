@@ -138,7 +138,7 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.T
 }
 
 // StreamExecute executes the query and streams results back through callback.
-func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	// All streaming clients should follow the code pattern below.
 	// The first part of the function starts the stream while holding
 	// a lock on conn.mu. The second part receives the data and calls
@@ -165,7 +165,8 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 				Sql:           query,
 				BindVariables: bindVars,
 			},
-			Options: options,
+			Options:       options,
+			TransactionId: transactionID,
 		}
 		stream, err := conn.c.StreamExecute(ctx, req)
 		if err != nil {

@@ -41,6 +41,7 @@ type MysqlDaemon interface {
 
 	// replication related methods
 	StartSlave(hookExtraEnv map[string]string) error
+	StartSlaveUntilAfter(ctx context.Context, pos mysql.Position) error
 	StopSlave(hookExtraEnv map[string]string) error
 	SlaveStatus() (mysql.SlaveStatus, error)
 	SetSemiSyncEnabled(master, slave bool) error

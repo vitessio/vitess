@@ -83,6 +83,19 @@ func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
 	return h.ExecuteOptional()
 }
 
+// StartSlaveUntilAfter starts a slave until replication has come to `targetPos`, then it stops replication
+func (mysqld *Mysqld) StartSlaveUntilAfter(ctx context.Context, targetPos mysql.Position) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	queries := []string{conn.StartSlaveUntilAfterCommand(targetPos)}
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
+}
+
 // StopSlave stops a slave.
 func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
