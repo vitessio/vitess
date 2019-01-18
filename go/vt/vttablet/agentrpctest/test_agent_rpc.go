@@ -52,6 +52,14 @@ type fakeRPCAgent struct {
 	mu sync.Mutex
 }
 
+func (fra *fakeRPCAgent) LockTables(ctx context.Context) error {
+	panic("implement me")
+}
+
+func (fra *fakeRPCAgent) UnlockTables(ctx context.Context) error {
+	panic("implement me")
+}
+
 func (fra *fakeRPCAgent) setSlow(slow bool) {
 	fra.mu.Lock()
 	fra.slow = slow
@@ -781,9 +789,24 @@ func (fra *fakeRPCAgent) StartSlave(ctx context.Context) error {
 	return nil
 }
 
+var testStartSlaveUntilAfterCalledWith = ""
+
+func (fra *fakeRPCAgent) StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	testStartSlaveUntilAfterCalledWith = position
+	return nil
+}
+
 func agentRPCTestStartSlave(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.StartSlave(ctx, tablet)
 	compareError(t, "StartSlave", err, true, testStartSlaveCalled)
+}
+
+func agentRPCTestStartSlaveUntilAfter(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.StartSlaveUntilAfter(ctx, tablet, "test-position", time.Minute)
+	compareError(t, "StartSlaveUntilAfter", err, "test-position", testStartSlaveUntilAfterCalledWith)
 }
 
 func agentRPCTestStartSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
