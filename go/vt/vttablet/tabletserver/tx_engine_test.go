@@ -437,12 +437,12 @@ func TestWithInnerTests(outerT *testing.T) {
 			wg := sync.WaitGroup{}
 			for _, newState := range test.TxEngineStates {
 				wg.Add(1)
-				go func() {
+				go func(s txEngineState) {
 					defer wg.Done()
 
 					failIfError(t,
-						changeState(te, newState))
-				}()
+						changeState(te, s))
+				}(newState)
 
 				// We give the state changes a chance to get started
 				time.Sleep(10 * time.Millisecond)
