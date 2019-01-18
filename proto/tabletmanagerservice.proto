@@ -68,6 +68,10 @@ service TabletManager {
 
   rpc ApplySchema(tabletmanagerdata.ApplySchemaRequest) returns (tabletmanagerdata.ApplySchemaResponse) {};
 
+  rpc LockTables(tabletmanagerdata.LockTablesRequest) returns (tabletmanagerdata.LockTablesResponse) {};
+
+  rpc UnlockTables(tabletmanagerdata.UnlockTablesRequest) returns (tabletmanagerdata.UnlockTablesResponse) {};
+
   rpc ExecuteFetchAsDba(tabletmanagerdata.ExecuteFetchAsDbaRequest) returns (tabletmanagerdata.ExecuteFetchAsDbaResponse) {};
 
   rpc ExecuteFetchAsAllPrivs(tabletmanagerdata.ExecuteFetchAsAllPrivsRequest) returns (tabletmanagerdata.ExecuteFetchAsAllPrivsResponse) {};
@@ -93,6 +97,10 @@ service TabletManager {
 
   // StartSlave starts the mysql replication
   rpc StartSlave(tabletmanagerdata.StartSlaveRequest) returns (tabletmanagerdata.StartSlaveResponse) {};
+
+  // StartSlave starts the mysql replication until and including
+  // the provided position
+  rpc StartSlaveUntilAfter(tabletmanagerdata.StartSlaveUntilAfterRequest) returns (tabletmanagerdata.StartSlaveUntilAfterResponse) {};
 
   // TabletExternallyReparented tells a tablet that its underlying MySQL is
   // currently the master. It is only used in environments (tabletmanagerdata.such as Vitess+MoB)
