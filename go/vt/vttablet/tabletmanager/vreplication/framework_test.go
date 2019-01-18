@@ -29,6 +29,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -45,11 +46,11 @@ import (
 )
 
 var (
-	playerEngine   *Engine
-	streamerEngine *vstreamer.Engine
-	env            *testenv.Env
-	globalFBC      = &fakeBinlogClient{}
-	globalDBClient = &realDBClient{}
+	playerEngine    *Engine
+	streamerEngine  *vstreamer.Engine
+	env             *testenv.Env
+	globalFBC       = &fakeBinlogClient{}
+	globalDBQueries = make(chan string, 1000)
 )
 
 func init() {
@@ -263,17 +264,12 @@ func expectFBCRequest(t *testing.T, tablet *topodatapb.Tablet, pos string, table
 //--------------------------------------
 // DBCLient wrapper
 
-func resetDBClient() {
-	globalDBClient.queries = make(chan string, 1000)
-}
-
 func realDBClientFactory() binlogplayer.DBClient {
-	resetDBClient()
-	return globalDBClient
+	return &realDBClient{}
 }
 
 type realDBClient struct {
-	queries chan string
+	conn *mysql.Conn
 }
 
 func (dbc *realDBClient) DBName() string {
@@ -281,17 +277,24 @@ func (dbc *realDBClient) DBName() string {
 }
 
 func (dbc *realDBClient) Connect() error {
+	conn, err := mysql.Connect(context.Background(), env.Dbcfgs.AppWithDB())
+	if err != nil {
+		return err
+	}
+	dbc.conn = conn
 	return nil
 }
 
 func (dbc *realDBClient) Begin() error {
-	dbc.queries <- "begin"
-	return env.Mysqld.ExecuteSuperQueryList(context.Background(), []string{"begin"})
+	globalDBQueries <- "begin"
+	_, err := dbc.conn.ExecuteFetch("begin", 10000, true)
+	return err
 }
 
 func (dbc *realDBClient) Commit() error {
-	dbc.queries <- "commit"
-	return env.Mysqld.ExecuteSuperQueryList(context.Background(), []string{"commit"})
+	globalDBQueries <- "commit"
+	_, err := dbc.conn.ExecuteFetch("commit", 10000, true)
+	return err
 }
 
 func (dbc *realDBClient) Rollback() error {
@@ -299,50 +302,52 @@ func (dbc *realDBClient) Rollback() error {
 }
 
 func (dbc *realDBClient) Close() {
+	dbc.conn.Close()
+	dbc.conn = nil
 }
 
-func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
+func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	if !strings.HasPrefix(query, "select") {
-		dbc.queries <- query
+		globalDBQueries <- query
 	}
 	if strings.HasPrefix(query, "use") {
 		return nil, nil
 	}
-	return env.Mysqld.FetchSuperQuery(context.Background(), query)
-}
-
-func printQueries(t *testing.T) {
-	t.Helper()
-	for {
-		select {
-		case got := <-globalDBClient.queries:
-			t.Errorf("%s", got)
-		default:
-			return
-		}
-	}
+	return dbc.conn.ExecuteFetch(query, 10000, true)
 }
 
 func expectDBClientQueries(t *testing.T, queries []string) {
 	t.Helper()
+	failed := false
 	for i, query := range queries {
+		if failed {
+			t.Errorf("no query received, expecting %s", query)
+			continue
+		}
 		var got string
 		select {
-		case got = <-globalDBClient.queries:
-			match, err := regexp.MatchString(query, got)
-			if err != nil {
-				panic(err)
+		case got = <-globalDBQueries:
+			var match bool
+			if query[0] == '/' {
+				result, err := regexp.MatchString(query[1:], got)
+				if err != nil {
+					panic(err)
+				}
+				match = result
+			} else {
+				match = (got == query)
 			}
 			if !match {
-				t.Errorf("query:\n%s, does not match query %d:\n%s", got, i, query)
+				t.Errorf("query:\n%q, does not match query %d:\n%q", got, i, query)
 			}
 		case <-time.After(5 * time.Second):
-			t.Fatalf("no query received, expecting %s", query)
+			t.Errorf("no query received, expecting %s", query)
+			failed = true
 		}
 	}
 	for {
 		select {
-		case got := <-globalDBClient.queries:
+		case got := <-globalDBQueries:
 			t.Errorf("unexpected query: %s", got)
 		default:
 			return

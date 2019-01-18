@@ -39,9 +39,9 @@ type relayLog struct {
 	curSize int
 	items   [][]*binlogdatapb.VEvent
 	err     error
-	// canAccept is true if: curSize<=maxSize, len(items)<maxItems, err==nil and ctx is not Done.
+	// canAccept is true if: curSize<=maxSize, len(items)<maxItems, and ctx is not Done.
 	canAccept sync.Cond
-	// hasItems is true if len(items)>0, err==nil, ctx is not Done, and call has not timedout.
+	// hasItems is true if len(items)>0, ctx is not Done, and call has not timedout.
 	hasItems sync.Cond
 }
 
@@ -124,24 +124,12 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
 }
 
 func (rl *relayLog) checkDone() error {
-	if rl.err != nil {
-		return rl.err
-	}
 	select {
 	case <-rl.ctx.Done():
 		return io.EOF
 	default:
 	}
 	return nil
-}
-
-func (rl *relayLog) SetError(err error) {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	rl.err = err
-	rl.canAccept.Broadcast()
-	rl.hasItems.Broadcast()
 }
 
 func eventsSize(events []*binlogdatapb.VEvent) int {
