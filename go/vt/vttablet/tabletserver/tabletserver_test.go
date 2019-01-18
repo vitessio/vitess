@@ -606,50 +606,6 @@ func TestBeginOnReplica(t *testing.T) {
 	}
 }
 
-// TODO - I think this whole test should be removed. Am I correct?
-//func TestTabletServerStopWithPrepare(t *testing.T) {
-//	// Reuse code from tx_executor_test.
-//	_, tsv, db := newTestTxExecutor(t)
-//	defer db.Close()
-//	ctx := context.Background()
-//	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-//	transactionID, err := tsv.Begin(ctx, &target, nil)
-//	if err != nil {
-//		t.Error(err)
-//	}
-//	if _, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil); err != nil {
-//		t.Error(err)
-//	}
-//	if err = tsv.Prepare(ctx, &target, transactionID, "aa"); err != nil {
-//		t.Error(err)
-//	}
-//	ch := make(chan bool)
-//	go func() {
-//		tsv.StopService()
-//		ch <- true
-//	}()
-//
-//	// StopService must wait for the prepared transaction to resolve.
-//	select {
-//	case <-ch:
-//		t.Fatal("ch should not fire")
-//	case <-time.After(10 * time.Millisecond):
-//	}
-//	if len(tsv.te.preparedPool.conns) != 1 {
-//		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
-//	}
-//
-//	// RollbackPrepared will allow StopService to complete.
-//	err = tsv.RollbackPrepared(ctx, &target, "aa", 0)
-//	if err != nil {
-//		t.Error(err)
-//	}
-//	<-ch
-//	if len(tsv.te.preparedPool.conns) != 0 {
-//		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", len(tsv.te.preparedPool.conns))
-//	}
-//}
-
 func TestTabletServerMasterToReplica(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t)
@@ -736,8 +692,8 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
 	}
 	tsv.SetServingType(topodatapb.TabletType_MASTER, false, nil)
-	if len(tsv.te.preparedPool.conns) != 0 {
-		t.Fatal("fail")
+	if v := len(tsv.te.preparedPool.conns); v != 0 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", v)
 	}
 
 	tsv.te.txPool.lastID.Set(1)
@@ -784,8 +740,8 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("tsv.te.txPool.lastID.Get(): %d, want 20", v)
 	}
 	tsv.SetServingType(topodatapb.TabletType_MASTER, false, nil)
-	if len(tsv.te.preparedPool.conns) != 0 {
-		t.Fatal("fail")
+	if v := len(tsv.te.preparedPool.conns); v != 0 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", v)
 	}
 }
 
