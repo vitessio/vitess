@@ -80,6 +80,9 @@ type FakeMysqlDaemon struct {
 	// If it doesn't match, SetSlavePosition will return an error.
 	SetSlavePositionPos mysql.Position
 
+	// StartSlaveUntilAfterPos is matched against the input
+	StartSlaveUntilAfterPos mysql.Position
+
 	// SetMasterInput is matched against the input of SetMaster
 	// (as "%v:%v"). If it doesn't match, SetMaster will return an error.
 	SetMasterInput string
@@ -237,6 +240,17 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 func (fmd *FakeMysqlDaemon) StartSlave(hookExtraEnv map[string]string) error {
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
 		"START SLAVE",
+	})
+}
+
+// StartSlaveUntilAfter is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) StartSlaveUntilAfter(ctx context.Context, pos mysql.Position) error {
+	if !reflect.DeepEqual(fmd.StartSlaveUntilAfterPos, pos) {
+		return fmt.Errorf("wrong pos for StartSlaveUntilAfter: expected %v got %v", fmd.SetSlavePositionPos, pos)
+	}
+
+	return fmd.ExecuteSuperQueryList(context.Background(), []string{
+		"START SLAVE UNTIL AFTER",
 	})
 }
 

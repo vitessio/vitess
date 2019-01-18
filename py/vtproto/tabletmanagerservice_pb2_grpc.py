@@ -87,6 +87,16 @@ class TabletManagerStub(object):
         request_serializer=tabletmanagerdata__pb2.ApplySchemaRequest.SerializeToString,
         response_deserializer=tabletmanagerdata__pb2.ApplySchemaResponse.FromString,
         )
+    self.LockTables = channel.unary_unary(
+        '/tabletmanagerservice.TabletManager/LockTables',
+        request_serializer=tabletmanagerdata__pb2.LockTablesRequest.SerializeToString,
+        response_deserializer=tabletmanagerdata__pb2.LockTablesResponse.FromString,
+        )
+    self.UnlockTables = channel.unary_unary(
+        '/tabletmanagerservice.TabletManager/UnlockTables',
+        request_serializer=tabletmanagerdata__pb2.UnlockTablesRequest.SerializeToString,
+        response_deserializer=tabletmanagerdata__pb2.UnlockTablesResponse.FromString,
+        )
     self.ExecuteFetchAsDba = channel.unary_unary(
         '/tabletmanagerservice.TabletManager/ExecuteFetchAsDba',
         request_serializer=tabletmanagerdata__pb2.ExecuteFetchAsDbaRequest.SerializeToString,
@@ -126,6 +136,11 @@ class TabletManagerStub(object):
         '/tabletmanagerservice.TabletManager/StartSlave',
         request_serializer=tabletmanagerdata__pb2.StartSlaveRequest.SerializeToString,
         response_deserializer=tabletmanagerdata__pb2.StartSlaveResponse.FromString,
+        )
+    self.StartSlaveUntilAfter = channel.unary_unary(
+        '/tabletmanagerservice.TabletManager/StartSlaveUntilAfter',
+        request_serializer=tabletmanagerdata__pb2.StartSlaveUntilAfterRequest.SerializeToString,
+        response_deserializer=tabletmanagerdata__pb2.StartSlaveUntilAfterResponse.FromString,
         )
     self.TabletExternallyReparented = channel.unary_unary(
         '/tabletmanagerservice.TabletManager/TabletExternallyReparented',
@@ -327,6 +342,20 @@ class TabletManagerServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
+  def LockTables(self, request, context):
+    # missing associated documentation comment in .proto file
+    pass
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+  def UnlockTables(self, request, context):
+    # missing associated documentation comment in .proto file
+    pass
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def ExecuteFetchAsDba(self, request, context):
     # missing associated documentation comment in .proto file
     pass
@@ -383,6 +412,14 @@ class TabletManagerServicer(object):
 
   def StartSlave(self, request, context):
     """StartSlave starts the mysql replication
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+  def StartSlaveUntilAfter(self, request, context):
+    """StartSlave starts the mysql replication until and including
+    the provided position
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
     context.set_details('Method not implemented!')
@@ -619,6 +656,16 @@ def add_TabletManagerServicer_to_server(servicer, server):
           request_deserializer=tabletmanagerdata__pb2.ApplySchemaRequest.FromString,
           response_serializer=tabletmanagerdata__pb2.ApplySchemaResponse.SerializeToString,
       ),
+      'LockTables': grpc.unary_unary_rpc_method_handler(
+          servicer.LockTables,
+          request_deserializer=tabletmanagerdata__pb2.LockTablesRequest.FromString,
+          response_serializer=tabletmanagerdata__pb2.LockTablesResponse.SerializeToString,
+      ),
+      'UnlockTables': grpc.unary_unary_rpc_method_handler(
+          servicer.UnlockTables,
+          request_deserializer=tabletmanagerdata__pb2.UnlockTablesRequest.FromString,
+          response_serializer=tabletmanagerdata__pb2.UnlockTablesResponse.SerializeToString,
+      ),
       'ExecuteFetchAsDba': grpc.unary_unary_rpc_method_handler(
           servicer.ExecuteFetchAsDba,
           request_deserializer=tabletmanagerdata__pb2.ExecuteFetchAsDbaRequest.FromString,
@@ -658,6 +705,11 @@ def add_TabletManagerServicer_to_server(servicer, server):
           servicer.StartSlave,
           request_deserializer=tabletmanagerdata__pb2.StartSlaveRequest.FromString,
           response_serializer=tabletmanagerdata__pb2.StartSlaveResponse.SerializeToString,
+      ),
+      'StartSlaveUntilAfter': grpc.unary_unary_rpc_method_handler(
+          servicer.StartSlaveUntilAfter,
+          request_deserializer=tabletmanagerdata__pb2.StartSlaveUntilAfterRequest.FromString,
+          response_serializer=tabletmanagerdata__pb2.StartSlaveUntilAfterResponse.SerializeToString,
       ),
       'TabletExternallyReparented': grpc.unary_unary_rpc_method_handler(
           servicer.TabletExternallyReparented,
