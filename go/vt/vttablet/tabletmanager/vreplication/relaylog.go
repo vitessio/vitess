@@ -56,14 +56,11 @@ func newRelayLog(ctx context.Context, maxItems, maxSize int) *relayLog {
 
 	// Any time context is done, wake up all waiters to make them exit.
 	go func() {
-		select {
-		case <-ctx.Done():
-			rl.mu.Lock()
-			defer rl.mu.Unlock()
-			rl.canAccept.Broadcast()
-			rl.hasItems.Broadcast()
-		default:
-		}
+		<-ctx.Done()
+		rl.mu.Lock()
+		defer rl.mu.Unlock()
+		rl.canAccept.Broadcast()
+		rl.hasItems.Broadcast()
 	}()
 	return rl
 }

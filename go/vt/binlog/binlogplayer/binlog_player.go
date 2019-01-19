@@ -601,9 +601,15 @@ func encodeString(in string) string {
 }
 
 // ReadVReplicationPos returns a statement to query the gtid for a
-// given shard from the _vt.vreplication table.
+// given stream from the _vt.vreplication table.
 func ReadVReplicationPos(index uint32) string {
 	return fmt.Sprintf("select pos from _vt.vreplication where id=%v", index)
+}
+
+// ReadVReplicationStatus returns a statement to query the status fields for a
+// given stream from the _vt.vreplication table.
+func ReadVReplicationStatus(index uint32) string {
+	return fmt.Sprintf("select pos, state, message from _vt.vreplication where id=%v", index)
 }
 
 // StatsHistoryRecord is used to store a Message with timestamp

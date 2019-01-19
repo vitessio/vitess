@@ -954,7 +954,7 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter)
 	go func() {
 		defer close(ch)
 		if err := vstream(ctx, t, pos, filter, ch); err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 	}()
 	return ch
