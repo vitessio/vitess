@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -108,7 +109,7 @@ func (vp *vplayer) Play(ctx context.Context) error {
 func (vp *vplayer) play(ctx context.Context) error {
 	startPos, stopPos, _, _, err := binlogplayer.ReadVRSettings(vp.dbClient, vp.id)
 	if err != nil {
-		return fmt.Errorf("error reading VReplication settings: %v", err)
+		return vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("error reading VReplication settings: %v", err))
 	}
 	vp.pos, err = mysql.DecodePosition(startPos)
 	if err != nil {
@@ -117,7 +118,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 	if stopPos != "" {
 		vp.stopPos, err = mysql.DecodePosition(stopPos)
 		if err != nil {
-			return fmt.Errorf("error decoding stop position %v: %v", stopPos, err)
+			return vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("error decoding stop position %v: %v", stopPos, err))
 		}
 	}
 	if !vp.stopPos.IsZero() {
@@ -161,13 +162,39 @@ func (vp *vplayer) play(ctx context.Context) error {
 	}()
 
 	select {
-	case err = <-applyErr:
-	case err = <-streamErr:
+	case err := <-applyErr:
+		defer func() {
+			// cancel and wait for the other thread to finish.
+			cancel()
+			<-streamErr
+		}()
+		// If the apply thread ends with io.EOF, it means the context
+		// was canceled, which can only happen if Engine is shutting down.
+		// If so, we return nil which will cause the vplayer to shut down.
+		if err == io.EOF {
+			return nil
+		}
+		return err
+	case err := <-streamErr:
+		defer func() {
+			// cancel and wait for the other thread to finish.
+			cancel()
+			<-applyErr
+		}()
+		// If context is done, don't return an error.
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+		// If the stream ends normally without context being canceled,
+		// we have to return an error indicating that the controller
+		// has to retry a different vttablet.
+		if err == nil {
+			return errors.New("vstream ended")
+		}
+		return err
 	}
-	if err == io.EOF {
-		return nil
-	}
-	return err
 }
 
 func (vp *vplayer) applyEvents(relay *relayLog) error {
@@ -261,7 +288,7 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
 			return nil
 		}
 		if !vp.pos.Equal(vp.stopPos) && vp.pos.AtLeast(vp.stopPos) {
-			return fmt.Errorf("next event position %v exceeds stop pos %v, exiting without applying", vp.pos, vp.stopPos)
+			return vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("next event position %v exceeds stop pos %v, exiting without applying", vp.pos, vp.stopPos))
 		}
 	case binlogdatapb.VEventType_BEGIN:
 		// No-op: begin is called as needed.
@@ -433,6 +460,9 @@ func (vp *vplayer) applyRowChange(tplan *tablePlan, rowChange *binlogdatapb.RowC
 	case before == nil && after == nil:
 		// unreachable
 	}
+	if query == "" {
+		return nil
+	}
 	return vp.exec(query)
 }
 
@@ -453,7 +483,7 @@ func (vp *vplayer) generateInsert(tplan *tablePlan, after []sqltypes.Value) stri
 
 func (vp *vplayer) generateUpdate(tplan *tablePlan, before, after []sqltypes.Value) string {
 	if tplan.onInsert == insertIgnore {
-		return ""
+		return vp.generateInsert(tplan, after)
 	}
 	sql := sqlparser.NewTrackedBuffer(nil)
 	sql.Myprintf("update %v set ", sqlparser.NewTableIdent(tplan.name))
@@ -465,15 +495,18 @@ func (vp *vplayer) generateUpdate(tplan *tablePlan, before, after []sqltypes.Val
 
 func (vp *vplayer) generateDelete(tplan *tablePlan, before []sqltypes.Value) string {
 	sql := sqlparser.NewTrackedBuffer(nil)
-	if tplan.onInsert == insertNormal {
+	switch tplan.onInsert {
+	case insertOndup:
+		sql.Myprintf("update %v set ", sqlparser.NewTableIdent(tplan.name))
+		vp.writeUpdateValues(sql, tplan, before, nil)
+		sql.Myprintf(" where ")
+		vp.writeWhereValues(sql, tplan, before)
+	case insertIgnore:
+		return ""
+	default: // insertNormal
 		sql.Myprintf("delete from %v where ", sqlparser.NewTableIdent(tplan.name))
 		vp.writeWhereValues(sql, tplan, before)
-		return sql.String()
 	}
-	sql.Myprintf("update %v set ", sqlparser.NewTableIdent(tplan.name))
-	vp.writeUpdateValues(sql, tplan, before, nil)
-	sql.Myprintf(" where ")
-	vp.writeWhereValues(sql, tplan, before)
 	return sql.String()
 }
 

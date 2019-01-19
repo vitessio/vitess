@@ -377,6 +377,14 @@ func TestReadVReplicationPos(t *testing.T) {
 	want := "select pos from _vt.vreplication where id=482821"
 	got := ReadVReplicationPos(482821)
 	if got != want {
-		t.Errorf("ReadVReplicationThrottlerSettings(482821) = %#v, want %#v", got, want)
+		t.Errorf("ReadVReplicationPos(482821) = %#v, want %#v", got, want)
+	}
+}
+
+func TestReadVReplicationStatus(t *testing.T) {
+	want := "select pos, state, message from _vt.vreplication where id=482821"
+	got := ReadVReplicationStatus(482821)
+	if got != want {
+		t.Errorf("ReadVReplicationStatus(482821) = %#v, want %#v", got, want)
 	}
 }

@@ -50,6 +50,7 @@ var (
 	streamerEngine  *vstreamer.Engine
 	env             *testenv.Env
 	globalFBC       = &fakeBinlogClient{}
+	vrepldb         = "vrepl"
 	globalDBQueries = make(chan string, 1000)
 )
 
@@ -89,8 +90,16 @@ func TestMain(m *testing.M) {
 		streamerEngine.Open(env.KeyspaceName, env.Cells[0])
 		defer streamerEngine.Close()
 
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), fmt.Sprintf("create database %s", vrepldb)); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+
 		playerEngine = NewEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory)
-		playerEngine.Open(context.Background())
+		if err := playerEngine.Open(context.Background()); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
 		defer playerEngine.Close()
 
 		return m.Run()
@@ -273,11 +282,13 @@ type realDBClient struct {
 }
 
 func (dbc *realDBClient) DBName() string {
-	return env.KeyspaceName
+	return vrepldb
 }
 
 func (dbc *realDBClient) Connect() error {
-	conn, err := mysql.Connect(context.Background(), env.Dbcfgs.AppWithDB())
+	app := env.Dbcfgs.AppWithDB()
+	app.DbName = vrepldb
+	conn, err := mysql.Connect(context.Background(), app)
 	if err != nil {
 		return err
 	}
@@ -286,19 +297,21 @@ func (dbc *realDBClient) Connect() error {
 }
 
 func (dbc *realDBClient) Begin() error {
-	globalDBQueries <- "begin"
 	_, err := dbc.conn.ExecuteFetch("begin", 10000, true)
+	globalDBQueries <- "begin"
 	return err
 }
 
 func (dbc *realDBClient) Commit() error {
-	globalDBQueries <- "commit"
 	_, err := dbc.conn.ExecuteFetch("commit", 10000, true)
+	globalDBQueries <- "commit"
 	return err
 }
 
 func (dbc *realDBClient) Rollback() error {
-	panic("rollback should never be called")
+	_, err := dbc.conn.ExecuteFetch("rollback", 10000, true)
+	globalDBQueries <- "rollback"
+	return err
 }
 
 func (dbc *realDBClient) Close() {
@@ -307,13 +320,14 @@ func (dbc *realDBClient) Close() {
 }
 
 func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
-	if !strings.HasPrefix(query, "select") {
-		globalDBQueries <- query
-	}
 	if strings.HasPrefix(query, "use") {
 		return nil, nil
 	}
-	return dbc.conn.ExecuteFetch(query, 10000, true)
+	qr, err := dbc.conn.ExecuteFetch(query, 10000, true)
+	if !strings.HasPrefix(query, "select") {
+		globalDBQueries <- query
+	}
+	return qr, err
 }
 
 func expectDBClientQueries(t *testing.T, queries []string) {

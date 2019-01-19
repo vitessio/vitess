@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -183,6 +184,9 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			for _, vevent := range vevents {
 				if err := bufferAndTransmit(vevent); err != nil {
+					if err == io.EOF {
+						return nil
+					}
 					return fmt.Errorf("error sending event: %v", err)
 				}
 			}

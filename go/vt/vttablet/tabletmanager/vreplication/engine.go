@@ -315,13 +315,13 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 	defer dbClient.Close()
 
 	for {
-		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationPos(uint32(id)), 10)
+		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(uint32(id)), 10)
 		switch {
 		case err != nil:
 			return err
 		case len(qr.Rows) == 0:
 			return fmt.Errorf("vreplication stream %d not found", id)
-		case len(qr.Rows) > 1 || len(qr.Rows[0]) != 1:
+		case len(qr.Rows) > 1 || len(qr.Rows[0]) != 3:
 			return fmt.Errorf("unexpected result: %v", qr)
 		}
 		current, err := mysql.DecodePosition(qr.Rows[0][0].ToString())
@@ -329,8 +329,16 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 			return err
 		}
 
-		if current.AtLeast(mPos) {
+		if current.Equal(mPos) {
 			return nil
+		}
+
+		if current.AtLeast(mPos) {
+			return fmt.Errorf("postion %v has been overshot, current position is %v", mPos, current)
+		}
+
+		if qr.Rows[0][1].ToString() == binlogplayer.BlpStopped {
+			return fmt.Errorf("replication has stopped at %v before reaching position %v, message: %s", current, mPos, qr.Rows[0][2].ToString())
 		}
 
 		select {
