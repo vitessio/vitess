@@ -376,7 +376,7 @@ pmm:
 # Default values for orchestrator resources
 orchestrator:
   enabled: false
-  image: vitess/orchestrator:3.0.13
+  image: vitess/orchestrator:3.0.14
   replicas: 3
   resources:
     requests:
