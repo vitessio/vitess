@@ -286,11 +286,15 @@ func TestWaitForPos(t *testing.T) {
 	// hack a controller into vre.
 	vre.controllers[1] = &controller{}
 
-	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+		sqltypes.NewVarBinary("Running"),
+		sqltypes.NewVarBinary(""),
 	}}}, nil)
-	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1084"),
+		sqltypes.NewVarBinary("Running"),
+		sqltypes.NewVarBinary(""),
 	}}}, nil)
 	start := time.Now()
 	if err := vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084"); err != nil {
@@ -326,14 +330,14 @@ func TestWaitForPosError(t *testing.T) {
 		t.Errorf("WaitForPos: %v, want %v", err, want)
 	}
 
-	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{}}}, nil)
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
 	want = "unexpected result: &{[] 0 0 [[]] <nil>}"
 	if err == nil || err.Error() != want {
 		t.Errorf("WaitForPos: %v, want %v", err, want)
 	}
 
-	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
 	}, {
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
@@ -356,8 +360,10 @@ func TestWaitForPosCancel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+		sqltypes.NewVarBinary("Running"),
+		sqltypes.NewVarBinary(""),
 	}}}, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -378,8 +384,10 @@ func TestWaitForPosCancel(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 		vre.Close()
 	}()
-	dbClient.ExpectRequest("select pos from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+		sqltypes.NewVarBinary("Running"),
+		sqltypes.NewVarBinary(""),
 	}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
 	want := "vreplication is closing: context canceled"

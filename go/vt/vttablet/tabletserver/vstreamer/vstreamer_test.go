@@ -741,9 +741,7 @@ func TestTypes(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+	t.Skip("This test is disabled because every flavor of mysql has a different behavior.")
 
 	// JSON is supported only after mysql57.
 	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
