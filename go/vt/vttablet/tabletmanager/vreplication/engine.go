@@ -288,17 +288,15 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		if !vre.isOpen {
 			return errors.New("vreplication engine is closed")
 		}
-		ct, ok := vre.controllers[id]
-		if !ok {
-			return fmt.Errorf("vreplication stream %d not found", id)
+		if ct, ok := vre.controllers[id]; ok {
+			mpos, err := mysql.DecodePosition(pos)
+			if err != nil {
+				return err
+			}
+			// vplayer doesn't export all the positions it receives unless
+			// we specifically request it for one.
+			ct.exportPosition(mpos)
 		}
-		mpos, err := mysql.DecodePosition(pos)
-		if err != nil {
-			return err
-		}
-		// vplayer doesn't export all the positions it receives unless
-		// we specifically request it for one.
-		ct.exportPosition(mpos)
 
 		// Ensure that the engine won't be closed while this is running.
 		vre.wg.Add(1)
@@ -329,12 +327,8 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 			return err
 		}
 
-		if current.Equal(mPos) {
-			return nil
-		}
-
 		if current.AtLeast(mPos) {
-			return fmt.Errorf("postion %v has been overshot, current position is %v", mPos, current)
+			return nil
 		}
 
 		if qr.Rows[0][1].ToString() == binlogplayer.BlpStopped {
