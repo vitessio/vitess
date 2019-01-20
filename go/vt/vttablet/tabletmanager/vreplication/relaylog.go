@@ -23,7 +23,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/sync2"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -35,13 +34,14 @@ type relayLog struct {
 	// mu controls all variables below and is shared by canAccept and hasItems.
 	// Broadcasting must be done while holding mu. This is mainly necessary because both
 	// conditions depend on ctx.Done(), which can change state asynchronously.
-	mu      sync.Mutex
-	curSize int
-	items   [][]*binlogdatapb.VEvent
-	err     error
+	mu             sync.Mutex
+	curSize        int
+	items          [][]*binlogdatapb.VEvent
+	interruptFetch bool
+	err            error
 	// canAccept is true if: curSize<=maxSize, len(items)<maxItems, and ctx is not Done.
 	canAccept sync.Cond
-	// hasItems is true if len(items)>0, ctx is not Done, and call has not timedout.
+	// hasItems is true if len(items)>0, ctx is not Done, and interuptFetch is false.
 	hasItems sync.Cond
 }
 
@@ -91,28 +91,15 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
 	if err := rl.checkDone(); err != nil {
 		return nil, err
 	}
-	timer := time.NewTimer(idleTimeout)
-	defer timer.Stop()
-	var timedout sync2.AtomicBool
-	go func() {
-		select {
-		case <-timer.C:
-			rl.mu.Lock()
-			defer rl.mu.Unlock()
-			timedout.Set(true)
-			rl.hasItems.Broadcast()
-		default:
-		}
-	}()
-	for len(rl.items) == 0 {
+	cancelTimer := rl.startTimer()
+	defer cancelTimer()
+	for len(rl.items) == 0 && !rl.interruptFetch {
 		rl.hasItems.Wait()
 		if err := rl.checkDone(); err != nil {
 			return nil, err
 		}
-		if timedout.Get() {
-			return nil, nil
-		}
 	}
+	rl.interruptFetch = false
 	items := rl.items
 	rl.items = nil
 	rl.curSize = 0
@@ -127,6 +114,29 @@ func (rl *relayLog) checkDone() error {
 	default:
 	}
 	return nil
+}
+
+func (rl *relayLog) startTimer() (cancel func()) {
+	timer := time.NewTimer(idleTimeout)
+	timerDone := make(chan struct{})
+	go func() {
+		select {
+		case <-timer.C:
+			rl.InterruptFetch()
+		case <-timerDone:
+		}
+	}()
+	return func() {
+		timer.Stop()
+		close(timerDone)
+	}
+}
+
+func (rl *relayLog) InterruptFetch() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.interruptFetch = true
+	rl.hasItems.Broadcast()
 }
 
 func eventsSize(events []*binlogdatapb.VEvent) int {
