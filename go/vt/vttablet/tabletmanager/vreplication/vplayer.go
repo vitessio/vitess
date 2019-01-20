@@ -57,7 +57,9 @@ type vplayer struct {
 	unsavedGTID   *binlogdatapb.VEvent
 	timeLastSaved time.Time
 	stopPos       mysql.Position
-	mustCommit    bool
+	// inTransaction is true if we've started a transaction.
+	// It remains true until the next commit or rollback.
+	inTransaction bool
 
 	// mu protects exportPositions.
 	// exportPositions specifies a list of positions.
@@ -202,32 +204,30 @@ func (vp *vplayer) applyEvents(relay *relayLog) error {
 		if err != nil {
 			return err
 		}
-		// This covers two situations:
-		// 1. Fetch was idle for idleTimeout.
-		// 2. We've been receiving empty events for longer than idleTimeout.
-		// In both cases, now > timeLastSaved. If so, any unsaved GTID should be saved
-		// to prevent us from falling behind on tracking the source binlog position.
-		if time.Now().Sub(vp.timeLastSaved) >= idleTimeout && vp.unsavedGTID != nil {
+		// Don't do special things in the middle of a transaction.
+		if !vp.inTransaction && vp.mustExport() {
 			if err := vp.updatePos(vp.unsavedGTID.Timestamp); err != nil {
 				return err
 			}
 		}
 		for i, events := range items {
 			for j, event := range events {
+				mustSave := false
 				switch event.Type {
 				case binlogdatapb.VEventType_COMMIT:
 					if vp.pos.Equal(vp.stopPos) {
-						// If stop pos is reached, we have to commit.
+						mustSave = true
 						break
 					}
 					if vp.mustExport() {
+						mustSave = true
 						break
 					}
 					if hasAnotherCommit(items, i, j+1) {
 						continue
 					}
 				}
-				if err := vp.applyEvent(event); err != nil {
+				if err := vp.applyEvent(event, mustSave); err != nil {
 					return err
 				}
 			}
@@ -236,6 +236,15 @@ func (vp *vplayer) applyEvents(relay *relayLog) error {
 }
 
 func (vp *vplayer) mustExport() bool {
+	// This covers two situations:
+	// 1. Fetch was idle for idleTimeout.
+	// 2. We've been receiving empty events for longer than idleTimeout.
+	// In both cases, now > timeLastSaved. If so, any unsaved GTID should be saved
+	// to prevent us from falling behind on tracking the source binlog position.
+	if time.Now().Sub(vp.timeLastSaved) >= idleTimeout && vp.unsavedGTID != nil {
+		return true
+	}
+
 	vp.mu.Lock()
 	defer vp.mu.Unlock()
 
@@ -274,7 +283,7 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 	return false
 }
 
-func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
+func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent, mustSave bool) error {
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		pos, err := mysql.DecodePosition(event.Gtid)
@@ -296,64 +305,53 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
 	case binlogdatapb.VEventType_BEGIN:
 		// No-op: begin is called as needed.
 	case binlogdatapb.VEventType_COMMIT:
-		posReached := !vp.stopPos.IsZero() && vp.pos.Equal(vp.stopPos)
-		// If stop pos is reached, then we must commit.
-		// So, if we haven't started a transaction (vp.mustCommit==false),
-		// we must start one.
-		if posReached && !vp.mustCommit {
-			if err := vp.dbClient.Begin(); err != nil {
+		if mustSave {
+			if err := vp.begin(); err != nil {
 				return err
 			}
-			vp.mustCommit = true
 		}
 
-		if !vp.mustCommit {
+		if !vp.inTransaction {
 			return nil
 		}
 		if err := vp.updatePos(event.Timestamp); err != nil {
 			return err
 		}
+		posReached := !vp.stopPos.IsZero() && vp.pos.Equal(vp.stopPos)
 		if posReached {
 			if err := vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
 				return err
 			}
 		}
-		if err := vp.dbClient.Commit(); err != nil {
+		if err := vp.commit(); err != nil {
 			return err
 		}
-		vp.mustCommit = false
 		if posReached {
 			return io.EOF
 		}
 	case binlogdatapb.VEventType_FIELD:
-		if !vp.mustCommit {
-			if err := vp.dbClient.Begin(); err != nil {
-				return err
-			}
-			vp.mustCommit = true
+		if err := vp.begin(); err != nil {
+			return err
 		}
 		if err := vp.updatePlan(event.FieldEvent); err != nil {
 			return err
 		}
 	case binlogdatapb.VEventType_ROW:
-		if !vp.mustCommit {
-			if err := vp.dbClient.Begin(); err != nil {
-				return err
-			}
-			vp.mustCommit = true
+		if err := vp.begin(); err != nil {
+			return err
 		}
 		if err := vp.applyRowEvent(event.RowEvent); err != nil {
 			return err
 		}
 	case binlogdatapb.VEventType_DDL:
-		if vp.mustCommit {
+		if vp.inTransaction {
 			return fmt.Errorf("unexpected state: DDL encountered in the middle of a transaction: %v", event.Ddl)
 		}
 		switch vp.source.OnDdl {
 		case binlogdatapb.OnDDLAction_IGNORE:
 			// no-op
 		case binlogdatapb.OnDDLAction_STOP:
-			if err := vp.dbClient.Begin(); err != nil {
+			if err := vp.begin(); err != nil {
 				return err
 			}
 			if err := vp.updatePos(event.Timestamp); err != nil {
@@ -362,7 +360,7 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
 			if err := vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at DDL %s", event.Ddl)); err != nil {
 				return err
 			}
-			if err := vp.dbClient.Commit(); err != nil {
+			if err := vp.commit(); err != nil {
 				return err
 			}
 			return io.EOF
@@ -383,6 +381,33 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
 		}
 	}
 	return nil
+}
+
+func (vp *vplayer) begin() error {
+	if vp.inTransaction {
+		return nil
+	}
+	if err := vp.dbClient.Begin(); err != nil {
+		return err
+	}
+	vp.inTransaction = true
+	return nil
+}
+
+func (vp *vplayer) commit() error {
+	if !vp.inTransaction {
+		return nil
+	}
+	if err := vp.dbClient.Commit(); err != nil {
+		return err
+	}
+	vp.inTransaction = false
+	return nil
+}
+
+func (vp *vplayer) rollback() {
+	vp.inTransaction = false
+	_ = vp.dbClient.Rollback()
 }
 
 func (vp *vplayer) setState(state, message string) error {
@@ -592,7 +617,7 @@ func (vp *vplayer) writeWhereValues(sql *sqlparser.TrackedBuffer, tplan *tablePl
 func (vp *vplayer) updatePos(ts int64) error {
 	updatePos := binlogplayer.GenerateUpdatePos(vp.id, vp.pos, time.Now().Unix(), ts)
 	if _, err := vp.dbClient.ExecuteFetch(updatePos, 0); err != nil {
-		_ = vp.dbClient.Rollback()
+		vp.rollback()
 		return fmt.Errorf("error %v updating position", err)
 	}
 	vp.unsavedGTID = nil

@@ -188,6 +188,15 @@ func TestFilters(t *testing.T) {
 
 func TestDDL(t *testing.T) {
 	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	execStatements(t, []string{
+		"create table dummy(id int, primary key(id))",
+		fmt.Sprintf("create table %s.dummy(id int, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table dummy",
+		fmt.Sprintf("drop table %s.dummy", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -196,6 +205,18 @@ func TestDDL(t *testing.T) {
 	}
 
 	cancel, _ := startVReplication(t, playerEngine, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	// Issue a dummy change to ensure vreplication is initialized. Otherwise there
+	// is a race between the DDLs and the schema loader of vstreamer.
+	// Root cause seems to be with MySQL where t1 shows up in information_schema before
+	// the actual table is created.
+	execStatements(t, []string{"insert into dummy values(1)"})
+	expectDBClientQueries(t, []string{
+		"begin",
+		"insert into dummy set id=1",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+
 	execStatements(t, []string{"create table t1(id int, primary key(id))"})
 	execStatements(t, []string{"drop table t1"})
 	expectDBClientQueries(t, []string{})
@@ -265,8 +286,6 @@ func TestDDL(t *testing.T) {
 	})
 	cancel()
 
-	// Don't test drop.
-	// MySQL rewrites them by uppercasing, which may be version specific.
 	execStatements(t, []string{
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),

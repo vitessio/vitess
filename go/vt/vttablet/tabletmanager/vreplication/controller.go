@@ -136,7 +136,13 @@ func (ct *controller) run(ctx context.Context) {
 		default:
 		}
 		log.Errorf("stream %v: %v, retrying after %v", ct.id, err, *retryDelay)
-		time.Sleep(*retryDelay)
+		timer := time.NewTimer(*retryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
 	}
 }
 
