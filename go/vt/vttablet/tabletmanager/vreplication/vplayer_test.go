@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -274,6 +275,100 @@ func TestDDL(t *testing.T) {
 	})
 }
 
+func TestStopPos(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	execStatements(t, []string{
+		"create table yes(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.yes(id int, val varbinary(128), primary key(id))", vrepldb),
+		"create table no(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table yes",
+		fmt.Sprintf("drop table %s.yes", vrepldb),
+		"drop table no",
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/yes",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	startPos := masterPosition(t)
+	query := binlogplayer.CreateVReplicationStopped("test", bls, startPos)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uint32(qr.InsertID)
+	for q := range globalDBQueries {
+		if strings.HasPrefix(q, "insert into _vt.vreplication") {
+			break
+		}
+	}
+
+	// Test normal stop.
+	execStatements(t, []string{
+		"insert into yes values(1, 'aaa')",
+	})
+	stopPos := masterPosition(t)
+	query = binlogplayer.StartVReplicationUntil(id, stopPos)
+	if _, err := playerEngine.Exec(query); err != nil {
+		t.Fatal(err)
+	}
+	expectDBClientQueries(t, []string{
+		"/update.*'Running'", // done by Engine
+		"/update.*'Running'", // done by vplayer on start
+		"begin",
+		"insert into yes set id=1, val='aaa'",
+		fmt.Sprintf("/update.*'%s'", stopPos),
+		"/update.*'Stopped'",
+		"commit",
+	})
+
+	// Test stopping at empty transaction.
+	execStatements(t, []string{
+		"insert into no values(2, 'aaa')",
+		"insert into no values(3, 'aaa')",
+	})
+	stopPos = masterPosition(t)
+	execStatements(t, []string{
+		"insert into no values(4, 'aaa')",
+	})
+	query = binlogplayer.StartVReplicationUntil(id, stopPos)
+	if _, err := playerEngine.Exec(query); err != nil {
+		t.Fatal(err)
+	}
+	expectDBClientQueries(t, []string{
+		"/update.*'Running'", // done by Engine
+		"/update.*'Running'", // done by vplayer on start
+		"begin",
+		// Since 'no' generates empty transactions that are skipped by
+		// vplayer, a commit is done only for the stop position event.
+		fmt.Sprintf("/update.*'%s'", stopPos),
+		"/update.*'Stopped'",
+		"commit",
+	})
+
+	// Test stopping when position is already reached.
+	query = binlogplayer.StartVReplicationUntil(id, stopPos)
+	if _, err := playerEngine.Exec(query); err != nil {
+		t.Fatal(err)
+	}
+	expectDBClientQueries(t, []string{
+		"/update.*'Running'", // done by Engine
+		"/update.*'Running'", // done by vplayer on start
+		"/update.*'Stopped'.*already reached",
+	})
+}
+
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
 	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
@@ -293,11 +388,7 @@ func startVReplication(t *testing.T, pe *Engine, filter *binlogdatapb.Filter, on
 	if pos == "" {
 		pos = masterPosition(t)
 	}
-	query := fmt.Sprintf(`insert into _vt.vreplication`+
-		`(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state)`+
-		`values('test', '%v', '%s', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running')`,
-		bls, pos,
-	)
+	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0)
 	qr, err := pe.Exec(query)
 	if err != nil {
 		t.Fatal(err)

@@ -113,7 +113,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 	}
 	vp.pos, err = mysql.DecodePosition(startPos)
 	if err != nil {
-		return fmt.Errorf("error decoding start position %v: %v", startPos, err)
+		return vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("error decoding start position %v: %v", startPos, err))
 	}
 	if stopPos != "" {
 		vp.stopPos, err = mysql.DecodePosition(stopPos)
@@ -168,9 +168,9 @@ func (vp *vplayer) play(ctx context.Context) error {
 			cancel()
 			<-streamErr
 		}()
-		// If the apply thread ends with io.EOF, it means the context
-		// was canceled, which can only happen if Engine is shutting down.
-		// If so, we return nil which will cause the vplayer to shut down.
+		// If the apply thread ends with io.EOF, it means either the Engine
+		// is shutting down and canceled the context, or stop position was reached.
+		// If so, we return nil which will cause the controller to not retry.
 		if err == io.EOF {
 			return nil
 		}
@@ -187,10 +187,9 @@ func (vp *vplayer) play(ctx context.Context) error {
 			return nil
 		default:
 		}
-		// If the stream ends normally without context being canceled,
-		// we have to return an error indicating that the controller
-		// has to retry a different vttablet.
-		if err == nil {
+		// If the stream ends normally we have to return an error indicating
+		// that the controller has to retry a different vttablet.
+		if err == nil || err == io.EOF {
 			return errors.New("vstream ended")
 		}
 		return err
@@ -288,18 +287,32 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent) error {
 			return nil
 		}
 		if !vp.pos.Equal(vp.stopPos) && vp.pos.AtLeast(vp.stopPos) {
-			return vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("next event position %v exceeds stop pos %v, exiting without applying", vp.pos, vp.stopPos))
+			// Code is unreachable, but bad data can cause this to happen.
+			if err := vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("next event position %v exceeds stop pos %v, exiting without applying", vp.pos, vp.stopPos)); err != nil {
+				return err
+			}
+			return io.EOF
 		}
 	case binlogdatapb.VEventType_BEGIN:
 		// No-op: begin is called as needed.
 	case binlogdatapb.VEventType_COMMIT:
+		posReached := !vp.stopPos.IsZero() && vp.pos.Equal(vp.stopPos)
+		// If stop pos is reached, then we must commit.
+		// So, if we haven't started a transaction (vp.mustCommit==false),
+		// we must start one.
+		if posReached && !vp.mustCommit {
+			if err := vp.dbClient.Begin(); err != nil {
+				return err
+			}
+			vp.mustCommit = true
+		}
+
 		if !vp.mustCommit {
 			return nil
 		}
 		if err := vp.updatePos(event.Timestamp); err != nil {
 			return err
 		}
-		posReached := !vp.stopPos.IsZero() && vp.pos.Equal(vp.stopPos)
 		if posReached {
 			if err := vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
 				return err
