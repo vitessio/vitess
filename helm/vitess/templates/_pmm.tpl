@@ -197,6 +197,7 @@ spec:
       # and we want to stop/remove running services, in case pod ips have changed
       if pmm-admin info; then
         pmm-admin stop --all
+        pmm-admin repair
         pmm-admin rm --all
       fi
 
@@ -218,7 +219,7 @@ spec:
       trap : TERM INT; sleep infinity & wait
 
 - name: pmm-client-metrics-log
-  image: vitess/logtail:helm-1.0.5
+  image: vitess/logtail:helm-1.0.6
   imagePullPolicy: IfNotPresent
   env:
   - name: TAIL_FILEPATH

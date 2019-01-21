@@ -1,3 +1,10 @@
+## 1.0.6 - 2019-01-20
+
+### Changes
+* Update Orchestrator default to 3.0.14
+* Run `pmm-admin repair` on `pmm-client` startup to recover failures on `pmm-server`
+* Backups now only run on `replica` (non-master), `rdonly`, or `spare` tablet types
+
 ## 1.0.5 - 2019-01-12
 
 ### Changes
