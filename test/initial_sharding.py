@@ -418,7 +418,7 @@ index by_msg (msg)
          '--exclude_tables', 'unrelated',
          '--chunk_count', '10',
          '--min_rows_per_chunk', '1',
-         '--min_healthy_rdonly_tablets', '1',
+         '--min_healthy_tablets', '1',
          'test_keyspace/0'],
         worker_rpc_port)
     utils.wait_procs([workerclient_proc])
@@ -449,7 +449,7 @@ index by_msg (msg)
          '--exclude_tables', 'unrelated',
          '--chunk_count', '10',
          '--min_rows_per_chunk', '1',
-         '--min_healthy_rdonly_tablets', '1',
+         '--min_healthy_tablets', '1',
          'test_keyspace/0'],
         worker_rpc_port)
     utils.wait_procs([workerclient_proc])

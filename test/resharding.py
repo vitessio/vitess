@@ -706,7 +706,7 @@ primary key (name)
          '--exclude_tables', 'unrelated',
          '--chunk_count', '10',
          '--min_rows_per_chunk', '1',
-         '--min_healthy_rdonly_tablets', '1',
+         '--min_healthy_tablets', '1',
          '--max_tps', '9999',
          'test_keyspace/80-'],
         worker_rpc_port)
@@ -731,7 +731,7 @@ primary key (name)
          '--exclude_tables', 'unrelated',
          '--chunk_count', '10',
          '--min_rows_per_chunk', '1',
-         '--min_healthy_rdonly_tablets', '1',
+         '--min_healthy_tablets', '1',
          '--max_tps', '9999',
          'test_keyspace/80-'],
         worker_rpc_port)
@@ -758,7 +758,7 @@ primary key (name)
          '--exclude_tables', 'unrelated',
          '--chunk_count', '10',
          '--min_rows_per_chunk', '1',
-         '--min_healthy_rdonly_tablets', '1',
+         '--min_healthy_tablets', '1',
          '--max_tps', '9999',
          'test_keyspace/80-'],
         worker_rpc_port)
@@ -793,7 +793,7 @@ primary key (name)
          '--exclude_tables', 'unrelated',
          '--chunk_count', '10',
          '--min_rows_per_chunk', '1',
-         '--min_healthy_rdonly_tablets', '1',
+         '--min_healthy_tablets', '1',
          '--max_tps', '9999',
          'test_keyspace/80-'],
         worker_rpc_port)

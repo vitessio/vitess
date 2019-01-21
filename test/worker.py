@@ -463,7 +463,7 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
     args = ['SplitClone',
             '--offline=false',
             '--destination_writer_count', '1',
-            '--min_healthy_rdonly_tablets', '1',
+            '--min_healthy_tablets', '1',
             '--max_tps', '9999']
     # Make the clone as slow as necessary such that there is enough time to
     # run PlannedReparent in the meantime.
@@ -570,7 +570,7 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
                                '--use_v3_resharding_mode=false',
                                'SplitClone',
                                '--online=false',
-                               '--min_healthy_rdonly_tablets', '1',
+                               '--min_healthy_tablets', '1',
                                'test_keyspace/0'], auto_log=True)
 
     # Make sure that everything is caught up to the same replication point
@@ -672,7 +672,7 @@ class TestMinHealthyRdonlyTablets(TestBaseSplitCloneResiliency):
          '--wait_for_healthy_rdonly_tablets_timeout', '1s',
          '--use_v3_resharding_mode=false',
          'SplitClone',
-         '--min_healthy_rdonly_tablets', '2',
+         '--min_healthy_tablets', '2',
          'test_keyspace/0'],
         auto_log=True,
         expect_fail=True)
