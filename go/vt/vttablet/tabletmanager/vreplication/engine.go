@@ -284,18 +284,8 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 	if err := func() error {
 		vre.mu.Lock()
 		defer vre.mu.Unlock()
-
 		if !vre.isOpen {
 			return errors.New("vreplication engine is closed")
-		}
-		if ct, ok := vre.controllers[id]; ok {
-			mpos, err := mysql.DecodePosition(pos)
-			if err != nil {
-				return err
-			}
-			// vplayer doesn't export all the positions it receives unless
-			// we specifically request it for one.
-			ct.exportPosition(mpos)
 		}
 
 		// Ensure that the engine won't be closed while this is running.

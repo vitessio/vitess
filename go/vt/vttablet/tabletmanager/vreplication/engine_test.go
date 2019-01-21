@@ -283,8 +283,6 @@ func TestWaitForPos(t *testing.T) {
 	if err := vre.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	// hack a controller into vre.
-	vre.controllers[1] = &controller{}
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
@@ -321,8 +319,6 @@ func TestWaitForPosError(t *testing.T) {
 	if err := vre.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	// hack a controller into vre.
-	vre.controllers[1] = &controller{}
 
 	err = vre.WaitForPos(context.Background(), 1, "BadFlavor/0-1-1084")
 	want = `parse error: unknown GTIDSet flavor "BadFlavor"`
@@ -367,13 +363,6 @@ func TestWaitForPosCancel(t *testing.T) {
 	}}}, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	// hack a controller that can handle Close
-	done := make(chan struct{})
-	close(done)
-	vre.controllers[1] = &controller{
-		cancel: func() {},
-		done:   done,
-	}
 	err := vre.WaitForPos(ctx, 1, "MariaDB/0-1-1084")
 	if err == nil || err != context.Canceled {
 		t.Errorf("WaitForPos: %v, want %v", err, context.Canceled)
