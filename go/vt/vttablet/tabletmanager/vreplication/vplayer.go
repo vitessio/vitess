@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -41,8 +40,8 @@ import (
 )
 
 var (
-	idleTimeout      = 1 * time.Hour
-	dblockRetryDelay = 1 * time.Second
+	idleTimeout      = 1 * time.Second
+	dbLockRetryDelay = 1 * time.Second
 )
 
 type vplayer struct {
@@ -60,18 +59,6 @@ type vplayer struct {
 	// inTransaction is true if we've started a transaction.
 	// It remains true until the next commit or rollback.
 	inTransaction bool
-
-	// mu protects exportPositions.
-	// exportPositions specifies a list of positions.
-	// Anytime the vplayer reaches or exceeds one of these
-	// positions, it will update the position even if it's
-	// an empty transaction. This is used for cases where
-	// a target is stopped, and a request is initiated to
-	// wait for vreplication to reach the source's position.
-	// Since vreplication only updates state on non-empty
-	// transactions, this list is used to force such updates.
-	mu              sync.Mutex
-	exportPositions []mysql.Position
 
 	pplan  *playerPlan
 	tplans map[string]*tablePlan
@@ -204,10 +191,17 @@ func (vp *vplayer) applyEvents(relay *relayLog) error {
 		if err != nil {
 			return err
 		}
-		// Don't do special things in the middle of a transaction.
-		if !vp.inTransaction && vp.mustExport() {
-			if err := vp.updatePos(vp.unsavedGTID.Timestamp); err != nil {
-				return err
+		// This covers two situations:
+		// 1. Fetch was idle for idleTimeout.
+		// 2. We've been receiving empty events for longer than idleTimeout.
+		// In both cases, now > timeLastSaved. If so, any unsaved GTID should be saved.
+		if time.Now().Sub(vp.timeLastSaved) >= idleTimeout && vp.unsavedGTID != nil {
+			// Although unlikely, we should not save if a transaction is still open.
+			// This can happen if a large transaction is split as multiple events.
+			if !vp.inTransaction {
+				if err := vp.updatePos(vp.unsavedGTID.Timestamp); err != nil {
+					return err
+				}
 			}
 		}
 		for i, events := range items {
@@ -219,10 +213,6 @@ func (vp *vplayer) applyEvents(relay *relayLog) error {
 						mustSave = true
 						break
 					}
-					if vp.mustExport() {
-						mustSave = true
-						break
-					}
 					if hasAnotherCommit(items, i, j+1) {
 						continue
 					}
@@ -231,36 +221,6 @@ func (vp *vplayer) applyEvents(relay *relayLog) error {
 					return err
 				}
 			}
-		}
-	}
-}
-
-func (vp *vplayer) mustExport() bool {
-	// This covers two situations:
-	// 1. Fetch was idle for idleTimeout.
-	// 2. We've been receiving empty events for longer than idleTimeout.
-	// In both cases, now > timeLastSaved. If so, any unsaved GTID should be saved
-	// to prevent us from falling behind on tracking the source binlog position.
-	if time.Now().Sub(vp.timeLastSaved) >= idleTimeout && vp.unsavedGTID != nil {
-		return true
-	}
-
-	vp.mu.Lock()
-	defer vp.mu.Unlock()
-
-	mustExport := false
-	for {
-		found := false
-		for i, export := range vp.exportPositions {
-			if vp.pos.AtLeast(export) {
-				mustExport = true
-				found = true
-				vp.exportPositions = append(vp.exportPositions[:i], vp.exportPositions[i+1:]...)
-				break
-			}
-		}
-		if !found {
-			return mustExport
 		}
 	}
 }
@@ -631,20 +591,14 @@ func (vp *vplayer) exec(sql string) error {
 	for err != nil {
 		// 1213: deadlock, 1205: lock wait timeout
 		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == 1213 || sqlErr.Number() == 1205 {
-			log.Infof("retryable error: %v, waiting for %v and retrying", sqlErr, dblockRetryDelay)
-			time.Sleep(dblockRetryDelay)
+			log.Infof("retryable error: %v, waiting for %v and retrying", sqlErr, dbLockRetryDelay)
+			time.Sleep(dbLockRetryDelay)
 			err = vp.dbClient.Retry()
 			continue
 		}
 		return err
 	}
 	return nil
-}
-
-func (vp *vplayer) exportPosition(pos mysql.Position) {
-	vp.mu.Lock()
-	defer vp.mu.Unlock()
-	vp.exportPositions = append(vp.exportPositions, pos)
 }
 
 func encodeValue(sql *sqlparser.TrackedBuffer, value sqltypes.Value) {
