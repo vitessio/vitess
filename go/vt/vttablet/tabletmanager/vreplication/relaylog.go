@@ -34,11 +34,11 @@ type relayLog struct {
 	// mu controls all variables below and is shared by canAccept and hasItems.
 	// Broadcasting must be done while holding mu. This is mainly necessary because both
 	// conditions depend on ctx.Done(), which can change state asynchronously.
-	mu             sync.Mutex
-	curSize        int
-	items          [][]*binlogdatapb.VEvent
-	interruptFetch bool
-	err            error
+	mu       sync.Mutex
+	curSize  int
+	items    [][]*binlogdatapb.VEvent
+	timedout bool
+	err      error
 	// canAccept is true if: curSize<=maxSize, len(items)<maxItems, and ctx is not Done.
 	canAccept sync.Cond
 	// hasItems is true if len(items)>0, ctx is not Done, and interuptFetch is false.
@@ -93,13 +93,13 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
 	}
 	cancelTimer := rl.startTimer()
 	defer cancelTimer()
-	for len(rl.items) == 0 && !rl.interruptFetch {
+	for len(rl.items) == 0 && !rl.timedout {
 		rl.hasItems.Wait()
 		if err := rl.checkDone(); err != nil {
 			return nil, err
 		}
 	}
-	rl.interruptFetch = false
+	rl.timedout = false
 	items := rl.items
 	rl.items = nil
 	rl.curSize = 0
@@ -122,7 +122,10 @@ func (rl *relayLog) startTimer() (cancel func()) {
 	go func() {
 		select {
 		case <-timer.C:
-			rl.InterruptFetch()
+			rl.mu.Lock()
+			defer rl.mu.Unlock()
+			rl.timedout = true
+			rl.hasItems.Broadcast()
 		case <-timerDone:
 		}
 	}()
@@ -130,13 +133,6 @@ func (rl *relayLog) startTimer() (cancel func()) {
 		timer.Stop()
 		close(timerDone)
 	}
-}
-
-func (rl *relayLog) InterruptFetch() {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	rl.interruptFetch = true
-	rl.hasItems.Broadcast()
 }
 
 func eventsSize(events []*binlogdatapb.VEvent) int {

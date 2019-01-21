@@ -17,9 +17,11 @@ limitations under the License.
 package vreplication
 
 import (
+	"flag"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
@@ -29,7 +31,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestFilters(t *testing.T) {
+func TestPlayerFilters(t *testing.T) {
 	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
 
 	execStatements(t, []string{
@@ -186,7 +188,7 @@ func TestFilters(t *testing.T) {
 	}
 }
 
-func TestDDL(t *testing.T) {
+func TestPlayerDDL(t *testing.T) {
 	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
 	execStatements(t, []string{
 		"create table dummy(id int, primary key(id))",
@@ -294,7 +296,7 @@ func TestDDL(t *testing.T) {
 	})
 }
 
-func TestStopPos(t *testing.T) {
+func TestPlayerStopPos(t *testing.T) {
 	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
 
 	execStatements(t, []string{
@@ -388,10 +390,98 @@ func TestStopPos(t *testing.T) {
 	})
 }
 
+func TestPlayerIdleUpdate(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	savedIdleTimeout := idleTimeout
+	defer func() { idleTimeout = savedIdleTimeout }()
+	idleTimeout = 100 * time.Millisecond
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	cancel, _ := startVReplication(t, playerEngine, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	defer cancel()
+
+	execStatements(t, []string{
+		"insert into t1 values(1, 'aaa')",
+	})
+	start := time.Now()
+	expectDBClientQueries(t, []string{
+		"begin",
+		"insert into t1 set id=1, val='aaa'",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+	// The above write will generate a new binlog event, and
+	// that event will loopback into player as an empty event.
+	// But it must not get saved until idleTimeout has passed.
+	// The exact positions are hard to verify because of this
+	// loopback mechanism.
+	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set pos=",
+	})
+	if duration := time.Now().Sub(start); duration < idleTimeout {
+		t.Errorf("duration: %v, must be at least %v", duration, idleTimeout)
+	}
+}
+
+func TestPlayerSplitTransaction(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	flag.Set("vstream_packet_size", "10")
+	defer flag.Set("vstream_packet_size", "10000")
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	cancel, _ := startVReplication(t, playerEngine, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	defer cancel()
+
+	execStatements(t, []string{
+		"begin",
+		"insert into t1 values(1, '123456')",
+		"insert into t1 values(2, '789012')",
+		"commit",
+	})
+	// Because the packet size is 10, this is received as two events,
+	// but still combined as one transaction.
+	expectDBClientQueries(t, []string{
+		"begin",
+		"insert into t1 set id=1, val='123456'",
+		"insert into t1 set id=2, val='789012'",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+}
+
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
 	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
 }
 
