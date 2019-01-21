@@ -50,6 +50,8 @@ import io.vitess.proto.Vtgate.StreamExecuteKeyRangesRequest;
 import io.vitess.proto.Vtgate.StreamExecuteKeyspaceIdsRequest;
 import io.vitess.proto.Vtgate.StreamExecuteRequest;
 import io.vitess.proto.Vtgate.StreamExecuteShardsRequest;
+import io.vitess.proto.Vtgate.UpdateStreamRequest;
+import io.vitess.proto.Vtgate.UpdateStreamResponse;
 
 /**
  * RpcClient defines a set of methods to communicate with VTGates.
@@ -242,4 +244,17 @@ public interface RpcClient extends Closeable {
    */
   ListenableFuture<GetSrvKeyspaceResponse> getSrvKeyspace(
       Context ctx, GetSrvKeyspaceRequest request) throws SQLException;
+
+  /**
+   * Starts streaming in the update stream.
+   *
+   * Stream begins at either the specified (shard, timestamp) or (KeyRange, timestamp) or from
+   * the position specified in a prior EventToken (if the EventToken's shard matches the specified shard).
+   *
+   * <p>See the
+   * <a href="https://github.com/vitessio/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  StreamIterator<UpdateStreamResponse> getUpdateStream(
+      Context ctx, UpdateStreamRequest updateStreamRequest) throws SQLException;
 }

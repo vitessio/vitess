@@ -45,6 +45,7 @@ import org.junit.Test;
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.Row;
 import io.vitess.proto.Query;
+import io.vitess.proto.Query.EventToken;
 import io.vitess.proto.Query.Field;
 import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 import io.vitess.proto.Topodata.KeyRange;
@@ -54,6 +55,8 @@ import io.vitess.proto.Topodata.SrvKeyspace;
 import io.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
 import io.vitess.proto.Topodata.TabletType;
 import io.vitess.proto.Vtgate.SplitQueryResponse;
+import io.vitess.proto.Vtgate.UpdateStreamRequest;
+import io.vitess.proto.Vtgate.UpdateStreamResponse;
 import io.vitess.proto.Vtrpc.CallerID;
 
 /**
@@ -481,6 +484,41 @@ public abstract class RpcClientTest {
         .build();
     SrvKeyspace actual = conn.getSrvKeyspace(ctx, "big");
     Assert.assertEquals(expected, actual);
+  }
+
+  @Test
+  public void testUpdateStream() throws Exception {
+    UpdateStreamRequest updateStreamRequest = UpdateStreamRequest.newBuilder()
+        .setCallerId(CALLER_ID)
+        .setKeyspace(KEYSPACE)
+        .setKeyRange(KEY_RANGES.get(0))
+        .setShard(ECHO_PREFIX + "test-shard")
+        .setTimestamp(System.currentTimeMillis())
+        .setEvent(EventToken.newBuilder()
+            .setPosition("event-position")
+            .setShard(ECHO_PREFIX + "test-shard")
+            .setTimestamp(System.currentTimeMillis())
+            .build())
+        .setTabletType(TABLET_TYPE)
+        .build();
+
+    String expected = "map["
+        + "callerId:" + CALLER_ID_ECHO
+        + " event:timestamp:" + updateStreamRequest.getEvent().getTimestamp()
+        + " shard:\"" + updateStreamRequest.getEvent().getShard() + "\""
+        + " position:\"" + updateStreamRequest.getEvent().getPosition() + "\""
+        + "  keyRange:start:\"\\001\\002\\003\\004\" end:\"\\005\\006\\007\\010\""
+        + "  keyspace:" + updateStreamRequest.getKeyspace()
+        + " shard:" + updateStreamRequest.getShard()
+        + " tabletType:" + TABLET_TYPE_ECHO
+        + " timestamp:" + updateStreamRequest.getTimestamp()
+        + "]";
+
+    StreamIterator<UpdateStreamResponse> updateStream = client.getUpdateStream(ctx, updateStreamRequest);
+    UpdateStreamResponse actual = updateStream.next();
+
+    Assert.assertFalse(updateStream.hasNext());
+    Assert.assertEquals(actual.getEvent().getEventToken().getPosition(), expected);
   }
 
   abstract static class Executable {
