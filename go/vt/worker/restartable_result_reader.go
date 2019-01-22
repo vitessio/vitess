@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -53,6 +55,8 @@ type RestartableResultReader struct {
 	chunk chunk
 	// allowMultipleRetries is true if we are allowed to retry more than once.
 	allowMultipleRetries bool
+	// if we are running inside a transaction, this will hold a non-zero value
+	txID int64
 
 	query string
 
@@ -82,6 +86,15 @@ func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, tp t
 		allowMultipleRetries: allowMultipleRetries,
 	}
 
+	err := tryToConnect(r)
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+func tryToConnect(r *RestartableResultReader) error {
+
 	// If the initial connection fails we retry once.
 	// Note: The first retry will be the second attempt.
 	attempt := 0
@@ -97,15 +110,35 @@ func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, tp t
 			err = fmt.Errorf("tablet=%v: %v", topoproto.TabletAliasString(r.tablet.Alias), err)
 			goto retry
 		}
-		return r, nil
+		return nil
 
 	retry:
 		if !retryable || attempt > 1 {
-			return nil, fmt.Errorf("failed to initialize tablet connection: retryable %v, %v", retryable, err)
+			return fmt.Errorf("failed to initialize tablet connection: retryable %v, %v", retryable, err)
 		}
 		statsRetryCount.Add(1)
-		logger.Infof("retrying after error: %v", err)
+		glog.Infof("retrying after error: %v", err)
 	}
+
+}
+
+// NewTransactionalRestartableResultReader does the same thing that NewRestartableResultReader does,
+// but works inside of a single transaction
+func NewTransactionalRestartableResultReader(ctx context.Context, logger logutil.Logger, tp tabletProvider, td *tabletmanagerdatapb.TableDefinition, chunk chunk, allowMultipleRetries bool, txID int64) (*RestartableResultReader, error) {
+	r := &RestartableResultReader{
+		ctx:                  ctx,
+		logger:               logger,
+		tp:                   tp,
+		td:                   td,
+		chunk:                chunk,
+		allowMultipleRetries: allowMultipleRetries,
+		txID:                 txID,
+	}
+	err := tryToConnect(r)
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 // getTablet (re)sets the tablet which is used for the streaming query.
@@ -145,11 +178,21 @@ func (r *RestartableResultReader) getTablet() (bool, error) {
 func (r *RestartableResultReader) startStream() (bool, error) {
 	// Start the streaming query.
 	r.generateQuery()
-	stream := queryservice.ExecuteWithStreamer(r.ctx, r.conn, &querypb.Target{
-		Keyspace:   r.tablet.Keyspace,
-		Shard:      r.tablet.Shard,
-		TabletType: r.tablet.Type,
-	}, r.query, make(map[string]*querypb.BindVariable), nil)
+	var stream sqltypes.ResultStream
+
+	if r.txID == 0 {
+		stream = queryservice.ExecuteWithStreamer(r.ctx, r.conn, &querypb.Target{
+			Keyspace:   r.tablet.Keyspace,
+			Shard:      r.tablet.Shard,
+			TabletType: r.tablet.Type,
+		}, r.query, make(map[string]*querypb.BindVariable), nil)
+	} else {
+		stream = queryservice.ExecuteWithTransactionalStreamer(r.ctx, r.conn, &querypb.Target{
+			Keyspace:   r.tablet.Keyspace,
+			Shard:      r.tablet.Shard,
+			TabletType: r.tablet.Type,
+		}, r.query, make(map[string]*querypb.BindVariable), r.txID, nil)
+	}
 
 	// Read the fields information.
 	cols, err := stream.Recv()
