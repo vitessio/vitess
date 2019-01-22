@@ -46,11 +46,12 @@ const (
 	// StreamExecute response. As of 06/2015, the default for it was 32 kB.
 	// Note that higher values for this flag --destination_pack_count will
 	// increase memory consumption in vtworker, vttablet and mysql.
-	defaultDestinationPackCount    = 10
-	defaultDestinationWriterCount  = 20
-	defaultMinHealthyRdonlyTablets = 2
-	defaultDestTabletType          = "RDONLY"
-	defaultParallelDiffsCount      = 8
-	defaultMaxTPS                  = throttler.MaxRateModuleDisabled
-	defaultMaxReplicationLag       = throttler.ReplicationLagModuleDisabled
+	defaultDestinationPackCount   = 10
+	defaultDestinationWriterCount = 20
+	defaultMinHealthyTablets      = 2
+	defaultDestTabletType         = "RDONLY"
+	defaultParallelDiffsCount     = 8
+	defaultMaxTPS                 = throttler.MaxRateModuleDisabled
+	defaultMaxReplicationLag      = throttler.ReplicationLagModuleDisabled
+	defaultUseConsistentSnapshot  = false
 )
