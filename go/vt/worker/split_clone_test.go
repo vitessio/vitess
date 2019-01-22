@@ -522,7 +522,7 @@ func TestSplitCloneV2_Offline(t *testing.T) {
 
 	// Run the vtworker command.
 	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("%+v", err)
 	}
 }
 
