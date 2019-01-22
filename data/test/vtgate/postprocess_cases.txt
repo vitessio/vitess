@@ -398,6 +398,123 @@
   }
 }
 
+# ORDER BY non-key column for join
+"select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a"
+{
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by a asc",
+      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [1]
+    },
+    "Right": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col3 from music where music.id = :user_id",
+      "FieldQuery": "select music.col3 from music where 1 != 1",
+      "Vindex": "music_user_map",
+      "Values": [":user_id"]
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ],
+    "Vars": {
+      "user_id": 2
+    }
+  }
+}
+
+# ORDER BY non-key column for implicit join
+"select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a"
+{
+  "Original": "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by a asc",
+      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [1]
+    },
+    "Right": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col3 from music where music.id = :user_id",
+      "FieldQuery": "select music.col3 from music where 1 != 1",
+      "Vindex": "music_user_map",
+      "Values": [":user_id"]
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ],
+    "Vars": {
+      "user_id": 2
+    }
+  }
+}
+
+# ORDER BY non-key column from second table for implicit join FAILS!!
+"select user.col1 a, user.col2 b, music.col3 c from user, music where user.id = music.id and user.id = 1 order by c"
+{
+  "Original": "select user.col1 a, user.col2 b, music.col3 c from user, music where user.id = music.id and user.id = 1 order by c",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 a, user.col2 b, user.id from user where user.id = 1",
+      "FieldQuery": "select user.col1 a, user.col2 b, user.id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [1]
+    },
+    "Right": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col3 c from music where music.id = :user_id order by c",
+      "FieldQuery": "select music.col3 c from music where 1 != 1",
+      "Vindex": "music_user_map",
+      "Values": [":user_id"]
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ],
+    "Vars": {
+      "user_id": 2
+    }
+  }
+}
+
 # ORDER BY NULL after pull-out subquery
 "select col from user where col in (select col2 from user) order by null"
 {
