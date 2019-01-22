@@ -21,16 +21,29 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 )
 
+// retryableClient is a wrapper on binlogplayer.DBClient.
+// It allows us to retry a failed transactions on lock errors.
 type retryableClient struct {
 	binlogplayer.DBClient
 	inTransaction bool
 	queries       []string
 }
 
+func (rt *retryableClient) Connect() error {
+	if err := rt.Connect(); err != nil {
+		return err
+	}
+	if _, err := rt.DBClient.ExecuteFetch("set @@session.time_zone = '+00:00'", 10000); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (rt *retryableClient) Begin() error {
 	if err := rt.DBClient.Begin(); err != nil {
 		return err
 	}
+	rt.queries = append(rt.queries, "begin")
 	rt.inTransaction = true
 	return nil
 }
@@ -49,7 +62,7 @@ func (rt *retryableClient) Rollback() error {
 		return err
 	}
 	rt.inTransaction = false
-	rt.queries = nil
+	// Don't reset queries to allow for vplayer to retry.
 	return nil
 }
 
@@ -63,17 +76,13 @@ func (rt *retryableClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Re
 }
 
 func (rt *retryableClient) Retry() error {
-	if !rt.inTransaction {
-		_, err := rt.DBClient.ExecuteFetch(rt.queries[0], 10000)
-		return err
-	}
-	if err := rt.DBClient.Rollback(); err != nil {
-		return err
-	}
-	if err := rt.DBClient.Begin(); err != nil {
-		return err
-	}
 	for _, q := range rt.queries {
+		if q == "begin" {
+			if err := rt.Begin(); err != nil {
+				return err
+			}
+			continue
+		}
 		if _, err := rt.DBClient.ExecuteFetch(q, 10000); err != nil {
 			return err
 		}

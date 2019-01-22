@@ -72,7 +72,7 @@ func TestPlayerFilters(t *testing.T) {
 			Match: "/yes",
 		}},
 	}
-	cancel, _ := startVReplication(t, playerEngine, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
 	defer cancel()
 
 	testcases := []struct {
@@ -206,7 +206,7 @@ func TestPlayerDDL(t *testing.T) {
 		}},
 	}
 
-	cancel, _ := startVReplication(t, playerEngine, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
 	// Issue a dummy change to ensure vreplication is initialized. Otherwise there
 	// is a race between the DDLs and the schema loader of vstreamer.
 	// Root cause seems to be with MySQL where t1 shows up in information_schema before
@@ -224,7 +224,7 @@ func TestPlayerDDL(t *testing.T) {
 	expectDBClientQueries(t, []string{})
 	cancel()
 
-	cancel, id := startVReplication(t, playerEngine, filter, binlogdatapb.OnDDLAction_STOP, "")
+	cancel, id := startVReplication(t, filter, binlogdatapb.OnDDLAction_STOP, "")
 	execStatements(t, []string{"create table t1(id int, primary key(id))"})
 	pos1 := masterPosition(t)
 	execStatements(t, []string{"drop table t1"})
@@ -252,7 +252,7 @@ func TestPlayerDDL(t *testing.T) {
 	cancel()
 
 	execStatements(t, []string{fmt.Sprintf("create table %s.t2(id int, primary key(id))", vrepldb)})
-	cancel, _ = startVReplication(t, playerEngine, filter, binlogdatapb.OnDDLAction_EXEC, "")
+	cancel, _ = startVReplication(t, filter, binlogdatapb.OnDDLAction_EXEC, "")
 	execStatements(t, []string{"create table t1(id int, primary key(id))"})
 	expectDBClientQueries(t, []string{
 		"create table t1(id int, primary key(id))",
@@ -275,7 +275,7 @@ func TestPlayerDDL(t *testing.T) {
 	})
 
 	execStatements(t, []string{fmt.Sprintf("create table %s.t2(id int, primary key(id))", vrepldb)})
-	cancel, _ = startVReplication(t, playerEngine, filter, binlogdatapb.OnDDLAction_EXEC_IGNORE, "")
+	cancel, _ = startVReplication(t, filter, binlogdatapb.OnDDLAction_EXEC_IGNORE, "")
 	execStatements(t, []string{"create table t1(id int, primary key(id))"})
 	expectDBClientQueries(t, []string{
 		"create table t1(id int, primary key(id))",
@@ -412,7 +412,7 @@ func TestPlayerIdleUpdate(t *testing.T) {
 			Match: "/.*",
 		}},
 	}
-	cancel, _ := startVReplication(t, playerEngine, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
 	defer cancel()
 
 	execStatements(t, []string{
@@ -458,7 +458,7 @@ func TestPlayerSplitTransaction(t *testing.T) {
 			Match: "/.*",
 		}},
 	}
-	cancel, _ := startVReplication(t, playerEngine, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
 	defer cancel()
 
 	execStatements(t, []string{
@@ -478,6 +478,436 @@ func TestPlayerSplitTransaction(t *testing.T) {
 	})
 }
 
+func TestPlayerLockErrors(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	defer cancel()
+
+	execStatements(t, []string{
+		"begin",
+		"insert into t1 values(1, 'aaa')",
+		"insert into t1 values(2, 'bbb')",
+		"commit",
+	})
+	expectDBClientQueries(t, []string{
+		"begin",
+		"insert into t1 set id=1, val='aaa'",
+		"insert into t1 set id=2, val='bbb'",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+
+	vconn := &realDBClient{nolog: true}
+	if err := vconn.Connect(); err != nil {
+		t.Error(err)
+	}
+	defer vconn.Close()
+
+	// Start a transaction and lock the second row.
+	if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
+		t.Error(err)
+	}
+	if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=2", 1); err != nil {
+		t.Error(err)
+	}
+
+	execStatements(t, []string{
+		"begin",
+		"update t1 set val='ccc' where id=1",
+		"update t1 set val='ccc' where id=2",
+		"commit",
+	})
+	// The innodb lock wait timeout is set to 1s.
+	expectDBClientQueries(t, []string{
+		"begin",
+		"update t1 set id=1, val='ccc' where id=1",
+		"update t1 set id=2, val='ccc' where id=2",
+		"rollback",
+	})
+
+	// Release the lock, and watch the retry go through.
+	_, _ = vconn.ExecuteFetch("rollback", 1)
+	expectDBClientQueries(t, []string{
+		"begin",
+		"update t1 set id=1, val='ccc' where id=1",
+		"update t1 set id=2, val='ccc' where id=2",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+}
+
+func TestPlayerCancelOnLock(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	defer cancel()
+
+	execStatements(t, []string{
+		"begin",
+		"insert into t1 values(1, 'aaa')",
+		"commit",
+	})
+	expectDBClientQueries(t, []string{
+		"begin",
+		"insert into t1 set id=1, val='aaa'",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+
+	vconn := &realDBClient{nolog: true}
+	if err := vconn.Connect(); err != nil {
+		t.Error(err)
+	}
+	defer vconn.Close()
+
+	// Start a transaction and lock the row.
+	if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
+		t.Error(err)
+	}
+	if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1); err != nil {
+		t.Error(err)
+	}
+
+	execStatements(t, []string{
+		"begin",
+		"update t1 set val='ccc' where id=1",
+		"commit",
+	})
+	// The innodb lock wait timeout is set to 1s.
+	expectDBClientQueries(t, []string{
+		"begin",
+		"update t1 set id=1, val='ccc' where id=1",
+		"rollback",
+	})
+
+	// VReplication should not get stuck if you cancel now.
+	done := make(chan bool)
+	go func() {
+		cancel()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Error("cancel is hung")
+	}
+}
+
+func TestPlayerBatching(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	defer cancel()
+
+	execStatements(t, []string{
+		"insert into t1 values(1, 'aaa')",
+	})
+	expectDBClientQueries(t, []string{
+		"begin",
+		"insert into t1 set id=1, val='aaa'",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+
+	vconn := &realDBClient{nolog: true}
+	if err := vconn.Connect(); err != nil {
+		t.Error(err)
+	}
+	defer vconn.Close()
+
+	// Start a transaction and lock the row.
+	if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
+		t.Error(err)
+	}
+	if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1); err != nil {
+		t.Error(err)
+	}
+
+	// create one transaction
+	execStatements(t, []string{
+		"update t1 set val='ccc' where id=1",
+	})
+	// Wait for the begin. The update will be blocked.
+	expectDBClientQueries(t, []string{
+		"begin",
+	})
+
+	// Create two more transactions. They will go and wait in the relayLog.
+	execStatements(t, []string{
+		"insert into t1 values(2, 'aaa')",
+		"insert into t1 values(3, 'aaa')",
+	})
+
+	// Release the lock.
+	_, _ = vconn.ExecuteFetch("rollback", 1)
+	// First transaction will complete. The other two
+	// transactions must be batched into one
+	expectDBClientQueries(t, []string{
+		"update t1 set id=1, val='ccc' where id=1",
+		"/update _vt.vreplication set pos=",
+		"commit",
+		"begin",
+		"insert into t1 set id=2, val='aaa'",
+		"insert into t1 set id=3, val='aaa'",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+}
+
+func TestPlayerRelayLogMaxSize(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	for i := 0; i < 2; i++ {
+		// First iteration checks max size, second checks max items
+		func() {
+			switch i {
+			case 0:
+				savedSize := relayLogMaxSize
+				defer func() { relayLogMaxSize = savedSize }()
+				relayLogMaxSize = 10
+			case 1:
+				savedLen := relayLogMaxItems
+				defer func() { relayLogMaxItems = savedLen }()
+				relayLogMaxItems = 2
+			}
+
+			execStatements(t, []string{
+				"create table t1(id int, val varbinary(128), primary key(id))",
+				fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+			})
+			defer execStatements(t, []string{
+				"drop table t1",
+				fmt.Sprintf("drop table %s.t1", vrepldb),
+			})
+			env.SchemaEngine.Reload(context.Background())
+
+			filter := &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match: "/.*",
+				}},
+			}
+			cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+			defer cancel()
+
+			execStatements(t, []string{
+				"insert into t1 values(1, '123456')",
+			})
+			expectDBClientQueries(t, []string{
+				"begin",
+				"insert into t1 set id=1, val='123456'",
+				"/update _vt.vreplication set pos=",
+				"commit",
+			})
+
+			vconn := &realDBClient{nolog: true}
+			if err := vconn.Connect(); err != nil {
+				t.Error(err)
+			}
+			defer vconn.Close()
+
+			// Start a transaction and lock the row.
+			if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
+				t.Error(err)
+			}
+			if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1); err != nil {
+				t.Error(err)
+			}
+
+			// create one transaction
+			execStatements(t, []string{
+				"update t1 set val='ccc' where id=1",
+			})
+			// Wait for the begin. The update will be blocked.
+			expectDBClientQueries(t, []string{
+				"begin",
+			})
+
+			// Create two more transactions. They will go and wait in the relayLog.
+			execStatements(t, []string{
+				"insert into t1 values(2, '789012')",
+				"insert into t1 values(3, '345678')",
+				"insert into t1 values(4, '901234')",
+			})
+
+			// Release the lock.
+			_, _ = vconn.ExecuteFetch("rollback", 1)
+			// First transaction will complete. The other two
+			// transactions must be batched into one. The last transaction
+			// will wait to be sent to the relay until the player fetches
+			// them.
+			expectDBClientQueries(t, []string{
+				"update t1 set id=1, val='ccc' where id=1",
+				"/update _vt.vreplication set pos=",
+				"commit",
+				"begin",
+				"insert into t1 set id=2, val='789012'",
+				"insert into t1 set id=3, val='345678'",
+				"/update _vt.vreplication set pos=",
+				"commit",
+				"begin",
+				"insert into t1 set id=4, val='901234'",
+				"/update _vt.vreplication set pos=",
+				"commit",
+			})
+		}()
+	}
+}
+
+func TestRestartOnVStreamEnd(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	savedDelay := *retryDelay
+	defer func() { *retryDelay = savedDelay }()
+	*retryDelay = 1 * time.Millisecond
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	defer cancel()
+
+	execStatements(t, []string{
+		"insert into t1 values(1, 'aaa')",
+	})
+	expectDBClientQueries(t, []string{
+		"begin",
+		"insert into t1 set id=1, val='aaa'",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+
+	streamerEngine.Close()
+	expectDBClientQueries(t, []string{
+		"/update.*'Error'.*vstream ended",
+	})
+	if err := streamerEngine.Open(env.KeyspaceName, env.ShardName); err != nil {
+		t.Fatal(err)
+	}
+
+	execStatements(t, []string{
+		"insert into t1 values(2, 'aaa')",
+	})
+	expectDBClientQueries(t, []string{
+		"/update.*'Running'",
+		"begin",
+		"insert into t1 set id=2, val='aaa'",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+}
+
+func TestTimestamp(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	execStatements(t, []string{
+		"create table t1(id int, ts timestamp, dt datetime)",
+		fmt.Sprintf("create table %s.t1(id int, ts timestamp, dt datetime)", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	defer cancel()
+
+	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select now()")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := qr.Rows[0][0].ToString()
+	t.Logf("want: %s", want)
+
+	execStatements(t, []string{
+		fmt.Sprintf("insert into t1 values(1, '%s', '%s')", want, want),
+	})
+	expectDBClientQueries(t, []string{
+		"begin",
+		// The insert value for ts will be in UTC.
+		// We'll check the row instead.
+		"/insert into t1 set id=",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+
+	qr, err = env.Mysqld.FetchSuperQuery(context.Background(), "select ts, dt from t1 where id=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The value for dt should come back in the local timezone.
+	if got := qr.Rows[0][0].ToString(); got != want {
+		t.Errorf("ts: %s, want %s", got, want)
+	}
+	// The value for dt should be as is.
+	if got := qr.Rows[0][1].ToString(); got != want {
+		t.Errorf("ts: %s, want %s", got, want)
+	}
+}
+
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
 	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
@@ -485,7 +915,7 @@ func execStatements(t *testing.T, queries []string) {
 	}
 }
 
-func startVReplication(t *testing.T, pe *Engine, filter *binlogdatapb.Filter, onddl binlogdatapb.OnDDLAction, pos string) (cancelFunc func(), id int) {
+func startVReplication(t *testing.T, filter *binlogdatapb.Filter, onddl binlogdatapb.OnDDLAction, pos string) (cancelFunc func(), id int) {
 	t.Helper()
 
 	bls := &binlogdatapb.BinlogSource{
@@ -498,7 +928,7 @@ func startVReplication(t *testing.T, pe *Engine, filter *binlogdatapb.Filter, on
 		pos = masterPosition(t)
 	}
 	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0)
-	qr, err := pe.Exec(query)
+	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -511,7 +941,7 @@ func startVReplication(t *testing.T, pe *Engine, filter *binlogdatapb.Filter, on
 	return func() {
 		t.Helper()
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := pe.Exec(query); err != nil {
+		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
 		expectDBClientQueries(t, []string{

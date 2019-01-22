@@ -17,7 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -42,6 +41,8 @@ import (
 var (
 	idleTimeout      = 1 * time.Second
 	dbLockRetryDelay = 1 * time.Second
+	relayLogMaxSize  = 10000
+	relayLogMaxItems = 1000
 )
 
 type vplayer struct {
@@ -50,17 +51,25 @@ type vplayer struct {
 	sourceTablet *topodatapb.Tablet
 	stats        *binlogplayer.Stats
 	dbClient     *retryableClient
-	mysqld       mysqlctl.MysqlDaemon
+	// mysqld is used to fetch the local schema.
+	mysqld mysqlctl.MysqlDaemon
 
-	pos           mysql.Position
-	unsavedGTID   *binlogdatapb.VEvent
+	pos mysql.Position
+	// unsavedGTID when we receive a GTID event and reset
+	// if it gets saved. If Fetch returns on idleTimeout,
+	// we save the last unsavedGTID.
+	unsavedGTID *binlogdatapb.VEvent
+	// timeLastSaved is set every time a GTID is saved.
 	timeLastSaved time.Time
 	stopPos       mysql.Position
 	// inTransaction is true if we've started a transaction.
 	// It remains true until the next commit or rollback.
 	inTransaction bool
 
-	pplan  *playerPlan
+	// pplan is built based on the source Filter at the beginning.
+	pplan *playerPlan
+	// tplans[table] is built for each table based on pplan and schema info
+	// about the table.
 	tplans map[string]*tablePlan
 }
 
@@ -130,7 +139,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	relay := newRelayLog(ctx, 10, 10)
+	relay := newRelayLog(ctx, relayLogMaxItems, relayLogMaxSize)
 
 	target := &querypb.Target{
 		Keyspace:   vp.sourceTablet.Keyspace,
@@ -147,7 +156,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 
 	applyErr := make(chan error, 1)
 	go func() {
-		applyErr <- vp.applyEvents(relay)
+		applyErr <- vp.applyEvents(ctx, relay)
 	}()
 
 	select {
@@ -185,7 +194,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 	}
 }
 
-func (vp *vplayer) applyEvents(relay *relayLog) error {
+func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	for {
 		items, err := relay.Fetch()
 		if err != nil {
@@ -217,7 +226,7 @@ func (vp *vplayer) applyEvents(relay *relayLog) error {
 						continue
 					}
 				}
-				if err := vp.applyEvent(event, mustSave); err != nil {
+				if err := vp.applyEvent(ctx, event, mustSave); err != nil {
 					return err
 				}
 			}
@@ -243,7 +252,7 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 	return false
 }
 
-func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent, mustSave bool) error {
+func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		pos, err := mysql.DecodePosition(event.Gtid)
@@ -300,7 +309,7 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent, mustSave bool) error {
 		if err := vp.begin(); err != nil {
 			return err
 		}
-		if err := vp.applyRowEvent(event.RowEvent); err != nil {
+		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
 			return err
 		}
 	case binlogdatapb.VEventType_DDL:
@@ -325,14 +334,14 @@ func (vp *vplayer) applyEvent(event *binlogdatapb.VEvent, mustSave bool) error {
 			}
 			return io.EOF
 		case binlogdatapb.OnDDLAction_EXEC:
-			if err := vp.exec(event.Ddl); err != nil {
+			if err := vp.exec(ctx, event.Ddl); err != nil {
 				return err
 			}
 			if err := vp.updatePos(event.Timestamp); err != nil {
 				return err
 			}
 		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
-			if err := vp.exec(event.Ddl); err != nil {
+			if err := vp.exec(ctx, event.Ddl); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Ddl)
 			}
 			if err := vp.updatePos(event.Timestamp); err != nil {
@@ -425,20 +434,20 @@ func (vp *vplayer) updatePlan(fieldEvent *binlogdatapb.FieldEvent) error {
 	return nil
 }
 
-func (vp *vplayer) applyRowEvent(rowEvent *binlogdatapb.RowEvent) error {
+func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
 	tplan := vp.tplans[rowEvent.TableName]
 	if tplan == nil {
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
 	for _, change := range rowEvent.RowChanges {
-		if err := vp.applyRowChange(tplan, change); err != nil {
+		if err := vp.applyRowChange(ctx, tplan, change); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (vp *vplayer) applyRowChange(tplan *tablePlan, rowChange *binlogdatapb.RowChange) error {
+func (vp *vplayer) applyRowChange(ctx context.Context, tplan *tablePlan, rowChange *binlogdatapb.RowChange) error {
 	// MakeRowTrusted is needed here because because Proto3ToResult is not convenient.
 	var before, after []sqltypes.Value
 	if rowChange.Before != nil {
@@ -461,7 +470,7 @@ func (vp *vplayer) applyRowChange(tplan *tablePlan, rowChange *binlogdatapb.RowC
 	if query == "" {
 		return nil
 	}
-	return vp.exec(query)
+	return vp.exec(ctx, query)
 }
 
 func (vp *vplayer) generateInsert(tplan *tablePlan, after []sqltypes.Value) string {
@@ -585,14 +594,23 @@ func (vp *vplayer) updatePos(ts int64) error {
 	return nil
 }
 
-func (vp *vplayer) exec(sql string) error {
+func (vp *vplayer) exec(ctx context.Context, sql string) error {
 	vp.stats.Timings.Record("query", time.Now())
 	_, err := vp.dbClient.ExecuteFetch(sql, 0)
 	for err != nil {
 		// 1213: deadlock, 1205: lock wait timeout
 		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == 1213 || sqlErr.Number() == 1205 {
 			log.Infof("retryable error: %v, waiting for %v and retrying", sqlErr, dbLockRetryDelay)
+			if err := vp.dbClient.Rollback(); err != nil {
+				return err
+			}
 			time.Sleep(dbLockRetryDelay)
+			// Check context here. Otherwise this can become an infinite loop.
+			select {
+			case <-ctx.Done():
+				return io.EOF
+			default:
+			}
 			err = vp.dbClient.Retry()
 			continue
 		}
@@ -602,14 +620,10 @@ func (vp *vplayer) exec(sql string) error {
 }
 
 func encodeValue(sql *sqlparser.TrackedBuffer, value sqltypes.Value) {
-	if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.ToBytes(), mysql.ZeroTimestamp) {
-		// Values in the binary log are UTC. Let's convert them
-		// to whatever timezone the connection is using,
-		// so MySQL properly converts them back to UTC.
-		sql.WriteString("convert_tz(")
-		value.EncodeSQL(sql)
-		sql.WriteString(", '+00:00', @@session.time_zone)")
-	} else {
-		value.EncodeSQL(sql)
-	}
+	// This is currently a separate function because special handling
+	// may be needed for certain types.
+	// Previously, this function used to convert timestamp to the session
+	// time zone, but we now set the session timezone to UTC. So, the timestamp
+	// value we receive as UTC can be sent as is.
+	value.EncodeSQL(sql)
 }
