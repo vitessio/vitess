@@ -625,5 +625,6 @@ func encodeValue(sql *sqlparser.TrackedBuffer, value sqltypes.Value) {
 	// Previously, this function used to convert timestamp to the session
 	// time zone, but we now set the session timezone to UTC. So, the timestamp
 	// value we receive as UTC can be sent as is.
+	// TODO(sougou): handle BIT data type here?
 	value.EncodeSQL(sql)
 }

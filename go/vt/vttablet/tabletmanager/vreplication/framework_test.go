@@ -327,7 +327,7 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 		return nil, nil
 	}
 	qr, err := dbc.conn.ExecuteFetch(query, 10000, true)
-	if !strings.HasPrefix(query, "select") && !dbc.nolog {
+	if !strings.HasPrefix(query, "select") && !strings.HasPrefix(query, "set") && !dbc.nolog {
 		globalDBQueries <- query
 	}
 	return qr, err
