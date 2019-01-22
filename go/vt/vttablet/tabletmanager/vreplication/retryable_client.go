@@ -29,16 +29,6 @@ type retryableClient struct {
 	queries       []string
 }
 
-func (rt *retryableClient) Connect() error {
-	if err := rt.Connect(); err != nil {
-		return err
-	}
-	if _, err := rt.DBClient.ExecuteFetch("set @@session.time_zone = '+00:00'", 10000); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (rt *retryableClient) Begin() error {
 	if err := rt.DBClient.Begin(); err != nil {
 		return err

@@ -642,7 +642,7 @@ func TestPlayerBatching(t *testing.T) {
 			Match: "/.*",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_EXEC, "")
 	defer cancel()
 
 	execStatements(t, []string{
@@ -682,12 +682,15 @@ func TestPlayerBatching(t *testing.T) {
 	execStatements(t, []string{
 		"insert into t1 values(2, 'aaa')",
 		"insert into t1 values(3, 'aaa')",
+		"create table t2(id int, val varbinary(128), primary key(id))",
+		"drop table t2",
 	})
 
 	// Release the lock.
 	_, _ = vconn.ExecuteFetch("rollback", 1)
 	// First transaction will complete. The other two
-	// transactions must be batched into one
+	// transactions must be batched into one. But the
+	// DDLs should be on their own.
 	expectDBClientQueries(t, []string{
 		"update t1 set id=1, val='ccc' where id=1",
 		"/update _vt.vreplication set pos=",
@@ -697,6 +700,10 @@ func TestPlayerBatching(t *testing.T) {
 		"insert into t1 set id=3, val='aaa'",
 		"/update _vt.vreplication set pos=",
 		"commit",
+		"create table t2(id int, val varbinary(128), primary key(id))",
+		"/update _vt.vreplication set pos=",
+		"/", // drop table is rewritten by mysql. Don't check.
+		"/update _vt.vreplication set pos=",
 	})
 }
 
@@ -894,7 +901,7 @@ func TestTimestamp(t *testing.T) {
 		"commit",
 	})
 
-	qr, err = env.Mysqld.FetchSuperQuery(context.Background(), "select ts, dt from t1 where id=1")
+	qr, err = env.Mysqld.FetchSuperQuery(context.Background(), fmt.Sprintf("select ts, dt from %s.t1 where id=1", vrepldb))
 	if err != nil {
 		t.Fatal(err)
 	}
