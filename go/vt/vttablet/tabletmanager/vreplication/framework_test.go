@@ -95,6 +95,11 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "set @@global.innodb_lock_wait_timeout=1"); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+
 		playerEngine = NewEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory)
 		if err := playerEngine.Open(context.Background()); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
@@ -278,7 +283,8 @@ func realDBClientFactory() binlogplayer.DBClient {
 }
 
 type realDBClient struct {
-	conn *mysql.Conn
+	conn  *mysql.Conn
+	nolog bool
 }
 
 func (dbc *realDBClient) DBName() string {
@@ -297,20 +303,17 @@ func (dbc *realDBClient) Connect() error {
 }
 
 func (dbc *realDBClient) Begin() error {
-	_, err := dbc.conn.ExecuteFetch("begin", 10000, true)
-	globalDBQueries <- "begin"
+	_, err := dbc.ExecuteFetch("begin", 10000)
 	return err
 }
 
 func (dbc *realDBClient) Commit() error {
-	_, err := dbc.conn.ExecuteFetch("commit", 10000, true)
-	globalDBQueries <- "commit"
+	_, err := dbc.ExecuteFetch("commit", 10000)
 	return err
 }
 
 func (dbc *realDBClient) Rollback() error {
-	_, err := dbc.conn.ExecuteFetch("rollback", 10000, true)
-	globalDBQueries <- "rollback"
+	_, err := dbc.ExecuteFetch("rollback", 10000)
 	return err
 }
 
@@ -324,7 +327,7 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 		return nil, nil
 	}
 	qr, err := dbc.conn.ExecuteFetch(query, 10000, true)
-	if !strings.HasPrefix(query, "select") {
+	if !strings.HasPrefix(query, "select") && !dbc.nolog {
 		globalDBQueries <- query
 	}
 	return qr, err
