@@ -62,9 +62,6 @@ type vplayer struct {
 	// timeLastSaved is set every time a GTID is saved.
 	timeLastSaved time.Time
 	stopPos       mysql.Position
-	// inTransaction is true if we've started a transaction.
-	// It remains true until the next commit or rollback.
-	inTransaction bool
 
 	// pplan is built based on the source Filter at the beginning.
 	pplan *playerPlan
@@ -207,7 +204,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		if time.Now().Sub(vp.timeLastSaved) >= idleTimeout && vp.unsavedGTID != nil {
 			// Although unlikely, we should not save if a transaction is still open.
 			// This can happen if a large transaction is split as multiple events.
-			if !vp.inTransaction {
+			if !vp.dbClient.InTransaction {
 				if err := vp.updatePos(vp.unsavedGTID.Timestamp); err != nil {
 					return err
 				}
@@ -275,12 +272,12 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		// No-op: begin is called as needed.
 	case binlogdatapb.VEventType_COMMIT:
 		if mustSave {
-			if err := vp.begin(); err != nil {
+			if err := vp.dbClient.Begin(); err != nil {
 				return err
 			}
 		}
 
-		if !vp.inTransaction {
+		if !vp.dbClient.InTransaction {
 			return nil
 		}
 		if err := vp.updatePos(event.Timestamp); err != nil {
@@ -292,35 +289,35 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return err
 			}
 		}
-		if err := vp.commit(); err != nil {
+		if err := vp.dbClient.Commit(); err != nil {
 			return err
 		}
 		if posReached {
 			return io.EOF
 		}
 	case binlogdatapb.VEventType_FIELD:
-		if err := vp.begin(); err != nil {
+		if err := vp.dbClient.Begin(); err != nil {
 			return err
 		}
 		if err := vp.updatePlan(event.FieldEvent); err != nil {
 			return err
 		}
 	case binlogdatapb.VEventType_ROW:
-		if err := vp.begin(); err != nil {
+		if err := vp.dbClient.Begin(); err != nil {
 			return err
 		}
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
 			return err
 		}
 	case binlogdatapb.VEventType_DDL:
-		if vp.inTransaction {
+		if vp.dbClient.InTransaction {
 			return fmt.Errorf("unexpected state: DDL encountered in the middle of a transaction: %v", event.Ddl)
 		}
 		switch vp.source.OnDdl {
 		case binlogdatapb.OnDDLAction_IGNORE:
 			// no-op
 		case binlogdatapb.OnDDLAction_STOP:
-			if err := vp.begin(); err != nil {
+			if err := vp.dbClient.Begin(); err != nil {
 				return err
 			}
 			if err := vp.updatePos(event.Timestamp); err != nil {
@@ -329,7 +326,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at DDL %s", event.Ddl)); err != nil {
 				return err
 			}
-			if err := vp.commit(); err != nil {
+			if err := vp.dbClient.Commit(); err != nil {
 				return err
 			}
 			return io.EOF
@@ -350,33 +347,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 	}
 	return nil
-}
-
-func (vp *vplayer) begin() error {
-	if vp.inTransaction {
-		return nil
-	}
-	if err := vp.dbClient.Begin(); err != nil {
-		return err
-	}
-	vp.inTransaction = true
-	return nil
-}
-
-func (vp *vplayer) commit() error {
-	if !vp.inTransaction {
-		return nil
-	}
-	if err := vp.dbClient.Commit(); err != nil {
-		return err
-	}
-	vp.inTransaction = false
-	return nil
-}
-
-func (vp *vplayer) rollback() {
-	vp.inTransaction = false
-	_ = vp.dbClient.Rollback()
 }
 
 func (vp *vplayer) setState(state, message string) error {
@@ -413,6 +383,13 @@ func (vp *vplayer) updatePlan(fieldEvent *binlogdatapb.FieldEvent) error {
 	pkcols, err := vp.mysqld.GetPrimaryKeyColumns(vp.dbClient.DBName(), tplan.name)
 	if err != nil {
 		return fmt.Errorf("error fetching pk columns for %s: %v", tplan.name, err)
+	}
+	if len(pkcols) == 0 {
+		// If the table doesn't have a PK, then we treat all columns as PK.
+		pkcols, err = vp.mysqld.GetColumns(vp.dbClient.DBName(), tplan.name)
+		if err != nil {
+			return fmt.Errorf("error fetching pk columns for %s: %v", tplan.name, err)
+		}
 	}
 	for _, pkcol := range pkcols {
 		found := false
@@ -577,7 +554,7 @@ func (vp *vplayer) writeWhereValues(sql *sqlparser.TrackedBuffer, tplan *tablePl
 	for _, cExpr := range tplan.pkCols {
 		sql.Myprintf("%s%v=", separator, cExpr.colname)
 		if separator == "" {
-			separator = " AND "
+			separator = " and "
 		}
 		encodeValue(sql, before[cExpr.colnum])
 	}
@@ -586,7 +563,7 @@ func (vp *vplayer) writeWhereValues(sql *sqlparser.TrackedBuffer, tplan *tablePl
 func (vp *vplayer) updatePos(ts int64) error {
 	updatePos := binlogplayer.GenerateUpdatePos(vp.id, vp.pos, time.Now().Unix(), ts)
 	if _, err := vp.dbClient.ExecuteFetch(updatePos, 0); err != nil {
-		vp.rollback()
+		vp.dbClient.Rollback()
 		return fmt.Errorf("error %v updating position", err)
 	}
 	vp.unsavedGTID = nil

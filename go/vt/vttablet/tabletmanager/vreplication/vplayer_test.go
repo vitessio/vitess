@@ -44,6 +44,8 @@ func TestPlayerFilters(t *testing.T) {
 		"create table yes(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.yes(id int, val varbinary(128), primary key(id))", vrepldb),
 		"create table no(id int, val varbinary(128), primary key(id))",
+		"create table nopk(id int, val varbinary(128))",
+		fmt.Sprintf("create table %s.nopk(id int, val varbinary(128))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src1",
@@ -55,6 +57,8 @@ func TestPlayerFilters(t *testing.T) {
 		"drop table yes",
 		fmt.Sprintf("drop table %s.yes", vrepldb),
 		"drop table no",
+		"drop table nopk",
+		fmt.Sprintf("drop table %s.nopk", vrepldb),
 	})
 	env.SchemaEngine.Reload(context.Background())
 
@@ -70,6 +74,8 @@ func TestPlayerFilters(t *testing.T) {
 			Filter: "select id, val from src3 group by id, val",
 		}, {
 			Match: "/yes",
+		}, {
+			Match: "/nopk",
 		}},
 	}
 	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
@@ -78,6 +84,8 @@ func TestPlayerFilters(t *testing.T) {
 	testcases := []struct {
 		input  string
 		output []string
+		table  string
+		data   [][]string
 	}{{
 		// insert with insertNormal
 		input: "insert into src1 values(1, 'aaa')",
@@ -86,6 +94,10 @@ func TestPlayerFilters(t *testing.T) {
 			"insert into dst1 set id=1, val='aaa'",
 			"/update _vt.vreplication set pos=",
 			"commit",
+		},
+		table: "dst1",
+		data: [][]string{
+			{"1", "aaa"},
 		},
 	}, {
 		// update with insertNormal
@@ -96,6 +108,10 @@ func TestPlayerFilters(t *testing.T) {
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
+		table: "dst1",
+		data: [][]string{
+			{"1", "bbb"},
+		},
 	}, {
 		// delete with insertNormal
 		input: "delete from src1 where id=1",
@@ -105,6 +121,8 @@ func TestPlayerFilters(t *testing.T) {
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
+		table: "dst1",
+		data:  [][]string{},
 	}, {
 		// insert with insertOnDup
 		input: "insert into src2 values(1, 2, 3)",
@@ -113,6 +131,10 @@ func TestPlayerFilters(t *testing.T) {
 			"insert into dst2 set id=1, val1=2, sval2=3, rcount=1 on duplicate key update val1=2, sval2=sval2+3, rcount=rcount+1",
 			"/update _vt.vreplication set pos=",
 			"commit",
+		},
+		table: "dst2",
+		data: [][]string{
+			{"1", "2", "3"},
 		},
 	}, {
 		// update with insertOnDup
@@ -123,6 +145,10 @@ func TestPlayerFilters(t *testing.T) {
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
+		table: "dst2",
+		data: [][]string{
+			{"1", "5", "1"},
+		},
 	}, {
 		// delete with insertOnDup
 		input: "delete from src2 where id=1",
@@ -131,6 +157,10 @@ func TestPlayerFilters(t *testing.T) {
 			"update dst2 set val1=NULL, sval2=sval2-1, rcount=rcount-1 where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
+		},
+		table: "dst2",
+		data: [][]string{
+			{"1", "", "0"},
 		},
 	}, {
 		// insert with insertIgnore
@@ -141,6 +171,10 @@ func TestPlayerFilters(t *testing.T) {
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
+		table: "dst3",
+		data: [][]string{
+			{"1", "aaa"},
+		},
 	}, {
 		// update with insertIgnore
 		input: "update src3 set val='bbb'",
@@ -150,6 +184,10 @@ func TestPlayerFilters(t *testing.T) {
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
+		table: "dst3",
+		data: [][]string{
+			{"1", "aaa"},
+		},
 	}, {
 		// delete with insertIgnore
 		input: "delete from src3 where id=1",
@@ -157,6 +195,10 @@ func TestPlayerFilters(t *testing.T) {
 			"begin",
 			"/update _vt.vreplication set pos=",
 			"commit",
+		},
+		table: "dst3",
+		data: [][]string{
+			{"1", "aaa"},
 		},
 	}, {
 		// insert: regular expression filter
@@ -167,6 +209,10 @@ func TestPlayerFilters(t *testing.T) {
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
+		table: "yes",
+		data: [][]string{
+			{"1", "aaa"},
+		},
 	}, {
 		// update: regular expression filter
 		input: "update yes set val='bbb'",
@@ -176,15 +222,59 @@ func TestPlayerFilters(t *testing.T) {
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
+		table: "yes",
+		data: [][]string{
+			{"1", "bbb"},
+		},
 	}, {
 		// table should not match a rule
 		input:  "insert into no values(1, 'aaa')",
 		output: []string{},
+	}, {
+		// nopk: insert
+		input: "insert into nopk values(1, 'aaa')",
+		output: []string{
+			"begin",
+			"insert into nopk set id=1, val='aaa'",
+			"/update _vt.vreplication set pos=",
+			"commit",
+		},
+		table: "nopk",
+		data: [][]string{
+			{"1", "aaa"},
+		},
+	}, {
+		// nopk: update
+		input: "update nopk set val='bbb' where id=1",
+		output: []string{
+			"begin",
+			"update nopk set id=1, val='bbb' where id=1 and val='aaa'",
+			"/update _vt.vreplication set pos=",
+			"commit",
+		},
+		table: "nopk",
+		data: [][]string{
+			{"1", "bbb"},
+		},
+	}, {
+		// nopk: delete
+		input: "delete from nopk where id=1",
+		output: []string{
+			"begin",
+			"delete from nopk where id=1 and val='bbb'",
+			"/update _vt.vreplication set pos=",
+			"commit",
+		},
+		table: "nopk",
+		data:  [][]string{},
 	}}
 
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		expectDBClientQueries(t, tcases.output)
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
 	}
 }
 
@@ -901,18 +991,7 @@ func TestTimestamp(t *testing.T) {
 		"commit",
 	})
 
-	qr, err = env.Mysqld.FetchSuperQuery(context.Background(), fmt.Sprintf("select ts, dt from %s.t1 where id=1", vrepldb))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The value for dt should come back in the local timezone.
-	if got := qr.Rows[0][0].ToString(); got != want {
-		t.Errorf("ts: %s, want %s", got, want)
-	}
-	// The value for dt should be as is.
-	if got := qr.Rows[0][1].ToString(); got != want {
-		t.Errorf("ts: %s, want %s", got, want)
-	}
+	expectData(t, "t1", [][]string{{"1", want, want}})
 }
 
 func execStatements(t *testing.T, queries []string) {
