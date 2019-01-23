@@ -371,3 +371,26 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 		}
 	}
 }
+
+func expectData(t *testing.T, table string, values [][]string) {
+	t.Helper()
+
+	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), fmt.Sprintf("select * from %s.%s", vrepldb, table))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	for i, row := range values {
+		if i >= len(qr.Rows) {
+			t.Errorf("Result too short, row: %d, want: %v", i, row)
+		}
+		for j, val := range row {
+			if j >= len(qr.Rows[i]) {
+				t.Errorf("Too few columns, result: %v, row: %d, want: %v", qr.Rows[i], i, row)
+			}
+			if got := qr.Rows[i][j].ToString(); got != val {
+				t.Errorf("Mismatch at (%d, %d): %v, want %s", i, j, qr.Rows[i][j], val)
+			}
+		}
+	}
+}

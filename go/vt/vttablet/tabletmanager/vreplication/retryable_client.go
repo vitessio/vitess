@@ -25,16 +25,19 @@ import (
 // It allows us to retry a failed transactions on lock errors.
 type retryableClient struct {
 	binlogplayer.DBClient
-	inTransaction bool
+	InTransaction bool
 	queries       []string
 }
 
 func (rt *retryableClient) Begin() error {
+	if rt.InTransaction {
+		return nil
+	}
 	if err := rt.DBClient.Begin(); err != nil {
 		return err
 	}
 	rt.queries = append(rt.queries, "begin")
-	rt.inTransaction = true
+	rt.InTransaction = true
 	return nil
 }
 
@@ -42,7 +45,7 @@ func (rt *retryableClient) Commit() error {
 	if err := rt.DBClient.Commit(); err != nil {
 		return err
 	}
-	rt.inTransaction = false
+	rt.InTransaction = false
 	rt.queries = nil
 	return nil
 }
@@ -51,13 +54,13 @@ func (rt *retryableClient) Rollback() error {
 	if err := rt.DBClient.Rollback(); err != nil {
 		return err
 	}
-	rt.inTransaction = false
+	rt.InTransaction = false
 	// Don't reset queries to allow for vplayer to retry.
 	return nil
 }
 
 func (rt *retryableClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
-	if !rt.inTransaction {
+	if !rt.InTransaction {
 		rt.queries = []string{query}
 	} else {
 		rt.queries = append(rt.queries, query)
