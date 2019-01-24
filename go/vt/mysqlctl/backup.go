@@ -164,13 +164,19 @@ func isDbDir(p string) bool {
 		return true
 	}
 
-	// Look for at least one .frm file
+	// Look for at least one database file
 	fis, err := ioutil.ReadDir(p)
 	if err != nil {
 		return false
 	}
 	for _, fi := range fis {
 		if strings.HasSuffix(fi.Name(), ".frm") {
+			return true
+		}
+
+		// the MyRocks engine stores data in RocksDB .sst files
+		// https://github.com/facebook/rocksdb/wiki/Rocksdb-BlockBasedTable-Format
+		if strings.HasSuffix(fi.Name(), ".sst") {
 			return true
 		}
 
