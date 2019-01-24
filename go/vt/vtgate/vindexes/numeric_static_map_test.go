@@ -23,19 +23,14 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/key"
 )
 
 // createVindex creates the "numeric_static_map" vindex object which is used by
 // each test.
-//
-// IMPORTANT: This code is called per test and must not be called from init()
-// because our internal implementation of testfiles.Locate() does not support to
-// be called from init().
 func createVindex() (Vindex, error) {
 	m := make(map[string]string)
-	m["json_path"] = testfiles.Locate("vtgate/numeric_static_map_test.json")
+	m["json_path"] = "testdata/numeric_static_map_test.json"
 	return CreateVindex("numeric_static_map", "numericStaticMap", m)
 }
 
