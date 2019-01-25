@@ -23,12 +23,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -334,8 +332,5 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 }
 
 func locateFile(name string) string {
-	if path.IsAbs(name) {
-		return name
-	}
-	return testfiles.Locate("vtgate/" + name)
+	return "testdata/" + name
 }

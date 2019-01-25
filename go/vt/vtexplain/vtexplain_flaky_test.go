@@ -24,8 +24,6 @@ import (
 	"path"
 	"strings"
 	"testing"
-
-	"vitess.io/vitess/go/testfiles"
 )
 
 var testOutputTempDir string
@@ -40,12 +38,12 @@ func defaultTestOpts() *Options {
 }
 
 func initTest(mode string, opts *Options, t *testing.T) {
-	schema, err := ioutil.ReadFile(testfiles.Locate("vtexplain/test-schema.sql"))
+	schema, err := ioutil.ReadFile("testdata/test-schema.sql")
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
 
-	vSchema, err := ioutil.ReadFile(testfiles.Locate("vtexplain/test-vschema.json"))
+	vSchema, err := ioutil.ReadFile("testdata/test-vschema.json")
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
@@ -75,13 +73,13 @@ func runTestCase(testcase, mode string, opts *Options, t *testing.T) {
 	t.Logf("vtexplain test: %s mode: %s", testcase, mode)
 	initTest(mode, opts, t)
 
-	sqlFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-queries.sql", testcase))
+	sqlFile := fmt.Sprintf("testdata/%s-queries.sql", testcase)
 	sql, err := ioutil.ReadFile(sqlFile)
 	if err != nil {
 		t.Fatalf("vtexplain error: %v", err)
 	}
 
-	textOutFile := testfiles.Locate(fmt.Sprintf("vtexplain/%s-output/%s-output.txt", mode, testcase))
+	textOutFile := fmt.Sprintf("testdata/%s-output/%s-output.txt", mode, testcase)
 	textOut, _ := ioutil.ReadFile(textOutFile)
 
 	explains, err := Run(string(sql))

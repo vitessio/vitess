@@ -32,7 +32,7 @@ The general convention is to send OLTP queries to `REPLICA` tablet types, and OL
 
 ## Is there a list of supported/unsupported queries?
 
-The list of unsupported constructs is currently in the form of test cases contained in this [test file](https://github.com/vitessio/vitess/blob/master/data/test/vtgate/unsupported_cases.txt). However, contrary to the test cases, there is limited support for SET, DDL and DBA constructs. This will be documented soon.
+The list of unsupported constructs is currently in the form of test cases contained in this [test file](https://github.com/vitessio/vitess/blob/master/go/vt/vtgate/planbuilder/testdata/unsupported_cases.txt). However, contrary to the test cases, there is limited support for SET, DDL and DBA constructs. This will be documented soon.
 
 
 ## If I have a log of all queries from my app. Is there a way I can try them against vitess to see how they’ll work?
