@@ -171,6 +171,10 @@ type TabletManagerClient interface {
 	// and it should go read-only and return its current position.
 	DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
 
+	// UndoDemoteMaster reverts all changes made by DemoteMaster
+	// To be used if we are unable to promote the chosen new master
+	UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error
+
 	// PromoteSlaveWhenCaughtUp transforms the tablet from a slave to a master.
 	PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topodatapb.Tablet, pos string) (string, error)
 

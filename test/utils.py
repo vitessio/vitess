@@ -827,7 +827,7 @@ def run_vtctl(clargs, auto_log=False, expect_fail=False,
       logging.debug('vtctl: %s', ' '.join(clargs))
     result = vtctl_client.execute_vtctl_command(vtctld_connection, clargs,
                                                 info_to_debug=True,
-                                                action_timeout=120)
+                                                action_timeout=10)
     return result, ''
 
   raise Exception('Unknown mode: %s', mode)

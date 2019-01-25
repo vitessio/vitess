@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -426,6 +427,10 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	event.DispatchUpdate(ev, "promoting slave")
 	rp, err = wr.tmc.PromoteSlaveWhenCaughtUp(ctx, masterElectTabletInfo.Tablet, rp)
 	if err != nil {
+		// if this fails it is not enough to return an error. we should rollback all the changes made by DemoteMaster
+		if err1 := wr.tmc.UndoDemoteMaster(ctx, oldMasterTabletInfo.Tablet); err1 != nil {
+			log.Warningf("Encountered error %v while trying to undo DemoteMaster", err1)
+		}
 		return fmt.Errorf("master-elect tablet %v failed to catch up with replication or be upgraded to master: %v", masterElectTabletAliasStr, err)
 	}
 
