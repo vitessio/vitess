@@ -13,8 +13,6 @@ COPY --from=k8s /vt/bin/vtctlclient /usr/bin/
 
 # add vitess user/group and add permissions
 RUN groupadd -r --gid 2000 vitess && \
-   useradd -r -g vitess --uid 1000 vitess && \
-   chown -R vitess:vitess /vt && \
-   chown -R vitess:vitess /vtdataroot
+   useradd -r -g vitess --uid 1000 vitess
     
 CMD ["/usr/bin/vtctlclient"]
