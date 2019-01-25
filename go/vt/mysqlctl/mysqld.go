@@ -210,7 +210,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 		name, err = binaryPath(dir, "mysqld_safe")
 		if err != nil {
 			// The movement to use systemd means that mysqld_safe is not always provided.
-			// This should not be considered an issue do do not generate a warning.
+			// This should not be considered an issue do not generate a warning.
 			log.Infof("%v: trying to launch mysqld instead", err)
 			name, err = binaryPath(dir, "mysqld")
 			// If this also fails, return an error.
