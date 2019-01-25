@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -291,6 +290,11 @@ func (tc *splitCloneTestCase) tearDown() {
 
 	for _, ft := range tc.tablets {
 		ft.StopActionLoop(tc.t)
+		ft.RPCServer.Stop()
+		ft.FakeMysqlDaemon.Close()
+		ft.Agent = nil
+		ft.RPCServer = nil
+		ft.FakeMysqlDaemon = nil
 	}
 	tc.leftMasterFakeDb.VerifyAllExecutedOrFail()
 	tc.leftReplicaFakeDb.VerifyAllExecutedOrFail()
