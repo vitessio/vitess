@@ -323,7 +323,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 	// necessary for synchronizing replication.
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, newFakeTMCTopo(ts))
 	if err := runCommand(t, wi, wr, args); err != nil {
-		t.Fatal(err)
+		t.Fatalf("%+v", err)
 	}
 }
 
