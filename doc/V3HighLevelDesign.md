@@ -1491,7 +1491,7 @@ If a, b and c where in different groups, the output would be:
 a   b where (b.id=a.id) and (cond1(a.col, b.col))
 ```
 
-The cond2 expression gets pushed into the the where clause for table ‘c’ because it’s the right-most group that’s referenced by the condition. External references will be changed to appropriate bind variables by the rewiring phase.
+The cond2 expression gets pushed into the where clause for table ‘c’ because it’s the right-most group that’s referenced by the condition. External references will be changed to appropriate bind variables by the rewiring phase.
 
 *Once VTGate acquires the ability to perform its own filters, should we stop pushing these conditions into the dependent queries and do it ourselves instead? The answer will usually be no. You almost always want to push down filters. This is because it will let the underlying database scan fewer rows, or choose better indexes. The more restrictive the query is, the better.*
 
