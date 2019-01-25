@@ -780,7 +780,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			case 1:
 				c.Capabilities &^= CapabilityClientMultiStatements
 			default:
-				log.Errorf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
+				log.Errorf("Got unhandled packet (ComSetOption default) from client %v, returning error: %v", c.ConnectionID, data)
 				if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
 					log.Errorf("Error writing error packet to client: %v", err)
 					return err
@@ -791,14 +791,14 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				return err
 			}
 		} else {
-			log.Errorf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
+			log.Errorf("Got unhandled packet (ComSetOption else) from client %v, returning error: %v", c.ConnectionID, data)
 			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
 				log.Errorf("Error writing error packet to client: %v", err)
 				return err
 			}
 		}
 	default:
-		log.Errorf("Got unhandled packet from %s, returning error: %v", c, data)
+		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
 		if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "command handling not implemented yet: %v", data[0]); err != nil {
 			log.Errorf("Error writing error packet to %s: %s", c, err)
