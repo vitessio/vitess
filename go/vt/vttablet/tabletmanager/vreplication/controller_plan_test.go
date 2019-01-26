@@ -21,7 +21,7 @@ import (
 	"testing"
 )
 
-func TestPlanBuilder(t *testing.T) {
+func TestControllerPlan(t *testing.T) {
 	tcases := []struct {
 		in   string
 		plan *controllerPlan

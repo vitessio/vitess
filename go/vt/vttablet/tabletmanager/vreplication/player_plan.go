@@ -26,78 +26,89 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-type playerPlan struct {
-	vstreamFilter *binlogdatapb.Filter
-	tablePlans    map[string]*tablePlan
+// PlayerPlan is the execution plan for a player stream.
+type PlayerPlan struct {
+	VStreamFilter *binlogdatapb.Filter
+	TablePlans    map[string]*TablePlan
 }
 
-type tablePlan struct {
-	name     string
-	colExprs []*colExpr
-	onInsert insertType
+// TablePlan is the execution plan for a table within a player stream.
+// There are two incarantions of this per table. The first one is built
+// while analyzing the inital stream request. A tentative plan is built
+// without knowing the table info. The second incarnation is built when
+// we receive the field info for a table. At that time, we copy the
+// original TablePlan into a separtae map and populate the Fields and
+// PKCols members.
+type TablePlan struct {
+	Name     string
+	ColExprs []*ColExpr `json:",omitempty"`
+	OnInsert InsertType `json:",omitempty"`
 
-	fields []*querypb.Field
-	pkCols []*colExpr
+	Fields []*querypb.Field `json:",omitempty"`
+	PKCols []*ColExpr       `json:",omitempty"`
 }
 
-func (tp *tablePlan) findCol(name sqlparser.ColIdent) *colExpr {
-	for _, cExpr := range tp.colExprs {
-		if cExpr.colname.Equal(name) {
+func (tp *TablePlan) findCol(name sqlparser.ColIdent) *ColExpr {
+	for _, cExpr := range tp.ColExprs {
+		if cExpr.ColName.Equal(name) {
 			return cExpr
 		}
 	}
 	return nil
 }
 
-type colExpr struct {
-	colname   sqlparser.ColIdent
-	colnum    int
-	op        operation
-	isGrouped bool
+// ColExpr describes the processing to be performed to
+// compute the value of the target table column.
+type ColExpr struct {
+	ColName   sqlparser.ColIdent
+	ColNum    int
+	Operation Operation `json:",omitempty"`
+	IsGrouped bool      `json:",omitempty"`
 }
 
-type operation int
+// Operation is the opcode for the ColExpr.
+type Operation int
 
+// The following values are the various ColExpr opcodes.
 const (
-	opNone = operation(iota)
-	opCount
-	opSum
+	OpNone = Operation(iota)
+	OpCount
+	OpSum
 )
 
-type insertType int
+// InsertType describes the type of insert statement to generate.
+type InsertType int
 
+// The following values are the various insert types.
 const (
-	insertNormal = insertType(iota)
-	insertOndup
-	insertIgnore
+	InsertNormal = InsertType(iota)
+	InsertOndup
+	InsertIgnore
 )
 
-func buildPlayerPlan(filter *binlogdatapb.Filter) (*playerPlan, error) {
-	plan := &playerPlan{
-		vstreamFilter: &binlogdatapb.Filter{
+func buildPlayerPlan(filter *binlogdatapb.Filter) (*PlayerPlan, error) {
+	plan := &PlayerPlan{
+		VStreamFilter: &binlogdatapb.Filter{
 			Rules: make([]*binlogdatapb.Rule, len(filter.Rules)),
 		},
-		tablePlans: make(map[string]*tablePlan),
+		TablePlans: make(map[string]*TablePlan),
 	}
 	for i, rule := range filter.Rules {
 		if strings.HasPrefix(rule.Match, "/") {
-			plan.vstreamFilter.Rules[i] = rule
+			plan.VStreamFilter.Rules[i] = rule
 			continue
 		}
 		sendRule, tplan, err := buildTablePlan(rule)
 		if err != nil {
 			return nil, err
 		}
-		if tplan == nil {
-			continue
-		}
-		plan.vstreamFilter.Rules[i] = sendRule
-		plan.tablePlans[sendRule.Match] = tplan
+		plan.VStreamFilter.Rules[i] = sendRule
+		plan.TablePlans[sendRule.Match] = tplan
 	}
 	return plan, nil
 }
 
-func buildTablePlan(rule *binlogdatapb.Rule) (*binlogdatapb.Rule, *tablePlan, error) {
+func buildTablePlan(rule *binlogdatapb.Rule) (*binlogdatapb.Rule, *TablePlan, error) {
 	statement, err := sqlparser.Parse(rule.Filter)
 	if err != nil {
 		return nil, nil, err
@@ -105,6 +116,9 @@ func buildTablePlan(rule *binlogdatapb.Rule) (*binlogdatapb.Rule, *tablePlan, er
 	sel, ok := statement.(*sqlparser.Select)
 	if !ok {
 		return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(statement))
+	}
+	if sel.Distinct != "" {
+		return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(sel))
 	}
 	if len(sel.From) > 1 {
 		return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(sel))
@@ -126,11 +140,11 @@ func buildTablePlan(rule *binlogdatapb.Rule) (*binlogdatapb.Rule, *tablePlan, er
 			Match:  fromTable.String(),
 			Filter: rule.Filter,
 		}
-		return sendRule, &tablePlan{name: rule.Match}, nil
+		return sendRule, &TablePlan{Name: rule.Match}, nil
 	}
 
-	tplan := &tablePlan{
-		name: rule.Match,
+	tplan := &TablePlan{
+		Name: rule.Match,
 	}
 	sendSelect := &sqlparser.Select{
 		From:  sel.From,
@@ -143,19 +157,19 @@ func buildTablePlan(rule *binlogdatapb.Rule) (*binlogdatapb.Rule, *tablePlan, er
 		}
 		if selExpr != nil {
 			sendSelect.SelectExprs = append(sendSelect.SelectExprs, selExpr)
-			cExpr.colnum = len(sendSelect.SelectExprs) - 1
+			cExpr.ColNum = len(sendSelect.SelectExprs) - 1
 		}
-		tplan.colExprs = append(tplan.colExprs, cExpr)
+		tplan.ColExprs = append(tplan.ColExprs, cExpr)
 	}
 
 	if sel.GroupBy != nil {
 		if err := analyzeGroupBy(sel.GroupBy, tplan); err != nil {
 			return nil, nil, err
 		}
-		tplan.onInsert = insertIgnore
-		for _, cExpr := range tplan.colExprs {
-			if !cExpr.isGrouped {
-				tplan.onInsert = insertOndup
+		tplan.OnInsert = InsertIgnore
+		for _, cExpr := range tplan.ColExprs {
+			if !cExpr.IsGrouped {
+				tplan.OnInsert = InsertOndup
 				break
 			}
 		}
@@ -167,7 +181,7 @@ func buildTablePlan(rule *binlogdatapb.Rule) (*binlogdatapb.Rule, *tablePlan, er
 	return sendRule, tplan, nil
 }
 
-func analyzeExpr(selExpr sqlparser.SelectExpr) (sqlparser.SelectExpr, *colExpr, error) {
+func analyzeExpr(selExpr sqlparser.SelectExpr) (sqlparser.SelectExpr, *ColExpr, error) {
 	aliased, ok := selExpr.(*sqlparser.AliasedExpr)
 	if !ok {
 		return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(selExpr))
@@ -178,54 +192,54 @@ func analyzeExpr(selExpr sqlparser.SelectExpr) (sqlparser.SelectExpr, *colExpr, 
 	}
 	switch expr := aliased.Expr.(type) {
 	case *sqlparser.ColName:
-		return selExpr, &colExpr{colname: as}, nil
+		return selExpr, &ColExpr{ColName: as}, nil
 	case *sqlparser.FuncExpr:
 		if expr.Distinct || len(expr.Exprs) != 1 {
-			return nil, nil, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
+			return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 		}
 		if aliased.As.IsEmpty() {
 			return nil, nil, fmt.Errorf("expression needs an alias: %v", sqlparser.String(expr))
 		}
 		switch fname := expr.Name.Lowered(); fname {
 		case "month", "day", "hour":
-			return selExpr, &colExpr{colname: as}, nil
+			return selExpr, &ColExpr{ColName: as}, nil
 		case "count":
 			if _, ok := expr.Exprs[0].(*sqlparser.StarExpr); !ok {
 				return nil, nil, fmt.Errorf("only count(*) is supported: %v", sqlparser.String(expr))
 			}
-			return nil, &colExpr{colname: as, op: opCount}, nil
+			return nil, &ColExpr{ColName: as, Operation: OpCount}, nil
 		case "sum":
 			aInner, ok := expr.Exprs[0].(*sqlparser.AliasedExpr)
 			if !ok {
-				return nil, nil, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
+				return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
 			innerCol, ok := aInner.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, nil, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
+				return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			return &sqlparser.AliasedExpr{Expr: innerCol}, &colExpr{colname: as, op: opSum}, nil
+			return &sqlparser.AliasedExpr{Expr: innerCol}, &ColExpr{ColName: as, Operation: OpSum}, nil
 		default:
-			return nil, nil, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
+			return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 		}
 	default:
 		return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 	}
 }
 
-func analyzeGroupBy(groupBy sqlparser.GroupBy, tplan *tablePlan) error {
+func analyzeGroupBy(groupBy sqlparser.GroupBy, tplan *TablePlan) error {
 	for _, expr := range groupBy {
 		colname, ok := expr.(*sqlparser.ColName)
 		if !ok {
-			return fmt.Errorf("unsupported: %v", sqlparser.String(expr))
+			return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 		}
 		cExpr := tplan.findCol(colname.Name)
 		if cExpr == nil {
 			return fmt.Errorf("group by expression does not reference an alias in the select list: %v", sqlparser.String(expr))
 		}
-		if cExpr.op != opNone {
+		if cExpr.Operation != OpNone {
 			return fmt.Errorf("group by expression is not allowed to reference an aggregate expression: %v", sqlparser.String(expr))
 		}
-		cExpr.isGrouped = true
+		cExpr.IsGrouped = true
 	}
 	return nil
 }
