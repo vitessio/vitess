@@ -64,10 +64,10 @@ type vplayer struct {
 	stopPos       mysql.Position
 
 	// pplan is built based on the source Filter at the beginning.
-	pplan *playerPlan
+	pplan *PlayerPlan
 	// tplans[table] is built for each table based on pplan and schema info
 	// about the table.
-	tplans map[string]*tablePlan
+	tplans map[string]*TablePlan
 }
 
 func newVPlayer(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topodatapb.Tablet, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon) *vplayer {
@@ -79,7 +79,7 @@ func newVPlayer(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topo
 		dbClient:      &retryableClient{DBClient: dbClient},
 		mysqld:        mysqld,
 		timeLastSaved: time.Now(),
-		tplans:        make(map[string]*tablePlan),
+		tplans:        make(map[string]*TablePlan),
 	}
 }
 
@@ -143,10 +143,10 @@ func (vp *vplayer) play(ctx context.Context) error {
 		Shard:      vp.sourceTablet.Shard,
 		TabletType: vp.sourceTablet.Type,
 	}
-	log.Infof("Sending vstream command: %v", plan.vstreamFilter)
+	log.Infof("Sending vstream command: %v", plan.VStreamFilter)
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vsClient.VStream(ctx, target, startPos, plan.vstreamFilter, func(events []*binlogdatapb.VEvent) error {
+		streamErr <- vsClient.VStream(ctx, target, startPos, plan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
 	}()
@@ -354,57 +354,57 @@ func (vp *vplayer) setState(state, message string) error {
 }
 
 func (vp *vplayer) updatePlan(fieldEvent *binlogdatapb.FieldEvent) error {
-	prelim := vp.pplan.tablePlans[fieldEvent.TableName]
-	tplan := &tablePlan{
-		name: fieldEvent.TableName,
+	prelim := vp.pplan.TablePlans[fieldEvent.TableName]
+	tplan := &TablePlan{
+		Name: fieldEvent.TableName,
 	}
 	if prelim != nil {
 		*tplan = *prelim
 	}
-	tplan.fields = fieldEvent.Fields
+	tplan.Fields = fieldEvent.Fields
 
-	if tplan.colExprs == nil {
-		tplan.colExprs = make([]*colExpr, len(tplan.fields))
-		for i, field := range tplan.fields {
-			tplan.colExprs[i] = &colExpr{
-				colname: sqlparser.NewColIdent(field.Name),
-				colnum:  i,
+	if tplan.ColExprs == nil {
+		tplan.ColExprs = make([]*ColExpr, len(tplan.Fields))
+		for i, field := range tplan.Fields {
+			tplan.ColExprs[i] = &ColExpr{
+				ColName: sqlparser.NewColIdent(field.Name),
+				ColNum:  i,
 			}
 		}
 	} else {
-		for _, cExpr := range tplan.colExprs {
-			if cExpr.colnum >= len(tplan.fields) {
+		for _, cExpr := range tplan.ColExprs {
+			if cExpr.ColNum >= len(tplan.Fields) {
 				// Unreachable code.
-				return fmt.Errorf("columns received from vreplication: %v, do not match expected: %v", tplan.fields, tplan.colExprs)
+				return fmt.Errorf("columns received from vreplication: %v, do not match expected: %v", tplan.Fields, tplan.ColExprs)
 			}
 		}
 	}
 
-	pkcols, err := vp.mysqld.GetPrimaryKeyColumns(vp.dbClient.DBName(), tplan.name)
+	pkcols, err := vp.mysqld.GetPrimaryKeyColumns(vp.dbClient.DBName(), tplan.Name)
 	if err != nil {
-		return fmt.Errorf("error fetching pk columns for %s: %v", tplan.name, err)
+		return fmt.Errorf("error fetching pk columns for %s: %v", tplan.Name, err)
 	}
 	if len(pkcols) == 0 {
 		// If the table doesn't have a PK, then we treat all columns as PK.
-		pkcols, err = vp.mysqld.GetColumns(vp.dbClient.DBName(), tplan.name)
+		pkcols, err = vp.mysqld.GetColumns(vp.dbClient.DBName(), tplan.Name)
 		if err != nil {
-			return fmt.Errorf("error fetching pk columns for %s: %v", tplan.name, err)
+			return fmt.Errorf("error fetching pk columns for %s: %v", tplan.Name, err)
 		}
 	}
 	for _, pkcol := range pkcols {
 		found := false
-		for i, cExpr := range tplan.colExprs {
-			if cExpr.colname.EqualString(pkcol) {
+		for i, cExpr := range tplan.ColExprs {
+			if cExpr.ColName.EqualString(pkcol) {
 				found = true
-				tplan.pkCols = append(tplan.pkCols, &colExpr{
-					colname: cExpr.colname,
-					colnum:  i,
+				tplan.PKCols = append(tplan.PKCols, &ColExpr{
+					ColName: cExpr.ColName,
+					ColNum:  i,
 				})
 				break
 			}
 		}
 		if !found {
-			return fmt.Errorf("primary key column %s missing from select list for table %s", pkcol, tplan.name)
+			return fmt.Errorf("primary key column %s missing from select list for table %s", pkcol, tplan.Name)
 		}
 	}
 	vp.tplans[fieldEvent.TableName] = tplan
@@ -424,14 +424,14 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	return nil
 }
 
-func (vp *vplayer) applyRowChange(ctx context.Context, tplan *tablePlan, rowChange *binlogdatapb.RowChange) error {
+func (vp *vplayer) applyRowChange(ctx context.Context, tplan *TablePlan, rowChange *binlogdatapb.RowChange) error {
 	// MakeRowTrusted is needed here because because Proto3ToResult is not convenient.
 	var before, after []sqltypes.Value
 	if rowChange.Before != nil {
-		before = sqltypes.MakeRowTrusted(tplan.fields, rowChange.Before)
+		before = sqltypes.MakeRowTrusted(tplan.Fields, rowChange.Before)
 	}
 	if rowChange.After != nil {
-		after = sqltypes.MakeRowTrusted(tplan.fields, rowChange.After)
+		after = sqltypes.MakeRowTrusted(tplan.Fields, rowChange.After)
 	}
 	var query string
 	switch {
@@ -450,113 +450,113 @@ func (vp *vplayer) applyRowChange(ctx context.Context, tplan *tablePlan, rowChan
 	return vp.exec(ctx, query)
 }
 
-func (vp *vplayer) generateInsert(tplan *tablePlan, after []sqltypes.Value) string {
+func (vp *vplayer) generateInsert(tplan *TablePlan, after []sqltypes.Value) string {
 	sql := sqlparser.NewTrackedBuffer(nil)
-	if tplan.onInsert == insertIgnore {
-		sql.Myprintf("insert ignore into %v set ", sqlparser.NewTableIdent(tplan.name))
+	if tplan.OnInsert == InsertIgnore {
+		sql.Myprintf("insert ignore into %v set ", sqlparser.NewTableIdent(tplan.Name))
 	} else {
-		sql.Myprintf("insert into %v set ", sqlparser.NewTableIdent(tplan.name))
+		sql.Myprintf("insert into %v set ", sqlparser.NewTableIdent(tplan.Name))
 	}
 	vp.writeInsertValues(sql, tplan, after)
-	if tplan.onInsert == insertOndup {
+	if tplan.OnInsert == InsertOndup {
 		sql.Myprintf(" on duplicate key update ")
 		vp.writeUpdateValues(sql, tplan, nil, after)
 	}
 	return sql.String()
 }
 
-func (vp *vplayer) generateUpdate(tplan *tablePlan, before, after []sqltypes.Value) string {
-	if tplan.onInsert == insertIgnore {
+func (vp *vplayer) generateUpdate(tplan *TablePlan, before, after []sqltypes.Value) string {
+	if tplan.OnInsert == InsertIgnore {
 		return vp.generateInsert(tplan, after)
 	}
 	sql := sqlparser.NewTrackedBuffer(nil)
-	sql.Myprintf("update %v set ", sqlparser.NewTableIdent(tplan.name))
+	sql.Myprintf("update %v set ", sqlparser.NewTableIdent(tplan.Name))
 	vp.writeUpdateValues(sql, tplan, before, after)
 	sql.Myprintf(" where ")
 	vp.writeWhereValues(sql, tplan, before)
 	return sql.String()
 }
 
-func (vp *vplayer) generateDelete(tplan *tablePlan, before []sqltypes.Value) string {
+func (vp *vplayer) generateDelete(tplan *TablePlan, before []sqltypes.Value) string {
 	sql := sqlparser.NewTrackedBuffer(nil)
-	switch tplan.onInsert {
-	case insertOndup:
-		sql.Myprintf("update %v set ", sqlparser.NewTableIdent(tplan.name))
+	switch tplan.OnInsert {
+	case InsertOndup:
+		sql.Myprintf("update %v set ", sqlparser.NewTableIdent(tplan.Name))
 		vp.writeUpdateValues(sql, tplan, before, nil)
 		sql.Myprintf(" where ")
 		vp.writeWhereValues(sql, tplan, before)
-	case insertIgnore:
+	case InsertIgnore:
 		return ""
 	default: // insertNormal
-		sql.Myprintf("delete from %v where ", sqlparser.NewTableIdent(tplan.name))
+		sql.Myprintf("delete from %v where ", sqlparser.NewTableIdent(tplan.Name))
 		vp.writeWhereValues(sql, tplan, before)
 	}
 	return sql.String()
 }
 
-func (vp *vplayer) writeInsertValues(sql *sqlparser.TrackedBuffer, tplan *tablePlan, after []sqltypes.Value) {
+func (vp *vplayer) writeInsertValues(sql *sqlparser.TrackedBuffer, tplan *TablePlan, after []sqltypes.Value) {
 	separator := ""
-	for _, cExpr := range tplan.colExprs {
-		sql.Myprintf("%s%v=", separator, cExpr.colname)
+	for _, cExpr := range tplan.ColExprs {
+		sql.Myprintf("%s%v=", separator, cExpr.ColName)
 		if separator == "" {
 			separator = ", "
 		}
-		if cExpr.op == opCount {
+		if cExpr.Operation == OpCount {
 			sql.WriteString("1")
 		} else {
-			encodeValue(sql, after[cExpr.colnum])
+			encodeValue(sql, after[cExpr.ColNum])
 		}
 	}
 }
 
-func (vp *vplayer) writeUpdateValues(sql *sqlparser.TrackedBuffer, tplan *tablePlan, before, after []sqltypes.Value) {
+func (vp *vplayer) writeUpdateValues(sql *sqlparser.TrackedBuffer, tplan *TablePlan, before, after []sqltypes.Value) {
 	separator := ""
-	for _, cExpr := range tplan.colExprs {
-		if cExpr.isGrouped {
+	for _, cExpr := range tplan.ColExprs {
+		if cExpr.IsGrouped {
 			continue
 		}
-		sql.Myprintf("%s%v=", separator, cExpr.colname)
+		sql.Myprintf("%s%v=", separator, cExpr.ColName)
 		if separator == "" {
 			separator = ", "
 		}
-		if cExpr.op == opCount || cExpr.op == opSum {
-			sql.Myprintf("%v", cExpr.colname)
+		if cExpr.Operation == OpCount || cExpr.Operation == OpSum {
+			sql.Myprintf("%v", cExpr.ColName)
 		}
 		if len(before) != 0 {
-			switch cExpr.op {
-			case opNone:
+			switch cExpr.Operation {
+			case OpNone:
 				if len(after) == 0 {
 					sql.WriteString("NULL")
 				}
-			case opCount:
+			case OpCount:
 				sql.WriteString("-1")
-			case opSum:
+			case OpSum:
 				sql.WriteString("-")
-				encodeValue(sql, before[cExpr.colnum])
+				encodeValue(sql, before[cExpr.ColNum])
 			}
 		}
 		if len(after) != 0 {
-			switch cExpr.op {
-			case opNone:
-				encodeValue(sql, after[cExpr.colnum])
-			case opCount:
+			switch cExpr.Operation {
+			case OpNone:
+				encodeValue(sql, after[cExpr.ColNum])
+			case OpCount:
 				sql.WriteString("+1")
-			case opSum:
+			case OpSum:
 				sql.WriteString("+")
-				encodeValue(sql, after[cExpr.colnum])
+				encodeValue(sql, after[cExpr.ColNum])
 			}
 		}
 	}
 }
 
-func (vp *vplayer) writeWhereValues(sql *sqlparser.TrackedBuffer, tplan *tablePlan, before []sqltypes.Value) {
+func (vp *vplayer) writeWhereValues(sql *sqlparser.TrackedBuffer, tplan *TablePlan, before []sqltypes.Value) {
 	separator := ""
-	for _, cExpr := range tplan.pkCols {
-		sql.Myprintf("%s%v=", separator, cExpr.colname)
+	for _, cExpr := range tplan.PKCols {
+		sql.Myprintf("%s%v=", separator, cExpr.ColName)
 		if separator == "" {
 			separator = " and "
 		}
-		encodeValue(sql, before[cExpr.colnum])
+		encodeValue(sql, before[cExpr.ColNum])
 	}
 }
 
