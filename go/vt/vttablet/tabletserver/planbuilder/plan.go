@@ -83,6 +83,8 @@ const (
 	PlanOtherAdmin
 	// PlanMessageStream is used for streaming messages.
 	PlanMessageStream
+	// PlanSelectImpossible is used for where or having clauses that can never be true.
+	PlanSelectImpossible
 	// NumPlans stores the total number of plans
 	NumPlans
 )
@@ -105,6 +107,7 @@ var planName = [NumPlans]string{
 	"OTHER_READ",
 	"OTHER_ADMIN",
 	"MESSAGE_STREAM",
+	"SELECT_IMPOSSIBLE",
 }
 
 func (pt PlanType) String() string {
@@ -126,7 +129,7 @@ func PlanByName(s string) (pt PlanType, ok bool) {
 
 // IsSelect returns true if PlanType is about a select query.
 func (pt PlanType) IsSelect() bool {
-	return pt == PlanPassSelect || pt == PlanSelectLock
+	return pt == PlanPassSelect || pt == PlanSelectLock || pt == PlanSelectImpossible
 }
 
 // MarshalJSON returns a json string for PlanType.
@@ -140,22 +143,23 @@ func (pt PlanType) MinRole() tableacl.Role {
 }
 
 var tableACLRoles = map[PlanType]tableacl.Role{
-	PlanPassSelect:     tableacl.READER,
-	PlanSelectLock:     tableacl.READER,
-	PlanSet:            tableacl.READER,
-	PlanPassDML:        tableacl.WRITER,
-	PlanDMLPK:          tableacl.WRITER,
-	PlanDMLSubquery:    tableacl.WRITER,
-	PlanInsertPK:       tableacl.WRITER,
-	PlanInsertSubquery: tableacl.WRITER,
-	PlanInsertMessage:  tableacl.WRITER,
-	PlanDDL:            tableacl.ADMIN,
-	PlanSelectStream:   tableacl.READER,
-	PlanOtherRead:      tableacl.READER,
-	PlanOtherAdmin:     tableacl.ADMIN,
-	PlanUpsertPK:       tableacl.WRITER,
-	PlanNextval:        tableacl.WRITER,
-	PlanMessageStream:  tableacl.WRITER,
+	PlanPassSelect:       tableacl.READER,
+	PlanSelectLock:       tableacl.READER,
+	PlanSet:              tableacl.READER,
+	PlanPassDML:          tableacl.WRITER,
+	PlanDMLPK:            tableacl.WRITER,
+	PlanDMLSubquery:      tableacl.WRITER,
+	PlanInsertPK:         tableacl.WRITER,
+	PlanInsertSubquery:   tableacl.WRITER,
+	PlanInsertMessage:    tableacl.WRITER,
+	PlanDDL:              tableacl.ADMIN,
+	PlanSelectStream:     tableacl.READER,
+	PlanOtherRead:        tableacl.READER,
+	PlanOtherAdmin:       tableacl.ADMIN,
+	PlanUpsertPK:         tableacl.WRITER,
+	PlanNextval:          tableacl.WRITER,
+	PlanMessageStream:    tableacl.WRITER,
+	PlanSelectImpossible: tableacl.READER,
 }
 
 //_______________________________________________
