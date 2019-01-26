@@ -278,6 +278,101 @@ func TestPlayerFilters(t *testing.T) {
 	}
 }
 
+func TestPlayerTypes(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	execStatements(t, []string{
+		"create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny))",
+		fmt.Sprintf("create table %s.vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny))", vrepldb),
+		"create table vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id))",
+		fmt.Sprintf("create table %s.vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id))", vrepldb),
+		"create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb))",
+		fmt.Sprintf("create table %s.vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb))", vrepldb),
+		"create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id))",
+		fmt.Sprintf("create table %s.vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id))", vrepldb),
+		"create table vitess_null(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.vitess_null(id int, val varbinary(128), primary key(id))", vrepldb),
+		"create table src1(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.src1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table vitess_ints",
+		fmt.Sprintf("drop table %s.vitess_ints", vrepldb),
+		"drop table vitess_fracts",
+		fmt.Sprintf("drop table %s.vitess_fracts", vrepldb),
+		"drop table vitess_strings",
+		fmt.Sprintf("drop table %s.vitess_strings", vrepldb),
+		"drop table vitess_misc",
+		fmt.Sprintf("drop table %s.vitess_misc", vrepldb),
+		"drop table vitess_null",
+		fmt.Sprintf("drop table %s.vitess_null", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	defer cancel()
+	testcases := []struct {
+		input  string
+		output string
+		table  string
+		data   [][]string
+	}{{
+		input:  "insert into vitess_ints values(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012)",
+		output: "insert into vitess_ints set tiny=-128, tinyu=255, small=-32768, smallu=65535, medium=-8388608, mediumu=16777215, normal=-2147483648, normalu=4294967295, big=-9223372036854775808, bigu=18446744073709551615, y=2012",
+		table:  "vitess_ints",
+		data: [][]string{
+			{"-128", "255", "-32768", "65535", "-8388608", "16777215", "-2147483648", "4294967295", "-9223372036854775808", "18446744073709551615", "2012"},
+		},
+	}, {
+		input:  "insert into vitess_fracts values(1, 1.99, 2.99, 3.99, 4.99)",
+		output: "insert into vitess_fracts set id=1, deci=1.99, num=2.99, f=3.99E+00, d=4.99E+00",
+		table:  "vitess_fracts",
+		data: [][]string{
+			{"1", "1.99", "2.99", "3.99", "4.99"},
+		},
+	}, {
+		input:  "insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
+		output: "insert into vitess_strings set vb='a', c='b', vc='c', b='d', tb='e', bl='f', ttx='g', tx='h', en='1', s='3'",
+		table:  "vitess_strings",
+		data: [][]string{
+			{"a", "b", "c", "d\x00\x00\x00", "e", "f", "g", "h", "a", "a,b"},
+		},
+	}, {
+		input:  "insert into vitess_misc values(1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2))",
+		output: "insert into vitess_misc set id=1, b=b'00000001', d='2012-01-01', dt='2012-01-01 15:45:45', t='15:45:45', g='\\0\\0\\0\\0\x01\x01\\0\\0\\0\\0\\0\\0\\0\\0\\0\xf0?\\0\\0\\0\\0\\0\\0\\0@'",
+		table:  "vitess_misc",
+		data: [][]string{
+			{"1", "\x01", "2012-01-01", "2012-01-01 15:45:45", "15:45:45", "\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@"},
+		},
+	}, {
+		input:  "insert into vitess_null values(1, null)",
+		output: "insert into vitess_null set id=1, val=null",
+		table:  "vitess_null",
+		data: [][]string{
+			{"1", ""},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		want := []string{
+			"begin",
+			tcases.output,
+			"/update _vt.vreplication set pos=",
+			"commit",
+		}
+		expectDBClientQueries(t, want)
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+	}
+}
+
 func TestPlayerDDL(t *testing.T) {
 	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
 	execStatements(t, []string{
