@@ -380,14 +380,14 @@ func expectData(t *testing.T, table string, values [][]string) {
 		t.Error(err)
 		return
 	}
+	if len(values) != len(qr.Rows) {
+		t.Fatalf("row counts don't match: %v, want %v", qr.Rows, values)
+	}
 	for i, row := range values {
-		if i >= len(qr.Rows) {
-			t.Fatalf("Result too short, row: %d, want: %v", i, row)
+		if len(row) != len(qr.Rows[i]) {
+			t.Fatalf("Too few columns, result: %v, row: %d, want: %v", qr.Rows[i], i, row)
 		}
 		for j, val := range row {
-			if j >= len(qr.Rows[i]) {
-				t.Fatalf("Too few columns, result: %v, row: %d, want: %v", qr.Rows[i], i, row)
-			}
 			if got := qr.Rows[i][j].ToString(); got != val {
 				t.Errorf("Mismatch at (%d, %d): %v, want %s", i, j, qr.Rows[i][j], val)
 			}

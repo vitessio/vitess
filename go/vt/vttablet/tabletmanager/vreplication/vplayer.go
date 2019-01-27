@@ -460,7 +460,7 @@ func (vp *vplayer) generateInsert(tplan *TablePlan, after []sqltypes.Value) stri
 	vp.writeInsertValues(sql, tplan, after)
 	if tplan.OnInsert == InsertOndup {
 		sql.Myprintf(" on duplicate key update ")
-		vp.writeUpdateValues(sql, tplan, nil, after)
+		_ = vp.writeUpdateValues(sql, tplan, nil, after)
 	}
 	return sql.String()
 }
@@ -471,7 +471,9 @@ func (vp *vplayer) generateUpdate(tplan *TablePlan, before, after []sqltypes.Val
 	}
 	sql := sqlparser.NewTrackedBuffer(nil)
 	sql.Myprintf("update %v set ", sqlparser.NewTableIdent(tplan.Name))
-	vp.writeUpdateValues(sql, tplan, before, after)
+	if ok := vp.writeUpdateValues(sql, tplan, before, after); !ok {
+		return ""
+	}
 	sql.Myprintf(" where ")
 	vp.writeWhereValues(sql, tplan, before)
 	return sql.String()
@@ -481,10 +483,7 @@ func (vp *vplayer) generateDelete(tplan *TablePlan, before []sqltypes.Value) str
 	sql := sqlparser.NewTrackedBuffer(nil)
 	switch tplan.OnInsert {
 	case InsertOndup:
-		sql.Myprintf("update %v set ", sqlparser.NewTableIdent(tplan.Name))
-		vp.writeUpdateValues(sql, tplan, before, nil)
-		sql.Myprintf(" where ")
-		vp.writeWhereValues(sql, tplan, before)
+		return vp.generateUpdate(tplan, before, nil)
 	case InsertIgnore:
 		return ""
 	default: // insertNormal
@@ -498,27 +497,50 @@ func (vp *vplayer) writeInsertValues(sql *sqlparser.TrackedBuffer, tplan *TableP
 	separator := ""
 	for _, cExpr := range tplan.ColExprs {
 		sql.Myprintf("%s%v=", separator, cExpr.ColName)
-		if separator == "" {
-			separator = ", "
-		}
+		separator = ", "
 		if cExpr.Operation == OpCount {
 			sql.WriteString("1")
 		} else {
-			encodeValue(sql, after[cExpr.ColNum])
+			if cExpr.Operation == OpSum && after[cExpr.ColNum].IsNull() {
+				sql.WriteString("0")
+			} else {
+				encodeValue(sql, after[cExpr.ColNum])
+			}
 		}
 	}
 }
 
-func (vp *vplayer) writeUpdateValues(sql *sqlparser.TrackedBuffer, tplan *TablePlan, before, after []sqltypes.Value) {
+// writeUpdateValues returns true if at least one value was set. Otherwise, it returns false.
+func (vp *vplayer) writeUpdateValues(sql *sqlparser.TrackedBuffer, tplan *TablePlan, before, after []sqltypes.Value) bool {
 	separator := ""
+	hasSet := false
 	for _, cExpr := range tplan.ColExprs {
 		if cExpr.IsGrouped {
 			continue
 		}
-		sql.Myprintf("%s%v=", separator, cExpr.ColName)
-		if separator == "" {
-			separator = ", "
+		if len(before) != 0 && len(after) != 0 {
+			if cExpr.Operation == OpCount {
+				continue
+			}
+			bef := before[cExpr.ColNum]
+			aft := after[cExpr.ColNum]
+			// If both are null, there's no change
+			if bef.IsNull() && aft.IsNull() {
+				continue
+			}
+			// If any one of them is null, something has changed.
+			if bef.IsNull() || aft.IsNull() {
+				goto mustSet
+			}
+			// Compare content only if none are null.
+			if bef.ToString() == aft.ToString() {
+				continue
+			}
 		}
+	mustSet:
+		sql.Myprintf("%s%v=", separator, cExpr.ColName)
+		separator = ", "
+		hasSet = true
 		if cExpr.Operation == OpCount || cExpr.Operation == OpSum {
 			sql.Myprintf("%v", cExpr.ColName)
 		}
@@ -531,8 +553,10 @@ func (vp *vplayer) writeUpdateValues(sql *sqlparser.TrackedBuffer, tplan *TableP
 			case OpCount:
 				sql.WriteString("-1")
 			case OpSum:
-				sql.WriteString("-")
-				encodeValue(sql, before[cExpr.ColNum])
+				if !before[cExpr.ColNum].IsNull() {
+					sql.WriteString("-")
+					encodeValue(sql, before[cExpr.ColNum])
+				}
 			}
 		}
 		if len(after) != 0 {
@@ -542,20 +566,21 @@ func (vp *vplayer) writeUpdateValues(sql *sqlparser.TrackedBuffer, tplan *TableP
 			case OpCount:
 				sql.WriteString("+1")
 			case OpSum:
-				sql.WriteString("+")
-				encodeValue(sql, after[cExpr.ColNum])
+				if !after[cExpr.ColNum].IsNull() {
+					sql.WriteString("+")
+					encodeValue(sql, after[cExpr.ColNum])
+				}
 			}
 		}
 	}
+	return hasSet
 }
 
 func (vp *vplayer) writeWhereValues(sql *sqlparser.TrackedBuffer, tplan *TablePlan, before []sqltypes.Value) {
 	separator := ""
 	for _, cExpr := range tplan.PKCols {
 		sql.Myprintf("%s%v=", separator, cExpr.ColName)
-		if separator == "" {
-			separator = " and "
-		}
+		separator = " and "
 		encodeValue(sql, before[cExpr.ColNum])
 	}
 }

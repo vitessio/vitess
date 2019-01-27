@@ -24,9 +24,10 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/mysql"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -104,7 +105,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update src1 set val='bbb'",
 		output: []string{
 			"begin",
-			"update dst1 set id=1, val='bbb' where id=1",
+			"update dst1 set val='bbb' where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
@@ -134,20 +135,20 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		table: "dst2",
 		data: [][]string{
-			{"1", "2", "3"},
+			{"1", "2", "3", "1"},
 		},
 	}, {
 		// update with insertOnDup
 		input: "update src2 set val1=5, val2=1 where id=1",
 		output: []string{
 			"begin",
-			"update dst2 set val1=5, sval2=sval2-3+1, rcount=rcount-1+1 where id=1",
+			"update dst2 set val1=5, sval2=sval2-3+1 where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
 		table: "dst2",
 		data: [][]string{
-			{"1", "5", "1"},
+			{"1", "5", "1", "1"},
 		},
 	}, {
 		// delete with insertOnDup
@@ -160,7 +161,7 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		table: "dst2",
 		data: [][]string{
-			{"1", "", "0"},
+			{"1", "", "0", "0"},
 		},
 	}, {
 		// insert with insertIgnore
@@ -218,7 +219,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update yes set val='bbb'",
 		output: []string{
 			"begin",
-			"update yes set id=1, val='bbb' where id=1",
+			"update yes set val='bbb' where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
@@ -248,7 +249,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update nopk set val='bbb' where id=1",
 		output: []string{
 			"begin",
-			"update nopk set id=1, val='bbb' where id=1 and val='aaa'",
+			"update nopk set val='bbb' where id=1 and val='aaa'",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
@@ -272,6 +273,115 @@ func TestPlayerFilters(t *testing.T) {
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})
 		expectDBClientQueries(t, tcases.output)
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+	}
+}
+
+func TestPlayerUpdates(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	execStatements(t, []string{
+		"create table t1(id int, grouped int, ungrouped int, summed int, primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, grouped int, ungrouped int, summed int, rcount int, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select id, grouped, ungrouped, sum(summed) as summed, count(*) as rcount from t1 group by id, grouped",
+		}},
+	}
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	defer cancel()
+
+	testcases := []struct {
+		input  string
+		output string
+		table  string
+		data   [][]string
+	}{{
+		// Start with all nulls
+		input:  "insert into t1 values(1, null, null, null)",
+		output: "insert into t1 set id=1, grouped=null, ungrouped=null, summed=0, rcount=1 on duplicate key update ungrouped=null, summed=summed, rcount=rcount+1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "", "", "0", "1"},
+		},
+	}, {
+		// null to null values
+		input:  "update t1 set grouped=1 where id=1",
+		output: "",
+		table:  "t1",
+		data: [][]string{
+			{"1", "", "", "0", "1"},
+		},
+	}, {
+		// null to non-null values
+		input:  "update t1 set ungrouped=1, summed=1 where id=1",
+		output: "update t1 set ungrouped=1, summed=summed+1 where id=1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "", "1", "1", "1"},
+		},
+	}, {
+		// non-null to non-null values
+		input:  "update t1 set ungrouped=2, summed=2 where id=1",
+		output: "update t1 set ungrouped=2, summed=summed-1+2 where id=1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "", "2", "2", "1"},
+		},
+	}, {
+		// non-null to null values
+		input:  "update t1 set ungrouped=null, summed=null where id=1",
+		output: "update t1 set ungrouped=null, summed=summed-2 where id=1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "", "", "0", "1"},
+		},
+	}, {
+		// insert non-null values
+		input:  "insert into t1 values(2, 2, 3, 4)",
+		output: "insert into t1 set id=2, grouped=2, ungrouped=3, summed=4, rcount=1 on duplicate key update ungrouped=3, summed=summed+4, rcount=rcount+1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "", "", "0", "1"},
+			{"2", "2", "3", "4", "1"},
+		},
+	}, {
+		// delete non-null values
+		input:  "delete from t1 where id=2",
+		output: "update t1 set ungrouped=NULL, summed=summed-4, rcount=rcount-1 where id=2",
+		table:  "t1",
+		data: [][]string{
+			{"1", "", "", "0", "1"},
+			{"2", "2", "", "0", "0"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := []string{
+			"begin",
+			tcases.output,
+			"/update _vt.vreplication set pos=",
+			"commit",
+		}
+		if tcases.output == "" {
+			output = []string{
+				"begin",
+				"/update _vt.vreplication set pos=",
+				"commit",
+			}
+		}
+		expectDBClientQueries(t, output)
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
@@ -370,7 +480,7 @@ func TestPlayerTypes(t *testing.T) {
 	}, {
 		// Binary pk is a special case: https://github.com/vitessio/vitess/issues/3984
 		input:  "update binary_pk set val='bbb' where b='a\\0\\0\\0'",
-		output: "update binary_pk set b='a\\0\\0\\0', val='bbb' where b='a\\0\\0\\0'",
+		output: "update binary_pk set val='bbb' where b='a\\0\\0\\0'",
 		table:  "binary_pk",
 		data: [][]string{
 			{"a\x00\x00\x00", "bbb"},
@@ -740,8 +850,8 @@ func TestPlayerLockErrors(t *testing.T) {
 	// The innodb lock wait timeout is set to 1s.
 	expectDBClientQueries(t, []string{
 		"begin",
-		"update t1 set id=1, val='ccc' where id=1",
-		"update t1 set id=2, val='ccc' where id=2",
+		"update t1 set val='ccc' where id=1",
+		"update t1 set val='ccc' where id=2",
 		"rollback",
 	})
 
@@ -749,8 +859,8 @@ func TestPlayerLockErrors(t *testing.T) {
 	_, _ = vconn.ExecuteFetch("rollback", 1)
 	expectDBClientQueries(t, []string{
 		"begin",
-		"update t1 set id=1, val='ccc' where id=1",
-		"update t1 set id=2, val='ccc' where id=2",
+		"update t1 set val='ccc' where id=1",
+		"update t1 set val='ccc' where id=2",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
@@ -811,7 +921,7 @@ func TestPlayerCancelOnLock(t *testing.T) {
 	// The innodb lock wait timeout is set to 1s.
 	expectDBClientQueries(t, []string{
 		"begin",
-		"update t1 set id=1, val='ccc' where id=1",
+		"update t1 set val='ccc' where id=1",
 		"rollback",
 	})
 
@@ -896,7 +1006,7 @@ func TestPlayerBatching(t *testing.T) {
 	// transactions must be batched into one. But the
 	// DDLs should be on their own.
 	expectDBClientQueries(t, []string{
-		"update t1 set id=1, val='ccc' where id=1",
+		"update t1 set val='ccc' where id=1",
 		"/update _vt.vreplication set pos=",
 		"commit",
 		"begin",
@@ -993,7 +1103,7 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 			// will wait to be sent to the relay until the player fetches
 			// them.
 			expectDBClientQueries(t, []string{
-				"update t1 set id=1, val='ccc' where id=1",
+				"update t1 set val='ccc' where id=1",
 				"/update _vt.vreplication set pos=",
 				"commit",
 				"begin",
