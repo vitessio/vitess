@@ -696,8 +696,8 @@ func TestTypes(t *testing.T) {
 				`fields:<name:"tx" type:TEXT > ` +
 				`fields:<name:"en" type:ENUM > ` +
 				`fields:<name:"s" type:SET > > `,
-			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
-				`values:"abcdefgh13" > > > `,
+			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:4 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
+				`values:"abcd\000\000\000efgh13" > > > `,
 			`commit`,
 		}},
 	}, {
