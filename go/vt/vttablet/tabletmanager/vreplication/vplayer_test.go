@@ -294,6 +294,8 @@ func TestPlayerTypes(t *testing.T) {
 		fmt.Sprintf("create table %s.vitess_null(id int, val varbinary(128), primary key(id))", vrepldb),
 		"create table src1(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.src1(id int, val varbinary(128), primary key(id))", vrepldb),
+		"create table binary_pk(b binary(4), val varbinary(4), primary key(b))",
+		fmt.Sprintf("create table %s.binary_pk(b binary(4), val varbinary(4), primary key(b))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table vitess_ints",
@@ -306,6 +308,8 @@ func TestPlayerTypes(t *testing.T) {
 		fmt.Sprintf("drop table %s.vitess_misc", vrepldb),
 		"drop table vitess_null",
 		fmt.Sprintf("drop table %s.vitess_null", vrepldb),
+		"drop table binary_pk",
+		fmt.Sprintf("drop table %s.binary_pk", vrepldb),
 	})
 	env.SchemaEngine.Reload(context.Background())
 
@@ -337,7 +341,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
-		output: "insert into vitess_strings set vb='a', c='b', vc='c', b='d', tb='e', bl='f', ttx='g', tx='h', en='1', s='3'",
+		output: "insert into vitess_strings set vb='a', c='b', vc='c', b='d\\0\\0\\0', tb='e', bl='f', ttx='g', tx='h', en='1', s='3'",
 		table:  "vitess_strings",
 		data: [][]string{
 			{"a", "b", "c", "d\x00\x00\x00", "e", "f", "g", "h", "a", "a,b"},
@@ -355,6 +359,21 @@ func TestPlayerTypes(t *testing.T) {
 		table:  "vitess_null",
 		data: [][]string{
 			{"1", ""},
+		},
+	}, {
+		input:  "insert into binary_pk values('a', 'aaa')",
+		output: "insert into binary_pk set b='a\\0\\0\\0', val='aaa'",
+		table:  "binary_pk",
+		data: [][]string{
+			{"a\x00\x00\x00", "aaa"},
+		},
+	}, {
+		// Binary pk is a special case: https://github.com/vitessio/vitess/issues/3984
+		input:  "update binary_pk set val='bbb' where b='a\\0\\0\\0'",
+		output: "update binary_pk set b='a\\0\\0\\0', val='bbb' where b='a\\0\\0\\0'",
+		table:  "binary_pk",
+		data: [][]string{
+			{"a\x00\x00\x00", "bbb"},
 		},
 	}}
 
