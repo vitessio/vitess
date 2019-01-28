@@ -193,6 +193,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> CONVERT CAST
 %token <bytes> SUBSTR SUBSTRING
 %token <bytes> GROUP_CONCAT SEPARATOR
+%token <bytes> TIMESTAMPADD TIMESTAMPDIFF
 
 // Match
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
@@ -2573,6 +2574,14 @@ function_call_nonkeyword:
   {
     $$ = &FuncExpr{Name:NewColIdent("current_time")}
   }
+| TIMESTAMPADD openb sql_id ',' value_expression ',' value_expression closeb
+  {
+    $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:$3.String(), Expr1:$5, Expr2:$7}
+  }
+| TIMESTAMPDIFF openb sql_id ',' value_expression ',' value_expression closeb
+  {
+    $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
+  }
 
 func_datetime_precision_opt:
   /* empty */
@@ -3237,6 +3246,8 @@ reserved_keyword:
 | STRAIGHT_JOIN
 | TABLE
 | THEN
+| TIMESTAMPADD
+| TIMESTAMPDIFF
 | TO
 | TRUE
 | UNION
