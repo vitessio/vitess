@@ -254,9 +254,6 @@ type TxPoolController interface {
 	Rollback(ctx context.Context, transactionID int64) error
 }
 
-var tsOnce sync.Once
-var srvTopoServer srvtopo.Server
-
 // NewCustomTabletServer creates a tablet server based on the input config.
 func NewCustomTabletServer(name string, config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	return NewTabletServer(name, config, topoServer, alias)
@@ -287,8 +284,8 @@ func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *top
 	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
 	tsv.watcher = NewReplicationWatcher(tsv.env, tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
-	srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo")
-	tsv.vstreamer = vstreamer.NewEngine(srvTopoServer, tsv.se)
+	srvTopoServer := srvtopo.NewResilientServer(topoServer, "TabletSrvTopo")
+	tsv.vstreamer = vstreamer.NewEngine(tsv.env, srvTopoServer, tsv.se)
 	tsv.env.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
 		tsv.mu.Lock()
 		state := tsv.state

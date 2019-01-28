@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -40,8 +41,8 @@ import (
 
 var (
 	once           sync.Once
-	vschemaErrors  *stats.Counter
-	vschemaUpdates *stats.Counter
+	vschemaErrors  = stats.NewCounter("VSchemaErrors", "Count of VSchema errors")
+	vschemaUpdates = stats.NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors")
 )
 
 // Engine is the engine for handling vreplication streaming requests.
@@ -76,7 +77,7 @@ type Engine struct {
 // NewEngine creates a new Engine.
 // Initialization sequence is: NewEngine->InitDBConfig->Open.
 // Open and Close can be called multiple times and are idempotent.
-func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
+func NewEngine(env *servenv.Embedder, ts srvtopo.Server, se *schema.Engine) *Engine {
 	vse := &Engine{
 		streamers: make(map[int]*vstreamer),
 		kschema:   &vindexes.KeyspaceSchema{},
@@ -85,9 +86,7 @@ func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
 	}
 	// TODO(sougou): migrate this to use embedder.
 	once.Do(func() {
-		vschemaErrors = stats.NewCounter("VSchemaErrors", "Count of VSchema errors")
-		vschemaUpdates = stats.NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors")
-		http.Handle("/debug/tablet_vschema", vse)
+		env.HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
 	})
 	return vse
 }
