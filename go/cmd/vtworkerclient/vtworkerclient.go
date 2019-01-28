@@ -55,7 +55,7 @@ func main() {
 			logutil.LogEvent(logger, e)
 		})
 	if err != nil {
-		log.Errorf("%+v", err)
+		log.Error(err)
 		os.Exit(1)
 	}
 }

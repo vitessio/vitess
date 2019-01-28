@@ -23,8 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
-
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -117,7 +115,7 @@ func tryToConnect(r *RestartableResultReader) error {
 			return fmt.Errorf("failed to initialize tablet connection: retryable %v, %v", retryable, err)
 		}
 		statsRetryCount.Add(1)
-		glog.Infof("retrying after error: %v", err)
+		log.Infof("retrying after error: %v", err)
 	}
 
 }

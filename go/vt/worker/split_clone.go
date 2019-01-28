@@ -435,29 +435,6 @@ func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 	return nil
 }
 
-func (scw *SplitCloneWorker) disableUniquenessCheckOnDestinationTablets(ctx context.Context) error {
-	for _, si := range scw.destinationShards {
-		tablets := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
-		if len(tablets) != 1 {
-			return fmt.Errorf("should have exactly one MASTER tablet, have %v", len(tablets))
-		}
-		tablet := tablets[0].Tablet
-		cmd := "SET UNIQUE_CHECKS=0"
-		scw.wr.Logger().Infof("disabling uniqueness checks on %v", topoproto.TabletAliasString(tablet.Alias))
-		_, err := scw.wr.TabletManagerClient().ExecuteFetchAsApp(ctx, tablet, true, []byte(cmd), 0)
-		if err != nil {
-			return fmt.Errorf("should have exactly one MASTER tablet, have %v", len(tablets))
-		}
-		scw.cleaner.Record("EnableUniquenessChecks", topoproto.TabletAliasString(tablet.Alias), func(ctx context.Context, wr *wrangler.Wrangler) error {
-			cmd := "SET UNIQUE_CHECKS=1"
-			_, err := scw.wr.TabletManagerClient().ExecuteFetchAsApp(ctx, tablet, true, []byte(cmd), 0)
-			return err
-		})
-	}
-
-	return nil
-}
-
 func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	// Phase 1: read what we need to do.
 	if err := scw.init(ctx); err != nil {
