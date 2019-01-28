@@ -45,7 +45,7 @@ import (
 )
 
 var (
-	// embedmu protects embeds, members of Instance and globalStatVars.
+	// embedmu protects embeds, members of embedder and globalStatVars.
 	// However, varMap and handlFunc have their own mutexes. This is
 	// because their handler functions directly access them.
 	embedmu sync.Mutex
@@ -53,7 +53,7 @@ var (
 	// embeds contains the full list of instances. Entries can only be
 	// added. The creation of a new instance with a previously existing
 	// name causes that instance to be reused.
-	embeds = make(map[string]*Embedder)
+	embeds = make(map[string]*embedder)
 
 	// globalStatVars contains the merged stats vars created for the instances.
 	globalStatVars = make(map[string]*varMap)
@@ -62,21 +62,21 @@ var (
 //-----------------------------------------------------------------
 
 // varMap contains the metadata for a merged stats var. It supports
-// only gauges and counters. For every Instance, it stores a function
-// that yields the counter or gauge values for that Instance.
+// only gauges and counters. For every embedder, it stores a function
+// that yields the counter or gauge values for that embedder.
 type varMap struct {
 	mu   sync.Mutex
 	vars map[string]func() map[string]int64
 }
 
-// Set adds or updates the func for an Instance.
+// Set adds or updates the func for an embedder.
 func (vmap *varMap) Set(name string, f func() map[string]int64) {
 	vmap.mu.Lock()
 	defer vmap.mu.Unlock()
 	vmap.vars[name] = f
 }
 
-// Fetch returns the consolidated stats value for all Instances.
+// Fetch returns the consolidated stats value for all embedder.
 func (vmap *varMap) Fetch() map[string]int64 {
 	result := make(map[string]int64)
 	vmap.mu.Lock()
@@ -95,7 +95,7 @@ func (vmap *varMap) Fetch() map[string]int64 {
 
 //-----------------------------------------------------------------
 
-// handleFunc stores the http Handler for an Instance. This function can
+// handleFunc stores the http Handler for an embedder. This function can
 // be replaced as needed.
 type handleFunc struct {
 	mu sync.Mutex
@@ -118,73 +118,95 @@ func (hf *handleFunc) Get() func(w http.ResponseWriter, r *http.Request) {
 
 //-----------------------------------------------------------------
 
-// Embedder provides the functions needed to embed an object
+// embedder provides the functions needed to embed an object
 // by remapping global endpoints into different namespaces.
-type Embedder struct {
-	name, label string
-	handleFuncs map[string]*handleFunc
-	sp          *statusPage
+type embedder struct {
+	name, prefix string
+	handleFuncs  map[string]*handleFunc
+	sp           *statusPage
 }
 
-// NewEmbedder creates a new Embedder with name as namespace.
-// The label specifies the prefix for the variables, and is also
-// used to label the additonial dimension for the stats vars.
-func NewEmbedder(name, label string) *Embedder {
+// AssignPrefix assigns a prefix for the instance name. All future
+// stats vars for the instance will be created with the specified
+// prefix. The prefix is is also used to label the additonial
+// dimension for the stats vars.
+func AssignPrefix(instanceName, prefix string) {
 	embedmu.Lock()
 	defer embedmu.Unlock()
 
-	e, ok := embeds[name]
+	e, ok := embeds[instanceName]
 	if ok {
-		e.resetLocked()
-		return e
+		e.resetLocked(prefix)
+		return
 	}
-	e = &Embedder{
-		name:        name,
-		label:       label,
+	e = &embedder{
+		name:        instanceName,
+		prefix:      prefix,
 		handleFuncs: make(map[string]*handleFunc),
 	}
-	if name != "" {
-		e.sp = newStatusPage(name)
+	if instanceName != "" {
+		e.sp = newStatusPage(instanceName)
 	}
-	embeds[name] = e
-	return e
+	embeds[instanceName] = e
 }
 
-func (e *Embedder) resetLocked() {
+func (e *embedder) resetLocked(prefix string) {
+	e.prefix = prefix
 	for _, hf := range e.handleFuncs {
 		hf.Set(nil)
 	}
+
 	for _, vmap := range globalStatVars {
 		vmap.mu.Lock()
 		delete(vmap.vars, e.name)
 		vmap.mu.Unlock()
 	}
+
 	if e.sp != nil {
 		e.sp.reset()
 	}
 }
 
-// URLPrefix returns the URL prefix for all the embedder.
-func (e *Embedder) URLPrefix() string {
-	// There are two other places where this logic is duplicated:
-	// status.go and go/vt/vtgate/discovery/healthcheck.go.
-	if e.name == "" {
-		return e.name
+// findOrCreateEmbedder returns an existing embedder or
+// creates a new one.
+func findOrCreateEmbedder(instanceName string) *embedder {
+	if e, ok := embeds[instanceName]; ok {
+		return e
 	}
-	return "/" + e.name
+	e := &embedder{
+		name:        instanceName,
+		prefix:      "",
+		handleFuncs: make(map[string]*handleFunc),
+	}
+	if instanceName != "" {
+		e.sp = newStatusPage(instanceName)
+	}
+	embeds[instanceName] = e
+	return e
 }
 
-// HandleFunc sets or overwrites the handler for url. If Instance has a name,
+// URLPrefix returns the URL prefix for all the embedder.
+func URLPrefix(instanceName string) string {
+	// There are two other places where this logic is duplicated:
+	// status.go and go/vt/vtgate/discovery/healthcheck.go.
+	if instanceName == "" {
+		return ""
+	}
+	return "/" + instanceName
+}
+
+// HandleFunc sets or overwrites the handler for url. If embedder has a name,
 // url remapped from /path to /name/path. If name is empty, the request
 // is passed through to http.HandleFunc.
-func (e *Embedder) HandleFunc(url string, f func(w http.ResponseWriter, r *http.Request)) {
-	if e.name == "" {
+func HandleFunc(instanceName, url string, f func(w http.ResponseWriter, r *http.Request)) {
+	if instanceName == "" {
 		http.HandleFunc(url, f)
 		return
 	}
 
 	embedmu.Lock()
 	defer embedmu.Unlock()
+	e := findOrCreateEmbedder(instanceName)
 
 	hf, ok := e.handleFuncs[url]
 	if ok {
@@ -194,36 +216,38 @@ func (e *Embedder) HandleFunc(url string, f func(w http.ResponseWriter, r *http.
 	hf = &handleFunc{f: f}
 	e.handleFuncs[url] = hf
 
-	http.HandleFunc(e.URLPrefix()+url, func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(URLPrefix(e.name)+url, func(w http.ResponseWriter, r *http.Request) {
 		if f := hf.Get(); f != nil {
 			f(w, r)
 		}
 	})
 }
 
-// AddStatusPart adds a status part to the status page. If instance has a name,
+// AddInstanceStatusPart adds a status part to the status page. If instance has a name,
 // the part is added to a url named /name/debug/status. Otherwise, it's /debug/status.
-func (e *Embedder) AddStatusPart(banner, frag string, f func() interface{}) {
-	if e.sp == nil {
+func AddInstanceStatusPart(instanceName, banner, frag string, f func() interface{}) {
+	if instanceName == "" {
 		AddStatusPart(banner, frag, f)
 		return
 	}
 
 	embedmu.Lock()
 	defer embedmu.Unlock()
+	e := findOrCreateEmbedder(instanceName)
 	e.sp.addStatusPart(banner, frag, f)
 }
 
 // NewCountersFuncWithMultiLabels creates a name-spaced equivalent for stats.NewCountersFuncWithMultiLabels.
-func (e *Embedder) NewCountersFuncWithMultiLabels(name, help string, labels []string, f func() map[string]int64) *stats.CountersFuncWithMultiLabels {
-	// If e.name is empty, it's a pass-through.
+func NewCountersFuncWithMultiLabels(instanceName, name, help string, labels []string, f func() map[string]int64) *stats.CountersFuncWithMultiLabels {
+	// If instanceName is empty, it's a pass-through.
 	// If name is empty, it's an unexported var.
-	if e.name == "" || name == "" {
+	if instanceName == "" || name == "" {
 		return stats.NewCountersFuncWithMultiLabels(name, help, labels, f)
 	}
 
 	embedmu.Lock()
 	defer embedmu.Unlock()
+	e := findOrCreateEmbedder(instanceName)
 
 	if vmap, ok := globalStatVars[name]; ok {
 		vmap.Set(e.name, f)
@@ -232,22 +256,23 @@ func (e *Embedder) NewCountersFuncWithMultiLabels(name, help string, labels []st
 	vmap := &varMap{vars: map[string]func() map[string]int64{e.name: f}}
 	globalStatVars[name] = vmap
 
-	newlabels := append(append(make([]string, 0, len(labels)+1), e.label), labels...)
-	_ = stats.NewCountersFuncWithMultiLabels(e.label+name, help, newlabels, func() map[string]int64 {
+	newlabels := append(append(make([]string, 0, len(labels)+1), e.prefix), labels...)
+	_ = stats.NewCountersFuncWithMultiLabels(e.prefix+name, help, newlabels, func() map[string]int64 {
 		return vmap.Fetch()
 	})
 	return stats.NewCountersFuncWithMultiLabels("", help, labels, f)
 }
 
 // NewGaugesFuncWithMultiLabels creates a name-spaced equivalent for stats.NewGaugesFuncWithMultiLabels.
-func (e *Embedder) NewGaugesFuncWithMultiLabels(name, help string, labels []string, f func() map[string]int64) *stats.GaugesFuncWithMultiLabels {
+func NewGaugesFuncWithMultiLabels(instanceName, name, help string, labels []string, f func() map[string]int64) *stats.GaugesFuncWithMultiLabels {
 	// This implementation is identical to NewCountersFuncWithMultiLabels, except it's for Gauges.
-	if e.name == "" || name == "" {
+	if instanceName == "" || name == "" {
 		return stats.NewGaugesFuncWithMultiLabels(name, help, labels, f)
 	}
 
 	embedmu.Lock()
 	defer embedmu.Unlock()
+	e := findOrCreateEmbedder(instanceName)
 
 	if vmap, ok := globalStatVars[name]; ok {
 		vmap.Set(e.name, f)
@@ -256,124 +281,124 @@ func (e *Embedder) NewGaugesFuncWithMultiLabels(name, help string, labels []stri
 	vmap := &varMap{vars: map[string]func() map[string]int64{e.name: f}}
 	globalStatVars[name] = vmap
 
-	newlabels := append(append(make([]string, 0, len(labels)+1), e.label), labels...)
-	_ = stats.NewGaugesFuncWithMultiLabels(e.label+name, help, newlabels, func() map[string]int64 {
+	newlabels := append(append(make([]string, 0, len(labels)+1), e.prefix), labels...)
+	_ = stats.NewGaugesFuncWithMultiLabels(e.prefix+name, help, newlabels, func() map[string]int64 {
 		return vmap.Fetch()
 	})
 	return stats.NewGaugesFuncWithMultiLabels("", help, labels, f)
 }
 
 // NewCounter creates a name-spaced equivalent for stats.NewCounter.
-func (e *Embedder) NewCounter(name string, help string) *stats.Counter {
-	if e.name == "" || name == "" {
+func NewCounter(instanceName, name string, help string) *stats.Counter {
+	if instanceName == "" || name == "" {
 		return stats.NewCounter(name, help)
 	}
 	v := stats.NewCounter("", help)
-	_ = e.NewCounterFunc(name, help, v.Get)
+	_ = NewCounterFunc(instanceName, name, help, v.Get)
 	return v
 }
 
 // NewGauge creates a name-spaced equivalent for stats.NewGauge.
-func (e *Embedder) NewGauge(name string, help string) *stats.Gauge {
-	if e.name == "" || name == "" {
+func NewGauge(instanceName, name string, help string) *stats.Gauge {
+	if instanceName == "" || name == "" {
 		return stats.NewGauge(name, help)
 	}
 	v := stats.NewGauge("", help)
-	_ = e.NewGaugeFunc(name, help, v.Get)
+	_ = NewGaugeFunc(instanceName, name, help, v.Get)
 	return v
 }
 
 // NewCounterFunc creates a name-spaced equivalent for stats.NewCounterFunc.
-func (e *Embedder) NewCounterFunc(name string, help string, f func() int64) *stats.CounterFunc {
-	if e.name == "" || name == "" {
+func NewCounterFunc(instanceName, name string, help string, f func() int64) *stats.CounterFunc {
+	if instanceName == "" || name == "" {
 		return stats.NewCounterFunc(name, help, f)
 	}
-	_ = e.NewCountersFuncWithMultiLabels(name, help, nil, func() map[string]int64 {
+	_ = NewCountersFuncWithMultiLabels(instanceName, name, help, nil, func() map[string]int64 {
 		return map[string]int64{"": f()}
 	})
 	return stats.NewCounterFunc("", help, f)
 }
 
 // NewGaugeFunc creates a name-spaced equivalent for stats.NewGaugeFunc.
-func (e *Embedder) NewGaugeFunc(name string, help string, f func() int64) *stats.GaugeFunc {
-	if e.name == "" || name == "" {
+func NewGaugeFunc(instanceName, name string, help string, f func() int64) *stats.GaugeFunc {
+	if instanceName == "" || name == "" {
 		return stats.NewGaugeFunc(name, help, f)
 	}
-	_ = e.NewGaugesFuncWithMultiLabels(name, help, nil, func() map[string]int64 {
+	_ = NewGaugesFuncWithMultiLabels(instanceName, name, help, nil, func() map[string]int64 {
 		return map[string]int64{"": f()}
 	})
 	return stats.NewGaugeFunc("", help, f)
 }
 
 // NewCounterDurationFunc creates a name-spaced equivalent for stats.NewCounterDurationFunc.
-func (e *Embedder) NewCounterDurationFunc(name string, help string, f func() time.Duration) *stats.CounterDurationFunc {
-	if e.name == "" || name == "" {
+func NewCounterDurationFunc(instanceName, name string, help string, f func() time.Duration) *stats.CounterDurationFunc {
+	if instanceName == "" || name == "" {
 		return stats.NewCounterDurationFunc(name, help, f)
 	}
-	_ = e.NewCounterFunc(name, help, func() int64 { return int64(f()) })
+	_ = NewCounterFunc(instanceName, name, help, func() int64 { return int64(f()) })
 	return stats.NewCounterDurationFunc("", help, f)
 }
 
 // NewGaugeDurationFunc creates a name-spaced equivalent for stats.NewGaugeDurationFunc.
-func (e *Embedder) NewGaugeDurationFunc(name string, help string, f func() time.Duration) *stats.GaugeDurationFunc {
-	if e.name == "" || name == "" {
+func NewGaugeDurationFunc(instanceName, name string, help string, f func() time.Duration) *stats.GaugeDurationFunc {
+	if instanceName == "" || name == "" {
 		return stats.NewGaugeDurationFunc(name, help, f)
 	}
-	_ = e.NewGaugeFunc(name, help, func() int64 { return int64(f()) })
+	_ = NewGaugeFunc(instanceName, name, help, func() int64 { return int64(f()) })
 	return stats.NewGaugeDurationFunc("", help, f)
 }
 
 // NewCountersWithSingleLabel creates a name-spaced equivalent for stats.NewCountersWithSingleLabel.
 // Tags are ignored if embedded.
-func (e *Embedder) NewCountersWithSingleLabel(name, help string, label string, tags ...string) *stats.CountersWithSingleLabel {
-	if e.name == "" || name == "" {
+func NewCountersWithSingleLabel(instanceName, name, help string, label string, tags ...string) *stats.CountersWithSingleLabel {
+	if instanceName == "" || name == "" {
 		return stats.NewCountersWithSingleLabel(name, help, label, tags...)
 	}
 
 	v := stats.NewCountersWithSingleLabel("", help, label)
-	_ = e.NewCountersFuncWithMultiLabels(name, help, []string{label}, v.Counts)
+	_ = NewCountersFuncWithMultiLabels(instanceName, name, help, []string{label}, v.Counts)
 	return v
 }
 
 // NewGaugesWithSingleLabel creates a name-spaced equivalent for stats.NewGaugesWithSingleLabel.
 // Tags are ignored if embedded.
-func (e *Embedder) NewGaugesWithSingleLabel(name, help string, label string, tags ...string) *stats.GaugesWithSingleLabel {
-	if e.name == "" || name == "" {
+func NewGaugesWithSingleLabel(instanceName, name, help string, label string, tags ...string) *stats.GaugesWithSingleLabel {
+	if instanceName == "" || name == "" {
 		return stats.NewGaugesWithSingleLabel(name, help, label, tags...)
 	}
 
 	v := stats.NewGaugesWithSingleLabel("", help, label)
-	_ = e.NewGaugesFuncWithMultiLabels(name, help, []string{label}, v.Counts)
+	_ = NewGaugesFuncWithMultiLabels(instanceName, name, help, []string{label}, v.Counts)
 	return v
 }
 
 // NewCountersWithMultiLabels creates a name-spaced equivalent for stats.NewCountersWithMultiLabels.
-func (e *Embedder) NewCountersWithMultiLabels(name, help string, labels []string) *stats.CountersWithMultiLabels {
-	if e.name == "" || name == "" {
+func NewCountersWithMultiLabels(instanceName, name, help string, labels []string) *stats.CountersWithMultiLabels {
+	if instanceName == "" || name == "" {
 		return stats.NewCountersWithMultiLabels(name, help, labels)
 	}
 
 	v := stats.NewCountersWithMultiLabels("", help, labels)
-	_ = e.NewCountersFuncWithMultiLabels(name, help, labels, v.Counts)
+	_ = NewCountersFuncWithMultiLabels(instanceName, name, help, labels, v.Counts)
 	return v
 }
 
 // NewGaugesWithMultiLabels creates a name-spaced equivalent for stats.NewGaugesWithMultiLabels.
-func (e *Embedder) NewGaugesWithMultiLabels(name, help string, labels []string) *stats.GaugesWithMultiLabels {
-	if e.name == "" || name == "" {
+func NewGaugesWithMultiLabels(instanceName, name, help string, labels []string) *stats.GaugesWithMultiLabels {
+	if instanceName == "" || name == "" {
 		return stats.NewGaugesWithMultiLabels(name, help, labels)
 	}
 
 	v := stats.NewGaugesWithMultiLabels("", help, labels)
-	_ = e.NewGaugesFuncWithMultiLabels(name, help, labels, v.Counts)
+	_ = NewGaugesFuncWithMultiLabels(instanceName, name, help, labels, v.Counts)
 	return v
 }
 
 // NewTimings creates a name-spaced equivalent for stats.NewTimings.
 // The function currently just returns an unexported variable.
 // TODO(sougou): implement.
-func (e *Embedder) NewTimings(name string, help string, label string) *stats.Timings {
-	if e.name == "" || name == "" {
+func NewTimings(instanceName, name string, help string, label string) *stats.Timings {
+	if instanceName == "" || name == "" {
 		return stats.NewTimings(name, help, label)
 	}
 	return stats.NewTimings("", help, label)
@@ -382,8 +407,8 @@ func (e *Embedder) NewTimings(name string, help string, label string) *stats.Tim
 // NewMultiTimings creates a name-spaced equivalent for stats.NewMultiTimings.
 // The function currently just returns an unexported variable.
 // TODO(sougou): implement.
-func (e *Embedder) NewMultiTimings(name string, help string, labels []string) *stats.MultiTimings {
-	if e.name == "" || name == "" {
+func NewMultiTimings(instanceName, name string, help string, labels []string) *stats.MultiTimings {
+	if instanceName == "" || name == "" {
 		return stats.NewMultiTimings(name, help, labels)
 	}
 	return stats.NewMultiTimings("", help, labels)
@@ -392,8 +417,8 @@ func (e *Embedder) NewMultiTimings(name string, help string, labels []string) *s
 // NewRates creates a name-spaced equivalent for stats.NewRates.
 // The function currently just returns an unexported variable.
 // TODO(sougou): implement.
-func (e *Embedder) NewRates(name string, countTracker stats.CountTracker, samples int, interval time.Duration) *stats.Rates {
-	if e.name == "" || name == "" {
+func NewRates(instanceName, name string, countTracker stats.CountTracker, samples int, interval time.Duration) *stats.Rates {
+	if instanceName == "" || name == "" {
 		return stats.NewRates(name, countTracker, samples, interval)
 	}
 	return stats.NewRates("", countTracker, samples, interval)
@@ -402,18 +427,18 @@ func (e *Embedder) NewRates(name string, countTracker stats.CountTracker, sample
 // NewHistogram creates a name-spaced equivalent for stats.NewHistogram.
 // The function currently just returns an unexported variable.
 // TODO(sougou): implement.
-func (e *Embedder) NewHistogram(name, help string, cutoffs []int64) *stats.Histogram {
-	if e.name == "" || name == "" {
+func NewHistogram(instanceName, name, help string, cutoffs []int64) *stats.Histogram {
+	if instanceName == "" || name == "" {
 		return stats.NewHistogram(name, help, cutoffs)
 	}
 	return stats.NewHistogram("", help, cutoffs)
 }
 
 // Publish creates a name-spaced equivalent for stats.Publish.
-// The function just passes through if the Instance name is empty.
+// The function just passes through if the embedder name is empty.
 // TODO(sougou): implement.
-func (e *Embedder) Publish(name string, v expvar.Var) {
-	if e.name == "" {
+func Publish(instanceName, name string, v expvar.Var) {
+	if instanceName == "" {
 		stats.Publish(name, v)
 	}
 }

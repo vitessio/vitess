@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -34,8 +33,8 @@ var errRejected = errors.New("rejected")
 type fakeTabletService struct {
 }
 
-func (fakeTabletService) CheckMySQL()            {}
-func (fakeTabletService) Env() *servenv.Embedder { return servenv.NewEmbedder("test", "") }
+func (fakeTabletService) CheckMySQL()          {}
+func (fakeTabletService) InstanceName() string { return "test" }
 
 var FakeTabletService = fakeTabletService{}
 

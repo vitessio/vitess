@@ -55,18 +55,19 @@ type ReplicationWatcher struct {
 }
 
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(env *servenv.Embedder, se *schema.Engine, config tabletenv.TabletConfig) *ReplicationWatcher {
+func NewReplicationWatcher(instanceName string, se *schema.Engine, config tabletenv.TabletConfig) *ReplicationWatcher {
 	rpw := &ReplicationWatcher{
 		watchReplication: config.WatchReplication,
 		se:               se,
 	}
-	env.Publish("EventTokenPosition", stats.StringFunc(func() string {
+	servenv.Publish(instanceName, "EventTokenPosition", stats.StringFunc(func() string {
 		if e := rpw.EventToken(); e != nil {
 			return e.Position
 		}
 		return ""
 	}))
-	env.NewGaugeFunc(
+	servenv.NewGaugeFunc(
+		instanceName,
 		"EventTokenTimestamp",
 		"Replication watcher event token timestamp",
 		func() int64 {

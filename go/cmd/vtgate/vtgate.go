@@ -66,7 +66,7 @@ func main() {
 	ts := topo.Open()
 	defer ts.Close()
 
-	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
+	resilientServer = srvtopo.NewResilientServer("ResilientSrvTopoServer", ts)
 
 	healthCheck = discovery.NewHealthCheck(*healthCheckRetryDelay, *healthCheckTimeout)
 	healthCheck.RegisterStats()

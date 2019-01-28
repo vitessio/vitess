@@ -22,7 +22,6 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 )
 
@@ -49,7 +48,7 @@ func TestMain(m *testing.M) {
 
 		// engine cannot be initialized in testenv because it introduces
 		// circular dependencies.
-		engine = NewEngine(servenv.NewEmbedder("test", ""), env.SrvTopo, env.SchemaEngine)
+		engine = NewEngine("TestStreamerEngine", env.SrvTopo, env.SchemaEngine)
 		engine.InitDBConfig(env.Dbcfgs)
 		engine.Open(env.KeyspaceName, env.Cells[0])
 		defer engine.Close()

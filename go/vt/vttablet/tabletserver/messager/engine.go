@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -42,7 +41,7 @@ import (
 // that the messager needs for callback.
 type TabletService interface {
 	CheckMySQL()
-	Env() *servenv.Embedder
+	InstanceName() string
 	PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error)
 	PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error)
 }

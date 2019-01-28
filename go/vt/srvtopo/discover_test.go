@@ -53,7 +53,7 @@ func TestFindAllTargets(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
 	flag.Set("srv_topo_cache_refresh", "0s") // No caching values
 	flag.Set("srv_topo_cache_ttl", "0s")     // No caching values
-	rs := NewResilientServer(ts, "TestFindAllKeyspaceShards")
+	rs := NewResilientServer("TestFindAllKeyspaceShards", ts)
 
 	// No keyspace / shards.
 	ks, err := FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_MASTER})

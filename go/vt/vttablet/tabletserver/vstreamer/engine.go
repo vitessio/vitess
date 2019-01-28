@@ -77,17 +77,14 @@ type Engine struct {
 // NewEngine creates a new Engine.
 // Initialization sequence is: NewEngine->InitDBConfig->Open.
 // Open and Close can be called multiple times and are idempotent.
-func NewEngine(env *servenv.Embedder, ts srvtopo.Server, se *schema.Engine) *Engine {
+func NewEngine(instanceName string, ts srvtopo.Server, se *schema.Engine) *Engine {
 	vse := &Engine{
 		streamers: make(map[int]*vstreamer),
 		kschema:   &vindexes.KeyspaceSchema{},
 		ts:        ts,
 		se:        se,
 	}
-	// TODO(sougou): migrate this to use embedder.
-	once.Do(func() {
-		env.HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
-	})
+	servenv.HandleFunc(instanceName, "/debug/tablet_vschema", vse.ServeHTTP)
 	return vse
 }
 

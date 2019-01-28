@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
@@ -124,8 +125,8 @@ func NewTxPool(
 	}
 	// Careful: conns also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
-	tsv.Env().NewGaugeDurationFunc(prefix+"TransactionPoolTimeout", "Transaction pool timeout", axp.timeout.Get)
-	tsv.Env().NewGaugeFunc(prefix+"TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
+	servenv.NewGaugeDurationFunc(tsv.InstanceName(), prefix+"TransactionPoolTimeout", "Transaction pool timeout", axp.timeout.Get)
+	servenv.NewGaugeFunc(tsv.InstanceName(), prefix+"TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
 	return axp
 }
 

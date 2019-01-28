@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -72,16 +73,16 @@ func NewEngine(tsv connpool.TabletService, config tabletenv.TabletConfig) *Engin
 		ticks:      timer.NewTimer(reloadTime),
 		reloadTime: reloadTime,
 	}
-	env := tsv.Env()
-	_ = env.NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
-	_ = env.NewGaugesFuncWithMultiLabels("TableRows", "table rows created in tabletserver", []string{"Table"}, se.getTableRows)
-	_ = env.NewGaugesFuncWithMultiLabels("DataLength", "data length in tabletserver", []string{"Table"}, se.getDataLength)
-	_ = env.NewGaugesFuncWithMultiLabels("IndexLength", "index length in tabletserver", []string{"Table"}, se.getIndexLength)
-	_ = env.NewGaugesFuncWithMultiLabels("DataFree", "data free in tabletserver", []string{"Table"}, se.getDataFree)
-	_ = env.NewGaugesFuncWithMultiLabels("MaxDataLength", "max data length in tabletserver", []string{"Table"}, se.getMaxDataLength)
+	instanceName := tsv.InstanceName()
+	_ = servenv.NewGaugeDurationFunc(instanceName, "SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
+	_ = servenv.NewGaugesFuncWithMultiLabels(instanceName, "TableRows", "table rows created in tabletserver", []string{"Table"}, se.getTableRows)
+	_ = servenv.NewGaugesFuncWithMultiLabels(instanceName, "DataLength", "data length in tabletserver", []string{"Table"}, se.getDataLength)
+	_ = servenv.NewGaugesFuncWithMultiLabels(instanceName, "IndexLength", "index length in tabletserver", []string{"Table"}, se.getIndexLength)
+	_ = servenv.NewGaugesFuncWithMultiLabels(instanceName, "DataFree", "data free in tabletserver", []string{"Table"}, se.getDataFree)
+	_ = servenv.NewGaugesFuncWithMultiLabels(instanceName, "MaxDataLength", "max data length in tabletserver", []string{"Table"}, se.getMaxDataLength)
 
-	env.HandleFunc("/debug/schema", se.ServeHTTP)
-	env.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HandleFunc(instanceName, "/debug/schema", se.ServeHTTP)
+	servenv.HandleFunc(instanceName, "/schemaz", func(w http.ResponseWriter, r *http.Request) {
 		// Ensure schema engine is Open. If vttablet came up in a non_serving role,
 		// the schema engine may not have been initialized.
 		err := se.Open()

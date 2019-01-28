@@ -47,7 +47,7 @@ func initResolver(t *testing.T, name string) *Resolver {
 	ctx := context.Background()
 	cell := "cell1"
 	ts := memorytopo.NewServer(cell)
-	rs := NewResilientServer(ts, name)
+	rs := NewResilientServer(name, ts)
 
 	// Create sharded keyspace and shards.
 	if err := ts.CreateKeyspace(ctx, "sks", &topodatapb.Keyspace{}); err != nil {

@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -127,5 +126,5 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 
 type fakeTabletService struct{}
 
-func (f fakeTabletService) CheckMySQL()            {}
-func (f fakeTabletService) Env() *servenv.Embedder { return servenv.NewEmbedder("test", "") }
+func (f fakeTabletService) CheckMySQL()          {}
+func (f fakeTabletService) InstanceName() string { return "test" }

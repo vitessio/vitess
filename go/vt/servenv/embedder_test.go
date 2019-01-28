@@ -30,10 +30,10 @@ import (
 )
 
 func TestURLPrefix(t *testing.T) {
-	if got, want := NewEmbedder("", "").URLPrefix(), ""; got != want {
+	if got, want := URLPrefix(""), ""; got != want {
 		t.Errorf("URLPrefix(''): %v, want %v", got, want)
 	}
-	if got, want := NewEmbedder("a", "").URLPrefix(), "/a"; got != want {
+	if got, want := URLPrefix("a"), "/a"; got != want {
 		t.Errorf("URLPrefix('a'): %v, want %v", got, want)
 	}
 }
@@ -48,8 +48,7 @@ func TestHandleFunc(t *testing.T) {
 	port := listener.Addr().(*net.TCPAddr).Port
 	go http.Serve(listener, nil)
 
-	ebd := NewEmbedder("", "")
-	ebd.HandleFunc("/path", func(w http.ResponseWriter, r *http.Request) {
+	HandleFunc("", "/path", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("1"))
 	})
 	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/path", port)), "1"; got != want {
@@ -59,8 +58,8 @@ func TestHandleFunc(t *testing.T) {
 		t.Errorf("httpGet: %s, must contain %s", got, want)
 	}
 
-	ebd = NewEmbedder("a", "")
-	ebd.HandleFunc("/path", func(w http.ResponseWriter, r *http.Request) {
+	AssignPrefix("a", "")
+	HandleFunc("a", "/path", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("2"))
 	})
 	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/a/path", port)), "2"; got != want {
@@ -70,7 +69,7 @@ func TestHandleFunc(t *testing.T) {
 		t.Errorf("httpGet: %s, must contain %s", got, want)
 	}
 
-	ebd.HandleFunc("/path", func(w http.ResponseWriter, r *http.Request) {
+	HandleFunc("a", "/path", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("3"))
 	})
 	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/a/path", port)), "3"; got != want {
@@ -80,16 +79,16 @@ func TestHandleFunc(t *testing.T) {
 		t.Errorf("httpGet: %s, must contain %s", got, want)
 	}
 
-	ebd = NewEmbedder("a", "")
-	ebd.HandleFunc("/path", func(w http.ResponseWriter, r *http.Request) {
+	AssignPrefix("a", "")
+	HandleFunc("a", "/path", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("4"))
 	})
 	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/a/path", port)), "4"; got != want {
 		t.Errorf("httpGet: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("b", "")
-	ebd.HandleFunc("/path", func(w http.ResponseWriter, r *http.Request) {
+	AssignPrefix("b", "")
+	HandleFunc("b", "/path", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("5"))
 	})
 	if got, want := httpGet(t, fmt.Sprintf("http://localhost:%d/b/path", port)), "5"; got != want {
@@ -124,42 +123,41 @@ func httpGet(t *testing.T, url string) string {
 }
 
 func TestCountersFuncWithMultiLabels(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	ebd.NewCountersFuncWithMultiLabels("gcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 1} })
+	NewCountersFuncWithMultiLabels("", "gcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 1} })
 	if got, want := expvar.Get("gcfwml").String(), `{"a": 1}`; got != want {
 		t.Errorf("CountersFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewCountersFuncWithMultiLabels("", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 2} })
-	ebd.NewCountersFuncWithMultiLabels("", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 3} })
+	NewCountersFuncWithMultiLabels("i1", "", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 2} })
+	NewCountersFuncWithMultiLabels("i1", "", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 3} })
 
-	ebd.NewCountersFuncWithMultiLabels("lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 4} })
+	NewCountersFuncWithMultiLabels("i1", "lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 4} })
 	if got, want := expvar.Get("labellcfwml").String(), `{"i1.a": 4}`; got != want {
 		t.Errorf("CountersFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
-	ebd.NewCountersFuncWithMultiLabels("lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 5} })
+	NewCountersFuncWithMultiLabels("i1", "lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 5} })
 	if got, want := expvar.Get("labellcfwml").String(), `{"i1.a": 5}`; got != want {
 		t.Errorf("CountersFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
 	if got, want := expvar.Get("labellcfwml").String(), "{}"; got != want {
 		t.Errorf("CountersFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
-	ebd.NewCountersFuncWithMultiLabels("lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 6} })
+	NewCountersFuncWithMultiLabels("i1", "lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 6} })
 	if got, want := expvar.Get("labellcfwml").String(), `{"i1.a": 6}`; got != want {
 		t.Errorf("CountersFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i2", "label")
-	ebd.NewCountersFuncWithMultiLabels("lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 7} })
+	AssignPrefix("i2", "label")
+	NewCountersFuncWithMultiLabels("i2", "lcfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 7} })
 	want1 := `{"i1.a": 6, "i2.a": 7}`
 	want2 := `{"i2.a": 7, "i1.a": 6}`
 	if got := expvar.Get("labellcfwml").String(); got != want1 && got != want2 {
@@ -168,42 +166,41 @@ func TestCountersFuncWithMultiLabels(t *testing.T) {
 }
 
 func TestGaugesFuncWithMultiLabels(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	ebd.NewGaugesFuncWithMultiLabels("ggfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 1} })
+	NewGaugesFuncWithMultiLabels("", "ggfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 1} })
 	if got, want := expvar.Get("ggfwml").String(), `{"a": 1}`; got != want {
 		t.Errorf("GaugesFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewGaugesFuncWithMultiLabels("", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 2} })
-	ebd.NewGaugesFuncWithMultiLabels("", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 3} })
+	NewGaugesFuncWithMultiLabels("i1", "", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 2} })
+	NewGaugesFuncWithMultiLabels("i1", "", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 3} })
 
-	ebd.NewGaugesFuncWithMultiLabels("lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 4} })
+	NewGaugesFuncWithMultiLabels("i1", "lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 4} })
 	if got, want := expvar.Get("labellgfwml").String(), `{"i1.a": 4}`; got != want {
 		t.Errorf("GaugesFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
-	ebd.NewGaugesFuncWithMultiLabels("lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 5} })
+	NewGaugesFuncWithMultiLabels("i1", "lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 5} })
 	if got, want := expvar.Get("labellgfwml").String(), `{"i1.a": 5}`; got != want {
 		t.Errorf("GaugesFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
 	if got, want := expvar.Get("labellgfwml").String(), "{}"; got != want {
 		t.Errorf("GaugesFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
-	ebd.NewGaugesFuncWithMultiLabels("lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 6} })
+	NewGaugesFuncWithMultiLabels("i1", "lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 6} })
 	if got, want := expvar.Get("labellgfwml").String(), `{"i1.a": 6}`; got != want {
 		t.Errorf("GaugesFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i2", "label")
-	ebd.NewGaugesFuncWithMultiLabels("lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 7} })
+	AssignPrefix("i2", "label")
+	NewGaugesFuncWithMultiLabels("i2", "lgfwml", "", []string{"l"}, func() map[string]int64 { return map[string]int64{"a": 7} })
 	want1 := `{"i1.a": 6, "i2.a": 7}`
 	want2 := `{"i2.a": 7, "i1.a": 6}`
 	if got := expvar.Get("labellgfwml").String(); got != want1 && got != want2 {
@@ -212,46 +209,45 @@ func TestGaugesFuncWithMultiLabels(t *testing.T) {
 }
 
 func TestCounter(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	c := ebd.NewCounter("gcounter", "")
+	c := NewCounter("", "gcounter", "")
 	c.Add(1)
 	if got, want := expvar.Get("gcounter").String(), "1"; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewCounter("", "")
-	ebd.NewCounter("", "")
+	NewCounter("i1", "", "")
+	NewCounter("i1", "", "")
 
-	c = ebd.NewCounter("lcounter", "")
+	c = NewCounter("i1", "lcounter", "")
 	c.Add(4)
 	if got, want := expvar.Get("labellcounter").String(), `{"i1": 4}`; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
-	c = ebd.NewCounter("lcounter", "")
+	c = NewCounter("i1", "lcounter", "")
 	c.Add(5)
 	if got, want := expvar.Get("labellcounter").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
 	if got, want := expvar.Get("labellcounter").String(), "{}"; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
-	c = ebd.NewCounter("lcounter", "")
+	c = NewCounter("i1", "lcounter", "")
 	c.Add(5)
 	if got, want := expvar.Get("labellcounter").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i2", "label")
-	c = ebd.NewCounter("lcounter", "")
+	AssignPrefix("i2", "label")
+	c = NewCounter("i2", "lcounter", "")
 	c.Add(6)
 	want1 := `{"i1": 5, "i2": 6}`
 	want2 := `{"i2": 6, "i1": 5}`
@@ -261,46 +257,45 @@ func TestCounter(t *testing.T) {
 }
 
 func TestGauge(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	c := ebd.NewGauge("ggauge", "")
+	c := NewGauge("", "ggauge", "")
 	c.Set(1)
 	if got, want := expvar.Get("ggauge").String(), "1"; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewGauge("", "")
-	ebd.NewGauge("", "")
+	NewGauge("i1", "", "")
+	NewGauge("i1", "", "")
 
-	c = ebd.NewGauge("lgauge", "")
+	c = NewGauge("i1", "lgauge", "")
 	c.Set(4)
 	if got, want := expvar.Get("labellgauge").String(), `{"i1": 4}`; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
-	c = ebd.NewGauge("lgauge", "")
+	c = NewGauge("i1", "lgauge", "")
 	c.Set(5)
 	if got, want := expvar.Get("labellgauge").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
 	if got, want := expvar.Get("labellgauge").String(), "{}"; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
-	c = ebd.NewGauge("lgauge", "")
+	c = NewGauge("i1", "lgauge", "")
 	c.Set(5)
 	if got, want := expvar.Get("labellgauge").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i2", "label")
-	c = ebd.NewGauge("lgauge", "")
+	AssignPrefix("i2", "label")
+	c = NewGauge("i2", "lgauge", "")
 	c.Set(6)
 	want1 := `{"i1": 5, "i2": 6}`
 	want2 := `{"i2": 6, "i1": 5}`
@@ -310,42 +305,41 @@ func TestGauge(t *testing.T) {
 }
 
 func TestCounterFunc(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	ebd.NewCounterFunc("gcf", "", func() int64 { return 1 })
+	NewCounterFunc("", "gcf", "", func() int64 { return 1 })
 	if got, want := expvar.Get("gcf").String(), "1"; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewCounterFunc("", "", func() int64 { return 2 })
-	ebd.NewCounterFunc("", "", func() int64 { return 3 })
+	NewCounterFunc("i1", "", "", func() int64 { return 2 })
+	NewCounterFunc("i1", "", "", func() int64 { return 3 })
 
-	ebd.NewCounterFunc("lcf", "", func() int64 { return 4 })
+	NewCounterFunc("i1", "lcf", "", func() int64 { return 4 })
 	if got, want := expvar.Get("labellcf").String(), `{"i1": 4}`; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
-	ebd.NewCounterFunc("lcf", "", func() int64 { return 5 })
+	NewCounterFunc("i1", "lcf", "", func() int64 { return 5 })
 	if got, want := expvar.Get("labellcf").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
 	if got, want := expvar.Get("labellcf").String(), "{}"; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
-	ebd.NewCounterFunc("lcf", "", func() int64 { return 5 })
+	NewCounterFunc("i1", "lcf", "", func() int64 { return 5 })
 	if got, want := expvar.Get("labellcf").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Counter get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i2", "label")
-	ebd.NewCounterFunc("lcf", "", func() int64 { return 6 })
+	AssignPrefix("i2", "label")
+	NewCounterFunc("i2", "lcf", "", func() int64 { return 6 })
 	want1 := `{"i1": 5, "i2": 6}`
 	want2 := `{"i2": 6, "i1": 5}`
 	if got := expvar.Get("labellcf").String(); got != want1 && got != want2 {
@@ -354,42 +348,41 @@ func TestCounterFunc(t *testing.T) {
 }
 
 func TestGaugeFunc(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	ebd.NewGaugeFunc("ggf", "", func() int64 { return 1 })
+	NewGaugeFunc("", "ggf", "", func() int64 { return 1 })
 	if got, want := expvar.Get("ggf").String(), "1"; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewGaugeFunc("", "", func() int64 { return 2 })
-	ebd.NewGaugeFunc("", "", func() int64 { return 3 })
+	NewGaugeFunc("i1", "", "", func() int64 { return 2 })
+	NewGaugeFunc("i1", "", "", func() int64 { return 3 })
 
-	ebd.NewGaugeFunc("lgf", "", func() int64 { return 4 })
+	NewGaugeFunc("i1", "lgf", "", func() int64 { return 4 })
 	if got, want := expvar.Get("labellgf").String(), `{"i1": 4}`; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
-	ebd.NewGaugeFunc("lgf", "", func() int64 { return 5 })
+	NewGaugeFunc("i1", "lgf", "", func() int64 { return 5 })
 	if got, want := expvar.Get("labellgf").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
 	if got, want := expvar.Get("labellgf").String(), "{}"; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
-	ebd.NewGaugeFunc("lgf", "", func() int64 { return 5 })
+	NewGaugeFunc("i1", "lgf", "", func() int64 { return 5 })
 	if got, want := expvar.Get("labellgf").String(), `{"i1": 5}`; got != want {
 		t.Errorf("Gauge get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i2", "label")
-	ebd.NewGaugeFunc("lgf", "", func() int64 { return 6 })
+	AssignPrefix("i2", "label")
+	NewGaugeFunc("i2", "lgf", "", func() int64 { return 6 })
 	want1 := `{"i1": 5, "i2": 6}`
 	want2 := `{"i2": 6, "i1": 5}`
 	if got := expvar.Get("labellgf").String(); got != want1 && got != want2 {
@@ -398,42 +391,41 @@ func TestGaugeFunc(t *testing.T) {
 }
 
 func TestCounterDurationFunc(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	ebd.NewCounterDurationFunc("gcduration", "", func() time.Duration { return 1 })
+	NewCounterDurationFunc("", "gcduration", "", func() time.Duration { return 1 })
 	if got, want := expvar.Get("gcduration").String(), "1"; got != want {
 		t.Errorf("CounterDuration get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewCounterDurationFunc("", "", func() time.Duration { return 2 })
-	ebd.NewCounterDurationFunc("", "", func() time.Duration { return 3 })
+	NewCounterDurationFunc("i1", "", "", func() time.Duration { return 2 })
+	NewCounterDurationFunc("i1", "", "", func() time.Duration { return 3 })
 
-	ebd.NewCounterDurationFunc("lcduration", "", func() time.Duration { return 4 })
+	NewCounterDurationFunc("i1", "lcduration", "", func() time.Duration { return 4 })
 	if got, want := expvar.Get("labellcduration").String(), `{"i1": 4}`; got != want {
 		t.Errorf("CounterDuration get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
-	ebd.NewCounterDurationFunc("lcduration", "", func() time.Duration { return 5 })
+	NewCounterDurationFunc("i1", "lcduration", "", func() time.Duration { return 5 })
 	if got, want := expvar.Get("labellcduration").String(), `{"i1": 5}`; got != want {
 		t.Errorf("CounterDuration get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
 	if got, want := expvar.Get("labellcduration").String(), "{}"; got != want {
 		t.Errorf("CounterDuration get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
-	ebd.NewCounterDurationFunc("lcduration", "", func() time.Duration { return 5 })
+	NewCounterDurationFunc("i1", "lcduration", "", func() time.Duration { return 5 })
 	if got, want := expvar.Get("labellcduration").String(), `{"i1": 5}`; got != want {
 		t.Errorf("CounterDuration get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i2", "label")
-	ebd.NewCounterDurationFunc("lcduration", "", func() time.Duration { return 6 })
+	AssignPrefix("i2", "label")
+	NewCounterDurationFunc("i2", "lcduration", "", func() time.Duration { return 6 })
 	want1 := `{"i1": 5, "i2": 6}`
 	want2 := `{"i2": 6, "i1": 5}`
 	if got := expvar.Get("labellcduration").String(); got != want1 && got != want2 {
@@ -442,42 +434,41 @@ func TestCounterDurationFunc(t *testing.T) {
 }
 
 func TestGaugeDurationFunc(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	ebd.NewGaugeDurationFunc("ggduration", "", func() time.Duration { return 1 })
+	NewGaugeDurationFunc("", "ggduration", "", func() time.Duration { return 1 })
 	if got, want := expvar.Get("ggduration").String(), "1"; got != want {
 		t.Errorf("GaugeDuration get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewGaugeDurationFunc("", "", func() time.Duration { return 2 })
-	ebd.NewGaugeDurationFunc("", "", func() time.Duration { return 3 })
+	NewGaugeDurationFunc("i1", "", "", func() time.Duration { return 2 })
+	NewGaugeDurationFunc("i1", "", "", func() time.Duration { return 3 })
 
-	ebd.NewGaugeDurationFunc("lgduration", "", func() time.Duration { return 4 })
+	NewGaugeDurationFunc("i1", "lgduration", "", func() time.Duration { return 4 })
 	if got, want := expvar.Get("labellgduration").String(), `{"i1": 4}`; got != want {
 		t.Errorf("GaugeDuration get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
-	ebd.NewGaugeDurationFunc("lgduration", "", func() time.Duration { return 5 })
+	NewGaugeDurationFunc("i1", "lgduration", "", func() time.Duration { return 5 })
 	if got, want := expvar.Get("labellgduration").String(), `{"i1": 5}`; got != want {
 		t.Errorf("GaugeDuration get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
 	if got, want := expvar.Get("labellgduration").String(), "{}"; got != want {
 		t.Errorf("GaugeDuration get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
-	ebd.NewGaugeDurationFunc("lgduration", "", func() time.Duration { return 6 })
+	NewGaugeDurationFunc("i1", "lgduration", "", func() time.Duration { return 6 })
 	if got, want := expvar.Get("labellgduration").String(), `{"i1": 6}`; got != want {
 		t.Errorf("GaugeDuration get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i2", "label")
-	ebd.NewGaugeDurationFunc("lgduration", "", func() time.Duration { return 7 })
+	AssignPrefix("i2", "label")
+	NewGaugeDurationFunc("i2", "lgduration", "", func() time.Duration { return 7 })
 	want1 := `{"i1": 6, "i2": 7}`
 	want2 := `{"i2": 7, "i1": 6}`
 	if got := expvar.Get("labellgduration").String(); got != want1 && got != want2 {
@@ -486,46 +477,45 @@ func TestGaugeDurationFunc(t *testing.T) {
 }
 
 func TestCountersWithSingleLabel(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	g := ebd.NewCountersWithSingleLabel("gcwsl", "", "l")
+	g := NewCountersWithSingleLabel("", "gcwsl", "", "l")
 	g.Add("a", 1)
 	if got, want := expvar.Get("gcwsl").String(), `{"a": 1}`; got != want {
 		t.Errorf("CountersWithSingleLabel get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewCountersWithSingleLabel("", "", "l")
-	ebd.NewCountersWithSingleLabel("", "", "l")
+	NewCountersWithSingleLabel("i1", "", "", "l")
+	NewCountersWithSingleLabel("i1", "", "", "l")
 
-	g = ebd.NewCountersWithSingleLabel("lcwsl", "", "l")
+	g = NewCountersWithSingleLabel("i1", "lcwsl", "", "l")
 	g.Add("a", 4)
 	if got, want := expvar.Get("labellcwsl").String(), `{"i1.a": 4}`; got != want {
 		t.Errorf("CountersWithSingleLabel get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
-	g = ebd.NewCountersWithSingleLabel("lcwsl", "", "l")
+	g = NewCountersWithSingleLabel("i1", "lcwsl", "", "l")
 	g.Add("a", 5)
 	if got, want := expvar.Get("labellcwsl").String(), `{"i1.a": 5}`; got != want {
 		t.Errorf("CountersWithSingleLabel get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
 	if got, want := expvar.Get("labellcwsl").String(), "{}"; got != want {
 		t.Errorf("CountersWithSingleLabel get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
-	g = ebd.NewCountersWithSingleLabel("lcwsl", "", "l")
+	g = NewCountersWithSingleLabel("i1", "lcwsl", "", "l")
 	g.Add("a", 6)
 	if got, want := expvar.Get("labellcwsl").String(), `{"i1.a": 6}`; got != want {
 		t.Errorf("CountersWithSingleLabel get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i2", "label")
-	g = ebd.NewCountersWithSingleLabel("lcwsl", "", "l")
+	AssignPrefix("i2", "label")
+	g = NewCountersWithSingleLabel("i2", "lcwsl", "", "l")
 	g.Add("a", 7)
 	want1 := `{"i1.a": 6, "i2.a": 7}`
 	want2 := `{"i2.a": 7, "i1.a": 6}`
@@ -535,46 +525,45 @@ func TestCountersWithSingleLabel(t *testing.T) {
 }
 
 func TestGaugesWithSingleLabel(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	g := ebd.NewGaugesWithSingleLabel("ggwsl", "", "l")
+	g := NewGaugesWithSingleLabel("", "ggwsl", "", "l")
 	g.Set("a", 1)
 	if got, want := expvar.Get("ggwsl").String(), `{"a": 1}`; got != want {
 		t.Errorf("GaugesWithSingleLabel get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewGaugesWithSingleLabel("", "", "l")
-	ebd.NewGaugesWithSingleLabel("", "", "l")
+	NewGaugesWithSingleLabel("i1", "", "", "l")
+	NewGaugesWithSingleLabel("i1", "", "", "l")
 
-	g = ebd.NewGaugesWithSingleLabel("lgwsl", "", "l")
+	g = NewGaugesWithSingleLabel("i1", "lgwsl", "", "l")
 	g.Set("a", 4)
 	if got, want := expvar.Get("labellgwsl").String(), `{"i1.a": 4}`; got != want {
 		t.Errorf("GaugesWithSingleLabel get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
-	g = ebd.NewGaugesWithSingleLabel("lgwsl", "", "l")
+	g = NewGaugesWithSingleLabel("i1", "lgwsl", "", "l")
 	g.Set("a", 5)
 	if got, want := expvar.Get("labellgwsl").String(), `{"i1.a": 5}`; got != want {
 		t.Errorf("GaugesWithSingleLabel get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
 	if got, want := expvar.Get("labellgwsl").String(), "{}"; got != want {
 		t.Errorf("GaugesWithSingleLabel get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
-	g = ebd.NewGaugesWithSingleLabel("lgwsl", "", "l")
+	g = NewGaugesWithSingleLabel("i1", "lgwsl", "", "l")
 	g.Set("a", 6)
 	if got, want := expvar.Get("labellgwsl").String(), `{"i1.a": 6}`; got != want {
 		t.Errorf("GaugesWithSingleLabel get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i2", "label")
-	g = ebd.NewGaugesWithSingleLabel("lgwsl", "", "l")
+	AssignPrefix("i2", "label")
+	g = NewGaugesWithSingleLabel("i2", "lgwsl", "", "l")
 	g.Set("a", 7)
 	want1 := `{"i1.a": 6, "i2.a": 7}`
 	want2 := `{"i2.a": 7, "i1.a": 6}`
@@ -584,46 +573,45 @@ func TestGaugesWithSingleLabel(t *testing.T) {
 }
 
 func TestCountersWithMultiLabels(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	g := ebd.NewCountersWithMultiLabels("gcwml", "", []string{"l"})
+	g := NewCountersWithMultiLabels("", "gcwml", "", []string{"l"})
 	g.Add([]string{"a"}, 1)
 	if got, want := expvar.Get("gcwml").String(), `{"a": 1}`; got != want {
 		t.Errorf("CountersWithMultiLabels get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewCountersWithMultiLabels("", "", []string{"l"})
-	ebd.NewCountersWithMultiLabels("", "", []string{"l"})
+	NewCountersWithMultiLabels("i1", "", "", []string{"l"})
+	NewCountersWithMultiLabels("i1", "", "", []string{"l"})
 
-	g = ebd.NewCountersWithMultiLabels("lcwml", "", []string{"l"})
+	g = NewCountersWithMultiLabels("i1", "lcwml", "", []string{"l"})
 	g.Add([]string{"a"}, 4)
 	if got, want := expvar.Get("labellcwml").String(), `{"i1.a": 4}`; got != want {
 		t.Errorf("CountersWithMultiLabels get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
-	g = ebd.NewCountersWithMultiLabels("lcwml", "", []string{"l"})
+	g = NewCountersWithMultiLabels("i1", "lcwml", "", []string{"l"})
 	g.Add([]string{"a"}, 5)
 	if got, want := expvar.Get("labellcwml").String(), `{"i1.a": 5}`; got != want {
 		t.Errorf("CountersWithMultiLabels get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
 	if got, want := expvar.Get("labellcwml").String(), "{}"; got != want {
 		t.Errorf("CountersWithMultiLabels get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
-	g = ebd.NewCountersWithMultiLabels("lcwml", "", []string{"l"})
+	g = NewCountersWithMultiLabels("i1", "lcwml", "", []string{"l"})
 	g.Add([]string{"a"}, 6)
 	if got, want := expvar.Get("labellcwml").String(), `{"i1.a": 6}`; got != want {
 		t.Errorf("CountersWithMultiLabels get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i2", "label")
-	g = ebd.NewCountersWithMultiLabels("lcwml", "", []string{"l"})
+	AssignPrefix("i2", "label")
+	g = NewCountersWithMultiLabels("i2", "lcwml", "", []string{"l"})
 	g.Add([]string{"a"}, 7)
 	want1 := `{"i1.a": 6, "i2.a": 7}`
 	want2 := `{"i2.a": 7, "i1.a": 6}`
@@ -633,46 +621,45 @@ func TestCountersWithMultiLabels(t *testing.T) {
 }
 
 func TestGaugesWithMultiLabels(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	g := ebd.NewGaugesWithMultiLabels("ggwml", "", []string{"l"})
+	g := NewGaugesWithMultiLabels("", "ggwml", "", []string{"l"})
 	g.Set([]string{"a"}, 1)
 	if got, want := expvar.Get("ggwml").String(), `{"a": 1}`; got != want {
 		t.Errorf("GaugesWithMultiLabels get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewGaugesWithMultiLabels("", "", []string{"l"})
-	ebd.NewGaugesWithMultiLabels("", "", []string{"l"})
+	NewGaugesWithMultiLabels("i1", "", "", []string{"l"})
+	NewGaugesWithMultiLabels("i1", "", "", []string{"l"})
 
-	g = ebd.NewGaugesWithMultiLabels("lgwml", "", []string{"l"})
+	g = NewGaugesWithMultiLabels("i1", "lgwml", "", []string{"l"})
 	g.Set([]string{"a"}, 4)
 	if got, want := expvar.Get("labellgwml").String(), `{"i1.a": 4}`; got != want {
 		t.Errorf("GaugesWithMultiLabels get: %s, want %s", got, want)
 	}
 
 	// Ensure var gets replaced.
-	g = ebd.NewGaugesWithMultiLabels("lgwml", "", []string{"l"})
+	g = NewGaugesWithMultiLabels("i1", "lgwml", "", []string{"l"})
 	g.Set([]string{"a"}, 5)
 	if got, want := expvar.Get("labellgwml").String(), `{"i1.a": 5}`; got != want {
 		t.Errorf("GaugesWithMultiLabels get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 	// Ensure gauge gets reset on re-instantiation.
 	if got, want := expvar.Get("labellgwml").String(), "{}"; got != want {
 		t.Errorf("GaugesWithMultiLabels get: %s, want %s", got, want)
 	}
 	// Ensure new value is returned after var gets added.
-	g = ebd.NewGaugesWithMultiLabels("lgwml", "", []string{"l"})
+	g = NewGaugesWithMultiLabels("i1", "lgwml", "", []string{"l"})
 	g.Set([]string{"a"}, 6)
 	if got, want := expvar.Get("labellgwml").String(), `{"i1.a": 6}`; got != want {
 		t.Errorf("GaugesWithMultiLabels get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i2", "label")
-	g = ebd.NewGaugesWithMultiLabels("lgwml", "", []string{"l"})
+	AssignPrefix("i2", "label")
+	g = NewGaugesWithMultiLabels("i2", "lgwml", "", []string{"l"})
 	g.Set([]string{"a"}, 7)
 	want1 := `{"i1.a": 6, "i2.a": 7}`
 	want2 := `{"i2.a": 7, "i1.a": 6}`
@@ -682,92 +669,87 @@ func TestGaugesWithMultiLabels(t *testing.T) {
 }
 
 func TestTimings(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	g := ebd.NewTimings("gtimings", "", "l")
+	g := NewTimings("", "gtimings", "", "l")
 	g.Add("a", 1)
 	if got, want := expvar.Get("gtimings").String(), "TotalCount"; !strings.Contains(got, want) {
 		t.Errorf("CountersFuncWithLabels get: %s, must contain %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewTimings("", "", "l")
-	ebd.NewTimings("", "", "l")
+	NewTimings("i1", "", "", "l")
+	NewTimings("i1", "", "", "l")
 
 	// Ensure non-anonymous vars also don't cause panics
-	ebd.NewTimings("ltimings", "", "l")
-	ebd.NewTimings("ltimings", "", "l")
+	NewTimings("i1", "ltimings", "", "l")
+	NewTimings("i1", "ltimings", "", "l")
 }
 
 func TestMultiTimings(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	g := ebd.NewMultiTimings("gmtimings", "", []string{"l"})
+	g := NewMultiTimings("", "gmtimings", "", []string{"l"})
 	g.Add([]string{"a"}, 1)
 	if got, want := expvar.Get("gmtimings").String(), "TotalCount"; !strings.Contains(got, want) {
 		t.Errorf("CountersFuncWithMultiLabels get: %s, must contain %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewMultiTimings("", "", []string{"l"})
-	ebd.NewMultiTimings("", "", []string{"l"})
+	NewMultiTimings("i1", "", "", []string{"l"})
+	NewMultiTimings("i1", "", "", []string{"l"})
 
 	// Ensure non-anonymous vars also don't cause panics
-	ebd.NewMultiTimings("lmtimings", "", []string{"l"})
-	ebd.NewMultiTimings("lmtimings", "", []string{"l"})
+	NewMultiTimings("i1", "lmtimings", "", []string{"l"})
+	NewMultiTimings("i1", "lmtimings", "", []string{"l"})
 }
 
 func TestRates(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	tm := ebd.NewMultiTimings("gratetimings", "", []string{"l"})
-	ebd.NewRates("grates", tm, 15*60/5, 5*time.Second)
+	tm := NewMultiTimings("", "gratetimings", "", []string{"l"})
+	NewRates("", "grates", tm, 15*60/5, 5*time.Second)
 	if got, want := expvar.Get("grates").String(), "{}"; got != want {
 		t.Errorf("CountersFuncWithMultiLabels get: %s, want %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewRates("", tm, 15*60/5, 5*time.Second)
-	ebd.NewRates("", tm, 15*60/5, 5*time.Second)
+	NewRates("i1", "", tm, 15*60/5, 5*time.Second)
+	NewRates("i1", "", tm, 15*60/5, 5*time.Second)
 
 	// Ensure non-anonymous vars also don't cause panics
-	ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
-	ebd.NewRates("lrates", tm, 15*60/5, 5*time.Second)
+	NewRates("i1", "lrates", tm, 15*60/5, 5*time.Second)
+	NewRates("i1", "lrates", tm, 15*60/5, 5*time.Second)
 }
 
 func TestHistogram(t *testing.T) {
-	ebd := NewEmbedder("", "")
-	g := ebd.NewHistogram("ghebdogram", "", []int64{10})
+	g := NewHistogram("", "ghebdogram", "", []int64{10})
 	g.Add(1)
 	if got, want := expvar.Get("ghebdogram").String(), `{"10": 1, "inf": 1, "Count": 1, "Total": 1}`; !strings.Contains(got, want) {
 		t.Errorf("CountersFuncWithMultiLabels get: %s, must contain %s", got, want)
 	}
 
-	ebd = NewEmbedder("i1", "label")
+	AssignPrefix("i1", "label")
 
 	// Ensure anonymous vars don't cause panics.
-	ebd.NewHistogram("", "", []int64{10})
-	ebd.NewHistogram("", "", []int64{10})
+	NewHistogram("i1", "", "", []int64{10})
+	NewHistogram("i1", "", "", []int64{10})
 
 	// Ensure non-anonymous vars also don't cause panics
-	ebd.NewHistogram("lhebdogram", "", []int64{10})
-	ebd.NewHistogram("lhebdogram", "", []int64{10})
+	NewHistogram("i1", "lhebdogram", "", []int64{10})
+	NewHistogram("i1", "lhebdogram", "", []int64{10})
 }
 
 func TestPublish(t *testing.T) {
-	ebd := NewEmbedder("", "")
 	s := stats.NewString("")
-	ebd.Publish("gpub", s)
+	Publish("", "gpub", s)
 	s.Set("1")
 	if got, want := expvar.Get("gpub").String(), `"1"`; got != want {
 		t.Errorf("Publish get: %s, want %s", got, want)
 	}
 
 	// This should not crash.
-	ebd = NewEmbedder("i1", "label")
-	ebd.Publish("lpub", s)
-	ebd.Publish("lpub", s)
+	AssignPrefix("i1", "label")
+	Publish("i1", "lpub", s)
+	Publish("i1", "lpub", s)
 }

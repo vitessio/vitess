@@ -45,7 +45,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 		*srvTopoCacheRefresh = 1 * time.Second
 	}()
 
-	rs := NewResilientServer(ts, "TestGetSrvKeyspace")
+	rs := NewResilientServer("TestGetSrvKeyspace", ts)
 
 	// Ask for a not-yet-created keyspace
 	_, err := rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
@@ -327,7 +327,7 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 		*srvTopoCacheTTL = 1 * time.Second
 		*srvTopoCacheRefresh = 1 * time.Second
 	}()
-	rs := NewResilientServer(ts, "TestSrvKeyspaceCachedErrors")
+	rs := NewResilientServer("TestSrvKeyspaceCachedErrors", ts)
 
 	// Ask for an unknown keyspace, should get an error.
 	ctx := context.Background()
@@ -364,7 +364,7 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 // value if the SrvKeyspace already exists.
 func TestGetSrvKeyspaceCreated(t *testing.T) {
 	ts := memorytopo.NewServer("test_cell")
-	rs := NewResilientServer(ts, "TestGetSrvKeyspaceCreated")
+	rs := NewResilientServer("TestGetSrvKeyspaceCreated", ts)
 
 	// Set SrvKeyspace with value.
 	want := &topodatapb.SrvKeyspace{
@@ -399,7 +399,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 	watchSrvVSchemaSleepTime = 10 * time.Millisecond
 	ctx := context.Background()
 	ts := memorytopo.NewServer("test_cell")
-	rs := NewResilientServer(ts, "TestWatchSrvVSchema")
+	rs := NewResilientServer("TestWatchSrvVSchema", ts)
 
 	// mu protects watchValue and watchErr.
 	mu := sync.Mutex{}
@@ -487,7 +487,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 		*srvTopoCacheTTL = 1 * time.Second
 		*srvTopoCacheRefresh = 1 * time.Second
 	}()
-	rs := NewResilientServer(ts, "TestGetSrvKeyspaceNames")
+	rs := NewResilientServer("TestGetSrvKeyspaceNames", ts)
 
 	// Set SrvKeyspace with value
 	want := &topodatapb.SrvKeyspace{

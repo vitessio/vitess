@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"time"
 
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -182,11 +183,11 @@ type queryserviceStatus struct {
 
 // AddStatusHeader registers a standlone header for the status page.
 func (tsv *TabletServer) AddStatusHeader() {
-	tsv.env.AddStatusPart("Tablet Server", headerTemplate, func() interface{} {
+	servenv.AddInstanceStatusPart(tsv.instanceName, "Tablet Server", headerTemplate, func() interface{} {
 		tsv.mu.Lock()
 		defer tsv.mu.Unlock()
 		return map[string]interface{}{
-			"Prefix": tsv.env.URLPrefix(),
+			"Prefix": servenv.URLPrefix(tsv.instanceName),
 			"Target": tsv.target,
 		}
 	})
@@ -194,7 +195,7 @@ func (tsv *TabletServer) AddStatusHeader() {
 
 // AddStatusPart registers the status part for the status page.
 func (tsv *TabletServer) AddStatusPart() {
-	tsv.env.AddStatusPart("Queryservice", queryserviceStatusTemplate, func() interface{} {
+	servenv.AddInstanceStatusPart(tsv.instanceName, "Queryservice", queryserviceStatusTemplate, func() interface{} {
 		status := queryserviceStatus{
 			State:   tsv.GetState(),
 			History: tsv.history.Records(),

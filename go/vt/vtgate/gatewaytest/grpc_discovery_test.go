@@ -65,7 +65,7 @@ func TestGRPCDiscovery(t *testing.T) {
 	// VTGate: create the discovery healthcheck, and the gateway.
 	// Wait for the right tablets to be present.
 	hc := discovery.NewHealthCheck(10*time.Second, 2*time.Minute)
-	rs := srvtopo.NewResilientServer(ts, "TestGRPCDiscovery")
+	rs := srvtopo.NewResilientServer("TestGRPCDiscovery", ts)
 	dg := gateway.GetCreator()(hc, rs, cell, 2)
 	hc.AddTablet(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{

@@ -138,7 +138,7 @@ func stateInfo(state int64) string {
 // Open and Close can be called repeatedly during the lifetime of
 // a subcomponent. These should also be idempotent.
 type TabletServer struct {
-	env                    *servenv.Embedder
+	instanceName           string
 	QueryTimeout           sync2.AtomicDuration
 	BeginTimeout           sync2.AtomicDuration
 	TerseErrors            bool
@@ -255,15 +255,15 @@ type TxPoolController interface {
 }
 
 // NewCustomTabletServer creates a tablet server based on the input config.
-func NewCustomTabletServer(name string, config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
-	return NewTabletServer(name, config, topoServer, alias)
+func NewCustomTabletServer(instanceName string, config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+	return NewTabletServer(instanceName, config, topoServer, alias)
 }
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(instanceName string, config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	tsv := &TabletServer{
-		env:                    servenv.NewEmbedder(name, "Tablet"),
+		instanceName:           instanceName,
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
 		BeginTimeout:           sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
 		TerseErrors:            config.TerseErrors,
@@ -282,27 +282,27 @@ func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *top
 	tsv.hr = heartbeat.NewReader(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
-	tsv.watcher = NewReplicationWatcher(tsv.env, tsv.se, config)
+	tsv.watcher = NewReplicationWatcher(tsv.instanceName, tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
-	srvTopoServer := srvtopo.NewResilientServer(topoServer, "TabletSrvTopo")
-	tsv.vstreamer = vstreamer.NewEngine(tsv.env, srvTopoServer, tsv.se)
-	tsv.env.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
+	srvTopoServer := srvtopo.NewResilientServer("TabletSrvTopo", topoServer)
+	tsv.vstreamer = vstreamer.NewEngine(tsv.instanceName, srvTopoServer, tsv.se)
+	servenv.NewGaugeFunc(instanceName, "TabletState", "Tablet server state", func() int64 {
 		tsv.mu.Lock()
 		state := tsv.state
 		tsv.mu.Unlock()
 		return state
 	})
-	tsv.env.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
+	servenv.Publish(instanceName, "TabletStateName", stats.StringFunc(tsv.GetState))
 
 	// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
 	// but exported with TabletStateName as a label for Prometheus, which doesn't support exporting strings as stat values.
-	tsv.env.NewGaugesFuncWithMultiLabels("TabletServerState", "Tablet server state labeled by state name", []string{"name"}, func() map[string]int64 {
+	servenv.NewGaugesFuncWithMultiLabels(instanceName, "TabletServerState", "Tablet server state labeled by state name", []string{"name"}, func() map[string]int64 {
 		return map[string]int64{tsv.GetState(): 1}
 	})
-	tsv.env.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
-	tsv.env.NewGaugeDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
-	tsv.env.NewGaugeDurationFunc("BeginTimeout", "Tablet server begin timeout", tsv.BeginTimeout.Get)
-	tsv.warnings = tsv.env.NewCountersWithSingleLabel("Warnings", "Warnings", "type", "ResultsExceeded")
+	servenv.NewGaugeDurationFunc(instanceName, "QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
+	servenv.NewGaugeDurationFunc(instanceName, "QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
+	servenv.NewGaugeDurationFunc(instanceName, "BeginTimeout", "Tablet server begin timeout", tsv.BeginTimeout.Get)
+	tsv.warnings = servenv.NewCountersWithSingleLabel(instanceName, "Warnings", "Warnings", "type", "ResultsExceeded")
 
 	tsv.registerDebugHealthHandler()
 	tsv.registerQueryzHandler()
@@ -311,9 +311,9 @@ func NewTabletServer(name string, config tabletenv.TabletConfig, topoServer *top
 	return tsv
 }
 
-// Env returns the servenv.servenv.
-func (tsv *TabletServer) Env() *servenv.Embedder {
-	return tsv.env
+// InstanceName returns the instance name
+func (tsv *TabletServer) InstanceName() string {
+	return tsv.instanceName
 }
 
 // Register prepares TabletServer for serving by calling
@@ -2007,7 +2007,7 @@ func (tsv *TabletServer) endRequest(isBegin bool) {
 }
 
 func (tsv *TabletServer) registerDebugHealthHandler() {
-	tsv.env.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HandleFunc(tsv.instanceName, "/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
 			acl.SendError(w, err)
 			return
@@ -2022,22 +2022,22 @@ func (tsv *TabletServer) registerDebugHealthHandler() {
 }
 
 func (tsv *TabletServer) registerQueryzHandler() {
-	tsv.env.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HandleFunc(tsv.instanceName, "/queryz", func(w http.ResponseWriter, r *http.Request) {
 		queryzHandler(tsv.qe, w, r)
 	})
 }
 
 func (tsv *TabletServer) registerStreamQueryzHandlers() {
-	tsv.env.HandleFunc("/streamqueryz", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HandleFunc(tsv.instanceName, "/streamqueryz", func(w http.ResponseWriter, r *http.Request) {
 		streamQueryzHandler(tsv.qe.streamQList, w, r)
 	})
-	tsv.env.HandleFunc("/streamqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HandleFunc(tsv.instanceName, "/streamqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
 		streamQueryzTerminateHandler(tsv.qe.streamQList, w, r)
 	})
 }
 
 func (tsv *TabletServer) registerTwopczHandler() {
-	tsv.env.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HandleFunc(tsv.instanceName, "/twopcz", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
 		txe := &TxExecutor{
 			ctx:      ctx,

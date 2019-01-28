@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -58,8 +57,8 @@ type Env struct {
 
 type fakeTabletService struct{}
 
-func (f fakeTabletService) CheckMySQL()            {}
-func (f fakeTabletService) Env() *servenv.Embedder { return servenv.NewEmbedder("test", "") }
+func (f fakeTabletService) CheckMySQL()        {}
+func (fakeTabletService) InstanceName() string { return "test" }
 
 // Init initializes an Env.
 func Init() (*Env, error) {
@@ -77,7 +76,7 @@ func Init() (*Env, error) {
 	if err := te.TopoServ.CreateShard(ctx, te.KeyspaceName, te.ShardName); err != nil {
 		panic(err)
 	}
-	te.SrvTopo = srvtopo.NewResilientServer(te.TopoServ, "TestTopo")
+	te.SrvTopo = srvtopo.NewResilientServer("TestTopo", te.TopoServ)
 
 	cfg := vttest.Config{
 		Topology: &vttestpb.VTTestTopology{

@@ -205,26 +205,22 @@ type srvKeyspaceEntry struct {
 	lastErrorTime time.Time
 }
 
-// TODO(sougou): remove this once we move to use embedder.
-var rsOnce sync.Once
-
 // NewResilientServer creates a new ResilientServer
 // based on the provided topo.Server.
-func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServer {
+func NewResilientServer(instanceName string, base *topo.Server) *ResilientServer {
 	if *srvTopoCacheRefresh > *srvTopoCacheTTL {
 		log.Fatalf("srv_topo_cache_refresh must be less than or equal to srv_topo_cache_ttl")
 	}
+	servenv.AssignPrefix(instanceName, instanceName)
 	server := &ResilientServer{
 		topoServer:   base,
 		cacheTTL:     *srvTopoCacheTTL,
 		cacheRefresh: *srvTopoCacheRefresh,
-		counts:       servenv.NewEmbedder(counterPrefix, "").NewCountersWithSingleLabel("Counts", "Resilient srvtopo server operations", "type"),
+		counts:       servenv.NewCountersWithSingleLabel(instanceName, "Counts", "Resilient srvtopo server operations", "type"),
 
 		srvKeyspaceNamesCache: make(map[string]*srvKeyspaceNamesEntry),
 		srvKeyspaceCache:      make(map[string]*srvKeyspaceEntry),
 	}
-	rsOnce.Do(func() {
-	})
 	return server
 }
 

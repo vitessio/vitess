@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -420,8 +419,8 @@ func TestStatsURL(t *testing.T) {
 type fakeTabletService struct {
 }
 
-func (fakeTabletService) CheckMySQL()            {}
-func (fakeTabletService) Env() *servenv.Embedder { return servenv.NewEmbedder("test", "") }
+func (fakeTabletService) CheckMySQL()          {}
+func (fakeTabletService) InstanceName() string { return "test" }
 
 var FakeTabletService = fakeTabletService{}
 

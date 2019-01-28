@@ -52,23 +52,23 @@ type ConnectionPool struct {
 	mysqlStats *stats.Timings
 }
 
-// NewConnectionPool creates a new ConnectionPool. The name is used
+// NewConnectionPool creates a new ConnectionPool. The instanceName is used
 // to publish stats only.
-func NewConnectionPool(name string, capacity int, idleTimeout time.Duration) *ConnectionPool {
+func NewConnectionPool(instanceName string, capacity int, idleTimeout time.Duration) *ConnectionPool {
 	cp := &ConnectionPool{capacity: capacity, idleTimeout: idleTimeout}
-	if name == "" {
+	if instanceName == "" {
 		return cp
 	}
-	env := servenv.NewEmbedder(name, name)
-	env.NewGaugeFunc("Capacity", "Connection pool capacity", cp.Capacity)
-	env.NewGaugeFunc("Available", "Connection pool available", cp.Available)
-	env.NewGaugeFunc("Active", "Connection pool active", cp.Active)
-	env.NewGaugeFunc("InUse", "Connection pool in-use", cp.InUse)
-	env.NewGaugeFunc("MaxCap", "Connection pool max cap", cp.MaxCap)
-	env.NewCounterFunc("WaitCount", "Connection pool wait count", cp.WaitCount)
-	env.NewCounterDurationFunc("WaitTime", "Connection pool wait time", cp.WaitTime)
-	env.NewGaugeDurationFunc("IdleTimeout", "Connection pool idle timeout", cp.IdleTimeout)
-	env.NewGaugeFunc("IdleClosed", "Connection pool idle closed", cp.IdleClosed)
+	servenv.AssignPrefix(instanceName, instanceName)
+	servenv.NewGaugeFunc(instanceName, "Capacity", "Connection pool capacity", cp.Capacity)
+	servenv.NewGaugeFunc(instanceName, "Available", "Connection pool available", cp.Available)
+	servenv.NewGaugeFunc(instanceName, "Active", "Connection pool active", cp.Active)
+	servenv.NewGaugeFunc(instanceName, "InUse", "Connection pool in-use", cp.InUse)
+	servenv.NewGaugeFunc(instanceName, "MaxCap", "Connection pool max cap", cp.MaxCap)
+	servenv.NewCounterFunc(instanceName, "WaitCount", "Connection pool wait count", cp.WaitCount)
+	servenv.NewCounterDurationFunc(instanceName, "WaitTime", "Connection pool wait time", cp.WaitTime)
+	servenv.NewGaugeDurationFunc(instanceName, "IdleTimeout", "Connection pool idle timeout", cp.IdleTimeout)
+	servenv.NewGaugeFunc(instanceName, "IdleClosed", "Connection pool idle closed", cp.IdleClosed)
 	return cp
 }
 
@@ -79,11 +79,11 @@ func (cp *ConnectionPool) pool() (p *pools.ResourcePool) {
 	return p
 }
 
-// Open must be call before starting to use the pool.
+// Open must be called before starting to use the pool.
 //
 // For instance:
 // mysqlStats := stats.NewTimings("Mysql")
-// pool := dbconnpool.NewConnectionPool("name", 10, 30*time.Second)
+// pool := dbconnpool.NewConnectionPool("instanceName", 10, 30*time.Second)
 // pool.Open(info, mysqlStats)
 // ...
 // conn, err := pool.Get()

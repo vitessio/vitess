@@ -40,7 +40,7 @@ var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: une
 // level objects can call back into it.
 type TabletService interface {
 	CheckMySQL()
-	Env() *servenv.Embedder
+	InstanceName() string
 }
 
 // Pool implements a custom connection pool for tabletserver.
@@ -72,16 +72,16 @@ func New(
 		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout),
 		tsv:         tsv,
 	}
-	env := tsv.Env()
-	env.NewGaugeFunc(name+"Capacity", "Tablet server conn pool capacity", cp.Capacity)
-	env.NewGaugeFunc(name+"Available", "Tablet server conn pool available", cp.Available)
-	env.NewGaugeFunc(name+"Active", "Tablet server conn pool active", cp.Active)
-	env.NewGaugeFunc(name+"InUse", "Tablet server conn pool in use", cp.InUse)
-	env.NewGaugeFunc(name+"MaxCap", "Tablet server conn pool max cap", cp.MaxCap)
-	env.NewCounterFunc(name+"WaitCount", "Tablet server conn pool wait count", cp.WaitCount)
-	env.NewCounterDurationFunc(name+"WaitTime", "Tablet server wait time", cp.WaitTime)
-	env.NewGaugeDurationFunc(name+"IdleTimeout", "Tablet server idle timeout", cp.IdleTimeout)
-	env.NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
+	instanceName := tsv.InstanceName()
+	servenv.NewGaugeFunc(instanceName, name+"Capacity", "Tablet server conn pool capacity", cp.Capacity)
+	servenv.NewGaugeFunc(instanceName, name+"Available", "Tablet server conn pool available", cp.Available)
+	servenv.NewGaugeFunc(instanceName, name+"Active", "Tablet server conn pool active", cp.Active)
+	servenv.NewGaugeFunc(instanceName, name+"InUse", "Tablet server conn pool in use", cp.InUse)
+	servenv.NewGaugeFunc(instanceName, name+"MaxCap", "Tablet server conn pool max cap", cp.MaxCap)
+	servenv.NewCounterFunc(instanceName, name+"WaitCount", "Tablet server conn pool wait count", cp.WaitCount)
+	servenv.NewCounterDurationFunc(instanceName, name+"WaitTime", "Tablet server wait time", cp.WaitTime)
+	servenv.NewGaugeDurationFunc(instanceName, name+"IdleTimeout", "Tablet server idle timeout", cp.IdleTimeout)
+	servenv.NewCounterFunc(instanceName, name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
 	return cp
 }
 

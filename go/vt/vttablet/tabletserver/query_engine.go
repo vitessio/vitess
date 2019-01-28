@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	tacl "vitess.io/vitess/go/vt/tableacl/acl"
@@ -236,32 +237,32 @@ func NewQueryEngine(tsv connpool.TabletService, se *schema.Engine, config tablet
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
-	env := tsv.Env()
-	env.NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Get)
-	env.NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
-	env.NewGaugeFunc("MaxDMLRows", "Query engine max DML rows", qe.maxDMLRows.Get)
-	env.NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
-	env.NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
-	env.NewGaugeFunc("QueryPoolWaiters", "Query engine query pool waiters", qe.queryPoolWaiters.Get)
+	instanceName := tsv.InstanceName()
+	servenv.NewGaugeFunc(instanceName, "MaxResultSize", "Query engine max result size", qe.maxResultSize.Get)
+	servenv.NewGaugeFunc(instanceName, "WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
+	servenv.NewGaugeFunc(instanceName, "MaxDMLRows", "Query engine max DML rows", qe.maxDMLRows.Get)
+	servenv.NewGaugeFunc(instanceName, "StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
+	servenv.NewCounterFunc(instanceName, "TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
+	servenv.NewGaugeFunc(instanceName, "QueryPoolWaiters", "Query engine query pool waiters", qe.queryPoolWaiters.Get)
 
-	env.NewGaugeFunc("QueryCacheLength", "Query engine query cache length", qe.plans.Length)
-	env.NewGaugeFunc("QueryCacheSize", "Query engine query cache size", qe.plans.Size)
-	env.NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.Capacity)
-	env.NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
-	env.Publish("QueryCacheOldest", stats.StringFunc(func() string {
+	servenv.NewGaugeFunc(instanceName, "QueryCacheLength", "Query engine query cache length", qe.plans.Length)
+	servenv.NewGaugeFunc(instanceName, "QueryCacheSize", "Query engine query cache size", qe.plans.Size)
+	servenv.NewGaugeFunc(instanceName, "QueryCacheCapacity", "Query engine query cache capacity", qe.plans.Capacity)
+	servenv.NewCounterFunc(instanceName, "QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
+	servenv.Publish(instanceName, "QueryCacheOldest", stats.StringFunc(func() string {
 		return fmt.Sprintf("%v", qe.plans.Oldest())
 	}))
-	env.NewCountersFuncWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"}, qe.getQueryCount)
-	env.NewCountersFuncWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"}, qe.getQueryTime)
-	env.NewCountersFuncWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"}, qe.getQueryRowCount)
-	env.NewCountersFuncWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"}, qe.getQueryErrorCount)
+	servenv.NewCountersFuncWithMultiLabels(instanceName, "QueryCounts", "query counts", []string{"Table", "Plan"}, qe.getQueryCount)
+	servenv.NewCountersFuncWithMultiLabels(instanceName, "QueryTimesNs", "query times in ns", []string{"Table", "Plan"}, qe.getQueryTime)
+	servenv.NewCountersFuncWithMultiLabels(instanceName, "QueryRowCounts", "query row counts", []string{"Table", "Plan"}, qe.getQueryRowCount)
+	servenv.NewCountersFuncWithMultiLabels(instanceName, "QueryErrorCounts", "query error counts", []string{"Table", "Plan"}, qe.getQueryErrorCount)
 
-	env.HandleFunc("/debug/hotrows", qe.txSerializer.ServeHTTP)
-	env.HandleFunc("/debug/tablet_plans", qe.handleHTTPQueryPlans)
-	env.HandleFunc("/debug/query_stats", qe.handleHTTPQueryStats)
-	env.HandleFunc("/debug/query_rules", qe.handleHTTPQueryRules)
-	env.HandleFunc("/debug/consolidations", qe.handleHTTPConsolidations)
-	env.HandleFunc("/debug/acl", qe.handleHTTPAclJSON)
+	servenv.HandleFunc(instanceName, "/debug/hotrows", qe.txSerializer.ServeHTTP)
+	servenv.HandleFunc(instanceName, "/debug/tablet_plans", qe.handleHTTPQueryPlans)
+	servenv.HandleFunc(instanceName, "/debug/query_stats", qe.handleHTTPQueryStats)
+	servenv.HandleFunc(instanceName, "/debug/query_rules", qe.handleHTTPQueryRules)
+	servenv.HandleFunc(instanceName, "/debug/consolidations", qe.handleHTTPConsolidations)
+	servenv.HandleFunc(instanceName, "/debug/acl", qe.handleHTTPAclJSON)
 
 	return qe
 }
