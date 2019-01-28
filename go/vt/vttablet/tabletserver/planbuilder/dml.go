@@ -202,6 +202,14 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 		return nil, err
 	}
 
+	if sel.Where != nil {
+		comp, ok := sel.Where.Expr.(*sqlparser.ComparisonExpr)
+		if ok && comp.IsImpossible() {
+			plan.PlanID = PlanSelectImpossible
+			return plan, nil
+		}
+	}
+
 	// Check if it's a NEXT VALUE statement.
 	if nextVal, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
 		if table.Type != schema.Sequence {
