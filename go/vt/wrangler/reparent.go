@@ -21,11 +21,11 @@ This file handles the reparenting operations.
 */
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
@@ -426,7 +426,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	wr.logger.Infof("promote slave %v", masterElectTabletAliasStr)
 	event.DispatchUpdate(ev, "promoting slave")
 	rp, err = wr.tmc.PromoteSlaveWhenCaughtUp(ctx, masterElectTabletInfo.Tablet, rp)
-	if err != nil {
+	if err != nil || (ctx.Err() != nil && ctx.Err() == context.DeadlineExceeded) {
 		// if this fails it is not enough to return an error. we should rollback all the changes made by DemoteMaster
 		if err1 := wr.tmc.UndoDemoteMaster(ctx, oldMasterTabletInfo.Tablet); err1 != nil {
 			log.Warningf("Encountered error %v while trying to undo DemoteMaster", err1)
