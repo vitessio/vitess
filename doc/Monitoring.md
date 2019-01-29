@@ -22,7 +22,7 @@ Scraping Vitess variables is a good way to integrate Vitess into an existing mon
 
 Vitess also includes support for push-based metrics systems via plug-ins. Each Vitess component would need to be run with the `--emit_stats` flag.
 
-By default, the stats_emit_period is 60s, so each component will push stats to the the selected backend every minute. This is configurable via the `--stats_emit_period` flag.
+By default, the stats_emit_period is 60s, so each component will push stats to the selected backend every minute. This is configurable via the `--stats_emit_period` flag.
 
 Vitess has preliminary plug-ins to support OpenTSDB as a push-based metrics backend.
 
