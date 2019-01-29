@@ -251,7 +251,7 @@ When you fire up the schema editor, it should take you to the load workflow. The
 
 The schema picks up the loaded JSON, parse it and display the various components of the schema in a page where the relationships are easily visualized. The vschema has four main components: keyspaces, tables, table classes and vindexes.
 
-Keyspaces can be on a left navbar. Once you select the keyspaces, it will display the the rest of the three components in one column each.
+Keyspaces can be on a left navbar. Once you select the keyspaces, it will display the rest of the three components in one column each.
 
 The schema editor will sanity check the JSON file for inconsistencies and flag them using various color codes:
 
