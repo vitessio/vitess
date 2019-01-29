@@ -98,7 +98,7 @@ const splitCloneHTML2 = `
       <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
       <INPUT type="hidden" name="shard" value="{{.Shard}}"/>
       <LABEL for="useConsistentSnapshot">Use consistent snapshot during the offline cloning:</LABEL>
-        <INPUT type="checkbox" id="useConsistentSnapshot" name="useConsistentSnapshot" value="false"><a href="https://dev.mysql.com/doc/refman/5.7/en/glossary.html#glos_consistent_read" target="_blank">?</a></BR>
+        <INPUT type="checkbox" id="useConsistentSnapshot" name="useConsistentSnapshot" value="true"><a href="https://dev.mysql.com/doc/refman/5.7/en/glossary.html#glos_consistent_read" target="_blank">?</a></BR>
       <INPUT type="submit" value="Clone"/>
     </form>
   </body>
