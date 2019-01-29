@@ -206,7 +206,7 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 	return nil
 }
 
-// swapBindVariables swaps in bind variable names at the the specified
+// swapBindVariables swaps in bind variable names at the specified
 // column position in the AST values and returns the converted values back.
 // Bind variable names are generated using baseName.
 func swapBindVariables(rows sqlparser.Values, colNum int, baseName string) (sqltypes.PlanValue, error) {
