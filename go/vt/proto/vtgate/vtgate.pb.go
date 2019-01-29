@@ -2803,7 +2803,7 @@ var xxx_messageInfo_ResolveTransactionResponse proto.InternalMessageInfo
 // SplitQuery takes a "SELECT" query and generates a list of queries called
 // "query-parts". Each query-part consists of the original query with an
 // added WHERE clause that restricts the query-part to operate only on
-// rows whose values in the the columns listed in the "split_column" field
+// rows whose values in the columns listed in the "split_column" field
 // of the request (see below) are in a particular range.
 //
 // It is guaranteed that the set of rows obtained from
