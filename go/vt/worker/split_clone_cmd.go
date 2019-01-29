@@ -25,12 +25,13 @@ import (
 	"strings"
 	"sync"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
@@ -82,14 +83,22 @@ const splitCloneHTML2 = `
         <INPUT type="text" id="writeQueryMaxSize" name="writeQueryMaxSize" value="{{.DefaultWriteQueryMaxSize}}"></BR>
       <LABEL for="destinationWriterCount">Destination Writer Count: </LABEL>
         <INPUT type="text" id="destinationWriterCount" name="destinationWriterCount" value="{{.DefaultDestinationWriterCount}}"></BR>
-      <LABEL for="minHealthyRdonlyTablets">Minimum Number of required healthy RDONLY tablets in the source and destination shard at start: </LABEL>
-        <INPUT type="text" id="minHealthyRdonlyTablets" name="minHealthyRdonlyTablets" value="{{.DefaultMinHealthyRdonlyTablets}}"></BR>
+      <LABEL for="tabletType">Tablet Type:</LABEL>
+			<SELECT id="tabletType" name="tabletType">
+  			<OPTION selected value="RDONLY">RDONLY</OPTION>
+  			<OPTION value="REPLICA">REPLICA</OPTION>
+			</SELECT>
+			</BR>
+      <LABEL for="minHealthyTablets">Minimum Number of required healthy RDONLY tablets in the source and destination shard at start: </LABEL>
+        <INPUT type="text" id="minHealthyTablets" name="minHealthyTablets" value="{{.DefaultMinHealthyTablets}}"></BR>
       <LABEL for="maxTPS">Maximum Write Transactions/second (If non-zero, writes on the destination will be throttled. Unlimited by default.): </LABEL>
         <INPUT type="text" id="maxTPS" name="maxTPS" value="{{.DefaultMaxTPS}}"></BR>
       <LABEL for="maxReplicationLag">Maximum Replication Lag Seconds (enables the adapative throttler. Disabled by default.): </LABEL>
         <INPUT type="text" id="maxReplicationLag" name="maxReplicationLag" value="{{.DefaultMaxReplicationLag}}"></BR>
       <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
       <INPUT type="hidden" name="shard" value="{{.Shard}}"/>
+      <LABEL for="useConsistentSnapshot">Use consistent snapshot during the offline cloning:</LABEL>
+        <INPUT type="checkbox" id="useConsistentSnapshot" name="useConsistentSnapshot" value="true"><a href="https://dev.mysql.com/doc/refman/5.7/en/glossary.html#glos_consistent_read" target="_blank">?</a></BR>
       <INPUT type="submit" value="Clone"/>
     </form>
   </body>
@@ -108,7 +117,9 @@ func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagS
 	writeQueryMaxRows := subFlags.Int("write_query_max_rows", defaultWriteQueryMaxRows, "maximum number of rows per write query")
 	writeQueryMaxSize := subFlags.Int("write_query_max_size", defaultWriteQueryMaxSize, "maximum size (in bytes) per write query")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
-	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyTablets, "minimum number of healthy RDONLY tablets in the source and destination shard at start")
+	tabletTypeStr := subFlags.String("tablet_type", "RDONLY", "tablet type to use (RDONLY or REPLICA)")
+	minHealthyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyTablets, "minimum number of healthy tablets in the source and destination shard at start")
+	useConsistentSnapshot := subFlags.Bool("use_consistent_snapshot", defaultUseConsistentSnapshot, "Instead of pausing replication on the source, uses transactions with consistent snapshot to have a stable view of the data.")
 	maxTPS := subFlags.Int64("max_tps", defaultMaxTPS, "rate limit of maximum number of (write) transactions/second on the destination (unlimited by default)")
 	maxReplicationLag := subFlags.Int64("max_replication_lag", defaultMaxReplicationLag, "if set, the adapative throttler will be enabled and automatically adjust the write rate to keep the lag below the set value in seconds (disabled by default)")
 	if err := subFlags.Parse(args); err != nil {
@@ -116,7 +127,7 @@ func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagS
 	}
 	if subFlags.NArg() != 1 {
 		subFlags.Usage()
-		return nil, fmt.Errorf("command SplitClone requires <keyspace/shard>")
+		return nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "command SplitClone requires <keyspace/shard>")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -127,7 +138,11 @@ func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagS
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	worker, err := newSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, excludeTableArray, *chunkCount, *minRowsPerChunk, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS, *maxReplicationLag)
+	tabletType, ok := topodata.TabletType_value[*tabletTypeStr]
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "command SplitClone invalid tablet_type: %v", tabletType)
+	}
+	worker, err := newSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, excludeTableArray, *chunkCount, *minRowsPerChunk, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *destinationWriterCount, *minHealthyTablets, topodata.TabletType(tabletType), *maxTPS, *maxReplicationLag, *useConsistentSnapshot)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "cannot create split clone worker")
 	}
@@ -173,7 +188,7 @@ func keyspacesWithOverlappingShards(ctx context.Context, wr *wrangler.Wrangler) 
 		return nil, rec.Error()
 	}
 	if len(result) == 0 {
-		return nil, fmt.Errorf("There are no keyspaces with overlapping shards")
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "there are no keyspaces with overlapping shards")
 	}
 	return result, nil
 }
@@ -212,9 +227,10 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 		result["DefaultWriteQueryMaxRows"] = fmt.Sprintf("%v", defaultWriteQueryMaxRows)
 		result["DefaultWriteQueryMaxSize"] = fmt.Sprintf("%v", defaultWriteQueryMaxSize)
 		result["DefaultDestinationWriterCount"] = fmt.Sprintf("%v", defaultDestinationWriterCount)
-		result["DefaultMinHealthyRdonlyTablets"] = fmt.Sprintf("%v", defaultMinHealthyTablets)
+		result["DefaultMinHealthyTablets"] = fmt.Sprintf("%v", defaultMinHealthyTablets)
 		result["DefaultMaxTPS"] = fmt.Sprintf("%v", defaultMaxTPS)
 		result["DefaultMaxReplicationLag"] = fmt.Sprintf("%v", defaultMaxReplicationLag)
+		result["DefaultUseConsistentSnapshot"] = fmt.Sprintf("%v", defaultUseConsistentSnapshot)
 		return nil, splitCloneTemplate2, result, nil
 	}
 
@@ -257,10 +273,15 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 	if err != nil {
 		return nil, nil, nil, vterrors.Wrap(err, "cannot parse destinationWriterCount")
 	}
-	minHealthyRdonlyTabletsStr := r.FormValue("minHealthyRdonlyTablets")
-	minHealthyRdonlyTablets, err := strconv.ParseInt(minHealthyRdonlyTabletsStr, 0, 64)
+	minHealthyTabletsStr := r.FormValue("minHealthyTablets")
+	minHealthyTablets, err := strconv.ParseInt(minHealthyTabletsStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, vterrors.Wrap(err, "cannot parse minHealthyRdonlyTablets")
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse minHealthyTablets")
+	}
+	tabletTypeStr := r.FormValue("tabletType")
+	tabletType, ok := topodata.TabletType_value[tabletTypeStr]
+	if !ok {
+		return nil, nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "command SplitClone invalid tablet_type: %v", tabletType)
 	}
 	maxTPSStr := r.FormValue("maxTPS")
 	maxTPS, err := strconv.ParseInt(maxTPSStr, 0, 64)
@@ -273,8 +294,11 @@ func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrang
 		return nil, nil, nil, vterrors.Wrap(err, "cannot parse maxReplicationLag")
 	}
 
+	useConsistentSnapshotStr := r.FormValue("useConsistentSnapshot")
+	useConsistentSnapshot := useConsistentSnapshotStr == "true"
+
 	// start the clone job
-	wrk, err := newSplitCloneWorker(wr, wi.cell, keyspace, shard, online, offline, excludeTableArray, int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS, maxReplicationLag)
+	wrk, err := newSplitCloneWorker(wr, wi.cell, keyspace, shard, online, offline, excludeTableArray, int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(destinationWriterCount), int(minHealthyTablets), topodata.TabletType(tabletType), maxTPS, maxReplicationLag, useConsistentSnapshot)
 	if err != nil {
 		return nil, nil, nil, vterrors.Wrap(err, "cannot create worker")
 	}

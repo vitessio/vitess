@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -107,6 +108,7 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 	writeQueryMaxSize := subFlags.Int("write_query_max_size", defaultWriteQueryMaxSize, "maximum size (in bytes) per write query")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
 	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyTablets, "minimum number of healthy RDONLY tablets before taking out one")
+	tabletTypeStr := subFlags.String("tablet_type", "RDONLY", "tablet type to use (RDONLY or REPLICA)")
 	maxTPS := subFlags.Int64("max_tps", defaultMaxTPS, "if non-zero, limit copy to maximum number of (write) transactions/second on the destination (unlimited by default)")
 	maxReplicationLag := subFlags.Int64("max_replication_lag", defaultMaxReplicationLag, "if set, the adapative throttler will be enabled and automatically adjust the write rate to keep the lag below the set value in seconds (disabled by default)")
 	if err := subFlags.Parse(args); err != nil {
@@ -127,7 +129,12 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 	if *tables != "" {
 		tableArray = strings.Split(*tables, ",")
 	}
-	worker, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, tableArray, *chunkCount, *minRowsPerChunk, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS, *maxReplicationLag)
+	tabletType, ok := topodata.TabletType_value[*tabletTypeStr]
+	if !ok {
+		return nil, fmt.Errorf("command SplitClone invalid tablet_type: %v", tabletType)
+	}
+
+	worker, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, tableArray, *chunkCount, *minRowsPerChunk, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *destinationWriterCount, *minHealthyRdonlyTablets, topodata.TabletType(tabletType), *maxTPS, *maxReplicationLag, /*useConsistentSnapshot*/false)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "cannot create worker")
 	}
@@ -265,6 +272,12 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 	if err != nil {
 		return nil, nil, nil, vterrors.Wrap(err, "cannot parse maxReplicationLag")
 	}
+	tabletTypeStr := r.FormValue("tabletType")
+	tabletType, ok := topodata.TabletType_value[tabletTypeStr]
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("cannot parse tabletType: %v", tabletType)
+	}
+
 
 	// Figure out the shard
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
@@ -282,7 +295,10 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 	}
 
 	// start the clone job
-	wrk, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, online, offline, tableArray, int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS, maxReplicationLag)
+	wrk, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, online, offline, tableArray, int(chunkCount),
+		int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize),
+		int(destinationWriterCount), int(minHealthyRdonlyTablets), topodata.TabletType(tabletType), maxTPS,
+		maxReplicationLag, false)
 	if err != nil {
 		return nil, nil, nil, vterrors.Wrap(err, "cannot create worker")
 	}
