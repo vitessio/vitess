@@ -2151,34 +2151,35 @@ type Expr interface {
 	SQLNode
 }
 
-func (*AndExpr) iExpr()          {}
-func (*OrExpr) iExpr()           {}
-func (*NotExpr) iExpr()          {}
-func (*ParenExpr) iExpr()        {}
-func (*ComparisonExpr) iExpr()   {}
-func (*RangeCond) iExpr()        {}
-func (*IsExpr) iExpr()           {}
-func (*ExistsExpr) iExpr()       {}
-func (*SQLVal) iExpr()           {}
-func (*NullVal) iExpr()          {}
-func (BoolVal) iExpr()           {}
-func (*ColName) iExpr()          {}
-func (ValTuple) iExpr()          {}
-func (*Subquery) iExpr()         {}
-func (ListArg) iExpr()           {}
-func (*BinaryExpr) iExpr()       {}
-func (*UnaryExpr) iExpr()        {}
-func (*IntervalExpr) iExpr()     {}
-func (*CollateExpr) iExpr()      {}
-func (*FuncExpr) iExpr()         {}
-func (*CaseExpr) iExpr()         {}
-func (*ValuesFuncExpr) iExpr()   {}
-func (*ConvertExpr) iExpr()      {}
-func (*SubstrExpr) iExpr()       {}
-func (*ConvertUsingExpr) iExpr() {}
-func (*MatchExpr) iExpr()        {}
-func (*GroupConcatExpr) iExpr()  {}
-func (*Default) iExpr()          {}
+func (*AndExpr) iExpr()           {}
+func (*OrExpr) iExpr()            {}
+func (*NotExpr) iExpr()           {}
+func (*ParenExpr) iExpr()         {}
+func (*ComparisonExpr) iExpr()    {}
+func (*RangeCond) iExpr()         {}
+func (*IsExpr) iExpr()            {}
+func (*ExistsExpr) iExpr()        {}
+func (*SQLVal) iExpr()            {}
+func (*NullVal) iExpr()           {}
+func (BoolVal) iExpr()            {}
+func (*ColName) iExpr()           {}
+func (ValTuple) iExpr()           {}
+func (*Subquery) iExpr()          {}
+func (ListArg) iExpr()            {}
+func (*BinaryExpr) iExpr()        {}
+func (*UnaryExpr) iExpr()         {}
+func (*IntervalExpr) iExpr()      {}
+func (*CollateExpr) iExpr()       {}
+func (*FuncExpr) iExpr()          {}
+func (*TimestampFuncExpr) iExpr() {}
+func (*CaseExpr) iExpr()          {}
+func (*ValuesFuncExpr) iExpr()    {}
+func (*ConvertExpr) iExpr()       {}
+func (*SubstrExpr) iExpr()        {}
+func (*ConvertUsingExpr) iExpr()  {}
+func (*MatchExpr) iExpr()         {}
+func (*GroupConcatExpr) iExpr()   {}
+func (*Default) iExpr()           {}
 
 // ReplaceExpr finds the from expression from root
 // and replaces it with to. If from matches root,
@@ -2866,6 +2867,40 @@ func (node *IntervalExpr) walkSubtree(visit Visit) error {
 
 func (node *IntervalExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr)
+}
+
+// TimestampFuncExpr represents the function and arguments for TIMESTAMP{ADD,DIFF} functions.
+type TimestampFuncExpr struct {
+	Name  string
+	Expr1 Expr
+	Expr2 Expr
+	Unit  string
+}
+
+// Format formats the node.
+func (node *TimestampFuncExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s(%s, %v, %v)", node.Name, node.Unit, node.Expr1, node.Expr2)
+}
+
+func (node *TimestampFuncExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Expr1,
+		node.Expr2,
+	)
+}
+
+func (node *TimestampFuncExpr) replace(from, to Expr) bool {
+	if replaceExprs(from, to, &node.Expr1) {
+		return true
+	}
+	if replaceExprs(from, to, &node.Expr2) {
+		return true
+	}
+	return false
 }
 
 // CollateExpr represents dynamic collate operator.
