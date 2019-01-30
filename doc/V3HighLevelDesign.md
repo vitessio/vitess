@@ -1311,7 +1311,7 @@ When two nodes are grouped, the current join condition becomes the root of the n
 * If it’s a JOIN, the new property is the more restrictive of the two nodes. So, if one of them is a Route, then the new node is also a Route.
 * For a LEFT JOIN, the new property is the same as the LHS node.
 
-If the grouping conditions are not met, then the node remains a join node. In this case, we have to see if the ON clause conditions can be pushed down into the left and/or right nodes. By the fact that the current join is split into two, the ON clause cannot be be pushed as is. Instead, we use associativity rules to our benefit and merge the ON clause conditions into the WHERE clauses of the underlying nodes. The rules are the same as the ones described for a normal WHERE clause.
+If the grouping conditions are not met, then the node remains a join node. In this case, we have to see if the ON clause conditions can be pushed down into the left and/or right nodes. By the fact that the current join is split into two, the ON clause cannot be pushed as is. Instead, we use associativity rules to our benefit and merge the ON clause conditions into the WHERE clauses of the underlying nodes. The rules are the same as the ones described for a normal WHERE clause.
 
 But left joins are slightly different, because the join condition is applied *to the RHS only*. Also, the condition cannot be further pushed into other nested left joins, because they will change the meaning of the statement. For example:
 
