@@ -1841,7 +1841,7 @@ func TestExecutorUnrecognized(t *testing.T) {
 func TestExecutorMessageAckSharded(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
-	// Constant IN is just a number, not a bind variable.
+	// Constant in IN clause, not a bind variable.
 	ids := []*querypb.Value{{
 		Type:  sqltypes.VarChar,
 		Value: []byte("1"),
