@@ -197,6 +197,15 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		if err != nil {
 			return err
 		}
+		// Filtered replication often ends up receiving a large number of empty transactions.
+		// This is required because the player needs to know the latest position of the source.
+		// This allows it to stop at that position if requested.
+		// This position also needs to be saved, which will allow an external request
+		// to check if a required position has been reached.
+		// However, this leads to a large number of empty commits which not only slow
+		// down the replay, but also generate binlog bloat on the target.
+		// In order to mitigate this problem, empty transactions are saved at most
+		// once every idleTimeout.
 		// This covers two situations:
 		// 1. Fetch was idle for idleTimeout.
 		// 2. We've been receiving empty events for longer than idleTimeout.
