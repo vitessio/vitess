@@ -936,6 +936,6 @@
 
 # outer and inner subquery route reference the same "uu.id" name
 # but they refer to different things. The first reference is to the outermost query,
-# and the second reference is to the the innermost 'from' subquery.
+# and the second reference is to the innermost 'from' subquery.
 "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
 "unsupported: cross-shard correlated subquery"
