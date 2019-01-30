@@ -614,7 +614,7 @@ func TestSelectIN(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 
-	// Constant IN is just a couple numbers, not bind variables.
+	// Constant in IN clause, not bind variables.
 	// They result in two different queries on two shards.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
