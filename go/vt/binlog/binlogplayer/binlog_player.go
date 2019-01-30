@@ -233,8 +233,8 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 	} else {
 		log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v', server: %v",
 			blp.uid,
-			hex.EncodeToString(blp.keyRange.Start),
-			hex.EncodeToString(blp.keyRange.End),
+			hex.EncodeToString(blp.keyRange.GetStart()),
+			hex.EncodeToString(blp.keyRange.GetEnd()),
 			blp.position,
 			blp.tablet,
 		)
