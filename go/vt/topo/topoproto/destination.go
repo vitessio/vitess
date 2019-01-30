@@ -66,6 +66,13 @@ func ParseDestination(targetString string, defaultTabletType topodatapb.TabletTy
 			dest = key.DestinationExactKeyRange{KeyRange: keyRange[0]}
 		} else {
 			// Parse as keyspace id
+
+			// Require all 16 hex chars to avoid any confusion about whether abbreviated keyspace IDs are a
+			// prefix like shard ranges or a suffix like most hex numbers in other situations.
+			if len(rangeString) != 16 {
+				return keyspace, tabletType, dest, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace id must be 16 hex characters in %s", rangeString)
+			}
+
 			destBytes, err := hex.DecodeString(rangeString)
 			if err != nil {
 				return keyspace, tabletType, dest, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected valid hex in keyspace id %s", rangeString)

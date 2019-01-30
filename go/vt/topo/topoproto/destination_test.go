@@ -46,10 +46,10 @@ func TestParseDestination(t *testing.T) {
 		tabletType:   topodatapb.TabletType_MASTER,
 		dest:         key.DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{}},
 	}, {
-		targetString: "ks[deadbeef]@master",
+		targetString: "ks[00000000deadbeef]@master",
 		keyspace:     "ks",
 		tabletType:   topodatapb.TabletType_MASTER,
-		dest:         key.DestinationKeyspaceID([]byte("\xde\xad\xbe\xef")),
+		dest:         key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\xde\xad\xbe\xef")),
 	}, {
 		targetString: "ks[10-]@master",
 		keyspace:     "ks",
@@ -115,8 +115,14 @@ func TestParseDestination(t *testing.T) {
 		t.Errorf("executorExec error: %v, want %s", err, want)
 	}
 
-	_, _, _, err = ParseDestination("ks[qrnqorrs]@master", topodatapb.TabletType_MASTER)
-	want = "expected valid hex in keyspace id qrnqorrs"
+	_, _, _, err = ParseDestination("ks[qrnqorrsqnqnqnqn]@master", topodatapb.TabletType_MASTER)
+	want = "expected valid hex in keyspace id qrnqorrsqnqnqnqn"
+	if err == nil || err.Error() != want {
+		t.Errorf("executorExec error: %v, want %s", err, want)
+	}
+
+	_, _, _, err = ParseDestination("ks[deadbeef]@master", topodatapb.TabletType_MASTER)
+	want = "keyspace id must be 16 hex characters in deadbeef"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec error: %v, want %s", err, want)
 	}
