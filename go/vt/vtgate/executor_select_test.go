@@ -596,7 +596,7 @@ func TestSelectKeyRangeUnique(t *testing.T) {
 func TestSelectIN(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
-	// Constant IN is just a number, not a bind variable.
+	// Constant in IN clause, not a bind variable.
 	_, err := executorExec(executor, "select id from user where id in (1)", nil)
 	if err != nil {
 		t.Error(err)
@@ -614,7 +614,7 @@ func TestSelectIN(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 
-	// Constant in IN clause, not bind variables.
+	// Constant IN is just a couple numbers, not bind variables.
 	// They result in two different queries on two shards.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
