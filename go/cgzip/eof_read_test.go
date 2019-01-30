@@ -20,8 +20,6 @@ import (
 	"io"
 	"io/ioutil"
 	"testing"
-
-	"vitess.io/vitess/go/testfiles"
 )
 
 // specialReader is a test class that will return bytes it reads from a file,
@@ -33,7 +31,6 @@ type specialReader struct {
 }
 
 func newSpecialReader(t *testing.T, filename string) *specialReader {
-	filename = testfiles.Locate(filename)
 	b, err := ioutil.ReadFile(filename)
 	if err != nil {
 		t.Fatalf("Cannot read file %v: %v", filename, err)
@@ -61,7 +58,7 @@ func (sr *specialReader) Read(p []byte) (int, error) {
 // So it will be read as 32k + 22k, and decompressed into 2MB + 2MB + 1M and
 // then 2MB + 2MB + 1M again. So it's a great test for corner cases.
 func TestEofAndData(t *testing.T) {
-	r := newSpecialReader(t, "cgzip_eof.gz")
+	r := newSpecialReader(t, "testdata/cgzip_eof.gz")
 	gz, err := NewReader(r)
 	if err != nil {
 		t.Fatalf("NewReader failed: %v", err)

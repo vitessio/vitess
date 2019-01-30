@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -395,18 +394,39 @@ func TestCreateDBAndTable(t *testing.T) {
 
 	vre := NewEngine(ts, testCell, mysqld, dbClientFactory)
 
-	notFound := mysql.SQLError{Num: 1146, Message: "not found"}
-	dbClient.ExpectRequest("select * from _vt.vreplication", nil, &notFound)
+	tableNotFound := mysql.SQLError{Num: 1146, Message: "table not found"}
+	dbClient.ExpectRequest("select * from _vt.vreplication", nil, &tableNotFound)
 	if err := vre.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	defer vre.Close()
 
+	// Missing db. Statement should get retried after creating everything.
+	dbNotFound := mysql.SQLError{Num: 1049, Message: "db not found"}
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, &dbNotFound)
+
 	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
+
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+
+	// Non-recoverable error.
+	unrecoverableError := &mysql.SQLError{Num: 1234, Message: "random error"}
+	dbClient.ExpectRequest("select fail_query from _vt.vreplication", &sqltypes.Result{}, unrecoverableError)
+
+	// Missing table. Statement should get retried after creating everything.
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("insert into _vt.vreplication values (null)", &sqltypes.Result{}, &tableNotFound)
+
+	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
+
 	dbClient.ExpectRequest("insert into _vt.vreplication values (null)", &sqltypes.Result{InsertID: 1}, nil)
+
+	// The rest of this test is normal with no db errors or extra queries.
+
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|state|source",
@@ -420,6 +440,11 @@ func TestCreateDBAndTable(t *testing.T) {
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("commit", nil, nil)
+
+	_, err := vre.Exec("select fail_query from _vt.vreplication")
+	if err != unrecoverableError {
+		t.Errorf("Want: %v, Got: %v", unrecoverableError, err)
+	}
 
 	qr, err := vre.Exec("insert into _vt.vreplication values(null)")
 	if err != nil {

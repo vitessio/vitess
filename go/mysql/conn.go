@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 const (
@@ -723,65 +724,28 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		queryStart := time.Now()
 		query := c.parseComQuery(data)
 		c.recycleReadPacket()
-		fieldSent := false
-		// sendFinished is set if the response should just be an OK packet.
-		sendFinished := false
 
-		err := handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
-			if sendFinished {
-				// Failsafe: Unreachable if server is well-behaved.
-				return io.EOF
-			}
-
-			if !fieldSent {
-				fieldSent = true
-
-				if len(qr.Fields) == 0 {
-					sendFinished = true
-
-					// A successful callback with no fields means that this was a
-					// DML or other write-only operation.
-					//
-					// We should not send any more packets after this, but make sure
-					// to extract the affected rows and last insert id from the result
-					// struct here since clients expect it.
-					return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, handler.WarningCount(c))
+		var queries []string
+		if c.Capabilities&CapabilityClientMultiStatements != 0 {
+			queries, err = sqlparser.SplitStatementToPieces(query)
+			if err != nil {
+				log.Errorf("Conn %v: Error splitting query: %v", c, err)
+				if werr := c.writeErrorPacketFromError(err); werr != nil {
+					// If we can't even write the error, we're done.
+					log.Errorf("Conn %v: Error writing query error: %v", c, werr)
+					return werr
 				}
-				if err := c.writeFields(qr); err != nil {
-					return err
-				}
-			}
-
-			return c.writeRows(qr)
-		})
-
-		// If no field was sent, we expect an error.
-		if !fieldSent {
-			// This is just a failsafe. Should never happen.
-			if err == nil || err == io.EOF {
-				err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
-			}
-			if werr := c.writeErrorPacketFromError(err); werr != nil {
-				// If we can't even write the error, we're done.
-				log.Errorf("Error writing query error to %s: %v", c, werr)
-				return werr
 			}
 		} else {
-			if err != nil {
-				// We can't send an error in the middle of a stream.
-				// All we can do is abort the send, which will cause a 2013.
-				log.Errorf("Error in the middle of a stream to %s: %v", c, err)
-				return err
+			queries = []string{query}
+		}
+		for index, sql := range queries {
+			more := false
+			if index != len(queries)-1 {
+				more = true
 			}
-
-			// Send the end packet only sendFinished is false (results were streamed).
-			// In this case the affectedRows and lastInsertID are always 0 since it
-			// was a read operation.
-			if !sendFinished {
-				if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-					log.Errorf("Error writing result to %s: %v", c, err)
-					return err
-				}
+			if err := c.execQuery(sql, handler, more); err != nil {
+				return err
 			}
 		}
 
@@ -807,14 +771,16 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 	case ComSetOption:
-		if operation, ok := c.parseComSetOption(data); ok {
+		operation, ok := c.parseComSetOption(data)
+		c.recycleReadPacket()
+		if ok {
 			switch operation {
 			case 0:
 				c.Capabilities |= CapabilityClientMultiStatements
 			case 1:
 				c.Capabilities &^= CapabilityClientMultiStatements
 			default:
-				log.Errorf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
+				log.Errorf("Got unhandled packet (ComSetOption default) from client %v, returning error: %v", c.ConnectionID, data)
 				if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
 					log.Errorf("Error writing error packet to client: %v", err)
 					return err
@@ -825,18 +791,88 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				return err
 			}
 		} else {
-			log.Errorf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
+			log.Errorf("Got unhandled packet (ComSetOption else) from client %v, returning error: %v", c.ConnectionID, data)
 			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
 				log.Errorf("Error writing error packet to client: %v", err)
 				return err
 			}
 		}
 	default:
-		log.Errorf("Got unhandled packet from %s, returning error: %v", c, data)
+		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
 		if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "command handling not implemented yet: %v", data[0]); err != nil {
 			log.Errorf("Error writing error packet to %s: %s", c, err)
 			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *Conn) execQuery(query string, handler Handler, more bool) error {
+	fieldSent := false
+	// sendFinished is set if the response should just be an OK packet.
+	sendFinished := false
+
+	err := handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
+		flag := c.StatusFlags
+		if more {
+			flag |= ServerMoreResultsExists
+		}
+		if sendFinished {
+			// Failsafe: Unreachable if server is well-behaved.
+			return io.EOF
+		}
+
+		if !fieldSent {
+			fieldSent = true
+
+			if len(qr.Fields) == 0 {
+				sendFinished = true
+
+				// A successful callback with no fields means that this was a
+				// DML or other write-only operation.
+				//
+				// We should not send any more packets after this, but make sure
+				// to extract the affected rows and last insert id from the result
+				// struct here since clients expect it.
+				return c.writeOKPacket(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c))
+			}
+			if err := c.writeFields(qr); err != nil {
+				return err
+			}
+		}
+
+		return c.writeRows(qr)
+	})
+
+	// If no field was sent, we expect an error.
+	if !fieldSent {
+		// This is just a failsafe. Should never happen.
+		if err == nil || err == io.EOF {
+			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+		}
+		if werr := c.writeErrorPacketFromError(err); werr != nil {
+			// If we can't even write the error, we're done.
+			log.Errorf("Error writing query error to %s: %v", c, werr)
+			return werr
+		}
+	} else {
+		if err != nil {
+			// We can't send an error in the middle of a stream.
+			// All we can do is abort the send, which will cause a 2013.
+			log.Errorf("Error in the middle of a stream to %s: %v", c, err)
+			return err
+		}
+
+		// Send the end packet only sendFinished is false (results were streamed).
+		// In this case the affectedRows and lastInsertID are always 0 since it
+		// was a read operation.
+		if !sendFinished {
+			if err := c.writeEndResult(more, 0, 0, handler.WarningCount(c)); err != nil {
+				log.Errorf("Error writing result to %s: %v", c, err)
+				return err
+			}
 		}
 	}
 

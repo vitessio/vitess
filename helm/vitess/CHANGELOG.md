@@ -1,3 +1,27 @@
+## 1.0.6 - 2019-01-20
+
+### Changes
+* Update Orchestrator default to 3.0.14
+* Run `pmm-admin repair` on `pmm-client` startup to recover failures on `pmm-server`
+* Backups now only run on `replica` (non-master), `rdonly`, or `spare` tablet types
+
+## 1.0.5 - 2019-01-12
+
+### Changes
+* Set FailMasterPromotionIfSQLThreadNotUpToDate = true in Orchestrator config, to prevent
+lagging replicas from being promoted to master and causing errant GTID problems.
+
+**NOTE:** You need to manually restart your Orchestrator pods for this change to take effect
+
+## 1.0.4 - 2019-01-01
+
+### Changes
+* Use the [Orchestrator API](https://github.com/github/orchestrator/blob/master/docs/using-the-web-api.md)
+to call `begin-downtime` before running `PlannedReparentShard` in the `preStopHook`, to make sure that Orchestrator
+doesn't try to run an external failover while Vitess is reparenting. When it is complete, it calls `end-downtime`.
+Also call `forget` on the instance after calling `vtctlclient DeleteTablet`. It will be rediscovered if/when
+the tablet comes back up. This eliminates most possible race conditions that could cause split brain.
+
 ## 1.0.3 - 2018-12-20
 
 ### Changes

@@ -921,9 +921,9 @@ var _Query_serviceDesc = grpc.ServiceDesc{
 	Metadata: "queryservice.proto",
 }
 
-func init() { proto.RegisterFile("queryservice.proto", fileDescriptor_queryservice_81e549fbfb878a8d) }
+func init() { proto.RegisterFile("queryservice.proto", fileDescriptor_queryservice_bb9da33c43234b51) }
 
-var fileDescriptor_queryservice_81e549fbfb878a8d = []byte{
+var fileDescriptor_queryservice_bb9da33c43234b51 = []byte{
 	// 519 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x95, 0xdf, 0x6b, 0xd4, 0x40,
 	0x10, 0xc7, 0xf5, 0xa1, 0xad, 0x4c, 0xe3, 0xaf, 0xad, 0x55, 0x9b, 0xd6, 0xb6, 0xf6, 0x4d, 0x84,

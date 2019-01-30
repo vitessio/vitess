@@ -188,6 +188,7 @@ func (client *QueryClient) StreamExecuteWithOptions(query string, bindvars map[s
 		&client.target,
 		query,
 		bindvars,
+		0,
 		options,
 		func(res *sqltypes.Result) error {
 			if result.Fields == nil {
@@ -211,6 +212,7 @@ func (client *QueryClient) Stream(query string, bindvars map[string]*querypb.Bin
 		&client.target,
 		query,
 		bindvars,
+		0,
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 		sendFunc,
 	)

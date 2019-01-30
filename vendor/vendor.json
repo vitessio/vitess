@@ -619,14 +619,6 @@
 			"revisionTime": "2016-12-07T01:17:43Z"
 		},
 		{
-			"checksumSHA1": "fe0NspvyJjx6DhmTjIpO0zmR+kg=",
-			"path": "github.com/influxdb/influxdb/client",
-			"revision": "afde71eb1740fd763ab9450e1f700ba0e53c36d0",
-			"revisionTime": "2014-12-28T19:15:54Z",
-			"version": "=v0.8.8",
-			"versionExact": "v0.8.8"
-		},
-		{
 			"checksumSHA1": "0ZrwvB6KoGPj2PoDNSEJwxQ6Mog=",
 			"path": "github.com/jmespath/go-jmespath",
 			"revision": "0b12d6b521d83fc7f755e7cfc1b1fbdd35a01a74",

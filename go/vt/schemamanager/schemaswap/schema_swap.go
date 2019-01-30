@@ -459,7 +459,7 @@ func (schemaSwap *Swap) stopAllHealthWatchers() {
 }
 
 // initializeSwap starts the schema swap process. If there is already a schema swap process started
-// the the method just picks up that. Otherwise it starts a new one and writes into the database that
+// the method just picks up that. Otherwise it starts a new one and writes into the database that
 // the process was started.
 func (schemaSwap *Swap) initializeSwap() error {
 	var waitGroup sync.WaitGroup

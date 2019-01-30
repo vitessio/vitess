@@ -288,6 +288,10 @@ message ExecuteOptions {
     READ_COMMITTED = 2;
     READ_UNCOMMITTED = 3;
     SERIALIZABLE = 4;
+
+    // This is not an "official" transaction level but it will do a
+    // START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY
+    CONSISTENT_SNAPSHOT_READ_ONLY = 5;
   }
 
   TransactionIsolation transaction_isolation = 9;
@@ -453,6 +457,7 @@ message StreamExecuteRequest {
   Target target = 3;
   BoundQuery query = 4;
   ExecuteOptions options = 5;
+  int64 transaction_id = 6;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute

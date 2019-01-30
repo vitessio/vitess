@@ -71,7 +71,7 @@ This rule is not strictly enforced. You are allowed to add these things, but at 
 
 Similar guidelines should be used when deciding to bypass Vitess to send statements directly to MySQL.
 
-Vitess also requires you to turn on STRICT_TRANS_TABLES mode. Otherwise, it cannot accurately predict what will be written to the database.
+Vitess also requires you to turn on STRICT_TRANS_TABLES or STRICT_ALL_TABLES mode. Otherwise, it cannot accurately predict what will be written to the database.
 
 It’s safe to apply backward compatible DDLs directly to MySQL. VTTablets can be configured to periodically check the schema for changes.
 

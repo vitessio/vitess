@@ -144,6 +144,25 @@ func (agent *ActionAgent) StartSlave(ctx context.Context) error {
 	return agent.MysqlDaemon.StartSlave(agent.hookExtraEnv())
 }
 
+// StartSlaveUntilAfter will start the replication and let it catch up
+// until and including the transactions in `position`
+func (agent *ActionAgent) StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
+	if err := agent.lock(ctx); err != nil {
+		return err
+	}
+	defer agent.unlock()
+
+	waitCtx, cancel := context.WithTimeout(ctx, waitTime)
+	defer cancel()
+
+	pos, err := mysql.DecodePosition(position)
+	if err != nil {
+		return err
+	}
+
+	return agent.MysqlDaemon.StartSlaveUntilAfter(waitCtx, pos)
+}
+
 // GetSlaves returns the address of all the slaves
 func (agent *ActionAgent) GetSlaves(ctx context.Context) ([]string, error) {
 	return mysqlctl.FindSlaves(agent.MysqlDaemon)

@@ -150,11 +150,6 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	expectNoError(t, err)
 	defer conn.Close()
 
-	connParams.DisableClientDeprecateEOF = false
-
-	expectFlag(t, "Negotiated ClientDeprecateEOF flag", (conn.Capabilities&mysql.CapabilityClientDeprecateEOF) != 0, !disableClientDeprecateEOF)
-	defer conn.Close()
-
 	qr, more, err := conn.ExecuteFetchMulti("select 1 from dual; set autocommit=1; select 1 from dual", 10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(multi result)", more, true)
