@@ -283,7 +283,7 @@ func TestMaxReplicationLagModule_ReplicaUnderTest_Timeout(t *testing.T) {
 	}
 
 	// r2 as "replica under test" did not report its lag for too long.
-	// We'll ignore it from now and and let other replicas trigger rate changes.
+	// We'll ignore it from now and let other replicas trigger rate changes.
 	// r1 @  173s, 0s lag
 	// time for r1 must be > 172s (70s + 40s + 62s) which is
 	// (last rate change + test duration + max duration between increases).
