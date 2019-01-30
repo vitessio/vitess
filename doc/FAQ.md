@@ -20,7 +20,7 @@ If no tablet type was specified, then VTGate chooses its default, which can be o
 
 Vitess supports different modes. In OLTP mode, the result size is typically limited to a preset number (10,000 rows by default). This limit can be adjusted based on your needs.
 
-However, OLAP mode has no limit to the number of rows returned. In order to change to this mode, you may issue the following command command before executing your query:
+However, OLAP mode has no limit to the number of rows returned. In order to change to this mode, you may issue the following command before executing your query:
 
 ```
 set workload='olap'
