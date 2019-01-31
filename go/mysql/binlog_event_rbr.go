@@ -853,14 +853,26 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		max := int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff))
 		// Length is encoded in 1 or 2 bytes.
 		if max > 255 {
+			// This code path exists due to https://bugs.mysql.com/bug.php?id=37426.
+			// CHAR types need to allocate 3 bytes per char. So, the length for CHAR(255)
+			// cannot be represented in 1 byte. This also means that this rule does not
+			// apply to BINARY data.
 			l := int(uint64(data[pos]) |
 				uint64(data[pos+1])<<8)
 			return sqltypes.MakeTrusted(querypb.Type_VARCHAR,
 				data[pos+2:pos+2+l]), l + 2, nil
 		}
 		l := int(data[pos])
-		return sqltypes.MakeTrusted(querypb.Type_VARCHAR,
-			data[pos+1:pos+1+l]), l + 1, nil
+		mdata := data[pos+1 : pos+1+l]
+		if sqltypes.IsBinary(styp) {
+			// Fixed length binaries have to be padded with zeroes
+			// up to the length of the field. Otherwise, equality checks
+			// fail against saved data. See https://github.com/vitessio/vitess/issues/3984.
+			ret := make([]byte, max)
+			copy(ret, mdata)
+			return sqltypes.MakeTrusted(querypb.Type_BINARY, ret), l + 1, nil
+		}
+		return sqltypes.MakeTrusted(querypb.Type_VARCHAR, mdata), l + 1, nil
 
 	case TypeGeometry:
 		l := 0

@@ -200,7 +200,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	}
 	defer vre.updateStats()
 
-	plan, err := getPlan(query)
+	plan, err := buildControllerPlan(query)
 	if err != nil {
 		return nil, err
 	}
@@ -281,14 +281,19 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		return err
 	}
 
-	vre.mu.Lock()
-	if !vre.isOpen {
-		vre.mu.Unlock()
-		return errors.New("vreplication engine is closed")
+	if err := func() error {
+		vre.mu.Lock()
+		defer vre.mu.Unlock()
+		if !vre.isOpen {
+			return errors.New("vreplication engine is closed")
+		}
+
+		// Ensure that the engine won't be closed while this is running.
+		vre.wg.Add(1)
+		return nil
+	}(); err != nil {
+		return err
 	}
-	// Ensure that the engine won't be closed while this is running.
-	vre.wg.Add(1)
-	vre.mu.Unlock()
 	defer vre.wg.Done()
 
 	dbClient := vre.dbClientFactory()
@@ -298,13 +303,13 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 	defer dbClient.Close()
 
 	for {
-		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationPos(uint32(id)), 10)
+		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(uint32(id)), 10)
 		switch {
 		case err != nil:
 			return err
 		case len(qr.Rows) == 0:
 			return fmt.Errorf("vreplication stream %d not found", id)
-		case len(qr.Rows) > 1 || len(qr.Rows[0]) != 1:
+		case len(qr.Rows) > 1 || len(qr.Rows[0]) != 3:
 			return fmt.Errorf("unexpected result: %v", qr)
 		}
 		current, err := mysql.DecodePosition(qr.Rows[0][0].ToString())
@@ -314,6 +319,10 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 
 		if current.AtLeast(mPos) {
 			return nil
+		}
+
+		if qr.Rows[0][1].ToString() == binlogplayer.BlpStopped {
+			return fmt.Errorf("replication has stopped at %v before reaching position %v, message: %s", current, mPos, qr.Rows[0][2].ToString())
 		}
 
 		select {

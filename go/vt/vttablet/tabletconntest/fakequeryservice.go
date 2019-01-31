@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -848,6 +849,11 @@ func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Tar
 		f.t.Errorf("callback2 failed: %v", err)
 	}
 	return nil
+}
+
+// VStream is part of the queryservice.QueryService interface
+func (f *FakeQueryService) VStream(ctx context.Context, target *querypb.Target, position string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	panic("not implemented")
 }
 
 // CreateFakeServer returns the fake server for the tests
