@@ -120,6 +120,61 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 	return true, result, nil
 }
 
+func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter) bool {
+	if query.Database != "" && query.Database != dbname {
+		return false
+	}
+	ast, err := sqlparser.Parse(query.SQL)
+	// If there was a parsing error, we send it through. Hopefully,
+	// recipient can handle it.
+	if err != nil {
+		return true
+	}
+	switch stmt := ast.(type) {
+	case *sqlparser.DBDDL:
+		return false
+	case *sqlparser.DDL:
+		if !stmt.Table.IsEmpty() {
+			return tableMatches(stmt.Table, dbname, filter)
+		}
+		for _, table := range stmt.FromTables {
+			if tableMatches(table, dbname, filter) {
+				return true
+			}
+		}
+		for _, table := range stmt.ToTables {
+			if tableMatches(table, dbname, filter) {
+				return true
+			}
+		}
+		return false
+	}
+	return true
+}
+
+func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb.Filter) bool {
+	if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
+		return false
+	}
+	for _, rule := range filter.Rules {
+		switch {
+		case strings.HasPrefix(rule.Match, "/"):
+			expr := strings.Trim(rule.Match, "/")
+			result, err := regexp.MatchString(expr, table.Name.String())
+			if err != nil {
+				return true
+			}
+			if !result {
+				continue
+			}
+			return true
+		case table.Name.String() == rule.Match:
+			return true
+		}
+	}
+	return false
+}
+
 func buildPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter *binlogdatapb.Filter) (*Plan, error) {
 	for _, rule := range filter.Rules {
 		switch {
@@ -293,18 +348,22 @@ func buildTablePlan(ti *Table, kschema *vindexes.KeyspaceSchema, query string) (
 	return plan, nil
 }
 
-func analyzeExpr(ti *Table, expr sqlparser.SelectExpr) (cExpr ColExpr, err error) {
-	aexpr, ok := expr.(*sqlparser.AliasedExpr)
+func analyzeExpr(ti *Table, selExpr sqlparser.SelectExpr) (cExpr ColExpr, err error) {
+	aliased, ok := selExpr.(*sqlparser.AliasedExpr)
 	if !ok {
-		return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+		return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(selExpr))
 	}
-	switch expr := aexpr.Expr.(type) {
+	as := aliased.As
+	if as.IsEmpty() {
+		as = sqlparser.NewColIdent(sqlparser.String(aliased.Expr))
+	}
+	switch expr := aliased.Expr.(type) {
 	case *sqlparser.ColName:
 		colnum, err := findColumn(ti, expr.Name)
 		if err != nil {
 			return ColExpr{}, err
 		}
-		return ColExpr{ColNum: colnum, Alias: expr.Name, Type: ti.Columns[colnum].Type}, nil
+		return ColExpr{ColNum: colnum, Alias: as, Type: ti.Columns[colnum].Type}, nil
 	case *sqlparser.FuncExpr:
 		if expr.Distinct || len(expr.Exprs) != 1 {
 			return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
@@ -318,10 +377,6 @@ func analyzeExpr(ti *Table, expr sqlparser.SelectExpr) (cExpr ColExpr, err error
 			innerCol, ok := aInner.Expr.(*sqlparser.ColName)
 			if !ok {
 				return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(expr))
-			}
-			as := aexpr.As
-			if as.IsEmpty() {
-				as = sqlparser.NewColIdent(sqlparser.String(expr))
 			}
 			colnum, err := findColumn(ti, innerCol.Name)
 			if err != nil {

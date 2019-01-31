@@ -37,7 +37,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// BinlogFormat is used for for specifying the binlog format.
+// BinlogFormat is used for specifying the binlog format.
 type BinlogFormat int
 
 // The following constants specify the possible binlog format values.
