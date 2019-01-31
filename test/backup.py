@@ -297,7 +297,7 @@ class TestBackup(unittest.TestCase):
     for row in result:
       metadata[row[0]] = row[1]
     self.assertEqual(metadata['Alias'], 'test_nj-0000062346')
-    self.assertEqual(metadata['ClusterAlias'], 'test_keyspace/0')
+    self.assertEqual(metadata['ClusterAlias'], 'test_keyspace.0')
     self.assertEqual(metadata['DataCenter'], 'test_nj')
     if tablet_type == 'replica':
       self.assertEqual(metadata['PromotionRule'], 'neutral')
