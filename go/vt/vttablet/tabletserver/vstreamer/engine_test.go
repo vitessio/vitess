@@ -50,7 +50,7 @@ func TestUpdateVSchema(t *testing.T) {
 		t.Skip()
 	}
 
-	defer setVSchema("{}")
+	defer env.SetVSchema("{}")
 
 	// We have to start at least one stream to start the vschema watcher.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -67,7 +67,7 @@ func TestUpdateVSchema(t *testing.T) {
 
 	startCount := expectUpdateCount(t, 1)
 
-	if err := setVSchema(shardedVSchema); err != nil {
+	if err := env.SetVSchema(shardedVSchema); err != nil {
 		t.Fatal(err)
 	}
 	expectUpdateCount(t, startCount+1)

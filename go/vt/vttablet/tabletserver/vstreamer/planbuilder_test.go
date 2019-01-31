@@ -60,11 +60,92 @@ func init() {
 	if err := json2.Unmarshal([]byte(input), &kspb); err != nil {
 		panic(fmt.Errorf("Unmarshal failed: %v", err))
 	}
-	kschema, err := vindexes.BuildKeyspaceSchema(&kspb, keyspaceName)
+	kschema, err := vindexes.BuildKeyspaceSchema(&kspb, "ks")
 	if err != nil {
 		panic(err)
 	}
 	testKSChema = kschema
+}
+
+func TestMustSendDDL(t *testing.T) {
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/t1.*/",
+		}, {
+			Match: "t2",
+		}},
+	}
+	testcases := []struct {
+		sql    string
+		db     string
+		output bool
+	}{{
+		sql:    "create database db",
+		output: false,
+	}, {
+		sql:    "create table foo(id int)",
+		output: false,
+	}, {
+		sql:    "create table db.foo(id int)",
+		output: false,
+	}, {
+		sql:    "create table mydb.foo(id int)",
+		output: false,
+	}, {
+		sql:    "create table t1a(id int)",
+		output: true,
+	}, {
+		sql:    "create table db.t1a(id int)",
+		output: false,
+	}, {
+		sql:    "create table mydb.t1a(id int)",
+		output: true,
+	}, {
+		sql:    "rename table t1a to foo, foo to bar",
+		output: true,
+	}, {
+		sql:    "rename table foo to t1a, foo to bar",
+		output: true,
+	}, {
+		sql:    "rename table foo to bar, t1a to bar",
+		output: true,
+	}, {
+		sql:    "rename table foo to bar, bar to foo",
+		output: false,
+	}, {
+		sql:    "drop table t1a, foo",
+		output: true,
+	}, {
+		sql:    "drop table foo, t1a",
+		output: true,
+	}, {
+		sql:    "drop table foo, bar",
+		output: false,
+	}, {
+		sql:    "bad query",
+		output: true,
+	}, {
+		sql:    "select * from t",
+		output: true,
+	}, {
+		sql:    "drop table t2",
+		output: true,
+	}, {
+		sql:    "create table t1a(id int)",
+		db:     "db",
+		output: false,
+	}, {
+		sql:    "create table t1a(id int)",
+		db:     "mydb",
+		output: true,
+	}}
+	for _, tcase := range testcases {
+		q := mysql.Query{SQL: tcase.sql, Database: tcase.db}
+		got := mustSendDDL(q, "mydb", filter)
+		if got != tcase.output {
+			t.Errorf("%v: %v, want %v", q, got, tcase.output)
+		}
+	}
 }
 
 func TestPlanbuilder(t *testing.T) {

@@ -23,6 +23,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/binlogdata";
 
 package binlogdata;
 
+import "vtrpc.proto";
 import "query.proto";
 import "topodata.proto";
 
@@ -131,6 +132,14 @@ message Filter {
   repeated Rule rules = 1;
 }
 
+// OnDDLAction lists the possible actions for DDLs.
+enum OnDDLAction {
+  IGNORE = 0;
+  STOP = 1;
+  EXEC = 2;
+  EXEC_IGNORE = 3;
+}
+
 // BinlogSource specifies the source  and filter parameters for
 // Filtered Replication. It currently supports a keyrange
 // or a list of tables.
@@ -153,6 +162,9 @@ message BinlogSource {
   // filter is set if we're using the generalized representation
   // for the filter.
   Filter filter = 6;
+
+  // on_ddl specifies the action to be taken when a DDL is encountered.
+  OnDDLAction on_ddl = 7;
 }
 
 // VEventType enumerates the event types.
@@ -195,19 +207,24 @@ message FieldEvent {
 // VEvent represents a vstream event
 message VEvent {
   VEventType type = 1;
-  string gtid = 2;
-  string ddl = 3;
-  RowEvent row_event = 4;
-  FieldEvent field_event = 5;
+  int64 timestamp = 2;
+  string gtid = 3;
+  string ddl = 4;
+  RowEvent row_event = 5;
+  FieldEvent field_event = 6;
 }
 
 // VStreamRequest is the payload for VStream
 message VStreamRequest {
-  string position = 1;
-  Filter filter = 2;
+  vtrpc.CallerID effective_caller_id = 1;
+  query.VTGateCallerID immediate_caller_id = 2;
+  query.Target target = 3;
+
+  string position = 4;
+  Filter filter = 5;
 }
 
 // VStreamResponse is the response from VStream
 message VStreamResponse {
-  repeated VEvent event = 1;
+  repeated VEvent events = 1;
 }

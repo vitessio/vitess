@@ -397,6 +397,16 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 	return tmutils.FilterTables(fmd.Schema, tables, excludeTables, includeViews)
 }
 
+// GetColumns is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) GetColumns(dbName, table string) ([]string, error) {
+	return []string{}, nil
+}
+
+// GetPrimaryKeyColumns is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) GetPrimaryKeyColumns(dbName, table string) ([]string, error) {
+	return []string{}, nil
+}
+
 // PreflightSchemaChange is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	if fmd.PreflightSchemaChangeResult == nil {
