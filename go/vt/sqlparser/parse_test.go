@@ -426,7 +426,49 @@ var (
 	}, {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
+		input: "select /* current_timestamp */ current_timestamp() from t",
+	}, {
 		input: "select /* current_timestamp as func */ current_timestamp() from t",
+	}, {
+		input: "select /* current_timestamp with fsp */ current_timestamp(3) from t",
+	}, {
+		input: "select /* current_date */ current_date() from t",
+	}, {
+		input: "select /* current_date as func */ current_date() from t",
+	}, {
+		input: "select /* current_time */ current_time() from t",
+	}, {
+		input: "select /* current_time as func */ current_time() from t",
+	}, {
+		input: "select /* current_time with fsp */ current_time(1) from t",
+	}, {
+		input: "select /* utc_timestamp */ utc_timestamp() from t",
+	}, {
+		input: "select /* utc_timestamp as func */ utc_timestamp() from t",
+	}, {
+		input: "select /* utc_timestamp with fsp */ utc_timestamp(0) from t",
+	}, {
+		input: "select /* utc_time */ utc_time() from t",
+	}, {
+		input: "select /* utc_time as func */ utc_time() from t",
+	}, {
+		input: "select /* utc_time with fsp */ utc_time(4) from t",
+	}, {
+		input: "select /* utc_date */ utc_date() from t",
+	}, {
+		input: "select /* utc_date as func */ utc_date() from t",
+	}, {
+		input: "select /* localtime */ localtime() from t",
+	}, {
+		input: "select /* localtime as func */ localtime() from t",
+	}, {
+		input: "select /* localtime with fsp */ localtime(5) from t",
+	}, {
+		input: "select /* localtimestamp */ localtimestamp() from t",
+	}, {
+		input: "select /* localtimestamp as func */ localtimestamp() from t",
+	}, {
+		input: "select /* localtimestamp with fsp */ localtimestamp(7) from t",
 	}, {
 		input: "select /* mod as func */ a from tab where mod(b, 2) = 0",
 	}, {
@@ -1580,6 +1622,8 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input: "update t set a = current_timestamp()",
 	}, {
+		input: "update t set a = current_timestamp(5)",
+	}, {
 		input:  "select a, current_date from t",
 		output: "select a, current_date() from t",
 	}, {
@@ -1588,17 +1632,25 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input: "select * from t where a > utc_timestmp()",
 	}, {
+		input: "select * from t where a > utc_timestamp(4)",
+	}, {
 		input:  "update t set b = utc_timestamp + 5",
 		output: "update t set b = utc_timestamp() + 5",
 	}, {
-		input:  "select utc_time, utc_date",
-		output: "select utc_time(), utc_date() from dual",
+		input:  "select utc_time, utc_date, utc_time(6)",
+		output: "select utc_time(), utc_date(), utc_time(6) from dual",
 	}, {
 		input:  "select 1 from dual where localtime > utc_time",
 		output: "select 1 from dual where localtime() > utc_time()",
 	}, {
+		input:  "select 1 from dual where localtime(2) > utc_time(1)",
+		output: "select 1 from dual where localtime(2) > utc_time(1)",
+	}, {
 		input:  "update t set a = localtimestamp(), b = utc_timestamp",
 		output: "update t set a = localtimestamp(), b = utc_timestamp()",
+	}, {
+		input:  "update t set a = localtimestamp(10), b = utc_timestamp(13)",
+		output: "update t set a = localtimestamp(10), b = utc_timestamp(13)",
 	}, {
 		input: "insert into t(a) values (unix_timestamp)",
 	}, {
@@ -2061,13 +2113,15 @@ func TestCreateTable(t *testing.T) {
 			"	time1 timestamp default current_timestamp,\n" +
 			"	time2 timestamp default current_timestamp(),\n" +
 			"	time3 timestamp default current_timestamp on update current_timestamp,\n" +
-			"	time4 timestamp default current_timestamp() on update current_timestamp()\n" +
+			"	time4 timestamp default current_timestamp() on update current_timestamp(),\n" +
+			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
 			")",
 		output: "create table t (\n" +
 			"	time1 timestamp default current_timestamp,\n" +
 			"	time2 timestamp default current_timestamp,\n" +
 			"	time3 timestamp default current_timestamp on update current_timestamp,\n" +
-			"	time4 timestamp default current_timestamp on update current_timestamp\n" +
+			"	time4 timestamp default current_timestamp on update current_timestamp,\n" +
+			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
 			")",
 	},
 	}
