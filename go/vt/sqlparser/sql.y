@@ -2550,6 +2550,7 @@ function_call_nonkeyword:
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_time")}
   }
+/* doesn't support fsp */
 | UTC_DATE func_datetime_precision_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_date")}
@@ -2565,6 +2566,7 @@ function_call_nonkeyword:
     $$ = &FuncExpr{Name:NewColIdent("localtimestamp")}
   }
   // curdate
+/* doesn't support fsp */
 | CURRENT_DATE func_datetime_precision_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_date")}
@@ -2573,6 +2575,34 @@ function_call_nonkeyword:
 | CURRENT_TIME func_datetime_precision_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_time")}
+  }
+// these functions can also be called with an optional argument
+|  CURRENT_TIMESTAMP openb value_expression closeb
+  {
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_timestamp"), Fsp:$3}
+  }
+| UTC_TIMESTAMP openb value_expression closeb
+  {
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_timestamp"), Fsp:$3}
+  }
+| UTC_TIME openb value_expression closeb
+  {
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_time"), Fsp:$3}
+  }
+  // now
+| LOCALTIME openb value_expression closeb
+  {
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtime"), Fsp:$3}
+  }
+  // now
+| LOCALTIMESTAMP openb value_expression closeb
+  {
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtimestamp"), Fsp:$3}
+  }
+  // curtime
+| CURRENT_TIME openb value_expression closeb
+  {
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp:$3}
   }
 | TIMESTAMPADD openb sql_id ',' value_expression ',' value_expression closeb
   {
