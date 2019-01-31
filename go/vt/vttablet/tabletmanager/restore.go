@@ -189,7 +189,7 @@ func (agent *ActionAgent) getLocalMetadataValues(tabletType topodatapb.TabletTyp
 	tablet := agent.Tablet()
 	values := map[string]string{
 		"Alias":         topoproto.TabletAliasString(tablet.Alias),
-		"ClusterAlias":  fmt.Sprintf("%s/%s", tablet.Keyspace, tablet.Shard),
+		"ClusterAlias":  fmt.Sprintf("%s.%s", tablet.Keyspace, tablet.Shard),
 		"DataCenter":    tablet.Alias.Cell,
 		"PromotionRule": "must_not",
 	}
