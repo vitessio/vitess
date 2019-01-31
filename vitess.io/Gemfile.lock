@@ -26,7 +26,7 @@ GEM
       activesupport (>= 2)
       nokogiri (~> 1.4)
     i18n (0.8.6)
-    jekyll (3.5.2)
+    jekyll (3.6.3)
       addressable (~> 2.4)
       colorator (~> 1.0)
       jekyll-sass-converter (~> 1.0)
@@ -97,7 +97,7 @@ PLATFORMS
 DEPENDENCIES
   RedCloth (~> 4.3.2)
   bourbon
-  jekyll (= 3.5.2)
+  jekyll (= 3.6.3)
   jekyll-coffeescript (= 1.0.1)
   jekyll-feed (= 0.3.1)
   jekyll-redirect-from (= 0.11.0)
