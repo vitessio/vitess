@@ -49,7 +49,7 @@ type msdDestinationTabletServer struct {
 	shardIndex    int
 }
 
-func (sq *msdDestinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+func (sq *msdDestinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
 	if strings.Contains(sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
@@ -111,7 +111,7 @@ type msdSourceTabletServer struct {
 	v3            bool
 }
 
-func (sq *msdSourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+func (sq *msdSourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
 	if strings.Contains(sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
@@ -277,7 +277,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(sourceRdonly.RPCServer, &msdSourceTabletServer{
-			t: t,
+			t:                        t,
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 			v3:                       v3,
@@ -288,7 +288,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 		qs := fakes.NewStreamHealthQueryService(destRdonly.Target())
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(destRdonly.RPCServer, &msdDestinationTabletServer{
-			t: t,
+			t:                        t,
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 			shardIndex:               0,
@@ -299,7 +299,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 		qs := fakes.NewStreamHealthQueryService(destRdonly.Target())
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(destRdonly.RPCServer, &msdDestinationTabletServer{
-			t: t,
+			t:                        t,
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 			shardIndex:               1,
@@ -323,7 +323,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 	// necessary for synchronizing replication.
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, newFakeTMCTopo(ts))
 	if err := runCommand(t, wi, wr, args); err != nil {
-		t.Fatal(err)
+		t.Fatalf("%+v", err)
 	}
 }
 

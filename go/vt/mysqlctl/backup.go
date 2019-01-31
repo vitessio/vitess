@@ -164,13 +164,19 @@ func isDbDir(p string) bool {
 		return true
 	}
 
-	// Look for at least one .frm file
+	// Look for at least one database file
 	fis, err := ioutil.ReadDir(p)
 	if err != nil {
 		return false
 	}
 	for _, fi := range fis {
 		if strings.HasSuffix(fi.Name(), ".frm") {
+			return true
+		}
+
+		// the MyRocks engine stores data in RocksDB .sst files
+		// https://github.com/facebook/rocksdb/wiki/Rocksdb-BlockBasedTable-Format
+		if strings.HasSuffix(fi.Name(), ".sst") {
 			return true
 		}
 
@@ -820,6 +826,12 @@ func Restore(
 	if len(bhs) == 0 {
 		// There are no backups (not even broken/incomplete ones).
 		logger.Errorf("No backup to restore on BackupStorage for directory %v. Starting up empty.", dir)
+		// Since this Was an empty database make sure we start replication at the beginning
+		if err = mysqld.ResetReplication(ctx); err == nil {
+			logger.Errorf("Error reseting slave replication: %v. Continuing", err)
+			err = ErrNoBackup
+		}
+
 		if err = PopulateMetadataTables(mysqld, localMetadata); err == nil {
 			err = ErrNoBackup
 		}

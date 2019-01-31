@@ -1789,6 +1789,38 @@ func TestQueries(t *testing.T) {
 				},
 			},
 		},
+		&framework.MultiCase{
+			Name: "impossible queries",
+			Cases: []framework.Testable{
+				&framework.TestCase{
+					Name:  "specific column",
+					Query: "select eid from vitess_a where 1 != 1",
+					Rewritten: []string{
+						"select eid from vitess_a where 1 != 1",
+					},
+					RowsAffected: 0,
+				},
+				&framework.TestCase{
+					Name:  "all columns",
+					Query: "select * from vitess_a where 1 != 1",
+					Rewritten: []string{
+						"select * from vitess_a where 1 != 1",
+					},
+					RowsAffected: 0,
+				},
+				&framework.TestCase{
+					Name:  "bind vars",
+					Query: "select :bv from vitess_a where 1 != 1",
+					BindVars: map[string]*querypb.BindVariable{
+						"bv": sqltypes.Int64BindVariable(1),
+					},
+					Rewritten: []string{
+						"select 1 from vitess_a where 1 != 1 limit 10001",
+					},
+					RowsAffected: 0,
+				},
+			},
+		},
 	}
 	for _, tcase := range testCases {
 		if err := tcase.Test("", client); err != nil {

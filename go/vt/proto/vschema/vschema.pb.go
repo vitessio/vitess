@@ -34,7 +34,7 @@ func (m *Keyspace) Reset()         { *m = Keyspace{} }
 func (m *Keyspace) String() string { return proto.CompactTextString(m) }
 func (*Keyspace) ProtoMessage()    {}
 func (*Keyspace) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{0}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{0}
 }
 func (m *Keyspace) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Keyspace.Unmarshal(m, b)
@@ -99,7 +99,7 @@ func (m *Vindex) Reset()         { *m = Vindex{} }
 func (m *Vindex) String() string { return proto.CompactTextString(m) }
 func (*Vindex) ProtoMessage()    {}
 func (*Vindex) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{1}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{1}
 }
 func (m *Vindex) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Vindex.Unmarshal(m, b)
@@ -170,7 +170,7 @@ func (m *Table) Reset()         { *m = Table{} }
 func (m *Table) String() string { return proto.CompactTextString(m) }
 func (*Table) ProtoMessage()    {}
 func (*Table) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{2}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{2}
 }
 func (m *Table) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Table.Unmarshal(m, b)
@@ -249,7 +249,7 @@ func (m *ColumnVindex) Reset()         { *m = ColumnVindex{} }
 func (m *ColumnVindex) String() string { return proto.CompactTextString(m) }
 func (*ColumnVindex) ProtoMessage()    {}
 func (*ColumnVindex) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{3}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{3}
 }
 func (m *ColumnVindex) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ColumnVindex.Unmarshal(m, b)
@@ -304,7 +304,7 @@ func (m *AutoIncrement) Reset()         { *m = AutoIncrement{} }
 func (m *AutoIncrement) String() string { return proto.CompactTextString(m) }
 func (*AutoIncrement) ProtoMessage()    {}
 func (*AutoIncrement) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{4}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{4}
 }
 func (m *AutoIncrement) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_AutoIncrement.Unmarshal(m, b)
@@ -351,7 +351,7 @@ func (m *Column) Reset()         { *m = Column{} }
 func (m *Column) String() string { return proto.CompactTextString(m) }
 func (*Column) ProtoMessage()    {}
 func (*Column) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{5}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{5}
 }
 func (m *Column) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Column.Unmarshal(m, b)
@@ -398,7 +398,7 @@ func (m *SrvVSchema) Reset()         { *m = SrvVSchema{} }
 func (m *SrvVSchema) String() string { return proto.CompactTextString(m) }
 func (*SrvVSchema) ProtoMessage()    {}
 func (*SrvVSchema) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vschema_5ecfaf46981fe072, []int{6}
+	return fileDescriptor_vschema_58a865bec489dd60, []int{6}
 }
 func (m *SrvVSchema) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SrvVSchema.Unmarshal(m, b)
@@ -439,9 +439,9 @@ func init() {
 	proto.RegisterMapType((map[string]*Keyspace)(nil), "vschema.SrvVSchema.KeyspacesEntry")
 }
 
-func init() { proto.RegisterFile("vschema.proto", fileDescriptor_vschema_5ecfaf46981fe072) }
+func init() { proto.RegisterFile("vschema.proto", fileDescriptor_vschema_58a865bec489dd60) }
 
-var fileDescriptor_vschema_5ecfaf46981fe072 = []byte{
+var fileDescriptor_vschema_58a865bec489dd60 = []byte{
 	// 562 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x54, 0x41, 0x6f, 0xd3, 0x4c,
 	0x10, 0x95, 0x93, 0xc6, 0x4d, 0xc6, 0x5f, 0xd2, 0x8f, 0x55, 0x29, 0xc6, 0x08, 0x35, 0xb2, 0x0a,

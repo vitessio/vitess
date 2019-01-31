@@ -35,7 +35,7 @@ func (m *TableGroupSpec) Reset()         { *m = TableGroupSpec{} }
 func (m *TableGroupSpec) String() string { return proto.CompactTextString(m) }
 func (*TableGroupSpec) ProtoMessage()    {}
 func (*TableGroupSpec) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tableacl_38276fd243b9c307, []int{0}
+	return fileDescriptor_tableacl_82b5f1376534b35e, []int{0}
 }
 func (m *TableGroupSpec) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TableGroupSpec.Unmarshal(m, b)
@@ -101,7 +101,7 @@ func (m *Config) Reset()         { *m = Config{} }
 func (m *Config) String() string { return proto.CompactTextString(m) }
 func (*Config) ProtoMessage()    {}
 func (*Config) Descriptor() ([]byte, []int) {
-	return fileDescriptor_tableacl_38276fd243b9c307, []int{1}
+	return fileDescriptor_tableacl_82b5f1376534b35e, []int{1}
 }
 func (m *Config) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Config.Unmarshal(m, b)
@@ -133,9 +133,9 @@ func init() {
 	proto.RegisterType((*Config)(nil), "tableacl.Config")
 }
 
-func init() { proto.RegisterFile("tableacl.proto", fileDescriptor_tableacl_38276fd243b9c307) }
+func init() { proto.RegisterFile("tableacl.proto", fileDescriptor_tableacl_82b5f1376534b35e) }
 
-var fileDescriptor_tableacl_38276fd243b9c307 = []byte{
+var fileDescriptor_tableacl_82b5f1376534b35e = []byte{
 	// 232 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x54, 0x90, 0xc1, 0x4b, 0xc3, 0x30,
 	0x14, 0xc6, 0x89, 0x9d, 0xd5, 0xbd, 0xc9, 0x0e, 0x41, 0x34, 0xc7, 0x32, 0x10, 0x7b, 0x6a, 0x40,

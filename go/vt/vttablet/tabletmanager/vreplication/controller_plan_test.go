@@ -21,27 +21,27 @@ import (
 	"testing"
 )
 
-func TestPlanBuilder(t *testing.T) {
+func TestControllerPlan(t *testing.T) {
 	tcases := []struct {
 		in   string
-		plan *plan
+		plan *controllerPlan
 		err  string
 	}{{
 		// Insert
 		in: "insert into _vt.vreplication values(null)",
-		plan: &plan{
+		plan: &controllerPlan{
 			opcode: insertQuery,
 			query:  "insert into _vt.vreplication values (null)",
 		},
 	}, {
 		in: "insert into _vt.vreplication(id) values(null)",
-		plan: &plan{
+		plan: &controllerPlan{
 			opcode: insertQuery,
 			query:  "insert into _vt.vreplication(id) values (null)",
 		},
 	}, {
 		in: "insert into _vt.vreplication(workflow, id) values('', null)",
-		plan: &plan{
+		plan: &controllerPlan{
 			opcode: insertQuery,
 			query:  "insert into _vt.vreplication(workflow, id) values ('', null)",
 		},
@@ -79,7 +79,7 @@ func TestPlanBuilder(t *testing.T) {
 		// Update
 	}, {
 		in: "update _vt.vreplication set state='Running' where id = 1",
-		plan: &plan{
+		plan: &controllerPlan{
 			opcode: updateQuery,
 			query:  "update _vt.vreplication set state = 'Running' where id = 1",
 			id:     1,
@@ -115,7 +115,7 @@ func TestPlanBuilder(t *testing.T) {
 		// Delete
 	}, {
 		in: "delete from _vt.vreplication where id = 1",
-		plan: &plan{
+		plan: &controllerPlan{
 			opcode: deleteQuery,
 			query:  "delete from _vt.vreplication where id = 1",
 			id:     1,
@@ -154,7 +154,7 @@ func TestPlanBuilder(t *testing.T) {
 		// Select
 	}, {
 		in: "select * from _vt.vreplication where id = 1",
-		plan: &plan{
+		plan: &controllerPlan{
 			opcode: selectQuery,
 			query:  "select * from _vt.vreplication where id = 1",
 		},
@@ -171,7 +171,7 @@ func TestPlanBuilder(t *testing.T) {
 		err: "unsupported construct: set a = 1",
 	}}
 	for _, tcase := range tcases {
-		pl, err := getPlan(tcase.in)
+		pl, err := buildControllerPlan(tcase.in)
 		if err != nil {
 			if err.Error() != tcase.err {
 				t.Errorf("getPlan(%v) error:\n%v, want\n%v", tcase.in, err, tcase.err)

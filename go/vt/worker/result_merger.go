@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/golang/protobuf/proto"
@@ -176,6 +177,15 @@ func (rm *ResultMerger) Next() (*sqltypes.Result, error) {
 
 	return result, nil
 }
+
+// Close closes all inputs
+func (rm *ResultMerger) Close(ctx context.Context) {
+	for _, i := range rm.inputs {
+		i.Close(ctx)
+	}
+}
+
+
 
 func (rm *ResultMerger) deleteInput(deleteMe ResultReader) {
 	for i, input := range rm.inputs {

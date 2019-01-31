@@ -345,12 +345,26 @@ spec:
 
             RETRY_COUNT=0
             MAX_RETRY_COUNT=100000
+            hostname=$(hostname -s)
 
             # retry reparenting
             until [ $DONE_REPARENTING ]; do
 
+{{ if $orc.enabled }}
+              # tell orchestrator to not attempt a recovery for 10 seconds while we are in the middle of reparenting
+              wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/begin-downtime/$hostname.vttablet/3306/preStopHook/VitessPlannedReparent/10s"
+{{ end }}
+
               # reparent before shutting down
               /vt/bin/vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC PlannedReparentShard -keyspace_shard={{ $keyspace.name }}/{{ $shard.name }} -avoid_master=$current_alias
+
+{{ if $orc.enabled }}
+              # tell orchestrator to refresh its view of this tablet
+              wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/refresh/$hostname.vttablet/3306"
+
+              # let orchestrator attempt recoveries now
+              wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/end-downtime/$hostname.vttablet/3306"
+{{ end }}
 
               # if PlannedReparentShard succeeded, then don't retry
               if [ $? -eq 0 ]; then
@@ -371,6 +385,12 @@ spec:
             # delete the current tablet from topology. Not strictly necessary, but helps to prevent
             # edge cases where there are two masters
             /vt/bin/vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC DeleteTablet $current_alias
+
+
+{{ if $orc.enabled }}
+            # tell orchestrator to forget the tablet, to prevent confusion / race conditions while the tablet restarts
+            wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/forget/$hostname.vttablet/3306"
+{{ end }}
 
   command: ["bash"]
   args:
@@ -513,7 +533,7 @@ spec:
 {{ define "cont-logrotate" }}
 
 - name: logrotate
-  image: vitess/logrotate:helm-1.0.3
+  image: vitess/logrotate:helm-1.0.6
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -527,7 +547,7 @@ spec:
 {{ define "cont-mysql-errorlog" }}
 
 - name: error-log
-  image: vitess/logtail:helm-1.0.3
+  image: vitess/logtail:helm-1.0.6
   imagePullPolicy: IfNotPresent
 
   env:
@@ -545,7 +565,7 @@ spec:
 {{ define "cont-mysql-slowlog" }}
 
 - name: slow-log
-  image: vitess/logtail:helm-1.0.3
+  image: vitess/logtail:helm-1.0.6
   imagePullPolicy: IfNotPresent
 
   env:
@@ -563,7 +583,7 @@ spec:
 {{ define "cont-mysql-generallog" }}
 
 - name: general-log
-  image: vitess/logtail:helm-1.0.3
+  image: vitess/logtail:helm-1.0.6
   imagePullPolicy: IfNotPresent
 
   env:

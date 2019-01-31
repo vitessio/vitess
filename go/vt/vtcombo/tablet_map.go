@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -315,9 +316,9 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb
 
 // StreamExecute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	err := itc.tablet.qsc.QueryService().StreamExecute(ctx, target, query, bindVars, options, callback)
+	err := itc.tablet.qsc.QueryService().StreamExecute(ctx, target, query, bindVars, transactionID, options, callback)
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
@@ -472,12 +473,26 @@ func (itc *internalTabletConn) UpdateStream(ctx context.Context, target *querypb
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
+// VStream is part of queryservice.QueryService.
+func (itc *internalTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	err := itc.tablet.qsc.QueryService().VStream(ctx, target, startPos, filter, send)
+	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
 //
 // TabletManagerClient implementation
 //
 
 // internalTabletManagerClient implements tmclient.TabletManagerClient
 type internalTabletManagerClient struct{}
+
+func (itmc *internalTabletManagerClient) LockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) UnlockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
 
 func (itmc *internalTabletManagerClient) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
 	t, ok := tabletMap[tablet.Alias.Uid]
@@ -613,6 +628,10 @@ func (itmc *internalTabletManagerClient) StopSlaveMinimum(ctx context.Context, t
 }
 
 func (itmc *internalTabletManagerClient) StartSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 

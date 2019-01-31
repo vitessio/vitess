@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -138,7 +139,7 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.T
 }
 
 // StreamExecute executes the query and streams results back through callback.
-func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	// All streaming clients should follow the code pattern below.
 	// The first part of the function starts the stream while holding
 	// a lock on conn.mu. The second part receives the data and calls
@@ -165,7 +166,8 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 				Sql:           query,
 				BindVariables: bindVars,
 			},
-			Options: options,
+			Options:       options,
+			TransactionId: transactionID,
 		}
 		stream, err := conn.c.StreamExecute(ctx, req)
 		if err != nil {
@@ -661,6 +663,50 @@ func (conn *gRPCQueryClient) UpdateStream(ctx context.Context, target *querypb.T
 		}
 		if err := callback(r.Event); err != nil {
 			if err == nil || err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+// VStream starts a VReplication stream.
+func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target, position string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	stream, err := func() (queryservicepb.Query_VStreamClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &binlogdatapb.VStreamRequest{
+			Target:            target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Position:          position,
+			Filter:            filter,
+		}
+		stream, err := conn.c.VStream(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
+	}
+	for {
+		r, err := stream.Recv()
+		if err != nil {
+			return tabletconn.ErrorFromGRPC(err)
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+		if err := send(r.Events); err != nil {
+			if err == io.EOF {
 				return nil
 			}
 			return err

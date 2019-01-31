@@ -54,7 +54,7 @@ Setting up these components directly -- for example, writing your own topology s
 * *Recommended*.  Vitess has basic support for identifying or changing a master, but it doesn't aim to fully address this feature. As such, we recommend using another program, like [Orchestrator](https://github.com/github/orchestrator), to monitor the health of your servers and to change your master database when necessary. (In a sharded database, each shard has a master.)
 
 
-* *Recommended*. You should have a way to monitor your database topology and set up alerts as needed. Vitess components facilitate this monitoring by exporting a lot of runtime variables, like QPS over the last few minutes, error rates, and query latency. The variables are exported in JSON format, and Vitess also supports an InfluxDB plug-in.
+* *Recommended*. You should have a way to monitor your database topology and set up alerts as needed. Vitess components facilitate this monitoring by exporting a lot of runtime variables, like QPS over the last few minutes, error rates, and query latency. The variables are exported in JSON format, and Vitess also supports a Prometheus plug-in.
 
 
 * *Optional*. Using the Kubernetes scripts as a base, you could run Vitess components with other configuration management systems (like Puppet) or frameworks (like Mesos or AWS images).

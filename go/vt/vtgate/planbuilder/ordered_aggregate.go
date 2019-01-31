@@ -272,7 +272,7 @@ func (oa *orderedAggregate) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, wh
 // be performed 'as they come'. In this respect, oa is the originator for
 // aggregate expressions like MAX, which will be added to symtab. The underlying
 // MAX sent to the route will not be added to symtab and will not be reachable by
-// others. This functionality depends on the the PushOrderBy to request that
+// others. This functionality depends on the PushOrderBy to request that
 // the rows be correctly ordered for a merge sort.
 func (oa *orderedAggregate) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
 	if inner, ok := expr.Expr.(*sqlparser.FuncExpr); ok {
