@@ -1935,28 +1935,6 @@ func TestCreateTable(t *testing.T) {
 			"	col_multipolygon2 multipolygon not null\n" +
 			")",
 
-		// test defaults
-		"create table t (\n" +
-			"	i1 int default 1,\n" +
-			"	i2 int default null,\n" +
-			"	f1 float default 1.23,\n" +
-			"	s1 varchar default 'c',\n" +
-			"	s2 varchar default 'this is a string',\n" +
-			"	s3 varchar default null,\n" +
-			"	s4 timestamp default current_timestamp,\n" +
-			"	s5 bit(1) default B'0'\n" +
-			")",
-
-		// test key field options
-		"create table t (\n" +
-			"	id int auto_increment primary key,\n" +
-			"	username varchar unique key,\n" +
-			"	email varchar unique,\n" +
-			"	full_name varchar key,\n" +
-			"	time1 timestamp on update current_timestamp,\n" +
-			"	time2 timestamp default current_timestamp on update current_timestamp\n" +
-			")",
-
 		// test defining indexes separately
 		"create table t (\n" +
 			"	id int auto_increment,\n" +
@@ -2108,6 +2086,46 @@ func TestCreateTable(t *testing.T) {
 			"	unique by_username3 (username) key_block_size 4\n" +
 			")",
 	}, {
+		// test defaults
+		input: "create table t (\n" +
+			"	i1 int default 1,\n" +
+			"	i2 int default null,\n" +
+			"	f1 float default 1.23,\n" +
+			"	s1 varchar default 'c',\n" +
+			"	s2 varchar default 'this is a string',\n" +
+			"	s3 varchar default null,\n" +
+			"	s4 timestamp default current_timestamp,\n" +
+			"	s5 bit(1) default B'0'\n" +
+			")",
+		output: "create table t (\n" +
+			"	i1 int default 1,\n" +
+			"	i2 int default null,\n" +
+			"	f1 float default 1.23,\n" +
+			"	s1 varchar default 'c',\n" +
+			"	s2 varchar default 'this is a string',\n" +
+			"	s3 varchar default null,\n" +
+			"	s4 timestamp default current_timestamp(),\n" +
+			"	s5 bit(1) default B'0'\n" +
+			")",
+	}, {
+		// test key field options
+		input: "create table t (\n" +
+			"	id int auto_increment primary key,\n" +
+			"	username varchar unique key,\n" +
+			"	email varchar unique,\n" +
+			"	full_name varchar key,\n" +
+			"	time1 timestamp on update current_timestamp,\n" +
+			"	time2 timestamp default current_timestamp on update current_timestamp\n" +
+			")",
+		output: "create table t (\n" +
+			"	id int auto_increment primary key,\n" +
+			"	username varchar unique key,\n" +
+			"	email varchar unique,\n" +
+			"	full_name varchar key,\n" +
+			"	time1 timestamp on update current_timestamp(),\n" +
+			"	time2 timestamp default current_timestamp() on update current_timestamp()\n" +
+			")",
+	}, {
 		// test current_timestamp with and without ()
 		input: "create table t (\n" +
 			"	time1 timestamp default current_timestamp,\n" +
@@ -2117,11 +2135,119 @@ func TestCreateTable(t *testing.T) {
 			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
 			")",
 		output: "create table t (\n" +
-			"	time1 timestamp default current_timestamp,\n" +
-			"	time2 timestamp default current_timestamp,\n" +
-			"	time3 timestamp default current_timestamp on update current_timestamp,\n" +
-			"	time4 timestamp default current_timestamp on update current_timestamp,\n" +
+			"	time1 timestamp default current_timestamp(),\n" +
+			"	time2 timestamp default current_timestamp(),\n" +
+			"	time3 timestamp default current_timestamp() on update current_timestamp(),\n" +
+			"	time4 timestamp default current_timestamp() on update current_timestamp(),\n" +
 			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
+			")",
+	}, {
+		// test utc_timestamp with and without ()
+		input: "create table t (\n" +
+			"	time1 timestamp default utc_timestamp,\n" +
+			"	time2 timestamp default utc_timestamp(),\n" +
+			"	time3 timestamp default utc_timestamp on update utc_timestamp,\n" +
+			"	time4 timestamp default utc_timestamp() on update utc_timestamp(),\n" +
+			"	time5 timestamp(4) default utc_timestamp(4) on update utc_timestamp(4)\n" +
+			")",
+		output: "create table t (\n" +
+			"	time1 timestamp default utc_timestamp(),\n" +
+			"	time2 timestamp default utc_timestamp(),\n" +
+			"	time3 timestamp default utc_timestamp() on update utc_timestamp(),\n" +
+			"	time4 timestamp default utc_timestamp() on update utc_timestamp(),\n" +
+			"	time5 timestamp(4) default utc_timestamp(4) on update utc_timestamp(4)\n" +
+			")",
+	}, {
+		// test utc_time with and without ()
+		input: "create table t (\n" +
+			"	time1 timestamp default utc_time,\n" +
+			"	time2 timestamp default utc_time(),\n" +
+			"	time3 timestamp default utc_time on update utc_time,\n" +
+			"	time4 timestamp default utc_time() on update utc_time(),\n" +
+			"	time5 timestamp(5) default utc_time(5) on update utc_time(5)\n" +
+			")",
+		output: "create table t (\n" +
+			"	time1 timestamp default utc_time(),\n" +
+			"	time2 timestamp default utc_time(),\n" +
+			"	time3 timestamp default utc_time() on update utc_time(),\n" +
+			"	time4 timestamp default utc_time() on update utc_time(),\n" +
+			"	time5 timestamp(5) default utc_time(5) on update utc_time(5)\n" +
+			")",
+	}, {
+		// test utc_date with and without ()
+		input: "create table t (\n" +
+			"	time1 timestamp default utc_date,\n" +
+			"	time2 timestamp default utc_date(),\n" +
+			"	time3 timestamp default utc_date on update utc_date,\n" +
+			"	time4 timestamp default utc_date() on update utc_date()\n" +
+			")",
+		output: "create table t (\n" +
+			"	time1 timestamp default utc_date(),\n" +
+			"	time2 timestamp default utc_date(),\n" +
+			"	time3 timestamp default utc_date() on update utc_date(),\n" +
+			"	time4 timestamp default utc_date() on update utc_date()\n" +
+			")",
+	}, {
+		// test localtime with and without ()
+		input: "create table t (\n" +
+			"	time1 timestamp default localtime,\n" +
+			"	time2 timestamp default localtime(),\n" +
+			"	time3 timestamp default localtime on update localtime,\n" +
+			"	time4 timestamp default localtime() on update localtime(),\n" +
+			"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
+			")",
+		output: "create table t (\n" +
+			"	time1 timestamp default localtime(),\n" +
+			"	time2 timestamp default localtime(),\n" +
+			"	time3 timestamp default localtime() on update localtime(),\n" +
+			"	time4 timestamp default localtime() on update localtime(),\n" +
+			"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
+			")",
+	}, {
+		// test localtimestamp with and without ()
+		input: "create table t (\n" +
+			"	time1 timestamp default localtimestamp,\n" +
+			"	time2 timestamp default localtimestamp(),\n" +
+			"	time3 timestamp default localtimestamp on update localtimestamp,\n" +
+			"	time4 timestamp default localtimestamp() on update localtimestamp(),\n" +
+			"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
+			")",
+		output: "create table t (\n" +
+			"	time1 timestamp default localtimestamp(),\n" +
+			"	time2 timestamp default localtimestamp(),\n" +
+			"	time3 timestamp default localtimestamp() on update localtimestamp(),\n" +
+			"	time4 timestamp default localtimestamp() on update localtimestamp(),\n" +
+			"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
+			")",
+	}, {
+		// test current_date with and without ()
+		input: "create table t (\n" +
+			"	time1 timestamp default current_date,\n" +
+			"	time2 timestamp default current_date(),\n" +
+			"	time3 timestamp default current_date on update current_date,\n" +
+			"	time4 timestamp default current_date() on update current_date()\n" +
+			")",
+		output: "create table t (\n" +
+			"	time1 timestamp default current_date(),\n" +
+			"	time2 timestamp default current_date(),\n" +
+			"	time3 timestamp default current_date() on update current_date(),\n" +
+			"	time4 timestamp default current_date() on update current_date()\n" +
+			")",
+	}, {
+		// test current_time with and without ()
+		input: "create table t (\n" +
+			"	time1 timestamp default current_time,\n" +
+			"	time2 timestamp default current_time(),\n" +
+			"	time3 timestamp default current_time on update current_time,\n" +
+			"	time4 timestamp default current_time() on update current_time(),\n" +
+			"	time5 timestamp(2) default current_time(2) on update current_time(2)\n" +
+			")",
+		output: "create table t (\n" +
+			"	time1 timestamp default current_time(),\n" +
+			"	time2 timestamp default current_time(),\n" +
+			"	time3 timestamp default current_time() on update current_time(),\n" +
+			"	time4 timestamp default current_time() on update current_time(),\n" +
+			"	time5 timestamp(2) default current_time(2) on update current_time(2)\n" +
 			")",
 	},
 	}
