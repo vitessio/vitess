@@ -75,6 +75,7 @@ func skipToEnd(yylex interface{}) {
   expr          Expr
   exprs         Exprs
   boolVal       BoolVal
+  sqlVal        *SQLVal
   colTuple      ColTuple
   values        Values
   valTuple      ValTuple
@@ -95,7 +96,7 @@ func skipToEnd(yylex interface{}) {
   TableSpec  *TableSpec
   columnType    ColumnType
   colKeyOpt     ColumnKeyOption
-  optVal        *SQLVal
+  optVal        Expr
   LengthScaleOption LengthScaleOption
   columnDefinition *ColumnDefinition
   indexDefinition *IndexDefinition
@@ -229,7 +230,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> compare
 %type <ins> insert_data
 %type <expr> value value_expression num_val
-%type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
+%type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict func_datetime_precision
 %type <str> is_suffix
 %type <colTuple> col_tuple
 %type <exprs> expression_list
@@ -274,7 +275,8 @@ func skipToEnd(yylex interface{}) {
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <optVal> length_opt column_default_opt column_comment_opt on_update_opt
+%type <sqlVal> length_opt column_comment_opt
+%type <optVal> column_default_opt on_update_opt
 %type <str> charset_opt collate_opt
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
@@ -965,46 +967,18 @@ column_default_opt:
   {
     $$ = nil
   }
-| DEFAULT STRING
+| DEFAULT value_expression
   {
-    $$ = NewStrVal($2)
-  }
-| DEFAULT INTEGRAL
-  {
-    $$ = NewIntVal($2)
-  }
-| DEFAULT FLOAT
-  {
-    $$ = NewFloatVal($2)
-  }
-| DEFAULT NULL
-  {
-    $$ = NewValArg($2)
-  }
-| DEFAULT CURRENT_TIMESTAMP
-  {
-    $$ = NewValArg($2)
-  }
-| DEFAULT CURRENT_TIMESTAMP '(' ')'
-  {
-    $$ = NewValArg($2)
-  }
-| DEFAULT BIT_LITERAL
-  {
-    $$ = NewBitVal($2)
+    $$ = $2
   }
 
 on_update_opt:
   {
     $$ = nil
   }
-| ON UPDATE CURRENT_TIMESTAMP
+| ON UPDATE function_call_nonkeyword
 {
-  $$ = NewValArg($3)
-}
-| ON UPDATE CURRENT_TIMESTAMP '(' ')'
-{
-  $$ = NewValArg($3)
+  $$ = $3
 }
 
 auto_increment_opt:
@@ -2538,71 +2512,71 @@ function_call_keyword:
   Dedicated grammar rules are needed because of the special syntax
 */
 function_call_nonkeyword:
-  CURRENT_TIMESTAMP func_datetime_precision_opt
+  CURRENT_TIMESTAMP func_datetime_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_timestamp")}
   }
-| UTC_TIMESTAMP func_datetime_precision_opt
+| UTC_TIMESTAMP func_datetime_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_timestamp")}
   }
-| UTC_TIME func_datetime_precision_opt
+| UTC_TIME func_datetime_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_time")}
   }
 /* doesn't support fsp */
-| UTC_DATE func_datetime_precision_opt
+| UTC_DATE func_datetime_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_date")}
   }
   // now
-| LOCALTIME func_datetime_precision_opt
+| LOCALTIME func_datetime_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("localtime")}
   }
   // now
-| LOCALTIMESTAMP func_datetime_precision_opt
+| LOCALTIMESTAMP func_datetime_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("localtimestamp")}
   }
   // curdate
 /* doesn't support fsp */
-| CURRENT_DATE func_datetime_precision_opt
+| CURRENT_DATE func_datetime_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_date")}
   }
   // curtime
-| CURRENT_TIME func_datetime_precision_opt
+| CURRENT_TIME func_datetime_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_time")}
   }
 // these functions can also be called with an optional argument
-|  CURRENT_TIMESTAMP openb value_expression closeb
+|  CURRENT_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_timestamp"), Fsp:$3}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_timestamp"), Fsp:$2}
   }
-| UTC_TIMESTAMP openb value_expression closeb
+| UTC_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_timestamp"), Fsp:$3}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_timestamp"), Fsp:$2}
   }
-| UTC_TIME openb value_expression closeb
+| UTC_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_time"), Fsp:$3}
-  }
-  // now
-| LOCALTIME openb value_expression closeb
-  {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtime"), Fsp:$3}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_time"), Fsp:$2}
   }
   // now
-| LOCALTIMESTAMP openb value_expression closeb
+| LOCALTIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtimestamp"), Fsp:$3}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtime"), Fsp:$2}
+  }
+  // now
+| LOCALTIMESTAMP func_datetime_precision
+  {
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtimestamp"), Fsp:$2}
   }
   // curtime
-| CURRENT_TIME openb value_expression closeb
+| CURRENT_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp:$3}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp:$2}
   }
 | TIMESTAMPADD openb sql_id ',' value_expression ',' value_expression closeb
   {
@@ -2613,9 +2587,15 @@ function_call_nonkeyword:
     $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
   }
 
-func_datetime_precision_opt:
+func_datetime_opt:
   /* empty */
 | openb closeb
+
+func_datetime_precision:
+  openb value_expression closeb
+  {
+    $$ = $2
+  }
 
 /*
   Function calls using non reserved keywords with *normal* syntax forms. Because
