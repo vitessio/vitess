@@ -264,7 +264,7 @@ function install_chromedriver() {
   local version="$1"
   local dist="$2"
 
-  curl -sL "http://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
+  curl -sL "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
   unzip -o -q chromedriver_linux64.zip -d "$dist"
   rm chromedriver_linux64.zip
 }
