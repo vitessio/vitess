@@ -50,7 +50,7 @@ type vplayer struct {
 	source       *binlogdatapb.BinlogSource
 	sourceTablet *topodatapb.Tablet
 	stats        *binlogplayer.Stats
-	dbClient     *retryableClient
+	dbClient     *vdbClient
 	// mysqld is used to fetch the local schema.
 	mysqld mysqlctl.MysqlDaemon
 
@@ -76,7 +76,7 @@ func newVPlayer(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topo
 		source:        source,
 		sourceTablet:  sourceTablet,
 		stats:         stats,
-		dbClient:      &retryableClient{DBClient: dbClient},
+		dbClient:      newVDBClient(dbClient, stats),
 		mysqld:        mysqld,
 		timeLastSaved: time.Now(),
 		tplans:        make(map[string]*TablePlan),
@@ -443,6 +443,10 @@ func (vp *vplayer) updatePos(ts int64) error {
 	}
 	vp.unsavedGTID = nil
 	vp.timeLastSaved = time.Now()
+	vp.stats.SetLastPosition(vp.pos)
+	if ts != 0 {
+		vp.stats.SecondsBehindMaster.Set(vp.timeLastSaved.Unix() - ts)
+	}
 	return nil
 }
 
