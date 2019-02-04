@@ -354,6 +354,13 @@ func TestResultMerger(t *testing.T) {
 				}
 				inner.Fatalf("ResultMerger testcase '%v' failed. See output above for different rows.", tc.desc)
 			}
+
+			for _, x := range tc.inputs {
+				fake := x.(*fakeResultReader)
+				if !fake.closed {
+					inner.Fatal("expected inputs to be closed by now")
+				}
+			}
 		})
 	}
 }
