@@ -318,6 +318,13 @@ func NewActionAgent(
 		if err := agent.lock(batchCtx); err != nil {
 			return nil, err
 		}
+
+		// Populate metadata table
+		localMetadata := agent.getLocalMetadataValues(agent.Tablet().Type)
+		if err = mysqlctl.PopulateMetadataTables(mysqld, localMetadata); err == nil {
+			return nil, err
+		}
+
 		if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
 			agent.unlock()
 			return nil, err
