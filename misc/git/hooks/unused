@@ -8,7 +8,7 @@ if [ -z "$GOPATH" ]; then
 fi
 
 if [ -z "$(which unused)" ]; then
-  echo "unused not found, please run: go get honnef.co/go/unused/cmd/unused"
+  echo "unused not found, please run: go get honnef.co/go/tools/cmd/unused"
   exit 1
 fi
 
