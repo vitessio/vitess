@@ -24,6 +24,9 @@ func Init() {
 	if *clientcertAuthMethod != mysql.MysqlClearPassword && *clientcertAuthMethod != mysql.MysqlDialog {
 		log.Exitf("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
 	}
+	if flag.CommandLine.Lookup("mysql_server_ssl_ca").Value.String() == "" {
+		log.Exitf("clientcert auth plugin requires the -mysql_server_ssl_ca flag to be set")
+	}
 	ascc := &AuthServerClientCert{
 		Method: *clientcertAuthMethod,
 	}
