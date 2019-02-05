@@ -120,7 +120,7 @@ func (wr *Wrangler) UpdateDisableQueryService(ctx context.Context, keyspace, sha
 		return err
 	}
 	// disable query service for shard
-	return wr.ts.UpdateDisableQueryService(ctx, si, tabletType, cells, disableQueryService)
+	return wr.ts.UpdateDisableQueryService(ctx, keyspace, []*topo.ShardInfo{si}, tabletType, cells, disableQueryService)
 }
 
 // DeleteShard will do all the necessary changes in the topology server
