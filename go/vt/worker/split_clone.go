@@ -912,25 +912,32 @@ func mergeOrSingle(readers []ResultReader, td *tabletmanagerdatapb.TableDefiniti
 	return sourceReader, nil
 }
 
+func closeReaders(ctx context.Context, readers []ResultReader) {
+	for _, reader := range readers {
+		if reader != nil {
+			reader.Close(ctx)
+		}
+	}
+}
+
 func (scw *SplitCloneWorker) getSourceResultReader(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, state StatusWorkerState, chunk chunk, txID int64) (ResultReader, error) {
 	sourceReaders := make([]ResultReader, len(scw.sourceShards))
-	var readers []ResultReader
-	defer func() {
-		for _, i := range readers {
-			i.Close(ctx)
-		}
-	}()
 
 	for shardIndex, si := range scw.sourceShards {
 		var sourceResultReader ResultReader
-		var err error
 		if state == WorkerStateCloneOffline && scw.useConsistentSnapshot {
+			var err error
 			if txID < 1 {
 				return nil, fmt.Errorf("tried using consistent snapshot without a valid transaction")
 			}
 			tp := newShardTabletProvider(scw.tsc, scw.tabletTracker, si.Keyspace(), si.ShardName(), scw.tabletType)
 			sourceResultReader, err = NewTransactionalRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, false, txID)
+			if err != nil {
+				closeReaders(ctx, sourceReaders)
+				return nil, fmt.Errorf("NewTransactionalRestartableResultReader for source: %v failed: %v", tp.description(), err)
+			}
 		} else {
+			var err error
 			var tp tabletProvider
 			allowMultipleRetries := true
 			if state == WorkerStateCloneOffline {
@@ -946,39 +953,36 @@ func (scw *SplitCloneWorker) getSourceResultReader(ctx context.Context, td *tabl
 			}
 			sourceResultReader, err = NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, allowMultipleRetries)
 			if err != nil {
+				closeReaders(ctx, sourceReaders)
 				return nil, fmt.Errorf("NewRestartableResultReader for source: %v failed: %v", tp.description(), err)
 			}
-			readers = append(readers, sourceResultReader)
 		}
 		sourceReaders[shardIndex] = sourceResultReader
 	}
 	resultReader, err := mergeOrSingle(sourceReaders, td)
-	if err == nil {
-		readers = readers[:0]
+	if err != nil {
+		closeReaders(ctx, sourceReaders)
+		return nil, err
 	}
 	return resultReader, err
 }
 
 func (scw *SplitCloneWorker) getDestinationResultReader(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, state StatusWorkerState, chunk chunk) (ResultReader, error) {
 	destReaders := make([]ResultReader, len(scw.destinationShards))
-	var readers []ResultReader
-	defer func() {
-		for _, i := range readers {
-			i.Close(ctx)
-		}
-	}()
 
 	for shardIndex, si := range scw.destinationShards {
 		tp := newShardTabletProvider(scw.tsc, scw.tabletTracker, si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
 		destResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, true /* allowMultipleRetries */)
 		if err != nil {
+			closeReaders(ctx, destReaders)
 			return nil, fmt.Errorf("NewRestartableResultReader for destination: %v failed: %v", tp.description(), err)
 		}
 		destReaders[shardIndex] = destResultReader
 	}
 	resultReader, err := mergeOrSingle(destReaders, td)
-	if err == nil {
-		readers = readers[:0]
+	if err != nil {
+		closeReaders(ctx, destReaders)
+		return nil, err
 	}
 	return resultReader, err
 }
