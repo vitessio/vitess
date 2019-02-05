@@ -81,23 +81,36 @@ import org.joda.time.Duration;
  * GrpcClient is a gRPC-based implementation of Vitess RpcClient.
  */
 public class GrpcClient implements RpcClient {
+  private static final Duration DEFAULT_TIMEOUT = Duration.standardSeconds(30);
+
   private final ManagedChannel channel;
   private final String channelId;
   private final VitessStub asyncStub;
   private final VitessFutureStub futureStub;
+  private final Duration timeout;
 
   public GrpcClient(ManagedChannel channel) {
     this.channel = channel;
     channelId = toChannelId(channel);
     asyncStub = VitessGrpc.newStub(channel);
     futureStub = VitessGrpc.newFutureStub(channel);
+    timeout = DEFAULT_TIMEOUT;
   }
 
-  public GrpcClient(ManagedChannel channel, CallCredentials credentials) {
+  public GrpcClient(ManagedChannel channel, Context context) {
+    this.channel = channel;
+    channelId = toChannelId(channel);
+    asyncStub = VitessGrpc.newStub(channel);
+    futureStub = VitessGrpc.newFutureStub(channel);
+    timeout = context.getTimeout() != null ? context.getTimeout() : DEFAULT_TIMEOUT;
+  }
+
+  public GrpcClient(ManagedChannel channel, CallCredentials credentials, Context context) {
     this.channel = channel;
     channelId = toChannelId(channel);
     asyncStub = VitessGrpc.newStub(channel).withCallCredentials(credentials);
     futureStub = VitessGrpc.newFutureStub(channel).withCallCredentials(credentials);
+    timeout = context.getTimeout() != null ? context.getTimeout() : DEFAULT_TIMEOUT;
   }
 
   private String toChannelId(ManagedChannel channel) {
@@ -107,7 +120,16 @@ public class GrpcClient implements RpcClient {
 
   @Override
   public void close() throws IOException {
-    channel.shutdown();
+    try {
+      if (!channel.shutdown().awaitTermination(timeout.getStandardSeconds(), TimeUnit.SECONDS)) {
+        // The channel failed to shut down cleanly within the specified window
+        // Now we try hard shutdown
+        channel.shutdownNow();
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+
   }
 
   @Override
