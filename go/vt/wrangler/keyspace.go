@@ -283,11 +283,6 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 		}
 	}
 
-	// rebuild the keyspace serving graph now that there is no error
-	if err = topotools.RebuildKeyspaceLocked(ctx, wr.logger, wr.ts, keyspace, cells); err != nil {
-		return err
-	}
-
 	// Master migrate performs its own refresh.
 	// Otherwise, honor skipRefreshState if requested.
 	if servedType == topodatapb.TabletType_MASTER || skipReFreshState {
@@ -481,13 +476,13 @@ func (wr *Wrangler) replicaMigrateServedType(ctx context.Context, keyspace strin
 	// Check and update all source shard records.
 	// Enable query service if needed
 	event.DispatchUpdate(ev, "updating shards to migrate from")
-	if err = wr.updateShardRecords(ctx, fromShards, cells, servedType, true, false); err != nil {
+	if err = wr.updateShardRecords(ctx, keyspace, fromShards, cells, servedType, true, false); err != nil {
 		return err
 	}
 
 	// Do the same for destination shards
 	event.DispatchUpdate(ev, "updating shards to migrate to")
-	if err = wr.updateShardRecords(ctx, toShards, cells, servedType, false, false); err != nil {
+	if err = wr.updateShardRecords(ctx, keyspace, toShards, cells, servedType, false, false); err != nil {
 		return err
 	}
 
@@ -539,31 +534,31 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 	// - wait for filtered replication to catch up
 	// - mark source shards as frozen
 	event.DispatchUpdate(ev, "disabling query service on all source masters")
-	if err := wr.updateShardRecords(ctx, sourceShards, nil, topodatapb.TabletType_MASTER, true, false); err != nil {
-		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
+	if err := wr.updateShardRecords(ctx, keyspace, sourceShards, nil, topodatapb.TabletType_MASTER, true, false); err != nil {
+		wr.cancelMasterMigrateServedTypes(ctx, keyspace, sourceShards)
 		return err
 	}
 	if err := wr.refreshMasters(ctx, sourceShards); err != nil {
-		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
+		wr.cancelMasterMigrateServedTypes(ctx, keyspace, sourceShards)
 		return err
 	}
 
 	event.DispatchUpdate(ev, "getting positions of source masters")
 	masterPositions, err := wr.getMastersPosition(ctx, sourceShards)
 	if err != nil {
-		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
+		wr.cancelMasterMigrateServedTypes(ctx, keyspace, sourceShards)
 		return err
 	}
 
 	event.DispatchUpdate(ev, "waiting for destination masters to catch up")
 	if err := wr.waitForFilteredReplication(ctx, masterPositions, destinationShards, filteredReplicationWaitTime); err != nil {
-		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
+		wr.cancelMasterMigrateServedTypes(ctx, keyspace, sourceShards)
 		return err
 	}
 
 	// We've reached the point of no return. Freeze the tablet control records in the source masters.
 	if err := wr.updateFrozenFlag(ctx, sourceShards, true); err != nil {
-		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
+		wr.cancelMasterMigrateServedTypes(ctx, keyspace, sourceShards)
 		return err
 	}
 
@@ -572,7 +567,7 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 	// This will allow someone to reverse the replication later if they change their mind.
 	if err := wr.setupReverseReplication(ctx, sourceShards, destinationShards); err != nil {
 		// It's safe to unfreeze if reverse replication setup fails.
-		wr.cancelMasterMigrateServedTypes(ctx, sourceShards)
+		wr.cancelMasterMigrateServedTypes(ctx, keyspace, sourceShards)
 		unfreezeErr := wr.updateFrozenFlag(ctx, sourceShards, false)
 		if unfreezeErr != nil {
 			wr.Logger().Errorf("Problem recovering for failed reverse replication: %v", unfreezeErr)
@@ -602,9 +597,11 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		if err != nil {
 			return err
 		}
-		wr.ts.UpdateDisableQueryService(ctx, si, topodatapb.TabletType_MASTER, nil, false)
 
 	}
+
+	// Enable query service
+	wr.ts.UpdateDisableQueryService(ctx, keyspace, destinationShards, topodatapb.TabletType_MASTER, nil, false)
 
 	event.DispatchUpdate(ev, "setting destination masters read-write")
 	if err := wr.refreshMasters(ctx, destinationShards); err != nil {
@@ -625,8 +622,8 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 	return nil
 }
 
-func (wr *Wrangler) cancelMasterMigrateServedTypes(ctx context.Context, sourceShards []*topo.ShardInfo) {
-	if err := wr.updateShardRecords(ctx, sourceShards, nil, topodatapb.TabletType_MASTER, false, true); err != nil {
+func (wr *Wrangler) cancelMasterMigrateServedTypes(ctx context.Context, keyspace string, sourceShards []*topo.ShardInfo) {
+	if err := wr.updateShardRecords(ctx, keyspace, sourceShards, nil, topodatapb.TabletType_MASTER, false, true); err != nil {
 		wr.Logger().Errorf2(err, "failed to re-enable source masters")
 		return
 	}
@@ -712,14 +709,14 @@ func (wr *Wrangler) startReverseReplication(ctx context.Context, sourceShards []
 }
 
 // updateShardRecords updates the shard records based on 'from' or 'to' direction.
-func (wr *Wrangler) updateShardRecords(ctx context.Context, shards []*topo.ShardInfo, cells []string, servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool) (err error) {
+func (wr *Wrangler) updateShardRecords(ctx context.Context, keyspace string, shards []*topo.ShardInfo, cells []string, servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool) (err error) {
+	err = wr.ts.UpdateDisableQueryService(ctx, keyspace, shards, servedType, cells, isFrom /* disable */)
+
+	if err != nil {
+		return err
+	}
+
 	for i, si := range shards {
-
-		err := wr.ts.UpdateDisableQueryService(ctx, si, servedType, cells, isFrom /* disable */)
-
-		if err != nil {
-			return err
-		}
 
 		shards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
 			if clearSourceShards {
