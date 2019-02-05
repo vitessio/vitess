@@ -98,7 +98,7 @@ public class GrpcClientFactory implements RpcClientFactory {
       channel.nameResolverFactory(nameResolverFactory);
     }
     return callCredentials != null ?
-            new GrpcClient(channel.build(), callCredentials) : new GrpcClient(channel.build());
+            new GrpcClient(channel.build(), callCredentials, ctx) : new GrpcClient(channel.build(), ctx);
   }
 
   /**
@@ -174,7 +174,7 @@ public class GrpcClientFactory implements RpcClientFactory {
     }
 
     return new GrpcClient(
-            channelBuilder(target).negotiationType(NegotiationType.TLS).sslContext(sslContext).intercept(new RetryingInterceptor(config)).build());
+            channelBuilder(target).negotiationType(NegotiationType.TLS).sslContext(sslContext).intercept(new RetryingInterceptor(config)).build(), ctx);
   }
 
   /**
