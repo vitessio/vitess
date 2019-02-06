@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,24 +16,26 @@
 
 package io.vitess.client.cursor;
 
-import java.sql.SQLDataException;
-import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
-import java.util.Iterator;
-import java.util.List;
-import javax.annotation.concurrent.NotThreadSafe;
-
 import io.vitess.client.StreamIterator;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.Field;
 import io.vitess.proto.Query.QueryResult;
 
+import java.sql.SQLDataException;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.util.Iterator;
+import java.util.List;
+
+import javax.annotation.concurrent.NotThreadSafe;
+
 /**
- * A {@link Cursor} that serves records from the sequence of {@link QueryResult} objects
- * represented by a {@link StreamIterator}.
+ * A {@link Cursor} that serves records from the sequence of {@link QueryResult} objects represented
+ * by a {@link StreamIterator}.
  */
 @NotThreadSafe
 public class StreamCursor extends Cursor {
+
   private StreamIterator<QueryResult> streamIterator;
   private Iterator<Query.Row> rowIterator;
 
@@ -103,8 +105,8 @@ public class StreamCursor extends Cursor {
    *
    * <p>Whereas the public {@link #next()} method advances the {@link Cursor} state to the next
    * {@link Row}, this method advances the internal state to the next {@link QueryResult}, which
-   * contains a batch of rows. Specifically, we get the next {@link QueryResult} from
-   * {@link #streamIterator}, and then set {@link #rowIterator} accordingly.
+   * contains a batch of rows. Specifically, we get the next {@link QueryResult} from {@link
+   * #streamIterator}, and then set {@link #rowIterator} accordingly.
    *
    * <p>If {@link #fields} is null, we assume the next {@link QueryResult} must contain the fields,
    * and set {@link #fields} from it.

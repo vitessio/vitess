@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+
+<!DOCTYPE suppressions PUBLIC
+  "-//Puppy Crawl//DTD Suppressions 1.1//EN"
+  "http://www.puppycrawl.com/dtds/suppressions_1_1.dtd">
+
+<suppressions>
+  <suppress files="[\\/]generated-sources[\\/]" checks=".*"/>
+  <suppress files="[\\/]main[\\/]java[\\/].*\.java" id="JavadocParagraph"/>
+  <suppress checks="JavadocParagraph" files=".*[\\/]src[\\/](test|main)[\\/].*\.java"/>
+  <suppress checks="AbbreviationAsWordInName" files=".*[\\/]src[\\/](test|main)[\\/].*\.java"/>
+  <suppress checks="JavadocMethod" files=".*[\\/]src[\\/](test|main)[\\/].*\.java"/>
+  <suppress checks="SummaryJavadoc" files=".*[\\/]src[\\/](test|main)[\\/].*\.java"/>
+  <suppress checks="OverloadMethodsDeclarationOrder" files=".*[\\/]src[\\/](test|main)[\\/].*\.java"/>
+</suppressions>
