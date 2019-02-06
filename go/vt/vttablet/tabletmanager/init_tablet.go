@@ -24,16 +24,19 @@ import (
 	"fmt"
 	"time"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -120,6 +123,17 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		default:
 			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
 		}
+	}
+
+	// Rebuild keyspace graph if this the first tablet in this keyspace/cell
+	_, err = agent.TopoServer.GetSrvKeyspace(ctx, agent.TabletAlias.Cell, *initKeyspace)
+	switch {
+	case err == nil:
+		// NOOP
+	case topo.IsErrType(err, topo.NoNode):
+		err = topotools.RebuildKeyspaceLocked(ctx, logutil.NewConsoleLogger(), agent.TopoServer, *initKeyspace, []string{agent.TabletAlias.Cell})
+	default:
+		return vterrors.Wrap(err, "InitTablet failed to read srvKeyspace")
 	}
 
 	log.Infof("Initializing the tablet for type %v", tabletType)
