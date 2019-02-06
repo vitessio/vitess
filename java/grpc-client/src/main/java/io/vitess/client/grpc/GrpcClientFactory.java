@@ -102,13 +102,13 @@ public class GrpcClientFactory implements RpcClientFactory {
   }
 
   /**
-   * This method constructs NettyChannelBuilder object that will be used to create
-   * RpcClient.
-   * Subclasses may override this method to make adjustments to the builder
-   * for example:
+   * <p>This method constructs NettyChannelBuilder object that will be used to create
+   * RpcClient.</p>
+   * <p>Subclasses may override this method to make adjustments to the builder
+   * for example:</p>
    *
    * <code>
-   *     @Override
+   *     {@literal @}Override
    *     protected NettyChannelBuilder channelBuilder(String target) {
    *       return super.channelBuilder(target)
    *               .eventLoopGroup(new EpollEventLoopGroup())
