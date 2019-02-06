@@ -102,9 +102,9 @@ public class GrpcClientFactory implements RpcClientFactory {
   }
 
   /**
-   * <p>This method constructs NettyChannelBuilder object that will be used to create
-   * RpcClient.</p>
-   * <p>Subclasses may override this method to make adjustments to the builder</p>
+   * This method constructs NettyChannelBuilder object that will be used to create
+   * RpcClient.
+   * Subclasses may override this method to make adjustments to the builder
    * for example:
    *
    * <code>

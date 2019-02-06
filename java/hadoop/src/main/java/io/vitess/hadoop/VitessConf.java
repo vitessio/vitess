@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,13 +19,16 @@ package io.vitess.hadoop;
 import io.vitess.client.RpcClientFactory;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.SplitQueryRequest;
-import java.util.Collection;
+
 import org.apache.hadoop.conf.Configuration;
+
+import java.util.Collection;
 
 /**
  * Collection of configuration properties used for {@link VitessInputFormat}
  */
 public class VitessConf {
+
   public static final String HOSTS = "vitess.client.hosts";
   public static final String CONN_TIMEOUT_MS = "vitess.client.conn_timeout_ms";
   public static final String INPUT_KEYSPACE = "vitess.client.keyspace";
@@ -108,7 +111,9 @@ public class VitessConf {
     conf.setEnum(ALGORITHM, algorithm);
   }
 
-  public String getRpcFactoryClass() { return conf.get(RPC_FACTORY_CLASS); }
+  public String getRpcFactoryClass() {
+    return conf.get(RPC_FACTORY_CLASS);
+  }
 
   public void setRpcFactoryClass(Class<? extends RpcClientFactory> clz) {
     conf.set(RPC_FACTORY_CLASS, clz.getName());
