@@ -20,10 +20,11 @@ import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+
 import io.grpc.CallCredentials;
+import io.grpc.InternalWithLogId;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
-import io.grpc.InternalWithLogId;
 import io.vitess.client.Context;
 import io.vitess.client.Proto;
 import io.vitess.client.RpcClient;
@@ -65,6 +66,9 @@ import io.vitess.proto.Vtgate.StreamExecuteShardsResponse;
 import io.vitess.proto.grpc.VitessGrpc;
 import io.vitess.proto.grpc.VitessGrpc.VitessFutureStub;
 import io.vitess.proto.grpc.VitessGrpc.VitessStub;
+
+import org.joda.time.Duration;
+
 import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
@@ -75,12 +79,12 @@ import java.sql.SQLSyntaxErrorException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientException;
 import java.util.concurrent.TimeUnit;
-import org.joda.time.Duration;
 
 /**
  * GrpcClient is a gRPC-based implementation of Vitess RpcClient.
  */
 public class GrpcClient implements RpcClient {
+
   private final ManagedChannel channel;
   private final String channelId;
   private final VitessStub asyncStub;
@@ -101,8 +105,8 @@ public class GrpcClient implements RpcClient {
   }
 
   private String toChannelId(ManagedChannel channel) {
-    return channel instanceof InternalWithLogId ?
-        ((InternalWithLogId) channel).getLogId().toString() : channel.toString();
+    return channel instanceof InternalWithLogId
+        ? ((InternalWithLogId) channel).getLogId().toString() : channel.toString();
   }
 
   @Override
@@ -145,7 +149,8 @@ public class GrpcClient implements RpcClient {
         new ExceptionConverter<ExecuteEntityIdsResponse>(), MoreExecutors.directExecutor());
   }
 
-  @Override public ListenableFuture<Vtgate.ExecuteBatchResponse> executeBatch(Context ctx,
+  @Override
+  public ListenableFuture<Vtgate.ExecuteBatchResponse> executeBatch(Context ctx,
       Vtgate.ExecuteBatchRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).executeBatch(request), Exception.class,
         new ExceptionConverter<Vtgate.ExecuteBatchResponse>(), MoreExecutors.directExecutor());
@@ -260,9 +265,9 @@ public class GrpcClient implements RpcClient {
   /**
    * Converts an exception from the gRPC framework into the appropriate {@link SQLException}.
    */
-  static SQLException convertGrpcError(Throwable e) {
-    if (e instanceof StatusRuntimeException) {
-      StatusRuntimeException sre = (StatusRuntimeException) e;
+  static SQLException convertGrpcError(Throwable exc) {
+    if (exc instanceof StatusRuntimeException) {
+      StatusRuntimeException sre = (StatusRuntimeException) exc;
 
       int errno = Proto.getErrno(sre.getMessage());
       String sqlState = Proto.getSQLState(sre.getMessage());
@@ -282,21 +287,23 @@ public class GrpcClient implements RpcClient {
           return new SQLRecoverableException(sre.toString(), sqlState, errno, sre);
         default: // Covers e.g. UNKNOWN.
           String advice = "";
-          if (e.getCause() instanceof java.nio.channels.ClosedChannelException) {
+          if (exc.getCause() instanceof java.nio.channels.ClosedChannelException) {
             advice =
-                "Failed to connect to vtgate. Make sure that vtgate is running and you are using the correct address. Details: ";
+                "Failed to connect to vtgate. Make sure that vtgate is running and you are using "
+                    + "the correct address. Details: ";
           }
           return new SQLNonTransientException(
-              "gRPC StatusRuntimeException: " + advice + e.toString(), sqlState, errno, e);
+              "gRPC StatusRuntimeException: " + advice + exc.toString(), sqlState, errno, exc);
       }
     }
-    return new SQLNonTransientException("gRPC error: " + e.toString(), e);
+    return new SQLNonTransientException("gRPC error: " + exc.toString(), exc);
   }
 
   static class ExceptionConverter<V> implements AsyncFunction<Exception, V> {
+
     @Override
-    public ListenableFuture<V> apply(Exception e) throws Exception {
-      throw convertGrpcError(e);
+    public ListenableFuture<V> apply(Exception exc) throws Exception {
+      throw convertGrpcError(exc);
     }
   }
 
@@ -318,9 +325,9 @@ public class GrpcClient implements RpcClient {
 
   @Override
   public String toString() {
-      return String.format("[GrpcClient-%s channel=%s]",
-              Integer.toHexString(this.hashCode()),
-              channelId
-      );
+    return String.format("[GrpcClient-%s channel=%s]",
+        Integer.toHexString(this.hashCode()),
+        channelId
+    );
   }
 }
