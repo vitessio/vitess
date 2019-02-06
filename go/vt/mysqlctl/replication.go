@@ -23,6 +23,7 @@ package mysqlctl
 import (
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -306,7 +307,14 @@ func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 			if err != nil {
 				return nil, fmt.Errorf("FindSlaves: malformed addr %v", err)
 			}
-			addrs = append(addrs, host)
+			var ips []string
+			ips, err = net.LookupHost(host)
+			if err != nil {
+				return nil, fmt.Errorf("FindSlaves: LookupHost failed %v", err)
+			}
+			for _, ip := range ips {
+				addrs = append(addrs, ip)
+			}
 		}
 	}
 
