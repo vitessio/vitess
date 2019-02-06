@@ -6,10 +6,14 @@
 
 <suppressions>
   <suppress files="[\\/]generated-sources[\\/]" checks=".*"/>
-  <suppress files="[\\/]main[\\/]java[\\/].*\.java" id="JavadocParagraph"/>
+
   <suppress checks="JavadocParagraph" files=".*[\\/]src[\\/](test|main)[\\/].*\.java"/>
   <suppress checks="AbbreviationAsWordInName" files=".*[\\/]src[\\/](test|main)[\\/].*\.java"/>
   <suppress checks="JavadocMethod" files=".*[\\/]src[\\/](test|main)[\\/].*\.java"/>
   <suppress checks="SummaryJavadoc" files=".*[\\/]src[\\/](test|main)[\\/].*\.java"/>
   <suppress checks="OverloadMethodsDeclarationOrder" files=".*[\\/]src[\\/](test|main)[\\/].*\.java"/>
+
+  <suppress checks="LocalVariableName" files="StringUtils.java" />
+  <suppress checks="ParameterName" files="StringUtils.java" />
+  <suppress checks="VariableDeclarationUsageDistance" files="StringUtils.java" />
 </suppressions>
