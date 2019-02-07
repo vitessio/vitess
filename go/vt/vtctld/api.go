@@ -327,7 +327,6 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 					}
 					return result, nil
 				}
-				log.Infof("Using findAllTablets with nil cells")
 				result, err := ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 				if err != nil && !topo.IsErrType(err, topo.PartialResult) {
 					return result, err

@@ -488,7 +488,7 @@ func (wr *Wrangler) replicaMigrateServedType(ctx context.Context, keyspace strin
 
 	// Now update serving keyspace
 
-	if err = wr.ts.MigrateServedType(ctx, keyspace, fromShards, toShards, servedType, cells); err != nil {
+	if err = wr.ts.MigrateServedType(ctx, keyspace, toShards, fromShards, servedType, cells); err != nil {
 		return err
 	}
 
