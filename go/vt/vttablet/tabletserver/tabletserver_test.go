@@ -2604,7 +2604,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 		t.Errorf("error got '%v', want '%s'", err, want)
 	}
 
-	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {a: \"type:INT64 value:\\\"1\\\" \"}"
+	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {a: \"type:INT64\" }"
 	if wantLog != getTestLog(0) {
 		t.Errorf("log got '%s', want '%s'", getTestLog(0), wantLog)
 	}
@@ -2654,7 +2654,7 @@ func TestTruncateErrors(t *testing.T) {
 		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
-	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vt [TRUNCATED]\", BindVars: {vtg1: \"type:VARCHAR value:\\\"t [TRUNCATED]"
+	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vt [TRUNCATED]\", BindVars: {vtg1: \"type:VARCHAR\" }"
 	if wantLog != getTestLog(0) {
 		t.Errorf("log got '%s', want '%s'", getTestLog(0), wantLog)
 	}
@@ -2673,7 +2673,7 @@ func TestTruncateErrors(t *testing.T) {
 		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
-	wantLog = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\" \"}"
+	wantLog = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR\" }"
 	if wantLog != getTestLog(1) {
 		t.Errorf("log got '%s', want '%s'", getTestLog(1), wantLog)
 	}

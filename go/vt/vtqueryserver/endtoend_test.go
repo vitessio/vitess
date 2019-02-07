@@ -436,7 +436,7 @@ func TestQueryDeadline(t *testing.T) {
 	// First run a query that is killed by the slow query killer after 2s
 	_, err = conn.ExecuteFetch("select sleep(5) from dual", 1000, false)
 	wantErr := "EOF (errno 2013) (sqlstate HY000) (CallerID: userData1): Sql: \"select sleep(:vtp1) from dual\", " +
-		"BindVars: {#maxLimit: \"type:INT64 value:\\\"10001\\\" \"vtp1: \"type:INT64 value:\\\"5\\\" \"} " +
+		"BindVars: {#maxLimit: \"type:INT64\" vtp1: \"type:INT64\" } " +
 		"(errno 2013) (sqlstate HY000) during query: select sleep(5) from dual"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("error want '%v', got '%v'", wantErr, err)
