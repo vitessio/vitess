@@ -111,10 +111,10 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData implemen
         "OF", "VIEW", "DOMAIN", "ON", "WHEN", "DOUBLE", "ONLY", "WHENEVER", "DROP", "OPEN", "WHERE",
         "ELSE", "OPTION", "WITH", "END", "OR", "WORK", "END-EXEC", "ORDER", "WRITE", "ESCAPE",
         "OUTER", "YEAR", "EXCEPT", "OUTPUT", "ZONE", "EXCEPTION"};
-    TreeMap mySQLKeywordMap = new TreeMap();
+    TreeMap mySqlKeywordMap = new TreeMap();
 
     for (String allMySQLKeyword : allMySQLKeywords) {
-      mySQLKeywordMap.put(allMySQLKeyword, null);
+      mySqlKeywordMap.put(allMySQLKeyword, null);
     }
 
     HashMap sql92KeywordMap = new HashMap(sql92Keywords.length);
@@ -126,11 +126,11 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData implemen
     Iterator sql92KeywordIterator = sql92KeywordMap.keySet().iterator();
 
     while (sql92KeywordIterator.hasNext()) {
-      mySQLKeywordMap.remove(sql92KeywordIterator.next());
+      mySqlKeywordMap.remove(sql92KeywordIterator.next());
     }
 
     StringBuffer keywordBuf = new StringBuffer();
-    sql92KeywordIterator = mySQLKeywordMap.keySet().iterator();
+    sql92KeywordIterator = mySqlKeywordMap.keySet().iterator();
     if (sql92KeywordIterator.hasNext()) {
       keywordBuf.append(sql92KeywordIterator.next().toString());
     }
@@ -1396,9 +1396,14 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData implemen
   /**
    * Enumeration for Table Types
    */
-  protected enum TableType {LOCAL_TEMPORARY("LOCAL TEMPORARY"), SYSTEM_TABLE(
-      "SYSTEM TABLE"), SYSTEM_VIEW("SYSTEM VIEW"), TABLE("TABLE", new String[]{"BASE TABLE"}), VIEW(
-      "VIEW"), UNKNOWN("UNKNOWN");
+  protected enum TableType {
+    LOCAL_TEMPORARY("LOCAL TEMPORARY"),
+    SYSTEM_TABLE("SYSTEM TABLE"),
+    SYSTEM_VIEW("SYSTEM VIEW"),
+    TABLE("TABLE", new String[]{"BASE TABLE"}),
+    VIEW("VIEW"),
+    UNKNOWN("UNKNOWN"),
+    ;
 
     private String name;
     private byte[] nameAsBytes;
@@ -1452,7 +1457,8 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData implemen
         }
       }
       return false;
-    }}
+    }
+  }
 
 
   /**

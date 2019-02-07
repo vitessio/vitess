@@ -117,21 +117,21 @@ public class VitessJDBCUrl {
    */
   public VitessJDBCUrl(String url, Properties info) throws SQLException {
 
-        /* URL pattern e.g. jdbc:vitess://username:password@ip1:port1,ip2:port2/keyspace/catalog?
-        property1=value1..
-        m.group(1) = "vitess"
-        m.group(2) = "username:password@"
-        m.group(3) = "username"
-        m.group(4) = ":password"
-        m.group(5) = "password"
-        m.group(6) = "ip1:port1,ip2:port2"
-        m.group(7) = "/keyspace"
-        m.group(8) = "keyspace"
-        m.group(9) = "/catalog"
-        m.group(10) = "catalog"
-        m.group(11) = "?property1=value1.."
-        m.group(12) = "property1=value1.."
-        */
+    /* URL pattern e.g. jdbc:vitess://username:password@ip1:port1,ip2:port2/keyspace/catalog?
+    property1=value1..
+    m.group(1) = "vitess"
+    m.group(2) = "username:password@"
+    m.group(3) = "username"
+    m.group(4) = ":password"
+    m.group(5) = "password"
+    m.group(6) = "ip1:port1,ip2:port2"
+    m.group(7) = "/keyspace"
+    m.group(8) = "keyspace"
+    m.group(9) = "/catalog"
+    m.group(10) = "catalog"
+    m.group(11) = "?property1=value1.."
+    m.group(12) = "property1=value1.."
+    */
 
     final Pattern p = Pattern.compile(Constants.URL_PATTERN);
     final Matcher m = p.matcher(url);
@@ -246,9 +246,9 @@ public class VitessJDBCUrl {
     StringTokenizer stringTokenizer = new StringTokenizer(hostURLs, ",");
     while (stringTokenizer.hasMoreTokens()) {
       String hostString = stringTokenizer.nextToken();
-            /*
-                pattern = ip:port
-             */
+      /*
+          pattern = ip:port
+      */
       final Pattern p = Pattern.compile("([^/:]+):(\\d+)?");
       final Matcher m = p.matcher(hostString);
       if (!m.find()) {

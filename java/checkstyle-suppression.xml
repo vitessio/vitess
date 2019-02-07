@@ -16,4 +16,6 @@
   <suppress checks="LocalVariableName" files="StringUtils.java" />
   <suppress checks="ParameterName" files="StringUtils.java" />
   <suppress checks="VariableDeclarationUsageDistance" files="StringUtils.java" />
+
+  <suppress checks="MissingSwitchDefault" files="VitessResultSet.java|VitessPreparedStatement.java" />
 </suppressions>

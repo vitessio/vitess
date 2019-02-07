@@ -104,17 +104,15 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
   }
 
   public ResultSet executeQuery() throws SQLException {
-    VTGateConnection vtGateConn;
-    Cursor cursor;
-
     checkOpen();
     closeOpenResultSetAndResetCount();
 
     //Setting to default value
     this.generatedId = -1;
 
-    vtGateConn = this.vitessConnection.getVtGateConn();
+    VTGateConnection vtGateConn = this.vitessConnection.getVtGateConn();
 
+    Cursor cursor;
     try {
       if (vitessConnection.isSimpleExecute() && this.fetchSize == 0) {
         checkAndBeginTransaction();
@@ -140,16 +138,14 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
   }
 
   public int executeUpdate() throws SQLException {
-    VTGateConnection vtGateConn;
-    Cursor cursor;
-    int truncatedUpdateCount;
-
     checkOpen();
     checkNotReadOnly();
     closeOpenResultSetAndResetCount();
 
-    vtGateConn = this.vitessConnection.getVtGateConn();
+    VTGateConnection vtGateConn = this.vitessConnection.getVtGateConn();
 
+    int truncatedUpdateCount;
+    Cursor cursor;
     try {
       checkAndBeginTransaction();
       Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
@@ -205,135 +201,136 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
     this.bindVariables.put(Constants.LITERAL_V + parameterIndex, null);
   }
 
-  public void setBoolean(int parameterIndex, boolean x) throws SQLException {
+  public void setBoolean(int parameterIndex, boolean ignored) throws SQLException {
     checkOpen();
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, ignored);
   }
 
-  public void setByte(int parameterIndex, byte x) throws SQLException {
+  public void setByte(int parameterIndex, byte ignored) throws SQLException {
     checkOpen();
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, ignored);
   }
 
-  public void setShort(int parameterIndex, short x) throws SQLException {
+  public void setShort(int parameterIndex, short ignored) throws SQLException {
     checkOpen();
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, ignored);
   }
 
-  public void setInt(int parameterIndex, int x) throws SQLException {
+  public void setInt(int parameterIndex, int ignored) throws SQLException {
     checkOpen();
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, ignored);
   }
 
-  public void setLong(int parameterIndex, long x) throws SQLException {
+  public void setLong(int parameterIndex, long ignored) throws SQLException {
     checkOpen();
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, ignored);
   }
 
-  public void setFloat(int parameterIndex, float x) throws SQLException {
+  public void setFloat(int parameterIndex, float ignored) throws SQLException {
     checkOpen();
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, ignored);
   }
 
-  public void setDouble(int parameterIndex, double x) throws SQLException {
+  public void setDouble(int parameterIndex, double ignored) throws SQLException {
     checkOpen();
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, ignored);
   }
 
-  public void setBigDecimal(int parameterIndex, BigDecimal x) throws SQLException {
+  public void setBigDecimal(int parameterIndex, BigDecimal ignored) throws SQLException {
     checkOpen();
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, ignored);
   }
 
-  public void setBigInteger(int parameterIndex, BigInteger x) throws SQLException {
+  public void setBigInteger(int parameterIndex, BigInteger ignored) throws SQLException {
     checkOpen();
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, ignored);
   }
 
-  public void setString(int parameterIndex, String x) throws SQLException {
+  public void setString(int parameterIndex, String ignored) throws SQLException {
     checkOpen();
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, ignored);
   }
 
-  public void setBytes(int parameterIndex, byte[] x) throws SQLException {
+  public void setBytes(int parameterIndex, byte[] ignored) throws SQLException {
     checkOpen();
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, x);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, ignored);
   }
 
-  public void setDate(int parameterIndex, Date x) throws SQLException {
+  public void setDate(int parameterIndex, Date date) throws SQLException {
     checkOpen();
-    String date = DateTime.formatDate(x);
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, date);
+    String dateString = DateTime.formatDate(date);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, dateString);
   }
 
-  public void setTime(int parameterIndex, Time x) throws SQLException {
+  public void setTime(int parameterIndex, Time time) throws SQLException {
     checkOpen();
-    String time = DateTime.formatTime(x);
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, time);
+    String timeString = DateTime.formatTime(time);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, timeString);
   }
 
-  public void setTimestamp(int parameterIndex, Timestamp x) throws SQLException {
+  public void setTimestamp(int parameterIndex, Timestamp timestamp) throws SQLException {
     checkOpen();
-    String timeStamp = DateTime.formatTimestamp(x);
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, timeStamp);
+    String timestampString = DateTime.formatTimestamp(timestamp);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, timestampString);
   }
 
-  public void setDate(int parameterIndex, Date x, Calendar cal) throws SQLException {
+  public void setDate(int parameterIndex, Date date, Calendar cal) throws SQLException {
     checkOpen();
-    String date = DateTime.formatDate(x, cal);
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, date);
+    String formattedDate = DateTime.formatDate(date, cal);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, formattedDate);
   }
 
-  public void setTime(int parameterIndex, Time x, Calendar cal) throws SQLException {
+  public void setTime(int parameterIndex, Time time, Calendar cal) throws SQLException {
     checkOpen();
-    String time = DateTime.formatTime(x, cal);
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, time);
+    String formattedTime = DateTime.formatTime(time, cal);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, formattedTime);
   }
 
-  public void setTimestamp(int parameterIndex, Timestamp x, Calendar cal) throws SQLException {
+  public void setTimestamp(int parameterIndex, Timestamp timestamp, Calendar cal)
+      throws SQLException {
     checkOpen();
-    String timeStamp = DateTime.formatTimestamp(x, cal);
-    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, timeStamp);
+    String formattedTimestamp = DateTime.formatTimestamp(timestamp, cal);
+    this.bindVariables.put(Constants.LITERAL_V + parameterIndex, formattedTimestamp);
   }
 
-  public void setObject(int parameterIndex, Object x) throws SQLException {
-    if (x == null) {
+  public void setObject(int parameterIndex, Object object) throws SQLException {
+    if (object == null) {
       setNull(parameterIndex, Types.NULL);
-    } else if (x instanceof String) {
-      setString(parameterIndex, (String) x);
-    } else if (x instanceof Short) {
-      setShort(parameterIndex, (Short) x);
-    } else if (x instanceof Integer) {
-      setInt(parameterIndex, (Integer) x);
-    } else if (x instanceof Long) {
-      setLong(parameterIndex, (Long) x);
-    } else if (x instanceof Float) {
-      setFloat(parameterIndex, (Float) x);
-    } else if (x instanceof Double) {
-      setDouble(parameterIndex, (Double) x);
-    } else if (x instanceof Boolean) {
-      setBoolean(parameterIndex, (Boolean) x);
-    } else if (x instanceof Byte) {
-      setByte(parameterIndex, (Byte) x);
-    } else if (x instanceof Character) {
-      setString(parameterIndex, String.valueOf(x));
-    } else if (x instanceof Date) {
-      setDate(parameterIndex, (Date) x);
-    } else if (x instanceof Time) {
-      setTime(parameterIndex, (Time) x);
-    } else if (x instanceof Timestamp) {
-      setTimestamp(parameterIndex, (Timestamp) x);
-    } else if (x instanceof BigDecimal) {
-      setBigDecimal(parameterIndex, (BigDecimal) x);
-    } else if (x instanceof BigInteger) {
-      setBigInteger(parameterIndex, (BigInteger) x);
-    } else if (x instanceof byte[]) {
-      setBytes(parameterIndex, (byte[]) x);
-    } else if (getConnection().getTreatUtilDateAsTimestamp() && x instanceof java.util.Date) {
-      setTimestamp(parameterIndex, new Timestamp(((java.util.Date) x).getTime()));
+    } else if (object instanceof String) {
+      setString(parameterIndex, (String) object);
+    } else if (object instanceof Short) {
+      setShort(parameterIndex, (Short) object);
+    } else if (object instanceof Integer) {
+      setInt(parameterIndex, (Integer) object);
+    } else if (object instanceof Long) {
+      setLong(parameterIndex, (Long) object);
+    } else if (object instanceof Float) {
+      setFloat(parameterIndex, (Float) object);
+    } else if (object instanceof Double) {
+      setDouble(parameterIndex, (Double) object);
+    } else if (object instanceof Boolean) {
+      setBoolean(parameterIndex, (Boolean) object);
+    } else if (object instanceof Byte) {
+      setByte(parameterIndex, (Byte) object);
+    } else if (object instanceof Character) {
+      setString(parameterIndex, String.valueOf(object));
+    } else if (object instanceof Date) {
+      setDate(parameterIndex, (Date) object);
+    } else if (object instanceof Time) {
+      setTime(parameterIndex, (Time) object);
+    } else if (object instanceof Timestamp) {
+      setTimestamp(parameterIndex, (Timestamp) object);
+    } else if (object instanceof BigDecimal) {
+      setBigDecimal(parameterIndex, (BigDecimal) object);
+    } else if (object instanceof BigInteger) {
+      setBigInteger(parameterIndex, (BigInteger) object);
+    } else if (object instanceof byte[]) {
+      setBytes(parameterIndex, (byte[]) object);
+    } else if (getConnection().getTreatUtilDateAsTimestamp() && object instanceof java.util.Date) {
+      setTimestamp(parameterIndex, new Timestamp(((java.util.Date) object).getTime()));
     } else {
       throw new SQLException(
-          Constants.SQLExceptionMessages.SQL_TYPE_INFER + x.getClass().getCanonicalName());
+          Constants.SQLExceptionMessages.SQL_TYPE_INFER + object.getClass().getCanonicalName());
     }
   }
 
@@ -446,20 +443,20 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
     int statementStartPos = StringUtils.findStartOfStatement(sql);
 
     for (int i = statementStartPos; i < statementLength; ++i) {
-      char c = sql.charAt(i);
+      char curChar = sql.charAt(i);
 
-      if (c == '\\' && i < (statementLength - 1)) {
+      if (curChar == '\\' && i < (statementLength - 1)) {
         i++;
         continue; // next character is escaped
       }
 
       // are we in a quoted identifier? (only valid when the id is not inside a 'string')
-      if (!inQuotes && c == quotedIdentifierChar) {
+      if (!inQuotes && curChar == quotedIdentifierChar) {
         inQuotedId = !inQuotedId;
       } else if (!inQuotedId) {
-        //	only respect quotes when not in a quoted identifier
+        //only respect quotes when not in a quoted identifier
         if (inQuotes) {
-          if (((c == '\'') || (c == '"')) && c == currentQuoteChar) {
+          if (((curChar == '\'') || (curChar == '"')) && curChar == currentQuoteChar) {
             if (i < (statementLength - 1) && sql.charAt(i + 1) == currentQuoteChar) {
               i++;
               continue; // inline quote escape
@@ -469,35 +466,38 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
             currentQuoteChar = 0;
           }
         } else {
-          if (c == '#' || (c == '-' && (i + 1) < statementLength && sql.charAt(i + 1) == '-')) {
+          if (curChar == '#'
+              || (curChar == '-'
+              && (i + 1) < statementLength
+              && sql.charAt(i + 1) == '-')) {
             // comment, run out to end of statement, or newline, whichever comes first
             int endOfStmt = statementLength - 1;
 
             for (; i < endOfStmt; i++) {
-              c = sql.charAt(i);
+              curChar = sql.charAt(i);
 
-              if (c == '\r' || c == '\n') {
+              if (curChar == '\r' || curChar == '\n') {
                 break;
               }
             }
 
             continue;
-          } else if (c == '/' && (i + 1) < statementLength) {
+          } else if (curChar == '/' && (i + 1) < statementLength) {
             // Comment?
-            char cNext = sql.charAt(i + 1);
-            if (cNext == '*') {
+            char nextChar = sql.charAt(i + 1);
+            if (nextChar == '*') {
               i += 2;
 
               for (int j = i; j < statementLength; j++) {
                 i++;
-                cNext = sql.charAt(j);
+                nextChar = sql.charAt(j);
 
-                if (cNext == '*' && (j + 1) < statementLength) {
+                if (nextChar == '*' && (j + 1) < statementLength) {
                   if (sql.charAt(j + 1) == '/') {
                     i++;
 
                     if (i < statementLength) {
-                      c = sql.charAt(i);
+                      curChar = sql.charAt(i);
                     }
 
                     break; // comment done
@@ -505,14 +505,14 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                 }
               }
             }
-          } else if ((c == '\'') || (c == '"')) {
+          } else if ((curChar == '\'') || (curChar == '"')) {
             inQuotes = true;
-            currentQuoteChar = c;
+            currentQuoteChar = curChar;
           }
         }
       }
 
-      if ((c == '?') && !inQuotes && !inQuotedId) {
+      if ((curChar == '?') && !inQuotes && !inQuotedId) {
         statementCount++;
       }
     }
@@ -525,12 +525,13 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void setAsciiStream(int parameterIndex, InputStream x, int length) throws SQLException {
+  public void setAsciiStream(int parameterIndex, InputStream ignored, int length)
+      throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void setBinaryStream(int parameterIndex, InputStream x) throws SQLException {
+  public void setBinaryStream(int parameterIndex, InputStream ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
@@ -653,12 +654,14 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
     }
   }
 
-  public void setAsciiStream(int parameterIndex, InputStream x, long length) throws SQLException {
+  public void setAsciiStream(int parameterIndex, InputStream ignored, long length)
+      throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void setBinaryStream(int parameterIndex, InputStream x, long length) throws SQLException {
+  public void setBinaryStream(int parameterIndex, InputStream ignored, long length)
+      throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
@@ -669,34 +672,35 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void setUnicodeStream(int parameterIndex, InputStream x, int length) throws SQLException {
+  public void setUnicodeStream(int parameterIndex, InputStream ignored, int length)
+      throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void setRef(int parameterIndex, Ref x) throws SQLException {
+  public void setRef(int parameterIndex, Ref ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void setBlob(int parameterIndex, Blob x) throws SQLException {
+  public void setBlob(int parameterIndex, Blob ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void setClob(int parameterIndex, Clob x) throws SQLException {
+  public void setClob(int parameterIndex, Clob clob) throws SQLException {
     checkOpen();
-    if (x.length() > Integer.MAX_VALUE) {
+    if (clob.length() > Integer.MAX_VALUE) {
       throw new SQLFeatureNotSupportedException(
           String.format("Clob size over %d not support", Integer.MAX_VALUE),
           Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
     // Clob uses 1-based indexing!
     this.bindVariables
-        .put(Constants.LITERAL_V + parameterIndex, x.getSubString(1, (int) x.length()));
+        .put(Constants.LITERAL_V + parameterIndex, clob.getSubString(1, (int) clob.length()));
   }
 
-  public void setArray(int parameterIndex, Array x) throws SQLException {
+  public void setArray(int parameterIndex, Array ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
@@ -706,12 +710,12 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void setURL(int parameterIndex, URL x) throws SQLException {
+  public void setURL(int parameterIndex, URL ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void setRowId(int parameterIndex, RowId x) throws SQLException {
+  public void setRowId(int parameterIndex, RowId ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
@@ -753,12 +757,13 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void setAsciiStream(int parameterIndex, InputStream x) throws SQLException {
+  public void setAsciiStream(int parameterIndex, InputStream ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void setBinaryStream(int parameterIndex, InputStream x, int length) throws SQLException {
+  public void setBinaryStream(int parameterIndex, InputStream ignored, int length)
+      throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }

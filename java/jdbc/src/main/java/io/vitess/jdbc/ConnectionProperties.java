@@ -295,7 +295,7 @@ public class ConnectionProperties {
       try {
         String testString = "abc";
         StringUtils.getBytes(testString, characterEncodingAsString);
-      } catch (UnsupportedEncodingException UE) {
+      } catch (UnsupportedEncodingException uee) {
         throw new SQLException("Unsupported character encoding: " + characterEncodingAsString);
       }
     }

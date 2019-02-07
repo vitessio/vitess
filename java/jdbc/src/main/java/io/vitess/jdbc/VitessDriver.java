@@ -41,9 +41,9 @@ public class VitessDriver implements Driver {
   static {
     try {
       DriverManager.registerDriver(new VitessDriver());
-    } catch (SQLException e) {
+    } catch (SQLException exc) {
       throw new RuntimeException(
-          Constants.SQLExceptionMessages.INIT_FAILED + " : " + e.getErrorCode() + " - " + e
+          Constants.SQLExceptionMessages.INIT_FAILED + " : " + exc.getErrorCode() + " - " + exc
               .getMessage());
     }
   }
