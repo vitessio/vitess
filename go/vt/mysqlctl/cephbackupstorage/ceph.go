@@ -88,7 +88,7 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 
 		// Give PutObject() the read end of the pipe.
 		object := objName(bh.dir, bh.name, filename)
-		_, err := bh.client.PutObject(bucket, object, reader, "application/octet-stream")
+		_, err := bh.client.PutObject(bucket, object, reader, -1, minio.PutObjectOptions{ContentType: "application/octet-stream"})
 		if err != nil {
 			// Signal the writer that an error occurred, in case it's not done writing yet.
 			reader.CloseWithError(err)
@@ -126,7 +126,7 @@ func (bh *CephBackupHandle) ReadFile(ctx context.Context, filename string) (io.R
 	// ceph bucket name
 	bucket := alterBucketName(bh.dir)
 	object := objName(bh.dir, bh.name, filename)
-	return bh.client.GetObject(bucket, object)
+	return bh.client.GetObject(bucket, object, minio.GetObjectOptions{})
 }
 
 // CephBackupStorage implements BackupStorage for Ceph Cloud Storage.
@@ -154,7 +154,7 @@ func (bs *CephBackupStorage) ListBackups(ctx context.Context, dir string) ([]bac
 	doneCh := make(chan struct{})
 	for object := range c.ListObjects(bucket, searchPrefix, false, doneCh) {
 		if object.Err != nil {
-			err := c.BucketExists(bucket)
+			_, err := c.BucketExists(bucket)
 			if err != nil {
 				return nil, nil
 			}
@@ -190,8 +190,13 @@ func (bs *CephBackupStorage) StartBackup(ctx context.Context, dir, name string) 
 	// ceph bucket name
 	bucket := alterBucketName(dir)
 
-	err = c.BucketExists(bucket)
+	found, err := c.BucketExists(bucket)
+
 	if err != nil {
+		log.Info("Error from BucketExists: %v, quitting", bucket)
+		return nil, errors.New("Error checking whether bucket exists: " + bucket)
+	}
+	if !found {
 		log.Info("Bucket: %v doesn't exist, creating new bucket with the required name", bucket)
 		err = c.MakeBucket(bucket, "")
 		if err != nil {
