@@ -139,13 +139,15 @@ func (ts *Server) GetShardServingCells(ctx context.Context, si *ShardInfo) (serv
 			defer wg.Done()
 			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, si.keyspace)
 			switch {
-			case err != nil:
+			case err == nil:
 				for _, partition := range srvKeyspace.GetPartitions() {
 					for _, shardReference := range partition.ShardReferences {
 						if shardReference.GetName() == si.ShardName() {
-							mu.Lock()
-							defer mu.Unlock()
-							servingCells = append(servingCells, cell)
+							func() {
+								mu.Lock()
+								defer mu.Unlock()
+								servingCells = append(servingCells, cell)
+							}()
 						}
 					}
 				}
@@ -174,7 +176,7 @@ func (ts *Server) GetShardServingTypes(ctx context.Context, si *ShardInfo) (serv
 
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
-	servingTypes = make([]topodatapb.TabletType, len(cells))
+	servingTypes = make([]topodatapb.TabletType, 0)
 	var mu sync.Mutex
 	for _, cell := range cells {
 		wg.Add(1)
@@ -182,24 +184,32 @@ func (ts *Server) GetShardServingTypes(ctx context.Context, si *ShardInfo) (serv
 			defer wg.Done()
 			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, si.keyspace)
 			switch {
-			case err != nil:
-				for _, partition := range srvKeyspace.GetPartitions() {
-					for _, shardReference := range partition.ShardReferences {
-						if shardReference.GetName() == si.ShardName() {
-							mu.Lock()
-							defer mu.Unlock()
-							found := false
-							for _, servingType := range servingTypes {
-								if servingType == partition.ServedType {
-									found = true
-								}
-							}
-							if !found {
-								servingTypes = append(servingTypes, partition.ServedType)
+			case err == nil:
+				func() {
+					mu.Lock()
+					defer mu.Unlock()
+					for _, partition := range srvKeyspace.GetPartitions() {
+						// Check that served types hasn't been added already
+						// TODO MAKE SURE TO ADD TO TEST FOR THIS
+						partitionAlreadyAdded := false
+						for _, servingType := range servingTypes {
+							if servingType == partition.ServedType {
+								partitionAlreadyAdded = true
+								break
 							}
 						}
+
+						if !partitionAlreadyAdded {
+							for _, shardReference := range partition.ShardReferences {
+								if shardReference.GetName() == si.ShardName() {
+									servingTypes = append(servingTypes, partition.ServedType)
+									break
+								}
+							}
+						}
+
 					}
-				}
+				}()
 			case IsErrType(err, NoNode):
 				// NOOP
 				return
@@ -254,10 +264,6 @@ func (ts *Server) RemoveShardServingKeyspace(ctx context.Context, si *ShardInfo,
 					return
 				}
 
-				if err := OrderAndCheckPartitions(cell, srvKeyspace); err != nil {
-					rec.RecordError(err)
-					return
-				}
 				err = ts.UpdateSrvKeyspace(ctx, cell, si.keyspace, srvKeyspace)
 				if err != nil {
 					rec.RecordError(err)
@@ -329,7 +335,7 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 						shardTabletControl := &topodatapb.ShardTabletControl{
 							Name:                 si.ShardName(),
 							KeyRange:             si.KeyRange,
-							QueryServiceDisabled: true,
+							QueryServiceDisabled: disableQueryService,
 						}
 						partition.ShardTabletControls = append(partition.GetShardTabletControls(), shardTabletControl)
 					}
@@ -376,40 +382,28 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 				rec.RecordError(err)
 				return
 			}
-			for _, si := range shardsToAdd {
-				for _, partition := range srvKeyspace.GetPartitions() {
-					if partition.GetServedType() != tabletType {
-						continue
-					}
-					found := false
-					for _, shardReference := range partition.GetShardReferences() {
-						if shardReference.GetName() == si.ShardName() {
-							found = true
-						}
-					}
-
-					if !found {
-						shardReference := &topodatapb.ShardReference{
-							Name:     si.ShardName(),
-							KeyRange: si.KeyRange,
-						}
-						partition.ShardReferences = append(partition.GetShardReferences(), shardReference)
-					}
+			for _, partition := range srvKeyspace.GetPartitions() {
+				if partition.GetServedType() != tabletType {
+					continue
 				}
-			}
 
-			for _, si := range shardsToRemove {
-				for _, partition := range srvKeyspace.GetPartitions() {
-					if partition.GetServedType() != tabletType {
-						continue
-					}
-					shardReferences := make([]*topodatapb.ShardReference, 0)
-					for _, shardReference := range partition.GetShardReferences() {
+				shardReferences := partition.GetShardReferences()[:0]
+				for _, si := range shardsToRemove {
+					for _, shardReference := range shardReferences {
 						if shardReference.GetName() != si.ShardName() {
-							partition.ShardReferences = append(shardReferences, shardReference)
+							shardReferences = append(shardReferences, shardReference)
 						}
 					}
 				}
+
+				for _, si := range shardsToAdd {
+					shardReference := &topodatapb.ShardReference{
+						Name:     si.ShardName(),
+						KeyRange: si.KeyRange,
+					}
+					shardReferences = append(shardReferences, shardReference)
+				}
+				partition.ShardReferences = shardReferences
 			}
 
 			if err := OrderAndCheckPartitions(cell, srvKeyspace); err != nil {

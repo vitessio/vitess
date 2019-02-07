@@ -539,39 +539,24 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	rec := concurrency.AllErrorRecorder{}
 	result := make([]*topodatapb.TabletAlias, 0, len(resultAsMap))
 	for _, cell := range cells {
-		srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
-		if err != nil {
-			return result, err
-		}
-
-		shardInCell := func() bool {
-			for _, partition := range srvKeyspace.GetPartitions() {
-				for _, shardReference := range partition.ShardReferences {
-					if shardReference.GetName() == shard {
-						return true
-					}
-				}
-			}
-			return false
-		}()
-
-		if shardInCell {
-			wg.Add(1)
-			go func(cell string) {
-				defer wg.Done()
-				sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
-				if err != nil {
-					rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
-					return
-				}
-
+		wg.Add(1)
+		go func(cell string) {
+			defer wg.Done()
+			sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
+			switch {
+			case err == nil:
 				mutex.Lock()
 				for _, node := range sri.Nodes {
 					resultAsMap[topoproto.TabletAliasString(node.TabletAlias)] = node.TabletAlias
 				}
 				mutex.Unlock()
-			}(cell)
-		}
+			case IsErrType(err, NoNode):
+				// There is no shard replication for this shard in this cell. NOOP
+			default:
+				rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
+				return
+			}
+		}(cell)
 	}
 	wg.Wait()
 	err = nil
