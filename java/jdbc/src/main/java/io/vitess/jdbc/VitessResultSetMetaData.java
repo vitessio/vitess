@@ -75,11 +75,11 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
         try {
           String collationName = field.getCollation();
           return collationName != null && !collationName.endsWith("_ci");
-        } catch (SQLException e) {
-          if (e.getCause() instanceof ArrayIndexOutOfBoundsException) {
+        } catch (SQLException exc) {
+          if (exc.getCause() instanceof ArrayIndexOutOfBoundsException) {
             return false;
           } else {
-            throw e;
+            throw exc;
           }
         }
       default:

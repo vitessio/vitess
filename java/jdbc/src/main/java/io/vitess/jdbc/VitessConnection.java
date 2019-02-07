@@ -85,7 +85,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
       this.vtSession = new VTSession(this.getTarget(), this.getExecuteOptions());
     } catch (Exception exc) {
       throw new SQLException(
-          Constants.SQLExceptionMessages.CONN_INIT_ERROR + " - " + e.getMessage(), exc);
+          Constants.SQLExceptionMessages.CONN_INIT_ERROR + " - " + exc.getMessage(), exc);
     }
   }
 

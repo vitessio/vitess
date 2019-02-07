@@ -595,7 +595,7 @@ public class FieldWithMetadata {
       asString.append(this.encoding);
       asString.append("]");
       return asString.toString();
-    } catch (Throwable t) {
+    } catch (Throwable ignored) {
       return super.toString();
     }
   }

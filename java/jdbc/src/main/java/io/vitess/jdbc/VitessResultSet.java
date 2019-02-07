@@ -89,8 +89,8 @@ public class VitessResultSet implements ResultSet {
     try {
       this.fields = enhancedFieldsFromCursor(
           vitessStatement == null ? null : vitessStatement.getConnection());
-    } catch (SQLException e) {
-      throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
+    } catch (SQLException exc) {
+      throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, exc);
     }
     this.currentRow = 0;
     if (null != vitessStatement) {
@@ -116,9 +116,9 @@ public class VitessResultSet implements ResultSet {
 
         Query.Row.Builder queryRow = Query.Row.newBuilder();
         StringBuilder sb = new StringBuilder();
-        for (String aRowData : rowData) {
-          sb.append(aRowData);
-          queryRow.addLengths(aRowData.length());
+        for (String singleRowData : rowData) {
+          sb.append(singleRowData);
+          queryRow.addLengths(singleRowData.length());
         }
         queryRow.setValues(ByteString.copyFromUtf8(sb.toString()));
         queryResultBuilder.addRows(queryRow);
@@ -129,8 +129,8 @@ public class VitessResultSet implements ResultSet {
     this.vitessStatement = null;
     try {
       this.fields = enhancedFieldsFromCursor(connection);
-    } catch (SQLException e) {
-      throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
+    } catch (SQLException exc) {
+      throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, exc);
     }
     this.currentRow = 0;
   }
@@ -151,10 +151,10 @@ public class VitessResultSet implements ResultSet {
 
       Query.Row.Builder queryRow = Query.Row.newBuilder();
       StringBuilder sb = new StringBuilder();
-      for (String aRowData : rowData) {
-        if (null != aRowData) {
-          sb.append(aRowData);
-          queryRow.addLengths(aRowData.length());
+      for (String singleRowData : rowData) {
+        if (null != singleRowData) {
+          sb.append(singleRowData);
+          queryRow.addLengths(singleRowData.length());
         } else {
           queryRow.addLengths(-1);
         }
@@ -167,8 +167,8 @@ public class VitessResultSet implements ResultSet {
     this.vitessStatement = null;
     try {
       this.fields = enhancedFieldsFromCursor(connection);
-    } catch (SQLException e) {
-      throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
+    } catch (SQLException exc) {
+      throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, exc);
     }
     this.currentRow = 0;
   }
@@ -203,7 +203,7 @@ public class VitessResultSet implements ResultSet {
     if (!this.closed) {
       try {
         this.cursor.close();
-      } catch (Exception e) {
+      } catch (Exception exc) {
         throw new SQLException(Constants.SQLExceptionMessages.VITESS_CURSOR_CLOSE_ERROR);
       } finally {
         //Dereferencing all the objects
@@ -249,9 +249,6 @@ public class VitessResultSet implements ResultSet {
   }
 
   public boolean getBoolean(int columnIndex) throws SQLException {
-    String boolString;
-    int bool;
-
     preAccessor(columnIndex);
 
     if (isNull(columnIndex)) {
@@ -265,7 +262,8 @@ public class VitessResultSet implements ResultSet {
       return byteArrayToBoolean(columnIndex);
     }
 
-    boolString = this.getString(columnIndex);
+    int bool;
+    String boolString = this.getString(columnIndex);
     try {
       bool = Integer.valueOf(boolString);
     } catch (NumberFormatException nfe) {
@@ -275,9 +273,6 @@ public class VitessResultSet implements ResultSet {
   }
 
   public byte getByte(int columnIndex) throws SQLException {
-    String byteString;
-    byte value;
-
     preAccessor(columnIndex);
     if (isNull(columnIndex)) {
       return 0;
@@ -290,7 +285,8 @@ public class VitessResultSet implements ResultSet {
       return (byte) object;
     }
 
-    byteString = this.getString(columnIndex);
+    byte value;
+    String byteString = this.getString(columnIndex);
     try {
       value = Byte.parseByte(byteString);
     } catch (NumberFormatException nfe) {
@@ -449,9 +445,6 @@ public class VitessResultSet implements ResultSet {
   }
 
   public byte[] getBytes(int columnIndex) throws SQLException {
-    String bytesString;
-    byte[] value;
-
     preAccessor(columnIndex);
     if (isNull(columnIndex)) {
       return null;
@@ -463,7 +456,8 @@ public class VitessResultSet implements ResultSet {
       return (byte[]) object;
     }
 
-    bytesString = this.getString(columnIndex);
+    byte[] value;
+    String bytesString = this.getString(columnIndex);
     try {
       value = bytesString.getBytes();
     } catch (Exception ex) {
@@ -631,8 +625,8 @@ public class VitessResultSet implements ResultSet {
     } else {
       try {
         return StringUtils.toString(bytes, 0, bytes.length, encoding);
-      } catch (UnsupportedEncodingException e) {
-        throw new SQLException("Unsupported character encoding: " + encoding, e);
+      } catch (UnsupportedEncodingException exc) {
+        throw new SQLException("Unsupported character encoding: " + encoding, exc);
       }
     }
   }
@@ -998,92 +992,95 @@ public class VitessResultSet implements ResultSet {
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateBoolean(int columnIndex, boolean x) throws SQLException {
+  public void updateBoolean(int columnIndex, boolean ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateByte(int columnIndex, byte x) throws SQLException {
+  public void updateByte(int columnIndex, byte ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateShort(int columnIndex, short x) throws SQLException {
+  public void updateShort(int columnIndex, short ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateInt(int columnIndex, int x) throws SQLException {
+  public void updateInt(int columnIndex, int ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateLong(int columnIndex, long x) throws SQLException {
+  public void updateLong(int columnIndex, long ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateFloat(int columnIndex, float x) throws SQLException {
+  public void updateFloat(int columnIndex, float ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateDouble(int columnIndex, double x) throws SQLException {
+  public void updateDouble(int columnIndex, double ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateBigDecimal(int columnIndex, BigDecimal x) throws SQLException {
+  public void updateBigDecimal(int columnIndex, BigDecimal ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateString(int columnIndex, String x) throws SQLException {
+  public void updateString(int columnIndex, String ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateBytes(int columnIndex, byte[] x) throws SQLException {
+  public void updateBytes(int columnIndex, byte[] ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateDate(int columnIndex, Date x) throws SQLException {
+  public void updateDate(int columnIndex, Date ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateTime(int columnIndex, Time x) throws SQLException {
+  public void updateTime(int columnIndex, Time ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateTimestamp(int columnIndex, Timestamp x) throws SQLException {
+  public void updateTimestamp(int columnIndex, Timestamp ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateAsciiStream(int columnIndex, InputStream x, int length) throws SQLException {
+  public void updateAsciiStream(int columnIndex, InputStream ignored, int length)
+      throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateBinaryStream(int columnIndex, InputStream x, int length) throws SQLException {
+  public void updateBinaryStream(int columnIndex, InputStream ignored, int length)
+      throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateCharacterStream(int columnIndex, Reader x, int length) throws SQLException {
+  public void updateCharacterStream(int columnIndex, Reader ignored, int length)
+      throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateObject(int columnIndex, Object x, int scaleOrLength) throws SQLException {
+  public void updateObject(int columnIndex, Object ignored, int scaleOrLength) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateObject(int columnIndex, Object x) throws SQLException {
+  public void updateObject(int columnIndex, Object ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
@@ -1093,77 +1090,78 @@ public class VitessResultSet implements ResultSet {
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateBoolean(String columnLabel, boolean x) throws SQLException {
+  public void updateBoolean(String columnLabel, boolean ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateByte(String columnLabel, byte x) throws SQLException {
+  public void updateByte(String columnLabel, byte ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateShort(String columnLabel, short x) throws SQLException {
+  public void updateShort(String columnLabel, short ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateInt(String columnLabel, int x) throws SQLException {
+  public void updateInt(String columnLabel, int ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateLong(String columnLabel, long x) throws SQLException {
+  public void updateLong(String columnLabel, long ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateFloat(String columnLabel, float x) throws SQLException {
+  public void updateFloat(String columnLabel, float ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateDouble(String columnLabel, double x) throws SQLException {
+  public void updateDouble(String columnLabel, double ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateBigDecimal(String columnLabel, BigDecimal x) throws SQLException {
+  public void updateBigDecimal(String columnLabel, BigDecimal ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateString(String columnLabel, String x) throws SQLException {
+  public void updateString(String columnLabel, String ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateBytes(String columnLabel, byte[] x) throws SQLException {
+  public void updateBytes(String columnLabel, byte[] ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateDate(String columnLabel, Date x) throws SQLException {
+  public void updateDate(String columnLabel, Date ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateTime(String columnLabel, Time x) throws SQLException {
+  public void updateTime(String columnLabel, Time ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateTimestamp(String columnLabel, Timestamp x) throws SQLException {
+  public void updateTimestamp(String columnLabel, Timestamp ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateAsciiStream(String columnLabel, InputStream x, int length) throws SQLException {
+  public void updateAsciiStream(String columnLabel, InputStream ignored, int length)
+      throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateBinaryStream(String columnLabel, InputStream x, int length)
+  public void updateBinaryStream(String columnLabel, InputStream ignored, int length)
       throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
@@ -1175,12 +1173,13 @@ public class VitessResultSet implements ResultSet {
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateObject(String columnLabel, Object x, int scaleOrLength) throws SQLException {
+  public void updateObject(String columnLabel, Object ignored, int scaleOrLength)
+      throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateObject(String columnLabel, Object x) throws SQLException {
+  public void updateObject(String columnLabel, Object ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
@@ -1285,42 +1284,42 @@ public class VitessResultSet implements ResultSet {
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateRef(int columnIndex, Ref x) throws SQLException {
+  public void updateRef(int columnIndex, Ref ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateRef(String columnLabel, Ref x) throws SQLException {
+  public void updateRef(String columnLabel, Ref ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateBlob(int columnIndex, Blob x) throws SQLException {
+  public void updateBlob(int columnIndex, Blob ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateBlob(String columnLabel, Blob x) throws SQLException {
+  public void updateBlob(String columnLabel, Blob ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateClob(int columnIndex, Clob x) throws SQLException {
+  public void updateClob(int columnIndex, Clob ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateClob(String columnLabel, Clob x) throws SQLException {
+  public void updateClob(String columnLabel, Clob ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateArray(int columnIndex, Array x) throws SQLException {
+  public void updateArray(int columnIndex, Array ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateArray(String columnLabel, Array x) throws SQLException {
+  public void updateArray(String columnLabel, Array ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
@@ -1335,12 +1334,12 @@ public class VitessResultSet implements ResultSet {
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateRowId(int columnIndex, RowId x) throws SQLException {
+  public void updateRowId(int columnIndex, RowId ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateRowId(String columnLabel, RowId x) throws SQLException {
+  public void updateRowId(String columnLabel, RowId ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
@@ -1350,22 +1349,22 @@ public class VitessResultSet implements ResultSet {
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateNString(int columnIndex, String nString) throws SQLException {
+  public void updateNString(int columnIndex, String ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateNString(String columnLabel, String nString) throws SQLException {
+  public void updateNString(String columnLabel, String ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateNClob(int columnIndex, NClob nClob) throws SQLException {
+  public void updateNClob(int columnIndex, NClob ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateNClob(String columnLabel, NClob nClob) throws SQLException {
+  public void updateNClob(String columnLabel, NClob ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
@@ -1420,7 +1419,8 @@ public class VitessResultSet implements ResultSet {
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateNCharacterStream(int columnIndex, Reader x, long length) throws SQLException {
+  public void updateNCharacterStream(int columnIndex, Reader ignored, long length)
+      throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
@@ -1431,28 +1431,31 @@ public class VitessResultSet implements ResultSet {
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateAsciiStream(int columnIndex, InputStream x, long length) throws SQLException {
-    throw new SQLFeatureNotSupportedException(
-        Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
-  }
-
-  public void updateBinaryStream(int columnIndex, InputStream x, long length) throws SQLException {
-    throw new SQLFeatureNotSupportedException(
-        Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
-  }
-
-  public void updateCharacterStream(int columnIndex, Reader x, long length) throws SQLException {
-    throw new SQLFeatureNotSupportedException(
-        Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
-  }
-
-  public void updateAsciiStream(String columnLabel, InputStream x, long length)
+  public void updateAsciiStream(int columnIndex, InputStream ignored, long length)
       throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateBinaryStream(String columnLabel, InputStream x, long length)
+  public void updateBinaryStream(int columnIndex, InputStream ignored, long length)
+      throws SQLException {
+    throw new SQLFeatureNotSupportedException(
+        Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+  }
+
+  public void updateCharacterStream(int columnIndex, Reader ignored, long length)
+      throws SQLException {
+    throw new SQLFeatureNotSupportedException(
+        Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+  }
+
+  public void updateAsciiStream(String columnLabel, InputStream ignored, long length)
+      throws SQLException {
+    throw new SQLFeatureNotSupportedException(
+        Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+  }
+
+  public void updateBinaryStream(String columnLabel, InputStream ignored, long length)
       throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
@@ -1496,7 +1499,7 @@ public class VitessResultSet implements ResultSet {
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateNCharacterStream(int columnIndex, Reader x) throws SQLException {
+  public void updateNCharacterStream(int columnIndex, Reader ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
@@ -1506,27 +1509,27 @@ public class VitessResultSet implements ResultSet {
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateAsciiStream(int columnIndex, InputStream x) throws SQLException {
+  public void updateAsciiStream(int columnIndex, InputStream ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateBinaryStream(int columnIndex, InputStream x) throws SQLException {
+  public void updateBinaryStream(int columnIndex, InputStream ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateCharacterStream(int columnIndex, Reader x) throws SQLException {
+  public void updateCharacterStream(int columnIndex, Reader ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateAsciiStream(String columnLabel, InputStream x) throws SQLException {
+  public void updateAsciiStream(String columnLabel, InputStream ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }
 
-  public void updateBinaryStream(String columnLabel, InputStream x) throws SQLException {
+  public void updateBinaryStream(String columnLabel, InputStream ignored) throws SQLException {
     throw new SQLFeatureNotSupportedException(
         Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
   }

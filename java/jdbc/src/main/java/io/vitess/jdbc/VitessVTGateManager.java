@@ -228,8 +228,8 @@ public class VitessVTGateManager {
     for (VTGateConnection vtGateConn : vtGateConnHashMap.values()) {
       try {
         vtGateConn.close();
-      } catch (IOException e) {
-        exception = new SQLException(e.getMessage(), e);
+      } catch (IOException ioe) {
+        exception = new SQLException(ioe.getMessage(), ioe);
       }
     }
     vtGateConnHashMap.clear();
