@@ -131,7 +131,7 @@ func (ts *Server) GetShardServingCells(ctx context.Context, si *ShardInfo) (serv
 
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
-	servingCells = make([]string, len(cells))
+	servingCells = make([]string, 0)
 	var mu sync.Mutex
 	for _, cell := range cells {
 		wg.Add(1)
@@ -146,6 +146,12 @@ func (ts *Server) GetShardServingCells(ctx context.Context, si *ShardInfo) (serv
 							func() {
 								mu.Lock()
 								defer mu.Unlock()
+								// Check that this cell hasn't been added already
+								for _, servingCell := range servingCells {
+									if servingCell == cell {
+										return
+									}
+								}
 								servingCells = append(servingCells, cell)
 							}()
 						}
@@ -289,11 +295,7 @@ func (ts *Server) RemoveShardServingKeyspace(ctx context.Context, si *ShardInfo,
 }
 
 // UpdateDisableQueryService will make sure the disableQueryService is
-// set appropriately in the shard record. Note we don't support a lot
-// of the corner cases:
-// - we don't support DisableQueryService at the same time as BlacklistedTables,
-//   because it's not used in the same context (vertical vs horizontal sharding)
-// This function should be called while holding the keyspace lock.
+// set appropriately in tablet controls in srvKeyspace.
 func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string, shards []*ShardInfo, tabletType topodatapb.TabletType, cells []string, disableQueryService bool) (err error) {
 	if err = CheckKeyspaceLocked(ctx, keyspace); err != nil {
 		return err
@@ -311,18 +313,19 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 	rec := concurrency.AllErrorRecorder{}
 	for _, cell := range cells {
 		wg.Add(1)
-		go func(cell, keyspace string) {
+		go func(cell string) {
 			defer wg.Done()
 			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 			if err != nil {
 				rec.RecordError(err)
 				return
 			}
-			for _, si := range shards {
-				for _, partition := range srvKeyspace.GetPartitions() {
-					if partition.GetServedType() != tabletType {
-						continue
-					}
+			for _, partition := range srvKeyspace.GetPartitions() {
+				if partition.GetServedType() != tabletType {
+					continue
+				}
+
+				for _, si := range shards {
 					found := false
 					for _, tabletControl := range partition.GetShardTabletControls() {
 						if tabletControl.GetName() == si.ShardName() {
@@ -348,7 +351,7 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 				return
 			}
 
-		}(cell, keyspace)
+		}(cell)
 	}
 	wg.Wait()
 	if rec.HasErrors() {
@@ -383,6 +386,12 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 				return
 			}
 			for _, partition := range srvKeyspace.GetPartitions() {
+
+				// We are finishing the migration, cleaning up tablet controls from the srvKeyspace
+				if tabletType == topodatapb.TabletType_MASTER {
+					partition.ShardTabletControls = nil
+				}
+
 				if partition.GetServedType() != tabletType {
 					continue
 				}
@@ -403,6 +412,7 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 					}
 					shardReferences = append(shardReferences, shardReference)
 				}
+
 				partition.ShardReferences = shardReferences
 			}
 
