@@ -47,8 +47,6 @@ const sqlCreateShardMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.shard_metada
 // old version of Vitess, or databases that are getting converted to run under
 // Vitess.
 func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string) error {
-	log.Infof("Populating _vt.local_metadata table...")
-
 	// Get a non-pooled DBA connection.
 	conn, err := mysqld.GetDbaConnection()
 	if err != nil {
@@ -56,6 +54,13 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string)
 	}
 	defer conn.Close()
 
+	// Check if metadata schema already exists
+	if rtbl, err := conn.ExecuteFetch("SHOW TABLES FROM _vt LIKE '%_metadata'", 2, false); err == nil && len(rtbl.Rows) == 2 {
+		// Metadata tables already exist; bail
+		return nil
+	}
+
+	log.Infof("Populating _vt.local_metadata table...")
 	// Disable replication on this session. We close the connection after using
 	// it, so there's no need to re-enable replication when we're done.
 	if _, err := conn.ExecuteFetch("SET @@session.sql_log_bin = 0", 0, false); err != nil {

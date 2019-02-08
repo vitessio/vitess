@@ -173,17 +173,7 @@ func TestInitTablet(t *testing.T) {
 	}
 	db := fakesqldb.New(t)
 	defer db.Close()
-	db.AddQueryPattern(`(SET|CREATE|BEGIN|INSERT|COMMIT)\b.*`, &sqltypes.Result{})
-	/*
-		db.AddQuery("SET @@session.sql_log_bin = 0", &sqltypes.Result{})
-		db.AddQuery("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{})
-		db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.local_metadata.*`, &sqltypes.Result{})
-		db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.shard_metadata.*`, &sqltypes.Result{})
-		db.AddQuery("BEGIN", &sqltypes.Result{})
-		db.AddQueryPattern(`INSERT INTO _vt.local_metadata.*`, &sqltypes.Result{})
-		db.AddQueryPattern(`INSERT INTO _vt.shard_metadata.*`, &sqltypes.Result{})
-		db.AddQuery("COMMIT", &sqltypes.Result{})
-	*/
+	db.AddQueryPattern(`(SHOW|SET|CREATE|BEGIN|INSERT|COMMIT)\b.*`, &sqltypes.Result{})
 
 	// start with a tablet record that doesn't exist
 	port := int32(1234)
