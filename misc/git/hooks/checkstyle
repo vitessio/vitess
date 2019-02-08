@@ -1,4 +1,7 @@
-#!/bin/bash -e
+#!/bin/bash
+
+set -e
+
 function get_module() {
   local path=$1;
   while true; do
@@ -12,9 +15,11 @@ function get_module() {
   done
 }
 
+cd java;
+
 modules=();
 
-for file in $(git diff --name-only --cached \*.java); do
+for file in $(git diff --relative --name-only --cached \*.java); do
   module=$(get_module "$file");
   if [ "" != "$module" ] \
       && [[ ! " ${modules[@]} " =~ " $module " ]]; then
@@ -35,3 +40,5 @@ export MAVEN_OPTS="-client
   -Xverify:none";
 
 mvn -q -pl "$modules_arg" checkstyle:check;
+
+cd -;
