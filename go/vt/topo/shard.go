@@ -58,9 +58,9 @@ func addCells(left, right []string) []string {
 
 // removeCellsFromList will remove the cells from the provided list. It returns
 // the new list, and a boolean that indicates the returned list is empty.
-func removeCellsFromList(cells, toRemove []string) []string {
-	leftoverCells := make([]string, 0, len(cells))
-	for _, cell := range cells {
+func removeCellsFromList(toRemove, fullList []string) []string {
+	leftoverCells := make([]string, 0)
+	for _, cell := range fullList {
 		if !InCellList(cell, toRemove) {
 			leftoverCells = append(leftoverCells, cell)
 		}
@@ -414,7 +414,7 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 }
 
 func (si *ShardInfo) removeCellsFromTabletControl(tc *topodatapb.Shard_TabletControl, tabletType topodatapb.TabletType, cells []string) {
-	result := removeCellsFromList(tc.Cells, cells)
+	result := removeCellsFromList(cells, tc.Cells)
 	if len(result) == 0 {
 		// we don't have any cell left, we need to clear this record
 		var tabletControls []*topodatapb.Shard_TabletControl
