@@ -257,12 +257,17 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 
 	// Create the connection.
 	conn, err = ts.factory.Create(cell, ci.ServerAddress, ci.Root)
-	if err != nil {
+	switch {
+	case err == nil:
+		conn = NewStatsConn(cell, conn)
+		ts.cells[cell] = conn
+		return conn, nil
+	case IsErrType(err, NoNode):
+		err = fmt.Errorf("failed to create topo connection to %v, %v: %v", ci.ServerAddress, ci.Root, err)
+		return nil, NewError(NoNode, err.Error())
+	default:
 		return nil, fmt.Errorf("failed to create topo connection to %v, %v: %v", ci.ServerAddress, ci.Root, err)
 	}
-	conn = NewStatsConn(cell, conn)
-	ts.cells[cell] = conn
-	return conn, nil
 }
 
 // GetRegionByCell returns the region group this `cell` belongs to, if there's none, it returns the `cell` as region.

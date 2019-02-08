@@ -137,13 +137,16 @@ func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update 
 // We first make sure no Shard record points to the cell.
 func (ts *Server) DeleteCellInfo(ctx context.Context, cell string) error {
 	srvKeyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
-	if err != nil {
+	switch {
+	case err == nil:
+		if len(srvKeyspaces) != 0 {
+			// TODO @rafael - implement this function and expose it via a vtctld command
+			return fmt.Errorf("cell %v has serving keyspaces. Before deleting, delete serving keyspace with: DeleteSrvKeyspaces", cell)
+		}
+	case IsErrType(err, NoNode):
+		// Nothing to do.
+	default:
 		return fmt.Errorf("GetSrvKeyspaceNames() failed: %v", err)
-	}
-
-	if len(srvKeyspaces) != 0 {
-		// TODO @rafael - implement this function and expose it via a vtctld command
-		return fmt.Errorf("cell %v has serving keyspaces. Before deleting, delete serving keyspace with: DeleteSrvKeyspaces", cell)
 	}
 
 	filePath := pathForCellInfo(cell)
