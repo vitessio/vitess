@@ -262,7 +262,7 @@
           <configLocation>google_checks.xml</configLocation>
           <suppressionsLocation>checkstyle-suppression.xml</suppressionsLocation>
           <consoleOutput>true</consoleOutput>
-          <failsOnError>false</failsOnError>
+          <failsOnError>true</failsOnError>
           <failOnViolation>true</failOnViolation>
           <violationSeverity>warning</violationSeverity>
         </configuration>
