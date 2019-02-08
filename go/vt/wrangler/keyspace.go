@@ -213,7 +213,7 @@ func (wr *Wrangler) cancelHorizontalResharding(ctx context.Context, keyspace, sh
 				return err
 			}
 		}
-		destinationShards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
+		updatedShard, err := wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
 			si.TabletControls = nil
 			si.SourceShards = nil
 			return nil
@@ -221,6 +221,9 @@ func (wr *Wrangler) cancelHorizontalResharding(ctx context.Context, keyspace, sh
 		if err != nil {
 			return err
 		}
+
+		destinationShards[i] = updatedShard
+
 		if err := wr.RefreshTabletsByShard(ctx, si, nil, nil); err != nil {
 			return err
 		}
@@ -506,18 +509,18 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 
 	si := sourceShards[0]
 	for _, srvKeyspace := range srvKeyspaces {
-		var types []string
+		var shardServedTypes []string
 		for _, partition := range srvKeyspace.GetPartitions() {
 			if partition.GetServedType() != topodatapb.TabletType_MASTER {
 				for _, shardReference := range partition.GetShardReferences() {
 					if shardReference.GetKeyRange() == si.GetKeyRange() {
-						types = append(types, partition.GetServedType().String())
+						shardServedTypes = append(shardServedTypes, partition.GetServedType().String())
 					}
 				}
 			}
 		}
-		if len(types) > 0 {
-			return fmt.Errorf("cannot migrate MASTER away from %v/%v until everything else is migrated. Make sure that the following types are migrated first: %v", si.Keyspace(), si.ShardName(), strings.Join(types, ", "))
+		if len(shardServedTypes) > 0 {
+			return fmt.Errorf("cannot migrate MASTER away from %v/%v until everything else is migrated. Make sure that the following types are migrated first: %v", si.Keyspace(), si.ShardName(), strings.Join(shardServedTypes, ", "))
 		}
 	}
 
@@ -598,6 +601,7 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		// Similar to updateShardRecords, but we also remove SourceShards.
 		destinationShards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
 			si.SourceShards = nil
+			si.IsMasterServing = true
 			return nil
 		})
 		if err != nil {
@@ -624,11 +628,17 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		}
 	}
 
+	// Update srvKeyspace now
+	if err = wr.ts.MigrateServedType(ctx, keyspace, destinationShards, sourceShards, topodatapb.TabletType_MASTER, nil); err != nil {
+		return err
+	}
+
 	event.DispatchUpdate(ev, "finished")
 	return nil
 }
 
 func (wr *Wrangler) cancelMasterMigrateServedTypes(ctx context.Context, keyspace string, sourceShards []*topo.ShardInfo) {
+	wr.Logger().Infof("source shards cancelMasterMigrateServedTypes: %v", sourceShards)
 	if err := wr.updateShardRecords(ctx, keyspace, sourceShards, nil, topodatapb.TabletType_MASTER, false, true); err != nil {
 		wr.Logger().Errorf2(err, "failed to re-enable source masters")
 		return
@@ -723,8 +733,7 @@ func (wr *Wrangler) updateShardRecords(ctx context.Context, keyspace string, sha
 	}
 
 	for i, si := range shards {
-
-		shards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
+		updatedShard, err := wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
 			if clearSourceShards {
 				si.SourceShards = nil
 			}
@@ -734,6 +743,9 @@ func (wr *Wrangler) updateShardRecords(ctx context.Context, keyspace string, sha
 		if err != nil {
 			return err
 		}
+
+		shards[i] = updatedShard
+
 		// For 'to' shards, refresh to make them serve.
 		// The 'from' shards will be refreshed after traffic has migrated.
 		if !isFrom {
@@ -747,17 +759,25 @@ func (wr *Wrangler) updateShardRecords(ctx context.Context, keyspace string, sha
 // for all master tablet control records.
 func (wr *Wrangler) updateFrozenFlag(ctx context.Context, shards []*topo.ShardInfo, value bool) (err error) {
 	for i, si := range shards {
-		shards[i], err = wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
+		updatedShard, err := wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
 			tc := si.GetTabletControl(topodatapb.TabletType_MASTER)
-			if tc == nil {
-				return fmt.Errorf("unexpected: missing tablet control record for source %v/%v", si.Keyspace(), si.ShardName())
+			if tc != nil {
+				tc.Frozen = value
+				return nil
 			}
-			tc.Frozen = value
+			// This shard does not have a tablet control record, adding one to set frozen flag
+			tc = &topodatapb.Shard_TabletControl{
+				TabletType: topodatapb.TabletType_MASTER,
+				Frozen:     value,
+			}
+			si.TabletControls = []*topodatapb.Shard_TabletControl{tc}
 			return nil
 		})
 		if err != nil {
 			return err
 		}
+
+		shards[i] = updatedShard
 	}
 	return nil
 }
