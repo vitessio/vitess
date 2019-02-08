@@ -177,6 +177,20 @@ copy_src_cmd="cp -R /tmp/src/!(vendor) ."
 # Git repository.
 copy_src_cmd=$(append_cmd "$copy_src_cmd" "cp -R /tmp/src/.git .")
 
+run_bootstrap=0
+if [[ $(git diff-tree -r --name-only HEAD master | grep "vendor.json") ]]; then
+    copy_src_cmd=$(append_cmd "$copy_src_cmd" "mkdir -p vendor")
+    copy_src_cmd=$(append_cmd "$copy_src_cmd" "cp /tmp/src/vendor/vendor.json ./vendor")
+    run_bootstrap=1
+fi
+if [[ $(git diff-tree -r --name-only HEAD master | grep "bootstrap.sh") ]]; then
+    run_bootstrap=1
+fi
+
+if [ $run_bootstrap -eq 1 ]; then
+    copy_src_cmd=$(append_cmd "$copy_src_cmd" "./bootstrap.sh")
+fi
+
 # Construct the command we will actually run.
 #
 # Uncomment the next line if you need to debug "bashcmd".
