@@ -77,7 +77,7 @@ func TestCreateShardCustomSharding(t *testing.T) {
 	if si, err := ts.GetShard(ctx, keyspace, shard0); err != nil {
 		t.Fatalf("GetShard(shard0) failed: %v", err)
 	} else {
-		if len(si.ServedTypes) != 3 {
+		if !si.IsMasterServing {
 			t.Fatalf("shard0 should have all 3 served types")
 		}
 	}
@@ -90,7 +90,7 @@ func TestCreateShardCustomSharding(t *testing.T) {
 	if si, err := ts.GetShard(ctx, keyspace, shard1); err != nil {
 		t.Fatalf("GetShard(shard1) failed: %v", err)
 	} else {
-		if len(si.ServedTypes) != 3 {
+		if !si.IsMasterServing {
 			t.Fatalf("shard1 should have all 3 served types")
 		}
 	}
