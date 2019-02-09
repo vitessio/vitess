@@ -144,13 +144,14 @@ func TestMigrateServedFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if len(si.TabletControls) != 1 || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
+	expected := []*topodatapb.Shard_TabletControl{
 		{
 			TabletType:        topodatapb.TabletType_RDONLY,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
-	}) {
-		t.Fatalf("rdonly type doesn't have right blacklisted tables")
+	}
+	if len(si.TabletControls) != 1 || !reflect.DeepEqual(si.TabletControls, expected) {
+		t.Fatalf("rdonly type doesn't have right blacklisted tables. Expected: %v, got: %v", expected, si.TabletControls)
 	}
 
 	// migrate replica over
