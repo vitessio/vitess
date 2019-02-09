@@ -54,18 +54,6 @@ func TestTabletExternallyReparented(t *testing.T) {
 	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
 	badSlave := NewFakeTablet(t, wr, "cell1", 4, topodatapb.TabletType_REPLICA, nil)
 
-	// Add a new Cell to the Shard, that doesn't map to any read topo cell,
-	// to simulate a data center being unreachable.
-	_, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
-		if !si.HasCell("cell666") {
-			si.Cells = append(si.Cells, "cell666")
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("UpdateShardFields failed: %v", err)
-	}
-
 	// Slightly unrelated test: make sure we can find the tablets
 	// even with a datacenter being down.
 	tabletMap, err := ts.GetTabletMapForShardByCell(ctx, "test_keyspace", "0", []string{"cell1"})

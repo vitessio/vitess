@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -42,8 +43,14 @@ func checkShardServedTypes(t *testing.T, ts *topo.Server, shard string, expected
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if len(si.ServedTypes) != expected {
-		t.Fatalf("shard %v has wrong served types: %#v", shard, si.ServedTypes)
+
+	servedTypes, err := ts.GetShardServingTypes(ctx, si)
+	if err != nil {
+		t.Fatalf("GetShard failed: %v", err)
+	}
+
+	if len(servedTypes) != expected {
+		t.Fatalf("shard %v has wrong served types: got: %v, expected: %v", shard, len(servedTypes), expected)
 	}
 }
 
@@ -100,6 +107,11 @@ func TestMigrateServedTypes(t *testing.T) {
 	dest2Rdonly := NewFakeTablet(t, wr, "cell1", 32, topodatapb.TabletType_RDONLY, nil,
 		TabletKeyspaceShard(t, "ks", "80-"))
 
+	// Build keyspace graph
+	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, "ks", []string{"cell1"})
+	if err != nil {
+		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
+	}
 	// double check the shards have the right served types
 	checkShardServedTypes(t, ts, "0", 3)
 	checkShardServedTypes(t, ts, "-80", 0)
