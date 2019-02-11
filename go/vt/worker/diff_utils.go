@@ -580,9 +580,8 @@ func (rd *RowDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
 			log.Errorf("Draining extra row(s) found on the right starting with: %v", right)
 			if count, err := rd.right.Drain(); err != nil {
 				return dr, err
-			} else {
-				dr.extraRowsRight += 1 + count
 			}
+			dr.extraRowsRight += 1 + count
 			return
 		}
 		if right == nil {
@@ -591,9 +590,8 @@ func (rd *RowDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
 			log.Errorf("Draining extra row(s) found on the left starting with: %v", left)
 			if count, err := rd.left.Drain(); err != nil {
 				return dr, err
-			} else {
-				dr.extraRowsLeft += 1 + count
 			}
+			dr.extraRowsLeft += 1 + count
 			return
 		}
 
