@@ -57,6 +57,14 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 		return err
 	}
 
+	// The caller intents to update all cells in this case
+	if len(cells) == 0 {
+		cells, err = ts.GetCellInfoNames(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
 	shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
