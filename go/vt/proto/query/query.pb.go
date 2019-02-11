@@ -3,16 +3,20 @@
 
 package query // import "vitess.io/vitess/go/vt/proto/query"
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
-import topodata "vitess.io/vitess/go/vt/proto/topodata"
-import vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
+import (
+	proto "github.com/golang/protobuf/proto"
+	fmt "fmt"
+	math "math"
+	topodata "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
-var _ = proto.Marshal
-var _ = fmt.Errorf
-var _ = math.Inf
+var (
+	_ = proto.Marshal
+	_ = fmt.Errorf
+	_ = math.Inf
+)
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the proto package it is being compiled against.
@@ -225,7 +229,7 @@ const (
 	// SET specifies a SET type.
 	// Properties: 27, IsQuoted.
 	Type_SET Type = 2075
-	// TUPLE specifies a a tuple. This cannot
+	// TUPLE specifies a tuple. This cannot
 	// be returned in a QueryResult, but it can
 	// be sent as a bind var.
 	// Properties: 28, None.
