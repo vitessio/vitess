@@ -54,6 +54,12 @@ func TestTabletExternallyReparented(t *testing.T) {
 	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
 	badSlave := NewFakeTablet(t, wr, "cell1", 4, topodatapb.TabletType_REPLICA, nil)
 
+	// Build keyspace graph
+	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1", "cell2"})
+	if err != nil {
+		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
+	}
+
 	// Slightly unrelated test: make sure we can find the tablets
 	// even with a datacenter being down.
 	tabletMap, err := ts.GetTabletMapForShardByCell(ctx, "test_keyspace", "0", []string{"cell1"})
@@ -80,9 +86,11 @@ func TestTabletExternallyReparented(t *testing.T) {
 		t.Fatalf("FindTabletByHostAndPort(master) worked in cell2: %v %v", err, master)
 	}
 
+	// Get tablet map for all cells.  If there were to be failures talking to local cells, this will return the tablet map
+	// and forward a partial result error
 	tabletMap, err = ts.GetTabletMapForShard(ctx, "test_keyspace", "0")
-	if !topo.IsErrType(err, topo.PartialResult) {
-		t.Fatalf("GetTabletMapForShard should have returned ErrPartialResult but got: %v", err)
+	if err != nil {
+		t.Fatalf("GetTabletMapForShard should nil but got: %v", err)
 	}
 	master, err = topotools.FindTabletByHostAndPort(tabletMap, oldMaster.Tablet.Hostname, "vt", oldMaster.Tablet.PortMap["vt"])
 	if err != nil || !topoproto.TabletAliasEqual(master, oldMaster.Tablet.Alias) {
