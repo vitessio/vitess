@@ -75,6 +75,7 @@
 
     <protobuf.java.version>3.6.1</protobuf.java.version>
     <protobuf.protoc.version>3.6.1</protobuf.protoc.version>
+    <checkstyle.plugin.version>3.0.0</checkstyle.plugin.version>
   </properties>
 
   <!-- Add new dependencies here and then add it below or in your module. -->
@@ -255,6 +256,28 @@
               <failOnWarning>true</failOnWarning>
               <outputXML>true</outputXML>
             </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>${checkstyle.plugin.version}</version>
+        <configuration>
+          <configLocation>google_checks.xml</configLocation>
+          <suppressionsLocation>checkstyle-suppression.xml</suppressionsLocation>
+          <consoleOutput>true</consoleOutput>
+          <failsOnError>true</failsOnError>
+          <failOnViolation>true</failOnViolation>
+          <violationSeverity>warning</violationSeverity>
+        </configuration>
+        <executions>
+          <execution>
+            <id>validate</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
           </execution>
         </executions>
       </plugin>

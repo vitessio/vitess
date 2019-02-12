@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,18 +19,11 @@ package io.vitess.hadoop;
 import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+
 import io.vitess.client.TestEnv;
 import io.vitess.client.TestUtil;
 import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
-import java.io.IOException;
-import java.lang.reflect.Type;
-import java.sql.SQLException;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
-import junit.extensions.TestSetup;
-import junit.framework.TestSuite;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -43,17 +36,26 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.sql.SQLException;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+
+import junit.extensions.TestSetup;
+import junit.framework.TestSuite;
 import vttest.Vttest.Keyspace;
 import vttest.Vttest.Shard;
 import vttest.Vttest.VTTestTopology;
-
 
 
 /**
  * Integration tests for MapReductions in Vitess. These tests use an in-process Hadoop cluster via
  * {@link HadoopTestCase}. These tests are JUnit3 style because of this dependency. Vitess setup for
  * these tests require at least one rdonly instance per shard.
- *
  */
 public class MapReduceIT extends HadoopTestCase {
 
@@ -114,7 +116,8 @@ public class MapReduceIT extends HadoopTestCase {
 
       // Rows are written as JSON since this is TextOutputFormat.
       String rowJson = parts[1];
-      Type mapType = new TypeToken<Map<String, String>>() {}.getType();
+      Type mapType = new TypeToken<Map<String, String>>() {
+      }.getType();
       @SuppressWarnings("unchecked")
       Map<String, String> map = (Map<String, String>) gson.fromJson(rowJson, mapType);
       actualNames.add(map.get("name"));
@@ -185,6 +188,7 @@ public class MapReduceIT extends HadoopTestCase {
 
   public static class TableMapper
       extends Mapper<NullWritable, RowWritable, IntWritable, RowWritable> {
+
     @Override
     public void map(NullWritable key, RowWritable value, Context context)
         throws IOException, InterruptedException {
@@ -199,6 +203,7 @@ public class MapReduceIT extends HadoopTestCase {
 
   public static class CountReducer
       extends Reducer<IntWritable, RowWritable, NullWritable, IntWritable> {
+
     @Override
     public void reduce(IntWritable key, Iterable<RowWritable> values, Context context)
         throws IOException, InterruptedException {

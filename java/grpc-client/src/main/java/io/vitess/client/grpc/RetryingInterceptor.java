@@ -3,15 +3,6 @@ package io.vitess.client.grpc;
 import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
-
-import javax.annotation.Nullable;
-
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -22,14 +13,24 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder;
 
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
+import javax.annotation.Nullable;
+
 /**
- * RetryingInterceptor is used for retrying certain classes of failed requests in the underlying gRPC connection.
- * At this time it handles {@link MethodDescriptor.MethodType.UNARY} requests with status {@link Status.Code.UNAVAILABLE}, which is
- * according to the spec meant to be a transient error. This class can be configured with {@link RetryingInterceptorConfig} to
- * determine what level of exponential backoff to apply to the handled types of failing requests.
+ * RetryingInterceptor is used for retrying certain classes of failed requests in the underlying
+ * gRPC connection. At this time it handles {@link MethodDescriptor.MethodType.UNARY} requests with
+ * status {@link Status.Code.UNAVAILABLE}, which is according to the spec meant to be a transient
+ * error. This class can be configured with {@link RetryingInterceptorConfig} to determine what
+ * level of exponential backoff to apply to the handled types of failing requests.
  *
- * When enabled, this interceptor will retry valid requests with an exponentially increasing backoff time up to the maximum
- * time defined by the {@link io.grpc.Deadline} in the call's {@link CallOptions}.
+ * When enabled, this interceptor will retry valid requests with an exponentially increasing backoff
+ * time up to the maximum time defined by the {@link io.grpc.Deadline} in the call's {@link
+ * CallOptions}.
  */
 public class RetryingInterceptor implements ClientInterceptor {
 
@@ -52,6 +53,7 @@ public class RetryingInterceptor implements ClientInterceptor {
   }
 
   private class RetryingCall<ReqT, RespT> extends ClientCall<ReqT, RespT> {
+
     private final MethodDescriptor<ReqT, RespT> method;
     private final CallOptions callOptions;
     private final Channel channel;
@@ -71,8 +73,8 @@ public class RetryingInterceptor implements ClientInterceptor {
     private final double backoffMultiplier;
 
     RetryingCall(MethodDescriptor<ReqT, RespT> method,
-                 CallOptions callOptions, Channel channel, Context context,
-                 RetryingInterceptorConfig config) {
+        CallOptions callOptions, Channel channel, Context context,
+        RetryingInterceptorConfig config) {
       this.method = method;
       this.callOptions = callOptions;
       this.channel = channel;
@@ -136,7 +138,7 @@ public class RetryingInterceptor implements ClientInterceptor {
 
     private long computeSleepTime() {
       long currentBackoff = nextBackoffMillis;
-      nextBackoffMillis = Math.min((long) ( currentBackoff * backoffMultiplier), maxBackoffMillis);
+      nextBackoffMillis = Math.min((long) (currentBackoff * backoffMultiplier), maxBackoffMillis);
       return currentBackoff;
     }
 
@@ -194,6 +196,7 @@ public class RetryingInterceptor implements ClientInterceptor {
     }
 
     private class AttemptListener extends ClientCall.Listener<RespT> {
+
       final ClientCall<ReqT, RespT> call;
       Metadata responseHeaders;
       RespT responseMessage;

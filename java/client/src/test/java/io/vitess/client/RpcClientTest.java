@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,27 +20,6 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
-import java.nio.charset.StandardCharsets;
-import java.sql.SQLDataException;
-import java.sql.SQLException;
-import java.sql.SQLIntegrityConstraintViolationException;
-import java.sql.SQLInvalidAuthorizationSpecException;
-import java.sql.SQLNonTransientException;
-import java.sql.SQLRecoverableException;
-import java.sql.SQLSyntaxErrorException;
-import java.sql.SQLTimeoutException;
-import java.sql.SQLTransientException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import org.joda.time.DateTime;
-import org.joda.time.Duration;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
 
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.Row;
@@ -56,6 +35,28 @@ import io.vitess.proto.Topodata.TabletType;
 import io.vitess.proto.Vtgate.SplitQueryResponse;
 import io.vitess.proto.Vtrpc.CallerID;
 
+import java.nio.charset.StandardCharsets;
+import java.sql.SQLDataException;
+import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
+import java.sql.SQLInvalidAuthorizationSpecException;
+import java.sql.SQLNonTransientException;
+import java.sql.SQLRecoverableException;
+import java.sql.SQLSyntaxErrorException;
+import java.sql.SQLTimeoutException;
+import java.sql.SQLTransientException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.joda.time.DateTime;
+import org.joda.time.Duration;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
 /**
  * RpcClientTest tests a given implementation of RpcClient against a mock vtgate server
  * (go/cmd/vtgateclienttest).
@@ -64,6 +65,7 @@ import io.vitess.proto.Vtrpc.CallerID;
  * vtgateclienttest server with the necessary parameters and then set 'client'.
  */
 public abstract class RpcClientTest {
+
   protected static RpcClient client;
   // ready is true when "vtgateclienttest" can accept RPCs. It is set by "waitForVtgateclienttest"
   // and reset to "false" at the start of each test class by "resetReady".
@@ -86,7 +88,8 @@ public abstract class RpcClientTest {
 
     // ctx is used by all RPCs within one test method. A deadline is set to cap test execution.
     // (RPCs will fail with DEADLINE_EXCEEDED if they keep using "ctx" 5 seconds from now.)
-    ctx = Context.getDefault().withDeadlineAfter(Duration.standardSeconds(5)).withCallerId(CALLER_ID);
+    ctx = Context.getDefault().withDeadlineAfter(Duration.standardSeconds(5))
+        .withCallerId(CALLER_ID);
   }
 
   private static final String ECHO_PREFIX = "echo://";
@@ -111,20 +114,20 @@ public abstract class RpcClientTest {
   private static final String SHARDS_ECHO = "[-80 80-]";
 
   private static final List<byte[]> KEYSPACE_IDS =
-      Arrays.asList(new byte[] {1, 2, 3, 4}, new byte[] {5, 6, 7, 8});
+      Arrays.asList(new byte[]{1, 2, 3, 4}, new byte[]{5, 6, 7, 8});
   private static final String KEYSPACE_IDS_ECHO = "[[1 2 3 4] [5 6 7 8]]";
 
   private static final List<KeyRange> KEY_RANGES =
-      Arrays.asList(KeyRange.newBuilder().setStart(ByteString.copyFrom(new byte[] {1, 2, 3, 4}))
-          .setEnd(ByteString.copyFrom(new byte[] {5, 6, 7, 8})).build());
+      Arrays.asList(KeyRange.newBuilder().setStart(ByteString.copyFrom(new byte[]{1, 2, 3, 4}))
+          .setEnd(ByteString.copyFrom(new byte[]{5, 6, 7, 8})).build());
   private static final String KEY_RANGES_ECHO =
       "[start:\"\\001\\002\\003\\004\" end:\"\\005\\006\\007\\010\" ]";
 
   private static final ImmutableMap<byte[], Object> ENTITY_KEYSPACE_IDS =
       new ImmutableMap.Builder<byte[], Object>()
-          .put(new byte[] {1, 2, 3}, 123)
-          .put(new byte[] {4, 5, 6}, 2.5)
-          .put(new byte[] {7, 8, 9}, new byte[] {1, 2, 3})
+          .put(new byte[]{1, 2, 3}, 123)
+          .put(new byte[]{4, 5, 6}, 2.5)
+          .put(new byte[]{7, 8, 9}, new byte[]{1, 2, 3})
           .build();
   private static final String ENTITY_KEYSPACE_IDS_ECHO =
       "[type:INT64 value:\"123\" keyspace_id:\"\\001\\002\\003\"  type:FLOAT64 value:\"2.5\" keyspace_id:\"\\004\\005\\006\"  type:VARBINARY value:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]";
@@ -132,12 +135,13 @@ public abstract class RpcClientTest {
   private static final TabletType TABLET_TYPE = TabletType.REPLICA;
   private static final String TABLET_TYPE_ECHO = TABLET_TYPE.toString();
   private static final Query.ExecuteOptions.IncludedFields ALL_FIELDS = Query.ExecuteOptions.IncludedFields.ALL;
-  private static final String OPTIONS_ALL_FIELDS_ECHO = "included_fields:" + ALL_FIELDS.toString() + " ";
+  private static final String OPTIONS_ALL_FIELDS_ECHO =
+      "included_fields:" + ALL_FIELDS.toString() + " ";
 
   private static final ImmutableMap<String, Object> BIND_VARS = new ImmutableMap.Builder<String, Object>()
       .put("int", 123)
       .put("float", 2.5)
-      .put("bytes", new byte[] {1, 2, 3})
+      .put("bytes", new byte[]{1, 2, 3})
       .build();
   private static final String BIND_VARS_ECHO =
       "map[bytes:type:VARBINARY value:\"\\001\\002\\003\"  float:type:FLOAT64 value:\"2.5\"  int:type:INT64 value:\"123\" ]";
@@ -187,9 +191,6 @@ public abstract class RpcClientTest {
    *
    * We will constantly execute the "GetSrvKeyspace" RPC and return when the binary responded
    * successfully.
-   *
-   * @throws SQLException
-   * @throws InterruptedException
    */
   private void waitForVtgateclienttest() throws SQLException, InterruptedException {
     if (ready) {
@@ -213,7 +214,9 @@ public abstract class RpcClientTest {
           throw e;
         }
 
-        System.out.format("Waiting until vtgateclienttest is ready and responds (got exception: %s)\n", rootCause);
+        System.out
+            .format("Waiting until vtgateclienttest is ready and responds (got exception: %s)\n",
+                rootCause);
         Thread.sleep(100 /* milliseconds */);
         waited = true;
       }
@@ -221,7 +224,8 @@ public abstract class RpcClientTest {
 
     if (waited) {
       double waitTimeSeconds = (DateTime.now().getMillis() - start.getMillis()) / 1000.0;
-      System.out.format("Had to wait %.1f second(s) until vtgateclienttest was ready.\n", waitTimeSeconds);
+      System.out.format("Had to wait %.1f second(s) until vtgateclienttest was ready.\n",
+          waitTimeSeconds);
     }
     ready = true;
   }
@@ -237,7 +241,8 @@ public abstract class RpcClientTest {
     Assert.assertEquals(NONTX_V3_SESSION_ECHO, echo.get("session"));
 
     echo = getEcho(
-        conn.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
+        conn.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE,
+            ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -307,7 +312,8 @@ public abstract class RpcClientTest {
   public void testEchoStreamExecute() throws Exception {
     Map<String, String> echo;
 
-    echo = getEcho(conn.streamExecute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
+    echo = getEcho(
+        conn.streamExecute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
@@ -363,7 +369,8 @@ public abstract class RpcClientTest {
     tx = conn.begin(ctx);
 
     echo = getEcho(
-        tx.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
+        tx.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE,
+            ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -462,7 +469,7 @@ public abstract class RpcClientTest {
             123,
             1000,
             Algorithm.FULL_SCAN)
-        .get(0);
+            .get(0);
     Assert.assertEquals(expected, actual);
   }
 
@@ -471,8 +478,8 @@ public abstract class RpcClientTest {
     SrvKeyspace expected = SrvKeyspace.newBuilder()
         .addPartitions(KeyspacePartition.newBuilder().setServedType(TabletType.REPLICA)
             .addShardReferences(ShardReference.newBuilder().setName("shard0").setKeyRange(KeyRange
-                .newBuilder().setStart(ByteString.copyFrom(new byte[] {0x40, 0, 0, 0, 0, 0, 0, 0}))
-                .setEnd(ByteString.copyFrom(new byte[] {(byte) 0x80, 0, 0, 0, 0, 0, 0, 0})).build())
+                .newBuilder().setStart(ByteString.copyFrom(new byte[]{0x40, 0, 0, 0, 0, 0, 0, 0}))
+                .setEnd(ByteString.copyFrom(new byte[]{(byte) 0x80, 0, 0, 0, 0, 0, 0, 0})).build())
                 .build())
             .build())
         .setShardingColumnName("sharding_column_name")
@@ -484,6 +491,7 @@ public abstract class RpcClientTest {
   }
 
   abstract static class Executable {
+
     abstract void execute(String query) throws Exception;
   }
 
@@ -521,6 +529,7 @@ public abstract class RpcClientTest {
   }
 
   abstract static class TransactionExecutable {
+
     abstract void execute(VTGateBlockingTx tx, String query) throws Exception;
   }
 
@@ -602,7 +611,8 @@ public abstract class RpcClientTest {
     checkExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
-        conn.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
+        conn.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE,
+            ALL_FIELDS);
       }
     });
     checkExecuteErrors(new Executable() {
@@ -647,20 +657,23 @@ public abstract class RpcClientTest {
     checkStreamExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
-        conn.streamExecuteShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS).next();
-      }
-    });
-    checkStreamExecuteErrors(new Executable() {
-      @Override
-      void execute(String query) throws Exception {
-        conn.streamExecuteKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS)
+        conn.streamExecuteShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS)
             .next();
       }
     });
     checkStreamExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
-        conn.streamExecuteKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE, ALL_FIELDS)
+        conn.streamExecuteKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE,
+            ALL_FIELDS)
+            .next();
+      }
+    });
+    checkStreamExecuteErrors(new Executable() {
+      @Override
+      void execute(String query) throws Exception {
+        conn.streamExecuteKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE,
+            ALL_FIELDS)
             .next();
       }
     });
@@ -683,7 +696,8 @@ public abstract class RpcClientTest {
     checkTransactionExecuteErrors(new TransactionExecutable() {
       @Override
       void execute(VTGateBlockingTx tx, String query) throws Exception {
-        tx.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
+        tx.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE,
+            ALL_FIELDS);
       }
     });
     checkTransactionExecuteErrors(new TransactionExecutable() {
@@ -703,7 +717,8 @@ public abstract class RpcClientTest {
       @Override
       void execute(VTGateBlockingTx tx, String query) throws Exception {
         tx.executeBatchShards(ctx,
-            Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, query, BIND_VARS)), TABLET_TYPE, ALL_FIELDS);
+            Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, query, BIND_VARS)), TABLET_TYPE,
+            ALL_FIELDS);
       }
     });
     checkTransactionExecuteErrors(new TransactionExecutable() {
