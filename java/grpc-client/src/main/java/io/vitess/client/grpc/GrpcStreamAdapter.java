@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,6 +18,7 @@ package io.vitess.client.grpc;
 
 import io.grpc.stub.StreamObserver;
 import io.vitess.client.StreamIterator;
+
 import java.sql.SQLDataException;
 import java.sql.SQLException;
 import java.util.NoSuchElementException;
@@ -29,9 +30,9 @@ import java.util.NoSuchElementException;
  * gRPC {@code StreamObserver} interface.
  *
  * <p>This class is abstract because it needs to be told how to extract the result
- * (e.g. {@link io.vitess.proto.Query.QueryResult QueryResult}) from a given RPC response
- * (e.g. {@link io.vitess.proto.Vtgate.StreamExecuteResponse StreamExecuteResponse}).
- * Callers must therefore implement {@link #getResult(Object)} when instantiating this class.
+ * (e.g. {@link io.vitess.proto.Query.QueryResult QueryResult}) from a given RPC response (e.g.
+ * {@link io.vitess.proto.Vtgate.StreamExecuteResponse StreamExecuteResponse}). Callers must
+ * therefore implement {@link #getResult(Object)} when instantiating this class.
  *
  * <p>The {@code StreamObserver} side will block until the result has been returned to the consumer
  * by the {@code StreamIterator} side. Therefore, the {@link #close()} method must be called when
@@ -42,11 +43,12 @@ import java.util.NoSuchElementException;
  */
 abstract class GrpcStreamAdapter<V, E>
     implements StreamObserver<V>, StreamIterator<E>, AutoCloseable {
+
   /**
-   * getResult must be implemented to tell the adapter how to convert from
-   * the StreamObserver value type (V) to the StreamIterator value type (E).
-   * Before converting, getResult() should check for application-level errors
-   * in the RPC response and throw the appropriate SQLException.
+   * getResult must be implemented to tell the adapter how to convert from the StreamObserver value
+   * type (V) to the StreamIterator value type (E). Before converting, getResult() should check for
+   * application-level errors in the RPC response and throw the appropriate SQLException.
+   *
    * @param value The RPC response object.
    * @return The result object to pass to the iterator consumer.
    * @throws SQLException For errors originating within the Vitess server.
@@ -75,10 +77,10 @@ abstract class GrpcStreamAdapter<V, E>
 
         nextValue = getResult(value);
         notifyAll();
-      } catch (InterruptedException e) {
-        onError(e);
-      } catch (SQLException e) {
-        onError(e);
+      } catch (InterruptedException exc) {
+        onError(exc);
+      } catch (SQLException exc) {
+        onError(exc);
       }
     }
   }
@@ -117,9 +119,9 @@ abstract class GrpcStreamAdapter<V, E>
         }
 
         return true;
-      } catch (InterruptedException e) {
-        onError(e);
-        throw new SQLDataException("gRPC StreamIterator interrupted while waiting for value", e);
+      } catch (InterruptedException exc) {
+        onError(exc);
+        throw new SQLDataException("gRPC StreamIterator interrupted while waiting for value", exc);
       }
     }
   }

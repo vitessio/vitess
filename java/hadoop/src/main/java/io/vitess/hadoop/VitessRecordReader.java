@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,18 +15,6 @@
  */
 
 package io.vitess.hadoop;
-
-import java.io.IOException;
-import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
-
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.RecordReader;
-import org.apache.hadoop.mapreduce.TaskAttemptContext;
-import org.joda.time.Duration;
 
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
@@ -39,7 +27,21 @@ import io.vitess.proto.Query.BoundQuery;
 import io.vitess.proto.Topodata.TabletType;
 import io.vitess.proto.Vtgate.SplitQueryResponse;
 
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapreduce.InputSplit;
+import org.apache.hadoop.mapreduce.RecordReader;
+import org.apache.hadoop.mapreduce.TaskAttemptContext;
+
+import org.joda.time.Duration;
+
+import java.io.IOException;
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
+
 public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> {
+
   private VitessInputSplit split;
   private VTGateBlockingConn vtgate;
   private VitessConf conf;
@@ -68,8 +70,8 @@ public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> 
           addressList.get(index));
       vtgate = new VTGateBlockingConn(rpcClient);
       includedFields = conf.getIncludedFields();
-    } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
-      throw new RuntimeException(e);
+    } catch (ClassNotFoundException | InstantiationException | IllegalAccessException exc) {
+      throw new RuntimeException(exc);
     }
   }
 
@@ -79,8 +81,8 @@ public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> 
       try {
         vtgate.close();
         vtgate = null;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+      } catch (IOException exc) {
+        throw new RuntimeException(exc);
       }
     }
   }
@@ -134,8 +136,8 @@ public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> 
       } else {
         currentRow = new RowWritable(row);
       }
-    } catch (SQLException e) {
-      throw new RuntimeException(e);
+    } catch (SQLException exc) {
+      throw new RuntimeException(exc);
     }
 
     if (currentRow == null) {

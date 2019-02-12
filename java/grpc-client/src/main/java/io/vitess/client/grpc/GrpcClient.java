@@ -117,8 +117,8 @@ public class GrpcClient implements RpcClient {
   }
 
   private String toChannelId(ManagedChannel channel) {
-    return channel instanceof InternalWithLogId ?
-        ((InternalWithLogId) channel).getLogId().toString() : channel.toString();
+    return channel instanceof InternalWithLogId
+        ? ((InternalWithLogId) channel).getLogId().toString() : channel.toString();
   }
 
   @Override
@@ -129,7 +129,7 @@ public class GrpcClient implements RpcClient {
         // Now we try hard shutdown
         channel.shutdownNow();
       }
-    } catch (InterruptedException e) {
+    } catch (InterruptedException exc) {
       Thread.currentThread().interrupt();
     }
 
@@ -170,7 +170,8 @@ public class GrpcClient implements RpcClient {
         new ExceptionConverter<ExecuteEntityIdsResponse>(), MoreExecutors.directExecutor());
   }
 
-  @Override public ListenableFuture<Vtgate.ExecuteBatchResponse> executeBatch(Context ctx,
+  @Override
+  public ListenableFuture<Vtgate.ExecuteBatchResponse> executeBatch(Context ctx,
       Vtgate.ExecuteBatchRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).executeBatch(request), Exception.class,
         new ExceptionConverter<Vtgate.ExecuteBatchResponse>(), MoreExecutors.directExecutor());
@@ -285,9 +286,9 @@ public class GrpcClient implements RpcClient {
   /**
    * Converts an exception from the gRPC framework into the appropriate {@link SQLException}.
    */
-  static SQLException convertGrpcError(Throwable e) {
-    if (e instanceof StatusRuntimeException) {
-      StatusRuntimeException sre = (StatusRuntimeException) e;
+  static SQLException convertGrpcError(Throwable exc) {
+    if (exc instanceof StatusRuntimeException) {
+      StatusRuntimeException sre = (StatusRuntimeException) exc;
 
       int errno = Proto.getErrno(sre.getMessage());
       String sqlState = Proto.getSQLState(sre.getMessage());
@@ -307,21 +308,23 @@ public class GrpcClient implements RpcClient {
           return new SQLRecoverableException(sre.toString(), sqlState, errno, sre);
         default: // Covers e.g. UNKNOWN.
           String advice = "";
-          if (e.getCause() instanceof java.nio.channels.ClosedChannelException) {
+          if (exc.getCause() instanceof java.nio.channels.ClosedChannelException) {
             advice =
-                "Failed to connect to vtgate. Make sure that vtgate is running and you are using the correct address. Details: ";
+                "Failed to connect to vtgate. Make sure that vtgate is running and you are using "
+                    + "the correct address. Details: ";
           }
           return new SQLNonTransientException(
-              "gRPC StatusRuntimeException: " + advice + e.toString(), sqlState, errno, e);
+              "gRPC StatusRuntimeException: " + advice + exc.toString(), sqlState, errno, exc);
       }
     }
-    return new SQLNonTransientException("gRPC error: " + e.toString(), e);
+    return new SQLNonTransientException("gRPC error: " + exc.toString(), exc);
   }
 
   static class ExceptionConverter<V> implements AsyncFunction<Exception, V> {
+
     @Override
-    public ListenableFuture<V> apply(Exception e) throws Exception {
-      throw convertGrpcError(e);
+    public ListenableFuture<V> apply(Exception exc) throws Exception {
+      throw convertGrpcError(exc);
     }
   }
 
@@ -343,10 +346,10 @@ public class GrpcClient implements RpcClient {
 
   @Override
   public String toString() {
-      return String.format("[GrpcClient-%s channel=%s]",
-              Integer.toHexString(this.hashCode()),
-              channelId
-      );
+    return String.format("[GrpcClient-%s channel=%s]",
+        Integer.toHexString(this.hashCode()),
+        channelId
+    );
   }
 
   private static Duration getContextTimeoutOrDefault(Context context) {

@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,9 +19,13 @@ package io.vitess.hadoop;
 import com.google.common.collect.Lists;
 import com.google.common.io.BaseEncoding;
 import com.google.gson.Gson;
+
 import io.vitess.client.cursor.Row;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.Field;
+
+import org.apache.hadoop.io.Writable;
+
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
@@ -29,12 +33,13 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.hadoop.io.Writable;
 
 public class RowWritable implements Writable {
+
   private Row row;
 
-  public RowWritable() {}
+  public RowWritable() {
+  }
 
   public RowWritable(Row row) {
     this.row = row;
@@ -76,8 +81,8 @@ public class RowWritable implements Writable {
       if (!map.containsKey(key)) {
         try {
           map.put(key, row.getRawValue(i + 1).toStringUtf8());
-        } catch (SQLException e) {
-          map.put(key, e.toString());
+        } catch (SQLException exc) {
+          map.put(key, exc.toString());
         }
       }
     }

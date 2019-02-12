@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,22 +19,25 @@ package io.vitess.client;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
+
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata.TabletType;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.joda.time.Duration;
 import org.junit.Assert;
 import vttest.Vttest.VTTestTopology;
 
-import io.vitess.proto.Query;
-import io.vitess.proto.Topodata.TabletType;
-
 public class TestUtil {
+
   static final Logger logger = LogManager.getLogger(TestUtil.class.getName());
   public static final String PROPERTY_KEY_CLIENT_TEST_ENV = "vitess.client.testEnv";
   public static final String PROPERTY_KEY_CLIENT_TEST_PORT = "vitess.client.testEnv.portName";
@@ -60,10 +63,12 @@ public class TestUtil {
         continue;
       }
       try {
-        Type mapType = new TypeToken<Map<String, Object>>() {}.getType();
+        Type mapType = new TypeToken<Map<String, Object>>() {
+        }.getType();
         Map<String, Object> map = new Gson().fromJson(line, mapType);
         testEnv.setPythonScriptProcess(p);
-        testEnv.setPort(((Double)map.get(System.getProperty(PROPERTY_KEY_CLIENT_TEST_PORT))).intValue());
+        testEnv.setPort(
+            ((Double) map.get(System.getProperty(PROPERTY_KEY_CLIENT_TEST_PORT))).intValue());
         return;
       } catch (JsonSyntaxException e) {
         logger.error("JsonSyntaxException parsing setup command output: " + line, e);
@@ -114,7 +119,7 @@ public class TestUtil {
     // Dial timeout
     Context ctx = Context.getDefault().withDeadlineAfter(Duration.millis(5000));
     return new VTGateBlockingConn(
-        getRpcClientFactory().create(ctx, "localhost:" +  testEnv.getPort()),
+        getRpcClientFactory().create(ctx, "localhost:" + testEnv.getPort()),
         testEnv.getKeyspace());
   }
 
@@ -132,7 +137,8 @@ public class TestUtil {
         bindVars.put("name", "name_" + id);
         bindVars.put("age", id % 10);
         bindVars.put("percent", id / 100.0);
-        tx.execute(ctx, insertSql, bindVars, TabletType.MASTER, Query.ExecuteOptions.IncludedFields.ALL);
+        tx.execute(ctx, insertSql, bindVars, TabletType.MASTER,
+            Query.ExecuteOptions.IncludedFields.ALL);
       }
       tx.commit(ctx);
     }
