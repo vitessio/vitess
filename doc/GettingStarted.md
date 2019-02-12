@@ -168,7 +168,7 @@ In addition, Vitess requires the software and libraries listed below.
     (install steps are below).
     
 3.  If Xcode is installed (with Console tools, which should be bundled automatically since the 7.1 version), all 
-    the dev dependencies should be satisfied in this step. If no Xcode is present, it is necessery to install pkg-config.
+    the dev dependencies should be satisfied in this step. If no Xcode is present, it is necessary to install pkg-config.
      
     ``` sh
     brew install pkg-config
