@@ -1170,6 +1170,8 @@ func (ct *ColumnType) SQLType() querypb.Type {
 			return sqltypes.Uint64
 		}
 		return sqltypes.Int64
+	case keywordStrings[BOOL], keywordStrings[BOOLEAN]:
+		return sqltypes.Uint8
 	case keywordStrings[TEXT]:
 		return sqltypes.Text
 	case keywordStrings[TINYTEXT]:
