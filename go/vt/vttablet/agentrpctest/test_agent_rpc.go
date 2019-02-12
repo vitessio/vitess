@@ -1136,10 +1136,11 @@ func agentRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmc
 //
 
 var testBackupConcurrency = 24
+var testBackupAllowMaster = false
 var testBackupCalled = false
 var testRestoreFromBackupCalled = false
 
-func (fra *fakeRPCAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
+func (fra *fakeRPCAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1150,7 +1151,7 @@ func (fra *fakeRPCAgent) Backup(ctx context.Context, concurrency int, logger log
 }
 
 func agentRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	stream, err := client.Backup(ctx, tablet, testBackupConcurrency)
+	stream, err := client.Backup(ctx, tablet, testBackupConcurrency, testBackupAllowMaster)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}
@@ -1159,7 +1160,7 @@ func agentRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.Table
 }
 
 func agentRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	stream, err := client.Backup(ctx, tablet, testBackupConcurrency)
+	stream, err := client.Backup(ctx, tablet, testBackupConcurrency, testBackupAllowMaster)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}

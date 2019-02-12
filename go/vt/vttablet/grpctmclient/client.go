@@ -764,7 +764,7 @@ func (e *backupStreamAdapter) Recv() (*logutilpb.Event, error) {
 }
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int) (logutil.EventStream, error) {
+func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowMaster bool) (logutil.EventStream, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return nil, err
@@ -772,6 +772,7 @@ func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, con
 
 	stream, err := c.Backup(ctx, &tabletmanagerdatapb.BackupRequest{
 		Concurrency: int64(concurrency),
+		AllowMaster: bool(allowMaster),
 	})
 	if err != nil {
 		cc.Close()

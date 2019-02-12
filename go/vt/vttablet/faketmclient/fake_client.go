@@ -296,7 +296,7 @@ func (e *eofEventStream) Recv() (*logutilpb.Event, error) {
 }
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int) (logutil.EventStream, error) {
+func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowMaster bool) (logutil.EventStream, error) {
 	return &eofEventStream{}, nil
 }
 

@@ -39,7 +39,7 @@ func init() {
 	addCommand("Shards", command{
 		"BackupShard",
 		commandBackupShard,
-		"<keyspace/shard>",
+		"[-allow_master=false] <keyspace/shard>",
 		"Chooses a tablet and creates a backup for a shard."})
 	addCommand("Shards", command{
 		"RemoveBackup",
@@ -50,7 +50,7 @@ func init() {
 	addCommand("Tablets", command{
 		"Backup",
 		commandBackup,
-		"[-concurrency=4] <tablet alias>",
+		"[-concurrency=4] [-allow_master=false] <tablet alias>",
 		"Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes."})
 	addCommand("Tablets", command{
 		"RestoreFromBackup",
@@ -61,6 +61,8 @@ func init() {
 
 func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
+	allowMaster := subFlags.Bool("allow_master", false, "Allows backups to be taken on master. Warning!! If you are using the builtin backup engine, this will shutdown your master mysql for as long as it takes to create a backup ")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -77,11 +79,13 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		return err
 	}
 
-	return execBackup(ctx, wr, tabletInfo.Tablet, *concurrency)
+	return execBackup(ctx, wr, tabletInfo.Tablet, *concurrency, *allowMaster)
 }
 
 func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
+	allowMaster := subFlags.Bool("allow_master", false, "Whether to use master tablet for backup. Warning!! If you are using the builtin backup engine, this will shutdown your master mysql for as long as it takes to create a backup ")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -103,8 +107,17 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	var secondsBehind uint32
 
 	for i := range tablets {
+		// FIXME: allow_master so that online backups can use master
 		// only run a backup on a replica, rdonly or spare tablet type
 		switch tablets[i].Type {
+		case topodatapb.TabletType_MASTER:
+			if *allowMaster {
+				tabletForBackup = tablets[i].Tablet
+				secondsBehind = 0
+				break
+			} else {
+				continue
+			}
 		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE:
 		default:
 			continue
@@ -128,12 +141,12 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return errors.New("no tablet available for backup")
 	}
 
-	return execBackup(ctx, wr, tabletForBackup, *concurrency)
+	return execBackup(ctx, wr, tabletForBackup, *concurrency, *allowMaster)
 }
 
 // execBackup is shared by Backup and BackupShard
-func execBackup(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, concurrency int) error {
-	stream, err := wr.TabletManagerClient().Backup(ctx, tablet, concurrency)
+func execBackup(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, concurrency int, allowMaster bool) error {
+	stream, err := wr.TabletManagerClient().Backup(ctx, tablet, concurrency, allowMaster)
 	if err != nil {
 		return err
 	}
