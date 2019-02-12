@@ -98,7 +98,8 @@ public class GrpcClientFactory implements RpcClientFactory {
       channel.nameResolverFactory(nameResolverFactory);
     }
     return callCredentials != null
-        ? new GrpcClient(channel.build(), callCredentials, ctx) : new GrpcClient(channel.build(), ctx);
+        ? new GrpcClient(channel.build(), callCredentials, ctx)
+        : new GrpcClient(channel.build(), ctx);
   }
 
   /**

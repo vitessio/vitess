@@ -129,7 +129,7 @@ public class GrpcClient implements RpcClient {
         // Now we try hard shutdown
         channel.shutdownNow();
       }
-    } catch (InterruptedException e) {
+    } catch (InterruptedException exc) {
       Thread.currentThread().interrupt();
     }
 
