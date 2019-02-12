@@ -20,10 +20,11 @@ import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+
 import io.grpc.CallCredentials;
+import io.grpc.InternalWithLogId;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
-import io.grpc.InternalWithLogId;
 import io.vitess.client.Context;
 import io.vitess.client.Proto;
 import io.vitess.client.RpcClient;
@@ -65,6 +66,9 @@ import io.vitess.proto.Vtgate.StreamExecuteShardsResponse;
 import io.vitess.proto.grpc.VitessGrpc;
 import io.vitess.proto.grpc.VitessGrpc.VitessFutureStub;
 import io.vitess.proto.grpc.VitessGrpc.VitessStub;
+
+import org.joda.time.Duration;
+
 import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
@@ -75,29 +79,41 @@ import java.sql.SQLSyntaxErrorException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientException;
 import java.util.concurrent.TimeUnit;
-import org.joda.time.Duration;
 
 /**
  * GrpcClient is a gRPC-based implementation of Vitess RpcClient.
  */
 public class GrpcClient implements RpcClient {
+  private static final Duration DEFAULT_TIMEOUT = Duration.standardSeconds(30);
+
   private final ManagedChannel channel;
   private final String channelId;
   private final VitessStub asyncStub;
   private final VitessFutureStub futureStub;
+  private final Duration timeout;
 
   public GrpcClient(ManagedChannel channel) {
     this.channel = channel;
     channelId = toChannelId(channel);
     asyncStub = VitessGrpc.newStub(channel);
     futureStub = VitessGrpc.newFutureStub(channel);
+    timeout = DEFAULT_TIMEOUT;
   }
 
-  public GrpcClient(ManagedChannel channel, CallCredentials credentials) {
+  public GrpcClient(ManagedChannel channel, Context context) {
+    this.channel = channel;
+    channelId = toChannelId(channel);
+    asyncStub = VitessGrpc.newStub(channel);
+    futureStub = VitessGrpc.newFutureStub(channel);
+    timeout = getContextTimeoutOrDefault(context);
+  }
+
+  public GrpcClient(ManagedChannel channel, CallCredentials credentials, Context context) {
     this.channel = channel;
     channelId = toChannelId(channel);
     asyncStub = VitessGrpc.newStub(channel).withCallCredentials(credentials);
     futureStub = VitessGrpc.newFutureStub(channel).withCallCredentials(credentials);
+    timeout = getContextTimeoutOrDefault(context);
   }
 
   private String toChannelId(ManagedChannel channel) {
@@ -107,7 +123,16 @@ public class GrpcClient implements RpcClient {
 
   @Override
   public void close() throws IOException {
-    channel.shutdown();
+    try {
+      if (!channel.shutdown().awaitTermination(timeout.getStandardSeconds(), TimeUnit.SECONDS)) {
+        // The channel failed to shut down cleanly within the specified window
+        // Now we try hard shutdown
+        channel.shutdownNow();
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+
   }
 
   @Override
@@ -322,5 +347,13 @@ public class GrpcClient implements RpcClient {
               Integer.toHexString(this.hashCode()),
               channelId
       );
+  }
+
+  private static Duration getContextTimeoutOrDefault(Context context) {
+    if (context.getTimeout() == null || context.getTimeout().getStandardSeconds() < 0) {
+      return DEFAULT_TIMEOUT;
+    }
+
+    return context.getTimeout();
   }
 }
