@@ -3,7 +3,7 @@ seed_file=$HOME/.vitess_bootstrap_done
 
 if [ ! -f $seed_file ];
 then
-    printf "\nVM Vitess hasn't been build in this VM. Downloading and setting up vitess deps. \n"
+    printf "\nVM Vitess hasn't been built in this VM. Downloading and setting up vitess deps. \n"
     ./vagrant-scripts/vitess/build.sh
     touch $seed_file
 fi
