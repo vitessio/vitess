@@ -224,10 +224,11 @@ def required_teardown():
   """Required cleanup steps that can't be skipped with --skip-teardown."""
   # We can't skip closing of gRPC connections, because the Python interpreter
   # won't let us die if any connections are left open.
-  global vtctld_connection
+  global vtctld_connection, vtctld
   if vtctld_connection:
     vtctld_connection.close()
     vtctld_connection = None
+    vtctld = None
 
 
 def kill_sub_processes():

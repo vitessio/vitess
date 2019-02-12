@@ -138,7 +138,7 @@ func (p *ParallelRunner) Run() error {
 		}
 		select {
 		case <-p.ctx.Done():
-			// Break this run and return early. Do not try to to execute any subsequent tasks.
+			// Break this run and return early. Do not try to execute any subsequent tasks.
 			log.Infof("Workflow is cancelled, remaining tasks will be aborted")
 			return nil
 		default:

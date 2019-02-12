@@ -26,7 +26,7 @@ GEM
       activesupport (>= 2)
       nokogiri (~> 1.4)
     i18n (0.8.6)
-    jekyll (3.5.2)
+    jekyll (3.6.3)
       addressable (~> 2.4)
       colorator (~> 1.0)
       jekyll-sass-converter (~> 1.0)
@@ -67,7 +67,7 @@ GEM
     neat (2.1.0)
       sass (~> 3.4)
       thor (~> 0.19)
-    nokogiri (1.8.2)
+    nokogiri (1.8.5)
       mini_portile2 (~> 2.3.0)
     pathutil (0.14.0)
       forwardable-extended (~> 2.6)
@@ -97,7 +97,7 @@ PLATFORMS
 DEPENDENCIES
   RedCloth (~> 4.3.2)
   bourbon
-  jekyll (= 3.5.2)
+  jekyll (= 3.6.3)
   jekyll-coffeescript (= 1.0.1)
   jekyll-feed (= 0.3.1)
   jekyll-redirect-from (= 0.11.0)

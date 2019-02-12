@@ -80,6 +80,9 @@ type FakeMysqlDaemon struct {
 	// If it doesn't match, SetSlavePosition will return an error.
 	SetSlavePositionPos mysql.Position
 
+	// StartSlaveUntilAfterPos is matched against the input
+	StartSlaveUntilAfterPos mysql.Position
+
 	// SetMasterInput is matched against the input of SetMaster
 	// (as "%v:%v"). If it doesn't match, SetMaster will return an error.
 	SetMasterInput string
@@ -240,6 +243,17 @@ func (fmd *FakeMysqlDaemon) StartSlave(hookExtraEnv map[string]string) error {
 	})
 }
 
+// StartSlaveUntilAfter is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) StartSlaveUntilAfter(ctx context.Context, pos mysql.Position) error {
+	if !reflect.DeepEqual(fmd.StartSlaveUntilAfterPos, pos) {
+		return fmt.Errorf("wrong pos for StartSlaveUntilAfter: expected %v got %v", fmd.SetSlavePositionPos, pos)
+	}
+
+	return fmd.ExecuteSuperQueryList(context.Background(), []string{
+		"START SLAVE UNTIL AFTER",
+	})
+}
+
 // StopSlave is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) StopSlave(hookExtraEnv map[string]string) error {
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
@@ -381,6 +395,16 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 		return nil, fmt.Errorf("no schema defined")
 	}
 	return tmutils.FilterTables(fmd.Schema, tables, excludeTables, includeViews)
+}
+
+// GetColumns is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) GetColumns(dbName, table string) ([]string, error) {
+	return []string{}, nil
+}
+
+// GetPrimaryKeyColumns is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) GetPrimaryKeyColumns(dbName, table string) ([]string, error) {
+	return []string{}, nil
 }
 
 // PreflightSchemaChange is part of the MysqlDaemon interface

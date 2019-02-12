@@ -749,6 +749,10 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}, nil
 	case sqlparser.KeywordString(sqlparser.TABLES):
 		if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
+			if destKeyspace == "" {
+				// Change "show tables from <keyspace>" to "show tables" directed to that keyspace.
+				destKeyspace = show.ShowTablesOpt.DbName
+			}
 			show.ShowTablesOpt.DbName = ""
 		}
 		sql = sqlparser.String(show)

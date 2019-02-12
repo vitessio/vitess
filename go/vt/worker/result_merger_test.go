@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -53,6 +54,7 @@ type fakeResultReader struct {
 	// currentIndex is the current index within the current range.
 	currentIndex int
 	rowsReturned int
+	closed       bool
 }
 
 // newFakeResultReader returns a new FakeResultReader.
@@ -108,6 +110,11 @@ func newFakeResultReader(fields []*querypb.Field, index int, distribution []int,
 // Fields returns the field information. It is part of the ResultReader interface.
 func (f *fakeResultReader) Fields() []*querypb.Field {
 	return f.fields
+}
+
+// Close closes nothing
+func (f *fakeResultReader) Close(ctx context.Context) {
+	f.closed = true
 }
 
 // Next returns the next fake result. It is part of the ResultReader interface.
@@ -298,53 +305,63 @@ func TestResultMerger(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		t.Logf("checking testcase: %v", tc.desc)
-		pkFieldCount := 1
-		if tc.multiPk {
-			pkFieldCount = 2
-		}
-		rm, err := NewResultMerger(tc.inputs, pkFieldCount)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// Consume all merged Results.
-		var got []*sqltypes.Result
-		for {
-			result, err := rm.Next()
+		t.Run(fmt.Sprintf("checking testcase: %v", tc.desc), func(inner *testing.T) {
+			pkFieldCount := 1
+			if tc.multiPk {
+				pkFieldCount = 2
+			}
+			rm, err := NewResultMerger(tc.inputs, pkFieldCount)
 			if err != nil {
-				if err == io.EOF {
-					break
-				} else {
-					t.Fatal(err)
-				}
+				inner.Fatal(err)
 			}
-			got = append(got, result)
-		}
 
-		if !reflect.DeepEqual(got, tc.want) {
-			for i := range got {
-				if i == len(tc.want) {
-					// got has more Results than want. Avoid index out of range errors.
-					break
+			// Consume all merged Results.
+			var got []*sqltypes.Result
+			for {
+				result, err := rm.Next()
+				if err != nil {
+					if err == io.EOF {
+						break
+					} else {
+						inner.Fatal(err)
+					}
 				}
-				if got[i].RowsAffected != tc.want[i].RowsAffected {
-					t.Logf("deviating RowsAffected value for Result at index: %v got = %v, want = %v", i, got[i].RowsAffected, tc.want[i].RowsAffected)
-				}
-				t.Logf("deviating Rows for Result at index: %v got = %v, want = %v", i, got[i].Rows, tc.want[i].Rows)
+				got = append(got, result)
 			}
-			if len(tc.want)-len(got) > 0 {
-				for i := len(got); i < len(tc.want); i++ {
-					t.Logf("missing Result in got: %v", tc.want[i].Rows)
+
+			rm.Close(context.Background())
+
+			if !reflect.DeepEqual(got, tc.want) {
+				for i := range got {
+					if i == len(tc.want) {
+						// got has more Results than want. Avoid index out of range errors.
+						break
+					}
+					if got[i].RowsAffected != tc.want[i].RowsAffected {
+						inner.Logf("deviating RowsAffected value for Result at index: %v got = %v, want = %v", i, got[i].RowsAffected, tc.want[i].RowsAffected)
+					}
+					inner.Logf("deviating Rows for Result at index: %v got = %v, want = %v", i, got[i].Rows, tc.want[i].Rows)
+				}
+				if len(tc.want)-len(got) > 0 {
+					for i := len(got); i < len(tc.want); i++ {
+						inner.Logf("missing Result in got: %v", tc.want[i].Rows)
+					}
+				}
+				if len(got)-len(tc.want) > 0 {
+					for i := len(tc.want); i < len(got); i++ {
+						inner.Logf("unnecessary extra Result in got: %v", got[i].Rows)
+					}
+				}
+				inner.Fatalf("ResultMerger testcase '%v' failed. See output above for different rows.", tc.desc)
+			}
+
+			for _, x := range tc.inputs {
+				fake := x.(*fakeResultReader)
+				if !fake.closed {
+					inner.Fatal("expected inputs to be closed by now")
 				}
 			}
-			if len(got)-len(tc.want) > 0 {
-				for i := len(tc.want); i < len(got); i++ {
-					t.Logf("unnecessary extra Result in got: %v", got[i].Rows)
-				}
-			}
-			t.Fatalf("ResultMerger testcase '%v' failed. See output above for different rows.", tc.desc)
-		}
+		})
 	}
 }
 
@@ -385,6 +402,10 @@ func (m *memoryResultReader) Next() (*sqltypes.Result, error) {
 	result := m.results[m.currentIndex]
 	m.currentIndex++
 	return result, nil
+}
+
+func (m *memoryResultReader) Close(ctx context.Context) {
+	// intentionally blank. we have nothing we need to close
 }
 
 // benchmarkResult is a package level variable whose sole purpose is to

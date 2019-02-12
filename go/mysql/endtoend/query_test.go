@@ -247,11 +247,6 @@ func doTestWarnings(t *testing.T, disableClientDeprecateEOF bool) {
 	expectNoError(t, err)
 	defer conn.Close()
 
-	connParams.DisableClientDeprecateEOF = false
-
-	expectFlag(t, "Negotiated ClientDeprecateEOF flag", (conn.Capabilities&mysql.CapabilityClientDeprecateEOF) != 0, !disableClientDeprecateEOF)
-	defer conn.Close()
-
 	result, err := conn.ExecuteFetch("create table a(id int, val int not null, primary key(id))", 0, false)
 	if err != nil {
 		t.Fatalf("create table failed: %v", err)

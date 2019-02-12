@@ -132,7 +132,7 @@ on the clicked button. The approval buttons are cleared after the phase has
 finished. The next phase will only starts if its previous phase has finished
 successfully.
 
-If the workflow is restored from a checkpoint, you will still see the the
+If the workflow is restored from a checkpoint, you will still see the
 approval button with approved message when there are running tasks under this
 approval. But you don't need to approve the same tasks again for a restarted
 workflow.

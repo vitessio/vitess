@@ -40,7 +40,15 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		return fmt.Errorf("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
 
-	// update our type to BACKUP
+	// Check tablet type current process has.
+	// During a network partition it is possible that from the topology perspective this is no longer the master,
+	// but the process didn't find out about this.
+	// It is not safe to take backups from tablet in this state
+	currentTablet := agent.Tablet()
+	if currentTablet.Type == topodatapb.TabletType_MASTER {
+		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, restart vttablet in replica mode")
+	}
+
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return err
@@ -49,6 +57,8 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, restart vttablet in replica mode")
 	}
 	originalType := tablet.Type
+
+	// update our type to BACKUP
 	if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP); err != nil {
 		return err
 	}

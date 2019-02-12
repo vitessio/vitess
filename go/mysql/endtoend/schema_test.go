@@ -52,10 +52,9 @@ func testDescribeTable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// MariaDB has '81' instead of '90' of Extra ColumnLength.
-	// Just try it and see if it's the only difference.
-	if conn.IsMariaDB() && result.Fields[5].ColumnLength == 81 {
-		result.Fields[5].ColumnLength = 90
+	// Zero-out the column lengths, because they can't be compared.
+	for i := range result.Fields {
+		result.Fields[i].ColumnLength = 0
 	}
 
 	if !sqltypes.FieldsEqual(result.Fields, mysql.DescribeTableFields) {

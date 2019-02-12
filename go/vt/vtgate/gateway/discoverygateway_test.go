@@ -59,7 +59,7 @@ func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
 
 func TestDiscoveryGatewayExecuteStream(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, true, func(dg Gateway, target *querypb.Target) error {
-		err := dg.StreamExecute(context.Background(), target, "query", nil, nil, func(qr *sqltypes.Result) error {
+		err := dg.StreamExecute(context.Background(), target, "query", nil, 0, nil, func(qr *sqltypes.Result) error {
 			return nil
 		})
 		return err
@@ -206,6 +206,107 @@ func TestShuffleTablets(t *testing.T) {
 	}
 }
 
+func TestDiscoveryGatewayGetAggregateStats(t *testing.T) {
+	keyspace := "ks"
+	shard := "0"
+	hc := discovery.NewFakeHealthCheck()
+	dg := createDiscoveryGateway(hc, nil, "cell1", 2).(*discoveryGateway)
+
+	// replica should only use local ones
+	hc.Reset()
+	dg.tsc.ResetForTesting()
+	hc.AddTestTablet("cell1", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
+	hc.AddTestTablet("cell1", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
+	target := &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: topodatapb.TabletType_REPLICA,
+		Cell:       "cell1",
+	}
+	tsl, err := dg.tsc.GetAggregateStats(target)
+	if err != nil {
+		t.Error(err)
+	}
+	if tsl.HealthyTabletCount != 2 {
+		t.Errorf("Expected 2 healthy replica tablets, got: %v", tsl.HealthyTabletCount)
+	}
+}
+
+func TestDiscoveryGatewayGetAggregateStatsRegion(t *testing.T) {
+	keyspace := "ks"
+	shard := "0"
+	hc := discovery.NewFakeHealthCheck()
+	dg := createDiscoveryGateway(hc, nil, "local-east", 2).(*discoveryGateway)
+
+	topo.UpdateCellsToRegionsForTests(map[string]string{
+		"local-west": "local",
+		"local-east": "local",
+		"remote":     "remote",
+	})
+
+	hc.Reset()
+	dg.tsc.ResetForTesting()
+	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
+	hc.AddTestTablet("local-west", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
+	hc.AddTestTablet("local-east", "3.3.3.3", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
+
+	// Non master targets in the same region as the gateway should be discoverable
+	target := &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: topodatapb.TabletType_REPLICA,
+		Cell:       "local-west",
+	}
+	tsl, err := dg.tsc.GetAggregateStats(target)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if tsl.HealthyTabletCount != 2 {
+		t.Errorf("Expected 2 healthy replica tablets, got: %v", tsl.HealthyTabletCount)
+	}
+}
+
+func TestDiscoveryGatewayGetAggregateStatsMaster(t *testing.T) {
+	keyspace := "ks"
+	shard := "0"
+	hc := discovery.NewFakeHealthCheck()
+	dg := createDiscoveryGateway(hc, nil, "cell1", 2).(*discoveryGateway)
+
+	// replica should only use local ones
+	hc.Reset()
+	dg.tsc.ResetForTesting()
+	hc.AddTestTablet("cell1", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 10, nil)
+	target := &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: topodatapb.TabletType_MASTER,
+		Cell:       "cell1",
+	}
+	tsl, err := dg.tsc.GetAggregateStats(target)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if tsl.HealthyTabletCount != 1 {
+		t.Errorf("Expected one healthy master, got: %v", tsl.HealthyTabletCount)
+	}
+
+	// You can get aggregate regardless of the cell when requesting a master
+	target = &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: topodatapb.TabletType_MASTER,
+		Cell:       "cell2",
+	}
+
+	tsl, err = dg.tsc.GetAggregateStats(target)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if tsl.HealthyTabletCount != 1 {
+		t.Errorf("Expected one healthy master, got: %v", tsl.HealthyTabletCount)
+	}
+}
+
 func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
@@ -227,6 +328,50 @@ func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 	tsl := dg.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_REPLICA)
 	if len(tsl) != 2 || (!topo.TabletEquality(tsl[0].Tablet, ep1) && !topo.TabletEquality(tsl[0].Tablet, ep2)) {
 		t.Errorf("want %+v or %+v, got %+v", ep1, ep2, tsl)
+	}
+}
+
+func BenchmarkOneCellGetAggregateStats(b *testing.B) { benchmarkCellsGetAggregateStats(1, b) }
+
+func BenchmarkTenCellGetAggregateStats(b *testing.B) { benchmarkCellsGetAggregateStats(10, b) }
+
+func Benchmark100CellGetAggregateStats(b *testing.B) { benchmarkCellsGetAggregateStats(100, b) }
+
+func Benchmark1000CellGetAggregateStats(b *testing.B) { benchmarkCellsGetAggregateStats(1000, b) }
+
+func benchmarkCellsGetAggregateStats(i int, b *testing.B) {
+	keyspace := "ks"
+	shard := "0"
+	hc := discovery.NewFakeHealthCheck()
+	dg := createDiscoveryGateway(hc, nil, "cell0", 2).(*discoveryGateway)
+	cellsToregions := make(map[string]string)
+	for j := 0; j < i; j++ {
+		cell := fmt.Sprintf("cell%v", j)
+		cellsToregions[cell] = "local"
+	}
+
+	topo.UpdateCellsToRegionsForTests(cellsToregions)
+	hc.Reset()
+	dg.tsc.ResetForTesting()
+
+	for j := 0; j < i; j++ {
+		cell := fmt.Sprintf("cell%v", j)
+		ip := fmt.Sprintf("%v.%v.%v,%v", j, j, j, j)
+		hc.AddTestTablet(cell, ip, 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
+	}
+
+	target := &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: topodatapb.TabletType_REPLICA,
+		Cell:       "cell0",
+	}
+
+	for n := 0; n < b.N; n++ {
+		_, err := dg.tsc.GetAggregateStats(target)
+		if err != nil {
+			b.Fatalf("Expected no error, got %v", err)
+		}
 	}
 }
 

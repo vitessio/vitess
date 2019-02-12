@@ -210,12 +210,6 @@ func (dg *discoveryGateway) GetMasterCell(keyspace, shard string) (string, query
 	return cell, dg, err
 }
 
-// StreamHealth is not forwarded to any other tablet,
-// but we handle it directly here.
-func (dg *discoveryGateway) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	return StreamHealthFromTargetStatsListener(ctx, dg.tsc, callback)
-}
-
 // Close shuts down underlying connections.
 // This function hides the inner implementation.
 func (dg *discoveryGateway) Close(ctx context.Context) error {

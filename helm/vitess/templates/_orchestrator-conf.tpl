@@ -40,6 +40,7 @@ data:
     "DiscoverByShowSlaveHosts": true,
     "EnableSyslog": false,
     "ExpiryHostnameResolvesMinutes": 60,
+    "FailMasterPromotionIfSQLThreadNotUpToDate": true,
     "FailureDetectionPeriodBlockMinutes": 60,
     "GraphiteAddr": "",
     "GraphiteConvertHostnameDotsToUnderscores": true,

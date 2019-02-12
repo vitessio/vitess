@@ -93,6 +93,16 @@ func (client *FakeTabletManagerClient) GetPermissions(ctx context.Context, table
 	return &tabletmanagerdatapb.Permissions{}, nil
 }
 
+// LockTables is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) LockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
+}
+
+// UnlockTables is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) UnlockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
+}
+
 //
 // Various read-write methods
 //
@@ -183,6 +193,11 @@ func (client *FakeTabletManagerClient) StopSlaveMinimum(ctx context.Context, tab
 
 // StartSlave is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StartSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
+}
+
+// StartSlaveUntilAfter is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error {
 	return nil
 }
 

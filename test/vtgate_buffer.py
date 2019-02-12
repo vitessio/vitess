@@ -172,7 +172,7 @@ class UpdateThread(AbstractVtgateThread):
 
       if self.ignore_error_func and self.ignore_error_func(e):
         logging.debug('UPDATE %d failed during COMMIT. But we cannot buffer'
-                      ' this error and and ignore it. err: %s', attempt, str(e))
+                      ' this error and ignore it. err: %s', attempt, str(e))
       else:
         self._commit_errors += 1
         if self._commit_errors > 1:

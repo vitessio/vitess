@@ -37,7 +37,7 @@ func (m *Shard) Reset()         { *m = Shard{} }
 func (m *Shard) String() string { return proto.CompactTextString(m) }
 func (*Shard) ProtoMessage()    {}
 func (*Shard) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vttest_beaece7261b82562, []int{0}
+	return fileDescriptor_vttest_6aca346ef34e15cf, []int{0}
 }
 func (m *Shard) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Shard.Unmarshal(m, b)
@@ -96,7 +96,7 @@ func (m *Keyspace) Reset()         { *m = Keyspace{} }
 func (m *Keyspace) String() string { return proto.CompactTextString(m) }
 func (*Keyspace) ProtoMessage()    {}
 func (*Keyspace) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vttest_beaece7261b82562, []int{1}
+	return fileDescriptor_vttest_6aca346ef34e15cf, []int{1}
 }
 func (m *Keyspace) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Keyspace.Unmarshal(m, b)
@@ -180,7 +180,7 @@ func (m *VTTestTopology) Reset()         { *m = VTTestTopology{} }
 func (m *VTTestTopology) String() string { return proto.CompactTextString(m) }
 func (*VTTestTopology) ProtoMessage()    {}
 func (*VTTestTopology) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vttest_beaece7261b82562, []int{2}
+	return fileDescriptor_vttest_6aca346ef34e15cf, []int{2}
 }
 func (m *VTTestTopology) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VTTestTopology.Unmarshal(m, b)
@@ -220,9 +220,9 @@ func init() {
 	proto.RegisterType((*VTTestTopology)(nil), "vttest.VTTestTopology")
 }
 
-func init() { proto.RegisterFile("vttest.proto", fileDescriptor_vttest_beaece7261b82562) }
+func init() { proto.RegisterFile("vttest.proto", fileDescriptor_vttest_6aca346ef34e15cf) }
 
-var fileDescriptor_vttest_beaece7261b82562 = []byte{
+var fileDescriptor_vttest_6aca346ef34e15cf = []byte{
 	// 322 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x51, 0xcb, 0x6a, 0xe3, 0x40,
 	0x10, 0x44, 0xb6, 0xa5, 0x5d, 0xb7, 0x1f, 0x98, 0xc1, 0x87, 0xb9, 0xad, 0xd7, 0xc6, 0xa0, 0x93,

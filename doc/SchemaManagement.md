@@ -64,7 +64,7 @@ ValidateSchemaShard user/0
 
 The <code>[ValidateSchemaKeyspace]({% link reference/vtctl.md %}#validateschemakeyspace)</code>
 command confirms that all of the tablets in a given keyspace have
-the the same schema as the master tablet on shard <code>0</code>
+the same schema as the master tablet on shard <code>0</code>
 in that keyspace. Thus, whereas the <code>ValidateSchemaShard</code>
 command confirms the consistency of the schema on tablets within a shard
 for a given keyspace, <code>ValidateSchemaKeyspace</code> confirms the
