@@ -18,6 +18,7 @@ package topotools
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -76,19 +77,26 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 	// srvKeyspaceMap is a map:
 	//   key: cell
 	//   value: topo.SrvKeyspace object being built
+	// We only build this in two scenarios:
+	// - The object does not exist.
+	// - ServedFrom changed.
 	srvKeyspaceMap := make(map[string]*topodatapb.SrvKeyspace)
 	for _, cell := range cells {
-		_, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
+		srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 		switch {
 		case err == nil:
-			// NOOP
-		case topo.IsErrType(err, topo.NoNode):
-			if _, ok := srvKeyspaceMap[cell]; !ok {
+			if !reflect.DeepEqual(srvKeyspace.ServedFrom, ki.ComputeCellServedFrom(cell)) {
 				srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
 					ShardingColumnName: ki.ShardingColumnName,
 					ShardingColumnType: ki.ShardingColumnType,
 					ServedFrom:         ki.ComputeCellServedFrom(cell),
 				}
+			}
+		case topo.IsErrType(err, topo.NoNode):
+			srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
+				ShardingColumnName: ki.ShardingColumnName,
+				ShardingColumnType: ki.ShardingColumnType,
+				ServedFrom:         ki.ComputeCellServedFrom(cell),
 			}
 		default:
 			// Couldn't get srvKeyspace, not

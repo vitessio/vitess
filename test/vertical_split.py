@@ -523,10 +523,10 @@ msg varchar(64)
     for ksf in keyspace_json['served_froms']:
       if ksf['tablet_type'] == topodata_pb2.RDONLY:
         found = True
-        self.assertEqual(ksf['cells'], ['test_nj'])
+        self.assertEqual(sorted(ksf['cells']), ['test_ca', 'test_nj'])
     self.assertTrue(found)
     utils.run_vtctl(['SetKeyspaceServedFrom', '-source=source_keyspace',
-                     '-remove', '-cells=test_nj', 'destination_keyspace',
+                     '-remove', '-cells=test_nj,test_ca', 'destination_keyspace',
                      'rdonly'], auto_log=True)
     keyspace_json = utils.run_vtctl_json(
         ['GetKeyspace', 'destination_keyspace'])
