@@ -1018,8 +1018,11 @@ func (wr *Wrangler) migrateServedFromLocked(ctx context.Context, ki *topo.Keyspa
 	if reverse {
 		ki.UpdateServedFromMap(servedType, cells, destinationShard.SourceShards[0].Keyspace, false, nil)
 	} else {
-		// Check with Sugi, I think in this world, there is no longer the concept of a destinationShard.Cells, so it must be think as all cells all the time.
-		ki.UpdateServedFromMap(servedType, cells, destinationShard.SourceShards[0].Keyspace, true, nil)
+		destinationShardcells, err := wr.ts.GetShardServingCells(ctx, destinationShard)
+		if err != nil {
+			return err
+		}
+		ki.UpdateServedFromMap(servedType, cells, destinationShard.SourceShards[0].Keyspace, true, destinationShardcells)
 	}
 
 	// re-read and check the destination shard
