@@ -16,7 +16,9 @@ limitations under the License.
 
 package mysql
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+)
 
 // This file contains utility methods to create binlog replication
 // packets. They are mostly used for testing.

@@ -16,7 +16,9 @@ limitations under the License.
 
 package throttler
 
-import "time"
+import (
+	"time"
+)
 
 // fakeRatesHistory simplifies faking the actual throttler rate for each
 // 1 second interval. With the add() method up to a given time all missing
