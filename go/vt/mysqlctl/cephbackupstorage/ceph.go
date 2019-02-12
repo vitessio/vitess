@@ -88,7 +88,7 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 
 		// Give PutObject() the read end of the pipe.
 		object := objName(bh.dir, bh.name, filename)
-		_, err := bh.client.PutObject(bucket, object, reader, -1, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+		_, err := bh.client.PutObjectWithContext(ctx, bucket, object, reader, -1, minio.PutObjectOptions{ContentType: "application/octet-stream"})
 		if err != nil {
 			// Signal the writer that an error occurred, in case it's not done writing yet.
 			reader.CloseWithError(err)
@@ -126,7 +126,7 @@ func (bh *CephBackupHandle) ReadFile(ctx context.Context, filename string) (io.R
 	// ceph bucket name
 	bucket := alterBucketName(bh.dir)
 	object := objName(bh.dir, bh.name, filename)
-	return bh.client.GetObject(bucket, object, minio.GetObjectOptions{})
+	return bh.client.GetObjectWithContext(ctx, bucket, object, minio.GetObjectOptions{})
 }
 
 // CephBackupStorage implements BackupStorage for Ceph Cloud Storage.
