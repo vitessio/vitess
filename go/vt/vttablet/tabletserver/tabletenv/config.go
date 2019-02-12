@@ -99,7 +99,7 @@ func init() {
 	flag.BoolVar(&Config.HeartbeatEnable, "heartbeat_enable", DefaultQsConfig.HeartbeatEnable, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
 	flag.DurationVar(&Config.HeartbeatInterval, "heartbeat_interval", DefaultQsConfig.HeartbeatInterval, "How frequently to read and write replication heartbeat.")
 
-	flag.BoolVar(&Config.EnforceStrictTransTables, "enforce_strict_trans_tables", DefaultQsConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
+	flag.BoolVar(&Config.EnforceStrictTransTables, "enforce_strict_trans_tables", DefaultQsConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
 	flag.BoolVar(&Config.EnableConsolidator, "enable-consolidator", DefaultQsConfig.EnableConsolidator, "This option enables the query consolidator.")
 }
 

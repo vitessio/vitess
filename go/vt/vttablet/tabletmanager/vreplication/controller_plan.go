@@ -23,8 +23,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-// plan is the plan for vreplication control statements.
-type plan struct {
+// controllerPlan is the plan for vreplication control statements.
+type controllerPlan struct {
 	opcode int
 	query  string
 	id     int
@@ -37,8 +37,8 @@ const (
 	selectQuery
 )
 
-// getPlan parses the input query and returns an appropriate plan.
-func getPlan(query string) (*plan, error) {
+// buildControllerPlan parses the input query and returns an appropriate plan.
+func buildControllerPlan(query string) (*controllerPlan, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func getPlan(query string) (*plan, error) {
 	}
 }
 
-func buildInsertPlan(ins *sqlparser.Insert) (*plan, error) {
+func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	if ins.Action != sqlparser.InsertStr {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
 	}
@@ -99,13 +99,13 @@ func buildInsertPlan(ins *sqlparser.Insert) (*plan, error) {
 			return nil, fmt.Errorf("id should not have a value: %v", sqlparser.String(ins))
 		}
 	}
-	return &plan{
+	return &controllerPlan{
 		opcode: insertQuery,
 		query:  sqlparser.String(ins),
 	}, nil
 }
 
-func buildUpdatePlan(upd *sqlparser.Update) (*plan, error) {
+func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	if sqlparser.String(upd.TableExprs) != "_vt.vreplication" {
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(upd.TableExprs))
 	}
@@ -123,14 +123,14 @@ func buildUpdatePlan(upd *sqlparser.Update) (*plan, error) {
 		return nil, err
 	}
 
-	return &plan{
+	return &controllerPlan{
 		opcode: updateQuery,
 		query:  sqlparser.String(upd),
 		id:     id,
 	}, nil
 }
 
-func buildDeletePlan(del *sqlparser.Delete) (*plan, error) {
+func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	if del.Targets != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
 	}
@@ -149,18 +149,18 @@ func buildDeletePlan(del *sqlparser.Delete) (*plan, error) {
 		return nil, err
 	}
 
-	return &plan{
+	return &controllerPlan{
 		opcode: deleteQuery,
 		query:  sqlparser.String(del),
 		id:     id,
 	}, nil
 }
 
-func buildSelectPlan(sel *sqlparser.Select) (*plan, error) {
+func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
 	if sqlparser.String(sel.From) != "_vt.vreplication" {
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(sel.From))
 	}
-	return &plan{
+	return &controllerPlan{
 		opcode: selectQuery,
 		query:  sqlparser.String(sel),
 	}, nil

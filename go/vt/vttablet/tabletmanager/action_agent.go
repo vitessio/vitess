@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/dbconnpool"
 
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/history"
@@ -204,6 +205,11 @@ type ActionAgent struct {
 	// _slaveStopped remembers if we've been told to stop replicating.
 	// If it's nil, we'll try to check for the slaveStoppedFile.
 	_slaveStopped *bool
+
+	// _lockTablesConnection is used to get and release the table read locks to pause replication
+	_lockTablesConnection *dbconnpool.DBConnection
+	_lockTablesTimer      *time.Timer
+	_lockTablesTimeout    *time.Duration
 }
 
 // NewActionAgent creates a new ActionAgent and registers all the

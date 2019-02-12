@@ -83,6 +83,24 @@ type Route struct {
 	ScatterErrorsAsWarnings bool
 }
 
+// NewSimpleRoute creates a Route with the bare minimum of parameters.
+func NewSimpleRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace) *Route {
+	return &Route{
+		Opcode:   opcode,
+		Keyspace: keyspace,
+	}
+}
+
+// NewRoute creates a Route.
+func NewRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace, query, fieldQuery string) *Route {
+	return &Route{
+		Opcode:     opcode,
+		Keyspace:   keyspace,
+		Query:      query,
+		FieldQuery: fieldQuery,
+	}
+}
+
 // OrderbyParams specifies the parameters for ordering.
 // This is used for merge-sorting scatter queries.
 type OrderbyParams struct {

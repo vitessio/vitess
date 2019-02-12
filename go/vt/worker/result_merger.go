@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"io"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -41,8 +41,9 @@ const ResultSizeRows = 64
 // The output stream will be sorted by ascending primary key order.
 // It implements the ResultReader interface.
 type ResultMerger struct {
-	inputs []ResultReader
-	fields []*querypb.Field
+	inputs    []ResultReader
+	allInputs []ResultReader
+	fields    []*querypb.Field
 	// output is the buffer of merged rows. Once it's full, we'll return it in
 	// Next() (wrapped in a sqltypes.Result).
 	output [][]sqltypes.Value
@@ -91,6 +92,7 @@ func NewResultMerger(inputs []ResultReader, pkFieldCount int) (*ResultMerger, er
 
 	rm := &ResultMerger{
 		inputs:      activeInputs,
+		allInputs:   inputs,
 		fields:      fields,
 		nextRowHeap: nextRowHeap,
 	}
@@ -175,6 +177,13 @@ func (rm *ResultMerger) Next() (*sqltypes.Result, error) {
 	rm.reset()
 
 	return result, nil
+}
+
+// Close closes all inputs
+func (rm *ResultMerger) Close(ctx context.Context) {
+	for _, i := range rm.allInputs {
+		i.Close(ctx)
+	}
 }
 
 func (rm *ResultMerger) deleteInput(deleteMe ResultReader) {

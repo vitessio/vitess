@@ -17,8 +17,13 @@ limitations under the License.
 package dbconfigs
 
 import (
+	"fmt"
+	"io/ioutil"
+	"os"
 	"reflect"
+	"syscall"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 )
@@ -215,5 +220,49 @@ func TestCopy(t *testing.T) {
 	got := want.Copy()
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("DBConfig: %v, want %v", got, want)
+	}
+}
+
+func TestCredentialsFileHUP(t *testing.T) {
+	tmpFile, err := ioutil.TempFile("", "credentials.json")
+	if err != nil {
+		t.Fatalf("couldn't create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	*dbCredentialsFile = tmpFile.Name()
+	*dbCredentialsServer = "file"
+	oldStr := "str1"
+	jsonConfig := fmt.Sprintf("{\"%s\": [\"%s\"]}", oldStr, oldStr)
+	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		t.Fatalf("couldn't write temp file: %v", err)
+	}
+	cs := GetCredentialsServer()
+	_, pass, err := cs.GetUserAndPassword(oldStr)
+	if pass != oldStr {
+		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
+	}
+	hupTest(t, tmpFile, oldStr, "str2")
+	hupTest(t, tmpFile, "str2", "str3") // still handling the signal
+}
+
+func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
+	cs := GetCredentialsServer()
+	jsonConfig := fmt.Sprintf("{\"%s\": [\"%s\"]}", newStr, newStr)
+	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		t.Fatalf("couldn't overwrite temp file: %v", err)
+	}
+	_, pass, err := cs.GetUserAndPassword(oldStr)
+	if pass != oldStr {
+		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
+	}
+	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+	time.Sleep(100 * time.Millisecond) // wait for signal handler
+	_, pass, err = cs.GetUserAndPassword(oldStr)
+	if err != ErrUnknownUser {
+		t.Fatalf("Should not have old %s after config reload", oldStr)
+	}
+	_, pass, err = cs.GetUserAndPassword(newStr)
+	if pass != newStr {
+		t.Fatalf("%s's Password should be '%s'", newStr, newStr)
 	}
 }

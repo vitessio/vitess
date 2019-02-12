@@ -37,7 +37,7 @@ For `select` statements, we can follow the V3 design principles, there will be a
 
 While analyzing the `WHERE` clause, if the primitive is a `vindexFunc`, we look for the three possible combinations listed above. Once they're matched, we can assign the corresponding opcode.
 
-While analyizing the `SELECT` expression list, we verify that that the user has specified expressions as required by each opcode.
+While analyzing the `SELECT` expression list, we verify that the user has specified expressions as required by each opcode.
 
 Joins and subqueries will not be allowed, at least for now.
 

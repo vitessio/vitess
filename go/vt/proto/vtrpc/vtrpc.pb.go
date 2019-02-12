@@ -168,7 +168,7 @@ func (x Code) String() string {
 	return proto.EnumName(Code_name, int32(x))
 }
 func (Code) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_vtrpc_63266364cf161411, []int{0}
+	return fileDescriptor_vtrpc_88a14d8f1bc03cf5, []int{0}
 }
 
 // LegacyErrorCode is the enum values for Errors. This type is deprecated.
@@ -276,7 +276,7 @@ func (x LegacyErrorCode) String() string {
 	return proto.EnumName(LegacyErrorCode_name, int32(x))
 }
 func (LegacyErrorCode) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_vtrpc_63266364cf161411, []int{1}
+	return fileDescriptor_vtrpc_88a14d8f1bc03cf5, []int{1}
 }
 
 // CallerID is passed along RPCs to identify the originating client
@@ -311,7 +311,7 @@ func (m *CallerID) Reset()         { *m = CallerID{} }
 func (m *CallerID) String() string { return proto.CompactTextString(m) }
 func (*CallerID) ProtoMessage()    {}
 func (*CallerID) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vtrpc_63266364cf161411, []int{0}
+	return fileDescriptor_vtrpc_88a14d8f1bc03cf5, []int{0}
 }
 func (m *CallerID) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CallerID.Unmarshal(m, b)
@@ -369,7 +369,7 @@ func (m *RPCError) Reset()         { *m = RPCError{} }
 func (m *RPCError) String() string { return proto.CompactTextString(m) }
 func (*RPCError) ProtoMessage()    {}
 func (*RPCError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vtrpc_63266364cf161411, []int{1}
+	return fileDescriptor_vtrpc_88a14d8f1bc03cf5, []int{1}
 }
 func (m *RPCError) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RPCError.Unmarshal(m, b)
@@ -417,9 +417,9 @@ func init() {
 	proto.RegisterEnum("vtrpc.LegacyErrorCode", LegacyErrorCode_name, LegacyErrorCode_value)
 }
 
-func init() { proto.RegisterFile("vtrpc.proto", fileDescriptor_vtrpc_63266364cf161411) }
+func init() { proto.RegisterFile("vtrpc.proto", fileDescriptor_vtrpc_88a14d8f1bc03cf5) }
 
-var fileDescriptor_vtrpc_63266364cf161411 = []byte{
+var fileDescriptor_vtrpc_88a14d8f1bc03cf5 = []byte{
 	// 605 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x93, 0x4d, 0x4f, 0x1b, 0x3b,
 	0x14, 0x86, 0xc9, 0x07, 0xf9, 0x38, 0x13, 0x88, 0x31, 0x5f, 0xe1, 0x5e, 0xae, 0xee, 0x55, 0x56,

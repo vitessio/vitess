@@ -364,7 +364,13 @@ func TestBindInSelect(t *testing.T) {
 		},
 	}
 	if !qr.Equal(want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
+		// MariaDB 10.3 has different behavior.
+		want2 := want.Copy()
+		want2.Fields[0].Type = sqltypes.Int32
+		want2.Rows[0][0] = sqltypes.NewInt32(1)
+		if !qr.Equal(want2) {
+			t.Errorf("Execute:\n%v, want\n%v or\n%v", prettyPrint(*qr), prettyPrint(*want), prettyPrint(*want2))
+		}
 	}
 
 	// String bind var.
@@ -382,7 +388,6 @@ func TestBindInSelect(t *testing.T) {
 			Type:         sqltypes.VarChar,
 			ColumnLength: 12,
 			Charset:      33,
-			Decimals:     31,
 			Flags:        1,
 		}},
 		RowsAffected: 1,
@@ -392,6 +397,8 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
+	// MariaDB 10.3 has different behavior.
+	qr.Fields[0].Decimals = 0
 	if !qr.Equal(want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
@@ -411,7 +418,6 @@ func TestBindInSelect(t *testing.T) {
 			Type:         sqltypes.VarChar,
 			ColumnLength: 6,
 			Charset:      33,
-			Decimals:     31,
 			Flags:        1,
 		}},
 		RowsAffected: 1,
@@ -421,6 +427,8 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
+	// MariaDB 10.3 has different behavior.
+	qr.Fields[0].Decimals = 0
 	if !qr.Equal(want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}

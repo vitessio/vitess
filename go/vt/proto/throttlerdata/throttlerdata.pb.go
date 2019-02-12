@@ -29,7 +29,7 @@ func (m *MaxRatesRequest) Reset()         { *m = MaxRatesRequest{} }
 func (m *MaxRatesRequest) String() string { return proto.CompactTextString(m) }
 func (*MaxRatesRequest) ProtoMessage()    {}
 func (*MaxRatesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{0}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{0}
 }
 func (m *MaxRatesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_MaxRatesRequest.Unmarshal(m, b)
@@ -63,7 +63,7 @@ func (m *MaxRatesResponse) Reset()         { *m = MaxRatesResponse{} }
 func (m *MaxRatesResponse) String() string { return proto.CompactTextString(m) }
 func (*MaxRatesResponse) ProtoMessage()    {}
 func (*MaxRatesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{1}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{1}
 }
 func (m *MaxRatesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_MaxRatesResponse.Unmarshal(m, b)
@@ -102,7 +102,7 @@ func (m *SetMaxRateRequest) Reset()         { *m = SetMaxRateRequest{} }
 func (m *SetMaxRateRequest) String() string { return proto.CompactTextString(m) }
 func (*SetMaxRateRequest) ProtoMessage()    {}
 func (*SetMaxRateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{2}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{2}
 }
 func (m *SetMaxRateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetMaxRateRequest.Unmarshal(m, b)
@@ -142,7 +142,7 @@ func (m *SetMaxRateResponse) Reset()         { *m = SetMaxRateResponse{} }
 func (m *SetMaxRateResponse) String() string { return proto.CompactTextString(m) }
 func (*SetMaxRateResponse) ProtoMessage()    {}
 func (*SetMaxRateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{3}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{3}
 }
 func (m *SetMaxRateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetMaxRateResponse.Unmarshal(m, b)
@@ -259,7 +259,7 @@ func (m *Configuration) Reset()         { *m = Configuration{} }
 func (m *Configuration) String() string { return proto.CompactTextString(m) }
 func (*Configuration) ProtoMessage()    {}
 func (*Configuration) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{4}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{4}
 }
 func (m *Configuration) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Configuration.Unmarshal(m, b)
@@ -391,7 +391,7 @@ func (m *GetConfigurationRequest) Reset()         { *m = GetConfigurationRequest
 func (m *GetConfigurationRequest) String() string { return proto.CompactTextString(m) }
 func (*GetConfigurationRequest) ProtoMessage()    {}
 func (*GetConfigurationRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{5}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{5}
 }
 func (m *GetConfigurationRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetConfigurationRequest.Unmarshal(m, b)
@@ -432,7 +432,7 @@ func (m *GetConfigurationResponse) Reset()         { *m = GetConfigurationRespon
 func (m *GetConfigurationResponse) String() string { return proto.CompactTextString(m) }
 func (*GetConfigurationResponse) ProtoMessage()    {}
 func (*GetConfigurationResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{6}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{6}
 }
 func (m *GetConfigurationResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetConfigurationResponse.Unmarshal(m, b)
@@ -478,7 +478,7 @@ func (m *UpdateConfigurationRequest) Reset()         { *m = UpdateConfigurationR
 func (m *UpdateConfigurationRequest) String() string { return proto.CompactTextString(m) }
 func (*UpdateConfigurationRequest) ProtoMessage()    {}
 func (*UpdateConfigurationRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{7}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{7}
 }
 func (m *UpdateConfigurationRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UpdateConfigurationRequest.Unmarshal(m, b)
@@ -532,7 +532,7 @@ func (m *UpdateConfigurationResponse) Reset()         { *m = UpdateConfiguration
 func (m *UpdateConfigurationResponse) String() string { return proto.CompactTextString(m) }
 func (*UpdateConfigurationResponse) ProtoMessage()    {}
 func (*UpdateConfigurationResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{8}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{8}
 }
 func (m *UpdateConfigurationResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UpdateConfigurationResponse.Unmarshal(m, b)
@@ -573,7 +573,7 @@ func (m *ResetConfigurationRequest) Reset()         { *m = ResetConfigurationReq
 func (m *ResetConfigurationRequest) String() string { return proto.CompactTextString(m) }
 func (*ResetConfigurationRequest) ProtoMessage()    {}
 func (*ResetConfigurationRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{9}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{9}
 }
 func (m *ResetConfigurationRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ResetConfigurationRequest.Unmarshal(m, b)
@@ -613,7 +613,7 @@ func (m *ResetConfigurationResponse) Reset()         { *m = ResetConfigurationRe
 func (m *ResetConfigurationResponse) String() string { return proto.CompactTextString(m) }
 func (*ResetConfigurationResponse) ProtoMessage()    {}
 func (*ResetConfigurationResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_throttlerdata_7d084fd3a7704c85, []int{10}
+	return fileDescriptor_throttlerdata_d10a8d735853021e, []int{10}
 }
 func (m *ResetConfigurationResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ResetConfigurationResponse.Unmarshal(m, b)
@@ -656,9 +656,9 @@ func init() {
 	proto.RegisterType((*ResetConfigurationResponse)(nil), "throttlerdata.ResetConfigurationResponse")
 }
 
-func init() { proto.RegisterFile("throttlerdata.proto", fileDescriptor_throttlerdata_7d084fd3a7704c85) }
+func init() { proto.RegisterFile("throttlerdata.proto", fileDescriptor_throttlerdata_d10a8d735853021e) }
 
-var fileDescriptor_throttlerdata_7d084fd3a7704c85 = []byte{
+var fileDescriptor_throttlerdata_d10a8d735853021e = []byte{
 	// 734 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x55, 0x5f, 0x4f, 0x03, 0x45,
 	0x10, 0xcf, 0x51, 0x8a, 0x30, 0xa5, 0x40, 0x17, 0x84, 0xa3, 0x18, 0x53, 0x2f, 0x31, 0x36, 0x8d,

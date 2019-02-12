@@ -33,7 +33,7 @@ func (m *ExecuteVtctlCommandRequest) Reset()         { *m = ExecuteVtctlCommandR
 func (m *ExecuteVtctlCommandRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteVtctlCommandRequest) ProtoMessage()    {}
 func (*ExecuteVtctlCommandRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vtctldata_1ba3ba7c409e0e97, []int{0}
+	return fileDescriptor_vtctldata_116d6c451a061272, []int{0}
 }
 func (m *ExecuteVtctlCommandRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteVtctlCommandRequest.Unmarshal(m, b)
@@ -79,7 +79,7 @@ func (m *ExecuteVtctlCommandResponse) Reset()         { *m = ExecuteVtctlCommand
 func (m *ExecuteVtctlCommandResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteVtctlCommandResponse) ProtoMessage()    {}
 func (*ExecuteVtctlCommandResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vtctldata_1ba3ba7c409e0e97, []int{1}
+	return fileDescriptor_vtctldata_116d6c451a061272, []int{1}
 }
 func (m *ExecuteVtctlCommandResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ExecuteVtctlCommandResponse.Unmarshal(m, b)
@@ -111,9 +111,9 @@ func init() {
 	proto.RegisterType((*ExecuteVtctlCommandResponse)(nil), "vtctldata.ExecuteVtctlCommandResponse")
 }
 
-func init() { proto.RegisterFile("vtctldata.proto", fileDescriptor_vtctldata_1ba3ba7c409e0e97) }
+func init() { proto.RegisterFile("vtctldata.proto", fileDescriptor_vtctldata_116d6c451a061272) }
 
-var fileDescriptor_vtctldata_1ba3ba7c409e0e97 = []byte{
+var fileDescriptor_vtctldata_116d6c451a061272 = []byte{
 	// 200 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0xcf, 0xd1, 0x4a, 0x87, 0x30,
 	0x14, 0x06, 0x70, 0xd6, 0xbf, 0x82, 0xff, 0x42, 0x83, 0x5d, 0x89, 0xdd, 0x88, 0x54, 0xec, 0xca,

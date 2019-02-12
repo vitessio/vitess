@@ -128,10 +128,10 @@ var _Vtworker_serviceDesc = grpc.ServiceDesc{
 }
 
 func init() {
-	proto.RegisterFile("vtworkerservice.proto", fileDescriptor_vtworkerservice_0d36cb3c7cfddd2b)
+	proto.RegisterFile("vtworkerservice.proto", fileDescriptor_vtworkerservice_4efa3310356e3c00)
 }
 
-var fileDescriptor_vtworkerservice_0d36cb3c7cfddd2b = []byte{
+var fileDescriptor_vtworkerservice_4efa3310356e3c00 = []byte{
 	// 151 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x2d, 0x2b, 0x29, 0xcf,
 	0x2f, 0xca, 0x4e, 0x2d, 0x2a, 0x4e, 0x2d, 0x2a, 0xcb, 0x4c, 0x4e, 0xd5, 0x2b, 0x28, 0xca, 0x2f,

@@ -89,6 +89,10 @@ type TabletManagerClient interface {
 	// ApplySchema will apply a schema change
 	ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
+	LockTables(ctx context.Context, tablet *topodatapb.Tablet) error
+
+	UnlockTables(ctx context.Context, tablet *topodatapb.Tablet) error
+
 	// ExecuteFetchAsDba executes a query remotely using the DBA pool.
 	// If usePool is set, a connection pool may be used to make the
 	// query faster. Close() should close the pool in that case.
@@ -121,6 +125,9 @@ type TabletManagerClient interface {
 
 	// StartSlave starts the mysql replication
 	StartSlave(ctx context.Context, tablet *topodatapb.Tablet) error
+
+	// StartSlaveUntilAfter starts replication until after the position specified
+	StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error
 
 	// TabletExternallyReparented tells a tablet it is now the master, after an
 	// external tool has already promoted the underlying mysqld to master and

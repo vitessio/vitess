@@ -45,6 +45,10 @@ type flavor interface {
 	// startSlave returns the command to start the slave.
 	startSlaveCommand() string
 
+	// startSlaveUntilAfter will restart replication, but only allow it
+	// to run until `pos` is reached. After reaching pos, replication will be stopped again
+	startSlaveUntilAfter(pos Position) string
+
 	// stopSlave returns the command to stop the slave.
 	stopSlaveCommand() string
 
@@ -144,6 +148,11 @@ func (c *Conn) MasterPosition() (Position, error) {
 // StartSlaveCommand returns the command to start the slave.
 func (c *Conn) StartSlaveCommand() string {
 	return c.flavor.startSlaveCommand()
+}
+
+// StartSlaveUntilAfterCommand returns the command to start the slave.
+func (c *Conn) StartSlaveUntilAfterCommand(pos Position) string {
+	return c.flavor.startSlaveUntilAfter(pos)
 }
 
 // StopSlaveCommand returns the command to stop the slave.
