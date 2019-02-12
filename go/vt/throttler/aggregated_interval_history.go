@@ -16,7 +16,9 @@ limitations under the License.
 
 package throttler
 
-import "time"
+import (
+	"time"
+)
 
 // aggregatedIntervalHistory aggregates data across multiple "intervalHistory"
 // instances. An instance should be mapped to a thread.
