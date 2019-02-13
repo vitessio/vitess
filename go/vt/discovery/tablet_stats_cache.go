@@ -196,24 +196,13 @@ func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStat
 	return e
 }
 
-func (tc *TabletStatsCache) getRegionByCell(cell string) (string, bool) {
-	tc.mu.RLock()
-	defer tc.mu.RUnlock()
-	if region, ok := tc.cellRegions[cell]; ok {
-		return region, true
-	}
-	return "", false
-}
-
-func (tc *TabletStatsCache) getOrCreateRegionByCell(cell string) string {
-	// Fast path
-	if region, ok := tc.getRegionByCell(cell); ok {
-		return region
-	}
-
-	// Slow path
+func (tc *TabletStatsCache) getRegionByCell(cell string) string {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
+
+	if region, ok := tc.cellRegions[cell]; ok {
+		return region
+	}
 
 	region := topo.GetRegionByCell(context.Background(), tc.ts, cell)
 	tc.cellRegions[cell] = region
@@ -225,7 +214,7 @@ func (tc *TabletStatsCache) getOrCreateRegionByCell(cell string) string {
 func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 	if ts.Target.TabletType != topodatapb.TabletType_MASTER &&
 		ts.Tablet.Alias.Cell != tc.cell &&
-		tc.getOrCreateRegionByCell(ts.Tablet.Alias.Cell) != tc.getOrCreateRegionByCell(tc.cell) {
+		tc.getRegionByCell(ts.Tablet.Alias.Cell) != tc.getRegionByCell(tc.cell) {
 		// this is for a non-master tablet in a different cell and a different region, drop it
 		return
 	}
@@ -296,7 +285,7 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 func (tc *TabletStatsCache) makeAggregateMap(stats []*TabletStats) map[string]*querypb.AggregateStats {
 	result := make(map[string]*querypb.AggregateStats)
 	for _, ts := range stats {
-		region := tc.getOrCreateRegionByCell(ts.Tablet.Alias.Cell)
+		region := tc.getRegionByCell(ts.Tablet.Alias.Cell)
 		agg, ok := result[region]
 		if !ok {
 			agg = &querypb.AggregateStats{
@@ -389,7 +378,7 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 			return agg, nil
 		}
 	}
-	targetRegion := tc.getOrCreateRegionByCell(target.Cell)
+	targetRegion := tc.getRegionByCell(target.Cell)
 	agg, ok := e.aggregates[targetRegion]
 	if !ok {
 		return nil, topo.NewError(topo.NoNode, topotools.TargetIdent(target))
