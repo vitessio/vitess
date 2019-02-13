@@ -56,6 +56,8 @@ type TabletStatsCache struct {
 	entries map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry
 	// tsm is a helper to broadcast aggregate stats.
 	tsm srvtopo.TargetStatsMultiplexer
+	// cellRegions is a cache of cell regions
+	cellRegions map[string]string
 }
 
 // tabletStatsCacheEntry is the per keyspace/shard/tabletType
@@ -134,6 +136,7 @@ func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListen
 		aggregatesChan: make(chan []*srvtopo.TargetStatsEntry, 100),
 		entries:        make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
 		tsm:            srvtopo.NewTargetStatsMultiplexer(),
+		cellRegions:    make(map[string]string),
 	}
 
 	if setListener {
@@ -193,13 +196,36 @@ func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStat
 	return e
 }
 
-func (tc *TabletStatsCache) getRegionByCell(cell string) string {
-	return topo.GetRegionByCell(context.Background(), tc.ts, cell)
+func (tc *TabletStatsCache) getRegionByCell(cell string) (string, bool) {
+	tc.mu.RLock()
+	defer tc.mu.RUnlock()
+	if region, ok := tc.cellRegions[cell]; ok {
+		return region, true
+	}
+	return "", false
+}
+
+func (tc *TabletStatsCache) getOrCreateRegionByCell(cell string) string {
+	// Fast path
+	if region, ok := tc.getRegionByCell(cell); ok {
+		return region
+	}
+
+	// Slow path
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	region := topo.GetRegionByCell(context.Background(), tc.ts, cell)
+	tc.cellRegions[cell] = region
+
+	return region
 }
 
 // StatsUpdate is part of the HealthCheckStatsListener interface.
 func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
-	if ts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Tablet.Alias.Cell != tc.cell && tc.getRegionByCell(ts.Tablet.Alias.Cell) != tc.getRegionByCell(tc.cell) {
+	if ts.Target.TabletType != topodatapb.TabletType_MASTER &&
+		ts.Tablet.Alias.Cell != tc.cell &&
+		tc.getOrCreateRegionByCell(ts.Tablet.Alias.Cell) != tc.getOrCreateRegionByCell(tc.cell) {
 		// this is for a non-master tablet in a different cell and a different region, drop it
 		return
 	}
@@ -270,7 +296,7 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 func (tc *TabletStatsCache) makeAggregateMap(stats []*TabletStats) map[string]*querypb.AggregateStats {
 	result := make(map[string]*querypb.AggregateStats)
 	for _, ts := range stats {
-		region := tc.getRegionByCell(ts.Tablet.Alias.Cell)
+		region := tc.getOrCreateRegionByCell(ts.Tablet.Alias.Cell)
 		agg, ok := result[region]
 		if !ok {
 			agg = &querypb.AggregateStats{
@@ -363,7 +389,7 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 			return agg, nil
 		}
 	}
-	targetRegion := tc.getRegionByCell(target.Cell)
+	targetRegion := tc.getOrCreateRegionByCell(target.Cell)
 	agg, ok := e.aggregates[targetRegion]
 	if !ok {
 		return nil, topo.NewError(topo.NoNode, topotools.TargetIdent(target))
