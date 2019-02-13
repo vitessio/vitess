@@ -609,8 +609,7 @@ func (vp *vplayer) exec(ctx context.Context, sql string) error {
 	vp.stats.Timings.Record("query", time.Now())
 	_, err := vp.dbClient.ExecuteFetch(sql, 0)
 	for err != nil {
-		// 1213: deadlock, 1205: lock wait timeout
-		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == 1213 || sqlErr.Number() == 1205 {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock || sqlErr.Number() == mysql.ERLockWaitTimeout {
 			log.Infof("retryable error: %v, waiting for %v and retrying", sqlErr, dbLockRetryDelay)
 			if err := vp.dbClient.Rollback(); err != nil {
 				return err
