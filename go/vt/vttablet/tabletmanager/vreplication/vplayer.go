@@ -39,7 +39,10 @@ import (
 )
 
 var (
-	idleTimeout      = 1 * time.Second
+	// idleTimeout is set to slightly above 1s, compared to heartbeatTime
+	// set by VStreamer at slightly below 1s. This minimizes conflicts
+	// between the two timeouts.
+	idleTimeout      = 1100 * time.Millisecond
 	dbLockRetryDelay = 1 * time.Second
 	relayLogMaxSize  = 10000
 	relayLogMaxItems = 1000
@@ -61,7 +64,11 @@ type vplayer struct {
 	unsavedGTID *binlogdatapb.VEvent
 	// timeLastSaved is set every time a GTID is saved.
 	timeLastSaved time.Time
-	stopPos       mysql.Position
+	// lastTimestampNs is the last timestamp seen so far.
+	lastTimestampNs int64
+	// timeOffsetNs keeps track of the time offset w.r.t. source tablet.
+	timeOffsetNs int64
+	stopPos      mysql.Position
 
 	// pplan is built based on the source Filter at the beginning.
 	pplan *PlayerPlan
@@ -197,6 +204,11 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		if err != nil {
 			return err
 		}
+		// No events were received. Update SecondsBehindMaster.
+		if len(items) == 0 {
+			behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
+			vp.stats.SecondsBehindMaster.Set(behind / 1e9)
+		}
 		// Filtered replication often ends up receiving a large number of empty transactions.
 		// This is required because the player needs to know the latest position of the source.
 		// This allows it to stop at that position if requested.
@@ -221,6 +233,11 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		}
 		for i, events := range items {
 			for j, event := range events {
+				if event.Timestamp != 0 {
+					vp.lastTimestampNs = event.Timestamp * 1e9
+					vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime
+					vp.stats.SecondsBehindMaster.Set(event.CurrentTime/1e9 - event.Timestamp)
+				}
 				mustSave := false
 				switch event.Type {
 				case binlogdatapb.VEventType_COMMIT:
@@ -354,6 +371,8 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return err
 			}
 		}
+	case binlogdatapb.VEventType_HEARTBEAT:
+		// No-op: heartbeat timings are calculated in outer loop.
 	}
 	return nil
 }
@@ -444,9 +463,6 @@ func (vp *vplayer) updatePos(ts int64) error {
 	vp.unsavedGTID = nil
 	vp.timeLastSaved = time.Now()
 	vp.stats.SetLastPosition(vp.pos)
-	if ts != 0 {
-		vp.stats.SecondsBehindMaster.Set(vp.timeLastSaved.Unix() - ts)
-	}
 	return nil
 }
 
