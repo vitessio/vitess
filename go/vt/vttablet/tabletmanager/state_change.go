@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
@@ -223,12 +224,18 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			} else {
 
 				for _, partition := range srvKeyspace.GetPartitions() {
+					if partition.GetServedType() != newTablet.Type {
+						continue
+					}
+
 					for _, tabletControl := range partition.GetShardTabletControls() {
-						if tabletControl.Name == newTablet.Shard {
+						if key.KeyRangeEqual(tabletControl.GetKeyRange(), newTablet.GetKeyRange()) {
+							log.Infof("This is the partition tabletControl KeyRange: %v newtabletKeyRange: %v changed: %v", tabletControl.GetName(), newTablet.GetShard(), tabletControl.QueryServiceDisabled)
 							if tabletControl.QueryServiceDisabled {
 								allowQuery = false
-								disallowQueryReason = "SrvKeyspace.QueryServiceEnabled set to false"
+								disallowQueryReason = "TabletControl.DisableQueryService set"
 							}
+							break
 						}
 					}
 				}

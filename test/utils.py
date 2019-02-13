@@ -1079,17 +1079,19 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64',
 
 
 def check_shard_query_service(
-    testcase, shard_name, tablet_type, expected_state):
+    testcase, cell, keyspace, shard_name, tablet_type, expected_state):
   """Checks DisableQueryService in the shard record's TabletControlMap."""
   # We assume that query service should be enabled unless
   # DisableQueryService is explicitly True
   query_service_enabled = True
-  tablet_controls = run_vtctl_json(
-      ['GetShard', shard_name]).get('tablet_controls')
-  if tablet_controls:
-    for tc in tablet_controls:
-      if tc['tablet_type'] == tablet_type:
-        if tc.get('disable_query_service', False):
+  ks = run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
+  for partition in ks['partitions']:
+    tablet_type = topodata_pb2.TabletType.Name(partition['served_type'])
+    if tablet_type != tablet_type:
+      continue
+    for shard in partition['shard_tablet_controls']:
+      if shard['name'] == shard_name:
+        if shard['query_service_disabled']:
           query_service_enabled = False
 
   testcase.assertEqual(
@@ -1102,10 +1104,10 @@ def check_shard_query_service(
 
 
 def check_shard_query_services(
-    testcase, shard_names, tablet_type, expected_state):
+    testcase, cell, keyspace, shard_names, tablet_type, expected_state):
   for shard_name in shard_names:
     check_shard_query_service(
-        testcase, shard_name, tablet_type, expected_state)
+        testcase, cell, keyspace, shard_name, tablet_type, expected_state)
 
 
 def check_tablet_query_service(

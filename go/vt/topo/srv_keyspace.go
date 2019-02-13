@@ -28,6 +28,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -326,7 +327,7 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 					for _, si := range shards {
 						found := false
 						for _, tabletControl := range partition.GetShardTabletControls() {
-							if tabletControl.GetName() == si.ShardName() {
+							if key.KeyRangeEqual(tabletControl.GetKeyRange(), si.GetKeyRange()) {
 								found = true
 								tabletControl.QueryServiceDisabled = disableQueryService
 							}
@@ -397,21 +398,38 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 						continue
 					}
 
-					shardReferences := partition.GetShardReferences()[:0]
-					for _, si := range shardsToRemove {
-						for _, shardReference := range shardReferences {
-							if shardReference.GetName() != si.ShardName() {
-								shardReferences = append(shardReferences, shardReference)
+					shardReferences := make([]*topodatapb.ShardReference, 0)
+
+					for _, shardReference := range partition.GetShardReferences() {
+						inShardsToRemove := false
+						for _, si := range shardsToRemove {
+							if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+								inShardsToRemove = true
+								break
 							}
+						}
+
+						if !inShardsToRemove {
+							shardReferences = append(shardReferences, shardReference)
 						}
 					}
 
 					for _, si := range shardsToAdd {
-						shardReference := &topodatapb.ShardReference{
-							Name:     si.ShardName(),
-							KeyRange: si.KeyRange,
+						alreadyAdded := false
+						for _, shardReference := range partition.GetShardReferences() {
+							if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+								alreadyAdded = true
+								break
+							}
 						}
-						shardReferences = append(shardReferences, shardReference)
+
+						if !alreadyAdded {
+							shardReference := &topodatapb.ShardReference{
+								Name:     si.ShardName(),
+								KeyRange: si.KeyRange,
+							}
+							shardReferences = append(shardReferences, shardReference)
+						}
 					}
 
 					partition.ShardReferences = shardReferences

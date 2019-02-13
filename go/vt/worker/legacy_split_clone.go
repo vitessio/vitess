@@ -618,7 +618,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 		destinationWaitGroup.Add(1)
 		go func(keyspace, shard string, kr *topodatapb.KeyRange) {
 			defer destinationWaitGroup.Done()
-			scw.wr.Logger().Infof("Making and populating vreplication table")
+			scw.wr.Logger().Infof("Making and populating vreplication table for %v/%v", keyspace, shard)
 
 			exc := newExecutor(scw.wr, scw.tsc, nil, keyspace, shard, 0)
 			for shardIndex, src := range scw.sourceShards {
