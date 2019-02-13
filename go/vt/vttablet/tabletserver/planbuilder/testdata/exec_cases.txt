@@ -974,7 +974,41 @@ options:PassthroughDMLs
   "PKValues": [[1], [2]]
 }
 
+# message insert with time_scheduled specified with PassthroughDMLs
+options:PassthroughDMLs
+"insert into msg(time_scheduled, id, message) values(1, 2, 'aa')"
+{
+  "PlanID": "INSERT_MESSAGE",
+  "TableName": "msg",
+  "Permissions": [
+    {
+      "TableName": "msg",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "insert into msg(time_scheduled, id, message) values (1, 2, 'aa')",
+  "OuterQuery": "insert into msg(time_scheduled, id, message, time_next, time_created, epoch) values (1, 2, 'aa', 1, :#time_now, 0)",
+  "PKValues": [[1], [2]]
+}
+
 # message insert with no time_schedule
+"insert into msg(id, message) values(2, 'aa')"
+{
+  "PlanID": "INSERT_MESSAGE",
+  "TableName": "msg",
+  "Permissions": [
+    {
+      "TableName": "msg",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "insert into msg(id, message) values (2, 'aa')",
+  "OuterQuery": "insert into msg(id, message, time_scheduled, time_next, time_created, epoch) values (2, 'aa', :#time_now, :#time_now, :#time_now, 0)",
+  "PKValues": [[":#time_now"], [2]]
+}
+
+# message insert with no time_schedule with PassthroughDMLs
+options:PassthroughDMLs
 "insert into msg(id, message) values(2, 'aa')"
 {
   "PlanID": "INSERT_MESSAGE",
