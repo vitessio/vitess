@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -35,6 +36,11 @@ import (
 )
 
 var packetSize = flag.Int("vstream_packet_size", 10000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
+
+// heartbeatTime is set to slightly below 1s, compared to idleTimeout
+// set by VPlayer at slightly above 1s. This minimizes conflicts
+// between the two timeouts.
+var heartbeatTime = 900 * time.Millisecond
 
 type vstreamer struct {
 	ctx    context.Context
@@ -132,9 +138,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD:
 			// We never have to send GTID, BEGIN or FIELD events on their own.
 			bufferedEvents = append(bufferedEvents, vevent)
-		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL:
-			// COMMIT and DDL are terminal. There may be no more events after
-			// these for a long time. So, we have to send whatever we have.
+		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_HEARTBEAT:
+			// COMMIT, DDL and HEARTBEAT must be immediately sent.
 			bufferedEvents = append(bufferedEvents, vevent)
 			vevents := bufferedEvents
 			bufferedEvents = nil
@@ -167,7 +172,16 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 
 	// Main loop: calls bufferAndTransmit as events arrive.
+	timer := time.NewTimer(heartbeatTime)
+	defer timer.Stop()
 	for {
+		timer.Reset(heartbeatTime)
+		// Drain event if timer fired before reset.
+		select {
+		case <-timer.C:
+		default:
+		}
+
 		select {
 		case ev, ok := <-events:
 			if !ok {
@@ -196,6 +210,18 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 		case <-ctx.Done():
 			return nil
+		case <-timer.C:
+			now := time.Now().UnixNano()
+			if err := bufferAndTransmit(&binlogdatapb.VEvent{
+				Type:        binlogdatapb.VEventType_HEARTBEAT,
+				Timestamp:   now / 1e9,
+				CurrentTime: now,
+			}); err != nil {
+				if err == io.EOF {
+					return nil
+				}
+				return fmt.Errorf("error sending event: %v", err)
+			}
 		}
 	}
 }
@@ -392,6 +418,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 	}
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())
+		vevent.CurrentTime = time.Now().UnixNano()
 	}
 	return vevents, nil
 }
