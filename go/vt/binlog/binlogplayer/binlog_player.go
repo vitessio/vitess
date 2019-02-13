@@ -397,7 +397,7 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 		if _, err = blp.exec(string(stmt.Sql)); err == nil {
 			continue
 		}
-		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == 1213 {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock {
 			// Deadlock: ask for retry
 			log.Infof("Deadlock: %v", err)
 			if err = blp.dbClient.Rollback(); err != nil {
