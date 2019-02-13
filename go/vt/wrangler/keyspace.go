@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -479,7 +480,7 @@ func (wr *Wrangler) replicaMigrateServedType(ctx context.Context, keyspace strin
 	// Check and update all source shard records.
 	// Enable query service if needed
 	event.DispatchUpdate(ev, "updating shards to migrate from")
-	if err = wr.updateShardRecords(ctx, keyspace, fromShards, cells, servedType, true, false); err != nil {
+	if err = wr.updateShardRecords(ctx, keyspace, fromShards, cells, servedType, true /* isFrom */, false /* clearSourceShards */); err != nil {
 		return err
 	}
 
@@ -513,7 +514,7 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		for _, partition := range srvKeyspace.GetPartitions() {
 			if partition.GetServedType() != topodatapb.TabletType_MASTER {
 				for _, shardReference := range partition.GetShardReferences() {
-					if shardReference.GetKeyRange() == si.GetKeyRange() {
+					if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
 						shardServedTypes = append(shardServedTypes, partition.GetServedType().String())
 					}
 				}

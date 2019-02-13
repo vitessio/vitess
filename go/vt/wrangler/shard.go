@@ -300,6 +300,12 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 
 	// now we can update the shard
 	wr.Logger().Infof("Removing cell %v from SrvKeyspace %v/%v", cell, keyspace, shard)
+	// lock the keyspace
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "Locking keyspace to remove shard from SrvKeyspace")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
 
 	return wr.ts.RemoveShardServingKeyspace(ctx, shardInfo, shardServingCells)
 }
