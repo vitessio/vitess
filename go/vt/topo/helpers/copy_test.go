@@ -42,7 +42,6 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 	if err := fromTS.CreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("cannot create shard: %v", err)
 	}
-
 	tablet1 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "test_cell",

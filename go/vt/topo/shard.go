@@ -429,43 +429,6 @@ func (si *ShardInfo) removeCellsFromTabletControl(tc *topodatapb.Shard_TabletCon
 	}
 }
 
-// UpdateServedTypesMap handles ServedTypesMap. It can add or remove cells.
-// func (si *ShardInfo) UpdateServedTypesMap(tabletType topodatapb.TabletType, cells []string, remove bool) error {
-// 	sst := si.GetServedType(tabletType)
-
-// 	if remove {
-// 		if sst == nil {
-// 			// nothing to remove
-// 			return nil
-// 		}
-// 		result, emptyList := removeCells(sst.Cells, cells, si.Cells)
-// 		if emptyList {
-// 			// we don't have any cell left, we need to clear this record
-// 			var servedTypes []*topodatapb.Shard_ServedType
-// 			for _, st := range si.ServedTypes {
-// 				if st.TabletType != tabletType {
-// 					servedTypes = append(servedTypes, st)
-// 				}
-// 			}
-// 			si.ServedTypes = servedTypes
-// 			return nil
-// 		}
-// 		sst.Cells = result
-// 		return nil
-// 	}
-
-// 	// add
-// 	if sst == nil {
-// 		si.ServedTypes = append(si.ServedTypes, &topodatapb.Shard_ServedType{
-// 			TabletType: tabletType,
-// 			Cells:      cells,
-// 		})
-// 		return nil
-// 	}
-// 	sst.Cells = addCells(sst.Cells, cells)
-// 	return nil
-// }
-
 //
 // Utility functions for shards
 //
