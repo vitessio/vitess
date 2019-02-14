@@ -24,7 +24,7 @@ config files](https://github.com/vitessio/vitess/blob/312064b96ac0070d9f8990e57a
 To customize the `my.cnf`, you can either add overrides in an additional
 `EXTRA_MY_CNF` file, or modify the files in `$VTROOT/config/mycnf` before
 distributing to your servers. In Kubernetes, you can use a
-[ConfigMap](http://kubernetes.io/docs/user-guide/configmap/) to overwrite
+[ConfigMap](https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/) to overwrite
 the entire `$VTROOT/config/mycnf` directory with your custom versions,
 rather than baking them into a custom container image.
 

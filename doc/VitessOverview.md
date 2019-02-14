@@ -174,11 +174,11 @@ Vitess also includes the following tools:
 
 ## Vitess on Kubernetes
 
-[Kubernetes](http://kubernetes.io/) is an open-source orchestration system for Docker containers, and Vitess can run as a Kubernetes-aware cloud native distributed database.
+[Kubernetes](https://kubernetes.io/) is an open-source orchestration system for Docker containers, and Vitess can run as a Kubernetes-aware cloud native distributed database.
 
 Kubernetes handles scheduling onto nodes in a compute cluster, actively manages workloads on those nodes, and groups containers comprising an application for easy management and discovery.
 This provides an analogous open-source environment to the way Vitess runs in YouTube,
-on the [predecessor to Kubernetes](http://blog.kubernetes.io/2015/04/borg-predecessor-to-kubernetes.html).
+on the [predecessor to Kubernetes](https://kubernetes.io/blog/2015/04/borg-predecessor-to-kubernetes/).
 
 The easiest way to run Vitess is via Kubernetes. However, it's not a requirement, and other types of deployment are used as well.
 
