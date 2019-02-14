@@ -73,7 +73,7 @@ $ git checkout master
 
 Try to commit small pieces along the way as you finish them, with an explanation
 of the changes in the commit message.
-Please see the [Code Review page]({% link contributing/code-reviews.md %}) for more guidance.
+Please see the [Code Review page](/doc/CodeReviews.md) for more guidance.
 
 As you work in a package, you can run just
 the unit tests for that package by running `go test` from within that package.
@@ -116,8 +116,7 @@ After this change, you can run `git push` without arguments:
 
 Then go to the [repository page](https://github.com/vitessio/vitess) and it
 should prompt you to create a Pull Request from a branch you recently pushed.
-You can also [choose a branch manually]
-(https://github.com/vitessio/vitess/compare).
+You can also [choose a branch manually](https://github.com/vitessio/vitess/compare).
 
 ## Addressing Changes
 
