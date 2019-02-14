@@ -112,7 +112,6 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
 	for cell, srvKeyspace := range srvKeyspaceMap {
-		// this is not an error
 		for _, si := range shards {
 			if !si.IsMasterServing {
 				continue
