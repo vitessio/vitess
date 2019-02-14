@@ -512,7 +512,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	ctx = trace.NewContext(ctx, span)
 	var err error
 
-	// The caller intents to update all cells in this case
+	// The caller intents to all cells
 	if len(cells) == 0 {
 		cells, err = ts.GetCellInfoNames(ctx)
 		if err != nil {
