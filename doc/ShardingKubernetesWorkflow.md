@@ -1,6 +1,6 @@
 This guide shows you an example about how to apply range-based sharding
 process in an existing unsharded Vitess [keyspace]({% link overview/concepts.md %}#keyspace)
-in [Kubernetes](http://kubernetes.io/) using the horizontal resharding workflow.
+in [Kubernetes](https://kubernetes.io/) using the horizontal resharding workflow.
 In this example, we will reshard from 1 shard "0" into 2 shards "-80" and "80-".
 We will follow a process similar to the general
 [Horizontal Sharding guide]({% link user-guide/horizontal-sharding-workflow.md %})
