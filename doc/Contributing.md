@@ -34,7 +34,7 @@ A readability reviewer ensures that the reviewee is writing idiomatic code and f
 While there's no Go style guide, there is a set of recommendations in the Go community which add up to an implicit style guide.
 To make sure you're writing idiomatic Go code, please read the following documents:
 
-* Go Readablity slides: https://talks.golang.org/2014/readability.slide
+* Go Readability slides: https://talks.golang.org/2014/readability.slide
   * Talk about Go readability with many specific examples.
 * "Effective Go": https://golang.org/doc/effective_go.html
   * Recommendations for writing good Go code.

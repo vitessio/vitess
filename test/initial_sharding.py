@@ -631,7 +631,7 @@ index by_msg (msg)
     utils.run_vtctl(['DeleteTablet', '-allow_master',
                      shard_master.tablet_alias], auto_log=True)
 
-    # rebuild the serving graph, all mentions of the old shards shoud be gone
+    # rebuild the serving graph, all mentions of the old shards should be gone
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # delete the original shard
