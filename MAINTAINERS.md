@@ -17,7 +17,7 @@ The following is the full list, alphabetically ordered.
 ## Areas of expertise
 
 ### General Vitess
-sougou, demmmer, rafael, dweitzman, tirsen
+sougou, demmer, rafael, dweitzman, tirsen
 
 ### Builds
 dkhenry
