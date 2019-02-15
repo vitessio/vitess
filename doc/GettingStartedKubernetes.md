@@ -1,9 +1,9 @@
-This page explains how to run Vitess on [Kubernetes](http://kubernetes.io).
+This page explains how to run Vitess on [Kubernetes](https://kubernetes.io).
 It also gives the steps to start a Kubernetes cluster with
 [Google Container Engine](https://cloud.google.com/container-engine/).
 
 If you already have Kubernetes v1.0+ running in one of the other
-[supported platforms](http://kubernetes.io/docs/getting-started-guides/),
+[supported platforms](https://kubernetes.io/docs/setup/pick-right-solution/),
 you can skip the `gcloud` steps.
 The `kubectl` steps will apply to any Kubernetes cluster.
 
@@ -230,7 +230,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     and the other is for a
     [local cell]({% link overview/concepts.md %}#cell-data-center)
     called *test*. You can check the status of the
-    [pods](http://kubernetes.io/v1.1/docs/user-guide/pods.html)
+    [pods](https://kubernetes.io/docs/concepts/workloads/pods/)
     in the cluster by running:
 
     ``` sh
@@ -308,8 +308,8 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     To enable RPC access into the Kubernetes cluster, we'll again use
     `kubectl` to set up an authenticated tunnel. Unlike the HTTP proxy
     we used for the web UI, this time we need raw [port forwarding]
-    (http://kubernetes.io/v1.1/docs/user-guide/kubectl/kubectl_port-forward.html)
-    for vtctld's [gRPC](http://grpc.io) port.
+    (https://kubernetes.io/docs/tasks/access-application-cluster/port-forward-access-application-cluster/)
+    for vtctld's [gRPC](https://grpc.io) port.
 
     Since the tunnel needs to target a particular vtctld pod name,
     we've provided the `kvtctl.sh` script, which uses `kubectl` to
@@ -357,7 +357,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     `vttablet` and `mysqld` processes, running on the same
     host. We enforce this coupling in Kubernetes by putting the respective
     containers for vttablet and mysqld inside a single
-    [pod](http://kubernetes.io/v1.1/docs/user-guide/pods.html).
+    [pod](https://kubernetes.io/docs/concepts/workloads/pods/).
 
     Run the following script to launch the vttablet pods, which also include
     mysqld:
@@ -530,7 +530,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     query to the correct `vttablet`. In Kubernetes, a `vtgate` service
     distributes connections to a pool of `vtgate` pods. The pods are curated by
     a [replication controller]
-    (http://kubernetes.io/v1.1/docs/user-guide/replication-controller.html).
+    (https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller/).
 
     ``` sh
     vitess/examples/kubernetes$ ./vtgate-up.sh
@@ -563,11 +563,11 @@ As with the `vtctld` service, by default the GuestBook app is not accessible
 from outside Kubernetes. In this case, since this is a user-facing frontend,
 we set `type: LoadBalancer` in the GuestBook service definition,
 which tells Kubernetes to create a public
-[load balancer](http://kubernetes.io/v1.1/docs/user-guide/services.html#type-loadbalancer)
+[load balancer](https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/)
 using the API for whatever platform your Kubernetes cluster is in.
 
 You also need to [allow access through your platform's firewall]
-(http://kubernetes.io/v1.1/docs/user-guide/services-firewalls.html).
+(https://kubernetes.io/docs/tasks/access-application-cluster/configure-cloud-provider-firewall/).
 
 ``` sh
 # For example, to open port 80 in the GCE firewall:
