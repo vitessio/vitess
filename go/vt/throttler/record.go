@@ -16,7 +16,9 @@ limitations under the License.
 
 package throttler
 
-import "time"
+import (
+	"time"
+)
 
 // record is a single observation.
 type record struct {
