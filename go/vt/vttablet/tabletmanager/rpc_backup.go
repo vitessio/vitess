@@ -46,7 +46,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	// It is not safe to take backups from tablet in this state
 	currentTablet := agent.Tablet()
 	if !allowMaster && currentTablet.Type == topodatapb.TabletType_MASTER {
-		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, restart vttablet in replica mode")
+		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, rerun the backup command with -allow_master")
 	}
 
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
@@ -54,7 +54,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		return err
 	}
 	if !allowMaster && tablet.Type == topodatapb.TabletType_MASTER {
-		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, restart vttablet in replica mode")
+		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, rerun the backup command with -allow_master")
 	}
 	originalType := tablet.Type
 

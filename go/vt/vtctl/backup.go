@@ -107,22 +107,12 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	var secondsBehind uint32
 
 	for i := range tablets {
-		// FIXME: allow_master so that online backups can use master
-		// only run a backup on a replica, rdonly or spare tablet type
+		// find a replica, rdonly or spare tablet type to run the backup on
 		switch tablets[i].Type {
-		case topodatapb.TabletType_MASTER:
-			if *allowMaster {
-				tabletForBackup = tablets[i].Tablet
-				secondsBehind = 0
-				break
-			} else {
-				continue
-			}
 		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE:
 		default:
 			continue
 		}
-
 		// choose the first tablet as the baseline
 		if tabletForBackup == nil {
 			tabletForBackup = tablets[i].Tablet
@@ -134,6 +124,19 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		if stats[i].SecondsBehindMaster < secondsBehind {
 			tabletForBackup = tablets[i].Tablet
 			secondsBehind = stats[i].SecondsBehindMaster
+		}
+	}
+
+	if tabletForBackup == nil && *allowMaster {
+		for i := range tablets {
+			switch tablets[i].Type {
+			case topodatapb.TabletType_MASTER:
+				tabletForBackup = tablets[i].Tablet
+				secondsBehind = 0
+				break
+			default:
+				continue
+			}
 		}
 	}
 

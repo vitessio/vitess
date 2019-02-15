@@ -257,7 +257,7 @@ func Restore(
 	if len(bhs) == 0 {
 		// There are no backups (not even broken/incomplete ones).
 		logger.Errorf("No backup to restore on BackupStorage for directory %v. Starting up empty.", dir)
-		// Since this Was an empty database make sure we start replication at the beginning
+		// Since this is an empty database make sure we start replication at the beginning
 		if err = mysqld.ResetReplication(ctx); err == nil {
 			logger.Errorf("Error reseting slave replication: %v. Continuing", err)
 			err = ErrNoBackup
@@ -273,7 +273,7 @@ func Restore(
 	if err != nil {
 		return mysql.Position{}, fmt.Errorf("Failed to find backup engine: %v", err)
 	}
-	if rval, err = be.ExecuteRestore(ctx, cnf, mysqld, dir, bhs, restoreConcurrency, hookExtraEnv, localMetadata, logger, deleteBeforeRestore, dbName); err != nil {
+	if rval, err = be.ExecuteRestore(ctx, cnf, mysqld, logger, dir, bhs, restoreConcurrency, hookExtraEnv); err != nil {
 		return rval, err
 	}
 

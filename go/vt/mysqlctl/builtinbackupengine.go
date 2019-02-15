@@ -496,21 +496,18 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 	return nil
 }
 
-// ExecuteRestore restores from a backup. If there is no
-// appropriate backup on the BackupStorage, Restore logs an error
-// and returns ErrNoBackup. Any other error is returned.
+// ExecuteRestore restores from a backup. If the restore is successful
+// we return the position from which replication should start
+// otherwise an error is returned
 func (be *BuiltinBackupEngine) ExecuteRestore(
 	ctx context.Context,
 	cnf *Mycnf,
 	mysqld MysqlDaemon,
+	logger logutil.Logger,
 	dir string,
 	bhs []backupstorage.BackupHandle,
 	restoreConcurrency int,
-	hookExtraEnv map[string]string,
-	localMetadata map[string]string,
-	logger logutil.Logger,
-	deleteBeforeRestore bool,
-	dbName string) (mysql.Position, error) {
+	hookExtraEnv map[string]string) (mysql.Position, error) {
 
 	var bh backupstorage.BackupHandle
 	var bm BackupManifest
@@ -562,7 +559,7 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	}
 
 	logger.Infof("Restore: copying all files")
-	if err := restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv); err != nil {
+	if err := be.restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv); err != nil {
 		return mysql.Position{}, err
 	}
 
@@ -571,7 +568,7 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place.
-func restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, transformHook string, compress bool, restoreConcurrency int, hookExtraEnv map[string]string) error {
+func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, transformHook string, compress bool, restoreConcurrency int, hookExtraEnv map[string]string) error {
 	sema := sync2.NewSemaphore(restoreConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
@@ -590,7 +587,7 @@ func restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle
 
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
-			rec.RecordError(restoreFile(ctx, cnf, bh, &fes[i], transformHook, compress, name, hookExtraEnv))
+			rec.RecordError(be.restoreFile(ctx, cnf, bh, &fes[i], transformHook, compress, name, hookExtraEnv))
 		}(i)
 	}
 	wg.Wait()
@@ -598,7 +595,7 @@ func restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle
 }
 
 // restoreFile restores an individual file.
-func restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, name string, hookExtraEnv map[string]string) (err error) {
+func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, name string, hookExtraEnv map[string]string) (err error) {
 	// Open the source file for reading.
 	var source io.ReadCloser
 	source, err = bh.ReadFile(ctx, name)

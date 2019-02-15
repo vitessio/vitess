@@ -27,6 +27,7 @@ import tablet
 import utils
 
 use_mysqlctld = False
+use_xtrabackup = False
 
 tablet_master = None
 tablet_replica1 = None

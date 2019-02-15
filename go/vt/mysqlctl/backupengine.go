@@ -35,7 +35,7 @@ var (
 // BackupEngine is the interface to the backup engine
 type BackupEngine interface {
 	ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error)
-	ExecuteRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, dir string, bhs []backupstorage.BackupHandle, restoreConcurrency int, hookExtraEnv map[string]string, localMetadata map[string]string, logger logutil.Logger, deleteBeforeRestore bool, dbName string) (mysql.Position, error)
+	ExecuteRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir string, bhs []backupstorage.BackupHandle, restoreConcurrency int, hookExtraEnv map[string]string) (mysql.Position, error)
 }
 
 // BackupEngineMap contains the registered implementations for BackupEngine
