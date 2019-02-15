@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -743,6 +745,10 @@ func CreateConsistentTableScanners(ctx context.Context, tablet *topo.TabletInfo,
 // CreateConsistentTransactions creates a number of consistent snapshot transactions,
 // all starting from the same spot in the tx log
 func CreateConsistentTransactions(ctx context.Context, tablet *topo.TabletInfo, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, numberOfScanners int) ([]int64, string, error) {
+	if numberOfScanners < 1 {
+		return nil, "", vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "need more than zero scanners: %d", numberOfScanners)
+	}
+
 	tm := tmclient.NewTabletManagerClient()
 	defer tm.Close()
 
