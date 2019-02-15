@@ -92,6 +92,14 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 					ServedFrom:         ki.ComputeCellServedFrom(cell),
 				}
 			}
+			if ki.ShardingColumnType != topodatapb.KeyspaceIdType_UNSET {
+				srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
+					ShardingColumnName: ki.ShardingColumnName,
+					ShardingColumnType: ki.ShardingColumnType,
+					ServedFrom:         ki.ComputeCellServedFrom(cell),
+				}
+			}
+
 		case topo.IsErrType(err, topo.NoNode):
 			srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
 				ShardingColumnName: ki.ShardingColumnName,
@@ -105,10 +113,11 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 
 	}
 
+	servedTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+
 	// for each entry in the srvKeyspaceMap map, we do the following:
 	// - get the Shard structures for each shard / cell
 	// - if not present, build an empty one from global Shard
-	// - compute the union of the db types (replica, master, ...)
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
 	for cell, srvKeyspace := range srvKeyspaceMap {
@@ -116,7 +125,6 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 			if !si.IsMasterServing {
 				continue
 			}
-			servedTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 			// for each type this shard is supposed to serve,
 			// add it to srvKeyspace.Partitions
 			for _, tabletType := range servedTypes {
