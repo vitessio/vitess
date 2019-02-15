@@ -16,7 +16,9 @@ limitations under the License.
 
 package tableacl
 
-import "strings"
+import (
+	"strings"
+)
 
 // Role defines the level of access on a table
 type Role int
