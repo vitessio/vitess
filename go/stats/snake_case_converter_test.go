@@ -16,7 +16,9 @@ limitations under the License.
 
 package stats
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestToSnakeCase(t *testing.T) {
 	var snakeCaseTest = []struct{ input, output string }{

@@ -16,7 +16,9 @@ limitations under the License.
 
 package stats
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestToKebabCase(t *testing.T) {
 	var kebabCaseTest = []struct{ input, output string }{
