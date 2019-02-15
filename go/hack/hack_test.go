@@ -16,7 +16,9 @@ limitations under the License.
 
 package hack
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestStringArena(t *testing.T) {
 	sarena := NewStringArena(10)
