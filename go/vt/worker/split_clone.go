@@ -797,6 +797,9 @@ func (scw *SplitCloneWorker) findTransactionalSources(ctx context.Context) error
 
 	// stop replication and create transactions to work on
 	txs, gtid, err := CreateConsistentTransactions(ctx, ti, scw.wr, scw.cleaner, scw.sourceReaderCount)
+	if err != nil {
+		return vterrors.Wrapf(err, "error creating consistent transactions")
+	}
 	scw.wr.Logger().Infof("created %v transactions", len(txs))
 	scw.lastPos = gtid
 	scw.transactions = txs
