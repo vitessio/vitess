@@ -138,6 +138,16 @@
         <artifactId>netty-handler</artifactId>
         <version>${netty.handler.version}</version>
       </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-common</artifactId>
+        <version>${netty.handler.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-transport</artifactId>
+        <version>${netty.handler.version}</version>
+      </dependency>
       <!-- TODO(mberlin): When we upgrade grpc, check if we can remove this. Without,
         grpc-client TLS tests fail with error "Jetty ALPN/NPN has not been properly configured.". -->
       <dependency>

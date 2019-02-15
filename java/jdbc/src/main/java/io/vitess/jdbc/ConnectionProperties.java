@@ -61,20 +61,17 @@ public class ConnectionProperties {
   private BooleanConnectionProperty blobsAreStrings = new BooleanConnectionProperty(
       "blobsAreStrings",
       "Should the driver always treat BLOBs as Strings - specifically to work around dubious "
-          + "metadata returned by the server for GROUP BY clauses?",
-      false);
+          + "metadata returned by the server for GROUP BY clauses?", false);
   private BooleanConnectionProperty functionsNeverReturnBlobs = new BooleanConnectionProperty(
       "functionsNeverReturnBlobs",
       "Should the driver always treat data from functions returning BLOBs as Strings - "
           + "specifically to work around dubious metadata returned by the server for GROUP BY "
-          + "clauses?",
-      false);
+          + "clauses?", false);
 
   // Configs for handing tinyint(1)
   private BooleanConnectionProperty tinyInt1isBit = new BooleanConnectionProperty("tinyInt1isBit",
       "Should the driver treat the datatype TINYINT(1) as the BIT type (because the server "
-          + "silently converts BIT -> TINYINT(1) when creating tables)?",
-      true);
+          + "silently converts BIT -> TINYINT(1) when creating tables)?", true);
   private BooleanConnectionProperty yearIsDateType = new BooleanConnectionProperty("yearIsDateType",
       "Should the JDBC driver treat the MySQL type \"YEAR\" as a java.sql.Date, or as a SHORT?",
       true);
@@ -91,29 +88,25 @@ public class ConnectionProperties {
       "useBlobToStoreUTF8OutsideBMP",
       "Tells the driver to treat [MEDIUM/LONG]BLOB columns as [LONG]VARCHAR columns holding text "
           + "encoded in UTF-8 that has characters outside the BMP (4-byte encodings), which MySQL"
-          + " server can't handle natively.",
-      false);
+          + " server can't handle natively.", false);
   private StringConnectionProperty utf8OutsideBmpIncludedColumnNamePattern =
       new StringConnectionProperty(
       "utf8OutsideBmpIncludedColumnNamePattern",
       "Used to specify exclusion rules to \"utf8OutsideBmpExcludedColumnNamePattern\". The regex "
-          + "must follow the patterns used for the java.util.regex package.",
-      null, null);
+          + "must follow the patterns used for the java.util.regex package.", null, null);
   private StringConnectionProperty utf8OutsideBmpExcludedColumnNamePattern =
       new StringConnectionProperty(
       "utf8OutsideBmpExcludedColumnNamePattern",
       "When \"useBlobToStoreUTF8OutsideBMP\" is set to \"true\", column names matching the given "
           + "regex will still be treated as BLOBs unless they match the regex specified for "
           + "\"utf8OutsideBmpIncludedColumnNamePattern\". The regex must follow the patterns used"
-          + " for the java.util.regex package.",
-      null, null);
+          + " for the java.util.regex package.", null, null);
 
   // Default encodings, for when one cannot be determined from field metadata
   private StringConnectionProperty characterEncoding = new StringConnectionProperty(
       "characterEncoding",
       "If a character encoding cannot be detected, which fallback should be used when dealing "
-          + "with strings? (defaults is to 'autodetect')",
-      null, null);
+          + "with strings? (defaults is to 'autodetect')", null, null);
 
   // Vitess-specific configs
   private StringConnectionProperty userName = new StringConnectionProperty(
@@ -121,8 +114,7 @@ public class ConnectionProperties {
       Constants.DEFAULT_USERNAME, null);
   private StringConnectionProperty target = new StringConnectionProperty(Constants.Property.TARGET,
       "Represents keyspace:shard@tabletType to be used to VTGates. keyspace, keyspace:shard, "
-          + "@tabletType all are optional.",
-      Constants.DEFAULT_TARGET, null);
+          + "@tabletType all are optional.", Constants.DEFAULT_TARGET, null);
   private StringConnectionProperty keyspace = new StringConnectionProperty(
       Constants.Property.KEYSPACE, "Targeted keyspace to execute queries on",
       Constants.DEFAULT_KEYSPACE, null);
@@ -145,8 +137,7 @@ public class ConnectionProperties {
   private BooleanConnectionProperty twopcEnabled = new BooleanConnectionProperty(
       Constants.Property.TWOPC_ENABLED,
       "Whether to enable two-phased commit, for atomic distributed commits. See http://vitess"
-          + ".io/user-guide/twopc/",
-      false);
+          + ".io/user-guide/twopc/", false);
   private EnumConnectionProperty<Query.ExecuteOptions.IncludedFields> includedFields =
       new EnumConnectionProperty<>(
       Constants.Property.INCLUDED_FIELDS,
@@ -160,19 +151,16 @@ public class ConnectionProperties {
   private BooleanConnectionProperty useAffectedRows = new BooleanConnectionProperty(
       "useAffectedRows",
       "Don't set the CLIENT_FOUND_ROWS flag when connecting to the server. The vitess default "
-          + "(useAffectedRows=true) is the opposite of mysql-connector-j.",
-      true);
+          + "(useAffectedRows=true) is the opposite of mysql-connector-j.", true);
 
   private BooleanConnectionProperty grpcRetriesEnabled = new BooleanConnectionProperty(
       "grpcRetriesEnabled",
       "If enabled, a gRPC interceptor will ensure retries happen in the case of TRANSIENT gRPC "
-          + "errors.",
-      true);
+          + "errors.", true);
   private LongConnectionProperty grpcRetryInitialBackoffMillis = new LongConnectionProperty(
       "grpcRetriesInitialBackoffMillis",
       "If grpcRetriesEnabled is set, what is the initial backoff time in milliseconds for "
-          + "exponential retry backoff.",
-      10);
+          + "exponential retry backoff.", 10);
   private LongConnectionProperty grpcRetryMaxBackoffMillis = new LongConnectionProperty(
       "grpcRetriesMaxBackoffMillis",
       "If grpcRetriesEnabled is set, what is the maximum backoff time in milliseconds for "
@@ -181,8 +169,12 @@ public class ConnectionProperties {
   private DoubleConnectionProperty grpcRetryBackoffMultiplier = new DoubleConnectionProperty(
       "grpcRetriesBackoffMultiplier",
       "If grpcRetriesEnabled is set, what multiplier should be used to increase exponential "
-          + "backoff on each retry.",
-      1.6);
+          + "backoff on each retry.", 1.6);
+  private StringConnectionProperty grpcChannelProvider = new StringConnectionProperty(
+      "grpcChannelBuilderProvider",
+      "Classname of an implementation of NettyChannelBuilderProvider. If set this class will be "
+          + "used to create channels for the GRPC client.", "", null);
+
   // TLS-related configs
   private BooleanConnectionProperty useSSL = new BooleanConnectionProperty(
       Constants.Property.USE_SSL, "Whether this connection should use transport-layer security",
@@ -190,22 +182,18 @@ public class ConnectionProperties {
   private BooleanConnectionProperty refreshConnection = new BooleanConnectionProperty(
       "refreshConnection",
       "When enabled, the driver will monitor for changes to the keystore and truststore files. If"
-          + " any are detected, SSL-enabled connections will be recreated.",
-      false);
+          + " any are detected, SSL-enabled connections will be recreated.", false);
   private LongConnectionProperty refreshSeconds = new LongConnectionProperty("refreshSeconds",
       "How often in seconds the driver will monitor for changes to the keystore and truststore "
-          + "files, when refreshConnection is enabled.",
-      60);
+          + "files, when refreshConnection is enabled.", 60);
   private BooleanConnectionProperty refreshClosureDelayed = new BooleanConnectionProperty(
       "refreshClosureDelayed",
       "When enabled, the closing of the old connections will be delayed instead of happening "
-          + "instantly.",
-      false);
+          + "instantly.", false);
   private LongConnectionProperty refreshClosureDelaySeconds = new LongConnectionProperty(
       "refreshClosureDelaySeconds",
       "How often in seconds the grace period before closing the old connections that had been "
-          + "recreated.",
-      300);
+          + "recreated.", 300);
   private StringConnectionProperty keyStore = new StringConnectionProperty(
       Constants.Property.KEYSTORE, "The Java .JKS keystore file to use when TLS is enabled", null,
       null);
@@ -215,14 +203,12 @@ public class ConnectionProperties {
   private StringConnectionProperty keyAlias = new StringConnectionProperty(
       Constants.Property.KEY_ALIAS,
       "Alias under which the private key is stored in the keystore file (if not specified, then "
-          + "the "
-          + "first valid `PrivateKeyEntry` will be used)", null, null);
+          + "the " + "first valid `PrivateKeyEntry` will be used)", null, null);
   private StringConnectionProperty keyPassword = new StringConnectionProperty(
       Constants.Property.KEY_PASSWORD,
       "The additional password protecting the private key entry within the keystore file (if not "
           + "specified, then the logic will fallback to the keystore password and then to no "
-          + "password at all)",
-      null, null);
+          + "password at all)", null, null);
   private StringConnectionProperty trustStore = new StringConnectionProperty(
       Constants.Property.TRUSTSTORE, "The Java .JKS truststore file to use when TLS is enabled",
       null, null);
@@ -232,20 +218,17 @@ public class ConnectionProperties {
   private StringConnectionProperty trustAlias = new StringConnectionProperty(
       Constants.Property.TRUST_ALIAS,
       "Alias under which the certficate chain is stored in the truststore file (if not specified,"
-          + " then "
-          + "the first valid `X509Certificate` will be used)", null, null);
+          + " then " + "the first valid `X509Certificate` will be used)", null, null);
 
   private BooleanConnectionProperty treatUtilDateAsTimestamp = new BooleanConnectionProperty(
       "treatUtilDateAsTimestamp",
       "Should the driver treat java.util.Date as a TIMESTAMP for the purposes of "
-          + "PreparedStatement.setObject()",
-      true);
+          + "PreparedStatement.setObject()", true);
 
   private LongConnectionProperty timeout = new LongConnectionProperty("timeout",
       "The default timeout, in millis, to use for queries, connections, and transaction "
           + "commit/rollback. Query timeout can be overridden by explicitly calling "
-          + "setQueryTimeout",
-      Constants.DEFAULT_TIMEOUT);
+          + "setQueryTimeout", Constants.DEFAULT_TIMEOUT);
 
   // Caching of some hot properties to avoid casting over and over
   private Topodata.TabletType tabletTypeCache;
@@ -502,6 +485,14 @@ public class ConnectionProperties {
 
   public void setGrpcRetryBackoffMultiplier(DoubleConnectionProperty grpcRetryBackoffMultiplier) {
     this.grpcRetryBackoffMultiplier = grpcRetryBackoffMultiplier;
+  }
+
+  public String getGrpcChannelProvider() {
+    return grpcChannelProvider.getValueAsString();
+  }
+
+  public void setGrpcChannelProvider(String grpcChannelProviderClassName) {
+    this.grpcChannelProvider.setValue(grpcChannelProviderClassName);
   }
 
   public boolean getUseSSL() {

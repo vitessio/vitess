@@ -27,6 +27,8 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
 import io.vitess.client.RpcClientFactory;
+import io.vitess.client.grpc.netty.DefaultChannelBuilderProvider;
+import io.vitess.client.grpc.netty.NettyChannelBuilderProvider;
 import io.vitess.client.grpc.tls.TlsOptions;
 
 import java.io.File;
@@ -50,17 +52,21 @@ import javax.net.ssl.SSLException;
  */
 public class GrpcClientFactory implements RpcClientFactory {
 
-  private RetryingInterceptorConfig config;
+  private NettyChannelBuilderProvider nettyChannelBuilderProvider;
   private CallCredentials callCredentials;
   private LoadBalancer.Factory loadBalancerFactory;
   private NameResolver.Factory nameResolverFactory;
 
   public GrpcClientFactory() {
-    this(RetryingInterceptorConfig.noOpConfig());
+    this(new DefaultChannelBuilderProvider(RetryingInterceptorConfig.noOpConfig()));
   }
 
   public GrpcClientFactory(RetryingInterceptorConfig config) {
-    this.config = config;
+    this(new DefaultChannelBuilderProvider(config));
+  }
+
+  public GrpcClientFactory(NettyChannelBuilderProvider nettyChannelBuilderProvider) {
+    this.nettyChannelBuilderProvider = nettyChannelBuilderProvider;
   }
 
   public GrpcClientFactory setCallCredentials(CallCredentials value) {
@@ -88,17 +94,14 @@ public class GrpcClientFactory implements RpcClientFactory {
    */
   @Override
   public RpcClient create(Context ctx, String target) {
-    NettyChannelBuilder channel = channelBuilder(target)
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .intercept(new RetryingInterceptor(config));
+    NettyChannelBuilder channel = channelBuilder(target).negotiationType(NegotiationType.PLAINTEXT);
     if (loadBalancerFactory != null) {
       channel.loadBalancerFactory(loadBalancerFactory);
     }
     if (nameResolverFactory != null) {
       channel.nameResolverFactory(nameResolverFactory);
     }
-    return callCredentials != null
-        ? new GrpcClient(channel.build(), callCredentials, ctx)
+    return callCredentials != null ? new GrpcClient(channel.build(), callCredentials, ctx)
         : new GrpcClient(channel.build(), ctx);
   }
 
@@ -109,27 +112,23 @@ public class GrpcClientFactory implements RpcClientFactory {
    * for example:</p>
    *
    * <code>
-   *     {@literal @}Override
-   *     protected NettyChannelBuilder channelBuilder(String target) {
-   *       return super.channelBuilder(target)
-   *               .eventLoopGroup(new EpollEventLoopGroup())
-   *               .withOption(EpollChannelOption.TCP_USER_TIMEOUT,30);
-   *     }
+   * {@literal @}Override protected NettyChannelBuilder channelBuilder(String target) { return
+   * super.channelBuilder(target) .eventLoopGroup(new EpollEventLoopGroup())
+   * .withOption(EpollChannelOption.TCP_USER_TIMEOUT,30); }
    * </code>
    *
    * @param target target is passed to NettyChannelBuilder which will resolve based on scheme,
    *     by default dns.
    */
   protected NettyChannelBuilder channelBuilder(String target) {
-    return NettyChannelBuilder.forTarget(target);
+    return nettyChannelBuilderProvider.getChannelBuilder(target);
   }
 
   /**
    * <p>Factory method to construct a gRPC client connection with transport-layer security.</p>
    *
    * <p>Within the <code>tlsOptions</code> parameter value, the <code>trustStore</code> field
-   * should
-   * always be populated.  All other fields are optional.</p>
+   * should always be populated.  All other fields are optional.</p>
    *
    * @param ctx TODO: This parameter is not actually used, but probably SHOULD be so that
    *     timeout duration and caller ID settings aren't discarded
@@ -146,9 +145,9 @@ public class GrpcClientFactory implements RpcClientFactory {
     if (trustStore == null) {
       throw new RuntimeException("Could not load trustStore");
     }
-    final X509Certificate[] trustCertCollection = tlsOptions.getTrustAlias() == null
-        ? loadCertCollection(trustStore)
-        : loadCertCollectionForAlias(trustStore, tlsOptions.getTrustAlias());
+    final X509Certificate[] trustCertCollection =
+        tlsOptions.getTrustAlias() == null ? loadCertCollection(trustStore)
+            : loadCertCollectionForAlias(trustStore, tlsOptions.getTrustAlias());
     sslContextBuilder.trustManager(trustCertCollection);
 
     // keyManager should only be set if a keyStore is specified (meaning that client authentication
@@ -156,21 +155,19 @@ public class GrpcClientFactory implements RpcClientFactory {
     final KeyStore keyStore = loadKeyStore(tlsOptions.getKeyStore(),
         tlsOptions.getKeyStorePassword());
     if (keyStore != null) {
-      final PrivateKeyWrapper privateKeyWrapper = tlsOptions.getKeyAlias() == null
-          ? loadPrivateKeyEntry(keyStore, tlsOptions.getKeyStorePassword(),
-          tlsOptions.getKeyPassword())
-          : loadPrivateKeyEntryForAlias(keyStore, tlsOptions.getKeyAlias(),
-              tlsOptions.getKeyStorePassword(), tlsOptions.getKeyPassword());
+      final PrivateKeyWrapper privateKeyWrapper =
+          tlsOptions.getKeyAlias() == null ? loadPrivateKeyEntry(keyStore,
+              tlsOptions.getKeyStorePassword(), tlsOptions.getKeyPassword())
+              : loadPrivateKeyEntryForAlias(keyStore, tlsOptions.getKeyAlias(),
+                  tlsOptions.getKeyStorePassword(), tlsOptions.getKeyPassword());
       if (privateKeyWrapper == null) {
         throw new RuntimeException(
             "Could not retrieve private key and certificate chain from keyStore");
       }
 
-      sslContextBuilder.keyManager(
-          privateKeyWrapper.getPrivateKey(),
-          privateKeyWrapper.getPassword(),
-          privateKeyWrapper.getCertificateChain()
-      );
+      sslContextBuilder
+          .keyManager(privateKeyWrapper.getPrivateKey(), privateKeyWrapper.getPassword(),
+              privateKeyWrapper.getCertificateChain());
     }
 
     final SslContext sslContext;
@@ -181,8 +178,9 @@ public class GrpcClientFactory implements RpcClientFactory {
     }
 
     return new GrpcClient(
-        channelBuilder(target).negotiationType(NegotiationType.TLS).sslContext(sslContext)
-            .intercept(new RetryingInterceptor(config)).build(), ctx);
+        channelBuilder(target).negotiationType(NegotiationType.TLS).sslContext(sslContext).build(),
+        ctx
+    );
   }
 
   /**
@@ -213,12 +211,10 @@ public class GrpcClientFactory implements RpcClientFactory {
 
   /**
    * <p>Loads an X509 certificate from a keystore using a given alias, and returns it as a
-   * one-element
-   * array so that it can be passed to {@link SslContextBuilder#trustManager(File)}.</p>
+   * one-element array so that it can be passed to {@link SslContextBuilder#trustManager(File)}.</p>
    *
    * <p>Returns <code>null</code> if there is any problem accessing the keystore, or if the alias
-   * does
-   * not match an X509 certificate.</p>
+   * does not match an X509 certificate.</p>
    */
   private X509Certificate[] loadCertCollectionForAlias(final KeyStore keyStore,
       final String alias) {
@@ -227,9 +223,7 @@ public class GrpcClientFactory implements RpcClientFactory {
     }
 
     try {
-      return new X509Certificate[]{
-          (X509Certificate) keyStore.getCertificate(alias)
-      };
+      return new X509Certificate[]{(X509Certificate) keyStore.getCertificate(alias)};
     } catch (KeyStoreException | ClassCastException exc) {
       return null;
     }
@@ -237,12 +231,10 @@ public class GrpcClientFactory implements RpcClientFactory {
 
   /**
    * <p>Loads the first valid X509 certificate found in the keystore, and returns it as a
-   * one-element
-   * array so that it can be passed to {@link SslContextBuilder#trustManager(File)}.</p>
+   * one-element array so that it can be passed to {@link SslContextBuilder#trustManager(File)}.</p>
    *
    * <p>Returns <code>null</code> if there is any problem accessing the keystore, or if no X509
-   * certificates
-   * are found at all.</p>
+   * certificates are found at all.</p>
    */
   private X509Certificate[] loadCertCollection(final KeyStore keyStore) {
     if (keyStore == null) {
@@ -269,14 +261,12 @@ public class GrpcClientFactory implements RpcClientFactory {
 
   /**
    * <p>Loads from a keystore the private key entry matching a given alias, and returns it parsed
-   * and
-   * ready to be passed to {@link SslContextBuilder#keyManager(PrivateKey, String,
+   * and ready to be passed to {@link SslContextBuilder#keyManager(PrivateKey, String,
    * X509Certificate...)}.</p>
    *
    * <p>To access the private key, this method will first try using the <code>keyPassword</code>
-   * parameter
-   * value (this parameter can be set to <code>null</code> to explicitly indicate that there is no
-   * password). If that fails, then this method will then try using the
+   * parameter value (this parameter can be set to <code>null</code> to explicitly indicate that
+   * there is no password). If that fails, then this method will then try using the
    * <code>keyStorePassword</code> parameter value as the key value too.</p>
    *
    * <p>Returns null if there is any problem accessing the keystore, if neither
@@ -325,13 +315,12 @@ public class GrpcClientFactory implements RpcClientFactory {
 
   /**
    * <p>Loads from a keystore the first valid private key entry found, and returns it parsed and
-   * ready to be
-   * passed to {@link SslContextBuilder#keyManager(PrivateKey, String, X509Certificate...)}.</p>
+   * ready to be passed to {@link SslContextBuilder#keyManager(PrivateKey, String,
+   * X509Certificate...)}.</p>
    *
    * <p>To access the private key, this method will first try using the <code>keyPassword</code>
-   * parameter
-   * value (this parameter can be set to <code>null</code> to explicitly indicate that there is no
-   * password). If that fails, then this method will then try using the
+   * parameter value (this parameter can be set to <code>null</code> to explicitly indicate that
+   * there is no password). If that fails, then this method will then try using the
    * <code>keyStorePassword</code> parameter value as the key value too.</p>
    *
    * <p>Returns null if there is any problem accessing the keystore, if neither
@@ -341,8 +330,7 @@ public class GrpcClientFactory implements RpcClientFactory {
    * <code>alias</code>.</p>
    */
   private PrivateKeyWrapper loadPrivateKeyEntry(final KeyStore keyStore,
-      final String keyStorePassword,
-      final String keyPassword) {
+      final String keyStorePassword, final String keyPassword) {
     if (keyStore == null) {
       return null;
     }

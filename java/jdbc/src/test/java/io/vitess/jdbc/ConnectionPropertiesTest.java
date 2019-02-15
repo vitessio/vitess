@@ -43,7 +43,7 @@ import org.mockito.Mockito;
 
 public class ConnectionPropertiesTest {
 
-  private static final int NUM_PROPS = 39;
+  private static final int NUM_PROPS = 40;
 
   @Test
   public void testReflection() throws Exception {
@@ -166,13 +166,15 @@ public class ConnectionPropertiesTest {
     assertEquals("characterEncoding", infos[2].name);
     assertEquals("executeType", infos[3].name);
     assertEquals("functionsNeverReturnBlobs", infos[4].name);
-    assertEquals("grpcRetriesEnabled", infos[5].name);
-    assertEquals("grpcRetriesBackoffMultiplier", infos[6].name);
-    assertEquals("grpcRetriesInitialBackoffMillis", infos[7].name);
-    assertEquals("grpcRetriesMaxBackoffMillis", infos[8].name);
-    assertEquals(Constants.Property.INCLUDED_FIELDS, infos[9].name);
-    assertEquals(Constants.Property.TABLET_TYPE, infos[21].name);
-    assertEquals(Constants.Property.TWOPC_ENABLED, infos[29].name);
+
+    assertEquals("grpcChannelBuilderProvider", infos[5].name);
+    assertEquals("grpcRetriesEnabled", infos[6].name);
+    assertEquals("grpcRetriesBackoffMultiplier", infos[7].name);
+    assertEquals("grpcRetriesInitialBackoffMillis", infos[8].name);
+    assertEquals("grpcRetriesMaxBackoffMillis", infos[9].name);
+    assertEquals(Constants.Property.INCLUDED_FIELDS, infos[10].name);
+    assertEquals(Constants.Property.TABLET_TYPE, infos[22].name);
+    assertEquals(Constants.Property.TWOPC_ENABLED, infos[30].name);
   }
 
   @Test

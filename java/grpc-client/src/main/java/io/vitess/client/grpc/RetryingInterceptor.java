@@ -36,7 +36,7 @@ public class RetryingInterceptor implements ClientInterceptor {
 
   private final RetryingInterceptorConfig config;
 
-  RetryingInterceptor(RetryingInterceptorConfig config) {
+  public RetryingInterceptor(RetryingInterceptorConfig config) {
     this.config = config;
   }
 

@@ -20,6 +20,8 @@ import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
 import io.vitess.client.VTGateConnection;
 import io.vitess.client.grpc.GrpcClientFactory;
+import io.vitess.client.grpc.netty.NettyChannelBuilderProvider;
+import io.vitess.client.grpc.netty.SimpleChannelBuilderProvider;
 import io.vitess.proto.Vtrpc;
 
 import org.joda.time.Duration;
@@ -100,6 +102,21 @@ public class VitessVTGateManagerTest {
         .get(VitessVTGateManager.class);
     Assert.assertEquals(3, map.size());
     VitessVTGateManager.close();
+  }
+
+  @Test
+  public void testGetChannelProviderFromProperties() throws SQLException {
+    VitessVTGateManager.close();
+
+    Properties info = new Properties();
+    info.setProperty("grpcChannelBuilderProvider", SimpleChannelBuilderProvider.class.getCanonicalName());
+
+    VitessConnection connection = new VitessConnection(
+        "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,10.33.17"
+            + ".233:15991/shipment/shipment?tabletType=master", info);
+
+    NettyChannelBuilderProvider channelBuilderProvider = VitessVTGateManager.getChannelProviderFromProperties(connection);
+    Assert.assertTrue(SimpleChannelBuilderProvider.class.isAssignableFrom(channelBuilderProvider.getClass()));
   }
 
 }
