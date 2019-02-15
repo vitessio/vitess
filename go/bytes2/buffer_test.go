@@ -16,7 +16,9 @@ limitations under the License.
 
 package bytes2
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestBuffer(t *testing.T) {
 	b := NewBuffer(nil)
