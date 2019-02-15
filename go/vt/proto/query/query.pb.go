@@ -854,7 +854,7 @@ type ExecuteOptions struct {
 	// vitess also sets a rowcount limit on queries, the smallest value wins.
 	SqlSelectLimit       int64                               `protobuf:"varint,8,opt,name=sql_select_limit,json=sqlSelectLimit,proto3" json:"sql_select_limit,omitempty"`
 	TransactionIsolation ExecuteOptions_TransactionIsolation `protobuf:"varint,9,opt,name=transaction_isolation,json=transactionIsolation,proto3,enum=query.ExecuteOptions_TransactionIsolation" json:"transaction_isolation,omitempty"`
-	// skip_query_plan_cache specifies if the query plan shoud be cached by vitess.
+	// skip_query_plan_cache specifies if the query plan should be cached by vitess.
 	// By default all query plans are cached.
 	SkipQueryPlanCache   bool     `protobuf:"varint,10,opt,name=skip_query_plan_cache,json=skipQueryPlanCache,proto3" json:"skip_query_plan_cache,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`

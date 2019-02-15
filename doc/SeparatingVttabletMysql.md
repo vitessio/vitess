@@ -26,7 +26,7 @@ The following adjustments need to be made to VTTablet command line parameters:
 
 * Disable restores / backups, by not passing any backup command line
   parameters. Specifically, `-restore_from_backup` and
-  `-backup_storage_implementation` shoud not be set.
+  `-backup_storage_implementation` should not be set.
 
 Since master management and replication are not handled by Vitess, we just need
 to make sure the tablet type in the topology is correct before running
