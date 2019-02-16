@@ -1323,7 +1323,10 @@ func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, su
 	if err != nil {
 		return err
 	}
-	return wr.UpdateDisableQueryService(ctx, keyspace, shard, tabletType, cells, *disableQueryService)
+	if !*remove && len(blacklistedTables) == 0 {
+		return wr.UpdateDisableQueryService(ctx, keyspace, shard, tabletType, cells, *disableQueryService)
+	}
+	return nil
 }
 
 func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
