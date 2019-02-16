@@ -621,6 +621,22 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		return err
 	}
 
+	// Update srvKeyspace now
+	if err = wr.ts.MigrateServedType(ctx, keyspace, destinationShards, sourceShards, topodatapb.TabletType_MASTER, nil); err != nil {
+		return err
+	}
+
+	// Make sure that from now on source shards have IsMasterServing set to false
+	for _, si := range sourceShards {
+		_, err := wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
+			si.IsMasterServing = false
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
 	if reverseReplication {
 		if err := wr.startReverseReplication(ctx, sourceShards); err != nil {
 			return err
@@ -629,11 +645,6 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		if err := wr.updateFrozenFlag(ctx, sourceShards, false); err != nil {
 			return err
 		}
-	}
-
-	// Update srvKeyspace now
-	if err = wr.ts.MigrateServedType(ctx, keyspace, destinationShards, sourceShards, topodatapb.TabletType_MASTER, nil); err != nil {
-		return err
 	}
 
 	event.DispatchUpdate(ev, "finished")
