@@ -213,9 +213,6 @@ class TestReparent(unittest.TestCase):
     # Start up a master mysql and vttablet
     tablet_62344.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
-    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
-    self.assertEqual(shard['cells'], ['test_nj'],
-                     'wrong list of cell in Shard: %s' % str(shard['cells']))
 
     # Create a few slaves for testing reparenting. Won't be healthy
     # as replication is not running.
@@ -227,10 +224,6 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.wait_for_vttablet_state('NOT_SERVING')
-    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
-    self.assertEqual(
-        shard['cells'], ['test_nj', 'test_ny'],
-        'wrong list of cell in Shard: %s' % str(shard['cells']))
 
     # Force the slaves to reparent assuming that all the datasets are
     # identical.
@@ -271,9 +264,6 @@ class TestReparent(unittest.TestCase):
 
     # Start up a master mysql and vttablet
     tablet_62344.init_tablet('replica', 'test_keyspace', shard_id, start=True)
-    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
-    self.assertEqual(shard['cells'], ['test_nj'],
-                     'wrong list of cell in Shard: %s' % str(shard['cells']))
 
     # Create a few slaves for testing reparenting.
     tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True,
