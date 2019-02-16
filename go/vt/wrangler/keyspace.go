@@ -783,7 +783,7 @@ func (wr *Wrangler) updateFrozenFlag(ctx context.Context, shards []*topo.ShardIn
 				TabletType: topodatapb.TabletType_MASTER,
 				Frozen:     value,
 			}
-			si.TabletControls = []*topodatapb.Shard_TabletControl{tc}
+			si.TabletControls = append(si.TabletControls, tc)
 			return nil
 		})
 		if err != nil {
