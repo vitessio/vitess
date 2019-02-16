@@ -5,7 +5,7 @@ This page describes the steps for cutting a new [open source release]
 
 ## Versioning
 
-Our versioning strategy is based on [Semantic Versioning](http://semver.org/).
+Our versioning strategy is based on [Semantic Versioning](https://semver.org/).
 
 ### Major Release (vX)
 
@@ -193,13 +193,13 @@ Therefore, file a JIRA ticket with Sonatype to get added ([example for a differe
 
 **Set up GPG**
 
-Follow [Sonatype's GPG instructions](http://central.sonatype.org/pages/working-with-pgp-signatures.html).
+Follow [Sonatype's GPG instructions](https://central.sonatype.org/pages/working-with-pgp-signatures.html).
 
 Install `gpg-agent` (needed below) e.g. on Ubuntu via: `sudo apt-get install gnupg-agent`
 
 **Login configuration**
 
-Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [instructions](http://central.sonatype.org/pages/apache-maven.html).
+Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [instructions](https://central.sonatype.org/pages/apache-maven.html).
 
 ### Deploy & Release
 

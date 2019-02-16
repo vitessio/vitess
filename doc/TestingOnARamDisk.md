@@ -1,6 +1,6 @@
 # Testing On A Ramdisk
 
-The `integration_test` testsuite contains tests that may time-out if run against a slow disk. If your workspace lives on hard disk (as opposed to [SSD](http://en.wikipedia.org/wiki/Solid-state_drive)), it is recommended that you run tests using a [ramdisk](http://en.wikipedia.org/wiki/RAM_drive).
+The `integration_test` testsuite contains tests that may time-out if run against a slow disk. If your workspace lives on hard disk (as opposed to [SSD](https://en.wikipedia.org/wiki/Solid-state_drive)), it is recommended that you run tests using a [ramdisk](https://en.wikipedia.org/wiki/RAM_drive).
 
 # Setup
 

@@ -19,7 +19,7 @@ The following sections explain how to set these up in your environment.
 
 ### Install Go 1.11+
 
-You need to install [Go 1.11+](http://golang.org/doc/install) to build the
+You need to install [Go 1.11+](https://golang.org/doc/install) to build the
 `vtctlclient` tool, which issues commands to Vitess.
 
 After installing Go, make sure your `GOPATH` environment
@@ -30,7 +30,7 @@ directory to which your non-root user has write access.
 In addition, make sure that `$GOPATH/bin` is included in
 your `$PATH`. More information about setting up a Go
 workspace can be found at
-[How to Write Go Code](http://golang.org/doc/code.html#Organization).
+[How to Write Go Code](https://golang.org/doc/code.html#Organization).
 
 ### Build and install vtctlclient
 

@@ -6,7 +6,7 @@ store small pieces of configuration data about the Vitess cluster, and provide
 cluster-wide locks. It also supports watches, and master election.
 
 Concretely, the Topology Service features are implemented by
-a [Lock Server](http://en.wikipedia.org/wiki/Distributed_lock_manager), referred
+a [Lock Server](https://en.wikipedia.org/wiki/Distributed_lock_manager), referred
 to as Topology Server in the rest of this document. We use a plug-in
 implementation and we support multiple Lock Servers (Zookeeper, etcd, Consul, …)
 as backends for the service.
