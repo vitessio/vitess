@@ -608,11 +608,13 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		if err != nil {
 			return err
 		}
-
 	}
 
 	// Enable query service
-	wr.ts.UpdateDisableQueryService(ctx, keyspace, destinationShards, topodatapb.TabletType_MASTER, nil, false)
+	err = wr.ts.UpdateDisableQueryService(ctx, keyspace, destinationShards, topodatapb.TabletType_MASTER, nil, false)
+	if err != nil {
+		return err
+	}
 
 	event.DispatchUpdate(ev, "setting destination masters read-write")
 	if err := wr.refreshMasters(ctx, destinationShards); err != nil {
@@ -728,7 +730,6 @@ func (wr *Wrangler) startReverseReplication(ctx context.Context, sourceShards []
 // updateShardRecords updates the shard records based on 'from' or 'to' direction.
 func (wr *Wrangler) updateShardRecords(ctx context.Context, keyspace string, shards []*topo.ShardInfo, cells []string, servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool) (err error) {
 	err = wr.ts.UpdateDisableQueryService(ctx, keyspace, shards, servedType, cells, isFrom /* disable */)
-
 	if err != nil {
 		return err
 	}
