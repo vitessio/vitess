@@ -18,7 +18,6 @@ package topotools
 
 import (
 	"fmt"
-	"reflect"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -71,46 +70,22 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 		return err
 	}
 
+	// This is safe to rebuild as long there are not srvKeyspaces with tablet controls set.
+	// TODO: Add this validation.
+
 	// Build the list of cells to work on: we get the union
 	// of all the Cells of all the Shards, limited to the provided cells.
 	//
 	// srvKeyspaceMap is a map:
 	//   key: cell
 	//   value: topo.SrvKeyspace object being built
-	// We only build this in two scenarios:
-	// - The object does not exist.
-	// - ServedFrom changed.
 	srvKeyspaceMap := make(map[string]*topodatapb.SrvKeyspace)
 	for _, cell := range cells {
-		srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
-		switch {
-		case err == nil:
-			if !reflect.DeepEqual(srvKeyspace.ServedFrom, ki.ComputeCellServedFrom(cell)) {
-				srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
-					ShardingColumnName: ki.ShardingColumnName,
-					ShardingColumnType: ki.ShardingColumnType,
-					ServedFrom:         ki.ComputeCellServedFrom(cell),
-				}
-			}
-			if ki.ShardingColumnType != topodatapb.KeyspaceIdType_UNSET {
-				srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
-					ShardingColumnName: ki.ShardingColumnName,
-					ShardingColumnType: ki.ShardingColumnType,
-					ServedFrom:         ki.ComputeCellServedFrom(cell),
-				}
-			}
-
-		case topo.IsErrType(err, topo.NoNode):
-			srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
-				ShardingColumnName: ki.ShardingColumnName,
-				ShardingColumnType: ki.ShardingColumnType,
-				ServedFrom:         ki.ComputeCellServedFrom(cell),
-			}
-		default:
-			// Couldn't get srvKeyspace, not
-			log.Warningf("Couldn't get srvKeyspace for cell %v, skip rebuilding", cell)
+		srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
+			ShardingColumnName: ki.ShardingColumnName,
+			ShardingColumnType: ki.ShardingColumnType,
+			ServedFrom:         ki.ComputeCellServedFrom(cell),
 		}
-
 	}
 
 	servedTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
