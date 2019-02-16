@@ -1148,22 +1148,18 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_1_master, True, False)
 
     # sabotage master migration and make it fail in an unfinished state
+    # Check that source master not serving, because this failure is past the
+    # point of no return.
     utils.run_vtctl(['SetShardTabletControl', '-blacklisted_tables=t',
                      'test_keyspace/c0-', 'master'], auto_log=True)
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],
                     auto_log=True, expect_fail=True)
 
-    # remove sabotage, but make it fail early. This should not result
-    # in the source master serving, because this failure is past the
-    # point of no return.
-    utils.run_vtctl(['SetShardTabletControl', '-blacklisted_tables=t',
-                     '-remove', 'test_keyspace/c0-', 'master'], auto_log=True)
-    utils.run_vtctl(['MigrateServedTypes',
-                     '-filtered_replication_wait_time', '0s',
-                     'test_keyspace/80-', 'master'],
-                     auto_log=True, expect_fail=True)
     utils.check_tablet_query_service(self, shard_1_master, False, True)
 
+    # remove sabotage
+    utils.run_vtctl(['SetShardTabletControl', '-blacklisted_tables=t',
+                     '-remove', 'test_keyspace/c0-', 'master'], auto_log=True)
     # do the migration that's expected to succeed
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],
                     auto_log=True)
