@@ -3,6 +3,4 @@
 This directory contains an example configuration for running Vitess on
 [Kubernetes](https://kubernetes.io/).
 
-See the [Vitess on Kubernetes](https://vitess.io/getting-started/)
-and [Sharding in Kubernetes](https://vitess.io/user-guide/sharding-kubernetes/)
-guides for instructions on using these files.
+See the [Vitess on Kubernetes](https://vitess.io/docs/tutorials/kubernetes/)
