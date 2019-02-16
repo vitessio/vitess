@@ -532,6 +532,53 @@ func (ts *Server) GetSrvKeyspaceAllCells(ctx context.Context, keyspace string) (
 	return srvKeyspaces, nil
 }
 
+// IsShardQueryServiceDisabled returns served types for given shard across all cells
+func (ts *Server) IsShardQueryServiceDisabled(ctx context.Context, si *ShardInfo) (queryServiceDisabled bool, err error) {
+	cells, err := ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return queryServiceDisabled, err
+	}
+
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	var mu sync.Mutex
+	for _, cell := range cells {
+		wg.Add(1)
+		go func(cell, keyspace string) {
+			defer wg.Done()
+			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, si.keyspace)
+			switch {
+			case err == nil:
+				func() {
+					mu.Lock()
+					defer mu.Unlock()
+					if queryServiceDisabled {
+						return
+					}
+					for _, partition := range srvKeyspace.GetPartitions() {
+						for _, shardReference := range partition.ShardReferences {
+							if shardReference.GetName() == si.ShardName() {
+							}
+						}
+
+					}
+				}()
+			case IsErrType(err, NoNode):
+				// NOOP
+				return
+			default:
+				rec.RecordError(err)
+				return
+			}
+		}(cell, si.Keyspace())
+	}
+	wg.Wait()
+	if rec.HasErrors() {
+		return queryServiceDisabled, NewError(PartialResult, rec.Error().Error())
+	}
+	return queryServiceDisabled, nil
+}
+
 // GetSrvKeyspace returns the SrvKeyspace for a cell/keyspace.
 func (ts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	conn, err := ts.ConnForCell(ctx, cell)
