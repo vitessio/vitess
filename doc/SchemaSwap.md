@@ -13,7 +13,7 @@ ApplySchema]({% link user-guide/schema-management.md %}) instead.
 
 One solution to realize such long-running schema changes is to use a temporary
 table and keep it in sync with triggers as [originally proposed by
-Shlomi](http://code.openark.org/blog/mysql/online-alter-table-now-available-in-openark-kit)
+Shlomi](https://code.openark.org/blog/mysql/online-alter-table-now-available-in-openark-kit)
 and further refined by others ([Percona's
 pt-online-schema-change](https://www.percona.com/doc/percona-toolkit/2.2/pt-online-schema-change.html),
 [Square's Shift](https://github.com/square/shift)).

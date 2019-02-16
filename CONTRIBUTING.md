@@ -10,7 +10,7 @@ to let everyone know what you're planning to work on, and to track progress and 
 
 ## Guidance for Novice Vitess Developers
 
-**Please read [vitess.io/contributing/](http://vitess.io/contributing/)** where we provide more information:
+**Please read [vitess.io/contributing/](https://vitess.io/contributing/)** where we provide more information:
 
 * How to make yourself familiar with Go and Vitess.
 * How to go through the GitHub workflow.

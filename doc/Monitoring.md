@@ -14,7 +14,7 @@ Viewing a status page can be useful since it works out of the box, but it only p
 
 ### 2. Pull-based metrics system
 
-Vitess uses Go’s [expvar package](http://golang.org/pkg/expvar/) to expose various metrics, with the expectation that a user can configure a pull-based metrics system to ingest those metrics. Metrics are published to `http://<host>:<port>/debug/vars` as JSON key-value pairs, which should be easy for any metrics system to parse.
+Vitess uses Go’s [expvar package](https://golang.org/pkg/expvar/) to expose various metrics, with the expectation that a user can configure a pull-based metrics system to ingest those metrics. Metrics are published to `http://<host>:<port>/debug/vars` as JSON key-value pairs, which should be easy for any metrics system to parse.
 
 Scraping Vitess variables is a good way to integrate Vitess into an existing monitoring system, and is useful for building up detailed monitoring dashboards. It is also the officially supported way for monitoring Vitess.
 
@@ -32,7 +32,7 @@ Once you’ve written the backend plug-in, you also need to register the plug-in
 
 You can then specify that Vitess should publish stats to the backend that you’re targeting by using the `--stats_backend` flag.  
 
-Connecting Vitess to a push-based metrics system can be useful if you’re already running a push-based system that you would like to integrate into. More discussion on using a push vs pull based monitoring system can be seen here: [http://www.boxever.com/push-vs-pull-for-monitoring](http://www.boxever.com/push-vs-pull-for-monitoring)
+Connecting Vitess to a push-based metrics system can be useful if you’re already running a push-based system that you would like to integrate into. More discussion on using a push vs pull based monitoring system can be seen here: [http://www.boxever.com/push-vs-pull-for-monitoring](https://www.boxever.com/push-vs-pull-for-monitoring)
 
 ## Monitoring with Kubernetes
 

@@ -3,7 +3,7 @@ This document defines common Vitess concepts and terminology.
 ## Keyspace
 
 A *keyspace* is a logical database. In the unsharded case, it maps directly
-to a MySQL database name. If [sharded](http://en.wikipedia.org/wiki/Shard_(database_architecture)),
+to a MySQL database name. If [sharded](https://en.wikipedia.org/wiki/Shard_(database_architecture)),
 a keyspace maps to multiple MySQL databases. However, it appears as a single
 database to the application.
 
