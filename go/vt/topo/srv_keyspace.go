@@ -310,6 +310,26 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 		}
 	}
 
+	for _, shard := range shards {
+		for _, tc := range shard.TabletControls {
+			if len(tc.BlacklistedTables) > 0 {
+				return fmt.Errorf("cannot safely alter DisableQueryService as BlacklistedTables is set for shard %v", shard)
+			}
+		}
+	}
+
+	if !disableQueryService {
+		for _, si := range shards {
+			tc := si.GetTabletControl(tabletType)
+			if tc == nil {
+				continue
+			}
+			if tc.Frozen {
+				return fmt.Errorf("migrate has gone past the point of no return, cannot re-enable serving for %v/%v", si.keyspace, si.shardName)
+			}
+		}
+	}
+
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	for _, cell := range cells {
@@ -574,7 +594,7 @@ func OrderAndCheckPartitions(cell string, srvKeyspace *topodatapb.SrvKeyspace) e
 func ShardIsServing(srvKeyspace *topodatapb.SrvKeyspace, shard *topodatapb.Shard) bool {
 	for _, partition := range srvKeyspace.GetPartitions() {
 		for _, shardReference := range partition.GetShardReferences() {
-			if shardReference.GetKeyRange() == shard.KeyRange {
+			if key.KeyRangeEqual(shardReference.GetKeyRange(), shard.GetKeyRange()) {
 				return true
 			}
 		}
