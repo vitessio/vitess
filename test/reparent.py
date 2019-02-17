@@ -274,9 +274,6 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
     for t in [tablet_62044, tablet_41983, tablet_31981]:
       t.wait_for_vttablet_state('NOT_SERVING')
-    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
-    self.assertEqual(shard['cells'], ['test_nj', 'test_ny'],
-                     'wrong list of cell in Shard: %s' % str(shard['cells']))
 
     # Force the slaves to reparent assuming that all the datasets are
     # identical.
