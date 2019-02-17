@@ -17,9 +17,9 @@ limitations under the License.
 package sqlparser
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -47,28 +47,29 @@ func NewParsedQuery(node SQLNode) *ParsedQuery {
 // GenerateQuery generates a query by substituting the specified
 // bindVariables. The extras parameter specifies special parameters
 // that can perform custom encoding.
-func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]*querypb.BindVariable, extras map[string]Encodable) ([]byte, error) {
+func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]*querypb.BindVariable, extras map[string]Encodable) (string, error) {
 	if len(pq.bindLocations) == 0 {
-		return []byte(pq.Query), nil
+		return pq.Query, nil
 	}
-	buf := bytes.NewBuffer(make([]byte, 0, len(pq.Query)))
+	var buf strings.Builder
+	buf.Grow(len(pq.Query))
 	current := 0
 	for _, loc := range pq.bindLocations {
 		buf.WriteString(pq.Query[current:loc.offset])
 		name := pq.Query[loc.offset : loc.offset+loc.length]
 		if encodable, ok := extras[name[1:]]; ok {
-			encodable.EncodeSQL(buf)
+			encodable.EncodeSQL(&buf)
 		} else {
 			supplied, _, err := FetchBindVar(name, bindVariables)
 			if err != nil {
-				return nil, err
+				return "", err
 			}
-			EncodeValue(buf, supplied)
+			EncodeValue(&buf, supplied)
 		}
 		current = loc.offset + loc.length
 	}
 	buf.WriteString(pq.Query[current:])
-	return buf.Bytes(), nil
+	return buf.String(), nil
 }
 
 // MarshalJSON is a custom JSON marshaler for ParsedQuery.
@@ -78,7 +79,7 @@ func (pq *ParsedQuery) MarshalJSON() ([]byte, error) {
 }
 
 // EncodeValue encodes one bind variable value into the query.
-func EncodeValue(buf *bytes.Buffer, value *querypb.BindVariable) {
+func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
 	if value.Type != querypb.Type_TUPLE {
 		// Since we already check for TUPLE, we don't expect an error.
 		v, _ := sqltypes.BindVariableToValue(value)
