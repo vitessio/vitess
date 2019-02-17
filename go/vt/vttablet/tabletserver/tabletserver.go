@@ -32,7 +32,6 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -152,12 +151,12 @@ type TabletServer struct {
 	// for health checks. This does not affect how queries are served.
 	// target specifies the primary target type, and also allow specifies
 	// secondary types that should be additionally allowed.
-	mu            sync.Mutex
-	state         int64
-	lameduck      sync2.AtomicInt32
-	target        querypb.Target
-	alsoAllow     []topodatapb.TabletType
-	requests      sync.WaitGroup
+	mu        sync.Mutex
+	state     int64
+	lameduck  sync2.AtomicInt32
+	target    querypb.Target
+	alsoAllow []topodatapb.TabletType
+	requests  sync.WaitGroup
 
 	// The following variables should be initialized only once
 	// before starting the tabletserver.
@@ -229,7 +228,7 @@ type TxPoolController interface {
 	AcceptReadOnly() error
 
 	// InitDBConfig must be called before Init.
-  InitDBConfig(dbcfgs *dbconfigs.DBConfigs)
+	InitDBConfig(dbcfgs *dbconfigs.DBConfigs)
 
 	// Init must be called once when vttablet starts for setting
 	// up the metadata tables.
@@ -1200,7 +1199,7 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 	}
 
 	// Example: table1 where id = 1 and sub_id = 2
-	key := fmt.Sprintf("%s%s", tableName, hack.String(where))
+	key := fmt.Sprintf("%s%s", tableName, where)
 	return key, tableName.String()
 }
 
@@ -1766,7 +1765,7 @@ func (se *splitQuerySQLExecuter) SQLExecute(
 		se.conn,
 		parsedQuery,
 		sqltypes.CopyBindVariables(bindVariables),
-		nil,  /* buildStreamComment */
+		"",   /* buildStreamComment */
 		true, /* wantfields */
 	)
 }

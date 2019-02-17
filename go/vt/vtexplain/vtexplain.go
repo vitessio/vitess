@@ -24,6 +24,7 @@ import (
 	"flag"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/jsonutil"
@@ -102,7 +103,7 @@ func (tq *TabletQuery) MarshalJSON() ([]byte, error) {
 	// Convert Bindvars to strings for nicer output
 	bindVars := make(map[string]string)
 	for k, v := range tq.BindVars {
-		var b bytes.Buffer
+		var b strings.Builder
 		sqlparser.EncodeValue(&b, v)
 		bindVars[k] = b.String()
 	}

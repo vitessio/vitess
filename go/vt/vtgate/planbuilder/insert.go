@@ -183,7 +183,7 @@ func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, val
 	for rowNum, val := range valueTuples {
 		midBuf.Myprintf("%v", val)
 		eins.Mid[rowNum] = midBuf.String()
-		midBuf.Truncate(0)
+		midBuf.Reset()
 	}
 	suffixBuf.Myprintf("%v", node.OnDup)
 	eins.Suffix = suffixBuf.String()
