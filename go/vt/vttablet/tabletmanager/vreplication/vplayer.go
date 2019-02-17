@@ -50,7 +50,7 @@ type vplayer struct {
 	source       *binlogdatapb.BinlogSource
 	sourceTablet *topodatapb.Tablet
 	stats        *binlogplayer.Stats
-	dbClient     *retryableClient
+	dbClient     *vdbClient
 	// mysqld is used to fetch the local schema.
 	mysqld mysqlctl.MysqlDaemon
 
@@ -76,7 +76,7 @@ func newVPlayer(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topo
 		source:        source,
 		sourceTablet:  sourceTablet,
 		stats:         stats,
-		dbClient:      &retryableClient{DBClient: dbClient},
+		dbClient:      newVDBClient(dbClient, stats),
 		mysqld:        mysqld,
 		timeLastSaved: time.Now(),
 		tplans:        make(map[string]*TablePlan),
@@ -426,172 +426,13 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
 	for _, change := range rowEvent.RowChanges {
-		if err := vp.applyRowChange(ctx, tplan, change); err != nil {
-			return err
+		if query := tplan.GenerateStatement(change); query != "" {
+			if err := vp.exec(ctx, query); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
-}
-
-func (vp *vplayer) applyRowChange(ctx context.Context, tplan *TablePlan, rowChange *binlogdatapb.RowChange) error {
-	// MakeRowTrusted is needed here because because Proto3ToResult is not convenient.
-	var before, after []sqltypes.Value
-	if rowChange.Before != nil {
-		before = sqltypes.MakeRowTrusted(tplan.Fields, rowChange.Before)
-	}
-	if rowChange.After != nil {
-		after = sqltypes.MakeRowTrusted(tplan.Fields, rowChange.After)
-	}
-	var query string
-	switch {
-	case before == nil && after != nil:
-		query = vp.generateInsert(tplan, after)
-	case before != nil && after != nil:
-		query = vp.generateUpdate(tplan, before, after)
-	case before != nil && after == nil:
-		query = vp.generateDelete(tplan, before)
-	case before == nil && after == nil:
-		// unreachable
-	}
-	if query == "" {
-		return nil
-	}
-	return vp.exec(ctx, query)
-}
-
-func (vp *vplayer) generateInsert(tplan *TablePlan, after []sqltypes.Value) string {
-	sql := sqlparser.NewTrackedBuffer(nil)
-	if tplan.OnInsert == InsertIgnore {
-		sql.Myprintf("insert ignore into %v set ", sqlparser.NewTableIdent(tplan.Name))
-	} else {
-		sql.Myprintf("insert into %v set ", sqlparser.NewTableIdent(tplan.Name))
-	}
-	vp.writeInsertValues(sql, tplan, after)
-	if tplan.OnInsert == InsertOndup {
-		sql.Myprintf(" on duplicate key update ")
-		_ = vp.writeUpdateValues(sql, tplan, nil, after)
-	}
-	return sql.String()
-}
-
-func (vp *vplayer) generateUpdate(tplan *TablePlan, before, after []sqltypes.Value) string {
-	if tplan.OnInsert == InsertIgnore {
-		return vp.generateInsert(tplan, after)
-	}
-	sql := sqlparser.NewTrackedBuffer(nil)
-	sql.Myprintf("update %v set ", sqlparser.NewTableIdent(tplan.Name))
-	if ok := vp.writeUpdateValues(sql, tplan, before, after); !ok {
-		return ""
-	}
-	sql.Myprintf(" where ")
-	vp.writeWhereValues(sql, tplan, before)
-	return sql.String()
-}
-
-func (vp *vplayer) generateDelete(tplan *TablePlan, before []sqltypes.Value) string {
-	sql := sqlparser.NewTrackedBuffer(nil)
-	switch tplan.OnInsert {
-	case InsertOndup:
-		return vp.generateUpdate(tplan, before, nil)
-	case InsertIgnore:
-		return ""
-	default: // insertNormal
-		sql.Myprintf("delete from %v where ", sqlparser.NewTableIdent(tplan.Name))
-		vp.writeWhereValues(sql, tplan, before)
-	}
-	return sql.String()
-}
-
-func (vp *vplayer) writeInsertValues(sql *sqlparser.TrackedBuffer, tplan *TablePlan, after []sqltypes.Value) {
-	separator := ""
-	for _, cExpr := range tplan.ColExprs {
-		sql.Myprintf("%s%v=", separator, cExpr.ColName)
-		separator = ", "
-		if cExpr.Operation == OpCount {
-			sql.WriteString("1")
-		} else {
-			if cExpr.Operation == OpSum && after[cExpr.ColNum].IsNull() {
-				sql.WriteString("0")
-			} else {
-				encodeValue(sql, after[cExpr.ColNum])
-			}
-		}
-	}
-}
-
-// writeUpdateValues returns true if at least one value was set. Otherwise, it returns false.
-func (vp *vplayer) writeUpdateValues(sql *sqlparser.TrackedBuffer, tplan *TablePlan, before, after []sqltypes.Value) bool {
-	separator := ""
-	hasSet := false
-	for _, cExpr := range tplan.ColExprs {
-		if cExpr.IsGrouped {
-			continue
-		}
-		if len(before) != 0 && len(after) != 0 {
-			if cExpr.Operation == OpCount {
-				continue
-			}
-			bef := before[cExpr.ColNum]
-			aft := after[cExpr.ColNum]
-			// If both are null, there's no change
-			if bef.IsNull() && aft.IsNull() {
-				continue
-			}
-			// If any one of them is null, something has changed.
-			if bef.IsNull() || aft.IsNull() {
-				goto mustSet
-			}
-			// Compare content only if none are null.
-			if bef.ToString() == aft.ToString() {
-				continue
-			}
-		}
-	mustSet:
-		sql.Myprintf("%s%v=", separator, cExpr.ColName)
-		separator = ", "
-		hasSet = true
-		if cExpr.Operation == OpCount || cExpr.Operation == OpSum {
-			sql.Myprintf("%v", cExpr.ColName)
-		}
-		if len(before) != 0 {
-			switch cExpr.Operation {
-			case OpNone:
-				if len(after) == 0 {
-					sql.WriteString("NULL")
-				}
-			case OpCount:
-				sql.WriteString("-1")
-			case OpSum:
-				if !before[cExpr.ColNum].IsNull() {
-					sql.WriteString("-")
-					encodeValue(sql, before[cExpr.ColNum])
-				}
-			}
-		}
-		if len(after) != 0 {
-			switch cExpr.Operation {
-			case OpNone:
-				encodeValue(sql, after[cExpr.ColNum])
-			case OpCount:
-				sql.WriteString("+1")
-			case OpSum:
-				if !after[cExpr.ColNum].IsNull() {
-					sql.WriteString("+")
-					encodeValue(sql, after[cExpr.ColNum])
-				}
-			}
-		}
-	}
-	return hasSet
-}
-
-func (vp *vplayer) writeWhereValues(sql *sqlparser.TrackedBuffer, tplan *TablePlan, before []sqltypes.Value) {
-	separator := ""
-	for _, cExpr := range tplan.PKCols {
-		sql.Myprintf("%s%v=", separator, cExpr.ColName)
-		separator = " and "
-		encodeValue(sql, before[cExpr.ColNum])
-	}
 }
 
 func (vp *vplayer) updatePos(ts int64) error {
@@ -602,6 +443,10 @@ func (vp *vplayer) updatePos(ts int64) error {
 	}
 	vp.unsavedGTID = nil
 	vp.timeLastSaved = time.Now()
+	vp.stats.SetLastPosition(vp.pos)
+	if ts != 0 {
+		vp.stats.SecondsBehindMaster.Set(vp.timeLastSaved.Unix() - ts)
+	}
 	return nil
 }
 
