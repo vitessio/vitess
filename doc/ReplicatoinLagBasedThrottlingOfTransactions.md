@@ -25,7 +25,7 @@ A text-format representation of the  [throttlerdata.Configuration](https://githu
 that contains configuration options for the throttler. 
 The most important fields in that message are *target_replication_lag_sec* and 
 *max_replication_lag_sec* that specify the desired limits on the replication lag. See the comments in the protocol definition file for more details.
-If this is not specified a [default](https://github.com/vitessio/vitess/blob/master/go/vt/tabletserver/tabletenv/config.go) configuration will be used.
+If this is not specified a [default](https://github.com/vitessio/vitess/tree/master/go/vt/vttablet/tabletserver/tabletenv/config.go) configuration will be used.
 
 * *tx-throttler-healthcheck-cells*
 
