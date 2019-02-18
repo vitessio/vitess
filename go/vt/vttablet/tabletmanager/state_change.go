@@ -230,7 +230,6 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 
 					for _, tabletControl := range partition.GetShardTabletControls() {
 						if key.KeyRangeEqual(tabletControl.GetKeyRange(), newTablet.GetKeyRange()) {
-							log.Infof("This is the partition tabletControl KeyRange: %v newtabletKeyRange: %v changed: %v", tabletControl.GetName(), newTablet.GetShard(), tabletControl.QueryServiceDisabled)
 							if tabletControl.QueryServiceDisabled {
 								allowQuery = false
 								disallowQueryReason = "TabletControl.DisableQueryService set"
