@@ -70,7 +70,7 @@ Setting up these components directly -- for example, writing your own topology s
 
 Obviously, your application needs to be able to call your database. So, we'll jump straight to explaining how you'd modify your application to connect to your database through vtgate.
 
-As of Release 2.1, VTGate supports the MySQL protocol. So, the application only needs to change where it connects to. For those using Java or Go, we additionally provide libraries that can communicate to VTGate using [gRPC](http://www.grpc.io/). Using the provided libraries allow you to send queries with bind variables, which is not inherently possible through the MySQL protocol.
+As of Release 2.1, VTGate supports the MySQL protocol. So, the application only needs to change where it connects to. For those using Java or Go, we additionally provide libraries that can communicate to VTGate using [gRPC](https://www.grpc.io/). Using the provided libraries allow you to send queries with bind variables, which is not inherently possible through the MySQL protocol.
 
 #### Unit testing database interactions
 
