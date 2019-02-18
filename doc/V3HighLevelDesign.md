@@ -301,7 +301,7 @@ You’ll see how these operands are used in the description of the operators.
 
 ## The operators
 
-If one were to ask what are the minimal set of primitives needed to serve SQL queries, we can use [relational algebra](http://www.tutorialspoint.com/dbms/relational_algebra.htm) as starting point. But databases have extended beyond those basic operations. They allow duplicate tuples and ordering. So, here’s a more practical set:
+If one were to ask what are the minimal set of primitives needed to serve SQL queries, we can use [relational algebra](https://www.tutorialspoint.com/dbms/relational_algebra.htm) as starting point. But databases have extended beyond those basic operations. They allow duplicate tuples and ordering. So, here’s a more practical set:
 
 1. Scan (FROM).
 2. Join: Join two results as cross-product (JOIN).

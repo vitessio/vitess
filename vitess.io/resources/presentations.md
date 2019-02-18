@@ -29,7 +29,7 @@ make all of this possible.
 ## CoreOS Meetup, January 2016
 
 Vitess team member [Anthony Yeh](https://github.com/enisoc)'s talk at
-the [January 2016 CoreOS Meetup](http://www.meetup.com/coreos/events/228233948/)
+the [January 2016 CoreOS Meetup](https://www.meetup.com/coreos/events/228233948/)
 discussed challenges and techniques for running distributed databases
 within Kubernetes, followed by a deep dive into the design trade-offs
 of the [Vitess on Kubernetes](https://github.com/vitessio/vitess/tree/master/examples/kubernetes)
@@ -42,7 +42,7 @@ deployment templates.
 
 Vitess team member [Anthony Yeh](https://github.com/enisoc)'s talk at
 Oracle OpenWorld 2015 focused on
-what the [Cloud Native Computing](http://cncf.io) paradigm means when
+what the [Cloud Native Computing](https://cncf.io) paradigm means when
 applied to MySQL in the cloud. The talk also included a deep dive into
 [transparent, live resharding]
 ({% link user-guide/sharding.md %}#resharding), one of the key

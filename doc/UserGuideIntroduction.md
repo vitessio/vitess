@@ -5,7 +5,7 @@ Other Linux distributions should work as well.
 
 ## Database support
 
-Vitess supports [MySQL 5.6](http://dev.mysql.com/doc/refman/5.6/en/),
+Vitess supports [MySQL 5.6](https://dev.mysql.com/doc/refman/5.6/en/),
 [MariaDB 10.0](https://downloads.mariadb.org/mariadb/10.0.21/), and any
 newer versions like MySQL 5.7, etc. Vitess also supports Percona's
 variations of these versions.
@@ -56,7 +56,7 @@ VTGate understands the MySQL binary protocol. So, any client that
 can directly talk to MySQL can also use Vitess.
 
 Additionally, VTGate exposes its functionality through a
-[gRPC](http://www.grpc.io/) API which has support for multiple languages.
+[gRPC](https://www.grpc.io/) API which has support for multiple languages.
 
 Accessing Vitess through gRPC has some minor advantages over the MySQL
 protocol:
