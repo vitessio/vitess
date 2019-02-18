@@ -588,6 +588,13 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 
 	// Destination shards need different handling than what updateShardRecords does.
 	event.DispatchUpdate(ev, "updating destination shards")
+
+	// Enable query service
+	err = wr.ts.UpdateDisableQueryService(ctx, keyspace, destinationShards, topodatapb.TabletType_MASTER, nil, false)
+	if err != nil {
+		return err
+	}
+
 	for i, si := range destinationShards {
 		ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 		if err != nil {
@@ -608,12 +615,6 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		if err != nil {
 			return err
 		}
-	}
-
-	// Enable query service
-	err = wr.ts.UpdateDisableQueryService(ctx, keyspace, destinationShards, topodatapb.TabletType_MASTER, nil, false)
-	if err != nil {
-		return err
 	}
 
 	event.DispatchUpdate(ev, "setting destination masters read-write")
