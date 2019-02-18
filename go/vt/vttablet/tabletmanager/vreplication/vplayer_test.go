@@ -249,7 +249,8 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update nopk set val='bbb' where id=1",
 		output: []string{
 			"begin",
-			"update nopk set val='bbb' where id=1 and val='aaa'",
+			"delete from nopk where id=1 and val='aaa'",
+			"insert into nopk set id=1, val='bbb'",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
@@ -386,6 +387,60 @@ func TestPlayerUpdates(t *testing.T) {
 			expectData(t, tcases.table, tcases.data)
 		}
 	}
+}
+
+func TestPlayerRowMove(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	execStatements(t, []string{
+		"create table src(id int, val1 int, val2 int, primary key(id))",
+		fmt.Sprintf("create table %s.dst(val1 int, sval2 int, rcount int, primary key(val1))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select val1, sum(val2) as sval2, count(*) as rcount from src group by val1",
+		}},
+	}
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	defer cancel()
+
+	execStatements(t, []string{
+		"insert into src values(1, 1, 1), (2, 2, 2), (3, 2, 3)",
+	})
+	expectDBClientQueries(t, []string{
+		"begin",
+		"insert into dst set val1=1, sval2=1, rcount=1 on duplicate key update sval2=sval2+1, rcount=rcount+1",
+		"insert into dst set val1=2, sval2=2, rcount=1 on duplicate key update sval2=sval2+2, rcount=rcount+1",
+		"insert into dst set val1=2, sval2=3, rcount=1 on duplicate key update sval2=sval2+3, rcount=rcount+1",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+	expectData(t, "dst", [][]string{
+		{"1", "1", "1"},
+		{"2", "5", "2"},
+	})
+
+	execStatements(t, []string{
+		"update src set val1=1, val2=4 where id=3",
+	})
+	expectDBClientQueries(t, []string{
+		"begin",
+		"update dst set sval2=sval2-3, rcount=rcount-1 where val1=2",
+		"insert into dst set val1=1, sval2=4, rcount=1 on duplicate key update sval2=sval2+4, rcount=rcount+1",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+	expectData(t, "dst", [][]string{
+		{"1", "5", "2"},
+		{"2", "2", "1"},
+	})
 }
 
 func TestPlayerTypes(t *testing.T) {

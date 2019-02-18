@@ -446,7 +446,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
 	for _, change := range rowEvent.RowChanges {
-		if query := tplan.GenerateStatement(change); query != "" {
+		for _, query := range tplan.GenerateStatements(change) {
 			if err := vp.exec(ctx, query); err != nil {
 				return err
 			}
