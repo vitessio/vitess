@@ -249,8 +249,8 @@ func (tp *TablePlan) FindCol(name sqlparser.ColIdent) *ColExpr {
 	return nil
 }
 
-// GenerateStatement must be called only after Fields and PKCols have been populated.
-func (tp *TablePlan) GenerateStatement(rowChange *binlogdatapb.RowChange) string {
+// GenerateStatements must be called only after Fields and PKCols have been populated.
+func (tp *TablePlan) GenerateStatements(rowChange *binlogdatapb.RowChange) []string {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var before, after []sqltypes.Value
 	if rowChange.Before != nil {
@@ -264,13 +264,33 @@ func (tp *TablePlan) GenerateStatement(rowChange *binlogdatapb.RowChange) string
 	case before == nil && after != nil:
 		query = tp.generateInsert(after)
 	case before != nil && after != nil:
+		pkChanged := false
+		for _, cExpr := range tp.PKCols {
+			if !valsEqual(before[cExpr.ColNum], after[cExpr.ColNum]) {
+				pkChanged = true
+				break
+			}
+		}
+		if pkChanged {
+			queries := make([]string, 0, 2)
+			if query := tp.generateDelete(before); query != "" {
+				queries = append(queries, query)
+			}
+			if query := tp.generateInsert(after); query != "" {
+				queries = append(queries, query)
+			}
+			return queries
+		}
 		query = tp.generateUpdate(before, after)
 	case before != nil && after == nil:
 		query = tp.generateDelete(before)
 	case before == nil && after == nil:
 		// unreachable
 	}
-	return query
+	if query != "" {
+		return []string{query}
+	}
+	return nil
 }
 
 func (tp *TablePlan) generateInsert(after []sqltypes.Value) string {
@@ -345,22 +365,10 @@ func (tp *TablePlan) generateUpdateValues(sql *sqlparser.TrackedBuffer, before, 
 			if cExpr.Operation == OpCount {
 				continue
 			}
-			bef := before[cExpr.ColNum]
-			aft := after[cExpr.ColNum]
-			// If both are null, there's no change
-			if bef.IsNull() && aft.IsNull() {
-				continue
-			}
-			// If any one of them is null, something has changed.
-			if bef.IsNull() || aft.IsNull() {
-				goto mustSet
-			}
-			// Compare content only if none are null.
-			if bef.ToString() == aft.ToString() {
+			if valsEqual(before[cExpr.ColNum], after[cExpr.ColNum]) {
 				continue
 			}
 		}
-	mustSet:
 		sql.Myprintf("%s%v=", separator, cExpr.ColName)
 		separator = ", "
 		hasSet = true
@@ -406,4 +414,16 @@ func (tp *TablePlan) generateWhereValues(sql *sqlparser.TrackedBuffer, before []
 		separator = " and "
 		encodeValue(sql, before[cExpr.ColNum])
 	}
+}
+
+func valsEqual(v1, v2 sqltypes.Value) bool {
+	if v1.IsNull() && v2.IsNull() {
+		return true
+	}
+	// If any one of them is null, something has changed.
+	if v1.IsNull() || v2.IsNull() {
+		return false
+	}
+	// Compare content only if none are null.
+	return v1.ToString() == v2.ToString()
 }
