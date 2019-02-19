@@ -706,7 +706,7 @@ x509: failed to load system roots and no roots provided
 It usually means that your Kubernetes nodes are running a host OS
 that puts root certificates in a different place than our configuration
 expects by default (for example, Fedora). See the comments in the
-[etcd controller template](https://github.com/vitessio/vitess/blob/master/examples/kubernetes/etcd-controller-template.yaml)
+[etcd controller template](https://github.com/kubernetes/examples/blob/master/staging/storage/vitess/etcd-controller-template.yaml)
 for examples of how to set the right location for your host OS.
 You'll also need to adjust the same certificate path settings in the
 `vtctld` and `vttablet` templates.

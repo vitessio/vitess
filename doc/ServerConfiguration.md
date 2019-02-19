@@ -504,7 +504,7 @@ This URL prints out a simple "ok" or “not ok” string that can be used to che
 
 #### /querylogz, /debug/querylog, /txlogz, /debug/txlog
 
-* /debug/querylog is a never-ending stream of currently executing queries with verbose information about each query. This URL can generate a lot of data because it streams every query processed by VTTablet. The details are as per this function: [https://github.com/vitessio/vitess/blob/master/go/vt/tabletserver/logstats.go#L202](https://github.com/vitessio/vitess/blob/master/go/vt/tabletserver/logstats.go#L202)
+* /debug/querylog is a never-ending stream of currently executing queries with verbose information about each query. This URL can generate a lot of data because it streams every query processed by VTTablet. The details are as per this function: [https://github.com/vitessio/vitess/tree/master/go/vt/vttablet/tabletserver/tabletenv/logstats.go#L202](https://github.com/vitessio/vitess/tree/master/go/vt/vttablet/tabletserver/tabletenv/logstats.go#L202)
 * /querylogz is a limited human readable version of /debug/querylog. It prints the next 300 queries by default. The limit can be specified with a limit=N parameter on the URL.
 * /txlogz is like /querylogz, but for transactions.
 * /debug/txlog is the JSON counterpart to /txlogz.
