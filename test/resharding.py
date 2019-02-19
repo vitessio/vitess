@@ -984,6 +984,13 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_1_ny_rdonly, True, False)
     utils.check_tablet_query_service(self, shard_1_rdonly1, False, True)
 
+    # Shouldn't be able to rebuild keyspace graph while migration is on going
+    # (i.e there are records that have tablet controls set)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],
+                    auto_log=True,
+                    expect_fail=True,
+    )
+
     # rerun migrate to ensure it doesn't fail
     # skip refresh to make it go faster
     utils.run_vtctl(['MigrateServedTypes', '--cells=test_nj',

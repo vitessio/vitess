@@ -81,6 +81,20 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 	//   value: topo.SrvKeyspace object being built
 	srvKeyspaceMap := make(map[string]*topodatapb.SrvKeyspace)
 	for _, cell := range cells {
+		srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
+		switch {
+		case err == nil:
+			for _, partition := range srvKeyspace.GetPartitions() {
+				if partition.GetShardTabletControls() != nil {
+					return fmt.Errorf("can't rebuild serving keyspace while a migration is on going. TabletControls is set for partition %v", partition)
+				}
+
+			}
+		case topo.IsErrType(err, topo.NoNode):
+			// NOOP
+		default:
+			return err
+		}
 		srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
 			ShardingColumnName: ki.ShardingColumnName,
 			ShardingColumnType: ki.ShardingColumnType,
@@ -97,7 +111,10 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 	// - check the ranges are compatible (no hole, covers everything)
 	for cell, srvKeyspace := range srvKeyspaceMap {
 		for _, si := range shards {
-			if !si.IsMasterServing {
+			// We rebuild keyspace iff:
+			// 1) shard master is in a serving state.
+			// 2) shard has served type for master (this is for backwards compatibility).
+			if !(si.IsMasterServing || si.GetServedType(topodatapb.TabletType_MASTER) != nil) {
 				continue
 			}
 			// for each type this shard is supposed to serve,
