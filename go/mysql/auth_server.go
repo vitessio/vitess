@@ -186,10 +186,7 @@ func isPassScrambleMysqlNativePassword(reply, salt []byte, mysqlNativePassword s
 	crypt.Write(hashStage1)
 	candidateHash2 := crypt.Sum(nil)
 
-	if bytes.Compare(candidateHash2, hash) != 0 {
-		return false
-	}
-	return true
+	return bytes.Equal(candidateHash2, hash)
 }
 
 // Constants for the dialog plugin.

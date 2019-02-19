@@ -76,7 +76,7 @@ func TestEncLenInt(t *testing.T) {
 		}
 
 		// Check failed decoding.
-		got, pos, ok = readLenEncInt(test.encoded[:len(test.encoded)-1], 0)
+		_, _, ok = readLenEncInt(test.encoded[:len(test.encoded)-1], 0)
 		if ok {
 			t.Errorf("readLenEncInt returned ok=true for shorter value %x", test.value)
 		}
@@ -101,7 +101,7 @@ func TestEncUint16(t *testing.T) {
 		t.Errorf("readUint16 returned %v/%v/%v but expected %v/%v/%v", got16, pos, ok, val16, 4, true)
 	}
 
-	got16, pos, ok = readUint16(data, 9)
+	_, _, ok = readUint16(data, 9)
 	if ok {
 		t.Errorf("readUint16 returned ok=true for shorter value")
 	}
@@ -119,7 +119,7 @@ func TestEncBytes(t *testing.T) {
 		t.Errorf("readByte returned %v/%v/%v but expected %v/%v/%v", got, pos, ok, 0xab, 6, true)
 	}
 
-	got, pos, ok = readByte(data, 10)
+	_, _, ok = readByte(data, 10)
 	if ok {
 		t.Errorf("readByte returned ok=true for shorter value")
 	}
@@ -130,7 +130,7 @@ func TestEncBytes(t *testing.T) {
 		t.Errorf("readBytes returned %v/%v/%v but expected %v/%v/%v", b, pos, ok, expected, 7, true)
 	}
 
-	b, pos, ok = readBytes(data, 9, 2)
+	_, _, ok = readBytes(data, 9, 2)
 	if ok {
 		t.Errorf("readBytes returned ok=true for shorter value")
 	}
@@ -154,7 +154,7 @@ func TestEncUint32(t *testing.T) {
 		t.Errorf("readUint32 returned %v/%v/%v but expected %v/%v/%v", got32, pos, ok, val32, 6, true)
 	}
 
-	got32, pos, ok = readUint32(data, 7)
+	_, _, ok = readUint32(data, 7)
 	if ok {
 		t.Errorf("readUint32 returned ok=true for shorter value")
 	}
@@ -179,7 +179,7 @@ func TestEncUint64(t *testing.T) {
 		t.Errorf("readUint64 returned %v/%v/%v but expected %v/%v/%v", got64, pos, ok, val64, 6, true)
 	}
 
-	got64, pos, ok = readUint64(data, 7)
+	_, _, ok = readUint64(data, 7)
 	if ok {
 		t.Errorf("readUint64 returned ok=true for shorter value")
 	}
@@ -247,13 +247,13 @@ func TestEncString(t *testing.T) {
 		}
 
 		// Check failed decoding with shorter data.
-		got, pos, ok = readLenEncString(test.lenEncoded[:len(test.lenEncoded)-1], 0)
+		_, _, ok = readLenEncString(test.lenEncoded[:len(test.lenEncoded)-1], 0)
 		if ok {
 			t.Errorf("readLenEncString returned ok=true for shorter value %v", test.value)
 		}
 
 		// Check failed decoding with no data.
-		got, pos, ok = readLenEncString([]byte{}, 0)
+		_, _, ok = readLenEncString([]byte{}, 0)
 		if ok {
 			t.Errorf("readLenEncString returned ok=true for empty value %v", test.value)
 		}
@@ -265,13 +265,13 @@ func TestEncString(t *testing.T) {
 		}
 
 		// Check failed skipping with shorter data.
-		pos, ok = skipLenEncString(test.lenEncoded[:len(test.lenEncoded)-1], 0)
+		_, ok = skipLenEncString(test.lenEncoded[:len(test.lenEncoded)-1], 0)
 		if ok {
 			t.Errorf("skipLenEncString returned ok=true for shorter value %v", test.value)
 		}
 
 		// Check failed skipping with no data.
-		pos, ok = skipLenEncString([]byte{}, 0)
+		_, ok = skipLenEncString([]byte{}, 0)
 		if ok {
 			t.Errorf("skipLenEncString returned ok=true for empty value %v", test.value)
 		}
@@ -283,13 +283,13 @@ func TestEncString(t *testing.T) {
 		}
 
 		// Check failed decoding as bytes with shorter data.
-		gotb, pos, ok = readLenEncStringAsBytes(test.lenEncoded[:len(test.lenEncoded)-1], 0)
+		_, _, ok = readLenEncStringAsBytes(test.lenEncoded[:len(test.lenEncoded)-1], 0)
 		if ok {
 			t.Errorf("readLenEncStringAsBytes returned ok=true for shorter value %v", test.value)
 		}
 
 		// Check failed decoding as bytes with no data.
-		gotb, pos, ok = readLenEncStringAsBytes([]byte{}, 0)
+		_, _, ok = readLenEncStringAsBytes([]byte{}, 0)
 		if ok {
 			t.Errorf("readLenEncStringAsBytes returned ok=true for empty value %v", test.value)
 		}
@@ -313,7 +313,7 @@ func TestEncString(t *testing.T) {
 		}
 
 		// Check failed decoding with shorter data.
-		got, pos, ok = readNullString(test.nullEncoded[:len(test.nullEncoded)-1], 0)
+		_, _, ok = readNullString(test.nullEncoded[:len(test.nullEncoded)-1], 0)
 		if ok {
 			t.Errorf("readNullString returned ok=true for shorter value %v", test.value)
 		}
