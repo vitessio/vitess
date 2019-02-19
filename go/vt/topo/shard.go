@@ -429,6 +429,16 @@ func (si *ShardInfo) removeCellsFromTabletControl(tc *topodatapb.Shard_TabletCon
 	}
 }
 
+// GetServedType returns the Shard_ServedType for a TabletType, or nil
+func (si *ShardInfo) GetServedType(tabletType topodatapb.TabletType) *topodatapb.Shard_ServedType {
+	for _, st := range si.ServedTypes {
+		if st.TabletType == tabletType {
+			return st
+		}
+	}
+	return nil
+}
+
 //
 // Utility functions for shards
 //
