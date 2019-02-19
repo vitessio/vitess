@@ -38,28 +38,29 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	wg := sync.WaitGroup{}
 
 	var clientConn net.Conn
+	var clientErr error
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		var err error
-		clientConn, err = net.Dial("tcp", addr)
-		if err != nil {
-			t.Fatalf("Dial failed: %v", err)
-		}
+		clientConn, clientErr = net.Dial("tcp", addr)
 	}()
 
 	var serverConn net.Conn
+	var serverErr error
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		var err error
-		serverConn, err = listener.Accept()
-		if err != nil {
-			t.Fatalf("Accept failed: %v", err)
-		}
+		serverConn, serverErr = listener.Accept()
 	}()
 
 	wg.Wait()
+
+	if clientErr != nil {
+		t.Fatalf("Dial failed: %v", clientErr)
+	}
+	if serverErr != nil {
+		t.Fatalf("Accept failed: %v", serverErr)
+	}
 
 	// Create a Conn on both sides.
 	cConn := newConn(clientConn)

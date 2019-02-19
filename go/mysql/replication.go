@@ -33,7 +33,7 @@ func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlog
 	pos = writeUint32(data, pos, binlogPos)
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint32(data, pos, serverID)
-	pos = writeEOFString(data, pos, binlogFilename)
+	_ = writeEOFString(data, pos, binlogFilename)
 	if err := c.writeEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}

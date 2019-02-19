@@ -184,7 +184,7 @@ func validateConfig(config map[string][]*AuthServerStaticEntry) error {
 	for _, entries := range config {
 		for _, entry := range entries {
 			if entry.SourceHost != "" && entry.SourceHost != localhostName {
-				return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Invalid SourceHost found (only localhost is supported): %v", entry.SourceHost)
+				return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid SourceHost found (only localhost is supported): %v", entry.SourceHost)
 			}
 		}
 	}
@@ -220,7 +220,7 @@ func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse [
 		} else {
 			computedAuthResponse := ScramblePassword(salt, []byte(entry.Password))
 			// Validate the password.
-			if matchSourceHost(remoteAddr, entry.SourceHost) && bytes.Compare(authResponse, computedAuthResponse) == 0 {
+			if matchSourceHost(remoteAddr, entry.SourceHost) && bytes.Equal(authResponse, computedAuthResponse) {
 				return &StaticUserData{entry.UserData, entry.Groups}, nil
 			}
 		}
