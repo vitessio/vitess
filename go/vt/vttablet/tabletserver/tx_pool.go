@@ -128,8 +128,21 @@ func NewTxPool(
 		// but we know it doesn't export Timeout.
 		stats.NewGaugeDurationFunc(prefix+"TransactionPoolTimeout", "Transaction pool timeout", axp.timeout.Get)
 		stats.NewGaugeFunc(prefix+"TransactionPoolWaiters", "Transaction pool waiters", axp.waiters.Get)
+		stats.NewGaugeFunc(prefix+"TransactionPoolDbaInUse", "Transaction pool ExecuteOptions_DBA transactions currently in use", axp.GetDBAInUseCount)
+		stats.NewGaugeFunc(prefix+"TransactionPoolDbaTotal", "Transaction pool ExecuteOptions_DBA transactions", axp.GetDBACount)
 	})
 	return axp
+}
+
+// GetDBACount returns the number of ExecuteOptions_DBA transactions
+func (axp *TxPool) GetDBACount() int64 {
+	return int64(len(axp.activePool.GetPersistent()))
+}
+
+// GetDBAInUseCount returns the number of ExecuteOptions_DBA transactions that
+// are currently in use
+func (axp *TxPool) GetDBAInUseCount() int64 {
+	return int64(len(axp.activePool.GetPersistentInUse()))
 }
 
 // Open makes the TxPool operational. This also starts the transaction killer

@@ -190,6 +190,33 @@ func (nu *Numbered) GetIdle(timeout time.Duration, purpose string) (vals []inter
 	return vals
 }
 
+// GetPersistent returns a list of resources that have been executed with
+// ExecuteOptions_DBA (and thus don't have an enforced timeout).
+func (nu *Numbered) GetPersistent() (vals []interface{}) {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	for _, nw := range nu.resources {
+		if !nw.enforceTimeout {
+			vals = append(vals, nw.val)
+		}
+	}
+	return vals
+}
+
+// GetPersistentInUse returns a list of resources that have been executed with
+// ExecuteOptions_DBA (and thus don't have an enforced timeout) and also are
+// currently in use.
+func (nu *Numbered) GetPersistentInUse() (vals []interface{}) {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	for _, nw := range nu.resources {
+		if !nw.enforceTimeout && nw.inUse {
+			vals = append(vals, nw.val)
+		}
+	}
+	return vals
+}
+
 // WaitForEmpty returns as soon as the pool becomes empty
 func (nu *Numbered) WaitForEmpty() {
 	nu.mu.Lock()
