@@ -135,6 +135,7 @@ func TestAPI(t *testing.T) {
 					"start": null,
 					"end":"gA=="
 				},
+				"served_types": [],
 				"source_shards": [],
 				"tablet_controls": [],
 				"is_master_serving": true
