@@ -134,11 +134,11 @@ func (rp *ResourcePool) closeIdleResources() {
 	fmt.Println("\n\ncloseIdleResources")
 	available := int(rp.Available())
 	idleTimeout := rp.IdleTimeout()
-	keep := int(rp.MinActive())
-	fmt.Println("avail", rp.Available())
+	protected := int(rp.MinActive())
+	fmt.Println("we are protecting", protected)
 
 	for i := 0; i < available; i++ {
-		fmt.Println(i)
+		fmt.Println("available loop", i)
 
 		select {
 		case <-rp.slots:
@@ -164,16 +164,16 @@ func (rp *ResourcePool) closeIdleResources() {
 		}
 
 		// Maintain a minimum amount of active resources, bypassing any idle timeout.
-		if keep > 0 {
-			fmt.Println("keeping...")
-			keep--
+		if protected > 0 {
+			fmt.Println("protecting...")
+			protected--
 			rp.resources <- wrapper
 			rp.slots <- true
 			continue
 		}
 
 		if idleTimeout > 0 && wrapper.timeUsed.Add(idleTimeout).Sub(time.Now()) < 0 {
-			fmt.Println("closing...")
+			fmt.Println("closing resource due to timeout")
 			wrapper.resource.Close()
 			wrapper.resource = nil
 			rp.idleClosed.Add(1)
@@ -225,7 +225,7 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 	default:
 	}
 
-	fmt.Println("aaaa")
+	fmt.Println("\nGET", rp.StatsJSON())
 
 	// Fetch
 	var ok bool
@@ -263,14 +263,14 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 		wrapper.resource, err = rp.factory()
 		fmt.Println("instantiated", wrapper)
 		if err != nil {
-			//rp.resources <- resourceWrapper{}
 			rp.slots <- true
 			return nil, err
 		}
 		rp.active.Add(1)
 	} else {
-		fmt.Println("existing!")
+		fmt.Println("There's an existing resource to use!")
 	}
+
 	rp.available.Add(-1)
 	rp.inUse.Add(1)
 	return wrapper.resource, err
@@ -281,6 +281,25 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 // you will need to call Put(nil) instead of returning the closed resource.
 // The will eventually cause a new resource to be created in its place.
 func (rp *ResourcePool) Put(resource Resource) {
+	fmt.Println("\n\nPUT", resource, rp.StatsJSON())
+
+	rp.inUse.Add(-1)
+	rp.available.Add(1)
+
+	if resource == nil {
+		rp.active.Add(-1)
+	} else {
+		var wrapper resourceWrapper
+		wrapper = resourceWrapper{resource, time.Now()}
+
+		select {
+		case rp.resources <- wrapper:
+		default:
+			panic(errors.New("attempt to Put into a full ResourcePool (2)"))
+		}
+
+		fmt.Println("resource returned")
+	}
 
 	// Put back a free capacity slot
 	select {
@@ -290,28 +309,6 @@ func (rp *ResourcePool) Put(resource Resource) {
 	}
 
 	fmt.Println("slot returned")
-
-	var wrapper resourceWrapper
-	if resource != nil {
-		wrapper = resourceWrapper{resource, time.Now()}
-	} else {
-		rp.active.Add(-1)
-
-		// TODO: Warn or ignore error
-		//rp.activateMinimumResources()
-		fmt.Println("resource was nil, returning")
-
-		return
-	}
-
-	select {
-	case rp.resources <- wrapper:
-	default:
-		panic(errors.New("attempt to Put into a full ResourcePool (2)"))
-	}
-	rp.inUse.Add(-1)
-	rp.available.Add(1)
-	fmt.Println("resource added")
 }
 
 // SetCapacity changes the capacity of the pool.

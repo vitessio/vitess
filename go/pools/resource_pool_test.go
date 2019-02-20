@@ -175,7 +175,6 @@ func TestOpen(t *testing.T) {
 	}
 	if p.Available() != 3 {
 		t.Errorf("Expecting 3, received %d", p.Available())
-		return
 	}
 	p.SetCapacity(6)
 	if p.Capacity() != 6 {
@@ -619,26 +618,56 @@ func TestMinActiveWithExpiry(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 5, 5, timeout, 3)
 	defer p.Close()
 
-	r, err := p.Get(context.Background())
-	if err != nil {
-		t.Errorf("Got an unexpected error: %v", err)
+	if count.Get() != 3 {
+		t.Errorf("Expecting 3, received %d", count.Get())
+		return
 	}
-	p.Put(r)
 
+	// Get one more than the minActive.
+	var resources []Resource
+	for i := 0; i < 4; i++ {
+		r, err := p.Get(context.Background())
+		if err != nil {
+			t.Errorf("Got an unexpected error: %v", err)
+		}
+		resources = append(resources, r)
+	}
+
+	// Should have only ever allocated 4 (3 min, 1 extra).
 	if count.Get() != 4 {
 		t.Errorf("Expecting 4, received %d", count.Get())
+		return
+	}
+	if p.Available() != 1 {
+		t.Errorf("Expecting 1, received %d", p.Available())
 	}
 	if p.Active() != 4 {
 		t.Errorf("Expecting 4, received %d", p.Active())
 	}
 
+	// Put one resource back and let it expire.
+	p.Put(resources[0])
 	time.Sleep(timeout * 2)
 
+	if p.Available() != 2 {
+		t.Errorf("Expecting 2, received %d", p.Available())
+	}
 	if p.Active() != 3 {
 		t.Errorf("Expecting 3, received %d", p.Active())
 	}
 	if p.IdleClosed() != 1 {
 		t.Errorf("Expecting 1, received %d", p.IdleClosed())
+	}
+
+	// Put another resource back, and nothing should expire.
+	p.Put(resources[1])
+	time.Sleep(timeout * 2)
+
+	if p.Active() != 3 {
+		t.Errorf("Expecting 3, received %d", p.Active())
+	}
+	if p.IdleClosed() != 2 {
+		t.Errorf("Expecting 2, received %d", p.IdleClosed())
 	}
 }
 
