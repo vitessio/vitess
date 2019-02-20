@@ -78,7 +78,7 @@ func New(
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
 		minActive:   minActive,
-		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout),
+		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout, minActive),
 		checker:     checker,
 	}
 	if name == "" || usedNames[name] {

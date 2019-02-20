@@ -147,6 +147,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 		config.PoolNamePrefix+"TxReadPool",
 		3,
 		time.Duration(config.IdleTimeout*1e9),
+		0,
 		checker,
 	)
 	te.twoPC = NewTwoPC(readPool)

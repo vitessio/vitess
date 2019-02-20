@@ -232,6 +232,7 @@ func newPool() *Pool {
 		fmt.Sprintf("TestPool%d", rand.Int63()),
 		100,
 		10*time.Second,
+		0,
 		checker,
 	)
 }
