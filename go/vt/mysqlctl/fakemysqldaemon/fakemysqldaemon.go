@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
@@ -150,7 +151,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 		Running: true,
 	}
 	if db != nil {
-		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute)
+		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", pools.ResourceImpl, 5, time.Minute, 0)
 		result.appPool.Open(db.ConnParams(), stats.NewTimings("", "", ""))
 	}
 	return result

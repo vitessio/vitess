@@ -22,10 +22,11 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/vt/callerid"
-
 	"golang.org/x/net/context"
+
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/vt/callerid"
 )
 
 func TestConnPoolGet(t *testing.T) {
@@ -230,8 +231,10 @@ var checker = dummyChecker{}
 func newPool() *Pool {
 	return New(
 		fmt.Sprintf("TestPool%d", rand.Int63()),
+		pools.ResourceImpl,
 		100,
 		10*time.Second,
+		0,
 		checker,
 	)
 }
