@@ -566,3 +566,16 @@ func TestExpired(t *testing.T) {
 		t.Errorf("got %v, want %s", err, want)
 	}
 }
+
+func TestMinActive(t *testing.T) {
+	count.Set(0)
+	p := NewResourcePool(PoolFactory, 2, 2, time.Second, 1)
+	defer p.Close()
+
+	if p.Available() != 0 {
+		t.Errorf("Expecting 1, received %d", p.Available())
+	}
+	if p.Active() != 1 {
+		t.Errorf("Expecting 1, received %d", p.Active())
+	}
+}

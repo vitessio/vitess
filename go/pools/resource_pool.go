@@ -101,16 +101,11 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		rp.resources <- resourceWrapper{}
 	}
 
+	rp.activateMinimumResources()
+
 	if idleTimeout != 0 {
 		rp.idleTimer = timer.NewTimer(idleTimeout / 10)
 		rp.idleTimer.Start(rp.closeIdleResources)
-	}
-
-	for i := 0; i < minActive; i++ {
-		if err := rp.activate(); err != nil {
-			// We did our best here, break out to prevent future errors.
-			break
-		}
 	}
 
 	return rp
@@ -167,6 +162,39 @@ func (rp *ResourcePool) closeIdleResources() {
 		}
 
 		rp.resources <- wrapper
+	}
+}
+
+// activateMinimumResources tries to maintain at least minActive resources to be active.
+func (rp *ResourcePool) activateMinimumResources() {
+	available := int(rp.Available())
+	remaining := int(rp.MinActive() - rp.Active())
+
+	fmt.Println(remaining)
+
+	for i := 0; i < available && remaining > 0; i++ {
+		var wrapper resourceWrapper
+		select {
+		case wrapper, _ = <-rp.resources:
+		default:
+			// stop early if we don't get anything new from the pool
+			return
+		}
+
+		if wrapper.resource != nil {
+			rp.resources <- wrapper
+			continue
+		}
+
+		var err error
+		wrapper.resource, err = rp.factory()
+		if err != nil {
+			rp.resources <- resourceWrapper{}
+			return
+		}
+		rp.active.Add(1)
+		rp.resources <- wrapper
+		remaining--
 	}
 }
 
@@ -231,6 +259,9 @@ func (rp *ResourcePool) Put(resource Resource) {
 		wrapper = resourceWrapper{resource, time.Now()}
 	} else {
 		rp.active.Add(-1)
+
+		// TODO: Warn or ignore error
+		rp.activateMinimumResources()
 	}
 	select {
 	case rp.resources <- wrapper:
@@ -239,17 +270,6 @@ func (rp *ResourcePool) Put(resource Resource) {
 	}
 	rp.inUse.Add(-1)
 	rp.available.Add(1)
-}
-
-// activate creates new a resource which remains active but not in use.
-func (rp *ResourcePool) activate() error {
-	resource, err := rp.Get(context.Background())
-	if err != nil {
-		return err
-	}
-
-	rp.Put(resource)
-	return nil
 }
 
 // SetCapacity changes the capacity of the pool.
