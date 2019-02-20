@@ -1035,7 +1035,6 @@ func (e *Executor) handleComment(sql string) (*sqltypes.Result, error) {
 func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, callback func(*sqltypes.Result) error) (err error) {
 	logStats := NewLogStats(ctx, method, sql, bindVars)
 	logStats.StmtType = sqlparser.StmtType(sqlparser.Preview(sql))
-	defer logStats.Send()
 
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
@@ -1046,10 +1045,12 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	// check if this is a stream statement for messaging
 	// TODO: support keyRange syntax
 	if logStats.StmtType == sqlparser.StmtType(sqlparser.StmtStream) {
+		defer logStats.Send()
 		return e.handleMessageStream(ctx, safeSession, sql, target, callback, vcursor, logStats)
 	}
 
 	if logStats.StmtType == sqlparser.StmtType(sqlparser.StmtSelect) {
+		defer logStats.Send()
 		plan, err := e.getPlan(
 			vcursor,
 			query,
@@ -1109,19 +1110,23 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		}
 
 		logStats.ExecuteTime = time.Since(execStart)
-
 		return err
 	}
-	execStart := time.Now()
-	qr, err := e.Execute(
+	qr, err := e.execute(
 		ctx,
-		"Execute",
 		safeSession,
 		sql,
-		bindVars)
-	logStats.ExecuteTime = time.Since(execStart)
+		bindVars,
+		logStats)
 	if err != nil {
+		logStats.Error = err
 		return err
+	}
+	// The mysql plugin runs an implicit rollback whenever a connection closes.
+	// To avoid spamming the log with no-op rollback records, ignore it if
+	// it was a no-op record (i.e. didn't issue any queries)
+	if !(logStats.StmtType == "ROLLBACK" && logStats.ShardQueries == 0) {
+		logStats.Send()
 	}
 	return callback(qr)
 }
