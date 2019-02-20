@@ -136,6 +136,7 @@ func (rp *ResourcePool) IsClosed() (closed bool) {
 func (rp *ResourcePool) closeIdleResources() {
 	available := int(rp.Available())
 	idleTimeout := rp.IdleTimeout()
+	keep := int(rp.MinActive())
 
 	for i := 0; i < available; i++ {
 		var wrapper resourceWrapper
@@ -146,7 +147,19 @@ func (rp *ResourcePool) closeIdleResources() {
 			return
 		}
 
-		if wrapper.resource != nil && idleTimeout > 0 && wrapper.timeUsed.Add(idleTimeout).Sub(time.Now()) < 0 {
+		if wrapper.resource == nil {
+			rp.resources <- wrapper
+			continue
+		}
+
+		// Maintain a minimum amount of active resources, bypassing any idle timeout.
+		if keep > 0 {
+			keep--
+			rp.resources <- wrapper
+			continue
+		}
+
+		if idleTimeout > 0 && wrapper.timeUsed.Add(idleTimeout).Sub(time.Now()) < 0 {
 			wrapper.resource.Close()
 			wrapper.resource = nil
 			rp.idleClosed.Add(1)
@@ -155,17 +168,6 @@ func (rp *ResourcePool) closeIdleResources() {
 
 		rp.resources <- wrapper
 	}
-}
-
-// activate creates new resources which are active but not in use.
-func (rp *ResourcePool) activate() error {
-	r, err := rp.factory()
-	if err != nil {
-		return err
-	}
-
-	rp.Put(r)
-	return nil
 }
 
 // Get will return the next available resource. If capacity
@@ -239,6 +241,17 @@ func (rp *ResourcePool) Put(resource Resource) {
 	rp.available.Add(1)
 }
 
+// activate creates new a resource which remains active but not in use.
+func (rp *ResourcePool) activate() error {
+	resource, err := rp.Get(context.Background())
+	if err != nil {
+		return err
+	}
+
+	rp.Put(resource)
+	return nil
+}
+
 // SetCapacity changes the capacity of the pool.
 // You can use it to shrink or expand, but not beyond
 // the max capacity. If the change requires the pool
@@ -248,6 +261,11 @@ func (rp *ResourcePool) Put(resource Resource) {
 func (rp *ResourcePool) SetCapacity(capacity int) error {
 	if capacity < 0 || capacity > cap(rp.resources) {
 		return fmt.Errorf("capacity %d is out of range", capacity)
+	}
+
+	minActive := int(rp.minActive.Get())
+	if capacity < minActive {
+		return fmt.Errorf("capacity %d must be higher than minActive %d", capacity, minActive)
 	}
 
 	// Atomically swap new capacity with old, but only
