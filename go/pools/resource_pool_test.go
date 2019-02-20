@@ -18,6 +18,7 @@ package pools
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -570,7 +571,7 @@ func TestExpired(t *testing.T) {
 func TestMinActive(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second,3)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 3)
 	defer p.Close()
 
 	if p.Available() != 5 {
@@ -587,9 +588,70 @@ func TestMinActive(t *testing.T) {
 	}
 }
 
+func TestMinActiveWithExpiry(t *testing.T) {
+	timeout := time.Millisecond * 20
+	lastID.Set(0)
+	count.Set(0)
+	p := NewResourcePool(PoolFactory, 5, 5, timeout, 3)
+	defer p.Close()
+
+	r, err := p.Get(context.Background())
+	if err != nil {
+		t.Errorf("Got an unexpected error: %v", err)
+	}
+	p.Put(r)
+
+	if count.Get() != 4 {
+		t.Errorf("Expecting 4, received %d", count.Get())
+	}
+	if p.Active() != 4 {
+		t.Errorf("Expecting 4, received %d", p.Active())
+	}
+
+	time.Sleep(timeout * 2)
+
+	if p.Active() != 3 {
+		t.Errorf("Expecting 3, received %d", p.Active())
+	}
+	if p.IdleClosed() != 1 {
+		t.Errorf("Expecting 1, received %d", p.IdleClosed())
+	}
+}
+
+func TestMinActiveSelfRefreshing(t *testing.T) {
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 3)
+	defer p.Close()
+
+	// Put back closed resources except one
+	for i := 0; i < 5; i++ {
+		fmt.Println("\n", i)
+		r, err := p.Get(context.Background())
+		if err != nil {
+			t.Errorf("Got an unexpected error: %v", err)
+		}
+
+		fmt.Println(i, r)
+		if i != 2 {
+			r = nil
+		}
+		p.Put(r)
+	}
+	if p.Available() != 5 {
+		t.Errorf("Expecting 5, received %d", p.Available())
+	}
+	if p.Active() != 1 {
+		t.Errorf("Expecting 1, received %d", p.Active())
+	}
+
+	p.activateMinimumResources()
+	if p.Active() != 3 {
+		t.Errorf("Expecting 3, received %d", p.Active())
+	}
+}
+
 func TestMinActiveTooHigh(t *testing.T) {
 	defer func() {
-		if r := recover(); r.(error).Error() != "minimum active 2 higher than capacity 1" {
+		if r := recover(); r.(error).Error() != "minActive 2 higher than capacity 1" {
 			t.Errorf("Did not panic correctly: %v", r)
 		}
 	}()
@@ -606,8 +668,8 @@ func TestMinActiveTooHighAfterSetCapacity(t *testing.T) {
 		t.Errorf("Expecting no error, instead got: %v", err)
 	}
 
-	expecting := "minimum active 2 higher than capacity 1"
 	err := p.SetCapacity(1)
+	expecting := "minActive 2 would now be higher than capacity 1"
 	if err == nil || err.Error() != expecting {
 		t.Errorf("Expecting: %v, instead got: %v", expecting, err)
 	}

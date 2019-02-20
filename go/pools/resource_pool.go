@@ -34,11 +34,6 @@ var (
 
 	// ErrTimeout is returned if a resource get times out.
 	ErrTimeout = errors.New("resource pool timed out")
-
-	// ErrMinActiveTooHigh is triggered when minActive is higher than capacity.
-	ErrMinActiveTooHigh = func(minActive, capacity int) error {
-		return fmt.Errorf("minimum active %v higher than capacity %v", minActive, capacity)
-	}
 )
 
 // Factory is a function that can be used to create a resource.
@@ -91,7 +86,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		panic(errors.New("invalid/out of range capacity"))
 	}
 	if minActive > capacity {
-		panic(ErrMinActiveTooHigh(minActive, capacity))
+		panic(fmt.Errorf("minActive %v higher than capacity %v", minActive, capacity))
 	}
 
 	rp := &ResourcePool{
@@ -134,32 +129,40 @@ func (rp *ResourcePool) IsClosed() (closed bool) {
 
 // closeIdleResources scans the pool for idle resources
 func (rp *ResourcePool) closeIdleResources() {
+	fmt.Println("\n\ncloseIdleResources")
 	available := int(rp.Available())
 	idleTimeout := rp.IdleTimeout()
 	keep := int(rp.MinActive())
+	fmt.Println("avail", rp.Available())
 
 	for i := 0; i < available; i++ {
+		fmt.Println(i)
+
 		var wrapper resourceWrapper
 		select {
 		case wrapper, _ = <-rp.resources:
 		default:
 			// stop early if we don't get anything new from the pool
+			fmt.Println("return early")
 			return
 		}
 
 		if wrapper.resource == nil {
 			rp.resources <- wrapper
+			fmt.Println("resource is nil")
 			continue
 		}
 
 		// Maintain a minimum amount of active resources, bypassing any idle timeout.
 		if keep > 0 {
+			fmt.Println("keeping...")
 			keep--
 			rp.resources <- wrapper
 			continue
 		}
 
 		if idleTimeout > 0 && wrapper.timeUsed.Add(idleTimeout).Sub(time.Now()) < 0 {
+			fmt.Println("closing...")
 			wrapper.resource.Close()
 			wrapper.resource = nil
 			rp.idleClosed.Add(1)
@@ -170,7 +173,8 @@ func (rp *ResourcePool) closeIdleResources() {
 	}
 }
 
-// activateMinimumResources tries to maintain at least minActive resources to be active.
+// activateMinimumResources tries to maintain at least minActive
+// resources to be active.
 func (rp *ResourcePool) activateMinimumResources() {
 	available := int(rp.Available())
 	remaining := int(rp.MinActive() - rp.Active())
@@ -241,11 +245,14 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 	// Unwrap
 	if wrapper.resource == nil {
 		wrapper.resource, err = rp.factory()
+		fmt.Println("instantiated", wrapper)
 		if err != nil {
 			rp.resources <- resourceWrapper{}
 			return nil, err
 		}
 		rp.active.Add(1)
+	} else {
+		fmt.Println("existing!")
 	}
 	rp.available.Add(-1)
 	rp.inUse.Add(1)
@@ -288,7 +295,7 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 
 	minActive := int(rp.minActive.Get())
 	if capacity < minActive {
-		return ErrMinActiveTooHigh(minActive, capacity)
+		return fmt.Errorf("minActive %v would now be higher than capacity %v", minActive, capacity)
 	}
 
 	// Atomically swap new capacity with old, but only
