@@ -1049,67 +1049,81 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		return e.handleMessageStream(ctx, safeSession, sql, target, callback, vcursor, logStats)
 	}
 
-	plan, err := e.getPlan(
-		vcursor,
-		query,
-		comments,
-		bindVars,
-		skipQueryPlanCache(safeSession),
-		logStats,
-	)
-	if err != nil {
-		logStats.Error = err
-		return err
-	}
+	if logStats.StmtType == sqlparser.StmtType(sqlparser.StmtSelect) {
+		plan, err := e.getPlan(
+			vcursor,
+			query,
+			comments,
+			bindVars,
+			skipQueryPlanCache(safeSession),
+			logStats,
+		)
+		if err != nil {
+			logStats.Error = err
+			return err
+		}
 
-	execStart := time.Now()
-	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+		execStart := time.Now()
+		logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
-	// Some of the underlying primitives may send results one row at a time.
-	// So, we need the ability to consolidate those into reasonable chunks.
-	// The callback wrapper below accumulates rows and sends them as chunks
-	// dictated by stream_buffer_size.
-	result := &sqltypes.Result{}
-	byteCount := 0
-	err = plan.Instructions.StreamExecute(vcursor, bindVars, true, func(qr *sqltypes.Result) error {
-		// If the row has field info, send it separately.
-		// TODO(sougou): this behavior is for handling tests because
-		// the framework currently sends all results as one packet.
-		if len(qr.Fields) > 0 {
-			qrfield := &sqltypes.Result{Fields: qr.Fields}
-			if err := callback(qrfield); err != nil {
+		// Some of the underlying primitives may send results one row at a time.
+		// So, we need the ability to consolidate those into reasonable chunks.
+		// The callback wrapper below accumulates rows and sends them as chunks
+		// dictated by stream_buffer_size.
+		result := &sqltypes.Result{}
+		byteCount := 0
+		err = plan.Instructions.StreamExecute(vcursor, bindVars, true, func(qr *sqltypes.Result) error {
+			// If the row has field info, send it separately.
+			// TODO(sougou): this behavior is for handling tests because
+			// the framework currently sends all results as one packet.
+			if len(qr.Fields) > 0 {
+				qrfield := &sqltypes.Result{Fields: qr.Fields}
+				if err := callback(qrfield); err != nil {
+					return err
+				}
+			}
+
+			for _, row := range qr.Rows {
+				result.Rows = append(result.Rows, row)
+				for _, col := range row {
+					byteCount += col.Len()
+				}
+
+				if byteCount >= e.streamSize {
+					err := callback(result)
+					result = &sqltypes.Result{}
+					byteCount = 0
+					if err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		})
+
+		// Send left-over rows.
+		if len(result.Rows) > 0 {
+			if err := callback(result); err != nil {
 				return err
 			}
 		}
 
-		for _, row := range qr.Rows {
-			result.Rows = append(result.Rows, row)
-			for _, col := range row {
-				byteCount += col.Len()
-			}
+		logStats.ExecuteTime = time.Since(execStart)
 
-			if byteCount >= e.streamSize {
-				err := callback(result)
-				result = &sqltypes.Result{}
-				byteCount = 0
-				if err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	})
-
-	// Send left-over rows.
-	if len(result.Rows) > 0 {
-		if err := callback(result); err != nil {
-			return err
-		}
+		return err
 	}
-
+	execStart := time.Now()
+	qr, err := e.Execute(
+		ctx,
+		"Execute",
+		safeSession,
+		sql,
+		bindVars)
 	logStats.ExecuteTime = time.Since(execStart)
-
-	return err
+	if err != nil {
+		return err
+	}
+	return callback(qr)
 }
 
 // handleMessageStream executes queries of the form 'stream * from t'
