@@ -62,7 +62,7 @@ func TestOpen(t *testing.T) {
 	var resources [10]Resource
 
 	// Test Get
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 5; i++ {
 		r, err := p.Get(ctx)
 		resources[i] = r
 		if err != nil {
@@ -568,14 +568,47 @@ func TestExpired(t *testing.T) {
 }
 
 func TestMinActive(t *testing.T) {
+	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 2, 2, time.Second, 1)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second,3)
 	defer p.Close()
 
-	if p.Available() != 0 {
-		t.Errorf("Expecting 1, received %d", p.Available())
+	if p.Available() != 5 {
+		t.Errorf("Expecting 5, received %d", p.Available())
 	}
-	if p.Active() != 1 {
-		t.Errorf("Expecting 1, received %d", p.Active())
+	if p.Active() != 3 {
+		t.Errorf("Expecting 3, received %d", p.Active())
+	}
+	if lastID.Get() != 3 {
+		t.Errorf("Expecting 3, received %d", lastID.Get())
+	}
+	if count.Get() != 3 {
+		t.Errorf("Expecting 3, received %d", count.Get())
+	}
+}
+
+func TestMinActiveTooHigh(t *testing.T) {
+	defer func() {
+		if r := recover(); r.(error).Error() != "minimum active 2 higher than capacity 1" {
+			t.Errorf("Did not panic correctly: %v", r)
+		}
+	}()
+
+	p := NewResourcePool(FailFactory, 1, 1, time.Second, 2)
+	defer p.Close()
+}
+
+func TestMinActiveTooHighAfterSetCapacity(t *testing.T) {
+	p := NewResourcePool(FailFactory, 3, 3, time.Second, 2)
+	defer p.Close()
+
+	if err := p.SetCapacity(2); err != nil {
+		t.Errorf("Expecting no error, instead got: %v", err)
+	}
+
+	expecting := "minimum active 2 higher than capacity 1"
+	err := p.SetCapacity(1)
+	if err == nil || err.Error() != expecting {
+		t.Errorf("Expecting: %v, instead got: %v", expecting, err)
 	}
 }
