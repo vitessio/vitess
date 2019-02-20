@@ -52,6 +52,7 @@ type ResourcePool struct {
 	factory     Factory
 	capacity    sync2.AtomicInt64
 	idleTimeout sync2.AtomicDuration
+	minActive   sync2.AtomicInt64
 	idleTimer   *timer.Timer
 
 	// stats
@@ -76,16 +77,25 @@ type resourceWrapper struct {
 // You cannot resize the pool beyond maxCap.
 // If a resource is unused beyond idleTimeout, it's discarded.
 // An idleTimeout of 0 means that there is no timeout.
-func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration) *ResourcePool {
+//
+// minActive is used to prepare and maintain a minimum amount
+// of active resources. Any errors when instantiating the factory
+// will cause the active resource count to be lower than requested.
+func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, minActive int) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
+	if minActive > capacity {
+		panic(errors.New("minActive is larger than capacity"))
+	}
+
 	rp := &ResourcePool{
 		resources:   make(chan resourceWrapper, maxCap),
 		factory:     factory,
 		available:   sync2.NewAtomicInt64(int64(capacity)),
 		capacity:    sync2.NewAtomicInt64(int64(capacity)),
 		idleTimeout: sync2.NewAtomicDuration(idleTimeout),
+		minActive:   sync2.NewAtomicInt64(int64(minActive)),
 	}
 	for i := 0; i < capacity; i++ {
 		rp.resources <- resourceWrapper{}
@@ -95,6 +105,14 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		rp.idleTimer = timer.NewTimer(idleTimeout / 10)
 		rp.idleTimer.Start(rp.closeIdleResources)
 	}
+
+	for i := 0; i < minActive; i++ {
+		if err := rp.activate(); err != nil {
+			// We did our best here, break out to prevent future errors.
+			break
+		}
+	}
+
 	return rp
 }
 
@@ -137,6 +155,17 @@ func (rp *ResourcePool) closeIdleResources() {
 
 		rp.resources <- wrapper
 	}
+}
+
+// activate creates new resources which are active but not in use.
+func (rp *ResourcePool) activate() error {
+	r, err := rp.factory()
+	if err != nil {
+		return err
+	}
+
+	rp.Put(r)
+	return nil
 }
 
 // Get will return the next available resource. If capacity
@@ -303,6 +332,11 @@ func (rp *ResourcePool) Available() int64 {
 // pool or claimed for use
 func (rp *ResourcePool) Active() int64 {
 	return rp.active.Get()
+}
+
+// MinActive returns the minimum amount of resources keep active.
+func (rp *ResourcePool) MinActive() int64 {
+	return rp.minActive.Get()
 }
 
 // InUse returns the number of claimed resources from the pool

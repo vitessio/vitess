@@ -62,7 +62,7 @@ func TestOpen(t *testing.T) {
 	var resources [10]Resource
 
 	// Test Get
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 20; i++ {
 		r, err := p.Get(ctx)
 		resources[i] = r
 		if err != nil {

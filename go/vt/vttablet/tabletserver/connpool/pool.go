@@ -60,6 +60,7 @@ type Pool struct {
 	connections    *pools.ResourcePool
 	capacity       int
 	idleTimeout    time.Duration
+	minActive      int
 	dbaPool        *dbconnpool.ConnectionPool
 	checker        MySQLChecker
 	appDebugParams *mysql.ConnParams
@@ -71,10 +72,12 @@ func New(
 	name string,
 	capacity int,
 	idleTimeout time.Duration,
+	minActive int,
 	checker MySQLChecker) *Pool {
 	cp := &Pool{
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
+		minActive:   minActive,
 		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout),
 		checker:     checker,
 	}
@@ -85,6 +88,7 @@ func New(
 	stats.NewGaugeFunc(name+"Capacity", "Tablet server conn pool capacity", cp.Capacity)
 	stats.NewGaugeFunc(name+"Available", "Tablet server conn pool available", cp.Available)
 	stats.NewGaugeFunc(name+"Active", "Tablet server conn pool active", cp.Active)
+	stats.NewGaugeFunc(name+"MinActive", "Tablet server conn pool min active", cp.MinActive)
 	stats.NewGaugeFunc(name+"InUse", "Tablet server conn pool in use", cp.InUse)
 	stats.NewGaugeFunc(name+"MaxCap", "Tablet server conn pool max cap", cp.MaxCap)
 	stats.NewCounterFunc(name+"WaitCount", "Tablet server conn pool wait count", cp.WaitCount)
@@ -109,7 +113,7 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
 	f := func() (pools.Resource, error) {
 		return NewDBConn(cp, appParams)
 	}
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
+	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.minActive)
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams, tabletenv.MySQLStats)
@@ -220,6 +224,15 @@ func (cp *Pool) Active() int64 {
 		return 0
 	}
 	return p.Active()
+}
+
+// MinActive returns the of connections in the pool to keep active
+func (cp *Pool) MinActive() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.MinActive()
 }
 
 // InUse returns the number of in-use connections in the pool

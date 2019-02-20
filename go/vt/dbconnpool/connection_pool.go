@@ -51,6 +51,7 @@ type ConnectionPool struct {
 	connections *pools.ResourcePool
 	capacity    int
 	idleTimeout time.Duration
+	minActive   int
 
 	// info and mysqlStats are set at Open() time
 	info       *mysql.ConnParams
@@ -59,8 +60,12 @@ type ConnectionPool struct {
 
 // NewConnectionPool creates a new ConnectionPool. The name is used
 // to publish stats only.
-func NewConnectionPool(name string, capacity int, idleTimeout time.Duration) *ConnectionPool {
-	cp := &ConnectionPool{capacity: capacity, idleTimeout: idleTimeout}
+func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, minActive int) *ConnectionPool {
+	cp := &ConnectionPool{
+		capacity:    capacity,
+		idleTimeout: idleTimeout,
+		minActive:   minActive,
+	}
 	if name == "" || usedNames[name] {
 		return cp
 	}
@@ -68,6 +73,7 @@ func NewConnectionPool(name string, capacity int, idleTimeout time.Duration) *Co
 	stats.NewGaugeFunc(name+"Capacity", "Connection pool capacity", cp.Capacity)
 	stats.NewGaugeFunc(name+"Available", "Connection pool available", cp.Available)
 	stats.NewGaugeFunc(name+"Active", "Connection pool active", cp.Active)
+	stats.NewGaugeFunc(name+"MinActive", "Connection pool minimum active", cp.MinActive)
 	stats.NewGaugeFunc(name+"InUse", "Connection pool in-use", cp.InUse)
 	stats.NewGaugeFunc(name+"MaxCap", "Connection pool max cap", cp.MaxCap)
 	stats.NewCounterFunc(name+"WaitCount", "Connection pool wait count", cp.WaitCount)
@@ -98,7 +104,7 @@ func (cp *ConnectionPool) Open(info *mysql.ConnParams, mysqlStats *stats.Timings
 	defer cp.mu.Unlock()
 	cp.info = info
 	cp.mysqlStats = mysqlStats
-	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout)
+	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, cp.minActive)
 }
 
 // connect is used by the resource pool to create a new Resource.
@@ -207,6 +213,15 @@ func (cp *ConnectionPool) Available() int64 {
 		return 0
 	}
 	return p.Available()
+}
+
+// MinActive returns the of connections in the pool to keep active
+func (cp *ConnectionPool) MinActive() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.MinActive()
 }
 
 // Active returns the number of active connections in the pool
