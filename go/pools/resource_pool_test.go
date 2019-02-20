@@ -58,13 +58,20 @@ func TestOpen(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
+	fmt.Println(111)
 	p := NewResourcePool(PoolFactory, 6, 6, time.Second, 0)
+	fmt.Println("set cap", p.StatsJSON())
 	p.SetCapacity(5)
 	var resources [10]Resource
 
+	fmt.Println(1, p.StatsJSON())
+
 	// Test Get
 	for i := 0; i < 5; i++ {
+		fmt.Println("a----------", i)
 		r, err := p.Get(ctx)
+		fmt.Println("aaaaaaaaaaaa", i)
+		fmt.Println(1, p.StatsJSON())
 		resources[i] = r
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
@@ -86,24 +93,31 @@ func TestOpen(t *testing.T) {
 		}
 	}
 
+	fmt.Println("WTFFFFFFFFFF", p.StatsJSON())
+
 	// Test that Get waits
 	ch := make(chan bool)
 	go func() {
 		for i := 0; i < 5; i++ {
+			fmt.Println("GET", i, p.StatsJSON())
 			r, err := p.Get(ctx)
 			if err != nil {
 				t.Errorf("Get failed: %v", err)
+				panic("exit")
 			}
 			resources[i] = r
 		}
 		for i := 0; i < 5; i++ {
+			fmt.Println("PUT")
 			p.Put(resources[i])
 		}
 		ch <- true
 	}()
 	for i := 0; i < 5; i++ {
 		// Sleep to ensure the goroutine waits
+		fmt.Println("SLEEP")
 		time.Sleep(10 * time.Millisecond)
+		fmt.Println("PUTBACK")
 		p.Put(resources[i])
 	}
 	<-ch
@@ -123,6 +137,9 @@ func TestOpen(t *testing.T) {
 		t.Errorf("Unexpected error %v", err)
 	}
 	r.Close()
+
+	fmt.Println(2)
+
 	p.Put(nil)
 	if count.Get() != 4 {
 		t.Errorf("Expecting 4, received %d", count.Get())
@@ -143,6 +160,7 @@ func TestOpen(t *testing.T) {
 	if lastID.Get() != 6 {
 		t.Errorf("Expecting 6, received %d", lastID.Get())
 	}
+	fmt.Println(3)
 
 	// SetCapacity
 	p.SetCapacity(3)
@@ -157,6 +175,7 @@ func TestOpen(t *testing.T) {
 	}
 	if p.Available() != 3 {
 		t.Errorf("Expecting 3, received %d", p.Available())
+		return
 	}
 	p.SetCapacity(6)
 	if p.Capacity() != 6 {
@@ -209,9 +228,13 @@ func TestShrinking(t *testing.T) {
 		}
 		resources[i] = r
 	}
+
+	fmt.Println("before shrink:", p.StatsJSON())
+
 	done := make(chan bool)
 	go func() {
 		p.SetCapacity(3)
+		fmt.Println("after shrink:", p.StatsJSON())
 		done <- true
 	}()
 	expected := `{"Capacity": 3, "Available": 0, "Active": 4, "InUse": 4, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0}`
@@ -221,6 +244,7 @@ func TestShrinking(t *testing.T) {
 		if stats != expected {
 			if i == 9 {
 				t.Errorf(`expecting '%s', received '%s'`, expected, stats)
+				panic(1)
 			}
 		}
 	}

@@ -49,6 +49,7 @@ type Resource interface {
 // ResourcePool allows you to use a pool of resources.
 type ResourcePool struct {
 	resources   chan resourceWrapper
+	slots       chan bool
 	factory     Factory
 	capacity    sync2.AtomicInt64
 	idleTimeout sync2.AtomicDuration
@@ -91,6 +92,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 
 	rp := &ResourcePool{
 		resources:   make(chan resourceWrapper, maxCap),
+		slots:       make(chan bool, maxCap),
 		factory:     factory,
 		available:   sync2.NewAtomicInt64(int64(capacity)),
 		capacity:    sync2.NewAtomicInt64(int64(capacity)),
@@ -98,7 +100,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		minActive:   sync2.NewAtomicInt64(int64(minActive)),
 	}
 	for i := 0; i < capacity; i++ {
-		rp.resources <- resourceWrapper{}
+		rp.slots <- true
 	}
 
 	rp.activateMinimumResources()
@@ -138,18 +140,26 @@ func (rp *ResourcePool) closeIdleResources() {
 	for i := 0; i < available; i++ {
 		fmt.Println(i)
 
+		select {
+		case <-rp.slots:
+		default:
+			// stop early if we don't get anything new from the pool
+			fmt.Println("return early 1")
+		}
+
 		var wrapper resourceWrapper
 		select {
 		case wrapper, _ = <-rp.resources:
 		default:
 			// stop early if we don't get anything new from the pool
-			fmt.Println("return early")
+			fmt.Println("return early 2")
+			rp.slots <- true
 			return
 		}
 
 		if wrapper.resource == nil {
-			rp.resources <- wrapper
-			fmt.Println("resource is nil")
+			fmt.Println("resource is nil, shouldn't happen, removing")
+			rp.slots <- true
 			continue
 		}
 
@@ -158,6 +168,7 @@ func (rp *ResourcePool) closeIdleResources() {
 			fmt.Println("keeping...")
 			keep--
 			rp.resources <- wrapper
+			rp.slots <- true
 			continue
 		}
 
@@ -167,9 +178,11 @@ func (rp *ResourcePool) closeIdleResources() {
 			wrapper.resource = nil
 			rp.idleClosed.Add(1)
 			rp.active.Add(-1)
+			continue
 		}
 
 		rp.resources <- wrapper
+		rp.slots <- true
 	}
 }
 
@@ -180,27 +193,18 @@ func (rp *ResourcePool) activateMinimumResources() {
 	remaining := int(rp.MinActive() - rp.Active())
 
 	for i := 0; i < available && remaining > 0; i++ {
-		var wrapper resourceWrapper
-		select {
-		case wrapper, _ = <-rp.resources:
-		default:
-			// stop early if we don't get anything new from the pool
-			return
-		}
-
-		if wrapper.resource != nil {
-			rp.resources <- wrapper
-			continue
-		}
+		<-rp.slots
 
 		var err error
+		var wrapper resourceWrapper
 		wrapper.resource, err = rp.factory()
 		if err != nil {
-			rp.resources <- resourceWrapper{}
+			rp.slots <- true
 			return
 		}
 		rp.active.Add(1)
 		rp.resources <- wrapper
+		rp.slots <- true
 		remaining--
 	}
 }
@@ -221,33 +225,46 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 	default:
 	}
 
+	fmt.Println("aaaa")
+
 	// Fetch
-	var wrapper resourceWrapper
 	var ok bool
 	select {
-	case wrapper, ok = <-rp.resources:
+	case _, ok = <-rp.slots:
 	default:
+		fmt.Println("no free capacity!")
 		if !wait {
+			fmt.Println("instafail")
 			return nil, nil
 		}
 		startTime := time.Now()
+		fmt.Println("waiting for a slot")
 		select {
-		case wrapper, ok = <-rp.resources:
+		case _, ok = <-rp.slots:
 		case <-ctx.Done():
 			return nil, ErrTimeout
 		}
 		rp.recordWait(startTime)
 	}
 	if !ok {
+		fmt.Println("ok is false, channel closed")
 		return nil, ErrClosed
+	}
+
+	var wrapper resourceWrapper
+	select {
+	case wrapper = <-rp.resources:
+	default:
 	}
 
 	// Unwrap
 	if wrapper.resource == nil {
+		fmt.Println("instantiating!")
 		wrapper.resource, err = rp.factory()
 		fmt.Println("instantiated", wrapper)
 		if err != nil {
-			rp.resources <- resourceWrapper{}
+			//rp.resources <- resourceWrapper{}
+			rp.slots <- true
 			return nil, err
 		}
 		rp.active.Add(1)
@@ -264,6 +281,16 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 // you will need to call Put(nil) instead of returning the closed resource.
 // The will eventually cause a new resource to be created in its place.
 func (rp *ResourcePool) Put(resource Resource) {
+
+	// Put back a free capacity slot
+	select {
+	case rp.slots <- true:
+	default:
+		panic(errors.New("attempt to Put into a full ResourcePool"))
+	}
+
+	fmt.Println("slot returned")
+
 	var wrapper resourceWrapper
 	if resource != nil {
 		wrapper = resourceWrapper{resource, time.Now()}
@@ -271,15 +298,20 @@ func (rp *ResourcePool) Put(resource Resource) {
 		rp.active.Add(-1)
 
 		// TODO: Warn or ignore error
-		rp.activateMinimumResources()
+		//rp.activateMinimumResources()
+		fmt.Println("resource was nil, returning")
+
+		return
 	}
+
 	select {
 	case rp.resources <- wrapper:
 	default:
-		panic(errors.New("attempt to Put into a full ResourcePool"))
+		panic(errors.New("attempt to Put into a full ResourcePool (2)"))
 	}
 	rp.inUse.Add(-1)
 	rp.available.Add(1)
+	fmt.Println("resource added")
 }
 
 // SetCapacity changes the capacity of the pool.
@@ -289,6 +321,7 @@ func (rp *ResourcePool) Put(resource Resource) {
 // number of resources are returned to the pool.
 // A SetCapacity of 0 is equivalent to closing the ResourcePool.
 func (rp *ResourcePool) SetCapacity(capacity int) error {
+	fmt.Println("\n\nsetCapacity", capacity, rp.StatsJSON())
 	if capacity < 0 || capacity > cap(rp.resources) {
 		return fmt.Errorf("capacity %d is out of range", capacity)
 	}
@@ -314,24 +347,51 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 		}
 	}
 
-	if capacity < oldcap {
-		for i := 0; i < oldcap-capacity; i++ {
-			wrapper := <-rp.resources
+	diff := oldcap - capacity
+
+	// Expanding
+	for i := 0; i < -diff; i++ {
+		fmt.Println("expanding...", i)
+		rp.slots <- true
+		rp.available.Add(1)
+	}
+
+	// Shrinking
+	for i := 0; i < diff; i++ {
+		fmt.Println("shrinking removing slot", i)
+		switch {
+		case <-rp.slots:
+			rp.available.Add(-1)
+		default:
+			fmt.Println("no slot was available to remove, let's abort")
+			break
+		}
+
+		fmt.Println(rp.StatsJSON())
+
+		fmt.Println("waiting for resource")
+		select {
+		case wrapper := <-rp.resources:
+			fmt.Println("got a resource")
 			if wrapper.resource != nil {
+				fmt.Println("removing resource")
 				wrapper.resource.Close()
 				rp.active.Add(-1)
+			} else {
+				fmt.Println("wtf")
 			}
-			rp.available.Add(-1)
-		}
-	} else {
-		for i := 0; i < capacity-oldcap; i++ {
-			rp.resources <- resourceWrapper{}
-			rp.available.Add(1)
+		default:
+			fmt.Println("no available resources")
 		}
 	}
+
 	if capacity == 0 {
+		close(rp.slots)
 		close(rp.resources)
 	}
+
+	fmt.Println("setCapacityDONE", capacity, rp.StatsJSON())
+
 	return nil
 }
 
