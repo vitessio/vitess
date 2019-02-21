@@ -1120,6 +1120,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		logStats)
 	if err != nil {
 		logStats.Error = err
+		logStats.Send()
 		return err
 	}
 	// The mysql plugin runs an implicit rollback whenever a connection closes.
