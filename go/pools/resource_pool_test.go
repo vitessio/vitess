@@ -56,6 +56,24 @@ func SlowFailFactory() (Resource, error) {
 	return nil, errors.New("Failed")
 }
 
+type SlowCloseResource struct {
+	num    int64
+	closed bool
+}
+
+func (r *SlowCloseResource) Close() {
+	if !r.closed {
+		time.Sleep(10 * time.Millisecond)
+		count.Add(-1)
+		r.closed = true
+	}
+}
+
+func SlowCloseFactory() (Resource, error) {
+	count.Add(1)
+	return &SlowCloseResource{lastID.Add(1), false}, nil
+}
+
 func getChecked(t *testing.T, p *ResourcePool) Resource {
 	t.Helper()
 	r, err := p.Get(context.Background())
@@ -97,6 +115,63 @@ func TestPutEmpty(t *testing.T) {
 
 	require.Equal(t, len(p.pool), 0)
 	require.Equal(t, State{Capacity: 1}, p.State())
+}
+
+func TestDrainBlock(t *testing.T) {
+	p := NewResourcePool(SlowCloseFactory, 2, 2, 0, 0)
+	var resources []Resource
+	for i := 0; i < 2; i++ {
+		resources = append(resources, getChecked(t, p))
+	}
+	for _, r := range resources {
+		putChecked(t, p, r)
+	}
+
+	require.Equal(t, State{Capacity: 2, InPool: 2}, p.State())
+	require.NoError(t, p.SetCapacity(1, true))
+	require.Equal(t, State{Capacity: 1, InPool: 1}, p.State())
+}
+
+func TestDrainNoBlock(t *testing.T) {
+	p := NewResourcePool(SlowCloseFactory, 2, 2, 0, 0)
+	var resources []Resource
+	for i := 0; i < 2; i++ {
+		resources = append(resources, getChecked(t, p))
+	}
+	for _, r := range resources {
+		putChecked(t, p, r)
+	}
+
+	require.Equal(t, State{Capacity: 2, InPool: 2}, p.State())
+	require.NoError(t, p.SetCapacity(1, false))
+	// Wait a tiny bit so the goroutine can update the capacity stats.
+	time.Sleep(time.Millisecond)
+	require.Equal(t, State{Capacity: 1, InPool: 2}, p.State())
+	// Wait until the resources close, at least 20ms (2 * 10ms per SlowResource)
+	time.Sleep(30 * time.Millisecond)
+	require.Equal(t, State{Capacity: 1, InPool: 1}, p.State())
+}
+
+func TestGrowBlock(t *testing.T) {
+	p := NewResourcePool(PoolFactory, 1, 2, 0, 0)
+	getChecked(t, p)
+	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
+	require.NoError(t, p.SetCapacity(2, true))
+	require.Equal(t, State{Capacity: 2, InUse: 1}, p.State())
+	getChecked(t, p)
+	require.Equal(t, State{Capacity: 2, InUse: 2}, p.State())
+}
+
+func TestGrowNoBlock(t *testing.T) {
+	p := NewResourcePool(PoolFactory, 1, 2, 0, 0)
+	getChecked(t, p)
+	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
+	require.NoError(t, p.SetCapacity(2, false))
+	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
+	// By the time the goroutine processes this `Get()`, the capacity
+	// would have been increased.
+	getChecked(t, p)
+	require.Equal(t, State{Capacity: 2, InUse: 2}, p.State())
 }
 
 func TestSimple(t *testing.T) {
@@ -154,7 +229,7 @@ func TestFull(t *testing.T) {
 	fmt.Println("testfull newresource")
 	p := NewResourcePool(PoolFactory, 6, 6, time.Second, 0)
 	fmt.Println("set cap", p.StatsJSON())
-	err := p.SetCapacity(5)
+	err := p.SetCapacity(5, true)
 	require.NoError(t, err)
 	var resources [10]Resource
 
@@ -258,9 +333,10 @@ func TestFull(t *testing.T) {
 	fmt.Println(3)
 
 	// SetCapacity
-	p.SetCapacity(3)
+	p.SetCapacity(3, true)
 	if count.Get() != 3 {
 		t.Errorf("Expecting 3, received %d", count.Get())
+		return
 	}
 	if lastID.Get() != 6 {
 		t.Errorf("Expecting 6, received %d", lastID.Get())
@@ -271,7 +347,7 @@ func TestFull(t *testing.T) {
 	if p.Available() != 3 {
 		t.Errorf("Expecting 3, received %d", p.Available())
 	}
-	p.SetCapacity(6)
+	p.SetCapacity(6, true)
 	if p.Capacity() != 6 {
 		t.Errorf("Expecting 6, received %d", p.Capacity())
 	}
@@ -323,27 +399,26 @@ func TestShrinking(t *testing.T) {
 		resources[i] = r
 	}
 
-	fmt.Println("before shrink:", p.StatsJSON())
-
 	done := make(chan bool)
 	go func() {
-		p.SetCapacity(3)
-		fmt.Println("after shrink:", p.StatsJSON())
+		p.SetCapacity(3, true)
 		done <- true
 	}()
 	expected := `{"Capacity": 3, "Available": 0, "Active": 4, "InUse": 4, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0}`
+
+	// TODO: This loop seems strange. Shouldn't it just need a sleep without a loop?
 	for i := 0; i < 10; i++ {
 		time.Sleep(10 * time.Millisecond)
 		stats := p.StatsJSON()
 		if stats != expected {
 			if i == 9 {
 				t.Errorf(`expecting '%s', received '%s'`, expected, stats)
-				panic(1)
 			}
 		}
 	}
 	// There are already 2 resources available in the pool.
 	// So, returning one should be enough for SetCapacity to complete.
+	fmt.Printf("1>>>>>>>>>>> %+v\n", p.State())
 	p.Put(resources[3])
 	<-done
 	// Return the rest of the resources
@@ -352,9 +427,8 @@ func TestShrinking(t *testing.T) {
 	}
 	stats := p.StatsJSON()
 	expected = `{"Capacity": 3, "Available": 3, "Active": 3, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0}`
-	if stats != expected {
-		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
-	}
+	require.Equal(t, expected, stats)
+	return
 	if count.Get() != 3 {
 		t.Errorf("Expecting 3, received %d", count.Get())
 	}
@@ -380,7 +454,7 @@ func TestShrinking(t *testing.T) {
 
 	// This will also wait
 	go func() {
-		p.SetCapacity(2)
+		p.SetCapacity(2, true)
 		done <- true
 	}()
 	time.Sleep(10 * time.Millisecond)
@@ -405,7 +479,7 @@ func TestShrinking(t *testing.T) {
 	}
 
 	// Test race condition of SetCapacity with itself
-	p.SetCapacity(3)
+	p.SetCapacity(3, true)
 	for i := 0; i < 3; i++ {
 		resources[i], err = p.Get(ctx)
 		if err != nil {
@@ -424,9 +498,9 @@ func TestShrinking(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// This will wait till we Put
-	go p.SetCapacity(2)
+	go p.SetCapacity(2, true)
 	time.Sleep(10 * time.Millisecond)
-	go p.SetCapacity(4)
+	go p.SetCapacity(4, true)
 	time.Sleep(10 * time.Millisecond)
 
 	// This should not hang
@@ -435,11 +509,11 @@ func TestShrinking(t *testing.T) {
 	}
 	<-done
 
-	err = p.SetCapacity(-1)
+	err = p.SetCapacity(-1, true)
 	if err == nil {
 		t.Errorf("Expecting error")
 	}
-	err = p.SetCapacity(255555)
+	err = p.SetCapacity(255555, true)
 	if err == nil {
 		t.Errorf("Expecting error")
 	}
@@ -488,7 +562,7 @@ func TestClosing(t *testing.T) {
 	<-ch
 
 	// SetCapacity must be ignored after Close
-	err := p.SetCapacity(1)
+	err := p.SetCapacity(1, true)
 	if err == nil {
 		t.Errorf("expecting error")
 	}
@@ -814,11 +888,11 @@ func TestMinActiveTooHighAfterSetCapacity(t *testing.T) {
 	p := NewResourcePool(FailFactory, 3, 3, time.Second, 2)
 	defer p.Close()
 
-	if err := p.SetCapacity(2); err != nil {
+	if err := p.SetCapacity(2, true); err != nil {
 		t.Errorf("Expecting no error, instead got: %v", err)
 	}
 
-	err := p.SetCapacity(1)
+	err := p.SetCapacity(1, true)
 	expecting := "minActive 2 would now be higher than capacity 1"
 	if err == nil || err.Error() != expecting {
 		t.Errorf("Expecting: %v, instead got: %v", expecting, err)

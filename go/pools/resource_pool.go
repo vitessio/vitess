@@ -57,7 +57,10 @@ type ResourcePool struct {
 	put chan *resourceWrapper
 
 	// setCapacity is a channel to change the capacity.
-	setCapacity chan int
+	setCapacity chan setCapacityRequest
+
+	// getCapacity is used only to block on a changed capacity.
+	getCapacity chan bool
 
 	factory Factory
 
@@ -87,6 +90,11 @@ type State struct {
 	WaitTime    time.Duration
 }
 
+type setCapacityRequest struct {
+	capacity int
+	block    bool
+}
+
 // NewResourcePool creates a new ResourcePool pool.
 // capacity is the number of possible resources in the pool:
 // there can be up to 'capacity' of these at a given time.
@@ -111,14 +119,9 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		pool:        make(chan resourceWrapper, maxCap),
 		get:         make(chan bool),
 		put:         make(chan *resourceWrapper),
-		setCapacity: make(chan int),
+		setCapacity: make(chan setCapacityRequest),
+		getCapacity: make(chan bool),
 		factory:     factory,
-
-		//waitTimers: []time.Time{},
-		//available:   sync2.NewAtomicInt64(int64(capacity)),
-		//capacity:    sync2.NewAtomicInt64(int64(capacity)),
-		//idleTimeout: sync2.NewAtomicDuration(idleTimeout),
-		//minActive:   sync2.NewAtomicInt64(int64(minActive)),
 	}
 
 	state := State{
@@ -212,27 +215,34 @@ func (rp *ResourcePool) run(state State) {
 				rp.pool <- *r
 			}
 
-		case newCap := <-rp.setCapacity:
-			fmt.Println("wtf?")
+		case capReq := <-rp.setCapacity:
+			newCap := capReq.capacity
 			oldCap := state.Capacity
 			delta := newCap - oldCap
 			state.Capacity = newCap
-			fmt.Println("got a setcap command", oldCap, newCap)
+			rp.storeState(state)
+			fmt.Println("got a setcap command", oldCap, newCap, delta)
 
 			// Shrinking capacity
 			if delta < 0 {
 				delta = -delta
-				fmt.Println("shrinking!", delta)
-				totalRemoved := (state.InUse + state.InPool) - newCap
-				fmt.Println("totalRemoved")
+				fmt.Println("shrinking!", delta, state.InPool)
+				//totalRemoved := (state.InUse + state.InPool) - newCap
+				//fmt.Println("totalRemoved", totalRemoved)
 
-				// We can't removed used resources, so only target the pool.
-				for i := 0; i < totalRemoved && state.InPool > 0; i++ {
+				// We can't remove used resources, so only target the pool.
+				for i := 0; i < delta && state.InPool > 0; i++ {
 					fmt.Println("loop", i)
 					r := <-rp.pool
 					r.resource.Close()
 					state.InPool--
+					// Closing is slow, so we update the stats inside the loop.
+					rp.storeState(state)
 				}
+			}
+
+			if capReq.block {
+				rp.getCapacity <- true
 			}
 		}
 	}
@@ -250,7 +260,7 @@ func (rp *ResourcePool) Close() {
 	if rp.idleTimer != nil {
 		rp.idleTimer.Stop()
 	}
-	_ = rp.SetCapacity(0)
+	_ = rp.SetCapacity(0, true)
 }
 
 // IsClosed returns true if the resource pool is closed.
@@ -413,7 +423,7 @@ func (rp *ResourcePool) Put(resource Resource) {
 // to be shrunk, SetCapacity waits till the necessary
 // number of resources are returned to the pool.
 // A SetCapacity of 0 is equivalent to closing the ResourcePool.
-func (rp *ResourcePool) SetCapacity(capacity int) error {
+func (rp *ResourcePool) SetCapacity(capacity int, block bool) error {
 	fmt.Println("\n\nsetCapacity", capacity, rp.StatsJSON())
 	if capacity < 0 || capacity > cap(rp.pool) {
 		return fmt.Errorf("capacity %d is out of range", capacity)
@@ -424,7 +434,14 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 		return fmt.Errorf("minActive %v would now be higher than capacity %v", minActive, capacity)
 	}
 
-	rp.setCapacity <- capacity
+	rp.setCapacity <- setCapacityRequest{
+		capacity: capacity,
+		block:    block,
+	}
+
+	if block {
+		<-rp.getCapacity
+	}
 
 	return nil
 }
@@ -542,7 +559,12 @@ func (rp *ResourcePool) Capacity() int {
 // Available returns the number of currently unused and available resources.
 func (rp *ResourcePool) Available() int {
 	s := rp.State()
-	return s.Capacity - s.InUse
+	available := s.Capacity - s.InUse
+	// Sometimes we can be over capacity temporarily when the capacity shrinks.
+	if available < 0 {
+		return 0
+	}
+	return available
 }
 
 // Active returns the number of active (i.e. non-nil) resources either in the
