@@ -19,6 +19,8 @@ package pools
 import (
 	"errors"
 	"fmt"
+	"github.com/stretchr/testify/require"
+	"runtime"
 	"testing"
 	"time"
 
@@ -54,30 +56,120 @@ func SlowFailFactory() (Resource, error) {
 	return nil, errors.New("Failed")
 }
 
+func getChecked(t *testing.T, p *ResourcePool) Resource {
+	t.Helper()
+	r, err := p.Get(context.Background())
+	require.NoError(t, err)
+	runtime.Gosched()
+	time.Sleep(time.Millisecond)
+	return r
+}
+
+func putChecked(t *testing.T, p *ResourcePool, r Resource) {
+	t.Helper()
+	fmt.Println("putChecked", r)
+	p.Put(r)
+	runtime.Gosched()
+	time.Sleep(time.Millisecond)
+}
+
 func TestOpen(t *testing.T) {
+	p := NewResourcePool(PoolFactory, 1, 2, 0, 0)
+	require.Equal(t, State{Capacity: 1}, p.State())
+}
+
+func TestGetPut(t *testing.T) {
+	lastID.Set(0)
+	p := NewResourcePool(PoolFactory, 1, 1, 0, 0)
+
+	r := getChecked(t, p).(*TestResource)
+	require.Equal(t, r.num, int64(1))
+	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
+
+	putChecked(t, p, r)
+	require.Equal(t, State{Capacity: 1, InPool: 1}, p.State())
+}
+
+func TestPutEmpty(t *testing.T) {
+	p := NewResourcePool(PoolFactory, 1, 1, 0, 0)
+	getChecked(t, p)
+	putChecked(t, p, nil)
+
+	require.Equal(t, len(p.pool), 0)
+	require.Equal(t, State{Capacity: 1}, p.State())
+}
+
+func TestSimple(t *testing.T) {
+	s := func(state State) State {
+		state.Capacity = 10
+		state.MinActive = 5
+		return state
+	}
+
+	p := NewResourcePool(PoolFactory, 10, 10, 0, 5)
+	require.Equal(t, s(State{InPool: 5}), p.State())
+
+	a, err := p.Get(context.Background())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	runtime.Gosched()
+	require.Equal(t, s(State{InPool: 4, InUse: 1}), p.State())
+
+	var resources []Resource
+	for i := 0; i < 9; i++ {
+		r, err := p.Get(context.Background())
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		resources = append(resources, r)
+	}
+	runtime.Gosched()
+	require.Equal(t, s(State{InPool: 0, InUse: 10}), p.State())
+
+	var b Resource
+	done := make(chan bool)
+	go func() {
+		t.Helper()
+		b = getChecked(t, p)
+		done <- true
+	}()
+	time.Sleep(time.Millisecond)
+	require.Equal(t, s(State{InPool: 0, InUse: 10, Waiters: 1}), p.State())
+
+	putChecked(t, p, a)
+	<-done
+	require.Equal(t, s(State{InPool: 0, InUse: 10, Waiters: 0}), p.State())
+
+	putChecked(t, p, b)
+	require.Equal(t, s(State{InPool: 1, InUse: 9, Waiters: 0}), p.State())
+}
+
+func TestFull(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	fmt.Println(111)
+	fmt.Println("testfull newresource")
 	p := NewResourcePool(PoolFactory, 6, 6, time.Second, 0)
 	fmt.Println("set cap", p.StatsJSON())
-	p.SetCapacity(5)
+	err := p.SetCapacity(5)
+	require.NoError(t, err)
 	var resources [10]Resource
 
 	fmt.Println(1, p.StatsJSON())
 
 	// Test Get
 	for i := 0; i < 5; i++ {
-		fmt.Println("a----------", i)
+		fmt.Println("\nTest Get ----------", i, p.StatsJSON())
 		r, err := p.Get(ctx)
-		fmt.Println("aaaaaaaaaaaa", i)
 		fmt.Println(1, p.StatsJSON())
 		resources[i] = r
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
 		}
-		if p.Available() != int64(5-i-1) {
+		if p.Available() != 5-i-1 {
 			t.Errorf("expecting %d, received %d", 5-i-1, p.Available())
+			return
 		}
 		if p.WaitCount() != 0 {
 			t.Errorf("expecting 0, received %d", p.WaitCount())
@@ -696,7 +788,9 @@ func TestMinActiveSelfRefreshing(t *testing.T) {
 		t.Errorf("Expecting 1, received %d", p.Active())
 	}
 
-	p.activateMinimumResources()
+	// TODO:
+	//p.activateMinimumResources()
+
 	if p.Active() != 3 {
 		t.Errorf("Expecting 3, received %d", p.Active())
 	}

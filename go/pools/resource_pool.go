@@ -21,10 +21,11 @@ package pools
 import (
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
+	"vitess.io/vitess/go/sync2"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 )
 
@@ -48,26 +49,42 @@ type Resource interface {
 
 // ResourcePool allows you to use a pool of resources.
 type ResourcePool struct {
-	resources   chan resourceWrapper
-	slots       chan bool
-	factory     Factory
-	capacity    sync2.AtomicInt64
-	idleTimeout sync2.AtomicDuration
-	minActive   sync2.AtomicInt64
-	idleTimer   *timer.Timer
+	// pool contains active resources.
+	pool chan resourceWrapper
 
-	// stats
-	available  sync2.AtomicInt64
-	active     sync2.AtomicInt64
-	inUse      sync2.AtomicInt64
-	waitCount  sync2.AtomicInt64
-	waitTime   sync2.AtomicDuration
-	idleClosed sync2.AtomicInt64
+	// get is a channel to request the availability of a resource.
+	get chan bool
+
+	// put is a channel to put back a resource into the pool.
+	put chan *resourceWrapper
+
+	// setCapacity is a channel to change the capacity.
+	setCapacity chan int
+
+	factory Factory
+
+	//idleTimeout sync2.AtomicDuration
+	idleTimer *timer.Timer
+	state     atomic.Value
+
+	waitCount sync2.AtomicInt64
+	waitTime  sync2.AtomicDuration
 }
 
 type resourceWrapper struct {
 	resource Resource
 	timeUsed time.Time
+	err      error
+}
+
+type State struct {
+	Waiters     int
+	InPool      int
+	InUse       int
+	Capacity    int
+	MinActive   int
+	IdleTimeout time.Duration
+	IdleClosed  int
 }
 
 // NewResourcePool creates a new ResourcePool pool.
@@ -91,26 +108,131 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	}
 
 	rp := &ResourcePool{
-		resources:   make(chan resourceWrapper, maxCap),
-		slots:       make(chan bool, maxCap),
+		pool:        make(chan resourceWrapper, maxCap),
+		get:         make(chan bool),
+		put:         make(chan *resourceWrapper),
+		setCapacity: make(chan int),
 		factory:     factory,
-		available:   sync2.NewAtomicInt64(int64(capacity)),
-		capacity:    sync2.NewAtomicInt64(int64(capacity)),
-		idleTimeout: sync2.NewAtomicDuration(idleTimeout),
-		minActive:   sync2.NewAtomicInt64(int64(minActive)),
-	}
-	for i := 0; i < capacity; i++ {
-		rp.slots <- true
+
+		//available:   sync2.NewAtomicInt64(int64(capacity)),
+		//capacity:    sync2.NewAtomicInt64(int64(capacity)),
+		//idleTimeout: sync2.NewAtomicDuration(idleTimeout),
+		//minActive:   sync2.NewAtomicInt64(int64(minActive)),
 	}
 
-	rp.activateMinimumResources()
-
-	if idleTimeout != 0 {
-		rp.idleTimer = timer.NewTimer(idleTimeout / 10)
-		rp.idleTimer.Start(rp.closeIdleResources)
+	state := State{
+		Capacity:    capacity,
+		MinActive:   minActive,
+		IdleTimeout: idleTimeout,
 	}
+
+	for i := 0; i < minActive; i++ {
+		if r := rp.create(); r.err == nil {
+			rp.pool <- r
+			state.InPool++
+			continue
+		}
+
+		// TODO: Return an error!
+	}
+
+	rp.storeState(state)
+	go rp.run(state)
+
+	// TODO: handle timeouts
+	//if idleTimeout != 0 {
+	//	rp.idleTimer = timer.NewTimer(idleTimeout / 10)
+	//	rp.idleTimer.Start(rp.closeIdleResources)
+	//}
 
 	return rp
+}
+
+func (rp *ResourcePool) create() resourceWrapper {
+	r, err := rp.factory()
+	if err != nil {
+		return resourceWrapper{err: err}
+	}
+
+	return resourceWrapper{
+		resource: r,
+		timeUsed: time.Now(),
+	}
+}
+
+func (rp *ResourcePool) run(state State) {
+	for {
+		rp.storeState(state)
+		select {
+		case <-rp.get:
+			if state.InPool == 0 {
+				if state.InUse < state.Capacity {
+					fmt.Println("adding a new resource")
+					// The pool is empty and we still have pool capacity.
+					rp.pool <- rp.create()
+					state.InUse++
+				} else {
+					// The pool is empty but we don't have enough capacity.
+					// The user will be blocked for a resource to be returned to the pool.
+					//
+					// InUse and InPool do not change here, because there has not
+					// been any new resources given, returned, or created.
+					state.Waiters++
+				}
+			} else if state.InPool != 0 {
+				state.InPool--
+				state.InUse++
+			}
+
+		case r := <-rp.put:
+			if state.Waiters > 0 {
+				fmt.Println("We have waiters!")
+				// When a resource is returned while waiting, we don't need to
+				// modify InPool or InUse because 1) we are not returning it to the
+				// pool, and 2) there is no change in the number of uses of resources.
+				// Basically we are just handing over the resource to another owner.
+				state.Waiters--
+			} else {
+				if r != nil {
+					state.InPool++
+					fmt.Println("Added to inpool", state.InPool)
+				}
+				state.InUse--
+				fmt.Println("Removed inuse", state.InUse)
+			}
+			if r != nil {
+				fmt.Println("Returning to pool...", r)
+				rp.pool <- *r
+			}
+
+		case newCap := <-rp.setCapacity:
+			fmt.Println("wtf?")
+			oldCap := state.Capacity
+			delta := newCap - oldCap
+			state.Capacity = newCap
+			fmt.Println("got a setcap command", oldCap, newCap)
+
+			// Shrinking capacity
+			if delta < 0 {
+				delta = -delta
+				fmt.Println("shrinking!", delta)
+				totalRemoved := (state.InUse + state.InPool) - newCap
+				fmt.Println("totalRemoved")
+
+				// We can't removed used resources, so only target the pool.
+				for i := 0; i < totalRemoved && state.InPool > 0; i++ {
+					fmt.Println("loop", i)
+					r := <-rp.pool
+					r.resource.Close()
+					state.InPool--
+				}
+			}
+		}
+	}
+}
+
+func (rp *ResourcePool) storeState(state State) {
+	rp.state.Store(state)
 }
 
 // Close empties the pool calling Close on all its resources.
@@ -125,12 +247,14 @@ func (rp *ResourcePool) Close() {
 }
 
 // IsClosed returns true if the resource pool is closed.
-func (rp *ResourcePool) IsClosed() (closed bool) {
-	return rp.capacity.Get() == 0
+func (rp *ResourcePool) IsClosed() bool {
+	//return rp.capacity.Get() == 0
+	return rp.Capacity() == 0
 }
 
 // closeIdleResources scans the pool for idle resources
 func (rp *ResourcePool) closeIdleResources() {
+	/*
 	fmt.Println("\n\ncloseIdleResources")
 	available := int(rp.Available())
 	idleTimeout := rp.IdleTimeout()
@@ -184,29 +308,7 @@ func (rp *ResourcePool) closeIdleResources() {
 		rp.resources <- wrapper
 		rp.slots <- true
 	}
-}
-
-// activateMinimumResources tries to maintain at least minActive
-// resources to be active.
-func (rp *ResourcePool) activateMinimumResources() {
-	available := int(rp.Available())
-	remaining := int(rp.MinActive() - rp.Active())
-
-	for i := 0; i < available && remaining > 0; i++ {
-		<-rp.slots
-
-		var err error
-		var wrapper resourceWrapper
-		wrapper.resource, err = rp.factory()
-		if err != nil {
-			rp.slots <- true
-			return
-		}
-		rp.active.Add(1)
-		rp.resources <- wrapper
-		rp.slots <- true
-		remaining--
-	}
+	*/
 }
 
 // Get will return the next available resource. If capacity
@@ -214,11 +316,7 @@ func (rp *ResourcePool) activateMinimumResources() {
 // it will wait till the next resource becomes available or a timeout.
 // A timeout of 0 is an indefinite wait.
 func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) {
-	return rp.get(ctx, true)
-}
-
-func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, err error) {
-	// If ctx has already expired, avoid racing with rp's resource channel.
+	// Check for context timeout
 	select {
 	case <-ctx.Done():
 		return nil, ErrTimeout
@@ -227,53 +325,38 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 
 	fmt.Println("\nGET", rp.StatsJSON())
 
-	// Fetch
+	// Inform the pool that we want a resource.
+	rp.get <- true
+
+	var wrapper resourceWrapper
 	var ok bool
 	select {
-	case _, ok = <-rp.slots:
+	case wrapper, ok = <-rp.pool:
+	case <-ctx.Done():
+		return nil, ErrTimeout
 	default:
-		fmt.Println("no free capacity!")
-		if !wait {
-			fmt.Println("instafail")
-			return nil, nil
-		}
+		fmt.Println("Waiting...")
+		// Did not immediately get a resource.
+		// We will now record how long it takes to wait.
 		startTime := time.Now()
-		fmt.Println("waiting for a slot")
 		select {
-		case _, ok = <-rp.slots:
+		case wrapper, ok = <-rp.pool:
 		case <-ctx.Done():
 			return nil, ErrTimeout
 		}
 		rp.recordWait(startTime)
 	}
+
 	if !ok {
 		fmt.Println("ok is false, channel closed")
 		return nil, ErrClosed
 	}
 
-	var wrapper resourceWrapper
-	select {
-	case wrapper = <-rp.resources:
-	default:
+	if wrapper.err != nil {
+		return nil, err
 	}
 
-	// Unwrap
-	if wrapper.resource == nil {
-		fmt.Println("instantiating!")
-		wrapper.resource, err = rp.factory()
-		fmt.Println("instantiated", wrapper)
-		if err != nil {
-			rp.slots <- true
-			return nil, err
-		}
-		rp.active.Add(1)
-	} else {
-		fmt.Println("There's an existing resource to use!")
-	}
-
-	rp.available.Add(-1)
-	rp.inUse.Add(1)
-	return wrapper.resource, err
+	return wrapper.resource, nil
 }
 
 // Put will return a resource to the pool. For every successful Get,
@@ -283,32 +366,25 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 func (rp *ResourcePool) Put(resource Resource) {
 	fmt.Println("\n\nPUT", resource, rp.StatsJSON())
 
-	rp.inUse.Add(-1)
-	rp.available.Add(1)
-
 	if resource == nil {
-		rp.active.Add(-1)
+		fmt.Println("putting nil")
+		rp.put <- nil
+		fmt.Println("putting nil done")
 	} else {
-		var wrapper resourceWrapper
-		wrapper = resourceWrapper{resource, time.Now()}
-
-		select {
-		case rp.resources <- wrapper:
-		default:
-			panic(errors.New("attempt to Put into a full ResourcePool (2)"))
+		fmt.Println("putting resource back")
+		rp.put <- &resourceWrapper{
+			resource: resource,
+			timeUsed: time.Now(),
 		}
-
 		fmt.Println("resource returned")
-	}
 
-	// Put back a free capacity slot
-	select {
-	case rp.slots <- true:
-	default:
-		panic(errors.New("attempt to Put into a full ResourcePool"))
-	}
+		//select {
+		//case rp.resources <- wrapper:
+		//default:
+		//	panic(errors.New("attempt to Put into a full ResourcePool (2)"))
+		//}
 
-	fmt.Println("slot returned")
+	}
 }
 
 // SetCapacity changes the capacity of the pool.
@@ -319,14 +395,21 @@ func (rp *ResourcePool) Put(resource Resource) {
 // A SetCapacity of 0 is equivalent to closing the ResourcePool.
 func (rp *ResourcePool) SetCapacity(capacity int) error {
 	fmt.Println("\n\nsetCapacity", capacity, rp.StatsJSON())
-	if capacity < 0 || capacity > cap(rp.resources) {
+	if capacity < 0 || capacity > cap(rp.pool) {
 		return fmt.Errorf("capacity %d is out of range", capacity)
 	}
 
-	minActive := int(rp.minActive.Get())
+	minActive := rp.State().MinActive
 	if capacity < minActive {
 		return fmt.Errorf("minActive %v would now be higher than capacity %v", minActive, capacity)
 	}
+
+	rp.setCapacity <- capacity
+
+	return nil
+}
+
+/*
 
 	// Atomically swap new capacity with old, but only
 	// if old capacity is non-zero.
@@ -391,6 +474,7 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 
 	return nil
 }
+*/
 
 func (rp *ResourcePool) recordWait(start time.Time) {
 	rp.waitCount.Add(1)
@@ -404,8 +488,9 @@ func (rp *ResourcePool) SetIdleTimeout(idleTimeout time.Duration) {
 		panic("SetIdleTimeout called when timer not initialized")
 	}
 
-	rp.idleTimeout.Set(idleTimeout)
-	rp.idleTimer.SetInterval(idleTimeout / 10)
+	//rp.idleTimeout.Set(idleTimeout)
+	//rp.idleTimer.SetInterval(idleTimeout / 10)
+	// TODO
 }
 
 // StatsJSON returns the stats in JSON format.
@@ -423,35 +508,41 @@ func (rp *ResourcePool) StatsJSON() string {
 	)
 }
 
+func (rp *ResourcePool) State() State {
+	return rp.state.Load().(State)
+}
+
 // Capacity returns the capacity.
-func (rp *ResourcePool) Capacity() int64 {
-	return rp.capacity.Get()
+func (rp *ResourcePool) Capacity() int {
+	return rp.State().Capacity
 }
 
 // Available returns the number of currently unused and available resources.
-func (rp *ResourcePool) Available() int64 {
-	return rp.available.Get()
+func (rp *ResourcePool) Available() int {
+	s := rp.State()
+	return s.Capacity - s.InUse
 }
 
 // Active returns the number of active (i.e. non-nil) resources either in the
 // pool or claimed for use
-func (rp *ResourcePool) Active() int64 {
-	return rp.active.Get()
+func (rp *ResourcePool) Active() int {
+	s := rp.State()
+	return s.InUse + s.InPool
 }
 
 // MinActive returns the minimum amount of resources keep active.
-func (rp *ResourcePool) MinActive() int64 {
-	return rp.minActive.Get()
+func (rp *ResourcePool) MinActive() int {
+	return rp.State().MinActive
 }
 
 // InUse returns the number of claimed resources from the pool
-func (rp *ResourcePool) InUse() int64 {
-	return rp.inUse.Get()
+func (rp *ResourcePool) InUse() int {
+	return rp.State().InUse
 }
 
 // MaxCap returns the max capacity.
-func (rp *ResourcePool) MaxCap() int64 {
-	return int64(cap(rp.resources))
+func (rp *ResourcePool) MaxCap() int {
+	return cap(rp.pool)
 }
 
 // WaitCount returns the total number of waits.
@@ -466,10 +557,10 @@ func (rp *ResourcePool) WaitTime() time.Duration {
 
 // IdleTimeout returns the idle timeout.
 func (rp *ResourcePool) IdleTimeout() time.Duration {
-	return rp.idleTimeout.Get()
+	return rp.State().IdleTimeout
 }
 
 // IdleClosed returns the count of resources closed due to idle timeout.
-func (rp *ResourcePool) IdleClosed() int64 {
-	return rp.idleClosed.Get()
+func (rp *ResourcePool) IdleClosed() int {
+	return rp.State().IdleClosed
 }
