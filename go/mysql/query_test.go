@@ -456,19 +456,6 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	wg.Wait()
 }
 
-func writeResult(conn *Conn, result *sqltypes.Result) error {
-	if len(result.Fields) == 0 {
-		return conn.writeOKPacket(result.RowsAffected, result.InsertID, conn.StatusFlags, 0)
-	}
-	if err := conn.writeFields(result); err != nil {
-		return err
-	}
-	if err := conn.writeRows(result); err != nil {
-		return err
-	}
-	return conn.writeEndResult(false, 0, 0, 0)
-}
-
 func RowString(row []sqltypes.Value) string {
 	l := len(row)
 	result := fmt.Sprintf("%v values:", l)
