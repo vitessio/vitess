@@ -24,6 +24,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
@@ -201,6 +203,15 @@ func (lh *LookupUnicodeLooseMD5Hash) Delete(vcursor VCursor, rowsColValues [][]s
 	return lh.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
 }
 
+// FromValue converts a from value field to what it should be stored as in the Vindex.
+func (lh *LookupUnicodeLooseMD5Hash) FromValue(fromValue sqltypes.Value) (sqltypes.Value, error) {
+	value, err := unicodeHashValue(fromValue)
+	if err != nil {
+		return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INTERNAL, "unable to hash from field %v", fromValue)
+	}
+	return value, nil
+}
+
 // MarshalJSON returns a JSON representation of LookupHash.
 func (lh *LookupUnicodeLooseMD5Hash) MarshalJSON() ([]byte, error) {
 	return json.Marshal(lh.lkp)
@@ -364,6 +375,15 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Update(vcursor VCursor, oldValues []
 		return fmt.Errorf("lookup.Update.convert: %v", err)
 	}
 	return lhu.lkp.Update(vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
+}
+
+// FromValue converts a from value field to what it should be stored as in the Vindex.
+func (lhu *LookupUnicodeLooseMD5HashUnique) FromValue(fromValue sqltypes.Value) (sqltypes.Value, error) {
+	value, err := unicodeHashValue(fromValue)
+	if err != nil {
+		return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INTERNAL, "unable to hash from field %v", fromValue)
+	}
+	return value, nil
 }
 
 // MarshalJSON returns a JSON representation of LookupHashUnique.

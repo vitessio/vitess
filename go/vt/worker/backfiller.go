@@ -41,7 +41,7 @@ type Backfiller struct {
 	aggregators []*RowAggregator
 	// tableName is required to update "equalRowsStatsCounters".
 	tableName    string
-	transform    func([]sqltypes.Value) ([]sqltypes.Value, error)
+	transform    func([]sqltypes.Value) ([]sqltypes.Value, bool, error)
 	skipNullRows bool
 }
 
@@ -52,7 +52,7 @@ type Backfiller struct {
 // then the non-primary-key columns. The columns in the rows returned by
 // the ResultReader must have the same order as td.Columns.
 func NewBackfiller(ctx context.Context, input ResultReader, destinationTableDefinition *tabletmanagerdatapb.TableDefinition, backfillStatus *backfillStatus, skipNullRows bool,
-	transform func([]sqltypes.Value) ([]sqltypes.Value, error),
+	transform func([]sqltypes.Value) ([]sqltypes.Value, bool, error),
 	// Parameters required by RowRouter.
 	destinationShards []*topo.ShardInfo, keyResolver keyspaceIDResolver,
 	// Parameters required by RowAggregator.
@@ -95,11 +95,11 @@ func (b *Backfiller) Backfill() (DiffReport, error) {
 			break
 		}
 
-		transform, err := b.transform(row)
+		transform, isNull, err := b.transform(row)
 		if err != nil {
 			return dr, err
 		}
-		if b.skipNullRows && transform[0].IsNull() {
+		if b.skipNullRows && isNull {
 			dr.processedRows++
 			continue
 		}

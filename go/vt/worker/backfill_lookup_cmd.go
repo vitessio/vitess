@@ -69,8 +69,10 @@ const backfillLookupHTML2 = `
 			</BR>
       <LABEL for="chunkCount">Chunk Count: </LABEL>
         <INPUT type="text" id="chunkCount" name="chunkCount" value="{{.DefaultChunkCount}}"></BR>
-      <LABEL for="minRowsPerChunk">Minimun Number of Rows per Chunk (may reduce the Chunk Count): </LABEL>
+      <LABEL for="minRowsPerChunk">Minimum Number of Rows per Chunk (may reduce the Chunk Count): </LABEL>
         <INPUT type="text" id="minRowsPerChunk" name="minRowsPerChunk" value="{{.DefaultMinRowsPerChunk}}"></BR>
+      <LABEL for="sourceRange">Source keyspace range to process: </LABEL>
+        <INPUT type="text" id="sourceRange" name="sourceRange" value="{{.DefaultSourceRange}}"></BR>
       <LABEL for="sourceReaderCount">Source Reader Count: </LABEL>
         <INPUT type="text" id="sourceReaderCount" name="sourceReaderCount" value="{{.DefaultSourceReaderCount}}"></BR>
       <LABEL for="writeQueryMaxRows">Maximum Number of Rows per Write Query: </LABEL>
@@ -99,6 +101,7 @@ func commandBackfillLookup(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.F
 	chunkCount := subFlags.Int("chunk_count", defaultChunkCount, "number of chunks per table")
 	minRowsPerChunk := subFlags.Int("min_rows_per_chunk", defaultMinRowsPerChunk, "minimum number of rows per chunk (may reduce --chunk_count)")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
+	sourceRange := subFlags.String("source_range", defaultSourceRange, "range of the source keyspace to copy from")
 	writeQueryMaxRows := subFlags.Int("write_query_max_rows", defaultWriteQueryMaxRows, "maximum number of rows per write query")
 	writeQueryMaxSize := subFlags.Int("write_query_max_size", defaultWriteQueryMaxSize, "maximum size (in bytes) per write query")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
@@ -128,7 +131,7 @@ func commandBackfillLookup(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.F
 		return nil, fmt.Errorf("cannot parse tabletType: %s", *tabletTypeStr)
 	}
 
-	worker, err := newBackfillLookupWorker(wr, wi.cell, keyspace, vindexName, topodatapb.TabletType(tabletType), *chunkCount, *minRowsPerChunk, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *destinationWriterCount, *maxTPS, *maxReplicationLag, *skipNullRows)
+	worker, err := newBackfillLookupWorker(wr, wi.cell, keyspace, vindexName, topodatapb.TabletType(tabletType), *sourceRange, *chunkCount, *minRowsPerChunk, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *destinationWriterCount, *maxTPS, *maxReplicationLag, *skipNullRows)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create Backfill Lookup worker: %v", err)
 	}
@@ -164,7 +167,7 @@ func writeOnlyVindexes(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 					rec.RecordError(err)
 					return
 				}
-				if writeOnly && vindex.Type == "lookup_hash" {
+				if writeOnly && (vindex.Type == "lookup_hash" || vindex.Type == "lookup_unicodeloosemd5_hash") {
 					mu.Lock()
 					result = append(result, map[string]string{
 						"Keyspace": keyspace,
@@ -216,6 +219,7 @@ func interactiveBackfillLookup(ctx context.Context, wi *Instance, wr *wrangler.W
 		result["DefaultOffline"] = defaultOffline
 		result["DefaultChunkCount"] = fmt.Sprintf("%v", defaultChunkCount)
 		result["DefaultMinRowsPerChunk"] = fmt.Sprintf("%v", defaultMinRowsPerChunk)
+		result["DefaultSourceRange"] = fmt.Sprintf("%v", defaultSourceRange)
 		result["DefaultSourceReaderCount"] = fmt.Sprintf("%v", defaultSourceReaderCount)
 		result["DefaultWriteQueryMaxRows"] = fmt.Sprintf("%v", defaultWriteQueryMaxRows)
 		result["DefaultWriteQueryMaxSize"] = fmt.Sprintf("%v", defaultWriteQueryMaxSize)
@@ -241,6 +245,10 @@ func interactiveBackfillLookup(ctx context.Context, wi *Instance, wr *wrangler.W
 	minRowsPerChunk, err := strconv.ParseInt(minRowsPerChunkStr, 0, 64)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse minRowsPerChunk: %s", err)
+	}
+	sourceRange := r.FormValue("sourceRange")
+	if sourceRange == "" {
+		sourceRange = defaultSourceRange
 	}
 	sourceReaderCount, err := strconv.ParseInt(sourceReaderCountStr, 0, 64)
 	if err != nil {
@@ -276,7 +284,7 @@ func interactiveBackfillLookup(ctx context.Context, wi *Instance, wr *wrangler.W
 	skipNullRows := skipNullRowsStr == "true"
 
 	// start the backfill job
-	wrk, err := newBackfillLookupWorker(wr, wi.cell, keyspace, vindex, topodatapb.TabletType(tabletType), int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(destinationWriterCount), maxTPS, maxReplicationLag, skipNullRows)
+	wrk, err := newBackfillLookupWorker(wr, wi.cell, keyspace, vindex, topodatapb.TabletType(tabletType), sourceRange, int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(destinationWriterCount), maxTPS, maxReplicationLag, skipNullRows)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}

@@ -26,16 +26,22 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -64,19 +70,24 @@ type BackfillLookupWorker struct {
 	tabletTracker          *TabletTracker
 
 	// populated during WorkerStateInit, read-only after that
-	vindex                    *vindexes.LookupHash
+	vindex                    *vindexes.Vindex
+	backfillableVindex        vindexes.Backfillable
 	destinationKeyspace       string
 	destinationTable          string
 	sourceTable               string
+	sourceFromColumn          string
 	fromColumn                string
 	toColumn                  string
 	primaryVindexColumn       string
 	sourceKeyspaceInfo        *topo.KeyspaceInfo
 	destinationKeyspaceInfo   *topo.KeyspaceInfo
+	sourceKeyRange            *topodatapb.KeyRange
 	sourceShards              []*topo.ShardInfo
 	destinationShards         []*topo.ShardInfo
+	sequenceShards            []*topo.ShardInfo
 	sourceKeyspaceSchema      *vindexes.KeyspaceSchema
 	destinationKeyspaceSchema *vindexes.KeyspaceSchema
+	destinationAutoIncrement  *vschema.AutoIncrement
 	// healthCheck is used for the destination shards to a) find out the current
 	// MASTER tablet, b) get the list of healthy RDONLY tablets and c) track the
 	// replication lag of all REPLICA tablets.
@@ -108,7 +119,7 @@ type BackfillLookupWorker struct {
 
 // newBackfillLookupWorker returns a new BackfillLookupWorker object which is used both by
 // the BackfillLookup and VerticalBackfillLookup command.
-func newBackfillLookupWorker(wr *wrangler.Wrangler, cell, keyspace, vindexName string, tabletType topodatapb.TabletType, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, destinationWriterCount int, maxTPS, maxReplicationLag int64, skipNullRows bool) (Worker, error) {
+func newBackfillLookupWorker(wr *wrangler.Wrangler, cell, keyspace, vindexName string, tabletType topodatapb.TabletType, sourceRange string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, destinationWriterCount int, maxTPS, maxReplicationLag int64, skipNullRows bool) (Worker, error) {
 	// Verify user defined flags.
 	if chunkCount <= 0 {
 		return nil, fmt.Errorf("chunk_count must be > 0: %v", chunkCount)
@@ -141,6 +152,14 @@ func newBackfillLookupWorker(wr *wrangler.Wrangler, cell, keyspace, vindexName s
 		return nil, fmt.Errorf("should use MASTER, RDONLY or REPLICA tablets")
 	}
 
+	targetKeyranges, err := key.ParseShardingSpec(sourceRange)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "unable to parse source range %v: %v", sourceRange)
+	}
+	if len(targetKeyranges) != 1 {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "only a single keyrange is currently supported %v", sourceRange)
+	}
+
 	scw := &BackfillLookupWorker{
 		StatusWorker:           NewStatusWorker(),
 		wr:                     wr,
@@ -149,6 +168,7 @@ func newBackfillLookupWorker(wr *wrangler.Wrangler, cell, keyspace, vindexName s
 		vindexName:             vindexName,
 		tabletType:             tabletType,
 		chunkCount:             chunkCount,
+		sourceKeyRange:         targetKeyranges[0],
 		minRowsPerChunk:        minRowsPerChunk,
 		sourceReaderCount:      sourceReaderCount,
 		writeQueryMaxRows:      writeQueryMaxRows,
@@ -348,6 +368,9 @@ func (blw *BackfillLookupWorker) init(ctx context.Context) error {
 
 	// Start watchers to get tablets added automatically to healthCheck.
 	allShards := append(blw.sourceShards, blw.destinationShards...)
+	if blw.sequenceShards != nil {
+		allShards = append(allShards, blw.sequenceShards...)
+	}
 	for _, si := range allShards {
 		watcher := discovery.NewShardReplicationWatcher(ctx, blw.wr.TopoServer(), blw.healthCheck,
 			blw.cell, si.Keyspace(), si.ShardName(),
@@ -365,9 +388,39 @@ func (blw *BackfillLookupWorker) initShards(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot FindAllShardsInKeyspace in %v: %v", blw.sourceKeyspace, err)
 	}
+
+	srvKeyspace, err := blw.wr.TopoServer().GetSrvKeyspace(ctx, blw.cell, blw.sourceKeyspace)
+	if err != nil {
+		return fmt.Errorf("cannot GetSrvKeyspace for %v: %v", blw.sourceKeyspace, err)
+	}
+
 	blw.sourceShards = make([]*topo.ShardInfo, 0, len(sourceShards))
 	for _, shard := range sourceShards {
-		blw.sourceShards = append(blw.sourceShards, shard)
+		if !key.KeyRangeIncludes(blw.sourceKeyRange, shard.KeyRange) {
+			continue
+		}
+
+		for _, partition := range srvKeyspace.Partitions {
+			if partition.GetServedType() != blw.tabletType {
+				continue
+			}
+			for _, group := range partition.GetShardReferences() {
+				if group.KeyRange.String() == shard.KeyRange.String() {
+					blw.wr.Logger().Infof("Using shard %v as source for %v/%v", shard.ShardName(), blw.cell, blw.sourceKeyspace)
+					blw.sourceShards = append(blw.sourceShards, shard)
+					break
+				}
+			}
+			break
+		}
+	}
+
+	if len(blw.sourceShards) == 0 {
+		return fmt.Errorf("no valid shards found for %v", blw.destinationKeyspace)
+	}
+
+	if !blw.validateContiguousKeyspace(blw.sourceKeyRange.Start, blw.sourceKeyRange.End) {
+		return fmt.Errorf("source shards do not cover the full keyspace")
 	}
 
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
@@ -376,11 +429,101 @@ func (blw *BackfillLookupWorker) initShards(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot FindAllShardsInKeyspace in %v: %v", blw.destinationKeyspace, err)
 	}
+
+	dstKeyspace, err := blw.wr.TopoServer().GetSrvKeyspace(ctx, blw.cell, blw.destinationKeyspace)
+	if err != nil {
+		return fmt.Errorf("cannot GetSrvKeyspace for %v: %v", blw.destinationKeyspace, err)
+	}
+
 	blw.destinationShards = make([]*topo.ShardInfo, 0, len(destinationShards))
 	for _, shard := range destinationShards {
-		blw.destinationShards = append(blw.destinationShards, shard)
+		for _, partition := range dstKeyspace.Partitions {
+			if partition.GetServedType() != topodatapb.TabletType_MASTER {
+				continue
+			}
+			for _, group := range partition.GetShardReferences() {
+				if group.KeyRange.String() == shard.KeyRange.String() {
+					blw.wr.Logger().Infof("Using shard %v as destination for %v/%v", shard.ShardName(), blw.cell, blw.destinationKeyspace)
+					blw.destinationShards = append(blw.destinationShards, shard)
+					break
+				}
+			}
+			break
+		}
+	}
+
+	if blw.destinationAutoIncrement != nil {
+		keyspaces, err := blw.wr.TopoServer().GetKeyspaces(ctx)
+		if err != nil {
+			return fmt.Errorf("cannot GetKeyspaces: %v", err)
+		}
+		for _, ks := range keyspaces {
+			kschema, err := blw.wr.TopoServer().GetVSchema(ctx, ks)
+			if err != nil {
+				return fmt.Errorf("cannot load VSchema for keyspace %v: %v", ks, err)
+			}
+			for table := range kschema.Tables {
+				if table == blw.destinationAutoIncrement.Sequence {
+					shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+					shards, err := blw.wr.TopoServer().FindAllShardsInKeyspace(shortCtx, ks)
+					cancel()
+					if err != nil {
+						return fmt.Errorf("cannot FindAllShardsInKeyspace in %v: %v", ks, err)
+					}
+					// NB: If and when sequences on sharded keyspaces become a thing we'll need to revisit this.
+					if len(shards) != 1 {
+						continue
+					}
+
+					blw.sequenceShards = make([]*topo.ShardInfo, 0, len(shards))
+					for _, shard := range shards {
+						blw.sequenceShards = append(blw.sequenceShards, shard)
+					}
+					break
+				}
+			}
+		}
 	}
 	return nil
+}
+
+/**
+ * validateContiguousKeyspace verifies that the set of shards in blw.sourceShards begins at *start* and ends at *finish*,
+ * and the shards cover the entire keyspace between those two spots. Empty arrays for either value represent the start
+ * or end of the keyspace as a whole.
+ */
+func (blw *BackfillLookupWorker) validateContiguousKeyspace(start, finish []byte) bool {
+	shard := blw.findStart(start)
+	count := 0
+	for shard != nil {
+		count++
+		if byteArraysMatch(shard.KeyRange.End, finish) {
+			return count == len(blw.sourceShards)
+		}
+		shard = blw.findStart(shard.KeyRange.End)
+	}
+	return false
+}
+
+func (blw *BackfillLookupWorker) findStart(position []byte) *topo.ShardInfo {
+	for _, shard := range blw.sourceShards {
+		if byteArraysMatch(shard.KeyRange.Start, position) {
+			return shard
+		}
+	}
+	return nil
+}
+
+func byteArraysMatch(a, b []byte) bool {
+	if len(a) == len(b) {
+		for i, p := range a {
+			if p != b[i] {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 func (blw *BackfillLookupWorker) sanityCheckShardInfos() error {
@@ -413,11 +556,17 @@ func (blw *BackfillLookupWorker) loadVindex(ctx context.Context) error {
 		panic("found vindex in Keyspace proto but not in KeyspaceSchema")
 	}
 
-	blw.vindex, ok = vindex.(*vindexes.LookupHash)
+	_, ok = vindex.(vindexes.Lookup)
 	if !ok {
-		return fmt.Errorf("can currently only backfill LookupHash")
+		return fmt.Errorf("can currently only backfill Lookup")
 	}
 
+	blw.backfillableVindex, ok = vindex.(vindexes.Backfillable)
+	if !ok {
+		return fmt.Errorf("can currently only backfill Backfillable")
+	}
+
+	blw.vindex = &vindex
 	blw.sourceTable = vindexDef.Owner
 
 	destinationTable := vindexDef.Params["table"]
@@ -443,6 +592,17 @@ func (blw *BackfillLookupWorker) loadVindex(ctx context.Context) error {
 		blw.primaryVindexColumn = defaultSourceVindex.Columns[0]
 	}
 
+	for _, v := range sourceTableDef.ColumnVindexes {
+		if v.Name == blw.vindexName {
+			blw.sourceFromColumn = v.Column
+			break
+		}
+	}
+
+	if blw.sourceFromColumn == "" {
+		return fmt.Errorf("cannot find sourceFromColumn for table %v with Vindex %v", blw.sourceTable, blw.vindexName)
+	}
+
 	blw.fromColumn = vindexDef.Params["from"]
 	blw.toColumn = vindexDef.Params["to"]
 
@@ -453,6 +613,7 @@ func (blw *BackfillLookupWorker) loadVindex(ctx context.Context) error {
 	if kschema == nil {
 		return fmt.Errorf("no VSchema for keyspace %v", blw.destinationKeyspace)
 	}
+	blw.destinationAutoIncrement = kschema.Tables[blw.destinationTable].AutoIncrement
 
 	keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, blw.destinationKeyspace)
 	if err != nil {
@@ -528,7 +689,7 @@ func (blw *BackfillLookupWorker) backfill(ctx context.Context) error {
 	sourceTableDefinition = proto.Clone(sourceTableDefinition).(*tabletmanagerdatapb.TableDefinition)
 	sourceTableDefinition.Columns = append(
 		append(sourceColumns, sourceTableDefinition.PrimaryKeyColumns...),
-		blw.fromColumn,
+		blw.sourceFromColumn,
 		blw.primaryVindexColumn)
 	fromColumnIndex := len(sourceTableDefinition.PrimaryKeyColumns)
 	defaultVindexColumnIndex := fromColumnIndex + 1
@@ -542,9 +703,17 @@ func (blw *BackfillLookupWorker) backfill(ctx context.Context) error {
 
 	// We only produce the from and to columns
 	destinationTableDefinition = proto.Clone(destinationTableDefinition).(*tabletmanagerdatapb.TableDefinition)
-	destinationTableDefinition.Columns = []string{
-		blw.fromColumn,
-		blw.toColumn,
+	if blw.destinationAutoIncrement == nil {
+		destinationTableDefinition.Columns = []string{
+			blw.fromColumn,
+			blw.toColumn,
+		}
+	} else {
+		destinationTableDefinition.Columns = []string{
+			blw.destinationAutoIncrement.Column,
+			blw.fromColumn,
+			blw.toColumn,
+		}
 	}
 
 	keyResolver, err := newV3ResolverFromTableDefinition(blw.destinationKeyspaceSchema, destinationTableDefinition)
@@ -679,11 +848,55 @@ func (blw *BackfillLookupWorker) backfill(ctx context.Context) error {
 				keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 				dbNames[i] = blw.destinationDbNames[keyspaceAndShard]
 			}
-			transform := func(row []sqltypes.Value) ([]sqltypes.Value, error) {
+
+			var seqTablet *topodatapb.Tablet
+			var seqQueryService queryservice.QueryService
+			var target *querypb.Target
+			if blw.destinationAutoIncrement != nil {
+				si := blw.sequenceShards[0]
+				blw.wr.Logger().Infof("Connecting to MASTER for %v/%v", si.Keyspace(), si.ShardName())
+				seqTabletProvider := newShardTabletProvider(blw.tsc, blw.tabletTracker, si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
+				seqTablet, err = seqTabletProvider.getTablet()
+				if err != nil {
+					processError("%v: Connecting to sequence tablet failed: %v", errPrefix, err)
+					return
+				}
+				seqQueryService, err = tabletconn.GetDialer()(seqTablet, true)
+				if err != nil {
+					processError("%v: Creating QueryService for sequence tablet failed: %v", errPrefix, err)
+					return
+				}
+				defer seqQueryService.Close(ctx)
+
+				target = &querypb.Target{
+					Keyspace:   si.Keyspace(),
+					Shard:      si.ShardName(),
+					TabletType: topodatapb.TabletType_MASTER,
+				}
+			}
+			transform := func(row []sqltypes.Value) ([]sqltypes.Value, bool, error) {
+				fromValue, err := blw.backfillableVindex.FromValue(row[fromColumnIndex])
+				if err != nil {
+					return nil, false, err
+				}
+
+				if blw.destinationAutoIncrement != nil {
+					bindVars := map[string]*querypb.BindVariable{"n": sqltypes.ValueBindVariable(sqltypes.NewInt64(1))}
+					results, err := seqQueryService.Execute(ctx, target, fmt.Sprintf("select next :n values from %s", blw.destinationAutoIncrement.Sequence), bindVars, 0, nil)
+					if err != nil {
+						return nil, false, err
+					}
+
+					return []sqltypes.Value{
+						results.Rows[0][0],
+						fromValue,
+						row[defaultVindexColumnIndex],
+					}, row[fromColumnIndex].IsNull(), nil
+				}
 				return []sqltypes.Value{
-					row[fromColumnIndex],
+					fromValue,
 					row[defaultVindexColumnIndex],
-				}, nil
+				}, row[fromColumnIndex].IsNull(), nil
 			}
 			backfiller, err := NewBackfiller(ctx, sourceReader, destinationTableDefinition, backfillStatus, blw.skipNullRows,
 				transform,

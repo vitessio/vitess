@@ -104,6 +104,11 @@ type Lookup interface {
 	Update(vc VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error
 }
 
+// Backfillable implements methods used while backfilling the Vindex from existing data.
+type Backfillable interface {
+	FromValue(fromValue sqltypes.Value) (sqltypes.Value, error)
+}
+
 // WantOwnerInfo defines the interface that a vindex must
 // satisfy to request info about the owner table. This information can
 // be used to query the owner's table for the owning row's presence.

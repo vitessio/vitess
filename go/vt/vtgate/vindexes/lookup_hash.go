@@ -176,6 +176,11 @@ func (lh *LookupHash) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	return lh.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
 }
 
+// FromValue converts a from value field to what it should be stored as in the Vindex.
+func (lh *LookupHash) FromValue(fromValue sqltypes.Value) (sqltypes.Value, error) {
+	return fromValue, nil
+}
+
 // MarshalJSON returns a JSON representation of LookupHash.
 func (lh *LookupHash) MarshalJSON() ([]byte, error) {
 	return json.Marshal(lh.lkp)
@@ -328,6 +333,11 @@ func (lhu *LookupHashUnique) Update(vcursor VCursor, oldValues []sqltypes.Value,
 		return fmt.Errorf("lookup.Update.vunhash: %v", err)
 	}
 	return lhu.lkp.Update(vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
+}
+
+// FromValue converts a from value field to what it should be stored as in the Vindex.
+func (lhu *LookupHashUnique) FromValue(fromValue sqltypes.Value) (sqltypes.Value, error) {
+	return fromValue, nil
 }
 
 // MarshalJSON returns a JSON representation of LookupHashUnique.

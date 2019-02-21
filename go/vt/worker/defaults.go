@@ -29,6 +29,7 @@ const (
 	// on average. If this is not guaranteed, --chunk_count will be reduced
 	// automatically.
 	defaultMinRowsPerChunk   = 10 * 1000
+	defaultSourceRange       = "-"
 	defaultSourceReaderCount = 10
 	// defaultWriteQueryMaxRows aggregates up to 100 rows per INSERT or DELETE
 	// query. Higher values are not recommended to avoid overloading MySQL.
