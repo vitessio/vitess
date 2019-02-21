@@ -21,11 +21,9 @@ package pools
 import (
 	"errors"
 	"fmt"
+	"golang.org/x/net/context"
 	"sync/atomic"
 	"time"
-	"vitess.io/vitess/go/sync2"
-
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/timer"
 )
 
@@ -67,10 +65,8 @@ type ResourcePool struct {
 	idleTimer *timer.Timer
 	state     atomic.Value
 
-	// waitCount tracks the number of times a resource wasn't immediately in the pool.
-	waitCount    sync2.AtomicInt64
-	waitTime     sync2.AtomicDuration
-	waitTimeChan chan time.Time
+	// waitTimers tracks when each waiter started to wait.
+	waitTimers []time.Time
 }
 
 type resourceWrapper struct {
@@ -87,6 +83,8 @@ type State struct {
 	MinActive   int
 	IdleTimeout time.Duration
 	IdleClosed  int
+	WaitCount   int
+	WaitTime    time.Duration
 }
 
 // NewResourcePool creates a new ResourcePool pool.
@@ -116,7 +114,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		setCapacity: make(chan int),
 		factory:     factory,
 
-		waitTimeChan: make(chan time.Time, 99999),
+		//waitTimers: []time.Time{},
 		//available:   sync2.NewAtomicInt64(int64(capacity)),
 		//capacity:    sync2.NewAtomicInt64(int64(capacity)),
 		//idleTimeout: sync2.NewAtomicDuration(idleTimeout),
@@ -184,9 +182,7 @@ func (rp *ResourcePool) run(state State) {
 					//
 					// InUse and InPool do not change here, because there has not
 					// been any new resources given, returned, or created.
-					fmt.Println(">>>>>>>>>>> PUTINWAITTIMECHAN")
-					rp.waitTimeChan <- time.Now()
-					fmt.Println(">>>>>>>>>>> PUTINWAITTIMECHAN DONE")
+					rp.waitTimers = append(rp.waitTimers, time.Now())
 					state.Waiters++
 				}
 			} else if state.InPool != 0 {
@@ -201,10 +197,8 @@ func (rp *ResourcePool) run(state State) {
 				// modify InPool or InUse because 1) we are not returning it to the
 				// pool, and 2) there is no change in the number of uses of resources.
 				// Basically we are just handing over the resource to another owner.
-				fmt.Println(">>>>>>>>>>> GETFROMWAITTIME")
-				rp.recordWait(<-rp.waitTimeChan)
 				state.Waiters--
-
+				rp.recordWait(&state)
 			} else {
 				if r != nil {
 					state.InPool++
@@ -502,9 +496,11 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 }
 */
 
-func (rp *ResourcePool) recordWait(start time.Time) {
-	rp.waitCount.Add(1)
-	rp.waitTime.Add(time.Now().Sub(start))
+func (rp *ResourcePool) recordWait(state *State) {
+	var start time.Time
+	start, rp.waitTimers = rp.waitTimers[0], rp.waitTimers[1:]
+	state.WaitCount++
+	state.WaitTime += time.Now().Sub(start)
 }
 
 // SetIdleTimeout sets the idle timeout. It can only be used if there was an
@@ -572,13 +568,13 @@ func (rp *ResourcePool) MaxCap() int {
 }
 
 // WaitCount returns the total number of waits.
-func (rp *ResourcePool) WaitCount() int64 {
-	return rp.waitCount.Get()
+func (rp *ResourcePool) WaitCount() int {
+	return rp.State().WaitCount
 }
 
 // WaitTime returns the total wait time.
 func (rp *ResourcePool) WaitTime() time.Duration {
-	return rp.waitTime.Get()
+	return rp.State().WaitTime
 }
 
 // IdleTimeout returns the idle timeout.

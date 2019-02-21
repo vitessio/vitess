@@ -139,10 +139,12 @@ func TestSimple(t *testing.T) {
 
 	putChecked(t, p, a)
 	<-done
-	require.Equal(t, s(State{InPool: 0, InUse: 10, Waiters: 0}), p.State())
+	require.NotZero(t, p.State().WaitTime)
+	wt := p.State().WaitTime
+	require.Equal(t, s(State{InPool: 0, InUse: 10, Waiters: 0, WaitCount: 1, WaitTime: wt}), p.State())
 
 	putChecked(t, p, b)
-	require.Equal(t, s(State{InPool: 1, InUse: 9, Waiters: 0}), p.State())
+	require.Equal(t, s(State{InPool: 1, InUse: 9, Waiters: 0, WaitCount: 1, WaitTime: wt}), p.State())
 }
 
 func TestFull(t *testing.T) {
