@@ -63,12 +63,14 @@ type ResourcePool struct {
 
 	factory Factory
 
-	//idleTimeout sync2.AtomicDuration
+	// idleTimeout sync2.AtomicDuration
 	idleTimer *timer.Timer
 	state     atomic.Value
 
-	waitCount sync2.AtomicInt64
-	waitTime  sync2.AtomicDuration
+	// waitCount tracks the number of times a resource wasn't immediately in the pool.
+	waitCount    sync2.AtomicInt64
+	waitTime     sync2.AtomicDuration
+	waitTimeChan chan time.Time
 }
 
 type resourceWrapper struct {
@@ -114,6 +116,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		setCapacity: make(chan int),
 		factory:     factory,
 
+		waitTimeChan: make(chan time.Time, 99999),
 		//available:   sync2.NewAtomicInt64(int64(capacity)),
 		//capacity:    sync2.NewAtomicInt64(int64(capacity)),
 		//idleTimeout: sync2.NewAtomicDuration(idleTimeout),
@@ -127,7 +130,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	}
 
 	for i := 0; i < minActive; i++ {
-		if r := rp.create(); r.err == nil {
+		if r, err := rp.create(); err == nil {
 			rp.pool <- r
 			state.InPool++
 			continue
@@ -148,16 +151,20 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	return rp
 }
 
-func (rp *ResourcePool) create() resourceWrapper {
+func (rp *ResourcePool) create() (resourceWrapper, error) {
 	r, err := rp.factory()
 	if err != nil {
-		return resourceWrapper{err: err}
+		return resourceWrapper{}, err
 	}
 
 	return resourceWrapper{
 		resource: r,
 		timeUsed: time.Now(),
-	}
+	}, nil
+}
+
+func (rp *ResourcePool) createEmpty() resourceWrapper {
+	return resourceWrapper{}
 }
 
 func (rp *ResourcePool) run(state State) {
@@ -167,16 +174,19 @@ func (rp *ResourcePool) run(state State) {
 		case <-rp.get:
 			if state.InPool == 0 {
 				if state.InUse < state.Capacity {
-					fmt.Println("adding a new resource")
 					// The pool is empty and we still have pool capacity.
-					rp.pool <- rp.create()
+					// Hand over an empty wrapper for the caller to instantiate.
 					state.InUse++
+					rp.pool <- rp.createEmpty()
 				} else {
 					// The pool is empty but we don't have enough capacity.
 					// The user will be blocked for a resource to be returned to the pool.
 					//
 					// InUse and InPool do not change here, because there has not
 					// been any new resources given, returned, or created.
+					fmt.Println(">>>>>>>>>>> PUTINWAITTIMECHAN")
+					rp.waitTimeChan <- time.Now()
+					fmt.Println(">>>>>>>>>>> PUTINWAITTIMECHAN DONE")
 					state.Waiters++
 				}
 			} else if state.InPool != 0 {
@@ -191,7 +201,10 @@ func (rp *ResourcePool) run(state State) {
 				// modify InPool or InUse because 1) we are not returning it to the
 				// pool, and 2) there is no change in the number of uses of resources.
 				// Basically we are just handing over the resource to another owner.
+				fmt.Println(">>>>>>>>>>> GETFROMWAITTIME")
+				rp.recordWait(<-rp.waitTimeChan)
 				state.Waiters--
+
 			} else {
 				if r != nil {
 					state.InPool++
@@ -328,35 +341,48 @@ func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) 
 	// Inform the pool that we want a resource.
 	rp.get <- true
 
-	var wrapper resourceWrapper
-	var ok bool
+	//// To correctly track how many times we have to wait, allow
+	//// the `run()` goroutine to push back new resources to the pool.
+	//runtime.Gosched() // Receive the `get`.
+	//runtime.Gosched() // Push to the `pool`.
+
+	//var wrapper resourceWrapper
+	//var ok bool
+	//select {
+	//case wrapper, ok = <-rp.pool:
+	//case <-ctx.Done():
+	//	return nil, ErrTimeout
+	//default:
+	//	fmt.Println("Waiting...")
+	//	// Did not immediately get a resource.
+	//	// We will now record how long it takes to wait.
+	//	startTime := time.Now()
+	//	select {
+	//	case wrapper, ok = <-rp.pool:
+	//	case <-ctx.Done():
+	//		return nil, ErrTimeout
+	//	}
+	//	rp.recordWait(startTime)
+	//}
+
 	select {
-	case wrapper, ok = <-rp.pool:
+	case wrapper, ok := <-rp.pool:
+		if !ok {
+			fmt.Println("ok is false, channel closed")
+			return nil, ErrClosed
+		}
+
+		if wrapper.resource == nil {
+			wrapper, err = rp.create()
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return wrapper.resource, nil
 	case <-ctx.Done():
 		return nil, ErrTimeout
-	default:
-		fmt.Println("Waiting...")
-		// Did not immediately get a resource.
-		// We will now record how long it takes to wait.
-		startTime := time.Now()
-		select {
-		case wrapper, ok = <-rp.pool:
-		case <-ctx.Done():
-			return nil, ErrTimeout
-		}
-		rp.recordWait(startTime)
 	}
-
-	if !ok {
-		fmt.Println("ok is false, channel closed")
-		return nil, ErrClosed
-	}
-
-	if wrapper.err != nil {
-		return nil, err
-	}
-
-	return wrapper.resource, nil
 }
 
 // Put will return a resource to the pool. For every successful Get,

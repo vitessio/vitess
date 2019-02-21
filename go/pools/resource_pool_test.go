@@ -173,6 +173,7 @@ func TestFull(t *testing.T) {
 		}
 		if p.WaitCount() != 0 {
 			t.Errorf("expecting 0, received %d", p.WaitCount())
+			return
 		}
 		if p.WaitTime() != 0 {
 			t.Errorf("expecting 0, received %d", p.WaitTime())
