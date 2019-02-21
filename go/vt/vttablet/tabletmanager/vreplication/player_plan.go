@@ -251,7 +251,7 @@ func (tp *TablePlan) FindCol(name sqlparser.ColIdent) *ColExpr {
 
 // GenerateStatement must be called only after Fields and PKCols have been populated.
 func (tp *TablePlan) GenerateStatement(rowChange *binlogdatapb.RowChange) string {
-	// MakeRowTrusted is needed here because because Proto3ToResult is not convenient.
+	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var before, after []sqltypes.Value
 	if rowChange.Before != nil {
 		before = sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
