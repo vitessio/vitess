@@ -13,7 +13,7 @@ Below are a few possible scenarios.
 
 Diagnosis 1: Inspect the graphs to see if QPS has gone up. If yes, drill down on the more detailed QPS graphs to see which table, or user caused the increase. If a table is identified, look at /debug/queryz for queries on that table.
 
-Action: Inform engineer about about toxic query. If it’s a specific user, you can stop their job or throttle them to keep the load manageable. As a last resort, blacklist query to allow the rest of the system to stay healthy.
+Action: Inform engineer about toxic query. If it’s a specific user, you can stop their job or throttle them to keep the load manageable. As a last resort, blacklist query to allow the rest of the system to stay healthy.
 
 Diagnosis 2: QPS did not go up, only latency did. Inspect the per-table latency graphs. If it’s a specific table, then it’s most likely a long-running low QPS query that’s skewing the numbers. Identify the culprit query and take necessary steps to get it optimized. Such queries usually do not cause outage. So, there may not be a need to take extreme measures.
 
