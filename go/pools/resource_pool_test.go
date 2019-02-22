@@ -175,7 +175,7 @@ func TestGrowNoBlock(t *testing.T) {
 	require.Equal(t, State{Capacity: 2, InUse: 2}, p.State())
 }
 
-func TestSimple(t *testing.T) {
+func TestFull1(t *testing.T) {
 	s := func(state State) State {
 		state.Capacity = 10
 		state.MinActive = 5
@@ -222,7 +222,7 @@ func TestSimple(t *testing.T) {
 	fmt.Println("simpl6")
 }
 
-func TestFull(t *testing.T) {
+func TestFull2(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
@@ -849,29 +849,19 @@ func TestMinActiveSelfRefreshing(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 3)
 	defer p.Close()
 
-	// Put back closed resources except one
+	// Get 5
+	var resources []Resource
 	for i := 0; i < 5; i++ {
-		fmt.Println("\n", i)
-		r, err := p.Get(context.Background())
-		if err != nil {
-			t.Errorf("Got an unexpected error: %v", err)
-		}
+		resources = append(resources, getChecked(t, p))
+	}
 
-		fmt.Println(i, r)
-		if i != 2 {
-			r = nil
-		}
-		p.Put(r)
+	// Put back nil except one
+	for i := 0; i < 4; i++ {
+		putChecked(t, p, nil)
 	}
-	if p.Available() != 5 {
-		t.Errorf("Expecting 5, received %d", p.Available())
-	}
-	if p.Active() != 1 {
-		t.Errorf("Expecting 1, received %d", p.Active())
-	}
-	if p.Active() != 3 {
-		t.Errorf("Expecting 3, received %d", p.Active())
-	}
+	putChecked(t, p, resources[4])
+
+	require.Equal(t, 3, p.Active())
 }
 
 func TestMinActiveTooHigh(t *testing.T) {

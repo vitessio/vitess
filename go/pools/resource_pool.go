@@ -132,26 +132,32 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		IdleTimeout: idleTimeout,
 	}
 
-	for i := 0; i < minActive; i++ {
-		if r, err := rp.create(); err == nil {
-			rp.pool <- r
-			state.InPool++
-			continue
-		}
-
-		// TODO: Return an error!
-	}
-
 	rp.storeState(state)
+	rp.ensureMinimumActive(&state)
 	go rp.run(state)
 
-	// TODO: handle timeouts
-	//if idleTimeout != 0 {
-	//	rp.idleTimer = timer.NewTimer(idleTimeout / 10)
-	//	rp.idleTimer.Start(rp.closeIdleResources)
-	//}
-
 	return rp
+}
+
+func (rp *ResourcePool) ensureMinimumActive(state *State) {
+	if state.MinActive == 0 || state.Closed {
+		return
+	}
+
+	required := state.MinActive - rp.Active()
+	fmt.Println("required", required)
+	for i := 0; i < required; i++ {
+		r, err := rp.create()
+		if err != nil {
+			fmt.Println("error creating factory", err)
+			// TODO: How to handle factory error?
+			break
+		}
+		rp.pool <- r
+		state.InPool++
+		fmt.Println("added minactive to pool")
+	}
+	rp.storeState(*state)
 }
 
 func (rp *ResourcePool) create() (resourceWrapper, error) {
@@ -171,14 +177,15 @@ func (rp *ResourcePool) createEmpty() resourceWrapper {
 }
 
 func (rp *ResourcePool) run(state State) {
-	var tick <-chan time.Time
+	var idleTick <-chan time.Time
 	if state.IdleTimeout != 0 {
-		tick = time.Tick(state.IdleTimeout / 10)
+		idleTick = time.Tick(state.IdleTimeout / 10)
 	}
 
 	for {
 		rp.storeState(state)
-		//fmt.Printf(";;;;;; run %+v\n", state)
+		rp.ensureMinimumActive(&state)
+
 		select {
 		case <-rp.get:
 			fmt.Println(";;;;;;;;get")
@@ -258,13 +265,12 @@ func (rp *ResourcePool) run(state State) {
 			if delta < 0 {
 				delta = -delta
 				fmt.Println("shrinking!", delta, state.InPool)
-				//totalRemoved := (state.InUse + state.InPool) - newCap
-				//fmt.Println("totalRemoved", totalRemoved)
 
-				// We can't remove used resources, so only target the pool.
+				// We can't remove InUse resources, so only target the pool.
+				// Collect the other resources lazily when they're returned.
 				for i := 0; i < delta && state.InPool > 0; i++ {
-					fmt.Println("loop", i)
 					r := <-rp.pool
+					// TODO: Delegate this for non-blocking access to the pool?
 					r.resource.Close()
 					state.InPool--
 					// Closing a resource is slow, so let's update the state.
@@ -281,15 +287,14 @@ func (rp *ResourcePool) run(state State) {
 				rp.getCapacity <- true
 			}
 
-		case <-tick:
+		case <-idleTick:
 			rp.closeIdleResources(&state)
 
-		case to := <-rp.setIdleTimeout:
-			state.IdleTimeout = to
-			if to == 0 {
-				tick = nil
+		case state.IdleTimeout = <-rp.setIdleTimeout:
+			if state.IdleTimeout == 0 {
+				idleTick = nil
 			} else {
-				tick = time.Tick(state.IdleTimeout / 10)
+				idleTick = time.Tick(state.IdleTimeout / 10)
 			}
 		}
 	}
@@ -314,7 +319,7 @@ func (rp *ResourcePool) IsClosed() bool {
 
 // closeIdleResources scans the pool for idle resources
 func (rp *ResourcePool) closeIdleResources(state *State) {
-	// Shouldn't be called, but checking in case.
+	// Shouldn't be zero, but checking in case.
 	if state.IdleTimeout == 0 {
 		return
 	}
