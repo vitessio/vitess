@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/context"
 	"sync/atomic"
 	"time"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 )
 
@@ -171,8 +172,10 @@ func (rp *ResourcePool) createEmpty() resourceWrapper {
 func (rp *ResourcePool) run(state State) {
 	for {
 		rp.storeState(state)
+		fmt.Printf(";;;;;; run %+v\n", state)
 		select {
 		case <-rp.get:
+			fmt.Println(";;;;;;;;get")
 			if state.InPool == 0 {
 				if state.InUse < state.Capacity {
 					// The pool is empty and we still have pool capacity.
@@ -194,26 +197,34 @@ func (rp *ResourcePool) run(state State) {
 			}
 
 		case r := <-rp.put:
-			if state.Waiters > 0 {
-				fmt.Println("We have waiters!")
+			fmt.Println(";;;;;;;;put")
+			if state.Waiters == 0 {
+				if r != nil {
+					state.InPool++
+					fmt.Println(";; Added to inpool", state.InPool)
+				}
+				state.InUse--
+				fmt.Println(";; Removed inuse", state.InUse)
+				if r != nil {
+					fmt.Println(";; Returning to pool...", r)
+					rp.pool <- *r
+				}
+			} else {
+				fmt.Println(";; We have waiters!")
 				// When a resource is returned while waiting, we don't need to
 				// modify InPool or InUse because 1) we are not returning it to the
 				// pool, and 2) there is no change in the number of uses of resources.
 				// Basically we are just handing over the resource to another owner.
 				state.Waiters--
 				rp.recordWait(&state)
-			} else {
-				if r != nil {
-					state.InPool++
-					fmt.Println("Added to inpool", state.InPool)
+				fmt.Println(";; not returning! because resource is nil")
+
+				// We have a waiter, but the returned resource is nil. We need to create one.
+				if r == nil {
+					rp.pool <- rp.createEmpty()
 				}
-				state.InUse--
-				fmt.Println("Removed inuse", state.InUse)
 			}
-			if r != nil {
-				fmt.Println("Returning to pool...", r)
-				rp.pool <- *r
-			}
+
 
 		case capReq := <-rp.setCapacity:
 			newCap := capReq.capacity
@@ -332,7 +343,12 @@ func (rp *ResourcePool) closeIdleResources() {
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will wait till the next resource becomes available or a timeout.
 // A timeout of 0 is an indefinite wait.
+var aa = sync2.AtomicInt32{}
+
 func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) {
+	aa.Add(1)
+	a := aa.Get()
+	fmt.Println(a)
 	// Check for context timeout
 	select {
 	case <-ctx.Done():
@@ -340,37 +356,16 @@ func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) 
 	default:
 	}
 
-	fmt.Println("\nGET", rp.StatsJSON())
+	fmt.Println("\nGET", a, rp.StatsJSON())
 
 	// Inform the pool that we want a resource.
 	rp.get <- true
 
-	//// To correctly track how many times we have to wait, allow
-	//// the `run()` goroutine to push back new resources to the pool.
-	//runtime.Gosched() // Receive the `get`.
-	//runtime.Gosched() // Push to the `pool`.
-
-	//var wrapper resourceWrapper
-	//var ok bool
-	//select {
-	//case wrapper, ok = <-rp.pool:
-	//case <-ctx.Done():
-	//	return nil, ErrTimeout
-	//default:
-	//	fmt.Println("Waiting...")
-	//	// Did not immediately get a resource.
-	//	// We will now record how long it takes to wait.
-	//	startTime := time.Now()
-	//	select {
-	//	case wrapper, ok = <-rp.pool:
-	//	case <-ctx.Done():
-	//		return nil, ErrTimeout
-	//	}
-	//	rp.recordWait(startTime)
-	//}
+	fmt.Println(a, "waiting...")
 
 	select {
 	case wrapper, ok := <-rp.pool:
+		fmt.Println(a, "waiting... OK!")
 		if !ok {
 			fmt.Println("ok is false, channel closed")
 			return nil, ErrClosed
@@ -379,6 +374,10 @@ func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) 
 		if wrapper.resource == nil {
 			wrapper, err = rp.create()
 			if err != nil {
+				fmt.Println(a, "got an error creating")
+				// Put back an available empty resource.
+				rp.Put(nil)
+				fmt.Println(a, "rp.Put returned")
 				return nil, err
 			}
 		}
