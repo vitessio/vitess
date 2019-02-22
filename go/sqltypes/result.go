@@ -185,9 +185,12 @@ func ResultsEqual(r1, r2 []Result) bool {
 // Every place this function is called, a comment is needed that explains
 // why it's justified.
 func MakeRowTrusted(fields []*querypb.Field, row *querypb.Row) []Value {
+	fieldCount := len(fields)
+
 	sqlRow := make([]Value, len(row.Lengths))
 	var offset int64
-	for i, length := range row.Lengths {
+	for i := 0; i < fieldCount; i++ {
+		length := row.Lengths[i]
 		if length < 0 {
 			continue
 		}
