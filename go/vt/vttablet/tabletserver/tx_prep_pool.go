@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	errPrepCommiting = errors.New("commiting")
+	errPrepCommitting = errors.New("committing")
 	errPrepFailed    = errors.New("failed")
 )
 
@@ -101,7 +101,7 @@ func (pp *TxPreparedPool) FetchForCommit(dtid string) (*TxConnection, error) {
 	c, ok := pp.conns[dtid]
 	if ok {
 		delete(pp.conns, dtid)
-		pp.reserved[dtid] = errPrepCommiting
+		pp.reserved[dtid] = errPrepCommitting
 	}
 	return c, nil
 }
