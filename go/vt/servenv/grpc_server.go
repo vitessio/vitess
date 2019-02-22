@@ -19,18 +19,18 @@ package servenv
 import (
 	"flag"
 	"fmt"
+	"math"
 	"net"
+	"time"
+
+	"github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/go-grpc-prometheus"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-
-	"math"
-	"time"
-
-	"github.com/grpc-ecosystem/go-grpc-prometheus"
+	"google.golang.org/grpc/keepalive"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/keepalive"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttls"
@@ -162,6 +162,16 @@ func createGRPCServer() {
 		opts = append(opts, grpc.KeepaliveParams(ka))
 	}
 
+	opts = append(opts, interceptors()...)
+
+	GRPCServer = grpc.NewServer(opts...)
+}
+
+// We can only set a ServerInterceptor once, so we chain multiple interceptors into one
+func interceptors() []grpc.ServerOption {
+	var streamInterceptor grpc.StreamServerInterceptor
+	var unaryInterceptor grpc.UnaryServerInterceptor
+
 	if *GRPCAuth != "" {
 		log.Infof("enabling auth plugin %v", *GRPCAuth)
 		pluginInitializer := GetAuthenticator(*GRPCAuth)
@@ -170,16 +180,34 @@ func createGRPCServer() {
 			log.Fatalf("Failed to load auth plugin: %v", err)
 		}
 		authPlugin = authPluginImpl
-		opts = append(opts, grpc.StreamInterceptor(streamInterceptor))
-		opts = append(opts, grpc.UnaryInterceptor(unaryInterceptor))
+		streamInterceptor = authenticatingStreamInterceptor
+		unaryInterceptor = authenticatingUnaryInterceptor
 	}
 
 	if *grpccommon.EnableGRPCPrometheus {
-		opts = append(opts, grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor))
-		opts = append(opts, grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor))
+		streamInterceptor = mergeS(streamInterceptor, grpc_prometheus.StreamServerInterceptor)
+		unaryInterceptor = mergeU(unaryInterceptor, grpc_prometheus.UnaryServerInterceptor)
 	}
 
-	GRPCServer = grpc.NewServer(opts...)
+	if streamInterceptor == nil {
+		return []grpc.ServerOption{}
+	} else {
+		return []grpc.ServerOption{grpc.StreamInterceptor(streamInterceptor), grpc.UnaryInterceptor(unaryInterceptor)}
+	}
+}
+
+func mergeS(a,b grpc.StreamServerInterceptor) grpc.StreamServerInterceptor {
+	if a == nil {
+		return b
+	}
+	return grpc_middleware.ChainStreamServer(a, b)
+}
+
+func mergeU(a,b grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
+	if a == nil {
+		return b
+	}
+	return grpc_middleware.ChainUnaryServer(a, b)
 }
 
 func serveGRPC() {
@@ -227,7 +255,7 @@ func GRPCCheckServiceMap(name string) bool {
 	return CheckServiceMap("grpc", name)
 }
 
-func streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func authenticatingStreamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	newCtx, err := authPlugin.Authenticate(stream.Context(), info.FullMethod)
 
 	if err != nil {
@@ -239,7 +267,7 @@ func streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.Str
 	return handler(srv, wrapped)
 }
 
-func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func authenticatingUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	newCtx, err := authPlugin.Authenticate(ctx, info.FullMethod)
 	if err != nil {
 		return nil, err
