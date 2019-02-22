@@ -187,11 +187,13 @@ func TestSimple(t *testing.T) {
 	a := getChecked(t, p)
 	require.Equal(t, s(State{InPool: 4, InUse: 1}), p.State())
 
+	fmt.Println("simpl2")
 	var resources []Resource
 	for i := 0; i < 9; i++ {
 		resources = append(resources, getChecked(t, p))
 	}
 	require.Equal(t, s(State{InPool: 0, InUse: 10}), p.State())
+	fmt.Println("simpl3")
 
 	var b Resource
 	done := make(chan bool)
@@ -203,14 +205,20 @@ func TestSimple(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	require.Equal(t, s(State{InPool: 0, InUse: 10, Waiters: 1}), p.State())
 
+	fmt.Println("simpl4")
+
 	putChecked(t, p, a)
+	fmt.Println("simpl4a")
 	<-done
+	fmt.Println("simpl4b")
 	require.NotZero(t, p.State().WaitTime)
 	wt := p.State().WaitTime
 	require.Equal(t, s(State{InPool: 0, InUse: 10, Waiters: 0, WaitCount: 1, WaitTime: wt}), p.State())
 
+	fmt.Println("simpl5")
 	putChecked(t, p, b)
 	require.Equal(t, s(State{InPool: 1, InUse: 9, Waiters: 0, WaitCount: 1, WaitTime: wt}), p.State())
+	fmt.Println("simpl6")
 }
 
 func TestFull(t *testing.T) {
@@ -418,10 +426,10 @@ func TestShrinking(t *testing.T) {
 	stats = p.StatsJSON()
 	expected = `{"Capacity": 3, "Available": 3, "Active": 3, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0}`
 	// TODO: Something is odd here.
-	//require.Equal(t, expected, stats)
-	//if count.Get() != 3 {
-	//	t.Errorf("Expecting 3, received %d", count.Get())
-	//}
+	require.Equal(t, expected, stats)
+	if count.Get() != 3 {
+		t.Errorf("Expecting 3, received %d", count.Get())
+	}
 
 	// Ensure no deadlock if SetCapacity is called after we start
 	// waiting for a resource
@@ -455,6 +463,7 @@ func TestShrinking(t *testing.T) {
 	}
 	<-done
 	<-done
+	time.Sleep(time.Millisecond)
 	if p.Capacity() != 2 {
 		t.Errorf("Expecting 2, received %d", p.Capacity())
 	}
@@ -463,6 +472,7 @@ func TestShrinking(t *testing.T) {
 	}
 	if p.WaitCount() != 1 {
 		t.Errorf("Expecting 1, received %d", p.WaitCount())
+		return
 	}
 	if count.Get() != 2 {
 		t.Errorf("Expecting 2, received %d", count.Get())

@@ -24,7 +24,6 @@ import (
 	"golang.org/x/net/context"
 	"sync/atomic"
 	"time"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 )
 
@@ -89,6 +88,7 @@ type State struct {
 	IdleClosed  int
 	WaitCount   int
 	WaitTime    time.Duration
+	Closed      bool
 }
 
 type setCapacityRequest struct {
@@ -196,18 +196,30 @@ func (rp *ResourcePool) run(state State) {
 				state.InUse++
 			}
 
-		case r := <-rp.put:
+		case wrapper := <-rp.put:
+			// Allow resources to be closed while pool is declared closed.
+			// OR
+			// Don't place resources back into the pull when we've reached
+			// capacity. This can happen after SetCapacity call.
+			if state.Closed || state.InPool == state.Capacity {
+				if wrapper != nil {
+					wrapper.resource.Close()
+				}
+				state.InUse--
+				continue
+			}
+
 			fmt.Println(";;;;;;;;put")
 			if state.Waiters == 0 {
-				if r != nil {
+				if wrapper != nil {
 					state.InPool++
 					fmt.Println(";; Added to inpool", state.InPool)
 				}
 				state.InUse--
 				fmt.Println(";; Removed inuse", state.InUse)
-				if r != nil {
-					fmt.Println(";; Returning to pool...", r)
-					rp.pool <- *r
+				if wrapper != nil {
+					fmt.Println(";; Returning to pool...", wrapper)
+					rp.pool <- *wrapper
 				}
 			} else {
 				fmt.Println(";; We have waiters!")
@@ -220,17 +232,19 @@ func (rp *ResourcePool) run(state State) {
 				fmt.Println(";; not returning! because resource is nil")
 
 				// We have a waiter, but the returned resource is nil. We need to create one.
-				if r == nil {
+				if wrapper == nil {
 					rp.pool <- rp.createEmpty()
+				} else {
+					rp.pool <- *wrapper
 				}
 			}
-
 
 		case capReq := <-rp.setCapacity:
 			newCap := capReq.capacity
 			oldCap := state.Capacity
 			delta := newCap - oldCap
 			state.Capacity = newCap
+			// Closing a resource is slow, so let's update the state.
 			rp.storeState(state)
 			fmt.Println("got a setcap command", oldCap, newCap, delta)
 
@@ -247,14 +261,20 @@ func (rp *ResourcePool) run(state State) {
 					r := <-rp.pool
 					r.resource.Close()
 					state.InPool--
-					// Closing is slow, so we update the stats inside the loop.
+					// Closing a resource is slow, so let's update the state.
 					rp.storeState(state)
 				}
+			}
+
+			if newCap == 0 {
+				close(rp.pool)
+				state.Closed = true
 			}
 
 			if capReq.block {
 				rp.getCapacity <- true
 			}
+
 		}
 	}
 }
@@ -276,8 +296,7 @@ func (rp *ResourcePool) Close() {
 
 // IsClosed returns true if the resource pool is closed.
 func (rp *ResourcePool) IsClosed() bool {
-	//return rp.capacity.Get() == 0
-	return rp.Capacity() == 0
+	return rp.State().Closed
 }
 
 // closeIdleResources scans the pool for idle resources
@@ -343,12 +362,7 @@ func (rp *ResourcePool) closeIdleResources() {
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will wait till the next resource becomes available or a timeout.
 // A timeout of 0 is an indefinite wait.
-var aa = sync2.AtomicInt32{}
-
 func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) {
-	aa.Add(1)
-	a := aa.Get()
-	fmt.Println(a)
 	// Check for context timeout
 	select {
 	case <-ctx.Done():
@@ -356,32 +370,23 @@ func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) 
 	default:
 	}
 
-	fmt.Println("\nGET", a, rp.StatsJSON())
-
 	// Inform the pool that we want a resource.
 	rp.get <- true
 
-	fmt.Println(a, "waiting...")
-
 	select {
 	case wrapper, ok := <-rp.pool:
-		fmt.Println(a, "waiting... OK!")
 		if !ok {
-			fmt.Println("ok is false, channel closed")
 			return nil, ErrClosed
 		}
 
 		if wrapper.resource == nil {
 			wrapper, err = rp.create()
 			if err != nil {
-				fmt.Println(a, "got an error creating")
 				// Put back an available empty resource.
 				rp.Put(nil)
-				fmt.Println(a, "rp.Put returned")
 				return nil, err
 			}
 		}
-
 		return wrapper.resource, nil
 	case <-ctx.Done():
 		return nil, ErrTimeout
@@ -424,13 +429,19 @@ func (rp *ResourcePool) Put(resource Resource) {
 // A SetCapacity of 0 is equivalent to closing the ResourcePool.
 func (rp *ResourcePool) SetCapacity(capacity int, block bool) error {
 	fmt.Println("\n\nsetCapacity", capacity, rp.StatsJSON())
+	if rp.State().Closed {
+		return fmt.Errorf("pool is closed")
+	}
+
 	if capacity < 0 || capacity > cap(rp.pool) {
 		return fmt.Errorf("capacity %d is out of range", capacity)
 	}
 
-	minActive := rp.State().MinActive
-	if capacity < minActive {
-		return fmt.Errorf("minActive %v would now be higher than capacity %v", minActive, capacity)
+	if capacity != 0 {
+		minActive := rp.State().MinActive
+		if capacity < minActive {
+			return fmt.Errorf("minActive %v would now be higher than capacity %v", minActive, capacity)
+		}
 	}
 
 	rp.setCapacity <- setCapacityRequest{
