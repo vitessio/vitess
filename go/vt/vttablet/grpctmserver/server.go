@@ -372,6 +372,14 @@ func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.
 	return response, err
 }
 
+func (s *server) UndoDemoteMaster(ctx context.Context, request *tabletmanagerdatapb.UndoDemoteMasterRequest) (response *tabletmanagerdatapb.UndoDemoteMasterResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "UndoDemoteMaster", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.UndoDemoteMasterResponse{}
+	err = s.agent.UndoDemoteMaster(ctx)
+	return response, err
+}
+
 func (s *server) PromoteSlaveWhenCaughtUp(ctx context.Context, request *tabletmanagerdatapb.PromoteSlaveWhenCaughtUpRequest) (response *tabletmanagerdatapb.PromoteSlaveWhenCaughtUpResponse, err error) {
 	defer s.agent.HandleRPCPanic(ctx, "PromoteSlaveWhenCaughtUp", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
