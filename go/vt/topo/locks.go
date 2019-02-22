@@ -38,11 +38,18 @@ import (
 var (
 	// DefaultLockTimeout is a good value to use as a default for
 	// locking a shard / keyspace.
-	DefaultLockTimeout = 30 * time.Second
+	// Now used only for unlock operations
+	defaultLockTimeout = 30 * time.Second
 
+	// Deprecated
 	// LockTimeout is the command line flag that introduces a shorter
 	// timeout for locking topology structures.
-	LockTimeout = flag.Duration("lock_timeout", DefaultLockTimeout, "timeout for acquiring topology locks")
+	deprecatedLockTimeout = flag.Duration("lock_timeout", defaultLockTimeout, "deprecated: timeout for acquiring topology locks, use remote_operation_timeout")
+
+	// RemoteOperationTimeout is used for operations where we have to
+	// call out to another process.
+	// Used for RPC calls (including topo server calls)
+	RemoteOperationTimeout = flag.Duration("remote_operation_timeout", 30*time.Second, "time to wait for a remote operation")
 )
 
 // Lock describes a long-running lock on a keyspace or a shard.
@@ -209,7 +216,7 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 func (l *Lock) lockKeyspace(ctx context.Context, ts *Server, keyspace string) (LockDescriptor, error) {
 	log.Infof("Locking keyspace %v for action %v", keyspace, l.Action)
 
-	ctx, cancel := context.WithTimeout(ctx, *LockTimeout)
+	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
 	defer cancel()
 
 	span := trace.NewSpanFromContext(ctx)
@@ -231,8 +238,10 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts *Server, keyspace string, 
 	// Detach from the parent timeout, but copy the trace span.
 	// We need to still release the lock even if the parent
 	// context timed out.
+	// Note that we are not using the user provided RemoteOperationTimeout
+	// here because it is possible that that timeout is too short.
 	ctx = trace.CopySpan(context.TODO(), ctx)
-	ctx, cancel := context.WithTimeout(ctx, DefaultLockTimeout)
+	ctx, cancel := context.WithTimeout(ctx, defaultLockTimeout)
 	defer cancel()
 
 	span := trace.NewSpanFromContext(ctx)
@@ -350,7 +359,7 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)
 
-	ctx, cancel := context.WithTimeout(ctx, *LockTimeout)
+	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
 	defer cancel()
 
 	span := trace.NewSpanFromContext(ctx)
@@ -372,8 +381,10 @@ func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string
 func (l *Lock) unlockShard(ctx context.Context, ts *Server, keyspace, shard string, lockDescriptor LockDescriptor, actionError error) error {
 	// Detach from the parent timeout, but copy the trace span.
 	// We need to still release the lock even if the parent context timed out.
+	// Note that we are not using the user provided RemoteOperationTimeout
+	// here because it is possible that that timeout is too short.
 	ctx = trace.CopySpan(context.TODO(), ctx)
-	ctx, cancel := context.WithTimeout(ctx, DefaultLockTimeout)
+	ctx, cancel := context.WithTimeout(ctx, defaultLockTimeout)
 	defer cancel()
 
 	span := trace.NewSpanFromContext(ctx)
