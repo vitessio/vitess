@@ -167,6 +167,7 @@ func TestGrowNoBlock(t *testing.T) {
 	getChecked(t, p)
 	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
 	require.NoError(t, p.SetCapacity(2, false))
+	// p.State() should be called here too quickly for setCapacity to update it.
 	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
 	// By the time the goroutine processes this `Get()`, the capacity
 	// would have been increased.
@@ -629,6 +630,8 @@ func TestIdleTimeout(t *testing.T) {
 		t.Errorf("Expecting 1, received %d", p.IdleClosed())
 	}
 
+	fmt.Println("testid1")
+
 	// sleep to let the idle closer run while all resources are in use
 	// then make sure things are still as we expect
 	time.Sleep(20 * time.Millisecond)
@@ -656,10 +659,13 @@ func TestIdleTimeout(t *testing.T) {
 		t.Errorf("Expecting 1, received %d", p.IdleClosed())
 	}
 
+	fmt.Println("testid2")
 	// the idle close thread wakes up every 1/100 of the idle time, so ensure
 	// the timeout change applies to newly added resources
 	p.SetIdleTimeout(1000 * time.Millisecond)
+	fmt.Println("testid2aaa")
 	p.Put(r)
+	fmt.Println("testid2bbb")
 
 	time.Sleep(20 * time.Millisecond)
 	if lastID.Get() != 2 {
@@ -671,6 +677,7 @@ func TestIdleTimeout(t *testing.T) {
 	if p.IdleClosed() != 1 {
 		t.Errorf("Expecting 1, received %d", p.IdleClosed())
 	}
+	fmt.Println("testid3")
 
 	p.SetIdleTimeout(10 * time.Millisecond)
 	time.Sleep(20 * time.Millisecond)
@@ -694,11 +701,10 @@ func TestCreateFail(t *testing.T) {
 	if _, err := p.Get(ctx); err.Error() != "Failed" {
 		t.Errorf("Expecting Failed, received %v", err)
 	}
+	time.Sleep(time.Millisecond)
 	stats := p.StatsJSON()
 	expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0}`
-	if stats != expected {
-		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
-	}
+	require.Equal(t, expected, stats)
 }
 
 func TestSlowCreateFail(t *testing.T) {
@@ -863,10 +869,6 @@ func TestMinActiveSelfRefreshing(t *testing.T) {
 	if p.Active() != 1 {
 		t.Errorf("Expecting 1, received %d", p.Active())
 	}
-
-	// TODO:
-	//p.activateMinimumResources()
-
 	if p.Active() != 3 {
 		t.Errorf("Expecting 3, received %d", p.Active())
 	}

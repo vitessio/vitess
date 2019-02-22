@@ -24,7 +24,6 @@ import (
 	"golang.org/x/net/context"
 	"sync/atomic"
 	"time"
-	"vitess.io/vitess/go/timer"
 )
 
 var (
@@ -47,6 +46,11 @@ type Resource interface {
 
 // ResourcePool allows you to use a pool of resources.
 type ResourcePool struct {
+	factory Factory
+
+	// state contains settings, inventory counts, and statistics of the pool.
+	state atomic.Value
+
 	// pool contains active resources.
 	pool chan resourceWrapper
 
@@ -62,11 +66,8 @@ type ResourcePool struct {
 	// getCapacity is used only to block on a changed capacity.
 	getCapacity chan bool
 
-	factory Factory
-
-	// idleTimeout sync2.AtomicDuration
-	idleTimer *timer.Timer
-	state     atomic.Value
+	// setIdleTimeout is a channel to request the timeout to be changed.
+	setIdleTimeout chan time.Duration
 
 	// waitTimers tracks when each waiter started to wait.
 	waitTimers []time.Time
@@ -75,7 +76,6 @@ type ResourcePool struct {
 type resourceWrapper struct {
 	resource Resource
 	timeUsed time.Time
-	err      error
 }
 
 type State struct {
@@ -117,12 +117,13 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	}
 
 	rp := &ResourcePool{
-		pool:        make(chan resourceWrapper, maxCap),
-		get:         make(chan bool),
-		put:         make(chan *resourceWrapper),
-		setCapacity: make(chan setCapacityRequest),
-		getCapacity: make(chan bool),
-		factory:     factory,
+		factory:        factory,
+		pool:           make(chan resourceWrapper, maxCap),
+		get:            make(chan bool),
+		put:            make(chan *resourceWrapper),
+		setCapacity:    make(chan setCapacityRequest),
+		getCapacity:    make(chan bool),
+		setIdleTimeout: make(chan time.Duration),
 	}
 
 	state := State{
@@ -170,9 +171,14 @@ func (rp *ResourcePool) createEmpty() resourceWrapper {
 }
 
 func (rp *ResourcePool) run(state State) {
+	var tick <-chan time.Time
+	if state.IdleTimeout != 0 {
+		tick = time.Tick(state.IdleTimeout / 10)
+	}
+
 	for {
 		rp.storeState(state)
-		fmt.Printf(";;;;;; run %+v\n", state)
+		//fmt.Printf(";;;;;; run %+v\n", state)
 		select {
 		case <-rp.get:
 			fmt.Println(";;;;;;;;get")
@@ -275,6 +281,16 @@ func (rp *ResourcePool) run(state State) {
 				rp.getCapacity <- true
 			}
 
+		case <-tick:
+			rp.closeIdleResources(&state)
+
+		case to := <-rp.setIdleTimeout:
+			state.IdleTimeout = to
+			if to == 0 {
+				tick = nil
+			} else {
+				tick = time.Tick(state.IdleTimeout / 10)
+			}
 		}
 	}
 }
@@ -288,9 +304,6 @@ func (rp *ResourcePool) storeState(state State) {
 // It waits for all resources to be returned (Put).
 // After a Close, Get is not allowed.
 func (rp *ResourcePool) Close() {
-	if rp.idleTimer != nil {
-		rp.idleTimer.Stop()
-	}
 	_ = rp.SetCapacity(0, true)
 }
 
@@ -300,7 +313,28 @@ func (rp *ResourcePool) IsClosed() bool {
 }
 
 // closeIdleResources scans the pool for idle resources
-func (rp *ResourcePool) closeIdleResources() {
+func (rp *ResourcePool) closeIdleResources(state *State) {
+	// Shouldn't be called, but checking in case.
+	if state.IdleTimeout == 0 {
+		return
+	}
+
+	for i := 0; i < state.InPool; i++ {
+		wrapper := <-rp.pool
+
+		if wrapper.timeUsed.Add(state.IdleTimeout).Sub(time.Now()) < 0 {
+			fmt.Println("closing resource due to timeout")
+			wrapper.resource.Close()
+			wrapper.resource = nil
+			state.IdleClosed++
+			state.InPool--
+			continue
+		}
+
+		// Not expired--back into the pool we go.
+		rp.pool <- wrapper
+	}
+
 	/*
 	fmt.Println("\n\ncloseIdleResources")
 	available := int(rp.Available())
@@ -310,13 +344,6 @@ func (rp *ResourcePool) closeIdleResources() {
 
 	for i := 0; i < available; i++ {
 		fmt.Println("available loop", i)
-
-		select {
-		case <-rp.slots:
-		default:
-			// stop early if we don't get anything new from the pool
-			fmt.Println("return early 1")
-		}
 
 		var wrapper resourceWrapper
 		select {
@@ -530,16 +557,10 @@ func (rp *ResourcePool) recordWait(state *State) {
 	state.WaitTime += time.Now().Sub(start)
 }
 
-// SetIdleTimeout sets the idle timeout. It can only be used if there was an
-// idle timeout set when the pool was created.
+// SetIdleTimeout sets the idle timeout for resources. The timeout is
+// checked at the 10th of the period of the timeout.
 func (rp *ResourcePool) SetIdleTimeout(idleTimeout time.Duration) {
-	if rp.idleTimer == nil {
-		panic("SetIdleTimeout called when timer not initialized")
-	}
-
-	//rp.idleTimeout.Set(idleTimeout)
-	//rp.idleTimer.SetInterval(idleTimeout / 10)
-	// TODO
+	rp.setIdleTimeout <- idleTimeout
 }
 
 // StatsJSON returns the stats in JSON format.
