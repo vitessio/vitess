@@ -48,7 +48,7 @@ We have three main directories:
 *   [`doc/`](https://github.com/vitessio/vitess/tree/master/doc) - original
     content
 *   [`docs/`](https://github.com/vitessio/vitess/tree/master/docs) - generated
-    website actually served at http://vitess.io/
+    website actually served at https://vitess.io/
 *   [`vitess.io/`](https://github.com/vitessio/vitess/tree/master/vitess.io) -
     all relevant files for the website e.g.
     *   Jekyll configuration
@@ -105,7 +105,7 @@ When you add a new section to the menu, please create a new directory below
 The main file in the section should have `index.md` as its boiler plate counter
 part. Example: `doc/Contributing.md` is included by
 `vitess.io/contributing/index.md` and therefore served as
-http://vitess.io/contributing/.
+https://vitess.io/contributing/.
 
 Make sure that you use `{% raw %}{% link ... %}{% endraw %}` to generate the URLs.
 See existing entries for examples.
@@ -113,7 +113,7 @@ See existing entries for examples.
 ### Orphaned doc/ Markdown Files
 
 There are several files in `doc/` which are currently not visible on
-http://vitess.io.
+https://vitess.io.
 
 Examples:
 
