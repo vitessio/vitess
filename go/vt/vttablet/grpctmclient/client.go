@@ -663,6 +663,17 @@ func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Table
 	return response.Position, nil
 }
 
+// UndoDemoteMaster is part of the tmclient.TabletManagerClient interface.
+func (client *Client) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error {
+	cc, c, err := client.dial(tablet)
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	_, err = c.UndoDemoteMaster(ctx, &tabletmanagerdatapb.UndoDemoteMasterRequest{})
+	return err
+}
+
 // PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface.
 func (client *Client) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topodatapb.Tablet, pos string) (string, error) {
 	cc, c, err := client.dial(tablet)
