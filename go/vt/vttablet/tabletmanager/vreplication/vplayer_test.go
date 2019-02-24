@@ -129,7 +129,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src2 values(1, 2, 3)",
 		output: []string{
 			"begin",
-			"insert into dst2 set id=1, val1=2, sval2=3, rcount=1 on duplicate key update val1=2, sval2=sval2+3, rcount=rcount+1",
+			"insert into dst2 set id=1, val1=2, sval2=ifnull(3, 0), rcount=1 on duplicate key update val1=2, sval2=sval2+ifnull(3, 0), rcount=rcount+1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
@@ -142,7 +142,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update src2 set val1=5, val2=1 where id=1",
 		output: []string{
 			"begin",
-			"update dst2 set val1=5, sval2=sval2-3+1 where id=1",
+			"update dst2 set val1=5, sval2=sval2-ifnull(3, 0)+ifnull(1, 0), rcount=rcount where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
@@ -155,7 +155,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "delete from src2 where id=1",
 		output: []string{
 			"begin",
-			"update dst2 set val1=NULL, sval2=sval2-1, rcount=rcount-1 where id=1",
+			"update dst2 set val1=null, sval2=sval2-ifnull(1, 0), rcount=rcount-1 where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
@@ -310,7 +310,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}{{
 		// Start with all nulls
 		input:  "insert into t1 values(1, null, null, null)",
-		output: "insert into t1 set id=1, grouped=null, ungrouped=null, summed=0, rcount=1 on duplicate key update ungrouped=null, summed=summed, rcount=rcount+1",
+		output: "insert into t1 set id=1, grouped=null, ungrouped=null, summed=ifnull(null, 0), rcount=1 on duplicate key update ungrouped=null, summed=summed+ifnull(null, 0), rcount=rcount+1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "", "0", "1"},
@@ -318,7 +318,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}, {
 		// null to null values
 		input:  "update t1 set grouped=1 where id=1",
-		output: "",
+		output: "update t1 set ungrouped=null, summed=summed-ifnull(null, 0)+ifnull(null, 0), rcount=rcount where id=1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "", "0", "1"},
@@ -326,7 +326,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}, {
 		// null to non-null values
 		input:  "update t1 set ungrouped=1, summed=1 where id=1",
-		output: "update t1 set ungrouped=1, summed=summed+1 where id=1",
+		output: "update t1 set ungrouped=1, summed=summed-ifnull(null, 0)+ifnull(1, 0), rcount=rcount where id=1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "1", "1", "1"},
@@ -334,7 +334,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}, {
 		// non-null to non-null values
 		input:  "update t1 set ungrouped=2, summed=2 where id=1",
-		output: "update t1 set ungrouped=2, summed=summed-1+2 where id=1",
+		output: "update t1 set ungrouped=2, summed=summed-ifnull(1, 0)+ifnull(2, 0), rcount=rcount where id=1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "2", "2", "1"},
@@ -342,7 +342,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}, {
 		// non-null to null values
 		input:  "update t1 set ungrouped=null, summed=null where id=1",
-		output: "update t1 set ungrouped=null, summed=summed-2 where id=1",
+		output: "update t1 set ungrouped=null, summed=summed-ifnull(2, 0)+ifnull(null, 0), rcount=rcount where id=1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "", "0", "1"},
@@ -350,7 +350,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}, {
 		// insert non-null values
 		input:  "insert into t1 values(2, 2, 3, 4)",
-		output: "insert into t1 set id=2, grouped=2, ungrouped=3, summed=4, rcount=1 on duplicate key update ungrouped=3, summed=summed+4, rcount=rcount+1",
+		output: "insert into t1 set id=2, grouped=2, ungrouped=3, summed=ifnull(4, 0), rcount=1 on duplicate key update ungrouped=3, summed=summed+ifnull(4, 0), rcount=rcount+1",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "", "0", "1"},
@@ -359,7 +359,7 @@ func TestPlayerUpdates(t *testing.T) {
 	}, {
 		// delete non-null values
 		input:  "delete from t1 where id=2",
-		output: "update t1 set ungrouped=NULL, summed=summed-4, rcount=rcount-1 where id=2",
+		output: "update t1 set ungrouped=null, summed=summed-ifnull(4, 0), rcount=rcount-1 where id=2",
 		table:  "t1",
 		data: [][]string{
 			{"1", "", "", "0", "1"},
@@ -416,9 +416,9 @@ func TestPlayerRowMove(t *testing.T) {
 	})
 	expectDBClientQueries(t, []string{
 		"begin",
-		"insert into dst set val1=1, sval2=1, rcount=1 on duplicate key update sval2=sval2+1, rcount=rcount+1",
-		"insert into dst set val1=2, sval2=2, rcount=1 on duplicate key update sval2=sval2+2, rcount=rcount+1",
-		"insert into dst set val1=2, sval2=3, rcount=1 on duplicate key update sval2=sval2+3, rcount=rcount+1",
+		"insert into dst set val1=1, sval2=ifnull(1, 0), rcount=1 on duplicate key update sval2=sval2+ifnull(1, 0), rcount=rcount+1",
+		"insert into dst set val1=2, sval2=ifnull(2, 0), rcount=1 on duplicate key update sval2=sval2+ifnull(2, 0), rcount=rcount+1",
+		"insert into dst set val1=2, sval2=ifnull(3, 0), rcount=1 on duplicate key update sval2=sval2+ifnull(3, 0), rcount=rcount+1",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
@@ -432,8 +432,8 @@ func TestPlayerRowMove(t *testing.T) {
 	})
 	expectDBClientQueries(t, []string{
 		"begin",
-		"update dst set sval2=sval2-3, rcount=rcount-1 where val1=2",
-		"insert into dst set val1=1, sval2=4, rcount=1 on duplicate key update sval2=sval2+4, rcount=rcount+1",
+		"update dst set sval2=sval2-ifnull(3, 0), rcount=rcount-1 where val1=2",
+		"insert into dst set val1=1, sval2=ifnull(4, 0), rcount=1 on duplicate key update sval2=sval2+ifnull(4, 0), rcount=rcount+1",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
