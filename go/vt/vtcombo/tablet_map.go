@@ -671,6 +671,10 @@ func (itmc *internalTabletManagerClient) DemoteMaster(ctx context.Context, table
 	return "", fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topodatapb.Tablet, pos string) (string, error) {
 	return "", fmt.Errorf("not implemented in vtcombo")
 }

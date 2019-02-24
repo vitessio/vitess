@@ -282,6 +282,12 @@ class TestBackup(unittest.TestCase):
     # backup the slave
     utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
 
+    # check that the backup shows up in the listing
+    backups = self._list_backups()
+    logging.debug('list of backups: %s', backups)
+    self.assertEqual(len(backups), 1)
+    self.assertTrue(backups[0].endswith(tablet_replica1.tablet_alias))
+
     # insert more data on the master
     self._insert_data(tablet_master, 2)
 
@@ -303,12 +309,6 @@ class TestBackup(unittest.TestCase):
       self.assertEqual(metadata['PromotionRule'], 'neutral')
     else:
       self.assertEqual(metadata['PromotionRule'], 'must_not')
-
-    # check that the backup shows up in the listing
-    backups = self._list_backups()
-    logging.debug('list of backups: %s', backups)
-    self.assertEqual(len(backups), 1)
-    self.assertTrue(backups[0].endswith(tablet_replica1.tablet_alias))
 
     # remove the backup and check that the list is empty
     self._remove_backup(backups[0])

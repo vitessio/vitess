@@ -378,6 +378,12 @@ message DemoteMasterResponse {
   string position = 1;
 }
 
+message UndoDemoteMasterRequest {
+}
+
+message UndoDemoteMasterResponse {
+}
+
 message PromoteSlaveWhenCaughtUpRequest {
   string position = 1;
 }

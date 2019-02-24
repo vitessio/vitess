@@ -157,6 +157,9 @@ service TabletManager {
   // DemoteMaster tells the soon-to-be-former master it's gonna change
   rpc DemoteMaster(tabletmanagerdata.DemoteMasterRequest) returns (tabletmanagerdata.DemoteMasterResponse) {};
 
+  // UndoDemoteMaster reverts all changes made by DemoteMaster
+  rpc UndoDemoteMaster(tabletmanagerdata.UndoDemoteMasterRequest) returns (tabletmanagerdata.UndoDemoteMasterResponse) {};
+
   // PromoteSlaveWhenCaughtUp tells the remote tablet to catch up,
   // and then be the master
   rpc PromoteSlaveWhenCaughtUp(tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest) returns (tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse) {};
