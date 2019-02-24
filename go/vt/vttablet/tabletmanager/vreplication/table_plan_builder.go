@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -74,22 +75,46 @@ const (
 
 func buildPlayerPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string) (*PlayerPlan, error) {
 	plan := &PlayerPlan{
-		VStreamFilter: &binlogdatapb.Filter{
-			Rules: make([]*binlogdatapb.Rule, len(filter.Rules)),
-		},
-		TablePlans: make(map[string]*TablePlan),
+		VStreamFilter: &binlogdatapb.Filter{},
+		TargetTables:  make(map[string]*TablePlan),
+		TablePlans:    make(map[string]*TablePlan),
 	}
-	for i, rule := range filter.Rules {
-		if strings.HasPrefix(rule.Match, "/") {
-			plan.VStreamFilter.Rules[i] = rule
-			continue
+	for tableName := range tableKeys {
+		for _, rule := range filter.Rules {
+			switch {
+			case strings.HasPrefix(rule.Match, "/"):
+				expr := strings.Trim(rule.Match, "/")
+				result, err := regexp.MatchString(expr, tableName)
+				if err != nil {
+					return nil, err
+				}
+				if !result {
+					continue
+				}
+				sendRule := &binlogdatapb.Rule{
+					Match:  tableName,
+					Filter: rule.Filter,
+				}
+				plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, sendRule)
+				tablePlan := &TablePlan{
+					Name:     tableName,
+					SendRule: sendRule,
+				}
+				plan.TargetTables[tableName] = tablePlan
+				plan.TablePlans[tableName] = tablePlan
+			case rule.Match == tableName:
+				sendRule, tablePlan, err := buildTablePlan(rule, tableKeys)
+				if err != nil {
+					return nil, err
+				}
+				if _, ok := plan.TablePlans[sendRule.Match]; ok {
+					continue
+				}
+				plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, sendRule)
+				plan.TargetTables[tableName] = tablePlan
+				plan.TablePlans[sendRule.Match] = tablePlan
+			}
 		}
-		sendRule, tablePlan, err := buildTablePlan(rule, tableKeys)
-		if err != nil {
-			return nil, err
-		}
-		plan.VStreamFilter.Rules[i] = sendRule
-		plan.TablePlans[sendRule.Match] = tablePlan
 	}
 	return plan, nil
 }
@@ -111,7 +136,11 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string) (*bi
 			return nil, nil, fmt.Errorf("unsupported qualifier for '*' expression: %v", sqlparser.String(expr))
 		}
 		sendRule.Filter = rule.Filter
-		return sendRule, &TablePlan{Name: rule.Match}, nil
+		tablePlan := &TablePlan{
+			Name:     rule.Match,
+			SendRule: sendRule,
+		}
+		return sendRule, tablePlan, nil
 	}
 
 	tpb := &tablePlanBuilder{
@@ -135,6 +164,7 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string) (*bi
 
 	sendRule.Filter = sqlparser.String(tpb.sendSelect)
 	tablePlan := tpb.generate(tableKeys)
+	tablePlan.SendRule = sendRule
 	return sendRule, tablePlan, nil
 }
 
