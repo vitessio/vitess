@@ -21,13 +21,25 @@ import (
 	"testing"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func TestPlayerPlan(t *testing.T) {
+type TestPlayerPlan struct {
+	VStreamFilter *binlogdatapb.Filter
+	TablePlans    map[string]*TestTablePlan
+}
+
+type TestTablePlan struct {
+	Name         string
+	PKReferences []string `json:",omitempty"`
+	Insert       string   `json:",omitempty"`
+	Update       string   `json:",omitempty"`
+	Delete       string   `json:",omitempty"`
+}
+
+func TestBuildPlayerPlan(t *testing.T) {
 	testcases := []struct {
 		input *binlogdatapb.Filter
-		plan  *PlayerPlan
+		plan  *TestPlayerPlan
 		err   string
 	}{{
 		// Regular expression
@@ -36,13 +48,13 @@ func TestPlayerPlan(t *testing.T) {
 				Match: "/.*",
 			}},
 		},
-		plan: &PlayerPlan{
+		plan: &TestPlayerPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match: "/.*",
 				}},
 			},
-			TablePlans: map[string]*TablePlan{},
+			TablePlans: map[string]*TestTablePlan{},
 		},
 	}, {
 		// '*' expression
@@ -52,14 +64,14 @@ func TestPlayerPlan(t *testing.T) {
 				Filter: "select * from t2",
 			}},
 		},
-		plan: &PlayerPlan{
+		plan: &TestPlayerPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t2",
 					Filter: "select * from t2",
 				}},
 			},
-			TablePlans: map[string]*TablePlan{
+			TablePlans: map[string]*TestTablePlan{
 				"t2": {
 					Name: "t1",
 				},
@@ -73,114 +85,20 @@ func TestPlayerPlan(t *testing.T) {
 				Filter: "select c1, c2 from t2",
 			}},
 		},
-		plan: &PlayerPlan{
+		plan: &TestPlayerPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t2",
 					Filter: "select c1, c2 from t2",
 				}},
 			},
-			TablePlans: map[string]*TablePlan{
+			TablePlans: map[string]*TestTablePlan{
 				"t2": {
-					Name: "t1",
-					ColExprs: []*ColExpr{{
-						ColName: sqlparser.NewColIdent("c1"),
-						ColNum:  0,
-					}, {
-						ColName: sqlparser.NewColIdent("c2"),
-						ColNum:  1,
-					}},
-				},
-			},
-		},
-	}, {
-		// func expr
-		input: &binlogdatapb.Filter{
-			Rules: []*binlogdatapb.Rule{{
-				Match:  "t1",
-				Filter: "select hour(c1) as hc1, day(c2) as dc2 from t2",
-			}},
-		},
-		plan: &PlayerPlan{
-			VStreamFilter: &binlogdatapb.Filter{
-				Rules: []*binlogdatapb.Rule{{
-					Match:  "t2",
-					Filter: "select hour(c1) as hc1, day(c2) as dc2 from t2",
-				}},
-			},
-			TablePlans: map[string]*TablePlan{
-				"t2": {
-					Name: "t1",
-					ColExprs: []*ColExpr{{
-						ColName: sqlparser.NewColIdent("hc1"),
-						ColNum:  0,
-					}, {
-						ColName: sqlparser.NewColIdent("dc2"),
-						ColNum:  1,
-					}},
-				},
-			},
-		},
-	}, {
-		// count expr
-		input: &binlogdatapb.Filter{
-			Rules: []*binlogdatapb.Rule{{
-				Match:  "t1",
-				Filter: "select hour(c1) as hc1, count(*) as c, day(c2) as dc2 from t2",
-			}},
-		},
-		plan: &PlayerPlan{
-			VStreamFilter: &binlogdatapb.Filter{
-				Rules: []*binlogdatapb.Rule{{
-					Match:  "t2",
-					Filter: "select hour(c1) as hc1, day(c2) as dc2 from t2",
-				}},
-			},
-			TablePlans: map[string]*TablePlan{
-				"t2": {
-					Name: "t1",
-					ColExprs: []*ColExpr{{
-						ColName: sqlparser.NewColIdent("hc1"),
-						ColNum:  0,
-					}, {
-						ColName:   sqlparser.NewColIdent("c"),
-						Operation: OpCount,
-					}, {
-						ColName: sqlparser.NewColIdent("dc2"),
-						ColNum:  1,
-					}},
-				},
-			},
-		},
-	}, {
-		// sum expr
-		input: &binlogdatapb.Filter{
-			Rules: []*binlogdatapb.Rule{{
-				Match:  "t1",
-				Filter: "select hour(c1) as hc1, sum(c3) as s, day(c2) as dc2 from t2",
-			}},
-		},
-		plan: &PlayerPlan{
-			VStreamFilter: &binlogdatapb.Filter{
-				Rules: []*binlogdatapb.Rule{{
-					Match:  "t2",
-					Filter: "select hour(c1) as hc1, c3, day(c2) as dc2 from t2",
-				}},
-			},
-			TablePlans: map[string]*TablePlan{
-				"t2": {
-					Name: "t1",
-					ColExprs: []*ColExpr{{
-						ColName: sqlparser.NewColIdent("hc1"),
-						ColNum:  0,
-					}, {
-						ColName:   sqlparser.NewColIdent("s"),
-						ColNum:    1,
-						Operation: OpSum,
-					}, {
-						ColName: sqlparser.NewColIdent("dc2"),
-						ColNum:  2,
-					}},
+					Name:         "t1",
+					PKReferences: []string{"c1"},
+					Insert:       "insert into t1 set c1=:a_c1, c2=:a_c2",
+					Update:       "update t1 set c2=:a_c2 where c1=:b_c1",
+					Delete:       "delete from t1 where c1=:b_c1",
 				},
 			},
 		},
@@ -192,29 +110,20 @@ func TestPlayerPlan(t *testing.T) {
 				Filter: "select c1, c2, c3 from t2 group by c3, c1",
 			}},
 		},
-		plan: &PlayerPlan{
+		plan: &TestPlayerPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t2",
 					Filter: "select c1, c2, c3 from t2",
 				}},
 			},
-			TablePlans: map[string]*TablePlan{
+			TablePlans: map[string]*TestTablePlan{
 				"t2": {
-					Name: "t1",
-					ColExprs: []*ColExpr{{
-						ColName:   sqlparser.NewColIdent("c1"),
-						ColNum:    0,
-						IsGrouped: true,
-					}, {
-						ColName: sqlparser.NewColIdent("c2"),
-						ColNum:  1,
-					}, {
-						ColName:   sqlparser.NewColIdent("c3"),
-						ColNum:    2,
-						IsGrouped: true,
-					}},
-					OnInsert: InsertOndup,
+					Name:         "t1",
+					PKReferences: []string{"c1"},
+					Insert:       "insert into t1 set c1=:a_c1, c2=:a_c2, c3=:a_c3 on duplicate key update c2=:a_c2",
+					Update:       "update t1 set c2=:a_c2 where c1=:b_c1",
+					Delete:       "update t1 set c2=null where c1=:b_c1",
 				},
 			},
 		},
@@ -226,30 +135,67 @@ func TestPlayerPlan(t *testing.T) {
 				Filter: "select c1, c2, c3 from t2 group by c3, c1, c2",
 			}},
 		},
-		plan: &PlayerPlan{
+		plan: &TestPlayerPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t2",
 					Filter: "select c1, c2, c3 from t2",
 				}},
 			},
-			TablePlans: map[string]*TablePlan{
+			TablePlans: map[string]*TestTablePlan{
 				"t2": {
-					Name: "t1",
-					ColExprs: []*ColExpr{{
-						ColName:   sqlparser.NewColIdent("c1"),
-						ColNum:    0,
-						IsGrouped: true,
-					}, {
-						ColName:   sqlparser.NewColIdent("c2"),
-						ColNum:    1,
-						IsGrouped: true,
-					}, {
-						ColName:   sqlparser.NewColIdent("c3"),
-						ColNum:    2,
-						IsGrouped: true,
-					}},
-					OnInsert: InsertIgnore,
+					Name:         "t1",
+					PKReferences: []string{"c1"},
+					Insert:       "insert ignore into t1 set c1=:a_c1, c2=:a_c2, c3=:a_c3",
+					Update:       "insert ignore into t1 set c1=:a_c1, c2=:a_c2, c3=:a_c3",
+				},
+			},
+		},
+	}, {
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select foo(a) as c1, b c2 from t1",
+			}},
+		},
+		plan: &TestPlayerPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select a, b from t1",
+				}},
+			},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					Name:         "t1",
+					PKReferences: []string{"a"},
+					Insert:       "insert into t1 set c1=foo(:a_a), c2=:a_b",
+					Update:       "update t1 set c2=:a_b where c1=(foo(:b_a))",
+					Delete:       "delete from t1 where c1=(foo(:b_a))",
+				},
+			},
+		},
+	}, {
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select a + b as c1, c as c2 from t1",
+			}},
+		},
+		plan: &TestPlayerPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select a, b, c from t1",
+				}},
+			},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					Name:         "t1",
+					PKReferences: []string{"a", "b"},
+					Insert:       "insert into t1 set c1=:a_a + :a_b, c2=:a_c",
+					Update:       "update t1 set c2=:a_c where c1=(:b_a + :b_b)",
+					Delete:       "delete from t1 where c1=(:b_a + :b_b)",
 				},
 			},
 		},
@@ -371,24 +317,6 @@ func TestPlayerPlan(t *testing.T) {
 		},
 		err: "unexpected: sum(a + b)",
 	}, {
-		// unsupported func
-		input: &binlogdatapb.Filter{
-			Rules: []*binlogdatapb.Rule{{
-				Match:  "t1",
-				Filter: "select foo(a) as c from t1",
-			}},
-		},
-		err: "unexpected: foo(a)",
-	}, {
-		// no complex expr in select
-		input: &binlogdatapb.Filter{
-			Rules: []*binlogdatapb.Rule{{
-				Match:  "t1",
-				Filter: "select a + b from t1",
-			}},
-		},
-		err: "unexpected: a + b",
-	}, {
 		// no complex expr in group by
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -417,8 +345,12 @@ func TestPlayerPlan(t *testing.T) {
 		err: "group by expression is not allowed to reference an aggregate expression: a",
 	}}
 
+	tableKeys := map[string][]string{
+		"t1": {"c1"},
+	}
+
 	for _, tcase := range testcases {
-		plan, err := buildPlayerPlan(tcase.input)
+		plan, err := buildPlayerPlan(tcase.input, tableKeys)
 		gotPlan, _ := json.Marshal(plan)
 		wantPlan, _ := json.Marshal(tcase.plan)
 		if string(gotPlan) != string(wantPlan) {

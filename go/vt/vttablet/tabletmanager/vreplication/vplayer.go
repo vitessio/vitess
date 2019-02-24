@@ -25,12 +25,10 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -69,6 +67,8 @@ type vplayer struct {
 	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
 	timeOffsetNs int64
 	stopPos      mysql.Position
+
+	tableKeys map[string][]string
 
 	// pplan is built based on the source Filter at the beginning.
 	pplan *PlayerPlan
@@ -130,7 +130,12 @@ func (vp *vplayer) play(ctx context.Context) error {
 	}
 	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, source: %v, filter: %v", vp.id, startPos, vp.stopPos, vp.sourceTablet, vp.source)
 
-	plan, err := buildPlayerPlan(vp.source.Filter)
+	tableKeys, err := vp.buildTableKeys()
+	if err != nil {
+		return err
+	}
+	vp.tableKeys = tableKeys
+	plan, err := buildPlayerPlan(vp.source.Filter, tableKeys)
 	if err != nil {
 		return err
 	}
@@ -196,6 +201,22 @@ func (vp *vplayer) play(ctx context.Context) error {
 		}
 		return err
 	}
+}
+
+func (vp *vplayer) buildTableKeys() (map[string][]string, error) {
+	schema, err := vp.mysqld.GetSchema(vp.dbClient.DBName(), []string{"/.*/"}, nil, false)
+	if err != nil {
+		return nil, err
+	}
+	tableKeys := make(map[string][]string)
+	for _, td := range schema.TableDefinitions {
+		if len(td.PrimaryKeyColumns) != 0 {
+			tableKeys[td.Name] = td.PrimaryKeyColumns
+		} else {
+			tableKeys[td.Name] = td.Columns
+		}
+	}
+	return tableKeys, nil
 }
 
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
@@ -384,58 +405,21 @@ func (vp *vplayer) setState(state, message string) error {
 
 func (vp *vplayer) updatePlan(fieldEvent *binlogdatapb.FieldEvent) error {
 	prelim := vp.pplan.TablePlans[fieldEvent.TableName]
-	tplan := &TablePlan{
-		Name: fieldEvent.TableName,
+	if prelim == nil {
+		prelim = &TablePlan{
+			Name: fieldEvent.TableName,
+		}
 	}
-	if prelim != nil {
-		*tplan = *prelim
+	if prelim.Insert != nil {
+		prelim.Fields = fieldEvent.Fields
+		vp.tplans[fieldEvent.TableName] = prelim
+		return nil
+	}
+	tplan, err := buildTablePlanFromFields(prelim.Name, fieldEvent.Fields, vp.tableKeys)
+	if err != nil {
+		return err
 	}
 	tplan.Fields = fieldEvent.Fields
-
-	if tplan.ColExprs == nil {
-		tplan.ColExprs = make([]*ColExpr, len(tplan.Fields))
-		for i, field := range tplan.Fields {
-			tplan.ColExprs[i] = &ColExpr{
-				ColName: sqlparser.NewColIdent(field.Name),
-				ColNum:  i,
-			}
-		}
-	} else {
-		for _, cExpr := range tplan.ColExprs {
-			if cExpr.ColNum >= len(tplan.Fields) {
-				// Unreachable code.
-				return fmt.Errorf("columns received from vreplication: %v, do not match expected: %v", tplan.Fields, tplan.ColExprs)
-			}
-		}
-	}
-
-	pkcols, err := vp.mysqld.GetPrimaryKeyColumns(vp.dbClient.DBName(), tplan.Name)
-	if err != nil {
-		return fmt.Errorf("error fetching pk columns for %s: %v", tplan.Name, err)
-	}
-	if len(pkcols) == 0 {
-		// If the table doesn't have a PK, then we treat all columns as PK.
-		pkcols, err = vp.mysqld.GetColumns(vp.dbClient.DBName(), tplan.Name)
-		if err != nil {
-			return fmt.Errorf("error fetching pk columns for %s: %v", tplan.Name, err)
-		}
-	}
-	for _, pkcol := range pkcols {
-		found := false
-		for i, cExpr := range tplan.ColExprs {
-			if cExpr.ColName.EqualString(pkcol) {
-				found = true
-				tplan.PKCols = append(tplan.PKCols, &ColExpr{
-					ColName: cExpr.ColName,
-					ColNum:  i,
-				})
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("primary key column %s missing from select list for table %s", pkcol, tplan.Name)
-		}
-	}
 	vp.tplans[fieldEvent.TableName] = tplan
 	return nil
 }
@@ -446,7 +430,11 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
 	for _, change := range rowEvent.RowChanges {
-		for _, query := range tplan.GenerateStatements(change) {
+		queries, err := tplan.generateStatements(change)
+		if err != nil {
+			return err
+		}
+		for _, query := range queries {
 			if err := vp.exec(ctx, query); err != nil {
 				return err
 			}
@@ -489,14 +477,4 @@ func (vp *vplayer) exec(ctx context.Context, sql string) error {
 		return err
 	}
 	return nil
-}
-
-func encodeValue(sql *sqlparser.TrackedBuffer, value sqltypes.Value) {
-	// This is currently a separate function because special handling
-	// may be needed for certain types.
-	// Previously, this function used to convert timestamp to the session
-	// time zone, but we now set the session timezone to UTC. So, the timestamp
-	// value we receive as UTC can be sent as is.
-	// TODO(sougou): handle BIT data type here?
-	value.EncodeSQL(sql)
 }
