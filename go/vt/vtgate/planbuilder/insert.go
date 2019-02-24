@@ -153,14 +153,21 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 		for colIdx, col := range colVindex.Columns {
 			routeValues[vIdx].Values[colIdx].Values = make([]sqltypes.PlanValue, len(rows))
 			colNum := findOrAddColumn(ins, col)
-			// swap bind variables
-			baseName := ":_" + col.CompliantName()
 			for rowNum, row := range rows {
 				innerpv, err := sqlparser.NewPlanValue(row[colNum])
 				if err != nil {
 					return nil, fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
 				}
 				routeValues[vIdx].Values[colIdx].Values[rowNum] = innerpv
+			}
+		}
+	}
+	for _, colVindex := range eins.Table.ColumnVindexes {
+		for _, col := range colVindex.Columns {
+			colNum := findOrAddColumn(ins, col)
+			// swap bind variables
+			baseName := ":_" + col.CompliantName()
+			for rowNum, row := range rows {
 				row[colNum] = sqlparser.NewValArg([]byte(baseName + strconv.Itoa(rowNum)))
 			}
 		}
