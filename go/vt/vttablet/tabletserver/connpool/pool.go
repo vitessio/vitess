@@ -170,7 +170,7 @@ func (cp *Pool) SetCapacity(capacity int) (err error) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	if cp.connections != nil {
-		err = cp.connections.SetCapacity(capacity)
+		err = cp.connections.SetCapacity(capacity, true)
 		if err != nil {
 			return err
 		}
@@ -205,7 +205,7 @@ func (cp *Pool) Capacity() int64 {
 	if p == nil {
 		return 0
 	}
-	return p.Capacity()
+	return int64(p.Capacity())
 }
 
 // Available returns the number of available connections in the pool
@@ -214,7 +214,7 @@ func (cp *Pool) Available() int64 {
 	if p == nil {
 		return 0
 	}
-	return p.Available()
+	return int64(p.Available())
 }
 
 // Active returns the number of active connections in the pool
@@ -223,7 +223,7 @@ func (cp *Pool) Active() int64 {
 	if p == nil {
 		return 0
 	}
-	return p.Active()
+	return int64(p.Active())
 }
 
 // MinActive returns the of connections in the pool to keep active
@@ -232,7 +232,7 @@ func (cp *Pool) MinActive() int64 {
 	if p == nil {
 		return 0
 	}
-	return p.MinActive()
+	return int64(p.MinActive())
 }
 
 // InUse returns the number of in-use connections in the pool
@@ -241,7 +241,7 @@ func (cp *Pool) InUse() int64 {
 	if p == nil {
 		return 0
 	}
-	return p.InUse()
+	return int64(p.InUse())
 }
 
 // MaxCap returns the maximum size of the pool
@@ -250,7 +250,7 @@ func (cp *Pool) MaxCap() int64 {
 	if p == nil {
 		return 0
 	}
-	return p.MaxCap()
+	return int64(p.MaxCap())
 }
 
 // WaitCount returns how many clients are waiting for a connection
