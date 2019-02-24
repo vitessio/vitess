@@ -84,13 +84,21 @@ type State struct {
 	InUse       int
 	Capacity    int
 	MinActive   int
-	IdleTimeout time.Duration
-	IdleClosed  int
-	WaitCount   int
-	WaitTime    time.Duration
 	Closed      bool
+	IdleTimeout time.Duration
+
+	// IdleClosed tracks the number of resources closed due to being idle.
+	IdleClosed  int64
+
+	// WaitCount contains the number of times Get() had to block and wait
+	// for a resource.
+	WaitCount   int64
+
+	// WaitCount tracks the total time waiting for a resource.
+	WaitTime    time.Duration
 }
 
+// setCapacityRequest is used to send over the setCapacity channel.
 type setCapacityRequest struct {
 	capacity int
 	block    bool
@@ -626,7 +634,7 @@ func (rp *ResourcePool) MaxCap() int {
 }
 
 // WaitCount returns the total number of waits.
-func (rp *ResourcePool) WaitCount() int {
+func (rp *ResourcePool) WaitCount() int64 {
 	return rp.State().WaitCount
 }
 
@@ -641,6 +649,6 @@ func (rp *ResourcePool) IdleTimeout() time.Duration {
 }
 
 // IdleClosed returns the count of resources closed due to idle timeout.
-func (rp *ResourcePool) IdleClosed() int {
+func (rp *ResourcePool) IdleClosed() int64 {
 	return rp.State().IdleClosed
 }
