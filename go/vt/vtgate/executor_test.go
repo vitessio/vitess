@@ -390,6 +390,9 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set net_write_timeout = 600",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
+		in:  "set sql_mode = 'STRICT_ALL_TABLES'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
 		in:  "set net_read_timeout = 600",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
