@@ -20,11 +20,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -44,6 +46,16 @@ var (
 	dbLockRetryDelay = 1 * time.Second
 	relayLogMaxSize  = 10000
 	relayLogMaxItems = 1000
+
+	// CreateCopyState is the list of statements to execute for creating
+	// the _vt.copy_state table
+	CreateCopyState = []string{
+		"create database if not exists _vt",
+		`create table if not exists _vt.copy_state (
+  vrepl_id int,
+  table_name varbinary(128),
+  last_pk varbinary(2000),
+  primary key (vrepl_id, table_name))`}
 )
 
 type vplayer struct {
@@ -217,6 +229,46 @@ func (vp *vplayer) buildTableKeys() (map[string][]string, error) {
 		}
 	}
 	return tableKeys, nil
+}
+
+func (vp *vplayer) populateCopyState(ctx context.Context) error {
+	defer vp.dbClient.Rollback()
+
+	// Check if table exists.
+	if _, err := vp.dbClient.ExecuteFetch("select * from _vt.copy_state limit 1", 10); err != nil {
+		// If it's a not found error, create it.
+		merr, isSQLErr := err.(*mysql.SQLError)
+		if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb) {
+			return err
+		}
+		log.Info("Looks like _vt.copy_state table may not exist. Trying to create... ")
+		for _, query := range CreateCopyState {
+			if _, merr := vp.dbClient.ExecuteFetch(query, 0); merr != nil {
+				log.Errorf("Failed to ensure _vt.copy_state table exists: %v", merr)
+				return err
+			}
+		}
+	}
+	if err := vp.dbClient.Begin(); err != nil {
+		return err
+	}
+	// Insert the table list only if at least one table matches.
+	if len(vp.pplan.TargetTables) != 0 {
+		var buf strings.Builder
+		buf.WriteString("insert into _vt.copy_state(vrepl_id, table_name) values ")
+		prefix := ""
+		for name := range vp.pplan.TargetTables {
+			fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vp.id, encodeString(name))
+			prefix = ", "
+		}
+		if _, err := vp.dbClient.ExecuteFetch(buf.String(), 1); err != nil {
+			return err
+		}
+	}
+	if err := vp.setState(binlogplayer.VReplicationCopying, ""); err != nil {
+		return err
+	}
+	return vp.dbClient.Commit()
 }
 
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
@@ -477,4 +529,10 @@ func (vp *vplayer) exec(ctx context.Context, sql string) error {
 		return err
 	}
 	return nil
+}
+
+func encodeString(in string) string {
+	var buf strings.Builder
+	sqltypes.NewVarChar(in).EncodeSQL(&buf)
+	return buf.String()
 }

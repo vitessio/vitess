@@ -52,6 +52,10 @@ var (
 	// BlplTransaction is the key for the stats map.
 	BlplTransaction = "Transaction"
 
+	// VReplicationInit is for the Init state.
+	VReplicationInit = "Init"
+	// VReplicationCopying is for the Copying state.
+	VReplicationCopying = "Copying"
 	// BlpRunning is for the Running state.
 	BlpRunning = "Running"
 	// BlpStopped is for the Stopped state.
