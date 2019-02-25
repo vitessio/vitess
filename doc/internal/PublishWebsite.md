@@ -66,7 +66,7 @@ The boiler plate markdown files have multiple purposes:
     the file
 *   re-arrange paths on the website e.g.
     [`doc/GitHubWorkFlow.md`](https://github.com/vitessio/vitess/blob/master/doc/GitHubWorkflow.md)
-    is actually served as http://vitess.io/contributing/github-workflow/
+    is actually served as https://vitess.io/docs/contributing/github-workflow/
     because there is the file
     [`vitess.io/contributing/github-workflow.md`](https://github.com/vitessio/vitess/blob/master/vitess.io/contributing/github-workflow.md).
 
