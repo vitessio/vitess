@@ -185,8 +185,8 @@ func interceptors() []grpc.ServerOption {
 	}
 
 	if *grpccommon.EnableGRPCPrometheus {
-		streamInterceptor = mergeS(streamInterceptor, grpc_prometheus.StreamServerInterceptor)
-		unaryInterceptor = mergeU(unaryInterceptor, grpc_prometheus.UnaryServerInterceptor)
+		streamInterceptor = mergeStreamServerInterceptor(streamInterceptor, grpc_prometheus.StreamServerInterceptor)
+		unaryInterceptor = mergeUnaryServerInterceptor(unaryInterceptor, grpc_prometheus.UnaryServerInterceptor)
 	}
 
 	if streamInterceptor == nil {
@@ -196,14 +196,14 @@ func interceptors() []grpc.ServerOption {
 	}
 }
 
-func mergeS(a,b grpc.StreamServerInterceptor) grpc.StreamServerInterceptor {
+func mergeStreamServerInterceptor(a,b grpc.StreamServerInterceptor) grpc.StreamServerInterceptor {
 	if a == nil {
 		return b
 	}
 	return grpc_middleware.ChainStreamServer(a, b)
 }
 
-func mergeU(a,b grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
+func mergeUnaryServerInterceptor(a,b grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
 	if a == nil {
 		return b
 	}
