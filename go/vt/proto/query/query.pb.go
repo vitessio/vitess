@@ -225,7 +225,7 @@ const (
 	// SET specifies a SET type.
 	// Properties: 27, IsQuoted.
 	Type_SET Type = 2075
-	// TUPLE specifies a a tuple. This cannot
+	// TUPLE specifies a tuple. This cannot
 	// be returned in a QueryResult, but it can
 	// be sent as a bind var.
 	// Properties: 28, None.
