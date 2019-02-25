@@ -53,7 +53,12 @@ func FailFactory() (Resource, error) {
 
 func SlowFailFactory() (Resource, error) {
 	time.Sleep(10 * time.Millisecond)
-	return nil, errors.New("Failed")
+	return FailFactory()
+}
+
+func SlowCreateFactory() (Resource, error) {
+	time.Sleep(10 * time.Millisecond)
+	return PoolFactory()
 }
 
 type SlowCloseResource struct {
@@ -91,12 +96,15 @@ func putChecked(t *testing.T, p *ResourcePool, r Resource) {
 
 func TestOpen(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 2, 0, 0)
+	defer p.Close()
+
 	require.Equal(t, State{Capacity: 1}, p.State())
 }
 
 func TestGetPut(t *testing.T) {
 	lastID.Set(0)
 	p := NewResourcePool(PoolFactory, 1, 1, 0, 0)
+	defer p.Close()
 
 	r := getChecked(t, p).(*TestResource)
 	require.Equal(t, r.num, int64(1))
@@ -108,6 +116,8 @@ func TestGetPut(t *testing.T) {
 
 func TestPutEmpty(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 1, 0, 0)
+	defer p.Close()
+
 	getChecked(t, p)
 	putChecked(t, p, nil)
 
@@ -117,6 +127,8 @@ func TestPutEmpty(t *testing.T) {
 
 func TestDrainBlock(t *testing.T) {
 	p := NewResourcePool(SlowCloseFactory, 3, 3, 0, 0)
+	defer p.Close()
+
 	var resources []Resource
 	for i := 0; i < 3; i++ {
 		resources = append(resources, getChecked(t, p))
@@ -138,10 +150,15 @@ func TestDrainBlock(t *testing.T) {
 
 	<-done
 	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
+
+	// Clean up so p.Close() can run properly.
+	putChecked(t, p, resources[2])
 }
 
 func TestDrainNoBlock(t *testing.T) {
 	p := NewResourcePool(SlowCloseFactory, 2, 2, 0, 0)
+	defer p.Close()
+
 	var resources []Resource
 	for i := 0; i < 2; i++ {
 		resources = append(resources, getChecked(t, p))
@@ -161,24 +178,36 @@ func TestDrainNoBlock(t *testing.T) {
 
 func TestGrowBlock(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 2, 0, 0)
-	getChecked(t, p)
+	defer p.Close()
+
+	a := getChecked(t, p)
 	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
 	require.NoError(t, p.SetCapacity(2, true))
 	time.Sleep(time.Millisecond)
 	require.Equal(t, State{Capacity: 2, InUse: 1}, p.State())
-	getChecked(t, p)
+	b := getChecked(t, p)
 	require.Equal(t, State{Capacity: 2, InUse: 2}, p.State())
+
+	// Clean up
+	putChecked(t, p, a)
+	putChecked(t, p, b)
 }
 
 func TestGrowNoBlock(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 2, 0, 0)
-	getChecked(t, p)
+	defer p.Close()
+
+	a := getChecked(t, p)
 	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
 	require.NoError(t, p.SetCapacity(2, false))
 	time.Sleep(time.Millisecond)
 	require.Equal(t, State{Capacity: 2, InUse: 1}, p.State())
-	getChecked(t, p)
+	b := getChecked(t, p)
 	require.Equal(t, State{Capacity: 2, InUse: 2}, p.State())
+
+	// Clean up
+	putChecked(t, p, a)
+	putChecked(t, p, b)
 }
 
 func TestFull1(t *testing.T) {
@@ -189,6 +218,8 @@ func TestFull1(t *testing.T) {
 	}
 
 	p := NewResourcePool(PoolFactory, 10, 10, 0, 5)
+	defer p.Close()
+
 	require.Equal(t, s(State{InPool: 5}), p.State())
 
 	a := getChecked(t, p)
@@ -224,14 +255,20 @@ func TestFull1(t *testing.T) {
 	putChecked(t, p, b)
 	require.Equal(t, s(State{InPool: 1, InUse: 9, Waiters: 0, WaitCount: 1, WaitTime: wt}), p.State())
 	fmt.Println("simpl6")
+
+	// Clean up
+	for _, r := range resources {
+		putChecked(t, p, r)
+	}
 }
 
 func TestFull2(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	fmt.Println("testfull newresource")
 	p := NewResourcePool(PoolFactory, 6, 6, time.Second, 0)
+	defer p.Close()
+
 	fmt.Println("set cap", p.StatsJSON())
 	err := p.SetCapacity(5, true)
 	require.NoError(t, err)
@@ -554,10 +591,8 @@ func TestClosing(t *testing.T) {
 	// Wait for goroutine to call Close
 	time.Sleep(10 * time.Millisecond)
 	stats := p.StatsJSON()
-	expected := `{"Capacity": 0, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0}`
-	if stats != expected {
-		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
-	}
+	expected := `{"Capacity": 0, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 0, "IdleClosed": 0}`
+	require.Equal(t, expected, stats)
 
 	// Put is allowed when closing
 	for i := 0; i < 5; i++ {
@@ -569,13 +604,12 @@ func TestClosing(t *testing.T) {
 
 	// SetCapacity must be ignored after Close
 	err := p.SetCapacity(1, true)
-	time.Sleep(time.Millisecond)
 	if err == nil {
 		t.Errorf("expecting error")
 	}
 
 	stats = p.StatsJSON()
-	expected = `{"Capacity": 0, "Available": 0, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0}`
+	expected = `{"Capacity": 0, "Available": 0, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 0, "IdleClosed": 0}`
 	require.Equal(t, expected, stats)
 	require.Equal(t, 5, int(lastID.Get()))
 	require.Equal(t, 0, int(count.Get()))
@@ -698,6 +732,7 @@ func TestCreateFail(t *testing.T) {
 	count.Set(0)
 	p := NewResourcePool(FailFactory, 5, 5, time.Second, 0)
 	defer p.Close()
+
 	if _, err := p.Get(ctx); err.Error() != "Failed" {
 		t.Errorf("Expecting Failed, received %v", err)
 	}
@@ -712,6 +747,7 @@ func TestSlowCreateFail(t *testing.T) {
 	count.Set(0)
 	p := NewResourcePool(SlowFailFactory, 2, 2, time.Second, 0)
 	defer p.Close()
+
 	ch := make(chan bool)
 	// The third Get should not wait indefinitely
 	for i := 0; i < 3; i++ {
@@ -728,63 +764,60 @@ func TestSlowCreateFail(t *testing.T) {
 	require.Equal(t, p.Available(), 2)
 }
 
-func TestTimeoutFull(t *testing.T) {
+func TestTimeoutSlow(t *testing.T) {
 	ctx := context.Background()
-	lastID.Set(0)
-	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, time.Second, 0)
+	p := NewResourcePool(SlowCreateFactory, 4, 4, time.Second, 0)
+
 	defer p.Close()
-	r := getChecked(t, p)
-	expected := State{Capacity: 1, InUse: 1, IdleTimeout: time.Second}
-	require.Equal(t, expected, p.State())
 
-	newctx, cancel := context.WithTimeout(ctx, time.Millisecond)
-	_, err := p.Get(newctx)
-	cancel()
+	var resources []Resource
+	for i := 0; i < 4; i++ {
+		resources = append(resources, getChecked(t, p))
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*5))
+	r, err := p.Get(ctx)
 	require.EqualError(t, err, "resource pool timed out")
+	cancel()
 
-	time.Sleep(time.Millisecond * 100)
-	fmt.Printf("%+v\n", p.State())
-	expected.WaitTime = p.State().WaitTime
-	expected.WaitCount = 1
+	expected := State{Capacity: 4, InUse: 4, IdleTimeout: time.Second}
 	require.Equal(t, expected, p.State())
 
-	fmt.Println("PUT GOOD ONE BACK")
-	p.Put(r)
-	time.Sleep(time.Millisecond * 100)
-	fmt.Printf("%+v\n", p.State())
-
-	expected.InUse = 0
-	expected.InPool = 1
-	require.Equal(t, expected, p.State())
+	for _, r = range resources {
+		p.Put(r)
+	}
 }
 
-func TestTimeoutNotFull(t *testing.T) {
+func TestTimeoutPoolFull(t *testing.T) {
 	ctx := context.Background()
-	lastID.Set(0)
-	count.Set(0)
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0)
-	defer p.Close()
+	p := NewResourcePool(PoolFactory, 1, 1, time.Second, 0)
 
-	r := getChecked(t, p)
+	var a, b Resource
+	defer func() {
+		if a != nil {
+			p.Put(a)
+		}
+		if b != nil {
+			p.Put(b)
+		}
+
+		p.Close()
+	}()
+
+	b = getChecked(t, p)
 	expected := State{Capacity: 1, InUse: 1, IdleTimeout: time.Second}
 	require.Equal(t, expected, p.State())
 
-	newctx, cancel := context.WithTimeout(ctx, time.Millisecond)
-	_, err := p.Get(newctx)
+	newctx, cancel := context.WithTimeout(ctx, time.Millisecond*50)
+	a, err := p.Get(newctx)
+	a = nil
 	cancel()
 	require.EqualError(t, err, "resource pool timed out")
 
-	time.Sleep(time.Millisecond * 100)
-	fmt.Printf("%+v\n", p.State())
-	expected.WaitTime = p.State().WaitTime
-	expected.WaitCount = 1
+	time.Sleep(time.Millisecond * 10)
 	require.Equal(t, expected, p.State())
 
-	fmt.Println("PUT GOOD ONE BACK")
-	p.Put(r)
-	time.Sleep(time.Millisecond * 100)
-	fmt.Printf("%+v\n", p.State())
+	p.Put(b)
+	b = nil
 
 	expected.InUse = 0
 	expected.InPool = 1
@@ -833,7 +866,11 @@ func TestMinActiveWithExpiry(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
 	p := NewResourcePool(PoolFactory, 5, 5, timeout, 3)
-	defer p.Close()
+	//defer p.Close()
+
+	require.Equal(t, 3, p.Active())
+
+	expected := State{Capacity: 5, MinActive: 3, IdleTimeout: timeout}
 
 	if count.Get() != 3 {
 		t.Errorf("Expecting 3, received %d", count.Get())
@@ -851,41 +888,31 @@ func TestMinActiveWithExpiry(t *testing.T) {
 	}
 
 	// Should have only ever allocated 4 (3 min, 1 extra).
-	if count.Get() != 4 {
-		t.Errorf("Expecting 4, received %d", count.Get())
-		return
-	}
-	if p.Available() != 1 {
-		t.Errorf("Expecting 1, received %d", p.Available())
-	}
-	if p.Active() != 4 {
-		t.Errorf("Expecting 4, received %d", p.Active())
-	}
+	expected.InUse = 4
+	require.Equal(t, expected, p.State())
+	require.Equal(t, 4, p.Active())
+	require.Equal(t, 4, int(count.Get()))
 
 	// Put one resource back and let it expire.
 	p.Put(resources[0])
 	time.Sleep(timeout * 2)
 
-	if p.Available() != 2 {
-		t.Errorf("Expecting 2, received %d", p.Available())
-	}
-	if p.Active() != 3 {
-		t.Errorf("Expecting 3, received %d", p.Active())
-	}
-	if p.IdleClosed() != 1 {
-		t.Errorf("Expecting 1, received %d", p.IdleClosed())
-	}
+	expected.InPool = 0
+	expected.InUse = 3
+	expected.IdleClosed = 1
+	require.Equal(t, expected, p.State())
+	require.Equal(t, 3, p.Active())
+
+	fmt.Println("shouldnt be closing here...")
 
 	// Put another resource back, and nothing should expire.
 	p.Put(resources[1])
 	time.Sleep(timeout * 2)
 
-	if p.Active() != 3 {
-		t.Errorf("Expecting 3, received %d", p.Active())
-	}
-	if p.IdleClosed() != 2 {
-		t.Errorf("Expecting 2, received %d", p.IdleClosed())
-	}
+	expected.InPool = 1
+	expected.InUse = 2
+	require.Equal(t, expected, p.State())
+	require.Equal(t, 3, p.Active())
 }
 
 func TestMinActiveSelfRefreshing(t *testing.T) {
