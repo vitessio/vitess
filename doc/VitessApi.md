@@ -666,7 +666,7 @@ StreamExecute executes a streaming query based on shards. It depends on the quer
 | <code>BIT</code> | <code>2073</code> | BIT specifies a BIT type. Properties: 25, IsQuoted.  |
 | <code>ENUM</code> | <code>2074</code> | ENUM specifies an ENUM type. Properties: 26, IsQuoted.  |
 | <code>SET</code> | <code>2075</code> | SET specifies a SET type. Properties: 27, IsQuoted.  |
-| <code>TUPLE</code> | <code>28</code> | TUPLE specifies a a tuple. This cannot be returned in a QueryResult, but it can be sent as a bind var. Properties: 28, None.  |
+| <code>TUPLE</code> | <code>28</code> | TUPLE specifies a tuple. This cannot be returned in a QueryResult, but it can be sent as a bind var. Properties: 28, None.  |
 | <code>GEOMETRY</code> | <code>2077</code> | GEOMETRY specifies a GEOMETRY type. Properties: 29, IsQuoted.  |
 | <code>JSON</code> | <code>2078</code> | JSON specified a JSON type. Properties: 30, IsQuoted.  |
 
