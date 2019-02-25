@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/context"
 	"sync"
 	"time"
+	"vitess.io/vitess/go/timer"
 )
 
 var (
@@ -56,8 +57,8 @@ type ResourcePool struct {
 	// pool contains active resources.
 	pool chan resourceWrapper
 
-	// setIdleTimeout is a channel to request the timeout to be changed.
-	setIdleTimeout chan time.Duration
+	// idleTimer is used to terminate idle resources that are in the pool.
+	idleTimer *timer.Timer
 
 	// waitTimers tracks when each waiter started to wait.
 	waitTimers []time.Time
@@ -110,69 +111,20 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	}
 
 	rp := &ResourcePool{
-		factory:       factory,
-		pool:          make(chan resourceWrapper, maxCap),
+		factory: factory,
+		pool:    make(chan resourceWrapper, maxCap),
 	}
 
 	rp.state = State{
-		Capacity:    capacity,
-		MinActive:   minActive,
-		IdleTimeout: idleTimeout,
+		Capacity:  capacity,
+		MinActive: minActive,
 	}
 
+	rp.SetIdleTimeout(idleTimeout)
 	rp.ensureMinimumActive()
 
 	return rp
 }
-
-// run is the main goroutine controlling the resource pool.
-//
-// All communication to and from this goroutine is via channels.
-// The State is updated occasionally atomically.
-//func (rp *ResourcePool) run(state State) {
-//	var idleTick <-chan time.Time
-//	if state.IdleTimeout != 0 {
-//		idleTick = time.Tick(state.IdleTimeout / 10)
-//	}
-//
-//	for {
-//		rp.storeState(state)
-//		rp.ensureMinimumActive(&state)
-//		rp.checkDrainState(&state)
-//
-//		select {
-//		case <-rp.get:
-//			fmt.Println("handleget")
-//			rp.handleGet(&state)
-//			fmt.Println("handlegetdone")
-//
-//		case wrapper := <-rp.put:
-//			rp.handlePut(&state, wrapper)
-//
-//		case capReq := <-rp.setCapacity:
-//			rp.handleSetCapacity(&state, capReq)
-//
-//		case <-idleTick:
-//			rp.closeIdleResources(&state)
-//
-//		case idleTimeout := <-rp.setIdleTimeout:
-//			idleTick = rp.handleSetIdleTimeout(&state, idleTimeout)
-//		}
-//	}
-//}
-
-func (rp *ResourcePool) handleSetIdleTimeout(state *State, idleTimeout time.Duration) <-chan time.Time {
-	state.IdleTimeout = idleTimeout
-	if state.IdleTimeout == 0 {
-		return nil
-	} else {
-		return time.Tick(state.IdleTimeout / 10)
-	}
-}
-
-//func (rp *ResourcePool) storeState(state State) {
-//rp.state.Store(state)
-//}
 
 func (rp *ResourcePool) create() (resourceWrapper, error) {
 	r, err := rp.factory()
@@ -212,35 +164,12 @@ func (rp *ResourcePool) ensureMinimumActive() {
 	}
 }
 
-// closeIdleResources scans the pool for idle resources
-func (rp *ResourcePool) closeIdleResources(state *State) {
-	// Shouldn't be zero, but checking in case.
-	if state.IdleTimeout == 0 {
-		return
-	}
-
-	for i := 0; i < state.InPool; i++ {
-		wrapper := <-rp.pool
-
-		if wrapper.timeUsed.Add(state.IdleTimeout).Sub(time.Now()) < 0 {
-			fmt.Println("closing resource due to timeout")
-			wrapper.resource.Close()
-			wrapper.resource = nil
-			state.IdleClosed++
-			state.InPool--
-			continue
-		}
-
-		// Not expired--back into the pool we go.
-		rp.pool <- wrapper
-	}
-}
-
 // Close empties the pool calling Close on all its resources.
 // You can call Close while there are outstanding resources.
 // It waits for all resources to be returned (Put).
 // After a Close, Get is not allowed.
 func (rp *ResourcePool) Close() {
+	rp.SetIdleTimeout(0)
 	_ = rp.SetCapacity(0, true)
 }
 
@@ -319,32 +248,6 @@ func (rp *ResourcePool) getWaiting(ctx context.Context) (Resource, error) {
 
 }
 
-/*
-func (rp *ResourcePool) handleGet(state *State) {
-	if state.InPool == 0 {
-		if state.InUse < state.Capacity {
-			// The pool is empty and we still have pool capacity.
-			// Hand over an empty wrapper for the caller to instantiate.
-			state.InUse++
-			fmt.Println("get: new")
-			rp.pool <- rp.createEmpty()
-		} else {
-			// The pool is empty but we don't have enough capacity.
-			// The user will be blocked for a resource to be returned to the pool.
-			//
-			// InUse and InPool do not change here, because there has not
-			// been any new resources given, returned, or created.
-			fmt.Println("get: add waiter")
-			rp.waitTimers = append(rp.waitTimers, time.Now())
-			state.Waiters++
-		}
-	} else if state.InPool != 0 {
-		state.InPool--
-		state.InUse++
-	}
-}
-*/
-
 // Put will return a resource to the pool. For every successful Get,
 // a corresponding Put is required. If you no longer need a resource,
 // you will need to call Put(nil) instead of returning the closed resource.
@@ -379,56 +282,6 @@ func (rp *ResourcePool) Put(resource Resource) {
 		//}
 	}
 }
-
-//func (rp *ResourcePool) handlePut(state *State, wrapper *resourceWrapper) {
-//	state.InUse--
-//
-//	// Allow resources to be closed while pool is declared closed.
-//	// Don't place resources back into the pool when we're at
-//	// capacity. This can happen during draining.
-//	fmt.Printf("handlePut %+v %+v\n", wrapper, state)
-//	if state.Closed || rp.Active() > state.Capacity {
-//		if wrapper != nil {
-//			wrapper.resource.Close()
-//		}
-//		return
-//	}
-//
-//	if state.Waiters == 0 {
-//		if wrapper == nil {
-//			return
-//		}
-//
-//		// If we're at capacity already, we need to close.
-//		fmt.Printf("%+v\n", state)
-//		if state.InPool == state.Capacity {
-//			wrapper.resource.Close()
-//			return
-//		}
-//
-//		fmt.Println(len(rp.pool))
-//
-//		state.InPool++
-//		rp.pool <- *wrapper
-//		return
-//	}
-//
-//	// There is a queue of waiters.
-//	state.Waiters--
-//	state.InUse++
-//	if wrapper != nil {
-//		rp.pool <- *wrapper
-//	} else {
-//		// We have a waiter, but the returned resource was nil. We need to create one.
-//		rp.pool <- rp.createEmpty()
-//	}
-//
-//	// Track how many times and long each wait took.
-//	var start time.Time
-//	start, rp.waitTimers = rp.waitTimers[0], rp.waitTimers[1:]
-//	state.WaitCount++
-//	state.WaitTime += time.Now().Sub(start)
-//}
 
 // SetCapacity changes the capacity of the pool.
 // You can use it to shrink or expand, but not beyond
@@ -515,7 +368,66 @@ func (rp *ResourcePool) SetCapacity(capacity int, block bool) error {
 // SetIdleTimeout sets the idle timeout for resources. The timeout is
 // checked at the 10th of the period of the timeout.
 func (rp *ResourcePool) SetIdleTimeout(idleTimeout time.Duration) {
-	rp.setIdleTimeout <- idleTimeout
+	rp.Lock()
+	defer rp.Unlock()
+
+	rp.state.IdleTimeout = idleTimeout
+	fastInterval := rp.state.IdleTimeout / 10
+
+	if rp.idleTimer == nil {
+		rp.idleTimer = timer.NewTimer(fastInterval)
+	}
+
+	if rp.state.IdleTimeout == 0 {
+		rp.idleTimer.Stop()
+		return
+	}
+
+	rp.idleTimer.SetInterval(fastInterval)
+	rp.idleTimer.Start(rp.closeIdleResources)
+}
+
+// closeIdleResources scans the pool for idle resources
+// and closes them.
+func (rp *ResourcePool) closeIdleResources() {
+	rp.Lock()
+
+	// Shouldn't be zero, but checking in case.
+	if rp.state.IdleTimeout == 0 {
+		rp.Unlock()
+		return
+	}
+	rp.Unlock()
+
+	for i := 0; i < rp.state.InPool; i++ {
+		select {
+		case wrapper, ok := <-rp.pool:
+			if !ok {
+				return
+			}
+
+			rp.Lock()
+			if wrapper.timeUsed.Add(rp.state.IdleTimeout).Sub(time.Now()) < 0 {
+				fmt.Println("closing resource due to timeout")
+				rp.state.IdleClosed++
+				rp.state.InPool--
+				rp.Unlock()
+				wrapper.resource.Close()
+				rp.Lock()
+				wrapper.resource = nil
+				continue
+			}
+			rp.Unlock()
+
+			// Not expired--back into the pool we go.
+			rp.pool <- wrapper
+
+		default:
+			// The pool might have been used while we were iterating.
+			// Maybe next time!
+			return
+		}
+	}
 }
 
 // StatsJSON returns the stats in JSON format.
