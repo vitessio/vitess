@@ -11,10 +11,10 @@ keywords:
   - sql
   - database
   - shard
-home: http://vitess.io
+home: https://vitess.io
 sources:
   - https://github.com/vitessio/vitess
 maintainers:
   - name: Vitess Project
     email: vitess@googlegroups.com
-icon: http://vitess.io/images/vitess_logo_with_border.svg
+icon: https://vitess.io/images/vitess_logo_with_border.svg
