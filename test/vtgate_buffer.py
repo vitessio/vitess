@@ -348,7 +348,7 @@ class TestBufferBase(unittest.TestCase):
     # Wait for replica to catch up to master.
     utils.wait_for_replication_pos(master, replica)
 
-    # Wait for at least one second to articially prolong the failover and give
+    # Wait for at least one second to artificially prolong the failover and give
     # the buffer a chance to observe it.
     d = time.time() - start
     min_unavailability_s = 1
