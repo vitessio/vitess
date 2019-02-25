@@ -38,7 +38,7 @@ process:            will check its peer is signed by:  for link:
   vtgate               vtgate client CA                  client -> vtgate
   client               vtgate server CA                  client -> vtgate
 
-Additionnally, we have the following constraints:
+Additionally, we have the following constraints:
 - the client certificate common name is used as immediate
 caller ID by vtgate, and forwarded to vttablet. This allows us to use
 table ACLs on the vttablet side.
