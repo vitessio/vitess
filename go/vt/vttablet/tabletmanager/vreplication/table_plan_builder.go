@@ -93,7 +93,7 @@ func buildPlayerPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string)
 				}
 				sendRule := &binlogdatapb.Rule{
 					Match:  tableName,
-					Filter: rule.Filter,
+					Filter: buildQuery(tableName, rule.Filter),
 				}
 				plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, sendRule)
 				tablePlan := &TablePlan{
@@ -117,6 +117,15 @@ func buildPlayerPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string)
 		}
 	}
 	return plan, nil
+}
+
+func buildQuery(tableName, filter string) string {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("select * from %v", sqlparser.NewTableIdent(tableName))
+	if filter != "" {
+		buf.Myprintf(" where in_keyrange(%v)", sqlparser.NewStrVal([]byte(filter)))
+	}
+	return buf.String()
 }
 
 func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string) (*binlogdatapb.Rule, *TablePlan, error) {
