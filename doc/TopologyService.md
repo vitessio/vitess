@@ -294,7 +294,7 @@ the same server address, and very importantly a *different* root directory.
 [Zookeeper
 Observers](https://zookeeper.apache.org/doc/trunk/zookeeperObservers.html) can
 also be used to limit the load on the global Zookeeper.  They are configured by
-specifying the adresses of the observers in the server address, after a `|`,
+specifying the addresses of the observers in the server address, after a `|`,
 for instance:
 `global_server1:p1,global_server2:p2|observer1:po1,observer2:po2`.
 

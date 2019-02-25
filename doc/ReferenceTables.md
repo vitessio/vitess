@@ -26,7 +26,7 @@ just a corner case of the vertical splits Vitess already supports.
 
 Action items:
 
-* First, this setup probably needs to be explicitely mentioned somewhere in the
+* First, this setup probably needs to be explicitly mentioned somewhere in the
   topology, not just as SourceShard objects in the destination keyspace, so
   Vitess can know about this setup at a higher level. Let's add a `repeated
   ReferenceKeyspace` field to the Keyspace object. Each `ReferenceKeyspace`
@@ -59,7 +59,7 @@ the Reference Tables feature is enabled.
 Action items:
 
 * Each step of the process would know what to do because of the
-  `ReferenceKeyspace` entries in the destinatin keyspace.
+  `ReferenceKeyspace` entries in the destination keyspace.
 
 * `vtctl CopySchemaShard` needs to also copy the schema of the reference tables.
 
@@ -82,7 +82,7 @@ Action items:
 
 ## Other Use Cases
 
-Other scenarios might also need to be supported, or explicitely disabled:
+Other scenarios might also need to be supported, or explicitly disabled:
 
 * Simple schema changes, or complicated Schema Swap in the reference keyspace:
   They would also need to be applied to the destination keyspace, the same way.

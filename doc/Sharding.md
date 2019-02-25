@@ -39,7 +39,7 @@ for your application.
 Vitess allows you to choose the type of sharding scheme by the choice of
 your Primary Vindex for the tables of a shard. Once you have chosen
 the Primary Vindex, you can choose the partitions depending on how the
-resulting keyspace IDs are distirbuted.
+resulting keyspace IDs are distributed.
 
 Vitess calculates the sharding key or keys for each query and then
 routes that query to the appropriate shards. For example, a query
@@ -168,7 +168,7 @@ is performed the following way:
 1. The server process uses the primary vindex to compute the keyspace ID for every
     row coming throug the replication stream, and sends that row to the corresponding
     target shard.
-1. The target shard converts the row into the corresponding DML (Data Manipulation Languate)
+1. The target shard converts the row into the corresponding DML (Data Manipulation Language)
     and applies the statement.
 
 If using RBR, it's generally required that you have full image turned on. However, if your
