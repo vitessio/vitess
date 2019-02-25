@@ -21,9 +21,10 @@ package pools
 import (
 	"errors"
 	"fmt"
-	"golang.org/x/net/context"
 	"sync"
 	"time"
+
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/timer"
 )
 
@@ -33,6 +34,12 @@ var (
 
 	// ErrTimeout is returned if a resource get times out.
 	ErrTimeout = errors.New("resource pool timed out")
+
+	// ErrFull is returned if a put is placed when the pool at capacity.
+	ErrFull = errors.New("resource pool is full")
+
+	// ErrPutBeforeGet is caused when there was a put called before a get.
+	ErrPutBeforeGet = errors.New("a put was placed before get in the resource pool")
 )
 
 // Factory is a function that can be used to create a resource.
@@ -59,19 +66,31 @@ type ResourcePool struct {
 
 	// idleTimer is used to terminate idle resources that are in the pool.
 	idleTimer *timer.Timer
-
-	// waitTimers tracks when each waiter started to wait.
-	waitTimers []time.Time
 }
 
 type State struct {
-	Waiters     int
-	InPool      int
-	InUse       int
+	// Capacity is the maximum number of resources in and out of the pool.
 	Capacity    int
+
+	// InPool is the number of resources in the pool.
+	InPool      int
+
+	// InUse is the number of resources allocated outside of the pool.
+	InUse       int
+
+	// Waiters is the number of Put() callers waiting for a resource when the pool is empty.
+	Waiters     int
+
+	// MinActive maintains a minimum number of active resources.
 	MinActive   int
+
+	// Closed is when the pool is shutting down or already shut down.
 	Closed      bool
+
+	// Draining is set when the new capacity is lower than the number of active resources.
 	Draining    bool
+
+	// IdleTimeout specifies how long to leave a resource in existence within the pool.
 	IdleTimeout time.Duration
 
 	// IdleClosed tracks the number of resources closed due to being idle.
@@ -154,10 +173,10 @@ func (rp *ResourcePool) ensureMinimumActive() {
 			// TODO(gak): How to handle factory error?
 			break
 		}
-		rp.pool <- r
 		rp.Lock()
 		rp.state.InPool++
 		rp.Unlock()
+		rp.pool <- r
 	}
 }
 
@@ -282,18 +301,23 @@ func (rp *ResourcePool) Put(resource Resource) {
 		return
 	}
 
-	rp.state.InPool++
-	rp.pool <- resourceWrapper{
-		resource: resource,
-		timeUsed: time.Now(),
+	if rp.state.InUse < 0 {
+		rp.state.InUse++
+		rp.Unlock()
+		panic(ErrPutBeforeGet)
 	}
 
-	// TODO: functionality to error when putting into a full pool.
-	//select {
-	//case rp.resources <- wrapper:
-	//default:
-	//	panic(errors.New("attempt to Put into a full ResourcePool (2)"))
-	//}
+	w := resourceWrapper{resource: resource, timeUsed: time.Now()}
+	select {
+	case rp.pool <- w:
+		rp.state.InPool++
+	default:
+		// We don't have room.
+		rp.state.InUse++
+		rp.Unlock()
+		panic(ErrFull)
+	}
+
 	rp.Unlock()
 }
 
@@ -346,7 +370,6 @@ func (rp *ResourcePool) SetCapacity(capacity int, block bool) error {
 		for {
 			rp.Lock()
 			remaining := rp.active() - rp.state.Capacity
-			fmt.Printf("drain: remaining %d %+v\n", remaining, rp.state)
 			if remaining <= 0 {
 				rp.state.Draining = false
 				if rp.state.Capacity == 0 {
@@ -360,19 +383,16 @@ func (rp *ResourcePool) SetCapacity(capacity int, block bool) error {
 			rp.Unlock()
 
 			// We can't remove InUse resources, so only target the pool.
-			// Collect the other resources lazily when they're returned.
-			fmt.Println("drain: waiting to close a resource")
-
+			// Collect the InUse resources lazily when they're returned.
 			select {
 			case r := <-rp.pool:
 				r.resource.Close()
-				fmt.Println("drain: closing resource")
 
 				rp.Lock()
 				rp.state.InPool--
 				rp.Unlock()
 
-				//case <-time.After(time.Second):
+			case <-time.After(time.Second):
 				// Someone could have pulled from the pool just before
 				// we started waiting. Let's check the pool status again.
 			}
@@ -442,8 +462,7 @@ func (rp *ResourcePool) closeIdleResources() {
 			}
 
 			rp.Lock()
-			if wrapper.timeUsed.Add(rp.state.IdleTimeout).Sub(time.Now()) < 0 {
-				fmt.Println("CIR: closing resource due to timeout")
+			if wrapper.timeUsed.Add(rp.state.IdleTimeout).After(time.Now()) {
 				rp.state.IdleClosed++
 				rp.state.InPool--
 				rp.Unlock()

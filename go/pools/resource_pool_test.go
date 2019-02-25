@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/require"
-	"runtime"
 	"testing"
 	"time"
 
@@ -79,19 +78,11 @@ func SlowCloseFactory() (Resource, error) {
 	return &SlowCloseResource{lastID.Add(1), false}, nil
 }
 
-func getChecked(t *testing.T, p *ResourcePool) Resource {
+func get(t *testing.T, p *ResourcePool) Resource {
 	t.Helper()
 	r, err := p.Get(context.Background())
 	require.NoError(t, err)
-	runtime.Gosched()
-	time.Sleep(time.Millisecond)
 	return r
-}
-
-func putChecked(t *testing.T, p *ResourcePool, r Resource) {
-	t.Helper()
-	fmt.Println("putChecked", r)
-	p.Put(r)
 }
 
 func TestOpen(t *testing.T) {
@@ -106,11 +97,11 @@ func TestGetPut(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 1, 0, 0)
 	defer p.Close()
 
-	r := getChecked(t, p).(*TestResource)
+	r := get(t, p).(*TestResource)
 	require.Equal(t, r.num, int64(1))
 	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
 
-	putChecked(t, p, r)
+	p.Put(r)
 	require.Equal(t, State{Capacity: 1, InPool: 1}, p.State())
 }
 
@@ -118,11 +109,33 @@ func TestPutEmpty(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 1, 0, 0)
 	defer p.Close()
 
-	getChecked(t, p)
-	putChecked(t, p, nil)
+	get(t, p)
+	p.Put(nil)
 
 	require.Equal(t, len(p.pool), 0)
 	require.Equal(t, State{Capacity: 1}, p.State())
+}
+
+func TestPutWithoutGet(t *testing.T) {
+	p := NewResourcePool(PoolFactory, 1, 1, 0, 0)
+	defer p.Close()
+
+	require.PanicsWithValue(t, ErrPutBeforeGet, func() { p.Put(&TestResource{}) })
+	require.Equal(t, State{Capacity: 1}, p.State())
+}
+
+func TestPutTooFull(t *testing.T) {
+	p := NewResourcePool(PoolFactory, 1, 1, 0, 1)
+	defer p.Close()
+
+	// Not sure how to cause the ErrFull panic naturally, so I'm hacking in a value.
+	p.state.InUse = 1
+
+	require.PanicsWithValue(t, ErrFull, func() { p.Put(&TestResource{}) })
+	require.Equal(t, State{Capacity: 1, MinActive: 1, InPool: 1, InUse: 1}, p.State())
+
+	// Allow p.Close() to not stall on a non-existent resource.
+	p.state.InUse = 0
 }
 
 func TestDrainBlock(t *testing.T) {
@@ -131,9 +144,9 @@ func TestDrainBlock(t *testing.T) {
 
 	var resources []Resource
 	for i := 0; i < 3; i++ {
-		resources = append(resources, getChecked(t, p))
+		resources = append(resources, get(t, p))
 	}
-	putChecked(t, p, resources[0])
+	p.Put(resources[0])
 	require.Equal(t, State{Capacity: 3, InUse: 2, InPool: 1}, p.State())
 
 	done := make(chan bool)
@@ -146,13 +159,13 @@ func TestDrainBlock(t *testing.T) {
 	// The first resource should be closed by now, but waiting for the second to unblock.
 	require.Equal(t, State{Capacity: 1, Draining: true, InUse: 2}, p.State())
 
-	putChecked(t, p, resources[1])
+	p.Put(resources[1])
 
 	<-done
 	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
 
 	// Clean up so p.Close() can run properly.
-	putChecked(t, p, resources[2])
+	p.Put(resources[2])
 }
 
 func TestDrainNoBlock(t *testing.T) {
@@ -161,15 +174,15 @@ func TestDrainNoBlock(t *testing.T) {
 
 	var resources []Resource
 	for i := 0; i < 2; i++ {
-		resources = append(resources, getChecked(t, p))
+		resources = append(resources, get(t, p))
 	}
-	putChecked(t, p, resources[0])
+	p.Put(resources[0])
 	require.Equal(t, State{Capacity: 2, InUse: 1, InPool: 1}, p.State())
 
 	require.NoError(t, p.SetCapacity(1, false))
 	require.Equal(t, State{Capacity: 1, Draining: true, InUse: 1, InPool: 1}, p.State())
 
-	putChecked(t, p, resources[1])
+	p.Put(resources[1])
 
 	// Wait until the resources close, at least 20ms (2 * 10ms per SlowResource)
 	time.Sleep(30 * time.Millisecond)
@@ -180,34 +193,34 @@ func TestGrowBlock(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 2, 0, 0)
 	defer p.Close()
 
-	a := getChecked(t, p)
+	a := get(t, p)
 	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
 	require.NoError(t, p.SetCapacity(2, true))
 	time.Sleep(time.Millisecond)
 	require.Equal(t, State{Capacity: 2, InUse: 1}, p.State())
-	b := getChecked(t, p)
+	b := get(t, p)
 	require.Equal(t, State{Capacity: 2, InUse: 2}, p.State())
 
 	// Clean up
-	putChecked(t, p, a)
-	putChecked(t, p, b)
+	p.Put(a)
+	p.Put(b)
 }
 
 func TestGrowNoBlock(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 2, 0, 0)
 	defer p.Close()
 
-	a := getChecked(t, p)
+	a := get(t, p)
 	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
 	require.NoError(t, p.SetCapacity(2, false))
 	time.Sleep(time.Millisecond)
 	require.Equal(t, State{Capacity: 2, InUse: 1}, p.State())
-	b := getChecked(t, p)
+	b := get(t, p)
 	require.Equal(t, State{Capacity: 2, InUse: 2}, p.State())
 
 	// Clean up
-	putChecked(t, p, a)
-	putChecked(t, p, b)
+	p.Put(a)
+	p.Put(b)
 }
 
 func TestFull1(t *testing.T) {
@@ -222,12 +235,12 @@ func TestFull1(t *testing.T) {
 
 	require.Equal(t, s(State{InPool: 5}), p.State())
 
-	a := getChecked(t, p)
+	a := get(t, p)
 	require.Equal(t, s(State{InPool: 4, InUse: 1}), p.State())
 
 	var resources []Resource
 	for i := 0; i < 9; i++ {
-		resources = append(resources, getChecked(t, p))
+		resources = append(resources, get(t, p))
 	}
 	require.Equal(t, s(State{InPool: 0, InUse: 10}), p.State())
 
@@ -235,7 +248,7 @@ func TestFull1(t *testing.T) {
 	done := make(chan bool)
 	go func() {
 		t.Helper()
-		b = getChecked(t, p)
+		b = get(t, p)
 		done <- true
 	}()
 	time.Sleep(time.Millisecond)
@@ -243,7 +256,7 @@ func TestFull1(t *testing.T) {
 
 	fmt.Println("simpl4")
 
-	putChecked(t, p, a)
+	p.Put(a)
 	fmt.Println("simpl4a")
 	<-done
 	fmt.Println("simpl4b")
@@ -252,13 +265,13 @@ func TestFull1(t *testing.T) {
 	require.Equal(t, s(State{InPool: 0, InUse: 10, Waiters: 0, WaitCount: 1, WaitTime: wt}), p.State())
 
 	fmt.Println("simpl5")
-	putChecked(t, p, b)
+	p.Put(b)
 	require.Equal(t, s(State{InPool: 1, InUse: 9, Waiters: 0, WaitCount: 1, WaitTime: wt}), p.State())
 	fmt.Println("simpl6")
 
 	// Clean up
 	for _, r := range resources {
-		putChecked(t, p, r)
+		p.Put(r)
 	}
 }
 
@@ -433,7 +446,7 @@ func TestShrinking(t *testing.T) {
 	var resources [10]Resource
 	// Leave one empty slot in the pool
 	for i := 0; i < 4; i++ {
-		resources[i] = getChecked(t, p)
+		resources[i] = get(t, p)
 	}
 
 	done := make(chan bool)
@@ -449,7 +462,7 @@ func TestShrinking(t *testing.T) {
 
 	// There are already 2 resources available in the pool.
 	// So, returning one should be enough for SetCapacity to complete.
-	putChecked(t, p, resources[3])
+	p.Put(resources[3])
 	<-done
 
 	time.Sleep(time.Millisecond * 10)
@@ -459,7 +472,7 @@ func TestShrinking(t *testing.T) {
 
 	// Return the rest of the resources
 	for i := 0; i < 3; i++ {
-		putChecked(t, p, resources[i])
+		p.Put(resources[i])
 	}
 	time.Sleep(time.Millisecond * 10)
 	fmt.Printf("2>>>>>>>>>>> %+v\n", p.State())
@@ -772,7 +785,7 @@ func TestTimeoutSlow(t *testing.T) {
 
 	var resources []Resource
 	for i := 0; i < 4; i++ {
-		resources = append(resources, getChecked(t, p))
+		resources = append(resources, get(t, p))
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*5))
 	r, err := p.Get(ctx)
@@ -803,7 +816,7 @@ func TestTimeoutPoolFull(t *testing.T) {
 		p.Close()
 	}()
 
-	b = getChecked(t, p)
+	b = get(t, p)
 	expected := State{Capacity: 1, InUse: 1, IdleTimeout: time.Second}
 	require.Equal(t, expected, p.State())
 
@@ -866,7 +879,7 @@ func TestMinActiveWithExpiry(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
 	p := NewResourcePool(PoolFactory, 5, 5, timeout, 3)
-	//defer p.Close()
+	defer p.Close()
 
 	require.Equal(t, 3, p.Active())
 
@@ -913,6 +926,10 @@ func TestMinActiveWithExpiry(t *testing.T) {
 	expected.InUse = 2
 	require.Equal(t, expected, p.State())
 	require.Equal(t, 3, p.Active())
+
+	// Clean up
+	p.Put(resources[2])
+	p.Put(resources[3])
 }
 
 func TestMinActiveSelfRefreshing(t *testing.T) {
@@ -922,14 +939,14 @@ func TestMinActiveSelfRefreshing(t *testing.T) {
 	// Get 5
 	var resources []Resource
 	for i := 0; i < 5; i++ {
-		resources = append(resources, getChecked(t, p))
+		resources = append(resources, get(t, p))
 	}
 
 	// Put back all nils except one
 	for i := 0; i < 4; i++ {
-		putChecked(t, p, nil)
+		p.Put(nil)
 	}
-	putChecked(t, p, resources[4])
+	p.Put(resources[4])
 
 	require.Equal(t, 3, p.Active())
 }
