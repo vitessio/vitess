@@ -118,18 +118,29 @@ func TestPutEmpty(t *testing.T) {
 }
 
 func TestDrainBlock(t *testing.T) {
-	p := NewResourcePool(SlowCloseFactory, 2, 2, 0, 0)
+	p := NewResourcePool(SlowCloseFactory, 3, 3, 0, 0)
 	var resources []Resource
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
 		resources = append(resources, getChecked(t, p))
 	}
-	for _, r := range resources {
-		putChecked(t, p, r)
-	}
+	putChecked(t, p, resources[0])
+	require.Equal(t, State{Capacity: 3, InUse: 2, InPool: 1}, p.State())
 
-	require.Equal(t, State{Capacity: 2, InPool: 2}, p.State())
-	require.NoError(t, p.SetCapacity(1, true))
-	require.Equal(t, State{Capacity: 1, InPool: 1}, p.State())
+	done := make(chan bool)
+	go func() {
+		require.NoError(t, p.SetCapacity(1, true))
+		time.Sleep(time.Millisecond)
+		done <- true
+	}()
+
+	time.Sleep(time.Millisecond * 30)
+	// The first resource should be closed by now, but waiting for the second to unblock.
+	require.Equal(t, State{Capacity: 1, Draining: true, InUse: 2}, p.State())
+
+	putChecked(t, p, resources[1])
+
+	<-done
+	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
 }
 
 func TestDrainNoBlock(t *testing.T) {
@@ -138,15 +149,16 @@ func TestDrainNoBlock(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		resources = append(resources, getChecked(t, p))
 	}
-	for _, r := range resources {
-		putChecked(t, p, r)
-	}
+	putChecked(t, p, resources[0])
+	require.Equal(t, State{Capacity: 2, InUse: 1, InPool: 1}, p.State())
 
-	require.Equal(t, State{Capacity: 2, InPool: 2}, p.State())
 	require.NoError(t, p.SetCapacity(1, false))
 	// Wait a tiny bit so the goroutine can update the capacity stats.
 	time.Sleep(time.Millisecond)
-	require.Equal(t, State{Capacity: 1, InPool: 2}, p.State())
+	require.Equal(t, State{Capacity: 1, Draining: true, InUse: 1, InPool: 1}, p.State())
+
+	putChecked(t, p, resources[1])
+
 	// Wait until the resources close, at least 20ms (2 * 10ms per SlowResource)
 	time.Sleep(30 * time.Millisecond)
 	require.Equal(t, State{Capacity: 1, InPool: 1}, p.State())
@@ -157,6 +169,7 @@ func TestGrowBlock(t *testing.T) {
 	getChecked(t, p)
 	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
 	require.NoError(t, p.SetCapacity(2, true))
+	time.Sleep(time.Millisecond)
 	require.Equal(t, State{Capacity: 2, InUse: 1}, p.State())
 	getChecked(t, p)
 	require.Equal(t, State{Capacity: 2, InUse: 2}, p.State())
@@ -167,10 +180,8 @@ func TestGrowNoBlock(t *testing.T) {
 	getChecked(t, p)
 	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
 	require.NoError(t, p.SetCapacity(2, false))
-	// p.State() should be called here too quickly for setCapacity to update it.
-	require.Equal(t, State{Capacity: 1, InUse: 1}, p.State())
-	// By the time the goroutine processes this `Get()`, the capacity
-	// would have been increased.
+	time.Sleep(time.Millisecond)
+	require.Equal(t, State{Capacity: 2, InUse: 1}, p.State())
 	getChecked(t, p)
 	require.Equal(t, State{Capacity: 2, InUse: 2}, p.State())
 }
@@ -188,13 +199,11 @@ func TestFull1(t *testing.T) {
 	a := getChecked(t, p)
 	require.Equal(t, s(State{InPool: 4, InUse: 1}), p.State())
 
-	fmt.Println("simpl2")
 	var resources []Resource
 	for i := 0; i < 9; i++ {
 		resources = append(resources, getChecked(t, p))
 	}
 	require.Equal(t, s(State{InPool: 0, InUse: 10}), p.State())
-	fmt.Println("simpl3")
 
 	var b Resource
 	done := make(chan bool)
@@ -515,6 +524,7 @@ func TestShrinking(t *testing.T) {
 		t.Errorf("Expecting error")
 	}
 	err = p.SetCapacity(255555, true)
+	time.Sleep(time.Millisecond)
 	if err == nil {
 		t.Errorf("Expecting error")
 	}
@@ -564,21 +574,16 @@ func TestClosing(t *testing.T) {
 
 	// SetCapacity must be ignored after Close
 	err := p.SetCapacity(1, true)
+	time.Sleep(time.Millisecond)
 	if err == nil {
 		t.Errorf("expecting error")
 	}
 
 	stats = p.StatsJSON()
 	expected = `{"Capacity": 0, "Available": 0, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0}`
-	if stats != expected {
-		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
-	}
-	if lastID.Get() != 5 {
-		t.Errorf("Expecting 5, received %d", count.Get())
-	}
-	if count.Get() != 0 {
-		t.Errorf("Expecting 0, received %d", count.Get())
-	}
+	require.Equal(t, expected, stats)
+	require.Equal(t, 5, int(lastID.Get()))
+	require.Equal(t, 0, int(count.Get()))
 }
 
 func TestIdleTimeout(t *testing.T) {
@@ -728,24 +733,67 @@ func TestSlowCreateFail(t *testing.T) {
 	require.Equal(t, p.Available(), 2)
 }
 
-func TestTimeout(t *testing.T) {
+func TestTimeoutFull(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
 	p := NewResourcePool(PoolFactory, 1, 1, time.Second, 0)
 	defer p.Close()
-	r, err := p.Get(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	newctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
-	_, err = p.Get(newctx)
+	r := getChecked(t, p)
+	expected := State{Capacity: 1, InUse: 1, IdleTimeout: time.Second}
+	require.Equal(t, expected, p.State())
+
+	newctx, cancel := context.WithTimeout(ctx, time.Millisecond)
+	_, err := p.Get(newctx)
 	cancel()
-	want := "resource pool timed out"
-	if err == nil || err.Error() != want {
-		t.Errorf("got %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "resource pool timed out")
+
+	time.Sleep(time.Millisecond * 100)
+	fmt.Printf("%+v\n", p.State())
+	expected.WaitTime = p.State().WaitTime
+	expected.WaitCount = 1
+	require.Equal(t, expected, p.State())
+
+	fmt.Println("PUT GOOD ONE BACK")
 	p.Put(r)
+	time.Sleep(time.Millisecond * 100)
+	fmt.Printf("%+v\n", p.State())
+
+	expected.InUse = 0
+	expected.InPool = 1
+	require.Equal(t, expected, p.State())
+}
+
+func TestTimeoutNotFull(t *testing.T) {
+	ctx := context.Background()
+	lastID.Set(0)
+	count.Set(0)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0)
+	defer p.Close()
+
+	r := getChecked(t, p)
+	expected := State{Capacity: 1, InUse: 1, IdleTimeout: time.Second}
+	require.Equal(t, expected, p.State())
+
+	newctx, cancel := context.WithTimeout(ctx, time.Millisecond)
+	_, err := p.Get(newctx)
+	cancel()
+	require.EqualError(t, err, "resource pool timed out")
+
+	time.Sleep(time.Millisecond * 100)
+	fmt.Printf("%+v\n", p.State())
+	expected.WaitTime = p.State().WaitTime
+	expected.WaitCount = 1
+	require.Equal(t, expected, p.State())
+
+	fmt.Println("PUT GOOD ONE BACK")
+	p.Put(r)
+	time.Sleep(time.Millisecond * 100)
+	fmt.Printf("%+v\n", p.State())
+
+	expected.InUse = 0
+	expected.InPool = 1
+	require.Equal(t, expected, p.State())
 }
 
 func TestExpired(t *testing.T) {
