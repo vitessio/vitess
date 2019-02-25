@@ -219,10 +219,13 @@ func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) 
 	default:
 		rp.Lock()
 		capacity := rp.hasFreeCapacity()
+		// TODO: for the race condition: pending++ check hasFreeCapacity with pending involved
 		rp.Unlock()
 		if !capacity {
-			return rp.GetQueued(ctx)
+			return rp.getQueued(ctx)
 		}
+
+		// TODO: Deal with double allocation with lock race condition.
 
 		wrapper, err := rp.create()
 		if err != nil {
@@ -237,9 +240,9 @@ func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) 
 	}
 }
 
-func (rp *ResourcePool) GetQueued(ctx context.Context) (Resource, error) {
+func (rp *ResourcePool) getQueued(ctx context.Context) (Resource, error) {
 	startTime := time.Now()
-	fmt.Println("GetQueued")
+	fmt.Println("getQueued")
 
 	rp.Lock()
 	rp.state.Waiters++
@@ -256,7 +259,7 @@ func (rp *ResourcePool) GetQueued(ctx context.Context) (Resource, error) {
 			return nil, ErrClosed
 		}
 
-		fmt.Println("GetQueued got item")
+		fmt.Println("getQueued got item")
 		rp.Lock()
 		rp.state.InPool--
 		rp.state.InUse++
@@ -289,6 +292,7 @@ func (rp *ResourcePool) Put(resource Resource) {
 
 	if rp.state.Closed || rp.active() > rp.state.Capacity {
 		if resource != nil {
+			fmt.Println("Closing resource due to closing or capacity", rp.state.Closed, rp.active())
 			resource.Close()
 		}
 		rp.Unlock()
@@ -386,7 +390,9 @@ func (rp *ResourcePool) SetCapacity(capacity int, block bool) error {
 			// Collect the InUse resources lazily when they're returned.
 			select {
 			case r := <-rp.pool:
+				fmt.Println("closing resource due to shrinking")
 				r.resource.Close()
+				r.resource = nil
 
 				rp.Lock()
 				rp.state.InPool--
@@ -414,18 +420,22 @@ func (rp *ResourcePool) SetIdleTimeout(idleTimeout time.Duration) {
 	fastInterval := rp.state.IdleTimeout / 10
 
 	if rp.idleTimer == nil {
+		fmt.Println("creating new timer", fastInterval)
 		rp.idleTimer = timer.NewTimer(fastInterval)
+	} else {
+		fmt.Println("stopping timer")
+		rp.Unlock()
+		rp.idleTimer.Stop()
+		rp.Lock()
 	}
 
-	rp.Unlock()
-	rp.idleTimer.Stop()
-	rp.Lock()
-
 	if rp.state.IdleTimeout == 0 {
+		fmt.Println("disabling timer")
 		rp.Unlock()
 		return
 	}
 
+	fmt.Println("activating timer", fastInterval)
 	rp.idleTimer.SetInterval(fastInterval)
 	rp.idleTimer.Start(rp.closeIdleResources)
 	rp.Unlock()
@@ -462,10 +472,12 @@ func (rp *ResourcePool) closeIdleResources() {
 			}
 
 			rp.Lock()
-			if wrapper.timeUsed.Add(rp.state.IdleTimeout).After(time.Now()) {
+			deadline := wrapper.timeUsed.Add(rp.state.IdleTimeout)
+			if time.Now().After(deadline) {
 				rp.state.IdleClosed++
 				rp.state.InPool--
 				rp.Unlock()
+				fmt.Println("closing resource due to timeout", wrapper.resource)
 				wrapper.resource.Close()
 				wrapper.resource = nil
 				continue
