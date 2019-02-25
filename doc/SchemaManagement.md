@@ -1,4 +1,4 @@
-Uisng Vitess requires you to work with two different types of schemas:
+Using Vitess requires you to work with two different types of schemas:
 
 1. The MySQL database schema. This is the schema of the individual MySQL instances.
 2. The [VSchema]({% link user-guide/vschema.md %}), which describes all the keyspaces and how they're sharded.

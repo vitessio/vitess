@@ -130,7 +130,7 @@ do now).
 
 The link here is also very straightforward:
 
-* When sucessfully starting a remote job, the address of the remote worker and
+* When successfully starting a remote job, the address of the remote worker and
   the UID of the job can be checkpointed.
   
 * After that, the workflow can just connect and update its status and logs when
