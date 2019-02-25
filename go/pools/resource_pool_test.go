@@ -87,8 +87,6 @@ func putChecked(t *testing.T, p *ResourcePool, r Resource) {
 	t.Helper()
 	fmt.Println("putChecked", r)
 	p.Put(r)
-	runtime.Gosched()
-	time.Sleep(time.Millisecond)
 }
 
 func TestOpen(t *testing.T) {
@@ -129,7 +127,6 @@ func TestDrainBlock(t *testing.T) {
 	done := make(chan bool)
 	go func() {
 		require.NoError(t, p.SetCapacity(1, true))
-		time.Sleep(time.Millisecond)
 		done <- true
 	}()
 
@@ -153,8 +150,6 @@ func TestDrainNoBlock(t *testing.T) {
 	require.Equal(t, State{Capacity: 2, InUse: 1, InPool: 1}, p.State())
 
 	require.NoError(t, p.SetCapacity(1, false))
-	// Wait a tiny bit so the goroutine can update the capacity stats.
-	time.Sleep(time.Millisecond)
 	require.Equal(t, State{Capacity: 1, Draining: true, InUse: 1, InPool: 1}, p.State())
 
 	putChecked(t, p, resources[1])

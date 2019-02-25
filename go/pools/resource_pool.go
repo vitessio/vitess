@@ -110,8 +110,8 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	}
 
 	rp := &ResourcePool{
-		factory: factory,
-		pool:    make(chan resourceWrapper, maxCap),
+		factory:       factory,
+		pool:          make(chan resourceWrapper, maxCap),
 	}
 
 	rp.state = State{
@@ -160,24 +160,6 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 //		}
 //	}
 //}
-
-/*
-func (rp *ResourcePool) checkDrainState(state *State) {
-	if !state.Draining {
-		return
-	}
-
-	if rp.Active() > state.Capacity {
-		return
-	}
-
-	state.Draining = false
-	rp.storeState(*state)
-	if rp.setCapacityBlocked {
-		rp.getCapacity <- true
-	}
-}
-*/
 
 func (rp *ResourcePool) handleSetIdleTimeout(state *State, idleTimeout time.Duration) <-chan time.Time {
 	state.IdleTimeout = idleTimeout
@@ -271,8 +253,6 @@ func (rp *ResourcePool) IsClosed() bool {
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will wait till the next resource becomes available or a timeout.
 func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) {
-	startTime := time.Now()
-
 	select {
 	case wrapper, ok := <-rp.pool:
 		if !ok {
@@ -290,46 +270,53 @@ func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) 
 		return nil, ErrTimeout
 
 	default:
-		rp.Lock()
-		if rp.active() >= rp.state.Capacity {
-			// We don't have capacity, so now we block on pool.
-			rp.state.Waiters++
-			rp.Unlock()
-
-			select {
-			case wrapper, ok := <-rp.pool:
-				if !ok {
-					return nil, ErrClosed
-				}
-
-				rp.Lock()
-				rp.state.InPool--
-				rp.state.InUse++
-				rp.state.Waiters--
-				rp.state.WaitCount++
-				rp.state.WaitTime += time.Now().Sub(startTime)
-				rp.Unlock()
-
-				return wrapper.resource, nil
-
-			case <-ctx.Done():
-				return nil, ErrTimeout
-			}
-		}
-		rp.Unlock()
-
-		wrapper, err := rp.create()
-		if err != nil {
-			return nil, err
-		}
-
-		rp.Lock()
-		rp.state.InUse++
-		rp.Unlock()
-
-		return wrapper.resource, nil
+		return rp.getWaiting(ctx)
 
 	}
+}
+
+func (rp *ResourcePool) getWaiting(ctx context.Context) (Resource, error) {
+	startTime := time.Now()
+
+	rp.Lock()
+	if rp.active() >= rp.state.Capacity {
+		// We don't have capacity, so now we block on pool.
+		rp.state.Waiters++
+		rp.Unlock()
+
+		select {
+		case wrapper, ok := <-rp.pool:
+			if !ok {
+				return nil, ErrClosed
+			}
+
+			rp.Lock()
+			rp.state.InPool--
+			rp.state.InUse++
+			rp.state.Waiters--
+			rp.state.WaitCount++
+			rp.state.WaitTime += time.Now().Sub(startTime)
+			rp.Unlock()
+
+			return wrapper.resource, nil
+
+		case <-ctx.Done():
+			return nil, ErrTimeout
+		}
+	}
+	rp.Unlock()
+
+	wrapper, err := rp.create()
+	if err != nil {
+		return nil, err
+	}
+
+	rp.Lock()
+	rp.state.InUse++
+	rp.Unlock()
+
+	return wrapper.resource, nil
+
 }
 
 /*
@@ -364,11 +351,20 @@ func (rp *ResourcePool) handleGet(state *State) {
 // The will eventually cause a new resource to be created in its place.
 func (rp *ResourcePool) Put(resource Resource) {
 	rp.Lock()
+	defer rp.Unlock()
+
+	rp.state.InUse--
+
+	if rp.state.Closed || rp.active() > rp.state.Capacity {
+		if resource != nil {
+			resource.Close()
+		}
+		return
+	}
+
 	if resource == nil {
-		rp.state.InUse--
 
 	} else {
-		rp.state.InUse--
 		rp.state.InPool++
 		rp.pool <- resourceWrapper{
 			resource: resource,
@@ -382,57 +378,57 @@ func (rp *ResourcePool) Put(resource Resource) {
 		//	panic(errors.New("attempt to Put into a full ResourcePool (2)"))
 		//}
 	}
-	rp.Unlock()
 }
-func (rp *ResourcePool) handlePut(state *State, wrapper *resourceWrapper) {
-	state.InUse--
 
-	// Allow resources to be closed while pool is declared closed.
-	// Don't place resources back into the pool when we're at
-	// capacity. This can happen during draining.
-	fmt.Printf("handlePut %+v %+v\n", wrapper, state)
-	if state.Closed || rp.Active() > state.Capacity {
-		if wrapper != nil {
-			wrapper.resource.Close()
-		}
-		return
-	}
-
-	if state.Waiters == 0 {
-		if wrapper == nil {
-			return
-		}
-
-		// If we're at capacity already, we need to close.
-		fmt.Printf("%+v\n", state)
-		if state.InPool == state.Capacity {
-			wrapper.resource.Close()
-			return
-		}
-
-		fmt.Println(len(rp.pool))
-
-		state.InPool++
-		rp.pool <- *wrapper
-		return
-	}
-
-	// There is a queue of waiters.
-	state.Waiters--
-	state.InUse++
-	if wrapper != nil {
-		rp.pool <- *wrapper
-	} else {
-		// We have a waiter, but the returned resource was nil. We need to create one.
-		rp.pool <- rp.createEmpty()
-	}
-
-	// Track how many times and long each wait took.
-	var start time.Time
-	start, rp.waitTimers = rp.waitTimers[0], rp.waitTimers[1:]
-	state.WaitCount++
-	state.WaitTime += time.Now().Sub(start)
-}
+//func (rp *ResourcePool) handlePut(state *State, wrapper *resourceWrapper) {
+//	state.InUse--
+//
+//	// Allow resources to be closed while pool is declared closed.
+//	// Don't place resources back into the pool when we're at
+//	// capacity. This can happen during draining.
+//	fmt.Printf("handlePut %+v %+v\n", wrapper, state)
+//	if state.Closed || rp.Active() > state.Capacity {
+//		if wrapper != nil {
+//			wrapper.resource.Close()
+//		}
+//		return
+//	}
+//
+//	if state.Waiters == 0 {
+//		if wrapper == nil {
+//			return
+//		}
+//
+//		// If we're at capacity already, we need to close.
+//		fmt.Printf("%+v\n", state)
+//		if state.InPool == state.Capacity {
+//			wrapper.resource.Close()
+//			return
+//		}
+//
+//		fmt.Println(len(rp.pool))
+//
+//		state.InPool++
+//		rp.pool <- *wrapper
+//		return
+//	}
+//
+//	// There is a queue of waiters.
+//	state.Waiters--
+//	state.InUse++
+//	if wrapper != nil {
+//		rp.pool <- *wrapper
+//	} else {
+//		// We have a waiter, but the returned resource was nil. We need to create one.
+//		rp.pool <- rp.createEmpty()
+//	}
+//
+//	// Track how many times and long each wait took.
+//	var start time.Time
+//	start, rp.waitTimers = rp.waitTimers[0], rp.waitTimers[1:]
+//	state.WaitCount++
+//	state.WaitTime += time.Now().Sub(start)
+//}
 
 // SetCapacity changes the capacity of the pool.
 // You can use it to shrink or expand, but not beyond
@@ -443,96 +439,78 @@ func (rp *ResourcePool) handlePut(state *State, wrapper *resourceWrapper) {
 // A SetCapacity of 0 is equivalent to closing the ResourcePool.
 func (rp *ResourcePool) SetCapacity(capacity int, block bool) error {
 	rp.Lock()
-	defer rp.Unlock()
 
 	if rp.state.Closed {
+		rp.Unlock()
 		return ErrClosed
 	}
 
 	if capacity < 0 || capacity > cap(rp.pool) {
+		rp.Unlock()
 		return fmt.Errorf("capacity %d is out of range", capacity)
 	}
 
 	if capacity != 0 {
 		minActive := rp.state.MinActive
 		if capacity < minActive {
+			rp.Unlock()
 			return fmt.Errorf("minActive %v would now be higher than capacity %v", minActive, capacity)
 		}
 	}
 
-	oldCap := rp.state.Capacity
-	newCap := capacity
-	delta := newCap - oldCap
-	rp.state.Capacity = newCap
+	isGrowing := capacity > rp.state.Capacity
+	rp.state.Capacity = capacity
 
-	// Shrinking capacity. Loop until enough pool resources are closed.
-	if delta < 0 {
-		delta = -delta
-		rp.state.Draining = true
-
-		// We can't remove InUse resources, so only target the pool.
-		// Collect the other resources lazily when they're returned.
-		for i := 0; i < delta && rp.state.InPool > 0; i++ {
-			r := <-rp.pool
-			r.resource.Close()
-			rp.state.InPool--
-		}
-	} else {
+	if isGrowing {
 		rp.state.Draining = false
+		rp.Unlock()
+		return nil
 	}
 
-	if newCap == 0 {
-		close(rp.pool)
-		rp.state.Closed = true
+	rp.state.Draining = true
+	rp.Unlock()
+
+	var done chan bool
+	if block {
+		done = make(chan bool)
+	}
+	go func() {
+		// Shrinking capacity. Loop until enough pool resources are closed.
+		for {
+			rp.Lock()
+			remaining := rp.active() - rp.state.Capacity
+			fmt.Println("drain: remaining", remaining)
+			if remaining <= 0 {
+				rp.state.Draining = false
+				if rp.state.Capacity == 0 {
+					close(rp.pool)
+					rp.state.Closed = true
+				}
+				rp.Unlock()
+				done <- true
+				return
+			}
+			rp.Unlock()
+
+			// We can't remove InUse resources, so only target the pool.
+			// Collect the other resources lazily when they're returned.
+			fmt.Println("drain: waiting to close a resource")
+			r := <-rp.pool
+			r.resource.Close()
+			fmt.Println("drain: closing resource")
+
+			rp.Lock()
+			rp.state.InPool--
+			rp.Unlock()
+		}
+	}()
+
+	if block {
+		<-done
 	}
 
 	return nil
 }
-
-func (rp *ResourcePool) drainer() {
-
-}
-
-/*
-func (rp *ResourcePool) handleSetCapacity(state *State, capReq setCapacityRequest) {
-	newCap := capReq.capacity
-	oldCap := state.Capacity
-	delta := newCap - oldCap
-	state.Capacity = newCap
-	rp.setCapacityBlocked = capReq.block
-
-	// Closing a resource is slow, so let's update the state for stats.
-	rp.storeState(*state)
-
-	// Shrinking capacity. Loop until enough pool resources are closed.
-	if delta < 0 {
-		delta = -delta
-		state.Draining = true
-		rp.storeState(*state)
-
-		// We can't remove InUse resources, so only target the pool.
-		// Collect the other resources lazily when they're returned.
-		for i := 0; i < delta && state.InPool > 0; i++ {
-			r := <-rp.pool
-			// TODO: This might need to be run in a separate goroutine so it doesn't
-			// block on resource.Close(). e.g.: rp.drainPool <- r.resource
-			r.resource.Close()
-			state.InPool--
-			rp.storeState(*state)
-		}
-	} else {
-		state.Draining = false
-		if rp.setCapacityBlocked {
-			rp.getCapacity <- true
-		}
-	}
-
-	if newCap == 0 {
-		close(rp.pool)
-		state.Closed = true
-	}
-}
-*/
 
 // SetIdleTimeout sets the idle timeout for resources. The timeout is
 // checked at the 10th of the period of the timeout.
@@ -589,7 +567,7 @@ func (rp *ResourcePool) Active() int {
 }
 
 func (rp *ResourcePool) active() int {
-	return rp.state.InUse - rp.state.InPool
+	return rp.state.InUse + rp.state.InPool
 }
 
 // MinActive returns the minimum amount of resources keep active.
