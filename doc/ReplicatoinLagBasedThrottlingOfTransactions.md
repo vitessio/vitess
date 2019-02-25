@@ -17,7 +17,7 @@ throttler:
 
 * *enable-tx-throttler*
 
-A boolean flag controling whether the replication-lag-based throttling is enabled.
+A boolean flag controlling whether the replication-lag-based throttling is enabled.
 
 * *tx-throttler-config*
 

@@ -2,7 +2,7 @@
 
 # Introduction
 
-This document builds on top of [The V3 high level design](https://github.com/vitessio/vitess/blob/master/doc/V3HighLevelDesign.md). It discusses implemenation of subquery support in greater detail.
+This document builds on top of [The V3 high level design](https://github.com/vitessio/vitess/blob/master/doc/V3HighLevelDesign.md). It discusses implementation of subquery support in greater detail.
 
 
 
@@ -124,7 +124,7 @@ So, in the above case, c cannot be pulled out beyond b. If c was not correlated 
 
 ### Generalizing pull-outs
 
-The pull-out algorithm can be generallized as follows:
+The pull-out algorithm can be generalized as follows:
 
 1. Compute the primitive the subquery depends on: subqueryFrom
 2. Compute the primitive the full expression depends on: subqueryTo

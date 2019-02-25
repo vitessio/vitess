@@ -90,7 +90,7 @@ We introduced many terms in the previous sections. It’s time for a quick recap
 Any form of failure until the point of saving the commit decision will result in a decision to rollback.
 
 * Transition the metadata state to ‘Rollback’.
-* Issue RollbackPrepared comands to the prepared transactions using the DTID.
+* Issue RollbackPrepared commands to the prepared transactions using the DTID.
 * If the original VTGate is still orchestrating, rollback the unprepared transactions using their VTIDs. The initial version will just execute RollbackPrepared on all participants with the assumption that any unprepared transactions will be rolled back by the transaction killer.
 * Delete the transaction in the MM (ConcludeTransaction).
 
