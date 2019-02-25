@@ -144,21 +144,21 @@ func (rp *ResourcePool) ensureMinimumActive() {
 		rp.Unlock()
 		return
 	}
-
 	required := rp.state.MinActive - rp.active()
+	rp.Unlock()
+
 	for i := 0; i < required; i++ {
-		rp.Unlock()
 		r, err := rp.create()
 		if err != nil {
 			fmt.Println("error creating factory", err)
 			// TODO(gak): How to handle factory error?
 			break
 		}
-		rp.Lock()
 		rp.pool <- r
+		rp.Lock()
 		rp.state.InPool++
+		rp.Unlock()
 	}
-	rp.Unlock()
 }
 
 // Close empties the pool calling Close on all its resources.
@@ -265,7 +265,6 @@ func (rp *ResourcePool) GetQueued(ctx context.Context) (Resource, error) {
 // The will eventually cause a new resource to be created in its place.
 func (rp *ResourcePool) Put(resource Resource) {
 	rp.Lock()
-	defer rp.Unlock()
 
 	rp.state.InUse--
 
@@ -273,13 +272,16 @@ func (rp *ResourcePool) Put(resource Resource) {
 		if resource != nil {
 			resource.Close()
 		}
+		rp.Unlock()
 		return
 	}
 
 	if resource == nil {
+		rp.Unlock()
+		rp.ensureMinimumActive()
 		return
-
 	}
+
 	rp.state.InPool++
 	rp.pool <- resourceWrapper{
 		resource: resource,
@@ -292,6 +294,7 @@ func (rp *ResourcePool) Put(resource Resource) {
 	//default:
 	//	panic(errors.New("attempt to Put into a full ResourcePool (2)"))
 	//}
+	rp.Unlock()
 }
 
 // SetCapacity changes the capacity of the pool.

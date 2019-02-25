@@ -925,7 +925,7 @@ func TestMinActiveSelfRefreshing(t *testing.T) {
 		resources = append(resources, getChecked(t, p))
 	}
 
-	// Put back nil except one
+	// Put back all nils except one
 	for i := 0; i < 4; i++ {
 		putChecked(t, p, nil)
 	}
