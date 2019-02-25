@@ -58,7 +58,7 @@ class TestServiceTestOfTabletManager(unittest.TestCase):
             topo_flavor = environment.topo_server().flavor()
             if topo_flavor == 'zk2':
                 # This is a one-off test to make sure our 'zk2' implementation
-                # behave with a server that is not DNS-resolveable.
+                # behave with a server that is not DNS-resolvable.
                 environment.topo_server().setup(add_bad_host=True)
             else:
                 environment.topo_server().setup()
