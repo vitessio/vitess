@@ -569,6 +569,12 @@
 			"revisionTime": "2016-09-12T15:30:41Z"
 		},
 		{
+			"checksumSHA1": "Naa1qU7ykpIyDUZktjbqAU3V6bY=",
+			"path": "github.com/grpc-ecosystem/go-grpc-middleware",
+			"revision": "f849b5445de4819127e123ca96ba0eeb62b5e479",
+			"revisionTime": "2019-01-18T09:38:23Z"
+		},
+		{
 			"checksumSHA1": "9dP53doJ/haDqTJyD0iuv8g0XFs=",
 			"path": "github.com/grpc-ecosystem/go-grpc-prometheus",
 			"revision": "39de4380c2e0353a115b80b1c730719c79bfb771",
