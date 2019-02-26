@@ -19,7 +19,10 @@ package pools
 import (
 	"errors"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"math/rand"
+	"runtime"
 	"testing"
 	"time"
 
@@ -120,7 +123,7 @@ func TestPutWithoutGet(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 1, 0, 0)
 	defer p.Close()
 
-	require.PanicsWithValue(t, ErrPutBeforeGet, func() { p.Put(&TestResource{}) })
+	assert.PanicsWithValue(t, ErrPutBeforeGet, func() { p.Put(&TestResource{}) })
 	require.Equal(t, State{Capacity: 1}, p.State())
 }
 
@@ -131,7 +134,7 @@ func TestPutTooFull(t *testing.T) {
 	// Not sure how to cause the ErrFull panic naturally, so I'm hacking in a value.
 	p.state.InUse = 1
 
-	require.PanicsWithValue(t, ErrFull, func() { p.Put(&TestResource{}) })
+	assert.PanicsWithValue(t, ErrFull, func() { p.Put(&TestResource{}) })
 	require.Equal(t, State{Capacity: 1, MinActive: 1, InPool: 1, InUse: 1}, p.State())
 
 	// Allow p.Close() to not stall on a non-existent resource.
@@ -920,5 +923,34 @@ func TestMinActiveTooHighAfterSetCapacity(t *testing.T) {
 	expecting := "minActive 2 would now be higher than capacity 1"
 	if err == nil || err.Error() != expecting {
 		t.Errorf("Expecting: %v, instead got: %v", expecting, err)
+	}
+}
+
+func TestGetPutRace(t *testing.T) {
+	p := NewResourcePool(SlowCreateFactory, 1, 1, 10*time.Nanosecond, 0)
+	defer p.Close()
+
+	for j := 0; j < 200; j++ {
+		fmt.Println("\n\n\n------------")
+		done := make(chan bool)
+		for i := 0; i < 2; i++ {
+			go func() {
+				time.Sleep(time.Duration(rand.Int() % 10))
+				r, err := p.Get(context.Background())
+				if err != nil {
+					fmt.Println(err)
+					panic(err)
+				}
+
+				time.Sleep(time.Duration(rand.Int() % 10))
+
+				p.Put(r)
+				done <- true
+			}()
+			runtime.Gosched()
+		}
+		<-done
+		<-done
+		fmt.Println("------------DONE")
 	}
 }

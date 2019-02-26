@@ -40,6 +40,9 @@ var (
 
 	// ErrPutBeforeGet is caused when there was a put called before a get.
 	ErrPutBeforeGet = errors.New("a put was placed before get in the resource pool")
+
+	// errNeedToQueue is used internally as a state informing that the caller needs to wait.
+	errNeedToQueue = errors.New("need to queue")
 )
 
 // Factory is a function that can be used to create a resource.
@@ -70,25 +73,28 @@ type ResourcePool struct {
 
 type State struct {
 	// Capacity is the maximum number of resources in and out of the pool.
-	Capacity    int
+	Capacity int
 
 	// InPool is the number of resources in the pool.
-	InPool      int
+	InPool int
 
 	// InUse is the number of resources allocated outside of the pool.
-	InUse       int
+	InUse int
+
+	// Spawning is the number of resources currently being created.
+	Spawning int
 
 	// Waiters is the number of Put() callers waiting for a resource when the pool is empty.
-	Waiters     int
+	Waiters int
 
 	// MinActive maintains a minimum number of active resources.
-	MinActive   int
+	MinActive int
 
 	// Closed is when the pool is shutting down or already shut down.
-	Closed      bool
+	Closed bool
 
 	// Draining is set when the new capacity is lower than the number of active resources.
-	Draining    bool
+	Draining bool
 
 	// IdleTimeout specifies how long to leave a resource in existence within the pool.
 	IdleTimeout time.Duration
@@ -157,6 +163,35 @@ func (rp *ResourcePool) create() (resourceWrapper, error) {
 	}, nil
 }
 
+func (rp *ResourcePool) safeCreate() (resourceWrapper, error) {
+	rp.Lock()
+	capacity := rp.hasFreeCapacity()
+	rp.state.Spawning++
+	rp.Unlock()
+
+	if !capacity {
+		rp.Lock()
+		rp.state.Spawning--
+		rp.Unlock()
+		return resourceWrapper{}, errNeedToQueue
+	}
+
+	wrapper, err := rp.create()
+	if err != nil {
+		rp.Lock()
+		rp.state.Spawning--
+		rp.Unlock()
+		return resourceWrapper{}, err
+	}
+
+	rp.Lock()
+	rp.state.InUse++
+	rp.state.Spawning--
+	rp.Unlock()
+
+	return wrapper, nil
+}
+
 func (rp *ResourcePool) ensureMinimumActive() {
 	rp.Lock()
 	if rp.state.MinActive == 0 || rp.state.Closed {
@@ -198,7 +233,6 @@ func (rp *ResourcePool) IsClosed() bool {
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will wait till the next resource becomes available or a timeout.
 func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) {
-	fmt.Println("get")
 	select {
 	case wrapper, ok := <-rp.pool:
 		if !ok {
@@ -210,75 +244,78 @@ func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) 
 		rp.state.InUse++
 		rp.Unlock()
 
+		fmt.Println("something in pool")
+
 		return wrapper.resource, nil
 
 	case <-ctx.Done():
-		fmt.Println("ctx done 1!")
 		return nil, ErrTimeout
 
 	default:
-		rp.Lock()
-		capacity := rp.hasFreeCapacity()
-		// TODO: for the race condition: pending++ check hasFreeCapacity with pending involved
-		rp.Unlock()
-		if !capacity {
+		wrapper, err := rp.safeCreate()
+		if err == errNeedToQueue {
 			return rp.getQueued(ctx)
-		}
-
-		// TODO: Deal with double allocation with lock race condition.
-
-		wrapper, err := rp.create()
-		if err != nil {
+		} else if err != nil {
 			return nil, err
 		}
 
-		rp.Lock()
-		rp.state.InUse++
-		rp.Unlock()
-
 		return wrapper.resource, nil
+
 	}
 }
 
 func (rp *ResourcePool) getQueued(ctx context.Context) (Resource, error) {
 	startTime := time.Now()
-	fmt.Println("getQueued")
 
 	rp.Lock()
 	rp.state.Waiters++
 	rp.Unlock()
 
 	// We don't have capacity, so now we block on pool.
-	select {
-	case wrapper, ok := <-rp.pool:
-		if !ok {
+	for {
+		select {
+		case wrapper, ok := <-rp.pool:
+			if !ok {
+				rp.Lock()
+				rp.state.Waiters--
+				rp.Unlock()
+
+				return nil, ErrClosed
+			}
+
+			rp.Lock()
+			rp.state.InPool--
+			rp.state.InUse++
+			rp.state.Waiters--
+			rp.state.WaitCount++
+			rp.state.WaitTime += time.Now().Sub(startTime)
+			rp.Unlock()
+
+			return wrapper.resource, nil
+
+		case <-ctx.Done():
+			fmt.Println("ctx done 2!")
 			rp.Lock()
 			rp.state.Waiters--
 			rp.Unlock()
 
-			return nil, ErrClosed
+			return nil, ErrTimeout
+
+		case <-time.After(100 * time.Millisecond):
+			// There could be a condition where this caller has been
+			// put into a queue, but another caller has failed in creating
+			// a resource, causing a deadlock. We'll check occasionally to see
+			// if there is now capacity to create.
+			wrapper, err := rp.safeCreate()
+			if err == errNeedToQueue {
+				continue
+			} else if err != nil {
+				return nil, err
+			} else {
+				return wrapper.resource, nil
+			}
 		}
-
-		fmt.Println("getQueued got item")
-		rp.Lock()
-		rp.state.InPool--
-		rp.state.InUse++
-		rp.state.Waiters--
-		rp.state.WaitCount++
-		rp.state.WaitTime += time.Now().Sub(startTime)
-		rp.Unlock()
-
-		return wrapper.resource, nil
-
-	case <-ctx.Done():
-		fmt.Println("ctx done 2!")
-		rp.Lock()
-		rp.state.Waiters--
-		rp.Unlock()
-
-		return nil, ErrTimeout
 	}
-
 }
 
 // Put will return a resource to the pool. For every successful Get,
@@ -286,6 +323,7 @@ func (rp *ResourcePool) getQueued(ctx context.Context) (Resource, error) {
 // you will need to call Put(nil) instead of returning the closed resource.
 // The will eventually cause a new resource to be created in its place.
 func (rp *ResourcePool) Put(resource Resource) {
+	fmt.Println("put", resource)
 	rp.Lock()
 
 	rp.state.InUse--
@@ -545,7 +583,7 @@ func (rp *ResourcePool) Active() int {
 }
 
 func (rp *ResourcePool) active() int {
-	return rp.state.InUse + rp.state.InPool
+	return rp.state.InUse + rp.state.InPool + rp.state.Spawning
 }
 
 func (rp *ResourcePool) freeCapacity() int {
