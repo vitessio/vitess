@@ -220,6 +220,28 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	}
 }
 
+func TestConnPoolMinActive(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPoolOpts(10)
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	dbConn, err := connPool.Get(context.Background())
+	if err != nil {
+		t.Fatalf("should not get an error, but got: %v", err)
+	}
+	if dbConn == nil {
+		t.Fatalf("db conn should not be nil")
+	}
+	// There is no context, it should not use appdebug connection
+	if dbConn.pool == nil {
+		t.Fatalf("db conn pool should not be nil")
+	}
+	dbConn.Recycle()
+
+	panic("ASD")
+}
+
 type dummyChecker struct {
 }
 
@@ -228,11 +250,15 @@ func (dummyChecker) CheckMySQL() {}
 var checker = dummyChecker{}
 
 func newPool() *Pool {
+	return newPoolOpts(0)
+}
+
+func newPoolOpts(minActive int) *Pool {
 	return New(
 		fmt.Sprintf("TestPool%d", rand.Int63()),
 		100,
 		10*time.Second,
-		0,
+		minActive,
 		checker,
 	)
 }
