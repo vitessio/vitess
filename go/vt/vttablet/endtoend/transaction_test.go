@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
+	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -342,6 +343,12 @@ func TestTxPoolSize(t *testing.T) {
 	if err := verifyIntValue(vend, "BeginTimeout", int(timeout)); err != nil {
 		t.Error(err)
 	}
+	if err := verifyIntValue(vend, "TransactionPoolDbaInUse", 0); err != nil {
+		t.Error(err)
+	}
+	if err := verifyIntValue(vend, "TransactionPoolDbaTotal", 0); err != nil {
+		t.Error(err)
+	}
 
 	client2 := framework.NewClient()
 	err = client2.Begin(false)
@@ -352,6 +359,58 @@ func TestTxPoolSize(t *testing.T) {
 	if err := compareIntDiff(framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 1); err != nil {
 		t.Error(err)
 	}
+}
+
+func TestTxPoolDba(t *testing.T) {
+	client1 := framework.NewClient()
+
+	// No DBA transactions yet
+	vstart := framework.DebugVars()
+	if err := verifyIntValue(vstart, "TransactionPoolDbaInUse", 0); err != nil {
+		t.Error(err)
+	}
+	if err := verifyIntValue(vstart, "TransactionPoolDbaTotal", 0); err != nil {
+		t.Error(err)
+	}
+
+	err := client1.BeginWithOptions(&querypb.ExecuteOptions{Workload: query.ExecuteOptions_DBA})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer client1.Rollback()
+
+	defer framework.Server.BeginTimeout.Set(framework.Server.BeginTimeout.Get())
+	timeout := 1 * time.Millisecond
+	framework.Server.BeginTimeout.Set(timeout)
+
+	// DBA transaction running, but not in use
+	vend := framework.DebugVars()
+	if err := verifyIntValue(vend, "TransactionPoolDbaInUse", 0); err != nil {
+		t.Error(err)
+	}
+	if err := verifyIntValue(vend, "TransactionPoolDbaTotal", 1); err != nil {
+		t.Error(err)
+	}
+
+	// Activate transaction
+	// TODO
+
+	// DBA transaction running and in use
+	// TODO check
+
+	// Wait for transaction to stop running
+	// TODO
+
+	// DBA transaction running, but not in use
+	vend = framework.DebugVars()
+	if err := verifyIntValue(vend, "TransactionPoolDbaInUse", 0); err != nil {
+		t.Error(err)
+	}
+	if err := verifyIntValue(vend, "TransactionPoolDbaTotal", 1); err != nil {
+		t.Error(err)
+	}
+
 }
 
 func TestTxTimeout(t *testing.T) {

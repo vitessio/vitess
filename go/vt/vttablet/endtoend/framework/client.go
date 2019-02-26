@@ -78,6 +78,19 @@ func (client *QueryClient) Begin(clientFoundRows bool) error {
 	return nil
 }
 
+// BeginWithOptions is like Begin, but you can pass in your custom ExecuteOptions.
+func (client *QueryClient) BeginWithOptions(options *querypb.ExecuteOptions) error {
+	if client.transactionID != 0 {
+		return errors.New("already in transaction")
+	}
+	transactionID, err := client.server.Begin(client.ctx, &client.target, options)
+	if err != nil {
+		return err
+	}
+	client.transactionID = transactionID
+	return nil
+}
+
 // Commit commits the current transaction.
 func (client *QueryClient) Commit() error {
 	defer func() { client.transactionID = 0 }()
