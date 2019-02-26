@@ -136,7 +136,7 @@ func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %v:\n", os.Args[0])
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, doc)
+		fmt.Fprint(os.Stderr, doc)
 	}
 	flag.Parse()
 	args := flag.Args()
@@ -206,7 +206,7 @@ func cmdWait(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	}
 	if err != nil {
 		if err == zk.ErrNoNode {
-			_, _, wait, err = zconn.ExistsW(ctx, zkPath)
+			_, _, wait, _ = zconn.ExistsW(ctx, zkPath)
 		} else {
 			return fmt.Errorf("wait: error %v: %v", zkPath, err)
 		}
@@ -600,7 +600,7 @@ func cmdEdit(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		return fmt.Errorf("edit: cannot read file %v", err)
 	}
 
-	if bytes.Compare(fileData, data) != 0 {
+	if !bytes.Equal(fileData, data) {
 		// data changed - update if we can
 		_, err = zconn.Set(ctx, zkPath, fileData, stat.Version)
 		if err != nil {
@@ -900,7 +900,7 @@ func cmdZip(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 			continue
 		}
 		fi := &zip.FileHeader{Name: path, Method: zip.Deflate}
-		fi.SetModTime(zk2topo.Time(stat.Mtime))
+		fi.Modified = zk2topo.Time(stat.Mtime)
 		f, err := zipWriter.CreateHeader(fi)
 		if err != nil {
 			return fmt.Errorf("zip: create failed: %v", err)

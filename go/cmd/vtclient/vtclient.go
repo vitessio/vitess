@@ -72,7 +72,7 @@ func init() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, usage)
+		fmt.Fprint(os.Stderr, usage)
 	}
 }
 
@@ -236,8 +236,8 @@ func execDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 		return nil, vterrors.Wrap(err, "COMMIT failed")
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	lastInsertID, err := result.LastInsertId()
+	rowsAffected, _ := result.RowsAffected()
+	lastInsertID, _ := result.LastInsertId()
 	return &results{
 		rowsAffected: rowsAffected,
 		lastInsertID: lastInsertID,
@@ -257,7 +257,7 @@ func execNonDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 	var qr results
 	cols, err := rows.Columns()
 	if err != nil {
-		return nil, fmt.Errorf("client error: %v", err)
+		return nil, vterrors.Wrap(err, "client error")
 	}
 	qr.Fields = cols
 
@@ -269,7 +269,7 @@ func execNonDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 			row[i] = &col
 		}
 		if err := rows.Scan(row...); err != nil {
-			return nil, fmt.Errorf("client error: %v", err)
+			return nil, vterrors.Wrap(err, "client error")
 		}
 
 		// unpack []*string into []string
@@ -282,7 +282,7 @@ func execNonDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 	qr.rowsAffected = int64(len(qr.Rows))
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("Vitess returned an error: %v", err)
+		return nil, vterrors.Wrap(err, "Vitess returned an error")
 	}
 
 	qr.duration = time.Since(start)
