@@ -19,7 +19,6 @@ package pools
 import (
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/rand"
 	"runtime"
@@ -123,7 +122,7 @@ func TestPutWithoutGet(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 1, 0, 0)
 	defer p.Close()
 
-	assert.PanicsWithValue(t, ErrPutBeforeGet, func() { p.Put(&TestResource{}) })
+	require.Panics(t, func() { p.Put(&TestResource{}) })
 	require.Equal(t, State{Capacity: 1}, p.State())
 }
 
@@ -134,7 +133,7 @@ func TestPutTooFull(t *testing.T) {
 	// Not sure how to cause the ErrFull panic naturally, so I'm hacking in a value.
 	p.state.InUse = 1
 
-	assert.PanicsWithValue(t, ErrFull, func() { p.Put(&TestResource{}) })
+	require.Panics(t, func() { p.Put(&TestResource{}) })
 	require.Equal(t, State{Capacity: 1, MinActive: 1, InPool: 1, InUse: 1}, p.State())
 
 	// Allow p.Close() to not stall on a non-existent resource.
