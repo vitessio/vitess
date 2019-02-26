@@ -169,8 +169,7 @@ func createGRPCServer() {
 
 // We can only set a ServerInterceptor once, so we chain multiple interceptors into one
 func interceptors() []grpc.ServerOption {
-	var streamInterceptor grpc.StreamServerInterceptor
-	var unaryInterceptor grpc.UnaryServerInterceptor
+	interceptors := &InterceptorBuilder{}
 
 	if *GRPCAuth != "" {
 		log.Infof("enabling auth plugin %v", *GRPCAuth)
@@ -180,34 +179,20 @@ func interceptors() []grpc.ServerOption {
 			log.Fatalf("Failed to load auth plugin: %v", err)
 		}
 		authPlugin = authPluginImpl
-		streamInterceptor = authenticatingStreamInterceptor
-		unaryInterceptor = authenticatingUnaryInterceptor
+		interceptors.Add(authenticatingStreamInterceptor, authenticatingUnaryInterceptor)
 	}
 
 	if *grpccommon.EnableGRPCPrometheus {
-		streamInterceptor = mergeStreamServerInterceptor(streamInterceptor, grpc_prometheus.StreamServerInterceptor)
-		unaryInterceptor = mergeUnaryServerInterceptor(unaryInterceptor, grpc_prometheus.UnaryServerInterceptor)
+		interceptors.Add(grpc_prometheus.StreamServerInterceptor, grpc_prometheus.UnaryServerInterceptor)
 	}
 
-	if streamInterceptor == nil {
-		return []grpc.ServerOption{}
+	if interceptors.NonEmpty() {
+		return []grpc.ServerOption{
+			grpc.StreamInterceptor(interceptors.StreamServerInterceptor),
+			grpc.UnaryInterceptor(interceptors.UnaryStreamInterceptor)}
 	} else {
-		return []grpc.ServerOption{grpc.StreamInterceptor(streamInterceptor), grpc.UnaryInterceptor(unaryInterceptor)}
+		return []grpc.ServerOption{}
 	}
-}
-
-func mergeStreamServerInterceptor(a,b grpc.StreamServerInterceptor) grpc.StreamServerInterceptor {
-	if a == nil {
-		return b
-	}
-	return grpc_middleware.ChainStreamServer(a, b)
-}
-
-func mergeUnaryServerInterceptor(a,b grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
-	if a == nil {
-		return b
-	}
-	return grpc_middleware.ChainUnaryServer(a, b)
 }
 
 func serveGRPC() {
@@ -293,4 +278,24 @@ func WrapServerStream(stream grpc.ServerStream) *WrappedServerStream {
 		return existing
 	}
 	return &WrappedServerStream{ServerStream: stream, WrappedContext: stream.Context()}
+}
+
+// InterceptorBuilder chains together multiple ServerInterceptors
+type InterceptorBuilder struct {
+	StreamServerInterceptor grpc.StreamServerInterceptor
+	UnaryStreamInterceptor  grpc.UnaryServerInterceptor
+}
+
+func (collector *InterceptorBuilder) Add(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor) {
+	if collector.StreamServerInterceptor == nil {
+		collector.StreamServerInterceptor = s
+		collector.UnaryStreamInterceptor = u
+	} else {
+		collector.StreamServerInterceptor = grpc_middleware.ChainStreamServer(collector.StreamServerInterceptor, s)
+		collector.UnaryStreamInterceptor = grpc_middleware.ChainUnaryServer(collector.UnaryStreamInterceptor, u)
+	}
+}
+
+func (collector *InterceptorBuilder) NonEmpty() bool {
+	return collector.StreamServerInterceptor != nil
 }
