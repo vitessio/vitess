@@ -15,9 +15,9 @@
 """Main python file."""
 
 import argparse
+import json
 import os
 import time
-import json
 
 from flask import Flask
 
