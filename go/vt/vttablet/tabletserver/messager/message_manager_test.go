@@ -23,6 +23,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/pools"
 
 	"golang.org/x/net/context"
 
@@ -784,7 +785,7 @@ func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.
 }
 
 func newMMConnPool(db *fakesqldb.DB) *connpool.Pool {
-	pool := connpool.New("", 20, time.Duration(10*time.Minute), 0, newFakeTabletServer())
+	pool := connpool.New("", pools.ResourceImpl, 20, time.Duration(10*time.Minute), 0, newFakeTabletServer())
 	dbconfigs := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
 	pool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.AppDebugWithDB())
 	return pool

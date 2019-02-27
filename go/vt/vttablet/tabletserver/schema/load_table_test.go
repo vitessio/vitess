@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/pools"
 
 	"golang.org/x/net/context"
 
@@ -221,7 +222,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	appParams := db.ConnParams()
 	dbaParams := db.ConnParams()
 	connPoolIdleTimeout := 10 * time.Second
-	connPool := connpool.New("", 2, connPoolIdleTimeout, 0, DummyChecker)
+	connPool := connpool.New("", pools.ResourceImpl, 2, connPoolIdleTimeout, 0, DummyChecker)
 	connPool.Open(appParams, dbaParams, appParams)
 	conn, err := connPool.Get(ctx)
 	if err != nil {

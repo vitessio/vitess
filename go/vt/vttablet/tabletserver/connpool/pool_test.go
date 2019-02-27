@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/pools"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/callerid"
@@ -256,6 +257,7 @@ func newPool() *Pool {
 func newPoolOpts(minActive int) *Pool {
 	return New(
 		fmt.Sprintf("TestPool%d", rand.Int63()),
+		pools.ResourceImpl,
 		100,
 		10*time.Second,
 		minActive,

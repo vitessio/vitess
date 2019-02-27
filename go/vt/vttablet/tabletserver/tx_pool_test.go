@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/pools"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
@@ -619,6 +620,7 @@ func newTxPool() *TxPool {
 	limiter := &txlimiter.TxAllowAll{}
 	return NewTxPool(
 		poolName,
+		pools.ResourceImpl,
 		transactionCap,
 		transactionCap,
 		transactionTimeout,
