@@ -99,7 +99,7 @@ type State struct {
 // of active resources. Any errors when instantiating the factory
 // will cause the active resource count to be lower than requested.
 func NewNewPool(factory CreateFactory, capacity, maxCap int, idleTimeout time.Duration, minActive int) *NewPool {
-	fmt.Println("NewNewPool", capacity, maxCap	, idleTimeout)
+	//fmt.Println("NewNewPool", capacity, maxCap	, idleTimeout)
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
@@ -124,7 +124,7 @@ func NewNewPool(factory CreateFactory, capacity, maxCap int, idleTimeout time.Du
 }
 
 func (rp *NewPool) create() (resourceWrapper, error) {
-	fmt.Println("RP create")
+	//fmt.Println("RP create")
 	r, err := rp.factory()
 	if err != nil {
 		return resourceWrapper{}, err
@@ -137,7 +137,7 @@ func (rp *NewPool) create() (resourceWrapper, error) {
 }
 
 func (rp *NewPool) safeCreate() (resourceWrapper, error) {
-	fmt.Println("RP safeCreate")
+	//fmt.Println("RP safeCreate")
 	rp.Lock()
 	capacity := rp.hasFreeCapacity()
 	rp.state.Spawning++
@@ -178,7 +178,7 @@ func (rp *NewPool) ensureMinimumActive() {
 	for i := 0; i < required; i++ {
 		r, err := rp.create()
 		if err != nil {
-			fmt.Println("error creating factory", err)
+			//fmt.Println("error creating factory", err)
 			// TODO(gak): How to handle factory error?
 			break
 		}
@@ -194,7 +194,7 @@ func (rp *NewPool) ensureMinimumActive() {
 // It waits for all resources to be returned (Put).
 // After a Close, Get is not allowed.
 func (rp *NewPool) Close() {
-	fmt.Println("RP Close")
+	//fmt.Println("RP Close")
 	rp.SetIdleTimeout(0)
 	_ = rp.SetCapacity(0, true)
 }
@@ -208,11 +208,11 @@ func (rp *NewPool) IsClosed() bool {
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will wait till the next resource becomes available or a timeout.
 func (rp *NewPool) Get(ctx context.Context) (resource Resource, err error) {
-	fmt.Printf("RP Get %+v\n", rp.State())
+	//fmt.Printf("RP Get %+v\n", rp.State())
 	select {
 	case wrapper, ok := <-rp.pool:
 		if !ok {
-			fmt.Printf("RP Get ErrClosed %+v\n", rp.State())
+			//fmt.Printf("RP Get ErrClosed %+v\n", rp.State())
 			return nil, ErrClosed
 		}
 
@@ -221,30 +221,30 @@ func (rp *NewPool) Get(ctx context.Context) (resource Resource, err error) {
 		rp.state.InUse++
 		rp.Unlock()
 
-		fmt.Printf("RP Get found in pool %v %+v\n", wrapper.resource, rp.State())
+		//fmt.Printf("RP Get found in pool %v %+v\n", wrapper.resource, rp.State())
 		return wrapper.resource, nil
 
 	case <-ctx.Done():
-		fmt.Printf("RP Get ErrTimeout1 %+v\n", rp.State())
+		//fmt.Printf("RP Get ErrTimeout1 %+v\n", rp.State())
 		return nil, ErrTimeout
 
 	default:
-		fmt.Printf("RP Get Nothing in pool %+v\n", rp.State())
+		//fmt.Printf("RP Get Nothing in pool %+v\n", rp.State())
 		wrapper, err := rp.safeCreate()
 		if err == errNeedToQueue {
 			return rp.getQueued(ctx)
 		} else if err != nil {
-			fmt.Printf("RP Error creating1 %v %+v\n", err, rp.State())
+			//fmt.Printf("RP Error creating1 %v %+v\n", err, rp.State())
 			return nil, err
 		}
 
-		fmt.Printf("RP Get created and returned %v %+v\n", wrapper.resource, rp.State())
+		//fmt.Printf("RP Get created and returned %v %+v\n", wrapper.resource, rp.State())
 		return wrapper.resource, nil
 	}
 }
 
 func (rp *NewPool) getQueued(ctx context.Context) (Resource, error) {
-	fmt.Printf("RP GetQueued %+v\n", rp.State())
+	//fmt.Printf("RP GetQueued %+v\n", rp.State())
 	startTime := time.Now()
 
 	rp.Lock()
@@ -260,7 +260,7 @@ func (rp *NewPool) getQueued(ctx context.Context) (Resource, error) {
 				rp.state.Waiters--
 				rp.Unlock()
 
-				fmt.Printf("RP GetQueued ErrClosed %+v\n", rp.State())
+				//fmt.Printf("RP GetQueued ErrClosed %+v\n", rp.State())
 				return nil, ErrClosed
 			}
 
@@ -272,7 +272,7 @@ func (rp *NewPool) getQueued(ctx context.Context) (Resource, error) {
 			rp.state.WaitTime += time.Now().Sub(startTime)
 			rp.Unlock()
 
-			fmt.Printf("RP GetQueued got from pool %v %+v\n", wrapper.resource, rp.State())
+			//fmt.Printf("RP GetQueued got from pool %v %+v\n", wrapper.resource, rp.State())
 			return wrapper.resource, nil
 
 		case <-ctx.Done():
@@ -280,7 +280,7 @@ func (rp *NewPool) getQueued(ctx context.Context) (Resource, error) {
 			rp.state.Waiters--
 			rp.Unlock()
 
-			fmt.Printf("RP GetQueued ErrTimeout %+v\n", rp.State())
+			//fmt.Printf("RP GetQueued ErrTimeout %+v\n", rp.State())
 			return nil, ErrTimeout
 
 		case <-time.After(100 * time.Millisecond):
@@ -288,16 +288,16 @@ func (rp *NewPool) getQueued(ctx context.Context) (Resource, error) {
 			// put into a queue, but another caller has failed in creating
 			// a resource, causing a deadlock. We'll check occasionally to see
 			// if there is now capacity to create.
-			fmt.Printf("RP GetQueued After 100ms %+v\n", rp.State())
+			//fmt.Printf("RP GetQueued After 100ms %+v\n", rp.State())
 
 			wrapper, err := rp.safeCreate()
 			if err == errNeedToQueue {
 				continue
 			} else if err != nil {
-				fmt.Printf("RP GetQueued err on create %v %+v\n", err, rp.State())
+				//fmt.Printf("RP GetQueued err on create %v %+v\n", err, rp.State())
 				return nil, err
 			} else {
-				fmt.Printf("RP GetQueued create after race %v %+v\n", wrapper.resource, rp.State())
+				//fmt.Printf("RP GetQueued create after race %v %+v\n", wrapper.resource, rp.State())
 				return wrapper.resource, nil
 			}
 		}
@@ -309,14 +309,14 @@ func (rp *NewPool) getQueued(ctx context.Context) (Resource, error) {
 // you will need to call Put(nil) instead of returning the closed resource.
 // The will eventually cause a new resource to be created in its place.
 func (rp *NewPool) Put(resource Resource) {
-	fmt.Printf("RP Put %v %+v\n", resource, rp.State())
+	//fmt.Printf("RP Put %v %+v\n", resource, rp.State())
 	rp.Lock()
 
 	rp.state.InUse--
 
 	if rp.state.Closed || rp.active() > rp.state.Capacity {
 		if resource != nil {
-			fmt.Println("RP Put closing resource due to closing or capacity", rp.state.Closed, rp.active())
+			//fmt.Println("RP Put closing resource due to closing or capacity", rp.state.Closed, rp.active())
 			resource.Close()
 		}
 		rp.Unlock()
@@ -325,7 +325,7 @@ func (rp *NewPool) Put(resource Resource) {
 
 	if resource == nil {
 		rp.Unlock()
-		fmt.Printf("RP Put got nil %v %+v\n", resource, rp.State())
+		//fmt.Printf("RP Put got nil %v %+v\n", resource, rp.State())
 		rp.ensureMinimumActive()
 		return
 	}
@@ -333,20 +333,20 @@ func (rp *NewPool) Put(resource Resource) {
 	if rp.state.InUse < 0 {
 		rp.state.InUse++
 		rp.Unlock()
-		fmt.Printf("RP Put ErRPutBeforeGet %+v\n", rp.State())
+		//fmt.Printf("RP Put ErRPutBeforeGet %+v\n", rp.State())
 		panic(ErrPutBeforeGet)
 	}
 
 	w := resourceWrapper{resource: resource, timeUsed: time.Now()}
 	select {
 	case rp.pool <- w:
-		fmt.Printf("RP Put back into pool %+v\n", rp.state)
+		//fmt.Printf("RP Put back into pool %+v\n", rp.state)
 		rp.state.InPool++
 	default:
 		// We don't have room.
 		rp.state.InUse++
 		rp.Unlock()
-		fmt.Printf("RP Put full pool %+v\n", rp.State())
+		//fmt.Printf("RP Put full pool %+v\n", rp.State())
 		panic(ErrFull)
 	}
 
@@ -361,7 +361,7 @@ func (rp *NewPool) Put(resource Resource) {
 // to the pool.
 // A SetCapacity of 0 is equivalent to closing the NewPool.
 func (rp *NewPool) SetCapacity(capacity int, block bool) error {
-	fmt.Printf("RP SetCapacity %d %+v\n", capacity, rp.State())
+	//fmt.Printf("RP SetCapacity %d %+v\n", capacity, rp.State())
 	rp.Lock()
 
 	if rp.state.Closed {
@@ -400,12 +400,12 @@ func (rp *NewPool) SetCapacity(capacity int, block bool) error {
 	}
 	go func() {
 		// Shrinking capacity. Loop until enough pool resources are closed.
-		fmt.Printf("SetCapacity starting drain... %+v\n", rp.State())
+		//fmt.Printf("SetCapacity starting drain... %+v\n", rp.State())
 		for {
 			rp.Lock()
 			remaining := rp.active() - rp.state.Capacity
 			if remaining <= 0 {
-				fmt.Printf("SetCapacity inpool fully drained %+v\n", rp.state)
+				//fmt.Printf("SetCapacity inpool fully drained %+v\n", rp.state)
 				rp.state.Draining = false
 				if rp.state.Capacity == 0 {
 					close(rp.pool)
@@ -421,14 +421,14 @@ func (rp *NewPool) SetCapacity(capacity int, block bool) error {
 			// Collect the InUse resources lazily when they're returned.
 			select {
 			case wrapper := <-rp.pool:
-				fmt.Printf("SetCapacity closing resource due to shrinking %v %+v\n", wrapper.resource, rp.State())
+				//fmt.Printf("SetCapacity closing resource due to shrinking %v %+v\n", wrapper.resource, rp.State())
 				wrapper.resource.Close()
 				wrapper.resource = nil
 
 				rp.Lock()
 				rp.state.InPool--
 				rp.Unlock()
-				fmt.Printf("SetCapacity closed resource due to shrinking %v %+v\n", wrapper.resource, rp.State())
+				//fmt.Printf("SetCapacity closed resource due to shrinking %v %+v\n", wrapper.resource, rp.State())
 
 			case <-time.After(time.Second):
 				// Someone could have pulled from the pool just before
@@ -452,22 +452,22 @@ func (rp *NewPool) SetIdleTimeout(idleTimeout time.Duration) {
 	fastInterval := rp.state.IdleTimeout / 10
 
 	if rp.idleTimer == nil {
-		fmt.Println("RP creating new timer", fastInterval)
+		//fmt.Println("RP creating new timer", fastInterval)
 		rp.idleTimer = timer.NewTimer(fastInterval)
 	} else {
-		fmt.Println("RP stopping timer")
+		//fmt.Println("RP stopping timer")
 		rp.Unlock()
 		rp.idleTimer.Stop()
 		rp.Lock()
 	}
 
 	if rp.state.IdleTimeout == 0 {
-		fmt.Println("RP disabling timer")
+		//fmt.Println("RP disabling timer")
 		rp.Unlock()
 		return
 	}
 
-	fmt.Println("RP activating timer", fastInterval)
+	//fmt.Println("RP activating timer", fastInterval)
 	rp.idleTimer.SetInterval(fastInterval)
 	rp.idleTimer.Start(rp.closeIdleResources)
 	rp.Unlock()
@@ -510,7 +510,7 @@ func (rp *NewPool) closeIdleResources() {
 				rp.state.IdleClosed++
 				rp.state.InPool--
 				rp.Unlock()
-				fmt.Printf("RP CIR closing resource due to timeout %v %+v\n", wrapper.resource, rp.State())
+				//fmt.Printf("RP CIR closing resource due to timeout %v %+v\n", wrapper.resource, rp.State())
 				wrapper.resource.Close()
 				wrapper.resource = nil
 				continue

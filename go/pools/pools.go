@@ -12,6 +12,8 @@ type Pool interface {
 	SetCapacity(int, bool) error
 	Close()
 
+	StatsJSON() string
+
 	Active() int
 }
 
