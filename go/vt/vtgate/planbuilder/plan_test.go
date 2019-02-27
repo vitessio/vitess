@@ -221,30 +221,32 @@ type testPlan struct {
 
 func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {
 	for tcase := range iterateExecFile(filename) {
-		plan, err := Build(tcase.input, &vschemaWrapper{
-			v: vschema,
-		})
-		var out string
-		if err != nil {
-			out = err.Error()
-		} else {
-			bout, _ := json.Marshal(testPlan{
-				Original:     plan.Original,
-				Instructions: plan.Instructions,
+		t.Run(tcase.comments, func(t *testing.T) {
+			plan, err := Build(tcase.input, &vschemaWrapper{
+				v: vschema,
 			})
-			out = string(bout)
-		}
-		if out != tcase.output {
-			t.Errorf("File: %s, Line:%v\n got:\n%s, \nwant:\n%s", filename, tcase.lineno, out, tcase.output)
-			// Uncomment these lines to re-generate input files
+			var out string
 			if err != nil {
-				out = fmt.Sprintf("\"%s\"", out)
+				out = err.Error()
 			} else {
-				bout, _ := json.MarshalIndent(plan, "", "  ")
+				bout, _ := json.Marshal(testPlan{
+					Original:     plan.Original,
+					Instructions: plan.Instructions,
+				})
 				out = string(bout)
 			}
-			fmt.Printf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out)
-		}
+			if out != tcase.output {
+				t.Errorf("File: %s, Line:%v\n got:\n%s, \nwant:\n%s", filename, tcase.lineno, out, tcase.output)
+				// Uncomment these lines to re-generate input files
+				if err != nil {
+					out = fmt.Sprintf("\"%s\"", out)
+				} else {
+					bout, _ := json.MarshalIndent(plan, "", "  ")
+					out = string(bout)
+				}
+				fmt.Printf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out)
+			}
+		})
 	}
 }
 

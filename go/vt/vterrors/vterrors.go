@@ -1,9 +1,10 @@
 // Package vterrors provides simple error handling primitives for Vitess
 //
 // In all Vitess code, errors should be propagated using vterrors.Wrapf()
-// and not fmt.Errorf().
+// and not fmt.Errorf(). This makes sure that stacktraces are kept and
+// propagated correctly.
 //
-// New errors should be created using vterrors.New
+// New errors should be created using vterrors.New or vterrors.Errorf
 //
 // Vitess uses canonical error codes for error reporting. This is based
 // on years of industry experience with error reporting. This idea is
@@ -27,9 +28,10 @@
 // Retrieving the cause of an error
 //
 // Using vterrors.Wrap constructs a stack of errors, adding context to the
-// preceding error. Depending on the nature of the error it may be necessary
-// to reverse the operation of errors.Wrap to retrieve the original error
-// for inspection. Any error value which implements this interface
+// preceding error, instead of simply building up a string.
+// Depending on the nature of the error it may be necessary to reverse the
+// operation of errors.Wrap to retrieve the original error for inspection.
+// Any error value which implements this interface
 //
 //     type causer interface {
 //             Cause() error
@@ -60,8 +62,7 @@
 //
 //     %s    print the error. If the error has a Cause it will be
 //           printed recursively
-//     %v    see %s
-//     %+v   extended format. Each Frame of the error's StackTrace will
+//     %v    extended format. Each Frame of the error's StackTrace will
 //           be printed in detail.
 //
 // Most but not all of the code in this file was originally copied from
@@ -70,8 +71,9 @@ package vterrors
 
 import (
 	"fmt"
-	"golang.org/x/net/context"
 	"io"
+
+	"golang.org/x/net/context"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -118,17 +120,14 @@ func (f *fundamental) Error() string { return f.msg }
 func (f *fundamental) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':
-		if s.Flag('+') {
-			io.WriteString(s, "Code: "+f.code.String()+"\n")
-			io.WriteString(s, f.msg+"\n")
-			f.stack.Format(s, verb)
-			return
-		}
-		fallthrough
+		panicIfError(io.WriteString(s, "Code: "+f.code.String()+"\n"))
+		panicIfError(io.WriteString(s, f.msg+"\n"))
+		f.stack.Format(s, verb)
+		return
 	case 's':
-		io.WriteString(s, f.msg)
+		panicIfError(io.WriteString(s, f.msg))
 	case 'q':
-		fmt.Fprintf(s, "%q", f.msg)
+		panicIfError(fmt.Fprintf(s, "%q", f.msg))
 	}
 }
 
@@ -196,17 +195,24 @@ func (w *wrapping) Error() string { return w.msg + ": " + w.cause.Error() }
 func (w *wrapping) Cause() error  { return w.cause }
 
 func (w *wrapping) Format(s fmt.State, verb rune) {
-	switch verb {
-	case 'v':
-		if s.Flag('+') {
-			fmt.Fprintf(s, "%+v\n", w.Cause())
-			io.WriteString(s, w.msg)
-			w.stack.Format(s, verb)
-			return
-		}
-		fallthrough
-	case 's', 'q':
-		io.WriteString(s, w.Error())
+	if rune('v') == verb {
+		panicIfError(fmt.Fprintf(s, "%v\n", w.Cause()))
+		panicIfError(io.WriteString(s, w.msg))
+		w.stack.Format(s, verb)
+		return
+	}
+
+	if rune('s') == verb || rune('q')  == verb {
+		panicIfError(io.WriteString(s, w.Error()))
+	}
+
+	return
+}
+
+// since we can't return an error, let's panic if something goes wrong here
+func panicIfError(_ int, err error) {
+	if err != nil {
+		panic(err)
 	}
 }
 

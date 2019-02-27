@@ -18,6 +18,7 @@ package gateway
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -34,23 +35,23 @@ import (
 )
 
 func TestDiscoveryGatewayExecute(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg Gateway, target *querypb.Target) error {
 		_, err := dg.Execute(context.Background(), target, "query", nil, 0, nil)
 		return err
 	})
-	testDiscoveryGatewayTransact(t, false, func(dg Gateway, target *querypb.Target) error {
+	testDiscoveryGatewayTransact(t, func(dg Gateway, target *querypb.Target) error {
 		_, err := dg.Execute(context.Background(), target, "query", nil, 1, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg Gateway, target *querypb.Target) error {
 		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 0, nil)
 		return err
 	})
-	testDiscoveryGatewayTransact(t, false, func(dg Gateway, target *querypb.Target) error {
+	testDiscoveryGatewayTransact(t, func(dg Gateway, target *querypb.Target) error {
 		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 1, nil)
 		return err
@@ -58,7 +59,7 @@ func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
 }
 
 func TestDiscoveryGatewayExecuteStream(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, true, func(dg Gateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg Gateway, target *querypb.Target) error {
 		err := dg.StreamExecute(context.Background(), target, "query", nil, 0, nil, func(qr *sqltypes.Result) error {
 			return nil
 		})
@@ -67,33 +68,33 @@ func TestDiscoveryGatewayExecuteStream(t *testing.T) {
 }
 
 func TestDiscoveryGatewayBegin(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg Gateway, target *querypb.Target) error {
 		_, err := dg.Begin(context.Background(), target, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayCommit(t *testing.T) {
-	testDiscoveryGatewayTransact(t, false, func(dg Gateway, target *querypb.Target) error {
+	testDiscoveryGatewayTransact(t, func(dg Gateway, target *querypb.Target) error {
 		return dg.Commit(context.Background(), target, 1)
 	})
 }
 
 func TestDiscoveryGatewayRollback(t *testing.T) {
-	testDiscoveryGatewayTransact(t, false, func(dg Gateway, target *querypb.Target) error {
+	testDiscoveryGatewayTransact(t, func(dg Gateway, target *querypb.Target) error {
 		return dg.Rollback(context.Background(), target, 1)
 	})
 }
 
 func TestDiscoveryGatewayBeginExecute(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg Gateway, target *querypb.Target) error {
 		_, _, err := dg.BeginExecute(context.Background(), target, "query", nil, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
+	testDiscoveryGatewayGeneric(t, func(dg Gateway, target *querypb.Target) error {
 		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
 		_, _, err := dg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
 		return err
@@ -375,7 +376,7 @@ func benchmarkCellsGetAggregateStats(i int, b *testing.B) {
 	}
 }
 
-func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway, target *querypb.Target) error) {
+func testDiscoveryGatewayGeneric(t *testing.T, f func(dg Gateway, target *querypb.Target) error) {
 	keyspace := "ks"
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
@@ -390,25 +391,23 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	// no tablet
 	hc.Reset()
 	dg.tsc.ResetForTesting()
-	want := "target: ks.0.replica, no valid tablet"
+	want := []string{"target: ks.0.replica", "no valid tablet"}
 	err := f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.Code_UNAVAILABLE)
+	verifyShardErrors(t, err, want, vtrpcpb.Code_UNAVAILABLE)
 
 	// tablet with error
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, fmt.Errorf("no connection"))
-	want = "target: ks.0.replica, no valid tablet"
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.Code_UNAVAILABLE)
+	verifyShardErrors(t, err, want, vtrpcpb.Code_UNAVAILABLE)
 
 	// tablet without connection
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	ep1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil).Tablet()
-	want = fmt.Sprintf(`target: ks.0.replica, no valid tablet`)
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.Code_UNAVAILABLE)
+	verifyShardErrors(t, err, want, vtrpcpb.Code_UNAVAILABLE)
 
 	// retry error
 	hc.Reset()
@@ -419,14 +418,12 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	ep1 = sc1.Tablet()
 	ep2 := sc2.Tablet()
-	wants := map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, topotools.TabletIdent(ep1)): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, topotools.TabletIdent(ep2)): 0,
-	}
+
 	err = f(dg, target)
-	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
-		t.Errorf("wanted error: %+v, got error: %v", wants, err)
-	}
+	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
+	verifyShardErrorEither(t, err,
+		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep1)),
+		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep2)))
 
 	// fatal error
 	hc.Reset()
@@ -437,14 +434,11 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	ep1 = sc1.Tablet()
 	ep2 = sc2.Tablet()
-	wants = map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, topotools.TabletIdent(ep1)): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, topotools.TabletIdent(ep2)): 0,
-	}
 	err = f(dg, target)
-	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
-		t.Errorf("wanted error: %+v, got error: %v", wants, err)
-	}
+	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
+	verifyShardErrorEither(t, err,
+		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep1)),
+		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep2)))
 
 	// server error - no retry
 	hc.Reset()
@@ -452,9 +446,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	ep1 = sc1.Tablet()
-	want = fmt.Sprintf(`target: ks.0.replica, used tablet: %s, INVALID_ARGUMENT error`, topotools.TabletIdent(ep1))
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
+	verifyContainsError(t, err, fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep1)), vtrpcpb.Code_INVALID_ARGUMENT)
 
 	// no failure
 	hc.Reset()
@@ -466,7 +459,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	}
 }
 
-func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gateway, target *querypb.Target) error) {
+func testDiscoveryGatewayTransact(t *testing.T, f func(dg Gateway, target *querypb.Target) error) {
 	keyspace := "ks"
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
@@ -487,14 +480,13 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	ep1 := sc1.Tablet()
 	ep2 := sc2.Tablet()
-	wants := map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, topotools.TabletIdent(ep1)): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: %s, FAILED_PRECONDITION error`, topotools.TabletIdent(ep2)): 0,
-	}
+
 	err := f(dg, target)
-	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
-		t.Errorf("wanted error: %+v, got error: %v", wants, err)
-	}
+	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
+	format := `used tablet: %s`
+	verifyShardErrorEither(t, err,
+		fmt.Sprintf(format, topotools.TabletIdent(ep1)),
+		fmt.Sprintf(format, topotools.TabletIdent(ep2)), )
 
 	// server error - no retry
 	hc.Reset()
@@ -502,16 +494,35 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	ep1 = sc1.Tablet()
-	want := fmt.Sprintf(`target: ks.0.replica, used tablet: %s, INVALID_ARGUMENT error`, topotools.TabletIdent(ep1))
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
+	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_INVALID_ARGUMENT)
+	verifyContainsError(t, err, fmt.Sprintf(format, topotools.TabletIdent(ep1)), vtrpcpb.Code_INVALID_ARGUMENT)
 }
 
-func verifyShardError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("wanted error: %s, got error: %v", wantErr, err)
+func verifyContainsError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("wanted error: \n%s\n, got error: \n%v\n", wantErr, err)
 	}
 	if code := vterrors.Code(err); code != wantCode {
-		t.Errorf("wanted error code: %s, got: %v", wantCode, code)
+		t.Fatalf("wanted error code: %s, got: %v", wantCode, code)
+	}
+}
+
+func verifyShardErrorEither(t *testing.T, err error, a, b string) {
+	if err == nil || !strings.Contains(err.Error(), a) || !strings.Contains(err.Error(), b) {
+		t.Fatalf("wanted error to contain: %v or %v\n, got error: %v", a, b, err)
+	}
+}
+
+func verifyShardErrors(t *testing.T, err error, wantErrors []string, wantCode vtrpcpb.Code) {
+	if err != nil {
+		for _, wantErr := range wantErrors {
+			if err == nil || !strings.Contains(err.Error(), wantErr) {
+				t.Fatalf("wanted error: \n%s\n, got error: \n%v\n", wantErr, err)
+			}
+		}
+	}
+	if code := vterrors.Code(err); code != wantCode {
+		t.Fatalf("wanted error code: %s, got: %v", wantCode, code)
 	}
 }

@@ -83,11 +83,11 @@ func buildSecondaryList(table *schema.Table, pkList [][]sqltypes.Value, secondar
 func resolveNumber(pv sqltypes.PlanValue, bindVars map[string]*querypb.BindVariable) (int64, error) {
 	v, err := pv.ResolveValue(bindVars)
 	if err != nil {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		return 0, err
 	}
 	ret, err := sqltypes.ToInt64(v)
 	if err != nil {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		return 0, err
 	}
 	return ret, nil
 }

@@ -44,10 +44,10 @@ package topo
 
 import (
 	"flag"
-	"fmt"
 	"sync"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -258,7 +258,7 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	// Create the connection.
 	conn, err = ts.factory.Create(cell, ci.ServerAddress, ci.Root)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create topo connection to %v, %v: %v", ci.ServerAddress, ci.Root, err)
+		return nil, vterrors.Wrapf(err, "failed to create topo connection to %v, %v", ci.ServerAddress, ci.Root)
 	}
 	conn = NewStatsConn(cell, conn)
 	ts.cells[cell] = conn
