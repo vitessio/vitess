@@ -18,7 +18,6 @@ package topo
 
 import (
 	"encoding/hex"
-	"fmt"
 	"path"
 	"reflect"
 	"sort"
@@ -26,8 +25,10 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
-	"github.com/golang/protobuf/proto"
+  "github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/trace"
@@ -104,7 +105,7 @@ func ValidateShardName(shard string) (string, *topodatapb.KeyRange, error) {
 
 	parts := strings.Split(shard, "-")
 	if len(parts) != 2 {
-		return "", nil, fmt.Errorf("invalid shardId, can only contain one '-': %v", shard)
+		return "", nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid shardId, can only contain one '-': %v", shard)
 	}
 
 	keyRange, err := key.ParseKeyRangeParts(parts[0], parts[1])
@@ -113,7 +114,7 @@ func ValidateShardName(shard string) (string, *topodatapb.KeyRange, error) {
 	}
 
 	if len(keyRange.End) > 0 && string(keyRange.Start) >= string(keyRange.End) {
-		return "", nil, fmt.Errorf("out of order keys: %v is not strictly smaller than %v", hex.EncodeToString(keyRange.Start), hex.EncodeToString(keyRange.End))
+		return "", nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "out of order keys: %v is not strictly smaller than %v", hex.EncodeToString(keyRange.Start), hex.EncodeToString(keyRange.End))
 	}
 
 	return strings.ToLower(shard), keyRange, nil
@@ -182,7 +183,7 @@ func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardI
 
 	value := &topodatapb.Shard{}
 	if err = proto.Unmarshal(data, value); err != nil {
-		return nil, fmt.Errorf("GetShard(%v,%v): bad shard data: %v", keyspace, shard, err)
+		return nil, vterrors.Wrapf(err, "GetShard(%v,%v): bad shard data", keyspace, shard)
 	}
 	return &ShardInfo{
 		keyspace:  keyspace,
@@ -329,12 +330,12 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 
 	// create the keyspace, maybe it already exists
 	if err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && !IsErrType(err, NodeExists) {
-		return nil, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+		return nil, vterrors.Wrapf(err, "CreateKeyspace(%v) failed", keyspace)
 	}
 
 	// now try to create with the lock, may already exist
 	if err = ts.CreateShard(ctx, keyspace, shard); err != nil && !IsErrType(err, NodeExists) {
-		return nil, fmt.Errorf("CreateShard(%v/%v) failed: %v", keyspace, shard, err)
+		return nil, vterrors.Wrapf(err, "CreateShard(%v/%v) failed", keyspace, shard)
 	}
 
 	// try to read the shard again, maybe someone created it
@@ -405,14 +406,14 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 	// we have an existing record, check table lists matches and
 	// DisableQueryService is not set
 	if tc.DisableQueryService {
-		return fmt.Errorf("cannot safely alter BlacklistedTables as DisableQueryService is set for shard %v/%v", si.keyspace, si.shardName)
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot safely alter BlacklistedTables as DisableQueryService is set for shard %v/%v", si.keyspace, si.shardName)
 	}
 
 	if remove {
 		si.removeCellsFromTabletControl(tc, tabletType, cells)
 	} else {
 		if !reflect.DeepEqual(tc.BlacklistedTables, tables) {
-			return fmt.Errorf("trying to use two different sets of blacklisted tables for shard %v/%v: %v and %v", si.keyspace, si.shardName, tc.BlacklistedTables, tables)
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "trying to use two different sets of blacklisted tables for shard %v/%v: %v and %v", si.keyspace, si.shardName, tc.BlacklistedTables, tables)
 		}
 
 		tc.Cells = addCells(tc.Cells, cells)
@@ -447,18 +448,18 @@ func (si *ShardInfo) UpdateDisableQueryService(ctx context.Context, tabletType t
 	// we have an existing record, check table list is empty and
 	// DisableQueryService is set
 	if len(tc.BlacklistedTables) > 0 {
-		return fmt.Errorf("cannot safely alter DisableQueryService as BlacklistedTables is set")
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot safely alter DisableQueryService as BlacklistedTables is set")
 	}
 	if !tc.DisableQueryService {
 		// This code is unreachable because we always delete the control record when we enable QueryService.
-		return fmt.Errorf("cannot safely alter DisableQueryService as DisableQueryService is not set, this record should not be there for shard %v/%v", si.keyspace, si.shardName)
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot safely alter DisableQueryService as DisableQueryService is not set, this record should not be there for shard %v/%v", si.keyspace, si.shardName)
 	}
 
 	if disableQueryService {
 		tc.Cells = addCells(tc.Cells, cells)
 	} else {
 		if tc.Frozen {
-			return fmt.Errorf("migrate has gone past the point of no return, cannot re-enable serving for %v/%v", si.keyspace, si.shardName)
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "migrate has gone past the point of no return, cannot re-enable serving for %v/%v", si.keyspace, si.shardName)
 		}
 		si.removeCellsFromTabletControl(tc, tabletType, cells)
 	}
@@ -611,7 +612,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 			defer wg.Done()
 			sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
 			if err != nil {
-				rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
+				rec.RecordError(vterrors.Wrapf(err, "GetShardReplication(%v, %v, %v) failed", cell, keyspace, shard))
 				return
 			}
 

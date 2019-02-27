@@ -194,222 +194,243 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 }
 
 func testResolverGeneric(t *testing.T, name string, action func(res *Resolver) (*sqltypes.Result, error)) {
-	// successful execute
-	s := createSandbox(name)
-	hc := discovery.NewFakeHealthCheck()
-	res := newTestResolver(hc, new(sandboxTopo), "aa")
-	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
+	t.Run("successful execute", func(t *testing.T) {
+		createSandbox(name)
+		hc := discovery.NewFakeHealthCheck()
+		res := newTestResolver(hc, new(sandboxTopo), "aa")
+		sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
 
-	_, err := action(res)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
-	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-
-	// non-retryable failure
-	s.Reset()
-	hc.Reset()
-	sbc0 = hc.AddTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 = hc.AddTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	sbc1.MustFailCodes[vtrpcpb.Code_INTERNAL] = 1
-	_, err = action(res)
-	want := []string{
-		fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20), INVALID_ARGUMENT error", name),
-		fmt.Sprintf("target: %s.20-40.master, used tablet: aa-0 (20-40), INTERNAL error", name),
-	}
-	if err == nil {
-		t.Errorf("want\n%v\ngot\n%v", want, err)
-	} else {
-		got := strings.Split(err.Error(), "\n")
-		sort.Strings(got)
-		if !reflect.DeepEqual(want, got) {
-			t.Errorf("want\n%v\ngot\n%v", want, got)
+		_, err := action(res)
+		if err != nil {
+			t.Errorf("want nil, got %v", err)
 		}
-	}
-	// Ensure that we tried only once
-	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	// Ensure that we tried topo only once when mapping KeyspaceId/KeyRange to shards
-	if s.SrvKeyspaceCounter != 1 {
-		t.Errorf("want 1, got %v", s.SrvKeyspaceCounter)
-	}
-
-	// retryable failure, no sharding event
-	s.Reset()
-	hc.Reset()
-	sbc0 = hc.AddTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 = hc.AddTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc0.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	sbc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	_, err = action(res)
-	want = []string{
-		fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20), FAILED_PRECONDITION error", name),
-		fmt.Sprintf("target: %s.20-40.master, used tablet: aa-0 (20-40), FAILED_PRECONDITION error", name),
-	}
-	if err == nil {
-		t.Errorf("want\n%v\ngot\n%v", want, err)
-	} else {
-		got := strings.Split(err.Error(), "\n")
-		sort.Strings(got)
-		if !reflect.DeepEqual(want, got) {
-			t.Errorf("want\n%v\ngot\n%v", want, got)
+		if execCount := sbc0.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
 		}
-	}
-	// Ensure that we tried only once.
-	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	// Ensure that we tried topo only twice.
-	if s.SrvKeyspaceCounter != 2 {
-		t.Errorf("want 2, got %v", s.SrvKeyspaceCounter)
-	}
-
-	// no failure, initial vertical resharding
-	s.Reset()
-	addSandboxServedFrom(name, name+"ServedFrom0")
-	hc.Reset()
-	sbc0 = hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 = hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	s0 := createSandbox(name + "ServedFrom0") // make sure we have a fresh copy
-	s0.ShardSpec = "-80-"
-	sbc2 := hc.AddTestTablet("aa", "1.1.1.1", 1003, name+"ServedFrom0", "-80", topodatapb.TabletType_MASTER, true, 1, nil)
-	_, err = action(res)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
-	// Ensure original keyspace is not used.
-	if execCount := sbc0.ExecCount.Get(); execCount != 0 {
-		t.Errorf("want 0, got %v", execCount)
-	}
-	if execCount := sbc1.ExecCount.Get(); execCount != 0 {
-		t.Errorf("want 0, got %v", execCount)
-	}
-	// Ensure redirected keyspace is accessed once.
-	if execCount := sbc2.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	// Ensure that we tried each keyspace only once.
-	if s.SrvKeyspaceCounter != 1 {
-		t.Errorf("want 1, got %v", s.SrvKeyspaceCounter)
-	}
-	if s0.SrvKeyspaceCounter != 1 {
-		t.Errorf("want 1, got %v", s0.SrvKeyspaceCounter)
-	}
-	s0.Reset()
-
-	// retryable failure, vertical resharding
-	s.Reset()
-	hc.Reset()
-	sbc0 = hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 = hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	i := 0
-	s.SrvKeyspaceCallback = func() {
-		if i == 1 {
-			addSandboxServedFrom(name, name+"ServedFrom")
-			hc.Reset()
-			hc.AddTestTablet("aa", "1.1.1.1", 1001, name+"ServedFrom", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
-			hc.AddTestTablet("aa", "1.1.1.1", 1002, name+"ServedFrom", "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
+		if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
 		}
-		i++
-	}
-	_, err = action(res)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
-	// Ensure that we tried only once on the original conn.
-	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	// Ensure that we tried topo only 3 times.
-	if s.SrvKeyspaceCounter != 3 {
-		t.Errorf("want 3, got %v", s.SrvKeyspaceCounter)
-	}
+	})
 
-	// retryable failure, horizontal resharding
-	s.Reset()
-	hc.Reset()
-	sbc0 = hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 = hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	i = 0
-	s.SrvKeyspaceCallback = func() {
-		if i == 1 {
-			s.ShardSpec = "-20-30-40-60-80-a0-c0-e0-"
-			hc.Reset()
-			hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
-			hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-30", topodatapb.TabletType_MASTER, true, 1, nil)
+	t.Run("non-retryable failure", func(t *testing.T) {
+		s := createSandbox(name)
+		hc := discovery.NewFakeHealthCheck()
+		res := newTestResolver(hc, new(sandboxTopo), "aa")
+		sbc0 := hc.AddTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc1 := hc.AddTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+		sbc1.MustFailCodes[vtrpcpb.Code_INTERNAL] = 1
+		_, err := action(res)
+		want := []string{
+			fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20): INVALID_ARGUMENT error", name),
+			fmt.Sprintf("target: %s.20-40.master, used tablet: aa-0 (20-40): INTERNAL error", name),
 		}
-		i++
-	}
-	_, err = action(res)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
-	// Ensure that we tried only once on original guy.
-	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	// Ensure that we tried topo only twice.
-	if s.SrvKeyspaceCounter != 2 {
-		t.Errorf("want 2, got %v", s.SrvKeyspaceCounter)
-	}
+		if err == nil {
+			t.Errorf("want\n%v\ngot\n%v", want, err)
+		} else {
+			got := strings.Split(err.Error(), "\n")
+			sort.Strings(got)
+			if !reflect.DeepEqual(want, got) {
+				t.Errorf("want\n%v\ngot\n%v", want, got)
+			}
+		}
+		// Ensure that we tried only once
+		if execCount := sbc0.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
+		}
+		if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
+		}
+		// Ensure that we tried topo only once when mapping KeyspaceId/KeyRange to shards
+		if s.SrvKeyspaceCounter != 1 {
+			t.Errorf("want 1, got %v", s.SrvKeyspaceCounter)
+		}
+
+	})
+
+	t.Run("retryable failure, no sharding event", func(t *testing.T) {
+		s := createSandbox(name)
+		hc := discovery.NewFakeHealthCheck()
+		res := newTestResolver(hc, new(sandboxTopo), "aa")
+		sbc0 := hc.AddTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc1 := hc.AddTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc0.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+		sbc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+		_, err := action(res)
+		want := []string{
+			fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20): FAILED_PRECONDITION error", name),
+			fmt.Sprintf("target: %s.20-40.master, used tablet: aa-0 (20-40): FAILED_PRECONDITION error", name),
+		}
+		if err == nil {
+			t.Errorf("want\n%v\ngot\n%v", want, err)
+		} else {
+			got := strings.Split(err.Error(), "\n")
+			sort.Strings(got)
+			if !reflect.DeepEqual(want, got) {
+				t.Errorf("want\n%v\ngot\n%v", want, got)
+			}
+		}
+		// Ensure that we tried only once.
+		if execCount := sbc0.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
+		}
+		if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
+		}
+		// Ensure that we tried topo only twice.
+		if s.SrvKeyspaceCounter != 2 {
+			t.Errorf("want 2, got %v", s.SrvKeyspaceCounter)
+		}
+	})
+
+	t.Run("no failure, initial vertical resharding", func(t *testing.T) {
+		s := createSandbox(name)
+		hc := discovery.NewFakeHealthCheck()
+		res := newTestResolver(hc, new(sandboxTopo), "aa")
+		addSandboxServedFrom(name, name+"ServedFrom0")
+		sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
+		s0 := createSandbox(name + "ServedFrom0") // make sure we have a fresh copy
+		s0.ShardSpec = "-80-"
+		sbc2 := hc.AddTestTablet("aa", "1.1.1.1", 1003, name+"ServedFrom0", "-80", topodatapb.TabletType_MASTER, true, 1, nil)
+		_, err := action(res)
+		if err != nil {
+			t.Errorf("want nil, got %v", err)
+		}
+		// Ensure original keyspace is not used.
+		if execCount := sbc0.ExecCount.Get(); execCount != 0 {
+			t.Errorf("want 0, got %v", execCount)
+		}
+		if execCount := sbc1.ExecCount.Get(); execCount != 0 {
+			t.Errorf("want 0, got %v", execCount)
+		}
+		// Ensure redirected keyspace is accessed once.
+		if execCount := sbc2.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
+		}
+		// Ensure that we tried each keyspace only once.
+		if s.SrvKeyspaceCounter != 1 {
+			t.Errorf("want 1, got %v", s.SrvKeyspaceCounter)
+		}
+		if s0.SrvKeyspaceCounter != 1 {
+			t.Errorf("want 1, got %v", s0.SrvKeyspaceCounter)
+		}
+		s0.Reset()
+	})
+
+	//
+	t.Run("retryable failure, vertical resharding", func(t *testing.T) {
+		s := createSandbox(name)
+		hc := discovery.NewFakeHealthCheck()
+		res := newTestResolver(hc, new(sandboxTopo), "aa")
+
+		sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+		i := 0
+		s.SrvKeyspaceCallback = func() {
+			if i == 1 {
+				addSandboxServedFrom(name, name+"ServedFrom")
+				hc.Reset()
+				hc.AddTestTablet("aa", "1.1.1.1", 1001, name+"ServedFrom", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+				hc.AddTestTablet("aa", "1.1.1.1", 1002, name+"ServedFrom", "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
+			}
+			i++
+		}
+		_, err := action(res)
+		if err != nil {
+			t.Errorf("want nil, got %v", err)
+		}
+		// Ensure that we tried only once on the original conn.
+		if execCount := sbc0.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
+		}
+		if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
+		}
+		// Ensure that we tried topo only 3 times.
+		if s.SrvKeyspaceCounter != 3 {
+			t.Errorf("want 3, got %v", s.SrvKeyspaceCounter)
+		}
+	})
+
+	t.Run("retryable failure, horizontal resharding", func(t *testing.T) {
+		s := createSandbox(name)
+		hc := discovery.NewFakeHealthCheck()
+		res := newTestResolver(hc, new(sandboxTopo), "aa")
+
+		s.Reset()
+		hc.Reset()
+		sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+		i := 0
+		s.SrvKeyspaceCallback = func() {
+			if i == 1 {
+				s.ShardSpec = "-20-30-40-60-80-a0-c0-e0-"
+				hc.Reset()
+				hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+				hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-30", topodatapb.TabletType_MASTER, true, 1, nil)
+			}
+			i++
+		}
+		_, err := action(res)
+		if err != nil {
+			t.Errorf("want nil, got %v", err)
+		}
+		// Ensure that we tried only once on original guy.
+		if execCount := sbc0.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
+		}
+		if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
+		}
+		// Ensure that we tried topo only twice.
+		if s.SrvKeyspaceCounter != 2 {
+			t.Errorf("want 2, got %v", s.SrvKeyspaceCounter)
+		}
+	})
 }
 
 func testResolverStreamGeneric(t *testing.T, name string, action func(res *Resolver) (*sqltypes.Result, error)) {
-	// successful execute
-	s := createSandbox(name)
-	hc := discovery.NewFakeHealthCheck()
-	res := newTestResolver(hc, new(sandboxTopo), "aa")
-	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
-	hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	_, err := action(res)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
-	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
+	t.Run("successful execute", func(t *testing.T) {
+		createSandbox(name)
+		hc := discovery.NewFakeHealthCheck()
+		res := newTestResolver(hc, new(sandboxTopo), "aa")
+		sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+		hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
+		_, err := action(res)
+		if err != nil {
+			t.Errorf("want nil, got %v", err)
+		}
+		if execCount := sbc0.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
+		}
 
-	// failure
-	s.Reset()
-	hc.Reset()
-	sbc0 = hc.AddTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
-	hc.AddTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc0.MustFailCodes[vtrpcpb.Code_INTERNAL] = 1
-	_, err = action(res)
-	want := fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20), INTERNAL error", name)
-	if err == nil || err.Error() != want {
-		t.Errorf("want\n%s\ngot\n%v", want, err)
-	}
-	// Ensure that we tried only once.
-	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	// Ensure that we tried topo only once
-	if s.SrvKeyspaceCounter != 1 {
-		t.Errorf("want 1, got %v", s.SrvKeyspaceCounter)
-	}
+	})
+
+	t.Run("failure", func(t *testing.T) {
+		s := createSandbox(name)
+		hc := discovery.NewFakeHealthCheck()
+		res := newTestResolver(hc, new(sandboxTopo), "aa")
+		sbc0 := hc.AddTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+		hc.AddTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc0.MustFailCodes[vtrpcpb.Code_INTERNAL] = 1
+		_, err := action(res)
+		want := fmt.Sprintf("target: %s.-20.master, used tablet: aa-0 (-20): INTERNAL error", name)
+		if err == nil || err.Error() != want {
+			t.Errorf("want\n%s\ngot\n%v", want, err)
+		}
+		// Ensure that we tried only once.
+		if execCount := sbc0.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
+		}
+		// Ensure that we tried topo only once
+		if s.SrvKeyspaceCounter != 1 {
+			t.Errorf("want 1, got %v", s.SrvKeyspaceCounter)
+		}
+	})
 }
 
 func TestResolverMessageAckSharded(t *testing.T) {
@@ -593,7 +614,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, false, nil, nil, buildBatchRequest)
-	want := "target: TestResolverExecBatchReresolve.0.master, used tablet: aa-0 (0), FAILED_PRECONDITION error"
+	want := "target: TestResolverExecBatchReresolve.0.master, used tablet: aa-0 (0): FAILED_PRECONDITION error"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -630,7 +651,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, true, nil, nil, buildBatchRequest)
-	want := "target: TestResolverExecBatchAsTransaction.0.master, used tablet: aa-0 (0), INTERNAL error"
+	want := "target: TestResolverExecBatchAsTransaction.0.master, used tablet: aa-0 (0): INTERNAL error"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %v, got %v", want, err)
 	}

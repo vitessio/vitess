@@ -95,16 +95,15 @@ type StackTrace []Frame
 func (st StackTrace) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':
-		switch {
-		case s.Flag('+'):
-			for _, f := range st {
-				fmt.Fprintf(s, "\n%+v", f)
-			}
-		case s.Flag('#'):
+
+		if s.Flag('#') {
 			fmt.Fprintf(s, "%#v", []Frame(st))
-		default:
-			fmt.Fprintf(s, "%v", []Frame(st))
+		} else {
+			for _, f := range st {
+				fmt.Fprintf(s, "\n%v", f)
+			}
 		}
+
 	case 's':
 		fmt.Fprintf(s, "%s", []Frame(st))
 	}
@@ -116,12 +115,9 @@ type stack []uintptr
 func (s *stack) Format(st fmt.State, verb rune) {
 	switch verb {
 	case 'v':
-		switch {
-		case st.Flag('+'):
-			for _, pc := range *s {
-				f := Frame(pc)
-				fmt.Fprintf(st, "\n%+v", f)
-			}
+		for _, pc := range *s {
+			f := Frame(pc)
+			fmt.Fprintf(st, "\n%+v", f)
 		}
 	}
 }

@@ -24,6 +24,8 @@ import (
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -88,7 +90,7 @@ func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePa
 	defer cancel()
 	wc := cli.Watch(ctx, key, clientv3.WithRev(revision))
 	if wc == nil {
-		return false, fmt.Errorf("Watch failed")
+		return false, vterrors.Errorf(vtrpc.Code_INTERNAL, "Watch failed")
 	}
 
 	select {

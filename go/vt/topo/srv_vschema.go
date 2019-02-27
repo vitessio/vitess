@@ -17,10 +17,9 @@ limitations under the License.
 package topo
 
 import (
-	"fmt"
-
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
@@ -53,7 +52,7 @@ func (ts *Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVS
 		cancel()
 		for range wdChannel {
 		}
-		return &WatchSrvVSchemaData{Err: fmt.Errorf("error unpacking initial SrvVSchema object: %v", err)}, nil, nil
+		return &WatchSrvVSchemaData{Err: vterrors.Wrapf(err, "error unpacking initial SrvVSchema object")}, nil, nil
 	}
 
 	changes := make(chan *WatchSrvVSchemaData, 10)
@@ -80,7 +79,7 @@ func (ts *Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVS
 				cancel()
 				for range wdChannel {
 				}
-				changes <- &WatchSrvVSchemaData{Err: fmt.Errorf("error unpacking SrvVSchema object: %v", err)}
+				changes <- &WatchSrvVSchemaData{Err: vterrors.Wrapf(err, "error unpacking SrvVSchema object")}
 				return
 			}
 			changes <- &WatchSrvVSchemaData{Value: value}
@@ -120,7 +119,7 @@ func (ts *Server) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.Sr
 	}
 	srvVSchema := &vschemapb.SrvVSchema{}
 	if err := proto.Unmarshal(data, srvVSchema); err != nil {
-		return nil, fmt.Errorf("SrvVSchema unmarshal failed: %v %v", data, err)
+		return nil, vterrors.Wrapf(err, "SrvVSchema unmarshal failed: %v", data)
 	}
 	return srvVSchema, nil
 }
