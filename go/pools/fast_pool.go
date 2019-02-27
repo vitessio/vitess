@@ -178,7 +178,6 @@ func (rp *FastPool) ensureMinimumActive() {
 	for i := 0; i < required; i++ {
 		r, err := rp.create()
 		if err != nil {
-			//fmt.Println("error creating factory", err)
 			// TODO(gak): How to handle factory error?
 			break
 		}

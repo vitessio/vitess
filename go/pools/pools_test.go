@@ -51,4 +51,3 @@ func benchmarkGetPut(b *testing.B, impl Impl, f CreateFactory, workers int, cap 
 
 	p.Close()
 }
-

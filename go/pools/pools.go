@@ -3,6 +3,7 @@ package pools
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 )
 
@@ -65,14 +66,19 @@ type Impl int
 
 const (
 	ResourceImpl Impl = iota
-	NewImpl
+	FastImpl
 )
 
 func New(poolImpl Impl, f CreateFactory, cap, maxCap int, idleTimeout time.Duration, minActive int) Pool {
+	// Have an environment override so that many of the tests don't need to be written twice.
+	if os.Getenv("VT_EXPERIMENTAL_FAST_POOL") != "" {
+		poolImpl = FastImpl
+	}
+
 	switch poolImpl {
 	case ResourceImpl:
 		return NewResourcePool(f, cap, maxCap, idleTimeout)
-	case NewImpl:
+	case FastImpl:
 		return NewFastPool(f, cap, maxCap, idleTimeout, minActive)
 	}
 
