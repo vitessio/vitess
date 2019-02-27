@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"vitess.io/vitess/go/pools"
-
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -115,11 +113,12 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 	)
 	te.txPool = NewTxPool(
 		config.PoolNamePrefix,
-		pools.ResourceImpl,
+		config.PoolImpl(),
 		config.TransactionCap,
 		config.FoundRowsPoolSize,
 		time.Duration(config.TransactionTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
+		config.TxPoolMinActive,
 		config.TxPoolWaiterCap,
 		checker,
 		limiter,
@@ -147,7 +146,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 	te.preparedPool = NewTxPreparedPool(config.TransactionCap - 2)
 	readPool := connpool.New(
 		config.PoolNamePrefix+"TxReadPool",
-		pools.ResourceImpl,
+		config.PoolImpl(),
 		3,
 		time.Duration(config.IdleTimeout*1e9),
 		0,

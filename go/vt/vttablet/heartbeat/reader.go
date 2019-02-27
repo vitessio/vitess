@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"vitess.io/vitess/go/pools"
-
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -81,7 +79,7 @@ func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Re
 		interval: config.HeartbeatInterval,
 		ticks:    timer.NewTimer(config.HeartbeatInterval),
 		errorLog: logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
-		pool:     connpool.New(config.PoolNamePrefix+"HeartbeatReadPool", pools.ResourceImpl, 1, time.Duration(config.IdleTimeout*1e9), 0, checker),
+		pool:     connpool.New(config.PoolNamePrefix+"HeartbeatReadPool", config.PoolImpl(), 1, time.Duration(config.IdleTimeout*1e9), 0, checker),
 	}
 }
 

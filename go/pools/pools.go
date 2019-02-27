@@ -70,7 +70,9 @@ const (
 )
 
 func New(poolImpl Impl, f CreateFactory, cap, maxCap int, idleTimeout time.Duration, minActive int) Pool {
-	// Have an environment override so that many of the tests don't need to be written twice.
+	// Have an environment override so that several of the tests
+	// outside this package don't need to be written twice.
+	// e.g. VT_EXPERIMENTAL_FAST_POOL=1 make unit_test
 	if os.Getenv("VT_EXPERIMENTAL_FAST_POOL") != "" {
 		poolImpl = FastImpl
 	}

@@ -81,7 +81,7 @@ func New(
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
 		minActive:   minActive,
-		dbaPool:     dbconnpool.NewConnectionPool("", pools.ResourceImpl, 1, idleTimeout, minActive),
+		dbaPool:     dbconnpool.NewConnectionPool("", impl, 1, idleTimeout, minActive),
 		checker:     checker,
 	}
 	if name == "" || usedNames[name] {

@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"vitess.io/vitess/go/pools"
-
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -86,7 +84,7 @@ func NewWriter(checker connpool.MySQLChecker, alias topodatapb.TabletAlias, conf
 		interval:    config.HeartbeatInterval,
 		ticks:       timer.NewTimer(config.HeartbeatInterval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
-		pool:        connpool.New(config.PoolNamePrefix+"HeartbeatWritePool", pools.ResourceImpl, 1, time.Duration(config.IdleTimeout*1e9), 0, checker),
+		pool:        connpool.New(config.PoolNamePrefix+"HeartbeatWritePool", config.PoolImpl(), 1, time.Duration(config.IdleTimeout*1e9), 0, checker),
 	}
 }
 

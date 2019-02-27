@@ -20,12 +20,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/net/context"
 	"net/http"
 	"sync"
 	"time"
-	"vitess.io/vitess/go/pools"
-
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
@@ -191,7 +189,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 
 	qe.conns = connpool.New(
 		config.PoolNamePrefix+"ConnPool",
-		pools.ResourceImpl,
+		config.PoolImpl(),
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 		config.QueryPoolMinActive,
@@ -201,7 +199,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 
 	qe.streamConns = connpool.New(
 		config.PoolNamePrefix+"StreamConnPool",
-		pools.ResourceImpl,
+		config.PoolImpl(),
 		config.StreamPoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 		0,

@@ -625,6 +625,7 @@ func newTxPool() *TxPool {
 		transactionCap,
 		transactionTimeout,
 		idleTimeout,
+		0,
 		waiterCap,
 		DummyChecker,
 		limiter,

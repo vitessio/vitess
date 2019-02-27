@@ -17,12 +17,10 @@ limitations under the License.
 package messager
 
 import (
+	"golang.org/x/net/context"
 	"sort"
 	"sync"
 	"time"
-	"vitess.io/vitess/go/pools"
-
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -67,7 +65,7 @@ func NewEngine(tsv TabletService, se *schema.Engine, config tabletenv.TabletConf
 		se:  se,
 		conns: connpool.New(
 			config.PoolNamePrefix+"MessagerPool",
-			pools.ResourceImpl,
+			config.PoolImpl(),
 			config.MessagePoolSize,
 			time.Duration(config.IdleTimeout*1e9),
 			0,

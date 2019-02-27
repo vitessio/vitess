@@ -19,12 +19,10 @@ package schema
 import (
 	"bytes"
 	"encoding/json"
+	"golang.org/x/net/context"
 	"net/http"
 	"sync"
 	"time"
-	"vitess.io/vitess/go/pools"
-
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
@@ -71,9 +69,8 @@ var schemaOnce sync.Once
 func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Engine {
 	reloadTime := time.Duration(config.SchemaReloadTime * 1e9)
 	idleTimeout := time.Duration(config.IdleTimeout * 1e9)
-	// TODO(gak): set up config option for minActive, pools.Impl
 	se := &Engine{
-		conns:      connpool.New("", pools.ResourceImpl, 3, idleTimeout, 0, checker),
+		conns:      connpool.New("", config.PoolImpl(), 3, idleTimeout, 0, checker),
 		ticks:      timer.NewTimer(reloadTime),
 		reloadTime: reloadTime,
 	}

@@ -109,11 +109,12 @@ func NewTxPool(
 	foundRowsCapacity int,
 	timeout time.Duration,
 	idleTimeout time.Duration,
+	minActive int,
 	waiterCap int,
 	checker connpool.MySQLChecker,
 	limiter txlimiter.TxLimiter) *TxPool {
 	axp := &TxPool{
-		conns:         connpool.New(prefix+"TransactionPool", impl, capacity, idleTimeout, 0, checker),
+		conns:         connpool.New(prefix+"TransactionPool", impl, capacity, idleTimeout, minActive, checker),
 		foundRowsPool: connpool.New(prefix+"FoundRowsPool", impl, foundRowsCapacity, idleTimeout, 0, checker),
 		activePool:    pools.NewNumbered(),
 		lastID:        sync2.NewAtomicInt64(time.Now().UnixNano()),

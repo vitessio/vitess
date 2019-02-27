@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"time"
+	"vitess.io/vitess/go/pools"
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/streamlog"
@@ -64,8 +65,9 @@ func init() {
 	flag.Float64Var(&Config.QueryPoolTimeout, "queryserver-config-query-pool-timeout", DefaultQsConfig.QueryPoolTimeout, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
 	flag.Float64Var(&Config.TxPoolTimeout, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPoolTimeout, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
 	flag.Float64Var(&Config.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
-	flag.IntVar(&Config.QueryPoolMinActive, "queryserver-config-pool-min-active", DefaultQsConfig.QueryPoolMinActive, "query server pool minimum active connections: will enforce at least this many active connections")
-	flag.IntVar(&Config.TxPoolMinActive, "queryserver-config-txpool-min-active", DefaultQsConfig.TxPoolMinActive, "query server transaction pool minimum active connections: will enforce at least this many active transactions")
+	flag.BoolVar(&Config.EnableFastPool, "queryserver-config-enable-fast-pool", DefaultQsConfig.EnableFastPool, "Enable the experimental fast pool.")
+	flag.IntVar(&Config.QueryPoolMinActive, "queryserver-config-pool-min-active", DefaultQsConfig.QueryPoolMinActive, "(fast pool only) query server pool minimum active connections: will enforce at least this many active connections.")
+	flag.IntVar(&Config.TxPoolMinActive, "queryserver-config-txpool-min-active", DefaultQsConfig.TxPoolMinActive, "(fast pool only) query server transaction pool minimum active connections: will enforce at least this many active connections")
 	flag.IntVar(&Config.QueryPoolWaiterCap, "queryserver-config-query-pool-waiter-cap", DefaultQsConfig.QueryPoolWaiterCap, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
 	flag.IntVar(&Config.TxPoolWaiterCap, "queryserver-config-txpool-waiter-cap", DefaultQsConfig.TxPoolWaiterCap, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
 	// tableacl related configurations.
@@ -144,6 +146,7 @@ type TabletConfig struct {
 	QueryPoolTimeout        float64
 	TxPoolTimeout           float64
 	IdleTimeout             float64
+	EnableFastPool          bool
 	QueryPoolMinActive      int
 	TxPoolMinActive         int
 	QueryPoolWaiterCap      int
@@ -217,6 +220,7 @@ var DefaultQsConfig = TabletConfig{
 	QueryPoolTimeout:        0,
 	TxPoolTimeout:           1,
 	IdleTimeout:             30 * 60,
+	EnableFastPool:          false,
 	QueryPoolMinActive:      0,
 	TxPoolMinActive:         0,
 	QueryPoolWaiterCap:      50000,
@@ -339,4 +343,12 @@ func VerifyConfig() error {
 		return fmt.Errorf("-hot_row_protection_concurrent_transactions must be > 0 (specified value: %v)", v)
 	}
 	return nil
+}
+
+func (c *TabletConfig) PoolImpl() pools.Impl {
+	if c.EnableFastPool {
+		return pools.FastImpl
+	} else {
+		return pools.ResourceImpl
+	}
 }
