@@ -87,6 +87,7 @@ func (mariadbFlavor) resetReplicationCommands() []string {
 		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
 		"RESET MASTER",
 		"SET GLOBAL gtid_slave_pos = ''",
+		"SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false", // semi-sync will be enabled if needed when slave is started.
 	}
 }
 
