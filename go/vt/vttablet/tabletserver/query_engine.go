@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"sync"
 	"time"
+	"vitess.io/vitess/go/pools"
 
 	"golang.org/x/net/context"
 
@@ -190,6 +191,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 
 	qe.conns = connpool.New(
 		config.PoolNamePrefix+"ConnPool",
+		pools.ResourceImpl,
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 		config.QueryPoolMinActive,
@@ -199,6 +201,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 
 	qe.streamConns = connpool.New(
 		config.PoolNamePrefix+"StreamConnPool",
+		pools.ResourceImpl,
 		config.StreamPoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 		0,

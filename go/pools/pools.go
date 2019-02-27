@@ -7,14 +7,26 @@ import (
 )
 
 type Pool interface {
+	Close()
 	Get(context.Context) (Resource, error)
 	Put(Resource)
+
 	SetCapacity(int, bool) error
-	Close()
+	SetIdleTimeout(duration time.Duration)
+
+	Capacity() int
+	IdleTimeout() time.Duration
+	MaxCap() int
+	MinActive() int
+	Active() int
+	Available() int
+	InUse() int
+
+	WaitTime() time.Duration
+	WaitCount() int64
+	IdleClosed() int64
 
 	StatsJSON() string
-
-	Active() int
 }
 
 var (

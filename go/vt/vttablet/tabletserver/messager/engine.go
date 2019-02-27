@@ -20,6 +20,7 @@ import (
 	"sort"
 	"sync"
 	"time"
+	"vitess.io/vitess/go/pools"
 
 	"golang.org/x/net/context"
 
@@ -66,6 +67,7 @@ func NewEngine(tsv TabletService, se *schema.Engine, config tabletenv.TabletConf
 		se:  se,
 		conns: connpool.New(
 			config.PoolNamePrefix+"MessagerPool",
+			pools.ResourceImpl,
 			config.MessagePoolSize,
 			time.Duration(config.IdleTimeout*1e9),
 			0,

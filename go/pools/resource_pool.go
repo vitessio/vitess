@@ -284,6 +284,11 @@ func (rp *ResourcePool) Active() int {
 	return int(rp.active.Get())
 }
 
+// MinActive is not used in this implementation. Always returns 0.
+func (rp *ResourcePool) MinActive() int {
+	return 0
+}
+
 // InUse returns the number of claimed resources from the pool
 func (rp *ResourcePool) InUse() int {
 	return int(rp.inUse.Get())

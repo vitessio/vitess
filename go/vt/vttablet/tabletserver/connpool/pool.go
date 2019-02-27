@@ -57,7 +57,7 @@ type MySQLChecker interface {
 // pool of dba connections that are used to kill connections.
 type Pool struct {
 	mu             sync.Mutex
-	connections    *pools.ResourcePool
+	connections    pools.Pool
 	impl           pools.Impl
 	capacity       int
 	idleTimeout    time.Duration
@@ -81,7 +81,7 @@ func New(
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
 		minActive:   minActive,
-		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout, minActive),
+		dbaPool:     dbconnpool.NewConnectionPool("", pools.ResourceImpl, 1, idleTimeout, minActive),
 		checker:     checker,
 	}
 	if name == "" || usedNames[name] {
@@ -101,7 +101,7 @@ func New(
 	return cp
 }
 
-func (cp *Pool) pool() (p *pools.ResourcePool) {
+func (cp *Pool) pool() (p pools.Pool) {
 	cp.mu.Lock()
 	p = cp.connections
 	cp.mu.Unlock()

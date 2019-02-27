@@ -37,6 +37,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"vitess.io/vitess/go/pools"
 
 	"bytes"
 
@@ -98,11 +99,11 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	}
 
 	// Create and open the connection pool for dba access.
-	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout, 0)
+	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", pools.ResourceImpl, *dbaPoolSize, *dbaIdleTimeout, 0)
 	result.dbaPool.Open(dbcfgs.Dba(), dbaMysqlStats)
 
 	// Create and open the connection pool for app access.
-	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, 0)
+	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", pools.ResourceImpl, *appPoolSize, *appIdleTimeout, 0)
 	result.appPool.Open(dbcfgs.AppWithDB(), appMysqlStats)
 
 	return result

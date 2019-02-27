@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"vitess.io/vitess/go/pools"
 
 	"golang.org/x/net/context"
 
@@ -146,7 +147,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 		Running: true,
 	}
 	if db != nil {
-		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0)
+		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", pools.ResourceImpl, 5, time.Minute, 0)
 		result.appPool.Open(db.ConnParams(), stats.NewTimings("", "", ""))
 	}
 	return result

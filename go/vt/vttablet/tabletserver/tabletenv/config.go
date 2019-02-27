@@ -20,9 +20,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"time"
-
 	"github.com/golang/protobuf/proto"
+	"time"
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/streamlog"
