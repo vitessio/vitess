@@ -17,8 +17,7 @@ limitations under the License.
 package mysql
 
 import (
-	tls "crypto/tls"
-	"fmt"
+	"crypto/tls"
 	"io"
 	"net"
 	"strings"
@@ -30,6 +29,8 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -324,7 +325,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 	} else {
 		if l.RequireSecureTransport {
-			c.writeErrorPacketFromError(fmt.Errorf("Server does not allow insecure connections, client must use SSL/TLS"))
+			c.writeErrorPacketFromError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "Server does not allow insecure connections, client must use SSL/TLS"))
 		}
 		connCountByTLSVer.Add(versionNoTLS, 1)
 		defer connCountByTLSVer.Add(versionNoTLS, -1)
@@ -546,7 +547,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 
 	// Sanity check.
 	if pos != len(data) {
-		return nil, fmt.Errorf("error building Handshake packet: got %v bytes expected %v", pos, len(data))
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "error building Handshake packet: got %v bytes expected %v", pos, len(data))
 	}
 
 	if err := c.writeEphemeralPacket(); err != nil {
@@ -571,10 +572,10 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	// Client flags, 4 bytes.
 	clientFlags, pos, ok := readUint32(data, pos)
 	if !ok {
-		return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read client flags")
+		return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read client flags")
 	}
 	if clientFlags&CapabilityClientProtocol41 == 0 {
-		return "", "", nil, fmt.Errorf("parseClientHandshakePacket: only support protocol 4.1")
+		return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: only support protocol 4.1")
 	}
 
 	// Remember a subset of the capabilities, so we can use them
@@ -593,13 +594,13 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	// See doc.go for more information.
 	_, pos, ok = readUint32(data, pos)
 	if !ok {
-		return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read maxPacketSize")
+		return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read maxPacketSize")
 	}
 
 	// Character set. Need to handle it.
 	characterSet, pos, ok := readByte(data, pos)
 	if !ok {
-		return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read characterSet")
+		return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read characterSet")
 	}
 	c.CharacterSet = characterSet
 
@@ -619,7 +620,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	// username
 	username, pos, ok := readNullString(data, pos)
 	if !ok {
-		return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read username")
+		return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read username")
 	}
 
 	// auth-response can have three forms.
@@ -628,29 +629,29 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		var l uint64
 		l, pos, ok = readLenEncInt(data, pos)
 		if !ok {
-			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response variable length")
+			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response variable length")
 		}
 		authResponse, pos, ok = readBytesCopy(data, pos, int(l))
 		if !ok {
-			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response")
+			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response")
 		}
 
 	} else if clientFlags&CapabilityClientSecureConnection != 0 {
 		var l byte
 		l, pos, ok = readByte(data, pos)
 		if !ok {
-			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response length")
+			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response length")
 		}
 
 		authResponse, pos, ok = readBytesCopy(data, pos, int(l))
 		if !ok {
-			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response")
+			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response")
 		}
 	} else {
 		a := ""
 		a, pos, ok = readNullString(data, pos)
 		if !ok {
-			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response")
+			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response")
 		}
 		authResponse = []byte(a)
 	}
@@ -660,7 +661,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		dbname := ""
 		dbname, pos, ok = readNullString(data, pos)
 		if !ok {
-			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read dbname")
+			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read dbname")
 		}
 		c.SchemaName = dbname
 	}
@@ -670,7 +671,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	if clientFlags&CapabilityClientPluginAuth != 0 {
 		authMethod, pos, ok = readNullString(data, pos)
 		if !ok {
-			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read authMethod")
+			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read authMethod")
 		}
 	}
 
@@ -696,7 +697,7 @@ func parseConnAttrs(data []byte, pos int) (map[string]string, int, error) {
 
 	attrLen, pos, ok := readLenEncInt(data, pos)
 	if !ok {
-		return nil, 0, fmt.Errorf("parseClientHandshakePacket: can't read connection attributes variable length")
+		return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attributes variable length")
 	}
 
 	var attrLenRead uint64
@@ -707,27 +708,27 @@ func parseConnAttrs(data []byte, pos int) (map[string]string, int, error) {
 		var keyLen byte
 		keyLen, pos, ok = readByte(data, pos)
 		if !ok {
-			return nil, 0, fmt.Errorf("parseClientHandshakePacket: can't read connection attribute key length")
+			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute key length")
 		}
 		attrLenRead += uint64(keyLen) + 1
 
 		var connAttrKey []byte
 		connAttrKey, pos, ok = readBytesCopy(data, pos, int(keyLen))
 		if !ok {
-			return nil, 0, fmt.Errorf("parseClientHandshakePacket: can't read connection attribute key")
+			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute key")
 		}
 
 		var valLen byte
 		valLen, pos, ok = readByte(data, pos)
 		if !ok {
-			return nil, 0, fmt.Errorf("parseClientHandshakePacket: can't read connection attribute value length")
+			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute value length")
 		}
 		attrLenRead += uint64(valLen) + 1
 
 		var connAttrVal []byte
 		connAttrVal, pos, ok = readBytesCopy(data, pos, int(valLen))
 		if !ok {
-			return nil, 0, fmt.Errorf("parseClientHandshakePacket: can't read connection attribute value")
+			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute value")
 		}
 
 		attrs[string(connAttrKey[:])] = string(connAttrVal[:])
@@ -757,7 +758,7 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 
 	// Sanity check.
 	if pos != len(data) {
-		return fmt.Errorf("error building AuthSwitchRequestPacket packet: got %v bytes expected %v", pos, len(data))
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building AuthSwitchRequestPacket packet: got %v bytes expected %v", pos, len(data))
 	}
 	return c.writeEphemeralPacket()
 }

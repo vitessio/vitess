@@ -25,6 +25,8 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
 )
 
@@ -185,7 +187,7 @@ func (c *Conn) Ping() error {
 	case ErrPacket:
 		return ParseErrorPacket(data)
 	}
-	return fmt.Errorf("unexpected packet type: %d", data[0])
+	return vterrors.Errorf(vtrpc.Code_INTERNAL,"unexpected packet type: %d", data[0])
 }
 
 // parseCharacterSet parses the provided character set.
@@ -634,7 +636,7 @@ func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
 	pos := 1
 	pluginName, pos, ok := readNullString(data, pos)
 	if !ok {
-		return "", nil, fmt.Errorf("cannot get plugin name from AuthSwitchRequest: %v", data)
+		return "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot get plugin name from AuthSwitchRequest: %v", data)
 	}
 
 	return pluginName, data[pos:], nil
@@ -649,7 +651,7 @@ func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	pos = writeNullString(data, pos, params.Pass)
 	// Sanity check.
 	if pos != len(data) {
-		return fmt.Errorf("error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
 	}
 	return c.writeEphemeralPacket()
 }

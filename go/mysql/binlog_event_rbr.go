@@ -25,6 +25,8 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -89,7 +91,7 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 		}
 	}
 	if pos != expectedEnd {
-		return nil, fmt.Errorf("unexpected metadata end: got %v was expecting %v (data=%v)", pos, expectedEnd, data)
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected metadata end: got %v was expecting %v (data=%v)", pos, expectedEnd, data)
 	}
 
 	// A bit array that says if each colum can be NULL.
@@ -119,7 +121,7 @@ func metadataLength(typ byte) int {
 
 	default:
 		// Unknown type. This is used in tests only, so panic.
-		panic(fmt.Errorf("metadataLength: unhandled data type: %v", typ))
+		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "metadataLength: unhandled data type: %v", typ))
 	}
 }
 
@@ -155,7 +157,7 @@ func metadataRead(data []byte, pos int, typ byte) (uint16, int, error) {
 
 	default:
 		// Unknown types, we can't go on.
-		return 0, 0, fmt.Errorf("metadataRead: unhandled data type: %v", typ)
+		return 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "metadataRead: unhandled data type: %v", typ)
 	}
 }
 
@@ -186,7 +188,7 @@ func metadataWrite(data []byte, pos int, typ byte, value uint16) int {
 
 	default:
 		// Unknown type. This is used in tests only, so panic.
-		panic(fmt.Errorf("metadataRead: unhandled data type: %v", typ))
+		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "metadataRead: unhandled data type: %v", typ))
 	}
 }
 
@@ -286,7 +288,7 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 				uint32(data[pos+2])<<16|
 				uint32(data[pos+3])<<24), nil
 		default:
-			return 0, fmt.Errorf("unsupported blob/geometry metadata value %v (data: %v pos: %v)", metadata, data, pos)
+			return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported blob/geometry metadata value %v (data: %v pos: %v)", metadata, data, pos)
 		}
 	case TypeString:
 		// This may do String, Enum, and Set. The type is in
@@ -307,7 +309,7 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		return l + 1, nil
 
 	default:
-		return 0, fmt.Errorf("unsupported type %v (data: %v pos: %v)", typ, data, pos)
+		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported type %v (data: %v pos: %v)", typ, data, pos)
 	}
 }
 
@@ -772,7 +774,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			return sqltypes.MakeTrusted(querypb.Type_ENUM,
 				strconv.AppendUint(nil, uint64(val), 10)), 2, nil
 		default:
-			return sqltypes.NULL, 0, fmt.Errorf("unexpected enum size: %v", metadata&0xff)
+			return sqltypes.NULL, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected enum size: %v", metadata&0xff)
 		}
 
 	case TypeSet:
@@ -800,7 +802,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 				uint32(data[pos+2])<<16 |
 				uint32(data[pos+3])<<24)
 		default:
-			return sqltypes.NULL, 0, fmt.Errorf("unsupported blob metadata value %v (data: %v pos: %v)", metadata, data, pos)
+			return sqltypes.NULL, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported blob metadata value %v (data: %v pos: %v)", metadata, data, pos)
 		}
 		pos += int(metadata)
 
@@ -808,7 +810,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		if typ == TypeJSON {
 			d, err := printJSONData(data[pos : pos+l])
 			if err != nil {
-				return sqltypes.NULL, 0, fmt.Errorf("error parsing JSON data %v: %v", data[pos:pos+l], err)
+				return sqltypes.NULL, 0, vterrors.Wrapf(err, "error parsing JSON data %v", data[pos:pos+l])
 			}
 			return sqltypes.MakeTrusted(sqltypes.Expression,
 				d), l + int(metadata), nil
@@ -835,7 +837,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 				return sqltypes.MakeTrusted(querypb.Type_UINT16,
 					strconv.AppendUint(nil, uint64(val), 10)), 2, nil
 			default:
-				return sqltypes.NULL, 0, fmt.Errorf("unexpected enum size: %v", metadata&0xff)
+				return sqltypes.NULL, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected enum size: %v", metadata&0xff)
 			}
 		}
 		if t == TypeSet {
@@ -892,14 +894,14 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 				uint32(data[pos+2])<<16 |
 				uint32(data[pos+3])<<24)
 		default:
-			return sqltypes.NULL, 0, fmt.Errorf("unsupported geometry metadata value %v (data: %v pos: %v)", metadata, data, pos)
+			return sqltypes.NULL, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported geometry metadata value %v (data: %v pos: %v)", metadata, data, pos)
 		}
 		pos += int(metadata)
 		return sqltypes.MakeTrusted(querypb.Type_GEOMETRY,
 			data[pos:pos+l]), l + int(metadata), nil
 
 	default:
-		return sqltypes.NULL, 0, fmt.Errorf("unsupported type %v", typ)
+		return sqltypes.NULL, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported type %v", typ)
 	}
 }
 

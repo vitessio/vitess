@@ -31,7 +31,9 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -247,12 +249,12 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 		if strings.HasSuffix(err.Error(), "read: connection reset by peer") {
 			return 0, io.EOF
 		}
-		return 0, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
+		return 0, vterrors.Wrapf(err, "io.ReadFull(header size) failed")
 	}
 
 	sequence := uint8(header[3])
 	if sequence != c.sequence {
-		return 0, fmt.Errorf("invalid sequence, expected %v got %v", c.sequence, sequence)
+		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 	}
 
 	c.sequence++
@@ -270,7 +272,7 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 // it most likely will be io.EOF.
 func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	if c.currentEphemeralPolicy != ephemeralUnused {
-		panic(fmt.Errorf("readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
 	}
 
 	r := c.getReader()
@@ -291,7 +293,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	if length < MaxPacketSize {
 		c.currentEphemeralBuffer = bufPool.Get(length)
 		if _, err := io.ReadFull(r, *c.currentEphemeralBuffer); err != nil {
-			return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
+			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
 		return *c.currentEphemeralBuffer, nil
 	}
@@ -301,7 +303,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	// optimize this code path easily.
 	data := make([]byte, length)
 	if _, err := io.ReadFull(r, data); err != nil {
-		return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
+		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 	}
 	for {
 		next, err := c.readOnePacket()
@@ -330,7 +332,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 // This function usually shouldn't be used - use readEphemeralPacket.
 func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 	if c.currentEphemeralPolicy != ephemeralUnused {
-		panic(fmt.Errorf("readEphemeralPacketDirect: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacketDirect: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
 	}
 
 	var r io.Reader = c.conn
@@ -350,12 +352,12 @@ func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 	if length < MaxPacketSize {
 		c.currentEphemeralBuffer = bufPool.Get(length)
 		if _, err := io.ReadFull(r, *c.currentEphemeralBuffer); err != nil {
-			return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
+			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
 		return *c.currentEphemeralBuffer, nil
 	}
 
-	return nil, fmt.Errorf("readEphemeralPacketDirect doesn't support more than one packet")
+	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacketDirect doesn't support more than one packet")
 }
 
 // recycleReadPacket recycles the read packet. It needs to be called
@@ -363,7 +365,7 @@ func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 func (c *Conn) recycleReadPacket() {
 	if c.currentEphemeralPolicy != ephemeralRead {
 		// Programming error.
-		panic(fmt.Errorf("trying to call recycleReadPacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to call recycleReadPacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
 	}
 	if c.currentEphemeralBuffer != nil {
 		// We are using the pool, put the buffer back in.
@@ -388,7 +390,7 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 
 	data := make([]byte, length)
 	if _, err := io.ReadFull(r, data); err != nil {
-		return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
+		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 	}
 	return data, nil
 }
@@ -467,16 +469,16 @@ func (c *Conn) writePacket(data []byte) error {
 		header[2] = byte(packetLength >> 16)
 		header[3] = c.sequence
 		if n, err := w.Write(header[:]); err != nil {
-			return fmt.Errorf("Write(header) failed: %v", err)
+			return vterrors.Wrapf(err, "Write(header) failed")
 		} else if n != 4 {
-			return fmt.Errorf("Write(header) returned a short write: %v < 4", n)
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "Write(header) returned a short write: %v < 4", n)
 		}
 
 		// Write the body.
 		if n, err := w.Write(data[index : index+packetLength]); err != nil {
-			return fmt.Errorf("Write(packet) failed: %v", err)
+			return vterrors.Wrapf(err, "Write(packet) failed")
 		} else if n != packetLength {
-			return fmt.Errorf("Write(packet) returned a short write: %v < %v", n, packetLength)
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "Write(packet) returned a short write: %v < %v", n, packetLength)
 		}
 
 		// Update our state.
@@ -492,9 +494,9 @@ func (c *Conn) writePacket(data []byte) error {
 				header[2] = 0
 				header[3] = c.sequence
 				if n, err := w.Write(header[:]); err != nil {
-					return fmt.Errorf("Write(empty header) failed: %v", err)
+					return vterrors.Wrapf(err, "Write(empty header) failed")
 				} else if n != 4 {
-					return fmt.Errorf("Write(empty header) returned a short write: %v < 4", n)
+					return vterrors.Errorf(vtrpc.Code_INTERNAL, "Write(empty header) returned a short write: %v < 4", n)
 				}
 				c.sequence++
 			}
@@ -523,11 +525,11 @@ func (c *Conn) writeEphemeralPacket() error {
 	switch c.currentEphemeralPolicy {
 	case ephemeralWrite:
 		if err := c.writePacket(*c.currentEphemeralBuffer); err != nil {
-			return fmt.Errorf("Conn %v: %v", c.ID(), err)
+			return vterrors.Wrapf(err, "Conn %v", c.ID())
 		}
 	case ephemeralUnused, ephemeralRead:
 		// Programming error.
-		panic(fmt.Errorf("Conn %v: trying to call writeEphemeralPacket while currentEphemeralPolicy is %v", c.ID(), c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "Conn %v: trying to call writeEphemeralPacket while currentEphemeralPolicy is %v", c.ID(), c.currentEphemeralPolicy))
 	}
 
 	return nil
@@ -538,7 +540,7 @@ func (c *Conn) writeEphemeralPacket() error {
 func (c *Conn) recycleWritePacket() {
 	if c.currentEphemeralPolicy != ephemeralWrite {
 		// Programming error.
-		panic(fmt.Errorf("trying to call recycleWritePacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to call recycleWritePacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
 	}
 	// Release our reference so the buffer can be gced
 	bufPool.Put(c.currentEphemeralBuffer)
@@ -915,7 +917,7 @@ func parseEOFPacket(data []byte) (warnings uint16, more bool, err error) {
 	// The status flag is in position 4 & 5
 	statusFlags, _, ok := readUint16(data, 3)
 	if !ok {
-		return 0, false, fmt.Errorf("invalid EOF packet statusFlags: %v", data)
+		return 0, false, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid EOF packet statusFlags: %v", data)
 	}
 	return warnings, (statusFlags & ServerMoreResultsExists) != 0, nil
 }
@@ -927,25 +929,25 @@ func parseOKPacket(data []byte) (uint64, uint64, uint16, uint16, error) {
 	// Affected rows.
 	affectedRows, pos, ok := readLenEncInt(data, pos)
 	if !ok {
-		return 0, 0, 0, 0, fmt.Errorf("invalid OK packet affectedRows: %v", data)
+		return 0, 0, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid OK packet affectedRows: %v", data)
 	}
 
 	// Last Insert ID.
 	lastInsertID, pos, ok := readLenEncInt(data, pos)
 	if !ok {
-		return 0, 0, 0, 0, fmt.Errorf("invalid OK packet lastInsertID: %v", data)
+		return 0, 0, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid OK packet lastInsertID: %v", data)
 	}
 
 	// Status flags.
 	statusFlags, pos, ok := readUint16(data, pos)
 	if !ok {
-		return 0, 0, 0, 0, fmt.Errorf("invalid OK packet statusFlags: %v", data)
+		return 0, 0, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid OK packet statusFlags: %v", data)
 	}
 
 	// Warnings.
 	warnings, pos, ok := readUint16(data, pos)
 	if !ok {
-		return 0, 0, 0, 0, fmt.Errorf("invalid OK packet warnings: %v", data)
+		return 0, 0, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid OK packet warnings: %v", data)
 	}
 
 	return affectedRows, lastInsertID, statusFlags, warnings, nil

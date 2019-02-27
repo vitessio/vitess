@@ -20,6 +20,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -137,7 +140,7 @@ func DecodePosition(s string) (rp Position, err error) {
 func ParsePosition(flavor, value string) (rp Position, err error) {
 	parser := gtidSetParsers[flavor]
 	if parser == nil {
-		return rp, fmt.Errorf("parse error: unknown GTIDSet flavor %#v", flavor)
+		return rp, vterrors.Errorf(vtrpc.Code_INTERNAL, "parse error: unknown GTIDSet flavor %#v", flavor)
 	}
 	gtidSet, err := parser(value)
 	if err != nil {
