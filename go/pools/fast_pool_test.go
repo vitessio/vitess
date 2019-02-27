@@ -17,7 +17,6 @@ limitations under the License.
 package pools
 
 import (
-	"fmt"
 	"github.com/stretchr/testify/require"
 	"math/rand"
 	"runtime"
@@ -50,23 +49,23 @@ func SlowCloseFactory() (Resource, error) {
 	return &SlowCloseResource{lastID.Add(1), false}, nil
 }
 
-func get(t *testing.T, p *NewPool) Resource {
+func get(t *testing.T, p *FastPool) Resource {
 	t.Helper()
 	r, err := p.Get(context.Background())
 	require.NoError(t, err)
 	return r
 }
 
-func TestNewOpen(t *testing.T) {
-	p := NewNewPool(PoolFactory, 1, 2, 0, 0)
+func TestFastOpen(t *testing.T) {
+	p := NewFastPool(PoolFactory, 1, 2, 0, 0)
 	defer p.Close()
 
 	require.Equal(t, State{Capacity: 1}, p.State())
 }
 
-func TestNewGetPut(t *testing.T) {
+func TestFastGetPut(t *testing.T) {
 	lastID.Set(0)
-	p := NewNewPool(PoolFactory, 1, 1, 0, 0)
+	p := NewFastPool(PoolFactory, 1, 1, 0, 0)
 	defer p.Close()
 
 	r := get(t, p).(*TestResource)
@@ -77,8 +76,8 @@ func TestNewGetPut(t *testing.T) {
 	require.Equal(t, State{Capacity: 1, InPool: 1}, p.State())
 }
 
-func TestNewPutEmpty(t *testing.T) {
-	p := NewNewPool(PoolFactory, 1, 1, 0, 0)
+func TestFastPutEmpty(t *testing.T) {
+	p := NewFastPool(PoolFactory, 1, 1, 0, 0)
 	defer p.Close()
 
 	get(t, p)
@@ -88,16 +87,16 @@ func TestNewPutEmpty(t *testing.T) {
 	require.Equal(t, State{Capacity: 1}, p.State())
 }
 
-func TestNewPutWithoutGet(t *testing.T) {
-	p := NewNewPool(PoolFactory, 1, 1, 0, 0)
+func TestFastPutWithoutGet(t *testing.T) {
+	p := NewFastPool(PoolFactory, 1, 1, 0, 0)
 	defer p.Close()
 
 	require.Panics(t, func() { p.Put(&TestResource{}) })
 	require.Equal(t, State{Capacity: 1}, p.State())
 }
 
-func TestNewPutTooFull(t *testing.T) {
-	p := NewNewPool(PoolFactory, 1, 1, 0, 1)
+func TestFastPutTooFull(t *testing.T) {
+	p := NewFastPool(PoolFactory, 1, 1, 0, 1)
 	defer p.Close()
 
 	// Not sure how to cause the ErrFull panic naturally, so I'm hacking in a value.
@@ -110,8 +109,8 @@ func TestNewPutTooFull(t *testing.T) {
 	p.state.InUse = 0
 }
 
-func TestNewDrainBlock(t *testing.T) {
-	p := NewNewPool(SlowCloseFactory, 3, 3, 0, 0)
+func TestFastDrainBlock(t *testing.T) {
+	p := NewFastPool(SlowCloseFactory, 3, 3, 0, 0)
 	defer p.Close()
 
 	var resources []Resource
@@ -140,8 +139,8 @@ func TestNewDrainBlock(t *testing.T) {
 	p.Put(resources[2])
 }
 
-func TestNewDrainNoBlock(t *testing.T) {
-	p := NewNewPool(SlowCloseFactory, 2, 2, 0, 0)
+func TestFastDrainNoBlock(t *testing.T) {
+	p := NewFastPool(SlowCloseFactory, 2, 2, 0, 0)
 	defer p.Close()
 
 	var resources []Resource
@@ -161,8 +160,8 @@ func TestNewDrainNoBlock(t *testing.T) {
 	require.Equal(t, State{Capacity: 1, InPool: 1}, p.State())
 }
 
-func TestNewGrowBlock(t *testing.T) {
-	p := NewNewPool(PoolFactory, 1, 2, 0, 0)
+func TestFastGrowBlock(t *testing.T) {
+	p := NewFastPool(PoolFactory, 1, 2, 0, 0)
 	defer p.Close()
 
 	a := get(t, p)
@@ -178,8 +177,8 @@ func TestNewGrowBlock(t *testing.T) {
 	p.Put(b)
 }
 
-func TestNewGrowNoBlock(t *testing.T) {
-	p := NewNewPool(PoolFactory, 1, 2, 0, 0)
+func TestFastGrowNoBlock(t *testing.T) {
+	p := NewFastPool(PoolFactory, 1, 2, 0, 0)
 	defer p.Close()
 
 	a := get(t, p)
@@ -195,14 +194,14 @@ func TestNewGrowNoBlock(t *testing.T) {
 	p.Put(b)
 }
 
-func TestNewFull1(t *testing.T) {
+func TestFastFull1(t *testing.T) {
 	s := func(state State) State {
 		state.Capacity = 10
 		state.MinActive = 5
 		return state
 	}
 
-	p := NewNewPool(PoolFactory, 10, 10, 0, 5)
+	p := NewFastPool(PoolFactory, 10, 10, 0, 5)
 	defer p.Close()
 
 	require.Equal(t, s(State{InPool: 5}), p.State())
@@ -226,20 +225,14 @@ func TestNewFull1(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	require.Equal(t, s(State{InPool: 0, InUse: 10, Waiters: 1}), p.State())
 
-	fmt.Println("simpl4")
-
 	p.Put(a)
-	fmt.Println("simpl4a")
 	<-done
-	fmt.Println("simpl4b")
 	require.NotZero(t, p.State().WaitTime)
 	wt := p.State().WaitTime
 	require.Equal(t, s(State{InPool: 0, InUse: 10, Waiters: 0, WaitCount: 1, WaitTime: wt}), p.State())
 
-	fmt.Println("simpl5")
 	p.Put(b)
 	require.Equal(t, s(State{InPool: 1, InUse: 9, Waiters: 0, WaitCount: 1, WaitTime: wt}), p.State())
-	fmt.Println("simpl6")
 
 	// Clean up
 	for _, r := range resources {
@@ -247,25 +240,20 @@ func TestNewFull1(t *testing.T) {
 	}
 }
 
-func TestNewFull2(t *testing.T) {
+func TestFastFull2(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewNewPool(PoolFactory, 6, 6, time.Second, 0)
+	p := NewFastPool(PoolFactory, 6, 6, time.Second, 0)
 	defer p.Close()
 
-	fmt.Println("set cap", p.StatsJSON())
 	err := p.SetCapacity(5, true)
 	require.NoError(t, err)
 	var resources [10]Resource
 
-	fmt.Println(1, p.StatsJSON())
-
-	// TestNew Get
+	// TestFast Get
 	for i := 0; i < 5; i++ {
-		fmt.Println("\nTestNew Get ----------", i, p.StatsJSON())
 		r, err := p.Get(ctx)
-		fmt.Println(1, p.StatsJSON())
 		resources[i] = r
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
@@ -289,13 +277,10 @@ func TestNewFull2(t *testing.T) {
 		}
 	}
 
-	fmt.Println("WTFFFFFFFFFF", p.StatsJSON())
-
-	// TestNew that Get waits
+	// TestFast that Get waits
 	ch := make(chan bool)
 	go func() {
 		for i := 0; i < 5; i++ {
-			fmt.Println("GET", i, p.StatsJSON())
 			r, err := p.Get(ctx)
 			if err != nil {
 				t.Errorf("Get failed: %v", err)
@@ -304,16 +289,13 @@ func TestNewFull2(t *testing.T) {
 			resources[i] = r
 		}
 		for i := 0; i < 5; i++ {
-			fmt.Println("PUT")
 			p.Put(resources[i])
 		}
 		ch <- true
 	}()
 	for i := 0; i < 5; i++ {
 		// Sleep to ensure the goroutine waits
-		fmt.Println("SLEEP")
 		time.Sleep(10 * time.Millisecond)
-		fmt.Println("PUTBACK")
 		p.Put(resources[i])
 	}
 	<-ch
@@ -327,14 +309,12 @@ func TestNewFull2(t *testing.T) {
 		t.Errorf("Expecting 5, received %d", lastID.Get())
 	}
 
-	// TestNew Close resource
+	// TestFast Close resource
 	r, err := p.Get(ctx)
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
 	}
 	r.Close()
-
-	fmt.Println(2)
 
 	p.Put(nil)
 	if count.Get() != 4 {
@@ -356,8 +336,6 @@ func TestNewFull2(t *testing.T) {
 	if lastID.Get() != 6 {
 		t.Errorf("Expecting 6, received %d", lastID.Get())
 	}
-	fmt.Println(3)
-
 	// SetCapacity
 	p.SetCapacity(3, true)
 	if count.Get() != 3 {
@@ -410,11 +388,11 @@ func TestNewFull2(t *testing.T) {
 	}
 }
 
-func TestNewShrinking(t *testing.T) {
+func TestFastShrinking(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewNewPool(PoolFactory, 5, 5, time.Second, 0)
+	p := NewFastPool(PoolFactory, 5, 5, time.Second, 0)
 	var resources [10]Resource
 	// Leave one empty slot in the pool
 	for i := 0; i < 4; i++ {
@@ -491,7 +469,7 @@ func TestNewShrinking(t *testing.T) {
 		t.Errorf("Expecting 2, received %d", count.Get())
 	}
 
-	// TestNew race condition of SetCapacity with itself
+	// TestFast race condition of SetCapacity with itself
 	p.SetCapacity(3, true)
 	for i := 0; i < 3; i++ {
 		resources[i], err = p.Get(ctx)
@@ -540,11 +518,11 @@ func TestNewShrinking(t *testing.T) {
 	}
 }
 
-func TestNewClosing(t *testing.T) {
+func TestFastClosing(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewNewPool(PoolFactory, 5, 5, time.Second, 0)
+	p := NewFastPool(PoolFactory, 5, 5, time.Second, 0)
 	var resources [10]Resource
 	for i := 0; i < 5; i++ {
 		r, err := p.Get(ctx)
@@ -582,10 +560,10 @@ func TestNewClosing(t *testing.T) {
 	require.Equal(t, 0, int(count.Get()))
 }
 
-func TestNewIdleTimeout(t *testing.T) {
+func TestFastIdleTimeout(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
-	p := NewNewPool(PoolFactory, 1, 1, 10*time.Millisecond, 0)
+	p := NewFastPool(PoolFactory, 1, 1, 10*time.Millisecond, 0)
 	defer p.Close()
 
 	r := get(t, p)
@@ -620,14 +598,10 @@ func TestNewIdleTimeout(t *testing.T) {
 
 	// The idle close thread wakes up every 1/10 of the idle time, so ensure
 	// the timeout change applies to newly added resources.
-	fmt.Println("new long timeout")
 	p.SetIdleTimeout(200 * time.Millisecond)
-	fmt.Println("new long timeout set")
 	p.Put(r)
-	fmt.Println("new long timeout put")
 
 	time.Sleep(20 * time.Millisecond)
-	fmt.Println("new long timeout after sleep")
 	require.Equal(t, 2, int(lastID.Get()))
 	require.Equal(t, 1, int(count.Get()))
 	require.Equal(t, 1, int(p.IdleClosed()))
@@ -639,11 +613,11 @@ func TestNewIdleTimeout(t *testing.T) {
 	require.Equal(t, 2, int(p.IdleClosed()))
 }
 
-func TestNewCreateFail(t *testing.T) {
+func TestFastCreateFail(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewNewPool(FailFactory, 5, 5, time.Second, 0)
+	p := NewFastPool(FailFactory, 5, 5, time.Second, 0)
 	defer p.Close()
 
 	if _, err := p.Get(ctx); err.Error() != "Failed" {
@@ -655,10 +629,10 @@ func TestNewCreateFail(t *testing.T) {
 	require.Equal(t, 0, p.Active())
 }
 
-func TestNewSlowCreateFail(t *testing.T) {
+func TestFastSlowCreateFail(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
-	p := NewNewPool(SlowFailFactory, 2, 2, time.Second, 0)
+	p := NewFastPool(SlowFailFactory, 2, 2, time.Second, 0)
 	defer p.Close()
 
 	ch := make(chan bool)
@@ -677,9 +651,9 @@ func TestNewSlowCreateFail(t *testing.T) {
 	require.Equal(t, p.Available(), 2)
 }
 
-func TestNewTimeoutSlow(t *testing.T) {
+func TestFastTimeoutSlow(t *testing.T) {
 	ctx := context.Background()
-	p := NewNewPool(SlowCreateFactory, 4, 4, time.Second, 0)
+	p := NewFastPool(SlowCreateFactory, 4, 4, time.Second, 0)
 
 	defer p.Close()
 
@@ -700,9 +674,9 @@ func TestNewTimeoutSlow(t *testing.T) {
 	}
 }
 
-func TestNewTimeoutPoolFull(t *testing.T) {
+func TestFastTimeoutPoolFull(t *testing.T) {
 	ctx := context.Background()
-	p := NewNewPool(PoolFactory, 1, 1, time.Second, 0)
+	p := NewFastPool(PoolFactory, 1, 1, time.Second, 0)
 
 	var a, b Resource
 	defer func() {
@@ -737,10 +711,10 @@ func TestNewTimeoutPoolFull(t *testing.T) {
 	require.Equal(t, expected, p.State())
 }
 
-func TestNewExpired(t *testing.T) {
+func TestFastExpired(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
-	p := NewNewPool(PoolFactory, 1, 1, time.Second, 0)
+	p := NewFastPool(PoolFactory, 1, 1, time.Second, 0)
 	defer p.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 	r, err := p.Get(ctx)
@@ -754,10 +728,10 @@ func TestNewExpired(t *testing.T) {
 	}
 }
 
-func TestNewMinActive(t *testing.T) {
+func TestFastMinActive(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
-	p := NewNewPool(PoolFactory, 5, 5, time.Second, 3)
+	p := NewFastPool(PoolFactory, 5, 5, time.Second, 3)
 	defer p.Close()
 
 	if p.Available() != 5 {
@@ -774,11 +748,11 @@ func TestNewMinActive(t *testing.T) {
 	}
 }
 
-func TestNewMinActiveWithExpiry(t *testing.T) {
+func TestFastMinActiveWithExpiry(t *testing.T) {
 	timeout := time.Millisecond * 20
 	lastID.Set(0)
 	count.Set(0)
-	p := NewNewPool(PoolFactory, 5, 5, timeout, 3)
+	p := NewFastPool(PoolFactory, 5, 5, timeout, 3)
 	defer p.Close()
 
 	require.Equal(t, 3, p.Active())
@@ -816,8 +790,6 @@ func TestNewMinActiveWithExpiry(t *testing.T) {
 	require.Equal(t, expected, p.State())
 	require.Equal(t, 3, p.Active())
 
-	fmt.Println("shouldnt be closing here...")
-
 	// Put another resource back, and nothing should expire.
 	p.Put(resources[1])
 	time.Sleep(timeout * 2)
@@ -832,8 +804,8 @@ func TestNewMinActiveWithExpiry(t *testing.T) {
 	p.Put(resources[3])
 }
 
-func TestNewMinActiveSelfRefreshing(t *testing.T) {
-	p := NewNewPool(PoolFactory, 5, 5, time.Second, 3)
+func TestFastMinActiveSelfRefreshing(t *testing.T) {
+	p := NewFastPool(PoolFactory, 5, 5, time.Second, 3)
 	defer p.Close()
 
 	// Get 5
@@ -851,19 +823,19 @@ func TestNewMinActiveSelfRefreshing(t *testing.T) {
 	require.Equal(t, 3, p.Active())
 }
 
-func TestNewMinActiveTooHigh(t *testing.T) {
+func TestFastMinActiveTooHigh(t *testing.T) {
 	defer func() {
 		if r := recover(); r.(error).Error() != "minActive 2 higher than capacity 1" {
 			t.Errorf("Did not panic correctly: %v", r)
 		}
 	}()
 
-	p := NewNewPool(FailFactory, 1, 1, time.Second, 2)
+	p := NewFastPool(FailFactory, 1, 1, time.Second, 2)
 	defer p.Close()
 }
 
-func TestNewMinActiveTooHighAfterSetCapacity(t *testing.T) {
-	p := NewNewPool(FailFactory, 3, 3, time.Second, 2)
+func TestFastMinActiveTooHighAfterSetCapacity(t *testing.T) {
+	p := NewFastPool(FailFactory, 3, 3, time.Second, 2)
 	defer p.Close()
 
 	if err := p.SetCapacity(2, true); err != nil {
@@ -877,19 +849,17 @@ func TestNewMinActiveTooHighAfterSetCapacity(t *testing.T) {
 	}
 }
 
-func TestNewGetPutRace(t *testing.T) {
-	p := NewNewPool(SlowCreateFactory, 1, 1, 10*time.Nanosecond, 0)
+func TestFastGetPutRace(t *testing.T) {
+	p := NewFastPool(SlowCreateFactory, 1, 1, 10*time.Nanosecond, 0)
 	defer p.Close()
 
 	for j := 0; j < 200; j++ {
-		fmt.Println("\n\n\n------------")
 		done := make(chan bool)
 		for i := 0; i < 2; i++ {
 			go func() {
 				time.Sleep(time.Duration(rand.Int() % 10))
 				r, err := p.Get(context.Background())
 				if err != nil {
-					fmt.Println(err)
 					panic(err)
 				}
 
@@ -902,6 +872,5 @@ func TestNewGetPutRace(t *testing.T) {
 		}
 		<-done
 		<-done
-		fmt.Println("------------DONE")
 	}
 }

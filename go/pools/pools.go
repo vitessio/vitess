@@ -73,7 +73,7 @@ func New(poolImpl Impl, f CreateFactory, cap, maxCap int, idleTimeout time.Durat
 	case ResourceImpl:
 		return NewResourcePool(f, cap, maxCap, idleTimeout)
 	case NewImpl:
-		return NewNewPool(f, cap, maxCap, idleTimeout, minActive)
+		return NewFastPool(f, cap, maxCap, idleTimeout, minActive)
 	}
 
 	return nil
