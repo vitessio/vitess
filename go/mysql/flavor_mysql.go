@@ -69,6 +69,7 @@ func (mysqlFlavor) resetReplicationCommands() []string {
 		"STOP SLAVE",
 		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
 		"RESET MASTER",    // This will also clear gtid_executed and gtid_purged.
+		"SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false", // semi-sync will be enabled if needed when slave is started.
 	}
 }
 
