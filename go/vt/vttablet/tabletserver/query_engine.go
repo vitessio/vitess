@@ -192,7 +192,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		config.PoolNamePrefix+"ConnPool",
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
-		0,
+		config.QueryPoolMinActive,
 		checker,
 	)
 	qe.connTimeout.Set(time.Duration(config.QueryPoolTimeout * 1e9))

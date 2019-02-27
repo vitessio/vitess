@@ -49,6 +49,7 @@ var (
 type ConnectionPool struct {
 	mu          sync.Mutex
 	connections *pools.ResourcePool
+	impl        pools.Impl
 	capacity    int
 	idleTimeout time.Duration
 	minActive   int
@@ -60,8 +61,9 @@ type ConnectionPool struct {
 
 // NewConnectionPool creates a new ConnectionPool. The name is used
 // to publish stats only.
-func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, minActive int) *ConnectionPool {
+func NewConnectionPool(name string, impl pools.Impl, capacity int, idleTimeout time.Duration, minActive int) *ConnectionPool {
 	cp := &ConnectionPool{
+		impl:        impl,
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
 		minActive:   minActive,
@@ -104,7 +106,7 @@ func (cp *ConnectionPool) Open(info *mysql.ConnParams, mysqlStats *stats.Timings
 	defer cp.mu.Unlock()
 	cp.info = info
 	cp.mysqlStats = mysqlStats
-	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, cp.minActive)
+	cp.connections = pools.New(cp.impl, cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, cp.minActive)
 }
 
 // connect is used by the resource pool to create a new Resource.

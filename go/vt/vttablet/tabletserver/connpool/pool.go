@@ -58,6 +58,7 @@ type MySQLChecker interface {
 type Pool struct {
 	mu             sync.Mutex
 	connections    *pools.ResourcePool
+	impl           pools.Impl
 	capacity       int
 	idleTimeout    time.Duration
 	minActive      int
@@ -70,11 +71,13 @@ type Pool struct {
 // to publish stats only.
 func New(
 	name string,
+	impl pools.Impl,
 	capacity int,
 	idleTimeout time.Duration,
 	minActive int,
 	checker MySQLChecker) *Pool {
 	cp := &Pool{
+		impl:        impl,
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
 		minActive:   minActive,
@@ -113,7 +116,7 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
 	f := func() (pools.Resource, error) {
 		return NewDBConn(cp, appParams)
 	}
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.minActive)
+	cp.connections = pools.New(cp.impl, f, cp.capacity, cp.capacity, cp.idleTimeout, cp.minActive)
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams, tabletenv.MySQLStats)
