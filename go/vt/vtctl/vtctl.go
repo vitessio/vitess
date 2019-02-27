@@ -2108,7 +2108,7 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(schema, "", "  ")
+	b, err := json2.MarshalIndentPB(schema, "  ")
 	if err != nil {
 		wr.Logger().Printf("%v\n", err)
 		return err
