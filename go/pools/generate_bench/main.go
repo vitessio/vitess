@@ -34,7 +34,7 @@ func main() {
 			for _, s := range impls {
 				fmt.Fprintf(f, "func Benchmark_%v_%vWorkers_%vCapacity(b *testing.B) {\n", s.name, workers, capacity)
 				fmt.Fprintf(f, "\tbenchmarkGetPut(b, %v, VerySlowFactory, %v, %v)\n", s.impl, workers, capacity)
-				fmt.Fprint(f, "}\n")
+				fmt.Fprint(f, "}\n\n")
 			}
 		}
 	}
