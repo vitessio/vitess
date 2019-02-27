@@ -427,52 +427,37 @@ func TestNewShrinking(t *testing.T) {
 		require.NoError(t, p.SetCapacity(3, true))
 		done <- true
 	}()
-	expected := `{"Capacity": 3, "Available": 0, "Active": 4, "InUse": 4, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0}`
 	time.Sleep(time.Millisecond)
-	stats := p.StatsJSON()
-	require.Equal(t, expected, stats)
+	require.Equal(t, State{Capacity: 3, InUse: 4, IdleTimeout: time.Second, Draining: true}, p.State())
+	require.Equal(t, 0, p.Available())
+	require.Equal(t, 4, p.Active())
 
 	// There are already 2 resources available in the pool.
 	// So, returning one should be enough for SetCapacity to complete.
 	p.Put(resources[3])
 	<-done
-
 	time.Sleep(time.Millisecond * 10)
-
-	fmt.Printf("1>>>>>>>>>>> %+v\n", p.State())
-	// {Waiters:0 InPool:1 InUse:3 Capacity:3 MinActive:0 IdleTimeout:1s IdleClosed:0 WaitCount:0 WaitTime:0s}
 
 	// Return the rest of the resources
 	for i := 0; i < 3; i++ {
 		p.Put(resources[i])
 	}
 	time.Sleep(time.Millisecond * 10)
-	fmt.Printf("2>>>>>>>>>>> %+v\n", p.State())
-	// {Waiters:0 InPool:4 InUse:0 Capacity:3 MinActive:0 IdleTimeout:1s IdleClosed:0 WaitCount:0 WaitTime:0s}
 
-	stats = p.StatsJSON()
-	expected = `{"Capacity": 3, "Available": 3, "Active": 3, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0}`
-	// TODO: Something is odd here.
-	require.Equal(t, expected, stats)
-	if count.Get() != 3 {
-		t.Errorf("Expecting 3, received %d", count.Get())
-	}
+	require.Equal(t, State{Capacity: 3, InPool: 3, IdleTimeout: time.Second}, p.State())
+	require.Equal(t, 3, p.Available())
+	require.Equal(t, 3, p.Active())
+	require.Equal(t, 3, int(count.Get()))
 
 	// Ensure no deadlock if SetCapacity is called after we start
 	// waiting for a resource
 	var err error
 	for i := 0; i < 3; i++ {
-		resources[i], err = p.Get(ctx)
-		if err != nil {
-			t.Errorf("Unexpected error %v", err)
-		}
+		resources[i] = get(t, p)
 	}
 	// This will wait because pool is empty
 	go func() {
-		r, err := p.Get(ctx)
-		if err != nil {
-			t.Errorf("Unexpected error %v", err)
-		}
+		r := get(t, p)
 		p.Put(r)
 		done <- true
 	}()
@@ -491,6 +476,7 @@ func TestNewShrinking(t *testing.T) {
 	<-done
 	<-done
 	time.Sleep(time.Millisecond)
+
 	if p.Capacity() != 2 {
 		t.Errorf("Expecting 2, received %d", p.Capacity())
 	}
@@ -575,9 +561,7 @@ func TestNewClosing(t *testing.T) {
 
 	// Wait for goroutine to call Close
 	time.Sleep(10 * time.Millisecond)
-	stats := p.StatsJSON()
-	expected := `{"Capacity": 0, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 0, "IdleClosed": 0}`
-	require.Equal(t, expected, stats)
+	require.Equal(t, State{InUse: 5, Draining: true}, p.State())
 
 	// Put is allowed when closing
 	for i := 0; i < 5; i++ {
@@ -593,9 +577,7 @@ func TestNewClosing(t *testing.T) {
 		t.Errorf("expecting error")
 	}
 
-	stats = p.StatsJSON()
-	expected = `{"Capacity": 0, "Available": 0, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 0, "IdleClosed": 0}`
-	require.Equal(t, expected, stats)
+	require.Equal(t, State{Closed: true}, p.State())
 	require.Equal(t, 5, int(lastID.Get()))
 	require.Equal(t, 0, int(count.Get()))
 }
@@ -668,9 +650,9 @@ func TestNewCreateFail(t *testing.T) {
 		t.Errorf("Expecting Failed, received %v", err)
 	}
 	time.Sleep(time.Millisecond)
-	stats := p.StatsJSON()
-	expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0}`
-	require.Equal(t, expected, stats)
+	require.Equal(t, State{Capacity: 5, IdleTimeout: time.Second}, p.State())
+	require.Equal(t, 5, p.Available())
+	require.Equal(t, 0, p.Active())
 }
 
 func TestNewSlowCreateFail(t *testing.T) {

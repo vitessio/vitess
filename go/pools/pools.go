@@ -9,7 +9,10 @@ import (
 type Pool interface {
 	Get(context.Context) (Resource, error)
 	Put(Resource)
+	SetCapacity(int, bool) error
 	Close()
+
+	Active() int
 }
 
 var (

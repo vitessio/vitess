@@ -19,6 +19,7 @@ limitations under the License.
 package pools
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -531,17 +532,12 @@ func (rp *NewPool) closeIdleResources() {
 
 // StatsJSON returns the stats in JSON format.
 func (rp *NewPool) StatsJSON() string {
-	return fmt.Sprintf(`{"Capacity": %v, "Available": %v, "Active": %v, "InUse": %v, "MaxCapacity": %v, "WaitCount": %v, "WaitTime": %v, "IdleTimeout": %v, "IdleClosed": %v}`,
-		rp.Capacity(),
-		rp.Available(),
-		rp.Active(),
-		rp.InUse(),
-		rp.MaxCap(),
-		rp.WaitCount(),
-		rp.WaitTime().Nanoseconds(),
-		rp.IdleTimeout().Nanoseconds(),
-		rp.IdleClosed(),
-	)
+	state := rp.State()
+	d, err := json.Marshal(&state)
+	if err != nil {
+		return ""
+	}
+	return string(d)
 }
 
 func (rp *NewPool) State() State {
