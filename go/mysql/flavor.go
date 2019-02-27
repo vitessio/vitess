@@ -24,6 +24,8 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -224,10 +226,10 @@ func resultToMap(qr *sqltypes.Result) (map[string]string, error) {
 		return nil, nil
 	}
 	if len(qr.Rows) > 1 {
-		return nil, fmt.Errorf("query returned %d rows, expected 1", len(qr.Rows))
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "query returned %d rows, expected 1", len(qr.Rows))
 	}
 	if len(qr.Fields) != len(qr.Rows[0]) {
-		return nil, fmt.Errorf("query returned %d column names, expected %d", len(qr.Fields), len(qr.Rows[0]))
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "query returned %d column names, expected %d", len(qr.Fields), len(qr.Rows[0]))
 	}
 
 	result := make(map[string]string, len(qr.Fields))
