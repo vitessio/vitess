@@ -24,7 +24,7 @@ func (r *VerySlowResource) Close() {
 
 func benchmarkGetPut(b *testing.B, impl Impl, f CreateFactory, workers int, cap int) {
 	b.Helper()
-	p := New(impl, f, cap, cap, time.Millisecond*10, 0)
+	p := New(impl, f, cap, cap, 0, 0)
 
 	done := make(chan bool)
 	for j := 0; j < workers; j++ {
