@@ -251,7 +251,6 @@ func TestFastFull2(t *testing.T) {
 	require.NoError(t, err)
 	var resources [10]Resource
 
-	// TestFast Get
 	for i := 0; i < 5; i++ {
 		r, err := p.Get(ctx)
 		resources[i] = r
@@ -277,7 +276,6 @@ func TestFastFull2(t *testing.T) {
 		}
 	}
 
-	// TestFast that Get waits
 	ch := make(chan bool)
 	go func() {
 		for i := 0; i < 5; i++ {
