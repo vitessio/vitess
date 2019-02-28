@@ -17,10 +17,11 @@ limitations under the License.
 package messager
 
 import (
-	"golang.org/x/net/context"
 	"sort"
 	"sync"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"

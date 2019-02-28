@@ -179,7 +179,7 @@ func (p *FastPool) ensureMinimumActive() {
 	for i := 0; i < required; i++ {
 		r, err := p.create()
 		if err != nil {
-			// TODO(gak): How to handle factory error?
+			// TODO(gak): How to handle factory error not initiated by the user?
 			break
 		}
 		p.Lock()

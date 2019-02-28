@@ -168,7 +168,6 @@ func (cp *ConnectionPool) Put(conn *PooledDBConnection) {
 
 // SetCapacity alters the size of the pool at runtime.
 func (cp *ConnectionPool) SetCapacity(capacity int) (err error) {
-	// TODO: We don't need to lock here.
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	if cp.connections != nil {

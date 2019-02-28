@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
 
@@ -34,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 

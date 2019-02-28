@@ -21,12 +21,12 @@ import (
 	"math/rand"
 	"testing"
 	"time"
-	"vitess.io/vitess/go/pools"
-
-	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/vt/callerid"
 
 	"golang.org/x/net/context"
+
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/vt/callerid"
 )
 
 func TestConnPoolGet(t *testing.T) {
@@ -229,16 +229,12 @@ func (dummyChecker) CheckMySQL() {}
 var checker = dummyChecker{}
 
 func newPool() *Pool {
-	return newPoolOpts(0)
-}
-
-func newPoolOpts(minActive int) *Pool {
 	return New(
 		fmt.Sprintf("TestPool%d", rand.Int63()),
 		pools.ResourceImpl,
 		100,
 		10*time.Second,
-		minActive,
+		0,
 		checker,
 	)
 }

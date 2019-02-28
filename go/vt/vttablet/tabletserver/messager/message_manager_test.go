@@ -23,11 +23,11 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"vitess.io/vitess/go/pools"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"

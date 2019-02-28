@@ -19,10 +19,11 @@ package schema
 import (
 	"bytes"
 	"encoding/json"
-	"golang.org/x/net/context"
 	"net/http"
 	"sync"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"

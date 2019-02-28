@@ -20,11 +20,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"time"
-	"vitess.io/vitess/go/pools"
+
+	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/throttler"

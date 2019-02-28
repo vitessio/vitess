@@ -21,12 +21,12 @@ import (
 	"reflect"
 	"strings"
 	"time"
-	"vitess.io/vitess/go/pools"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
