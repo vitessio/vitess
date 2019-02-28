@@ -100,6 +100,5 @@ Slack and Nozzle are swapped for aesthetics, because the icons don't align well 
 <div class="page-spacer"></div>
 
 <div class="row" style="text-align: center">
-  <a href="https://www.cncf.io/"><img src="/images/cncf-icon-color.svg" width="200" height="200"></a>
   <h3>We are a Cloud Native Computing Foundation project.</h3>
 </div>
