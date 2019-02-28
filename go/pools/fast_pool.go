@@ -44,7 +44,7 @@ type FastPool struct {
 	pool chan resourceWrapper
 
 	// idleTimer is used to terminate idle resources that are in the pool.
-	idleTimer    *timer.Timer
+	idleTimer *timer.Timer
 }
 
 type State struct {
@@ -123,6 +123,7 @@ func NewFastPool(factory CreateFactory, capacity, maxCap int, idleTimeout time.D
 	return p
 }
 
+// create a resource wrapper. return an error if the factory function failed.
 func (p *FastPool) create() (resourceWrapper, error) {
 	r, err := p.factory()
 	if err != nil {
@@ -135,6 +136,7 @@ func (p *FastPool) create() (resourceWrapper, error) {
 	}, nil
 }
 
+// safeCreate will prevent allocating a resource past the capacity of the pool.
 func (p *FastPool) safeCreate() (resourceWrapper, error) {
 	p.Lock()
 	capacity := p.hasFreeCapacity()
@@ -164,6 +166,7 @@ func (p *FastPool) safeCreate() (resourceWrapper, error) {
 	return wrapper, nil
 }
 
+// ensureMinimumActive keeps at least a certain amount of resources instantiated.
 func (p *FastPool) ensureMinimumActive() {
 	p.Lock()
 	if p.state.MinActive == 0 || p.state.Closed {
@@ -187,6 +190,7 @@ func (p *FastPool) ensureMinimumActive() {
 }
 
 // Close empties the pool calling Close on all its resources.
+//
 // You can call Close while there are outstanding resources.
 // It waits for all resources to be returned (Put).
 // After a Close, Get is not allowed.
@@ -201,8 +205,8 @@ func (p *FastPool) IsClosed() bool {
 }
 
 // Get will return the next available resource. If capacity
-// has not been reached, it will create a new one using the factory. Otherwise,
-// it will wait till the next resource becomes available or a timeout.
+// has not been reached, it will create a new one using the factory.
+// Otherwise, it will wait till the next resource becomes available or a timeout.
 func (p *FastPool) Get(ctx context.Context) (resource Resource, err error) {
 	if p.State().Closed {
 		return nil, ErrClosed
@@ -236,6 +240,9 @@ func (p *FastPool) Get(ctx context.Context) (resource Resource, err error) {
 	}
 }
 
+// getQueued will wait for a resource to become available in the pool.
+// This is called when there is no capacity to create a resource and
+// there is nothing in the pool.
 func (p *FastPool) getQueued(ctx context.Context) (Resource, error) {
 	startTime := time.Now()
 
@@ -243,7 +250,6 @@ func (p *FastPool) getQueued(ctx context.Context) (Resource, error) {
 	p.state.Waiters++
 	p.Unlock()
 
-	// We don't have capacity, so now we block on pool.
 	for {
 		select {
 		case wrapper, ok := <-p.pool:
@@ -302,6 +308,7 @@ func (p *FastPool) Put(resource Resource) {
 	p.state.InUse--
 
 	if p.state.Closed || p.active() > p.state.Capacity {
+		// We're ether closed or shrinking.
 		p.Unlock()
 		if resource != nil {
 			resource.Close()
@@ -326,7 +333,7 @@ func (p *FastPool) Put(resource Resource) {
 	case p.pool <- w:
 		p.state.InPool++
 	default:
-		// We don't have room.
+		// We don't have room in the pool.
 		p.state.InUse++
 		p.Unlock()
 		panic(ErrFull)
@@ -341,7 +348,8 @@ func (p *FastPool) Put(resource Resource) {
 // to be shrunk and `block` is true, SetCapacity waits
 // till the necessary number of resources are returned
 // to the pool.
-// A SetCapacity of 0 is equivalent to closing the FastPool.
+//
+// A SetCapacity of 0 is equivalent to closing the pool.
 func (p *FastPool) SetCapacity(capacity int, block bool) error {
 	p.Lock()
 
@@ -514,6 +522,7 @@ func (p *FastPool) StatsJSON() string {
 	return string(d)
 }
 
+// State returns the state struct with state, statistics, etc.
 func (p *FastPool) State() State {
 	p.Lock()
 	state := p.state
