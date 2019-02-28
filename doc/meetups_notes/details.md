@@ -4,7 +4,7 @@ Until we find the right home for Vitess monthly meeting notes, they live here on
 
 ### Vitess Monthly Meeting
 
-Vitess monthly meetings happen on the 3rd Thursday of every month, unless otherwise stated on vitess.slack.com (click [here](https://vitess.slack.com/join/shared_invite/enQtMzIxMDMyMzA0NzA1LTBjYjY1M2I2Yjg5YmY3ODIwOTk0N2M1YzI4Y2ViODdiNmIxMDdiMDM5YWQ1ZTc0YmJhZDdiOTliMGVkNDY4MjM) to join us on Slack). 
+Vitess monthly meetings happen on the 3rd Thursday of every month at 8:00AM Pacific time, unless otherwise stated on vitess.slack.com (click [here](https://vitess.slack.com/join/shared_invite/enQtMzIxMDMyMzA0NzA1LTBjYjY1M2I2Yjg5YmY3ODIwOTk0N2M1YzI4Y2ViODdiNmIxMDdiMDM5YWQ1ZTc0YmJhZDdiOTliMGVkNDY4MjM) to join us on Slack). 
 
 There is a recurring calendar invite that will always have the latest meeting dates, ping Adrianna (@skinnylatte on vitess.slack.com or email adrianna [at] planetscale.com if you would like to be invited to it).
 
