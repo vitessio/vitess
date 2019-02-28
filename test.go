@@ -826,7 +826,17 @@ func selectedTests(args []string, config *Config) []*Test {
 		for _, name := range args {
 			t, ok := config.Tests[name]
 			if !ok {
-				log.Fatalf("Unknown test: %v", name)
+				tests := make([]string, len(config.Tests))
+
+				i := 0
+				for k := range config.Tests {
+					tests[i] = k
+					i++
+				}
+
+				sort.Strings(tests)
+
+				log.Fatalf("Unknown test: %v\nAvailable tests are: %v", name, strings.Join(tests, ", "))
 			}
 			t.name = name
 			tests = append(tests, t)
