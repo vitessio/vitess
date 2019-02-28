@@ -50,9 +50,9 @@ Vagrant.configure("2") do |config|
   config.vm.provider :virtualbox do |vb|
     vb.name = "vitess"
     vb.customize ["modifyvm", :id, "--ioapic", "on"]
-    # vb.customize ["modifyvm", :id, "--cpuexecutioncap", "85"]
-    # vb.customize [ "modifyvm", :id, "--uartmode1", "disconnected" ]
-    vb.memory = 14888
+    vb.customize ["modifyvm", :id, "--cpuexecutioncap", "85"]
+    vb.customize [ "modifyvm", :id, "--uartmode1", "disconnected" ]
+    vb.memory = 12888
     vb.cpus = 4
   end
   config.vm.provision "shell", path: "./vagrant-scripts/bootstrap_vm.sh"
