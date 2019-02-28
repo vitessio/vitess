@@ -227,3 +227,7 @@ func (r *Reader) recordError(err error) {
 	r.errorLog.Errorf("%v", err)
 	readErrors.Add(1)
 }
+
+func (r *Reader) IsOpen() bool {
+	return r.isOpen
+}

@@ -152,12 +152,12 @@ type TabletServer struct {
 	// for health checks. This does not affect how queries are served.
 	// target specifies the primary target type, and also allow specifies
 	// secondary types that should be additionally allowed.
-	mu            sync.Mutex
-	state         int64
-	lameduck      sync2.AtomicInt32
-	target        querypb.Target
-	alsoAllow     []topodatapb.TabletType
-	requests      sync.WaitGroup
+	mu        sync.Mutex
+	state     int64
+	lameduck  sync2.AtomicInt32
+	target    querypb.Target
+	alsoAllow []topodatapb.TabletType
+	requests  sync.WaitGroup
 
 	// The following variables should be initialized only once
 	// before starting the tabletserver.
@@ -229,7 +229,7 @@ type TxPoolController interface {
 	AcceptReadOnly() error
 
 	// InitDBConfig must be called before Init.
-  InitDBConfig(dbcfgs *dbconfigs.DBConfigs)
+	InitDBConfig(dbcfgs *dbconfigs.DBConfigs)
 
 	// Init must be called once when vttablet starts for setting
 	// up the metadata tables.
@@ -1867,6 +1867,14 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 // HeartbeatLag returns the current lag as calculated by the heartbeat
 // package, if heartbeat is enabled. Otherwise returns 0.
 func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
+	// If the reader is closed and we are not serving, then the
+	// query service is shutdown and this value is not being updated.
+	// We return healthy from this as a signal to the healtcheck to attempt
+	// to start the query service again. If the query service fails to start
+	// with an error, then that error is be reported by the healthcheck.
+	if !tsv.hr.IsOpen() && !tsv.IsServing() {
+		return 0, nil
+	}
 	return tsv.hr.GetLatest()
 }
 
