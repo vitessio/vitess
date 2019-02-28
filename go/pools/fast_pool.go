@@ -22,7 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"runtime/debug"
+	"os"
 	"sync"
 	"time"
 
@@ -100,7 +100,6 @@ type State struct {
 // of active resources. Any errors when instantiating the factory
 // will cause the active resource count to be lower than requested.
 func NewFastPool(factory CreateFactory, capacity, maxCap int, idleTimeout time.Duration, minActive int) *FastPool {
-	fmt.Println("NewFastPool", capacity, maxCap, idleTimeout)
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
@@ -108,25 +107,27 @@ func NewFastPool(factory CreateFactory, capacity, maxCap int, idleTimeout time.D
 		panic(fmt.Errorf("minActive %v higher than capacity %v", minActive, capacity))
 	}
 
-	rp := &FastPool{
+	p := &FastPool{
 		factory: factory,
 		pool:    make(chan resourceWrapper, maxCap),
 	}
 
-	rp.state = State{
+	p.state = State{
 		Capacity:  capacity,
 		MinActive: minActive,
 	}
 
-	rp.ensureMinimumActive()
-	rp.SetIdleTimeout(idleTimeout)
+	p.log("NewFastPool")
 
-	return rp
+	p.ensureMinimumActive()
+	p.SetIdleTimeout(idleTimeout)
+
+	return p
 }
 
-func (rp *FastPool) create() (resourceWrapper, error) {
-	fmt.Println("RP create")
-	r, err := rp.factory()
+func (p *FastPool) create() (resourceWrapper, error) {
+	p.Log("create")
+	r, err := p.factory()
 	if err != nil {
 		return resourceWrapper{}, err
 	}
@@ -137,55 +138,55 @@ func (rp *FastPool) create() (resourceWrapper, error) {
 	}, nil
 }
 
-func (rp *FastPool) safeCreate() (resourceWrapper, error) {
-	fmt.Println("RP safeCreate")
-	rp.Lock()
-	capacity := rp.hasFreeCapacity()
-	rp.state.Spawning++
-	rp.Unlock()
+func (p *FastPool) safeCreate() (resourceWrapper, error) {
+	p.Log("safeCreate")
+	p.Lock()
+	capacity := p.hasFreeCapacity()
+	p.state.Spawning++
+	p.Unlock()
 
 	if !capacity {
-		rp.Lock()
-		rp.state.Spawning--
-		rp.Unlock()
+		p.Lock()
+		p.state.Spawning--
+		p.Unlock()
 		return resourceWrapper{}, errNeedToQueue
 	}
 
-	wrapper, err := rp.create()
+	wrapper, err := p.create()
 	if err != nil {
-		rp.Lock()
-		rp.state.Spawning--
-		rp.Unlock()
+		p.Lock()
+		p.state.Spawning--
+		p.Unlock()
 		return resourceWrapper{}, err
 	}
 
-	rp.Lock()
-	rp.state.InUse++
-	rp.state.Spawning--
-	rp.Unlock()
+	p.Lock()
+	p.state.InUse++
+	p.state.Spawning--
+	p.Unlock()
 
 	return wrapper, nil
 }
 
-func (rp *FastPool) ensureMinimumActive() {
-	rp.Lock()
-	if rp.state.MinActive == 0 || rp.state.Closed {
-		rp.Unlock()
+func (p *FastPool) ensureMinimumActive() {
+	p.Lock()
+	if p.state.MinActive == 0 || p.state.Closed {
+		p.Unlock()
 		return
 	}
-	required := rp.state.MinActive - rp.active()
-	rp.Unlock()
+	required := p.state.MinActive - p.active()
+	p.Unlock()
 
 	for i := 0; i < required; i++ {
-		r, err := rp.create()
+		r, err := p.create()
 		if err != nil {
 			// TODO(gak): How to handle factory error?
 			break
 		}
-		rp.Lock()
-		rp.state.InPool++
-		rp.Unlock()
-		rp.pool <- r
+		p.Lock()
+		p.state.InPool++
+		p.Unlock()
+		p.pool <- r
 	}
 }
 
@@ -193,101 +194,101 @@ func (rp *FastPool) ensureMinimumActive() {
 // You can call Close while there are outstanding resources.
 // It waits for all resources to be returned (Put).
 // After a Close, Get is not allowed.
-func (rp *FastPool) Close() {
-	fmt.Println("RP Close")
-	rp.SetIdleTimeout(0)
-	_ = rp.SetCapacity(0, true)
+func (p *FastPool) Close() {
+	p.Log("Close")
+	p.SetIdleTimeout(0)
+	_ = p.SetCapacity(0, true)
+	p.Log("Close DONE")
 }
 
 // IsClosed returns true if the resource pool is closed.
-func (rp *FastPool) IsClosed() bool {
-	return rp.State().Closed
+func (p *FastPool) IsClosed() bool {
+	return p.State().Closed
 }
 
 // Get will return the next available resource. If capacity
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will wait till the next resource becomes available or a timeout.
-func (rp *FastPool) Get(ctx context.Context) (resource Resource, err error) {
-	fmt.Printf("RP Get %+v\n", rp.State())
-	debug.PrintStack()
+func (p *FastPool) Get(ctx context.Context) (resource Resource, err error) {
+	p.Log("Get")
 
-	if rp.State().Closed {
-		fmt.Printf("RP we're closed! %+v\n", rp.State())
+	if p.State().Closed {
+		p.Log("Get: already closed")
 		return nil, ErrClosed
 	}
 
 	select {
-	case wrapper, ok := <-rp.pool:
+	case wrapper, ok := <-p.pool:
 		if !ok {
-			fmt.Printf("RP Get ErrClosed %+v\n", rp.State())
+			p.Log("Get: pool closed")
 			return nil, ErrClosed
 		}
 
-		rp.Lock()
-		rp.state.InPool--
-		rp.state.InUse++
-		rp.Unlock()
+		p.Lock()
+		p.state.InPool--
+		p.state.InUse++
+		p.Unlock()
 
-		fmt.Printf("RP Get found in pool %v %+v\n", wrapper.resource, rp.State())
+		p.Log("Get: resource found in pool:", wrapper.resource)
 		return wrapper.resource, nil
 
 	case <-ctx.Done():
-		fmt.Printf("RP Get ErrTimeout1 %+v\n", rp.State())
+		p.Log("Get: ErrTimeout1")
 		return nil, ErrTimeout
 
 	default:
-		fmt.Printf("RP Get Nothing in pool %+v\n", rp.State())
-		wrapper, err := rp.safeCreate()
+		p.Log("Get: nothing in pool")
+		wrapper, err := p.safeCreate()
 		if err == errNeedToQueue {
-			return rp.getQueued(ctx)
+			return p.getQueued(ctx)
 		} else if err != nil {
-			fmt.Printf("RP Error creating1 %v %+v\n", err, rp.State())
+			p.Log("Get: error creating1", err)
 			return nil, err
 		}
 
-		fmt.Printf("RP Get created and returned %v %+v\n", wrapper.resource, rp.State())
+		p.Log("Get: returning", wrapper.resource)
 		return wrapper.resource, nil
 	}
 }
 
-func (rp *FastPool) getQueued(ctx context.Context) (Resource, error) {
-	fmt.Printf("RP GetQueued %+v\n", rp.State())
+func (p *FastPool) getQueued(ctx context.Context) (Resource, error) {
+	p.Log("GetQueued")
 	startTime := time.Now()
 
-	rp.Lock()
-	rp.state.Waiters++
-	rp.Unlock()
+	p.Lock()
+	p.state.Waiters++
+	p.Unlock()
 
 	// We don't have capacity, so now we block on pool.
 	for {
 		select {
-		case wrapper, ok := <-rp.pool:
+		case wrapper, ok := <-p.pool:
 			if !ok {
-				rp.Lock()
-				rp.state.Waiters--
-				rp.Unlock()
+				p.Lock()
+				p.state.Waiters--
+				p.Unlock()
 
-				fmt.Printf("RP GetQueued ErrClosed %+v\n", rp.State())
+				p.Log("GetQueued: ErrClosed")
 				return nil, ErrClosed
 			}
 
-			rp.Lock()
-			rp.state.InPool--
-			rp.state.InUse++
-			rp.state.Waiters--
-			rp.state.WaitCount++
-			rp.state.WaitTime += time.Now().Sub(startTime)
-			rp.Unlock()
+			p.Lock()
+			p.state.InPool--
+			p.state.InUse++
+			p.state.Waiters--
+			p.state.WaitCount++
+			p.state.WaitTime += time.Now().Sub(startTime)
+			p.Unlock()
 
-			fmt.Printf("RP GetQueued got from pool %v %+v\n", wrapper.resource, rp.State())
+			p.Log("GetQueued: returned", wrapper.resource)
 			return wrapper.resource, nil
 
 		case <-ctx.Done():
-			rp.Lock()
-			rp.state.Waiters--
-			rp.Unlock()
+			p.Lock()
+			p.state.Waiters--
+			p.Unlock()
 
-			fmt.Printf("RP GetQueued ErrTimeout %+v\n", rp.State())
+			p.Log("GetQueued: ErrTimeout2")
 			return nil, ErrTimeout
 
 		case <-time.After(100 * time.Millisecond):
@@ -295,20 +296,17 @@ func (rp *FastPool) getQueued(ctx context.Context) (Resource, error) {
 			// put into a queue, but another caller has failed in creating
 			// a resource, causing a deadlock. We'll check occasionally to see
 			// if there is now capacity to create.
-			fmt.Printf("RP GetQueued After 100ms %+v\n", rp.State())
-
-			if rp.State().Closed {
+			if p.State().Closed {
 				return nil, ErrClosed
 			}
-
-			wrapper, err := rp.safeCreate()
+			wrapper, err := p.safeCreate()
 			if err == errNeedToQueue {
 				continue
 			} else if err != nil {
-				fmt.Printf("RP GetQueued err on create %v %+v\n", err, rp.State())
+				p.Log("GetQueued: err on create", err)
 				return nil, err
 			} else {
-				fmt.Printf("RP GetQueued create after race %v %+v\n", wrapper.resource, rp.State())
+				p.Log("GetQueued: create after race", wrapper.resource)
 				return wrapper.resource, nil
 			}
 		}
@@ -319,49 +317,49 @@ func (rp *FastPool) getQueued(ctx context.Context) (Resource, error) {
 // a corresponding Put is required. If you no longer need a resource,
 // you will need to call Put(nil) instead of returning the closed resource.
 // The will eventually cause a new resource to be created in its place.
-func (rp *FastPool) Put(resource Resource) {
-	fmt.Printf("RP Put %v %+v\n", resource, rp.State())
-	rp.Lock()
+func (p *FastPool) Put(resource Resource) {
+	p.Log("Put", resource)
+	p.Lock()
 
-	rp.state.InUse--
+	p.state.InUse--
 
-	if rp.state.Closed || rp.active() > rp.state.Capacity {
-		rp.Unlock()
+	if p.state.Closed || p.active() > p.state.Capacity {
+		p.Unlock()
 		if resource != nil {
-			fmt.Println("RP Put closing resource due to closing or capacity", rp.State().Closed, rp.Active())
+			p.Log("Put: closing resource")
 			resource.Close()
 		}
 		return
 	}
 
 	if resource == nil {
-		rp.Unlock()
-		fmt.Printf("RP Put got nil %v %+v\n", resource, rp.State())
-		rp.ensureMinimumActive()
+		p.Unlock()
+		p.Log("Put: got nil")
+		p.ensureMinimumActive()
 		return
 	}
 
-	if rp.state.InUse < 0 {
-		rp.state.InUse++
-		rp.Unlock()
-		fmt.Printf("RP Put ErRPutBeforeGet %+v\n", rp.State())
+	if p.state.InUse < 0 {
+		p.state.InUse++
+		p.Unlock()
+		p.Log("Put: ErrPutBeforeGet")
 		panic(ErrPutBeforeGet)
 	}
 
 	w := resourceWrapper{resource: resource, timeUsed: time.Now()}
 	select {
-	case rp.pool <- w:
-		fmt.Printf("RP Put back into pool %+v\n", rp.state)
-		rp.state.InPool++
+	case p.pool <- w:
+		p.log("Put: Returned to pool")
+		p.state.InPool++
 	default:
 		// We don't have room.
-		rp.state.InUse++
-		rp.Unlock()
-		fmt.Printf("RP Put full pool %+v\n", rp.State())
+		p.state.InUse++
+		p.Unlock()
+		p.Log("Put: pool full")
 		panic(ErrFull)
 	}
 
-	rp.Unlock()
+	p.Unlock()
 }
 
 // SetCapacity changes the capacity of the pool.
@@ -371,49 +369,49 @@ func (rp *FastPool) Put(resource Resource) {
 // till the necessary number of resources are returned
 // to the pool.
 // A SetCapacity of 0 is equivalent to closing the FastPool.
-func (rp *FastPool) SetCapacity(capacity int, block bool) error {
-	fmt.Printf("RP SetCapacity %d %+v\n", capacity, rp.State())
-	rp.Lock()
+func (p *FastPool) SetCapacity(capacity int, block bool) error {
+	p.Log("SetCapacity", capacity)
+	p.Lock()
 
-	if rp.state.Closed {
-		rp.Unlock()
+	if p.state.Closed {
+		p.Unlock()
 		return ErrClosed
 	}
 
-	if capacity < 0 || capacity > cap(rp.pool) {
-		rp.Unlock()
+	if capacity < 0 || capacity > cap(p.pool) {
+		p.Unlock()
 		return fmt.Errorf("capacity %d is out of range", capacity)
 	}
 
 	if capacity != 0 {
-		minActive := rp.state.MinActive
+		minActive := p.state.MinActive
 		if capacity < minActive {
-			rp.Unlock()
+			p.Unlock()
 			return fmt.Errorf("minActive %v would now be higher than capacity %v", minActive, capacity)
 		}
 	}
 
 	if capacity == 0 {
-		rp.state.Closed = true
+		p.state.Closed = true
 	}
 
-	isGrowing := capacity > rp.state.Capacity
-	rp.state.Capacity = capacity
+	isGrowing := capacity > p.state.Capacity
+	p.state.Capacity = capacity
 
 	if isGrowing {
-		rp.state.Draining = false
-		rp.Unlock()
+		p.state.Draining = false
+		p.Unlock()
 		return nil
 	}
 
-	rp.state.Draining = true
-	rp.Unlock()
+	p.state.Draining = true
+	p.Unlock()
 
 	var done chan bool
 	if block {
 		done = make(chan bool)
 	}
-	go rp.shrink(done)
+	go p.shrink(done)
 	if block {
 		<-done
 	}
@@ -422,36 +420,35 @@ func (rp *FastPool) SetCapacity(capacity int, block bool) error {
 }
 
 // shrink active resources until capacity it is not above the set capacity.
-func (rp *FastPool) shrink(done chan<- bool) {
-	fmt.Printf("SetCapacity starting drain... %+v\n", rp.State())
+func (p *FastPool) shrink(done chan<- bool) {
+	p.log("shrink: starting")
 	for {
-		rp.Lock()
-		remaining := rp.active() - rp.state.Capacity
+		p.Lock()
+		remaining := p.active() - p.state.Capacity
 		if remaining <= 0 {
-			fmt.Printf("SetCapacity inpool fully drained %+v\n", rp.state)
-			rp.state.Draining = false
-			if rp.state.Capacity == 0 {
-				close(rp.pool)
-				rp.state.Closed = true
+			p.log("shrink: fully drained")
+			p.state.Draining = false
+			if p.state.Capacity == 0 {
+				close(p.pool)
+				p.state.Closed = true
 			}
-			rp.Unlock()
+			p.Unlock()
 			done <- true
 			return
 		}
-		rp.Unlock()
+		p.Unlock()
 
 		// We can't remove InUse resources, so only target the pool.
 		// Collect the InUse resources lazily when they're returned.
 		select {
-		case wrapper := <-rp.pool:
-			fmt.Printf("SetCapacity closing resource due to shrinking %v %+v\n", wrapper.resource, rp.State())
+		case wrapper := <-p.pool:
+			p.Log("shrink: closing", wrapper.resource)
 			wrapper.resource.Close()
 			wrapper.resource = nil
 
-			rp.Lock()
-			rp.state.InPool--
-			rp.Unlock()
-			fmt.Printf("SetCapacity closed resource due to shrinking %v %+v\n", wrapper.resource, rp.State())
+			p.Lock()
+			p.state.InPool--
+			p.Unlock()
 
 		case <-time.After(time.Second):
 			// Someone could have pulled from the pool just before
@@ -462,48 +459,43 @@ func (rp *FastPool) shrink(done chan<- bool) {
 
 // SetIdleTimeout sets the idle timeout for resources. The timeout is
 // checked at the 10th of the period of the timeout.
-func (rp *FastPool) SetIdleTimeout(idleTimeout time.Duration) {
-	rp.Lock()
-	rp.state.IdleTimeout = idleTimeout
-	fastInterval := rp.state.IdleTimeout / 10
+func (p *FastPool) SetIdleTimeout(idleTimeout time.Duration) {
+	p.Lock()
+	p.state.IdleTimeout = idleTimeout
+	fastInterval := p.state.IdleTimeout / 10
 
-	if rp.idleTimer == nil {
-		fmt.Println("RP creating new timer", fastInterval)
-		rp.idleTimer = timer.NewTimer(fastInterval)
+	if p.idleTimer == nil {
+		p.idleTimer = timer.NewTimer(fastInterval)
 	} else {
-		fmt.Println("RP stopping timer")
-		rp.Unlock()
-		rp.idleTimer.Stop()
-		rp.Lock()
+		p.Unlock()
+		p.idleTimer.Stop()
+		p.Lock()
 	}
 
-	if rp.state.IdleTimeout == 0 {
-		fmt.Println("RP disabling timer")
-		rp.Unlock()
+	if p.state.IdleTimeout == 0 {
+		p.Unlock()
 		return
 	}
 
-	fmt.Println("RP activating timer", fastInterval)
-	rp.idleTimer.SetInterval(fastInterval)
-	rp.idleTimer.Start(rp.closeIdleResources)
-	rp.Unlock()
-	fmt.Println("RP activating timer done", fastInterval)
+	p.idleTimer.SetInterval(fastInterval)
+	p.idleTimer.Start(p.closeIdleResources)
+	p.Unlock()
 }
 
 // closeIdleResources scans the pool for idle resources
 // and closes them.
-func (rp *FastPool) closeIdleResources() {
+func (p *FastPool) closeIdleResources() {
 	// Shouldn't be zero, but checking in case.
-	if rp.State().IdleTimeout == 0 {
+	if p.State().IdleTimeout == 0 {
 		return
 	}
 
 	for {
-		rp.Lock()
-		inPool := rp.state.InPool
-		minActive := rp.state.MinActive
-		active := rp.active()
-		rp.Unlock()
+		p.Lock()
+		inPool := p.state.InPool
+		minActive := p.state.MinActive
+		active := p.active()
+		p.Unlock()
 
 		if active <= minActive {
 			return
@@ -514,26 +506,26 @@ func (rp *FastPool) closeIdleResources() {
 		}
 
 		select {
-		case wrapper, ok := <-rp.pool:
+		case wrapper, ok := <-p.pool:
 			if !ok {
 				return
 			}
 
-			rp.Lock()
-			deadline := wrapper.timeUsed.Add(rp.state.IdleTimeout)
+			p.Lock()
+			deadline := wrapper.timeUsed.Add(p.state.IdleTimeout)
 			if time.Now().After(deadline) {
-				rp.state.IdleClosed++
-				rp.state.InPool--
-				rp.Unlock()
-				fmt.Printf("RP CIR closing resource due to timeout %v %+v\n", wrapper.resource, rp.State())
+				p.state.IdleClosed++
+				p.state.InPool--
+				p.Unlock()
+				p.Log("idle: closing", wrapper.resource)
 				wrapper.resource.Close()
 				wrapper.resource = nil
 				break
 			}
-			rp.Unlock()
+			p.Unlock()
 
 			// Not expired--back into the pool we go.
-			rp.pool <- wrapper
+			p.pool <- wrapper
 
 		default:
 			// The pool might have been used while we were iterating.
@@ -544,8 +536,8 @@ func (rp *FastPool) closeIdleResources() {
 }
 
 // StatsJSON returns the stats in JSON format.
-func (rp *FastPool) StatsJSON() string {
-	state := rp.State()
+func (p *FastPool) StatsJSON() string {
+	state := p.State()
 	d, err := json.Marshal(&state)
 	if err != nil {
 		return ""
@@ -553,22 +545,22 @@ func (rp *FastPool) StatsJSON() string {
 	return string(d)
 }
 
-func (rp *FastPool) State() State {
-	rp.Lock()
-	state := rp.state
-	rp.Unlock()
+func (p *FastPool) State() State {
+	p.Lock()
+	state := p.state
+	p.Unlock()
 
 	return state
 }
 
 // Capacity returns the capacity.
-func (rp *FastPool) Capacity() int {
-	return rp.State().Capacity
+func (p *FastPool) Capacity() int {
+	return p.State().Capacity
 }
 
 // Available returns the number of currently unused and available resources.
-func (rp *FastPool) Available() int {
-	s := rp.State()
+func (p *FastPool) Available() int {
+	s := p.State()
 	available := s.Capacity - s.InUse
 	// Sometimes we can be over capacity temporarily while the capacity shrinks.
 	if available < 0 {
@@ -579,56 +571,67 @@ func (rp *FastPool) Available() int {
 
 // Active returns the number of active (i.e. non-nil) resources either in the
 // pool or claimed for use
-func (rp *FastPool) Active() int {
-	rp.Lock()
-	v := rp.active()
-	rp.Unlock()
+func (p *FastPool) Active() int {
+	p.Lock()
+	v := p.active()
+	p.Unlock()
 	return v
 }
 
-func (rp *FastPool) active() int {
-	return rp.state.InUse + rp.state.InPool + rp.state.Spawning
+func (p *FastPool) active() int {
+	return p.state.InUse + p.state.InPool + p.state.Spawning
 }
 
-func (rp *FastPool) freeCapacity() int {
-	return rp.state.Capacity - rp.active()
+func (p *FastPool) freeCapacity() int {
+	return p.state.Capacity - p.active()
 }
 
-func (rp *FastPool) hasFreeCapacity() bool {
-	return rp.freeCapacity() > 0
+func (p *FastPool) hasFreeCapacity() bool {
+	return p.freeCapacity() > 0
 }
 
 // MinActive returns the minimum amount of resources keep active.
-func (rp *FastPool) MinActive() int {
-	return rp.State().MinActive
+func (p *FastPool) MinActive() int {
+	return p.State().MinActive
 }
 
 // InUse returns the number of claimed resources from the pool
-func (rp *FastPool) InUse() int {
-	return rp.State().InUse
+func (p *FastPool) InUse() int {
+	return p.State().InUse
 }
 
 // MaxCap returns the max capacity.
-func (rp *FastPool) MaxCap() int {
-	return cap(rp.pool)
+func (p *FastPool) MaxCap() int {
+	return cap(p.pool)
 }
 
 // WaitCount returns the total number of waits.
-func (rp *FastPool) WaitCount() int64 {
-	return rp.State().WaitCount
+func (p *FastPool) WaitCount() int64 {
+	return p.State().WaitCount
 }
 
 // WaitTime returns the total wait time.
-func (rp *FastPool) WaitTime() time.Duration {
-	return rp.State().WaitTime
+func (p *FastPool) WaitTime() time.Duration {
+	return p.State().WaitTime
 }
 
 // IdleTimeout returns the idle timeout.
-func (rp *FastPool) IdleTimeout() time.Duration {
-	return rp.State().IdleTimeout
+func (p *FastPool) IdleTimeout() time.Duration {
+	return p.State().IdleTimeout
 }
 
 // IdleClosed returns the count of resources closed due to idle timeout.
-func (rp *FastPool) IdleClosed() int64 {
-	return rp.State().IdleClosed
+func (p *FastPool) IdleClosed() int64 {
+	return p.State().IdleClosed
+}
+
+func (p *FastPool) Log(s ...interface{}) {
+	p.Lock()
+	p.log(s...)
+	p.Unlock()
+}
+
+func (p *FastPool) log(s ...interface{}) {
+	fmt.Printf("POOL %d %+v ", os.Getpid(), p.state)
+	fmt.Println(s...)
 }
