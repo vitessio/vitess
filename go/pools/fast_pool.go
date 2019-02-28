@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -99,7 +100,7 @@ type State struct {
 // of active resources. Any errors when instantiating the factory
 // will cause the active resource count to be lower than requested.
 func NewFastPool(factory CreateFactory, capacity, maxCap int, idleTimeout time.Duration, minActive int) *FastPool {
-	//fmt.Println("NewFastPool", capacity, maxCap	, idleTimeout)
+	fmt.Println("NewFastPool", capacity, maxCap, idleTimeout)
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
@@ -124,7 +125,7 @@ func NewFastPool(factory CreateFactory, capacity, maxCap int, idleTimeout time.D
 }
 
 func (rp *FastPool) create() (resourceWrapper, error) {
-	//fmt.Println("RP create")
+	fmt.Println("RP create")
 	r, err := rp.factory()
 	if err != nil {
 		return resourceWrapper{}, err
@@ -137,7 +138,7 @@ func (rp *FastPool) create() (resourceWrapper, error) {
 }
 
 func (rp *FastPool) safeCreate() (resourceWrapper, error) {
-	//fmt.Println("RP safeCreate")
+	fmt.Println("RP safeCreate")
 	rp.Lock()
 	capacity := rp.hasFreeCapacity()
 	rp.state.Spawning++
@@ -193,7 +194,7 @@ func (rp *FastPool) ensureMinimumActive() {
 // It waits for all resources to be returned (Put).
 // After a Close, Get is not allowed.
 func (rp *FastPool) Close() {
-	//fmt.Println("RP Close")
+	fmt.Println("RP Close")
 	rp.SetIdleTimeout(0)
 	_ = rp.SetCapacity(0, true)
 }
@@ -207,11 +208,18 @@ func (rp *FastPool) IsClosed() bool {
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will wait till the next resource becomes available or a timeout.
 func (rp *FastPool) Get(ctx context.Context) (resource Resource, err error) {
-	//fmt.Printf("RP Get %+v\n", rp.State())
+	fmt.Printf("RP Get %+v\n", rp.State())
+	debug.PrintStack()
+
+	if rp.State().Closed {
+		fmt.Printf("RP we're closed! %+v\n", rp.State())
+		return nil, ErrClosed
+	}
+
 	select {
 	case wrapper, ok := <-rp.pool:
 		if !ok {
-			//fmt.Printf("RP Get ErrClosed %+v\n", rp.State())
+			fmt.Printf("RP Get ErrClosed %+v\n", rp.State())
 			return nil, ErrClosed
 		}
 
@@ -220,30 +228,30 @@ func (rp *FastPool) Get(ctx context.Context) (resource Resource, err error) {
 		rp.state.InUse++
 		rp.Unlock()
 
-		//fmt.Printf("RP Get found in pool %v %+v\n", wrapper.resource, rp.State())
+		fmt.Printf("RP Get found in pool %v %+v\n", wrapper.resource, rp.State())
 		return wrapper.resource, nil
 
 	case <-ctx.Done():
-		//fmt.Printf("RP Get ErrTimeout1 %+v\n", rp.State())
+		fmt.Printf("RP Get ErrTimeout1 %+v\n", rp.State())
 		return nil, ErrTimeout
 
 	default:
-		//fmt.Printf("RP Get Nothing in pool %+v\n", rp.State())
+		fmt.Printf("RP Get Nothing in pool %+v\n", rp.State())
 		wrapper, err := rp.safeCreate()
 		if err == errNeedToQueue {
 			return rp.getQueued(ctx)
 		} else if err != nil {
-			//fmt.Printf("RP Error creating1 %v %+v\n", err, rp.State())
+			fmt.Printf("RP Error creating1 %v %+v\n", err, rp.State())
 			return nil, err
 		}
 
-		//fmt.Printf("RP Get created and returned %v %+v\n", wrapper.resource, rp.State())
+		fmt.Printf("RP Get created and returned %v %+v\n", wrapper.resource, rp.State())
 		return wrapper.resource, nil
 	}
 }
 
 func (rp *FastPool) getQueued(ctx context.Context) (Resource, error) {
-	//fmt.Printf("RP GetQueued %+v\n", rp.State())
+	fmt.Printf("RP GetQueued %+v\n", rp.State())
 	startTime := time.Now()
 
 	rp.Lock()
@@ -259,7 +267,7 @@ func (rp *FastPool) getQueued(ctx context.Context) (Resource, error) {
 				rp.state.Waiters--
 				rp.Unlock()
 
-				//fmt.Printf("RP GetQueued ErrClosed %+v\n", rp.State())
+				fmt.Printf("RP GetQueued ErrClosed %+v\n", rp.State())
 				return nil, ErrClosed
 			}
 
@@ -271,7 +279,7 @@ func (rp *FastPool) getQueued(ctx context.Context) (Resource, error) {
 			rp.state.WaitTime += time.Now().Sub(startTime)
 			rp.Unlock()
 
-			//fmt.Printf("RP GetQueued got from pool %v %+v\n", wrapper.resource, rp.State())
+			fmt.Printf("RP GetQueued got from pool %v %+v\n", wrapper.resource, rp.State())
 			return wrapper.resource, nil
 
 		case <-ctx.Done():
@@ -279,7 +287,7 @@ func (rp *FastPool) getQueued(ctx context.Context) (Resource, error) {
 			rp.state.Waiters--
 			rp.Unlock()
 
-			//fmt.Printf("RP GetQueued ErrTimeout %+v\n", rp.State())
+			fmt.Printf("RP GetQueued ErrTimeout %+v\n", rp.State())
 			return nil, ErrTimeout
 
 		case <-time.After(100 * time.Millisecond):
@@ -287,16 +295,20 @@ func (rp *FastPool) getQueued(ctx context.Context) (Resource, error) {
 			// put into a queue, but another caller has failed in creating
 			// a resource, causing a deadlock. We'll check occasionally to see
 			// if there is now capacity to create.
-			//fmt.Printf("RP GetQueued After 100ms %+v\n", rp.State())
+			fmt.Printf("RP GetQueued After 100ms %+v\n", rp.State())
+
+			if rp.State().Closed {
+				return nil, ErrClosed
+			}
 
 			wrapper, err := rp.safeCreate()
 			if err == errNeedToQueue {
 				continue
 			} else if err != nil {
-				//fmt.Printf("RP GetQueued err on create %v %+v\n", err, rp.State())
+				fmt.Printf("RP GetQueued err on create %v %+v\n", err, rp.State())
 				return nil, err
 			} else {
-				//fmt.Printf("RP GetQueued create after race %v %+v\n", wrapper.resource, rp.State())
+				fmt.Printf("RP GetQueued create after race %v %+v\n", wrapper.resource, rp.State())
 				return wrapper.resource, nil
 			}
 		}
@@ -308,23 +320,23 @@ func (rp *FastPool) getQueued(ctx context.Context) (Resource, error) {
 // you will need to call Put(nil) instead of returning the closed resource.
 // The will eventually cause a new resource to be created in its place.
 func (rp *FastPool) Put(resource Resource) {
-	//fmt.Printf("RP Put %v %+v\n", resource, rp.State())
+	fmt.Printf("RP Put %v %+v\n", resource, rp.State())
 	rp.Lock()
 
 	rp.state.InUse--
 
 	if rp.state.Closed || rp.active() > rp.state.Capacity {
+		rp.Unlock()
 		if resource != nil {
-			//fmt.Println("RP Put closing resource due to closing or capacity", rp.state.Closed, rp.active())
+			fmt.Println("RP Put closing resource due to closing or capacity", rp.State().Closed, rp.Active())
 			resource.Close()
 		}
-		rp.Unlock()
 		return
 	}
 
 	if resource == nil {
 		rp.Unlock()
-		//fmt.Printf("RP Put got nil %v %+v\n", resource, rp.State())
+		fmt.Printf("RP Put got nil %v %+v\n", resource, rp.State())
 		rp.ensureMinimumActive()
 		return
 	}
@@ -332,20 +344,20 @@ func (rp *FastPool) Put(resource Resource) {
 	if rp.state.InUse < 0 {
 		rp.state.InUse++
 		rp.Unlock()
-		//fmt.Printf("RP Put ErRPutBeforeGet %+v\n", rp.State())
+		fmt.Printf("RP Put ErRPutBeforeGet %+v\n", rp.State())
 		panic(ErrPutBeforeGet)
 	}
 
 	w := resourceWrapper{resource: resource, timeUsed: time.Now()}
 	select {
 	case rp.pool <- w:
-		//fmt.Printf("RP Put back into pool %+v\n", rp.state)
+		fmt.Printf("RP Put back into pool %+v\n", rp.state)
 		rp.state.InPool++
 	default:
 		// We don't have room.
 		rp.state.InUse++
 		rp.Unlock()
-		//fmt.Printf("RP Put full pool %+v\n", rp.State())
+		fmt.Printf("RP Put full pool %+v\n", rp.State())
 		panic(ErrFull)
 	}
 
@@ -360,7 +372,7 @@ func (rp *FastPool) Put(resource Resource) {
 // to the pool.
 // A SetCapacity of 0 is equivalent to closing the FastPool.
 func (rp *FastPool) SetCapacity(capacity int, block bool) error {
-	//fmt.Printf("RP SetCapacity %d %+v\n", capacity, rp.State())
+	fmt.Printf("RP SetCapacity %d %+v\n", capacity, rp.State())
 	rp.Lock()
 
 	if rp.state.Closed {
@@ -381,6 +393,10 @@ func (rp *FastPool) SetCapacity(capacity int, block bool) error {
 		}
 	}
 
+	if capacity == 0 {
+		rp.state.Closed = true
+	}
+
 	isGrowing := capacity > rp.state.Capacity
 	rp.state.Capacity = capacity
 
@@ -397,50 +413,51 @@ func (rp *FastPool) SetCapacity(capacity int, block bool) error {
 	if block {
 		done = make(chan bool)
 	}
-	go func() {
-		// Shrinking capacity. Loop until enough pool resources are closed.
-		//fmt.Printf("SetCapacity starting drain... %+v\n", rp.State())
-		for {
-			rp.Lock()
-			remaining := rp.active() - rp.state.Capacity
-			if remaining <= 0 {
-				//fmt.Printf("SetCapacity inpool fully drained %+v\n", rp.state)
-				rp.state.Draining = false
-				if rp.state.Capacity == 0 {
-					close(rp.pool)
-					rp.state.Closed = true
-				}
-				rp.Unlock()
-				done <- true
-				return
-			}
-			rp.Unlock()
-
-			// We can't remove InUse resources, so only target the pool.
-			// Collect the InUse resources lazily when they're returned.
-			select {
-			case wrapper := <-rp.pool:
-				//fmt.Printf("SetCapacity closing resource due to shrinking %v %+v\n", wrapper.resource, rp.State())
-				wrapper.resource.Close()
-				wrapper.resource = nil
-
-				rp.Lock()
-				rp.state.InPool--
-				rp.Unlock()
-				//fmt.Printf("SetCapacity closed resource due to shrinking %v %+v\n", wrapper.resource, rp.State())
-
-			case <-time.After(time.Second):
-				// Someone could have pulled from the pool just before
-				// we started waiting. Let's check the pool status again.
-			}
-		}
-	}()
-
+	go rp.shrink(done)
 	if block {
 		<-done
 	}
 
 	return nil
+}
+
+// shrink active resources until capacity it is not above the set capacity.
+func (rp *FastPool) shrink(done chan<- bool) {
+	fmt.Printf("SetCapacity starting drain... %+v\n", rp.State())
+	for {
+		rp.Lock()
+		remaining := rp.active() - rp.state.Capacity
+		if remaining <= 0 {
+			fmt.Printf("SetCapacity inpool fully drained %+v\n", rp.state)
+			rp.state.Draining = false
+			if rp.state.Capacity == 0 {
+				close(rp.pool)
+				rp.state.Closed = true
+			}
+			rp.Unlock()
+			done <- true
+			return
+		}
+		rp.Unlock()
+
+		// We can't remove InUse resources, so only target the pool.
+		// Collect the InUse resources lazily when they're returned.
+		select {
+		case wrapper := <-rp.pool:
+			fmt.Printf("SetCapacity closing resource due to shrinking %v %+v\n", wrapper.resource, rp.State())
+			wrapper.resource.Close()
+			wrapper.resource = nil
+
+			rp.Lock()
+			rp.state.InPool--
+			rp.Unlock()
+			fmt.Printf("SetCapacity closed resource due to shrinking %v %+v\n", wrapper.resource, rp.State())
+
+		case <-time.After(time.Second):
+			// Someone could have pulled from the pool just before
+			// we started waiting. Let's check the pool status again.
+		}
+	}
 }
 
 // SetIdleTimeout sets the idle timeout for resources. The timeout is
@@ -451,25 +468,26 @@ func (rp *FastPool) SetIdleTimeout(idleTimeout time.Duration) {
 	fastInterval := rp.state.IdleTimeout / 10
 
 	if rp.idleTimer == nil {
-		//fmt.Println("RP creating new timer", fastInterval)
+		fmt.Println("RP creating new timer", fastInterval)
 		rp.idleTimer = timer.NewTimer(fastInterval)
 	} else {
-		//fmt.Println("RP stopping timer")
+		fmt.Println("RP stopping timer")
 		rp.Unlock()
 		rp.idleTimer.Stop()
 		rp.Lock()
 	}
 
 	if rp.state.IdleTimeout == 0 {
-		//fmt.Println("RP disabling timer")
+		fmt.Println("RP disabling timer")
 		rp.Unlock()
 		return
 	}
 
-	//fmt.Println("RP activating timer", fastInterval)
+	fmt.Println("RP activating timer", fastInterval)
 	rp.idleTimer.SetInterval(fastInterval)
 	rp.idleTimer.Start(rp.closeIdleResources)
 	rp.Unlock()
+	fmt.Println("RP activating timer done", fastInterval)
 }
 
 // closeIdleResources scans the pool for idle resources
@@ -495,13 +513,11 @@ func (rp *FastPool) closeIdleResources() {
 			return
 		}
 
-		//fmt.Printf("RP CIR Waiting for pool %+v\n", rp.State())
 		select {
 		case wrapper, ok := <-rp.pool:
 			if !ok {
 				return
 			}
-			//fmt.Printf("RP CIR popped from pool %v %+v\n", wrapper.resource, rp.State())
 
 			rp.Lock()
 			deadline := wrapper.timeUsed.Add(rp.state.IdleTimeout)
@@ -509,19 +525,17 @@ func (rp *FastPool) closeIdleResources() {
 				rp.state.IdleClosed++
 				rp.state.InPool--
 				rp.Unlock()
-				//fmt.Printf("RP CIR closing resource due to timeout %v %+v\n", wrapper.resource, rp.State())
+				fmt.Printf("RP CIR closing resource due to timeout %v %+v\n", wrapper.resource, rp.State())
 				wrapper.resource.Close()
 				wrapper.resource = nil
-				continue
+				break
 			}
 			rp.Unlock()
 
 			// Not expired--back into the pool we go.
-			//fmt.Printf("RP CIR back to pool %v %+v\n", wrapper.resource, rp.State())
 			rp.pool <- wrapper
 
 		default:
-			//fmt.Println("CIR: nothing in pool")
 			// The pool might have been used while we were iterating.
 			// Maybe next time!
 			return

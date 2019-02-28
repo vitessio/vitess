@@ -393,6 +393,8 @@ func TestFastShrinking(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
 	p := NewFastPool(PoolFactory, 5, 5, time.Second, 0)
+	defer p.Close()
+
 	var resources [10]Resource
 	// Leave one empty slot in the pool
 	for i := 0; i < 4; i++ {
@@ -539,7 +541,7 @@ func TestFastClosing(t *testing.T) {
 
 	// Wait for goroutine to call Close
 	time.Sleep(10 * time.Millisecond)
-	require.Equal(t, State{InUse: 5, Draining: true}, p.State())
+	require.Equal(t, State{InUse: 5, Closed: true, Draining: true}, p.State())
 
 	// Put is allowed when closing
 	for i := 0; i < 5; i++ {
@@ -551,13 +553,30 @@ func TestFastClosing(t *testing.T) {
 
 	// SetCapacity must be ignored after Close
 	err := p.SetCapacity(1, true)
-	if err == nil {
-		t.Errorf("expecting error")
-	}
-
+	require.Error(t, err)
 	require.Equal(t, State{Closed: true}, p.State())
 	require.Equal(t, 5, int(lastID.Get()))
 	require.Equal(t, 0, int(count.Get()))
+}
+
+func TestFastGetAfterClose(t *testing.T) {
+	p := NewFastPool(SlowCloseFactory, 5, 5, time.Second, 0)
+	a := get(t, p)
+
+	done := make(chan bool)
+	go func() {
+		p.Close()
+		done <- true
+	}()
+
+	time.Sleep(time.Millisecond)
+
+	_, err := p.Get(context.Background())
+	require.Error(t, err)
+
+	p.Put(a)
+
+	<-done
 }
 
 func TestFastIdleTimeout(t *testing.T) {
