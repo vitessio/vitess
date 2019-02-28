@@ -86,12 +86,13 @@ type State struct {
 	WaitTime time.Duration
 }
 
-// NewFastPool creates a new FastPool pool.
-// capacity is the number of possible resources in the pool:
-// there can be up to 'capacity' of these at a given time.
+// NewFastPool creates a new pool for generic resources.
+//
+// capacity is the number of possible active resources allocated.
+//
 // maxCap specifies the extent to which the pool can be resized
 // in the future through the SetCapacity function.
-// You cannot resize the pool beyond maxCap.
+//
 // If a resource is unused beyond idleTimeout, it's discarded.
 // An idleTimeout of 0 means that there is no timeout.
 //
