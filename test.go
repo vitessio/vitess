@@ -781,7 +781,7 @@ firstPass:
 			if ct.Tags == nil {
 				ct.Tags = []string{}
 			}
-			log.Printf("% 32v:\t%v\n", t.name, t.PassTime)
+			log.Printf("%v:\t%v\n", t.name, t.PassTime)
 		}
 		log.Printf("Shard %v total: %v\n", i, time.Duration(sums[i]))
 	}
@@ -808,13 +808,13 @@ func getTestsSorted(names []string, testMap map[string]*Test) []*Test {
 
 func selectedTests(args []string, config *Config) []*Test {
 	var tests []*Test
-	excluded_tests := strings.Split(*exclude, ",")
+	excludedTests := strings.Split(*exclude, ",")
 	if *shard >= 0 {
 		// Run the tests in a given shard.
 		// This can be combined with positional args.
 		var names []string
 		for name, t := range config.Tests {
-			if t.Shard == *shard && !t.Manual && (*exclude == "" || !t.hasAnyTag(excluded_tests)) {
+			if t.Shard == *shard && !t.Manual && (*exclude == "" || !t.hasAnyTag(excludedTests)) {
 				t.name = name
 				names = append(names, name)
 			}
@@ -846,7 +846,7 @@ func selectedTests(args []string, config *Config) []*Test {
 		// Run all tests.
 		var names []string
 		for name, t := range config.Tests {
-			if !t.Manual && (*tag == "" || t.hasTag(*tag)) && (*exclude == "" || !t.hasAnyTag(excluded_tests)) {
+			if !t.Manual && (*tag == "" || t.hasTag(*tag)) && (*exclude == "" || !t.hasAnyTag(excludedTests)) {
 				names = append(names, name)
 			}
 		}
