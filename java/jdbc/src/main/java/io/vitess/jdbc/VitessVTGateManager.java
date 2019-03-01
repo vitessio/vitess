@@ -231,7 +231,7 @@ public class VitessVTGateManager {
         conn.getGrpcRetryMaxBackoffMillis(), conn.getGrpcRetryBackoffMultiplier());
   }
 
-  private static NettyChannelBuilderProvider getChannelProviderFromProperties(
+  static NettyChannelBuilderProvider getChannelProviderFromProperties(
       VitessConnection connection) {
     // Skip reflection in default case
     if (Strings.isNullOrEmpty(connection.getGrpcChannelProvider())) {
