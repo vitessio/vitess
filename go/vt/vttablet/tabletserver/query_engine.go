@@ -190,16 +190,20 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 
 	qe.conns = connpool.New(
 		config.PoolNamePrefix+"ConnPool",
+		config.PoolImpl(),
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
+		config.QueryPoolMinActive,
 		checker,
 	)
 	qe.connTimeout.Set(time.Duration(config.QueryPoolTimeout * 1e9))
 
 	qe.streamConns = connpool.New(
 		config.PoolNamePrefix+"StreamConnPool",
+		config.PoolImpl(),
 		config.StreamPoolSize,
 		time.Duration(config.IdleTimeout*1e9),
+		0,
 		checker,
 	)
 	qe.enableConsolidator = config.EnableConsolidator

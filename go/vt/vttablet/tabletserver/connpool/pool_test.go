@@ -22,10 +22,11 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/vt/callerid"
-
 	"golang.org/x/net/context"
+
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/vt/callerid"
 )
 
 func TestConnPoolGet(t *testing.T) {
@@ -123,6 +124,29 @@ func TestConnPoolSetCapacity(t *testing.T) {
 	err = connPool.SetCapacity(10)
 	if err != nil {
 		t.Fatalf("set capacity should succeed")
+	}
+	if connPool.Capacity() != 10 {
+		t.Fatalf("capacity should be 10")
+	}
+}
+
+func TestFastPoolConnPoolSetCapacity(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPoolOpts(pools.FastImpl, 10)
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	err := connPool.SetCapacity(-10)
+	if err == nil {
+		t.Fatalf("set capacity should return error for negative capacity")
+	}
+	err = connPool.SetCapacity(10)
+	if err != nil {
+		t.Fatalf("set capacity should succeed")
+	}
+	err = connPool.SetCapacity(9)
+	if err == nil {
+		t.Fatalf("set capacity should fail")
 	}
 	if connPool.Capacity() != 10 {
 		t.Fatalf("capacity should be 10")
@@ -228,10 +252,16 @@ func (dummyChecker) CheckMySQL() {}
 var checker = dummyChecker{}
 
 func newPool() *Pool {
+	return newPoolOpts(pools.ResourceImpl, 0)
+}
+
+func newPoolOpts(impl pools.Impl, minActive int) *Pool {
 	return New(
 		fmt.Sprintf("TestPool%d", rand.Int63()),
+		impl,
 		100,
 		10*time.Second,
+		minActive,
 		checker,
 	)
 }

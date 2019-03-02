@@ -104,16 +104,18 @@ type TxPool struct {
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
 func NewTxPool(
 	prefix string,
+	impl pools.Impl,
 	capacity int,
 	foundRowsCapacity int,
 	timeout time.Duration,
 	idleTimeout time.Duration,
+	minActive int,
 	waiterCap int,
 	checker connpool.MySQLChecker,
 	limiter txlimiter.TxLimiter) *TxPool {
 	axp := &TxPool{
-		conns:         connpool.New(prefix+"TransactionPool", capacity, idleTimeout, checker),
-		foundRowsPool: connpool.New(prefix+"FoundRowsPool", foundRowsCapacity, idleTimeout, checker),
+		conns:         connpool.New(prefix+"TransactionPool", impl, capacity, idleTimeout, minActive, checker),
+		foundRowsPool: connpool.New(prefix+"FoundRowsPool", impl, foundRowsCapacity, idleTimeout, 0, checker),
 		activePool:    pools.NewNumbered(),
 		lastID:        sync2.NewAtomicInt64(time.Now().UnixNano()),
 		timeout:       sync2.NewAtomicDuration(timeout),

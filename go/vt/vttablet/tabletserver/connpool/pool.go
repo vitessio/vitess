@@ -57,9 +57,11 @@ type MySQLChecker interface {
 // pool of dba connections that are used to kill connections.
 type Pool struct {
 	mu             sync.Mutex
-	connections    *pools.ResourcePool
+	connections    pools.Pool
+	impl           pools.Impl
 	capacity       int
 	idleTimeout    time.Duration
+	minActive      int
 	dbaPool        *dbconnpool.ConnectionPool
 	checker        MySQLChecker
 	appDebugParams *mysql.ConnParams
@@ -69,13 +71,17 @@ type Pool struct {
 // to publish stats only.
 func New(
 	name string,
+	impl pools.Impl,
 	capacity int,
 	idleTimeout time.Duration,
+	minActive int,
 	checker MySQLChecker) *Pool {
 	cp := &Pool{
+		impl:        impl,
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
-		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout),
+		minActive:   minActive,
+		dbaPool:     dbconnpool.NewConnectionPool("", impl, 1, idleTimeout, 0),
 		checker:     checker,
 	}
 	if name == "" || usedNames[name] {
@@ -85,6 +91,7 @@ func New(
 	stats.NewGaugeFunc(name+"Capacity", "Tablet server conn pool capacity", cp.Capacity)
 	stats.NewGaugeFunc(name+"Available", "Tablet server conn pool available", cp.Available)
 	stats.NewGaugeFunc(name+"Active", "Tablet server conn pool active", cp.Active)
+	stats.NewGaugeFunc(name+"MinActive", "Tablet server conn pool min active", cp.MinActive)
 	stats.NewGaugeFunc(name+"InUse", "Tablet server conn pool in use", cp.InUse)
 	stats.NewGaugeFunc(name+"MaxCap", "Tablet server conn pool max cap", cp.MaxCap)
 	stats.NewCounterFunc(name+"WaitCount", "Tablet server conn pool wait count", cp.WaitCount)
@@ -94,7 +101,7 @@ func New(
 	return cp
 }
 
-func (cp *Pool) pool() (p *pools.ResourcePool) {
+func (cp *Pool) pool() (p pools.Pool) {
 	cp.mu.Lock()
 	p = cp.connections
 	cp.mu.Unlock()
@@ -109,7 +116,7 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
 	f := func() (pools.Resource, error) {
 		return NewDBConn(cp, appParams)
 	}
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
+	cp.connections = pools.New(cp.impl, f, cp.capacity, cp.capacity, cp.idleTimeout, cp.minActive)
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams, tabletenv.MySQLStats)
@@ -166,7 +173,7 @@ func (cp *Pool) SetCapacity(capacity int) (err error) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	if cp.connections != nil {
-		err = cp.connections.SetCapacity(capacity)
+		err = cp.connections.SetCapacity(capacity, true)
 		if err != nil {
 			return err
 		}
@@ -201,7 +208,7 @@ func (cp *Pool) Capacity() int64 {
 	if p == nil {
 		return 0
 	}
-	return p.Capacity()
+	return int64(p.Capacity())
 }
 
 // Available returns the number of available connections in the pool
@@ -210,7 +217,7 @@ func (cp *Pool) Available() int64 {
 	if p == nil {
 		return 0
 	}
-	return p.Available()
+	return int64(p.Available())
 }
 
 // Active returns the number of active connections in the pool
@@ -219,7 +226,16 @@ func (cp *Pool) Active() int64 {
 	if p == nil {
 		return 0
 	}
-	return p.Active()
+	return int64(p.Active())
+}
+
+// MinActive returns the of connections in the pool to keep active
+func (cp *Pool) MinActive() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return int64(p.MinActive())
 }
 
 // InUse returns the number of in-use connections in the pool
@@ -228,7 +244,7 @@ func (cp *Pool) InUse() int64 {
 	if p == nil {
 		return 0
 	}
-	return p.InUse()
+	return int64(p.InUse())
 }
 
 // MaxCap returns the maximum size of the pool
@@ -237,7 +253,7 @@ func (cp *Pool) MaxCap() int64 {
 	if p == nil {
 		return 0
 	}
-	return p.MaxCap()
+	return int64(p.MaxCap())
 }
 
 // WaitCount returns how many clients are waiting for a connection

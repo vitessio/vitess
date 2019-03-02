@@ -21,8 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -35,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -85,7 +84,7 @@ func NewWriter(checker connpool.MySQLChecker, alias topodatapb.TabletAlias, conf
 		interval:    config.HeartbeatInterval,
 		ticks:       timer.NewTimer(config.HeartbeatInterval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
-		pool:        connpool.New(config.PoolNamePrefix+"HeartbeatWritePool", 1, time.Duration(config.IdleTimeout*1e9), checker),
+		pool:        connpool.New(config.PoolNamePrefix+"HeartbeatWritePool", config.PoolImpl(), 1, time.Duration(config.IdleTimeout*1e9), 0, checker),
 	}
 }
 

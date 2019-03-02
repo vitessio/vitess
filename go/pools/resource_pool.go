@@ -28,23 +28,7 @@ import (
 	"vitess.io/vitess/go/timer"
 )
 
-var (
-	// ErrClosed is returned if ResourcePool is used when it's closed.
-	ErrClosed = errors.New("resource pool is closed")
-
-	// ErrTimeout is returned if a resource get times out.
-	ErrTimeout = errors.New("resource pool timed out")
-)
-
-// Factory is a function that can be used to create a resource.
-type Factory func() (Resource, error)
-
-// Resource defines the interface that every resource must provide.
-// Thread synchronization between Close() and IsClosed()
-// is the responsibility of the caller.
-type Resource interface {
-	Close()
-}
+var _ Pool = &ResourcePool{}
 
 // ResourcePool allows you to use a pool of resources.
 type ResourcePool struct {
@@ -60,13 +44,8 @@ type ResourcePool struct {
 	idleTimeout sync2.AtomicDuration
 
 	resources chan resourceWrapper
-	factory   Factory
+	factory   CreateFactory
 	idleTimer *timer.Timer
-}
-
-type resourceWrapper struct {
-	resource Resource
-	timeUsed time.Time
 }
 
 // NewResourcePool creates a new ResourcePool pool.
@@ -77,7 +56,7 @@ type resourceWrapper struct {
 // You cannot resize the pool beyond maxCap.
 // If a resource is unused beyond idleTimeout, it's discarded.
 // An idleTimeout of 0 means that there is no timeout.
-func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration) *ResourcePool {
+func NewResourcePool(factory CreateFactory, capacity, maxCap int, idleTimeout time.Duration) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
@@ -107,7 +86,7 @@ func (rp *ResourcePool) Close() {
 	if rp.idleTimer != nil {
 		rp.idleTimer.Stop()
 	}
-	_ = rp.SetCapacity(0)
+	_ = rp.SetCapacity(0, true)
 }
 
 // IsClosed returns true if the resource pool is closed.
@@ -217,7 +196,7 @@ func (rp *ResourcePool) Put(resource Resource) {
 // to be shrunk, SetCapacity waits till the necessary
 // number of resources are returned to the pool.
 // A SetCapacity of 0 is equivalent to closing the ResourcePool.
-func (rp *ResourcePool) SetCapacity(capacity int) error {
+func (rp *ResourcePool) SetCapacity(capacity int, _ bool) error {
 	if capacity < 0 || capacity > cap(rp.resources) {
 		return fmt.Errorf("capacity %d is out of range", capacity)
 	}
@@ -291,29 +270,34 @@ func (rp *ResourcePool) StatsJSON() string {
 }
 
 // Capacity returns the capacity.
-func (rp *ResourcePool) Capacity() int64 {
-	return rp.capacity.Get()
+func (rp *ResourcePool) Capacity() int {
+	return int(rp.capacity.Get())
 }
 
 // Available returns the number of currently unused and available resources.
-func (rp *ResourcePool) Available() int64 {
-	return rp.available.Get()
+func (rp *ResourcePool) Available() int {
+	return int(rp.available.Get())
 }
 
 // Active returns the number of active (i.e. non-nil) resources either in the
 // pool or claimed for use
-func (rp *ResourcePool) Active() int64 {
-	return rp.active.Get()
+func (rp *ResourcePool) Active() int {
+	return int(rp.active.Get())
+}
+
+// MinActive is not used in this implementation. Always returns 0.
+func (rp *ResourcePool) MinActive() int {
+	return 0
 }
 
 // InUse returns the number of claimed resources from the pool
-func (rp *ResourcePool) InUse() int64 {
-	return rp.inUse.Get()
+func (rp *ResourcePool) InUse() int {
+	return int(rp.inUse.Get())
 }
 
 // MaxCap returns the max capacity.
-func (rp *ResourcePool) MaxCap() int64 {
-	return int64(cap(rp.resources))
+func (rp *ResourcePool) MaxCap() int {
+	return cap(rp.resources)
 }
 
 // WaitCount returns the total number of waits.
@@ -335,3 +319,4 @@ func (rp *ResourcePool) IdleTimeout() time.Duration {
 func (rp *ResourcePool) IdleClosed() int64 {
 	return rp.idleClosed.Get()
 }
+

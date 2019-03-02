@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -221,7 +222,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	appParams := db.ConnParams()
 	dbaParams := db.ConnParams()
 	connPoolIdleTimeout := 10 * time.Second
-	connPool := connpool.New("", 2, connPoolIdleTimeout, DummyChecker)
+	connPool := connpool.New("", pools.ResourceImpl, 2, connPoolIdleTimeout, 0, DummyChecker)
 	connPool.Open(appParams, dbaParams, appParams)
 	conn, err := connPool.Get(ctx)
 	if err != nil {

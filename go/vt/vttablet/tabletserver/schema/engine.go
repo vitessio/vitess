@@ -71,7 +71,7 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 	reloadTime := time.Duration(config.SchemaReloadTime * 1e9)
 	idleTimeout := time.Duration(config.IdleTimeout * 1e9)
 	se := &Engine{
-		conns:      connpool.New("", 3, idleTimeout, checker),
+		conns:      connpool.New("", config.PoolImpl(), 3, idleTimeout, 0, checker),
 		ticks:      timer.NewTimer(reloadTime),
 		reloadTime: reloadTime,
 	}

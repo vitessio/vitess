@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sync2"
 )
@@ -58,7 +59,7 @@ func TestOpen(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
 	p := NewResourcePool(PoolFactory, 6, 6, time.Second)
-	p.SetCapacity(5)
+	p.SetCapacity(5, true)
 	var resources [10]Resource
 
 	// Test Get
@@ -68,7 +69,7 @@ func TestOpen(t *testing.T) {
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
 		}
-		if p.Available() != int64(5-i-1) {
+		if p.Available() != 5-i-1 {
 			t.Errorf("expecting %d, received %d", 5-i-1, p.Available())
 		}
 		if p.WaitCount() != 0 {
@@ -144,7 +145,7 @@ func TestOpen(t *testing.T) {
 	}
 
 	// SetCapacity
-	p.SetCapacity(3)
+	p.SetCapacity(3, true)
 	if count.Get() != 3 {
 		t.Errorf("Expecting 3, received %d", count.Get())
 	}
@@ -157,7 +158,7 @@ func TestOpen(t *testing.T) {
 	if p.Available() != 3 {
 		t.Errorf("Expecting 3, received %d", p.Available())
 	}
-	p.SetCapacity(6)
+	p.SetCapacity(6, true)
 	if p.Capacity() != 6 {
 		t.Errorf("Expecting 6, received %d", p.Capacity())
 	}
@@ -210,7 +211,7 @@ func TestShrinking(t *testing.T) {
 	}
 	done := make(chan bool)
 	go func() {
-		p.SetCapacity(3)
+		p.SetCapacity(3, true)
 		done <- true
 	}()
 	expected := `{"Capacity": 3, "Available": 0, "Active": 4, "InUse": 4, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0}`
@@ -261,7 +262,7 @@ func TestShrinking(t *testing.T) {
 
 	// This will also wait
 	go func() {
-		p.SetCapacity(2)
+		p.SetCapacity(2, true)
 		done <- true
 	}()
 	time.Sleep(10 * time.Millisecond)
@@ -286,7 +287,7 @@ func TestShrinking(t *testing.T) {
 	}
 
 	// Test race condition of SetCapacity with itself
-	p.SetCapacity(3)
+	p.SetCapacity(3, true)
 	for i := 0; i < 3; i++ {
 		resources[i], err = p.Get(ctx)
 		if err != nil {
@@ -305,9 +306,9 @@ func TestShrinking(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// This will wait till we Put
-	go p.SetCapacity(2)
+	go p.SetCapacity(2, true)
 	time.Sleep(10 * time.Millisecond)
-	go p.SetCapacity(4)
+	go p.SetCapacity(4, true)
 	time.Sleep(10 * time.Millisecond)
 
 	// This should not hang
@@ -316,11 +317,11 @@ func TestShrinking(t *testing.T) {
 	}
 	<-done
 
-	err = p.SetCapacity(-1)
+	err = p.SetCapacity(-1, true)
 	if err == nil {
 		t.Errorf("Expecting error")
 	}
-	err = p.SetCapacity(255555)
+	err = p.SetCapacity(255555, true)
 	if err == nil {
 		t.Errorf("Expecting error")
 	}
@@ -369,7 +370,7 @@ func TestClosing(t *testing.T) {
 	<-ch
 
 	// SetCapacity must be ignored after Close
-	err := p.SetCapacity(1)
+	err := p.SetCapacity(1, true)
 	if err == nil {
 		t.Errorf("expecting error")
 	}
@@ -565,4 +566,40 @@ func TestExpired(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("got %v, want %s", err, want)
 	}
+}
+
+func TestPanicStringCreateFactory(t *testing.T) {
+	p := NewResourcePool(PanicStringCreateFactory, 10, 10, 0)
+	require.Panics(t, func() {
+		_, _ = p.Get(context.Background())
+	})
+	//p.Close() // This will hang due to a race condition.
+}
+
+func TestPanicErrorCreateFactory(t *testing.T) {
+	p := NewResourcePool(PanicErrorCreateFactory, 10, 10, 0)
+	require.Panics(t, func() {
+		_, _ = p.Get(context.Background())
+	})
+	//p.Close() // This will hang due to a race condition.
+}
+
+func TestPanicStringCloseFactory(t *testing.T) {
+	p := NewResourcePool(PanicStringCloseFactory, 10, 10, 0)
+	r, err := p.Get(context.Background())
+	require.NoError(t, err)
+	p.Put(r)
+	require.Panics(t, func() {
+		p.Close()
+	})
+}
+
+func TestPanicErrorCloseFactory(t *testing.T) {
+	p := NewResourcePool(PanicErrorCloseFactory, 10, 10, 0)
+	r, err := p.Get(context.Background())
+	require.NoError(t, err)
+	p.Put(r)
+	require.Panics(t, func() {
+		p.Close()
+	})
 }

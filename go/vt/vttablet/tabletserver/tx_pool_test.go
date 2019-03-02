@@ -19,25 +19,24 @@ package tabletserver
 import (
 	"fmt"
 	"math/rand"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	"regexp"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 )
 
 func TestTxPoolExecuteRollback(t *testing.T) {
@@ -640,10 +639,12 @@ func newTxPool() *TxPool {
 	limiter := &txlimiter.TxAllowAll{}
 	return NewTxPool(
 		poolName,
+		pools.ResourceImpl,
 		transactionCap,
 		transactionCap,
 		transactionTimeout,
 		idleTimeout,
+		0,
 		waiterCap,
 		DummyChecker,
 		limiter,
