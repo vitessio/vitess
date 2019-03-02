@@ -28,13 +28,14 @@ import utils
 
 use_mysqlctld = False
 use_xtrabackup = False
+stream_mode = 'tar'
 #TODO get path to xtrabackup using `which`
 xtrabackup_args = ['-backup_engine_implementation',
                    'xtrabackup',
-                   '-xtrabackup_root_path',
-                   '/usr/bin',
                    '-xtrabackup_stream_mode',
-                   'tar']
+                   stream_mode,
+                   '-xtrabackup_backup_flags',
+                   '--user=vt_dba --password=VtDbaPass']
 
 tablet_master = None
 tablet_replica1 = None

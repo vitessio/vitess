@@ -31,9 +31,9 @@ import (
 
 	"github.com/klauspost/pgzip"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // XtrabackupEngine encapsulates the logic of the xtrabackup engine
@@ -52,7 +52,7 @@ var (
 	// TBD whether to support flags to pass through to restore phase
 	xtrabackupRestoreFlags = flag.String("xtrabackup_restore_flags", "", "flags to pass to restore command. these will be added to the end of the command")
 	// streaming mode
-	xtrabackupStreamMode = flag.String("xtrabackup_stream_mode", "", "which mode to use if streaming, valid values are tar and xbstream")
+	xtrabackupStreamMode = flag.String("xtrabackup_stream_mode", "tar", "which mode to use if streaming, valid values are tar and xbstream")
 )
 
 const (
@@ -75,25 +75,15 @@ func (be *XtrabackupEngine) backupFileName() string {
 	return fileName
 }
 
-func (be *XtrabackupEngine) restoreFileName() string {
-	fileName := "backup"
-	if *xtrabackupStreamMode != "" {
-		fileName += "."
-		fileName += *xtrabackupStreamMode
-	}
-	return fileName
-}
-
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
 func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error) {
 
-	// TODO support directory mode - xtrabackup --backup /path/to/somewhere
-
+	/* TODO uncomment if we keep this option
 	if *xtrabackupEnginePath == "" {
 		return false, errors.New("xtrabackup_root_path must be provided")
 	}
-
+	*/
 	backupProgram := path.Join(*xtrabackupEnginePath, xtrabackup)
 	// TODO check that the executable file exists, exit if it doesn't or isn't executable
 
@@ -133,20 +123,6 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	dst := bufio.NewWriterSize(wc, 2*1024*1024)
 	writer := io.MultiWriter(dst)
 
-	// Create the external write pipe, if any.
-	var pipe io.WriteCloser
-	var wait hook.WaitFunc
-	transformHook := *backupStorageHook
-	if transformHook != "" {
-		h := hook.NewHook(transformHook, []string{"-operation", "write"})
-		h.ExtraEnv = hookExtraEnv
-		pipe, wait, _, err = h.ExecuteAsWritePipe(writer)
-		if err != nil {
-			return false, fmt.Errorf("'%v' hook returned error: %v", *backupStorageHook, err)
-		}
-		writer = pipe
-	}
-
 	// Create the gzip compression pipe, if necessary.
 	var gzip *pgzip.Writer
 	if *backupStorageCompress {
@@ -164,17 +140,6 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	_, err = io.Copy(writer, backupOut)
 	if err != nil {
 		return false, fmt.Errorf("cannot copy data: %v", err)
-	}
-
-	// Close the Pipe.
-	if wait != nil {
-		stderr, err := wait()
-		if stderr != "" {
-			logger.Infof("'%v' hook returned stderr: %v", transformHook, stderr)
-		}
-		if err != nil {
-			return false, fmt.Errorf("'%v' returned error: %v", transformHook, err)
-		}
 	}
 
 	// Close gzip to flush it, after that all data is sent to writer.
@@ -211,9 +176,10 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	restoreConcurrency int,
 	hookExtraEnv map[string]string) (mysql.Position, error) {
 
+	/* TODO uncomment if we keep this option
 	if *xtrabackupEnginePath == "" {
 		return mysql.Position{}, errors.New("xtrabackup_root_path must be provided")
-	}
+	} */
 
 	// Starting from here we won't be able to recover if we get stopped by a cancelled
 	// context. Thus we use the background context to get through to the finish.
@@ -261,23 +227,26 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	prepareOut, _ := prepareCmd.StdoutPipe()
 	prepareErr, _ := prepareCmd.StderrPipe()
 	prepareCmd.Start()
-	errOutput, err := ioutil.ReadAll(prepareErr)
-	_, errout := ioutil.ReadAll(prepareOut)
-	prepareCmd.Wait()
-
-	if errout != nil {
-		return mysql.Position{}, errout
+	errOutput, _ := ioutil.ReadAll(prepareErr)
+	stdOutput, _ := ioutil.ReadAll(prepareOut)
+	err = prepareCmd.Wait()
+	if string(stdOutput) != "" {
+		// TODO remove after testing
+		logger.Infof("Prepare stdout %v", string(stdOutput))
 	}
+	output := string(errOutput)
+	if output != "" {
+		// TODO remove after testing
+		logger.Infof("Prepare stderr %v", output)
+	}
+
 	if err != nil {
 		return mysql.Position{}, err
 	}
-	output := string(errOutput)
-	// TODO remove after testing
-	logger.Infof("Prepare output %v", string(errOutput))
-
 	if !strings.Contains(output, successMsg) {
 		return mysql.Position{}, errors.New("Prepare step failed")
 	}
+
 	// then copy-back
 	logger.Infof("Restore: Copying the files")
 
@@ -290,20 +259,22 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	copybackErr, _ := copybackCmd.StderrPipe()
 	copybackOut, _ := copybackCmd.StdoutPipe()
 	copybackCmd.Start()
-	errOutput, err = ioutil.ReadAll(copybackErr)
-	_, errout = ioutil.ReadAll(copybackOut)
-	copybackCmd.Wait()
-
-	if errout != nil {
-		return mysql.Position{}, errout
+	errOutput, _ = ioutil.ReadAll(copybackErr)
+	stdOutput, _ = ioutil.ReadAll(copybackOut)
+	err = copybackCmd.Wait()
+	output = string(errOutput)
+	if output != "" {
+		// TODO remove after testing
+		logger.Infof("Copy-back stderr %v", string(output))
 	}
+	if string(stdOutput) != "" {
+		// TODO remove after testing
+		logger.Infof("Copy-back stdout %v", string(stdOutput))
+	}
+
 	if err != nil {
 		return mysql.Position{}, err
 	}
-	output = string(errOutput)
-	// TODO remove after testing
-	logger.Infof("Copy-back output %v", string(errOutput))
-
 	if !strings.Contains(output, successMsg) {
 		return mysql.Position{}, errors.New("Copy-back step failed")
 	}
@@ -328,7 +299,7 @@ func (be *XtrabackupEngine) ExecuteRestore(
 		}
 		counter = counter + 1
 	}
-	// TODO clean up TmpDir/backupDir
+	// TODO clean up extracted files from TmpDir
 	return replicationPosition, nil
 }
 
@@ -343,7 +314,6 @@ func (be *XtrabackupEngine) restoreFile(
 	name string,
 	hookExtraEnv map[string]string) (err error) {
 
-	// TODO create a directory under TmpDir to hold the extracted backup
 	streamMode := *xtrabackupStreamMode
 	// Open the source file for reading.
 	var source io.ReadCloser
@@ -354,17 +324,6 @@ func (be *XtrabackupEngine) restoreFile(
 	defer source.Close()
 
 	reader := io.MultiReader(source)
-
-	// Create the external read pipe, if any.
-	var wait hook.WaitFunc
-	if transformHook != "" {
-		h := hook.NewHook(transformHook, []string{"-operation", "read"})
-		h.ExtraEnv = hookExtraEnv
-		reader, wait, _, err = h.ExecuteAsReadPipe(reader)
-		if err != nil {
-			return fmt.Errorf("'%v' hook returned error: %v", transformHook, err)
-		}
-	}
 
 	// Create the uncompresser if needed.
 	if compress {
@@ -385,82 +344,53 @@ func (be *XtrabackupEngine) restoreFile(
 		reader = gz
 	}
 
-	dstFileName := path.Join(cnf.TmpDir, be.restoreFileName())
-
-	// Open the destination file for writing.
-	dstFile, err := os.Create(dstFileName)
-	if err != nil {
-		return fmt.Errorf("cannot create destination file %v: %v", dstFileName, err)
-	}
-	defer func() {
-		if cerr := dstFile.Close(); cerr != nil {
-			if err != nil {
-				// We already have an error, just log this one.
-				logger.Errorf("failed to close file %v: %v", name, cerr)
-			} else {
-				err = cerr
-			}
-		}
-	}()
-
-	// Create a buffering output.
-	dst := bufio.NewWriterSize(dstFile, 2*1024*1024)
-	// Copy the data. Will also write to the hasher.
-	if _, err = io.Copy(dst, reader); err != nil {
-		return err
-	}
-
-	// Close the Pipe.
-	if wait != nil {
-		stderr, err := wait()
-		if stderr != "" {
-			logger.Infof("'%v' hook returned stderr: %v", transformHook, stderr)
-		}
-		if err != nil {
-			return fmt.Errorf("'%v' returned error: %v", transformHook, err)
-		}
-	}
-	if err := dst.Flush(); err != nil {
-		return err
-	}
-
 	switch streamMode {
 	case streamModeTar:
 		// now extract the files by running tar
 		// error if we can't find tar
-		flagsToExec := []string{"-C", cnf.TmpDir, "-xif", dstFileName}
+		flagsToExec := []string{"-C", cnf.TmpDir, "-xi"}
 		tarCmd := exec.Command("tar", flagsToExec...)
-		// TODO check
-		//tarOut, _ := tarCmd.StdoutPipe()
+		logger.Infof("Executing tar cmd with flags %v", flagsToExec)
+		tarCmd.Stdin = reader
+		tarOut, _ := tarCmd.StdoutPipe()
 		tarErr, _ := tarCmd.StderrPipe()
 		tarCmd.Start()
-		errOutput, err := ioutil.ReadAll(tarErr)
-		tarCmd.Wait()
+		output, _ := ioutil.ReadAll(tarOut)
+		errOutput, _ := ioutil.ReadAll(tarErr)
+		err := tarCmd.Wait()
 
-		if err != nil {
-			return err
+		if string(output) != "" {
+			logger.Infof("output from tar: %v ", string(output))
 		}
 		if string(errOutput) != "" {
-			logger.Errorf("error from tar: ", string(errOutput))
+			logger.Infof("error from tar: %v ", string(errOutput))
+		}
+		if err != nil {
+			return vterrors.Wrapf(err, "error from tar")
 		}
 
 	case xbstream:
 		// now extract the files by running xbstream
 		xbstreamProgram := path.Join(*xtrabackupEnginePath, xbstream)
-		flagsToExec := []string{"-x", "-C", cnf.TmpDir, "<", dstFileName}
+		flagsToExec := []string{"-C", cnf.TmpDir, "-x"}
 		xbstreamCmd := exec.Command(xbstreamProgram, flagsToExec...)
-		// TODO check
-		//xbstreamOut, _ := xbstreamCmd.StdoutPipe()
+		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
+		xbstreamCmd.Stdin = reader
+		xbstreamOut, _ := xbstreamCmd.StdoutPipe()
 		xbstreamErr, _ := xbstreamCmd.StderrPipe()
 		xbstreamCmd.Start()
-		errOutput, err := ioutil.ReadAll(xbstreamErr)
-		xbstreamCmd.Wait()
+		output, _ := ioutil.ReadAll(xbstreamOut)
+		errOutput, _ := ioutil.ReadAll(xbstreamErr)
+		err := xbstreamCmd.Wait()
 
-		if err != nil {
-			return err
+		if string(output) != "" {
+			logger.Infof("Output from xbstream: %v ", string(output))
 		}
 		if string(errOutput) != "" {
-			logger.Errorf("error from xbstream: ", string(errOutput))
+			logger.Infof("error from xbstream: %v", string(errOutput))
+		}
+		if err != nil {
+			return vterrors.Wrapf(err, "error from xbstream")
 		}
 	default:
 	}
