@@ -697,7 +697,7 @@ func (wr *Wrangler) setupReverseReplication(ctx context.Context, sourceShards, d
 				Shard:    dest.ShardName(),
 				KeyRange: kr,
 			}
-			qr, err := wr.VReplicationExec(ctx, sourceShard.MasterAlias, binlogplayer.CreateVReplicationStopped("ReversedResharding", bls, masterPositions[j]))
+			qr, err := wr.VReplicationExec(ctx, sourceShard.MasterAlias, binlogplayer.CreateVReplicationState("ReversedResharding", bls, masterPositions[j], binlogplayer.BlpStopped))
 			if err != nil {
 				return err
 			}
