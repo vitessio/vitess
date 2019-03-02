@@ -682,7 +682,7 @@ func TestPlayerStopPos(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
 	startPos := masterPosition(t)
-	query := binlogplayer.CreateVReplicationStopped("test", bls, startPos)
+	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogplayer.BlpStopped)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
