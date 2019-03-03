@@ -25,6 +25,7 @@ import (
 )
 
 const (
+	// DefaultVtDataRoot is the default value for VTROOT environment variable
 	DefaultVtDataRoot = "/vt"
 )
 
@@ -44,7 +45,7 @@ func VtRoot() (root string, err error) {
 	if strings.HasSuffix(dir, "/bin") {
 		return path.Dir(dir), nil
 	}
-	err = errors.New("VTROOT could not be guessed from the executable location. Please set $VTROOT.")
+	err = errors.New("VTROOT could not be guessed from the executable location. Please set $VTROOT")
 	return
 }
 
@@ -70,7 +71,7 @@ func VtMysqlRoot() (string, error) {
 	// otherwise let's use VTROOT
 	root, err := VtRoot()
 	if err != nil {
-		return "", errors.New("VT_MYSQL_ROOT is not set and could not be guessed from the executable location. Please set $VT_MYSQL_ROOT.")
+		return "", errors.New("VT_MYSQL_ROOT is not set and could not be guessed from the executable location. Please set $VT_MYSQL_ROOT")
 	}
 	return root, nil
 }
@@ -86,7 +87,7 @@ func VtMysqlBaseDir() (string, error) {
 	// otherwise let's use VtMysqlRoot
 	root, err := VtMysqlRoot()
 	if err != nil {
-		return "", errors.New("VT_MYSQL_BASEDIR is not set. Please set $VT_MYSQL_BASEDIR.")
+		return "", errors.New("VT_MYSQL_BASEDIR is not set. Please set $VT_MYSQL_BASEDIR")
 	}
 	return root, nil
 }
