@@ -170,9 +170,7 @@ func (m *Manager) Run(ctx context.Context) {
 	m.mu.Unlock()
 
 	// Wait for the context to be canceled.
-	select {
-	case <-ctx.Done():
-	}
+	<-ctx.Done()
 
 	// Clear context and get a copy of the running jobs.
 	m.mu.Lock()
@@ -187,9 +185,7 @@ func (m *Manager) Run(ctx context.Context) {
 		rw.cancel()
 	}
 	for _, rw := range runningWorkflows {
-		select {
-		case <-rw.done:
-		}
+		<-rw.done
 	}
 }
 
@@ -331,7 +327,7 @@ func (m *Manager) Start(ctx context.Context, uuid string) error {
 
 	rw, ok := m.workflows[uuid]
 	if !ok {
-		return fmt.Errorf("Cannot find workflow %v in the workflow list", uuid)
+		return fmt.Errorf("cannot find workflow %v in the workflow list", uuid)
 	}
 
 	if rw.wi.State != workflowpb.WorkflowState_NotStarted {
@@ -446,10 +442,10 @@ func (m *Manager) Delete(ctx context.Context, uuid string) error {
 
 	rw, ok := m.workflows[uuid]
 	if !ok {
-		return fmt.Errorf("No workflow with uuid %v", uuid)
+		return fmt.Errorf("no workflow with uuid %v", uuid)
 	}
 	if rw.wi.State == workflowpb.WorkflowState_Running {
-		return fmt.Errorf("Cannot delete running workflow")
+		return fmt.Errorf("cannot delete running workflow")
 	}
 	if err := m.ts.DeleteWorkflow(m.ctx, rw.wi); err != nil {
 		log.Errorf("Could not delete workflow %v: %v", rw.wi, err)

@@ -343,7 +343,7 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts *topo.Serve
 			}
 		}
 	default:
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Unsupported ShardingColumnType: %v", shardingColumnType)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "unsupported ShardingColumnType: %v", shardingColumnType)
 	}
 
 	sql := fmt.Sprintf("SELECT %v FROM %v %v", strings.Join(escapeAll(orderedColumns(td)), ", "), sqlescape.EscapeID(td.Name), where)
@@ -452,7 +452,7 @@ func (dr *DiffReport) HasDifferences() bool {
 // ComputeQPS fills in processingQPS
 func (dr *DiffReport) ComputeQPS() {
 	if dr.processedRows > 0 {
-		dr.processingQPS = int(time.Duration(dr.processedRows) * time.Second / time.Now().Sub(dr.startingTime))
+		dr.processingQPS = int(time.Duration(dr.processedRows) * time.Second / time.Since(dr.startingTime))
 	}
 }
 
@@ -508,7 +508,7 @@ func CompareRows(fields []*querypb.Field, compareCount int, left, right []sqltyp
 			r := rv.([]byte)
 			return bytes.Compare(l, r), nil
 		default:
-			return 0, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Unsupported type %T returned by mysql.proto.Convert", l)
+			return 0, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "unsupported type %T returned by mysql.proto.Convert", l)
 		}
 	}
 	return 0, nil
@@ -723,7 +723,7 @@ func CreateConsistentTableScanners(ctx context.Context, tablet *topo.TabletInfo,
 		return nil, "", err
 	}
 
-	queryService, err := tabletconn.GetDialer()(tablet.Tablet, true)
+	queryService, _ := tabletconn.GetDialer()(tablet.Tablet, true)
 	defer queryService.Close(ctx)
 
 	scanners := make([]TableScanner, numberOfScanners)
@@ -766,7 +766,7 @@ func CreateConsistentTransactions(ctx context.Context, tablet *topo.TabletInfo, 
 	target := CreateTargetFrom(tablet.Tablet)
 
 	// Create transactions
-	queryService, err := tabletconn.GetDialer()(tablet.Tablet, true)
+	queryService, _ := tabletconn.GetDialer()(tablet.Tablet, true)
 	defer queryService.Close(ctx)
 	connections, err := createTransactions(ctx, numberOfScanners, wr, cleaner, queryService, target, tablet.Tablet)
 	if err != nil {

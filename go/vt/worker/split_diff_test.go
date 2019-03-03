@@ -288,7 +288,7 @@ func testSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.Table
 		defer ft.StopActionLoop(t)
 	}
 
-	tabletTypeName, _ := topodatapb.TabletType_name[int32(destinationTabletType)]
+	tabletTypeName := topodatapb.TabletType_name[int32(destinationTabletType)]
 	// Run the vtworker command.
 	args := []string{
 		"SplitDiff",

@@ -269,7 +269,7 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 		result, err = r.output.Recv()
 		if err == nil || err == io.EOF {
 			alias := topoproto.TabletAliasString(r.tablet.Alias)
-			log.V(2).Infof("tablet=%v table=%v chunk=%v: Successfully restarted streaming query with query '%v' after %.1f seconds.", alias, r.td.Name, r.chunk, r.query, time.Now().Sub(start).Seconds())
+			log.V(2).Infof("tablet=%v table=%v chunk=%v: Successfully restarted streaming query with query '%v' after %.1f seconds.", alias, r.td.Name, r.chunk, r.query, time.Since(start).Seconds())
 			if attempt == 2 {
 				statsStreamingQueryRestartsSameTabletCounters.Add(alias, 1)
 			} else {
@@ -295,7 +295,7 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 		}
 
 		deadline, _ := retryCtx.Deadline()
-		log.V(2).Infof("tablet=%v table=%v chunk=%v: Failed to restart streaming query (attempt %d) with query '%v'. Retrying to restart stream on a different tablet (for up to %.1f minutes). Next retry is in %.1f seconds. Error: %v", alias, r.td.Name, r.chunk, attempt, r.query, deadline.Sub(time.Now()).Minutes(), executeFetchRetryTime.Seconds(), err)
+		log.V(2).Infof("tablet=%v table=%v chunk=%v: Failed to restart streaming query (attempt %d) with query '%v'. Retrying to restart stream on a different tablet (for up to %.1f minutes). Next retry is in %.1f seconds. Error: %v", alias, r.td.Name, r.chunk, attempt, r.query, time.Until(deadline).Minutes(), executeFetchRetryTime.Seconds(), err)
 
 		select {
 		case <-retryCtx.Done():
@@ -303,7 +303,7 @@ func (r *RestartableResultReader) nextWithRetries() (*sqltypes.Result, error) {
 			if err == context.DeadlineExceeded {
 				return nil, vterrors.Wrapf(err, "%v: failed to restart the streaming connection after retrying for %v", r.tp.description(), *retryDuration)
 			}
-			return nil, vterrors.Wrapf(err, "%v: interrupted while trying to restart the streaming connection (%.1f minutes elapsed so far)", r.tp.description(), time.Now().Sub(start).Minutes())
+			return nil, vterrors.Wrapf(err, "%v: interrupted while trying to restart the streaming connection (%.1f minutes elapsed so far)", r.tp.description(), time.Since(start).Minutes())
 		case <-time.After(*executeFetchRetryTime):
 			// Make a pause between the retries to avoid hammering the servers.
 		}

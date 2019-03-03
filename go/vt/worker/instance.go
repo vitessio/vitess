@@ -108,7 +108,7 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 		// We return FAILED_PRECONDITION to signal that a manual resolution is required.
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			"The worker job was stopped %.1f minutes ago, but not reset. Run the 'Reset' command to clear it manually. Job: %v",
-			time.Now().Sub(wi.lastRunStopTime).Minutes(),
+			time.Since(wi.lastRunStopTime).Minutes(),
 			wi.currentWorker)
 	}
 
