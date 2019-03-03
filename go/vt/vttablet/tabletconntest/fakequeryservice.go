@@ -856,6 +856,11 @@ func (f *FakeQueryService) VStream(ctx context.Context, target *querypb.Target, 
 	panic("not implemented")
 }
 
+// VStreamRows is part of the QueryService interface.
+func (f *FakeQueryService) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk []*querypb.Value, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	panic("not implemented")
+}
+
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t *testing.T) *FakeQueryService {
 	return &FakeQueryService{
