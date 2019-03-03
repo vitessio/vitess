@@ -37,8 +37,8 @@ type state string
 
 const (
 	stateIncreaseRate         state = "I"
-	stateDecreaseAndGuessRate       = "D"
-	stateEmergency                  = "E"
+	stateDecreaseAndGuessRate state = "D"
+	stateEmergency            state = "E"
 )
 
 type replicationLagChange int
