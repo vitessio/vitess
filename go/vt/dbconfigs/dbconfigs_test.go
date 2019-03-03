@@ -237,7 +237,7 @@ func TestCredentialsFileHUP(t *testing.T) {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 	cs := GetCredentialsServer()
-	_, pass, err := cs.GetUserAndPassword(oldStr)
+	_, pass, _ := cs.GetUserAndPassword(oldStr)
 	if pass != oldStr {
 		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
 	}
@@ -251,17 +251,17 @@ func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
 	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't overwrite temp file: %v", err)
 	}
-	_, pass, err := cs.GetUserAndPassword(oldStr)
+	_, pass, _ := cs.GetUserAndPassword(oldStr)
 	if pass != oldStr {
 		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
 	}
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 	time.Sleep(100 * time.Millisecond) // wait for signal handler
-	_, pass, err = cs.GetUserAndPassword(oldStr)
+	_, _, err := cs.GetUserAndPassword(oldStr)
 	if err != ErrUnknownUser {
 		t.Fatalf("Should not have old %s after config reload", oldStr)
 	}
-	_, pass, err = cs.GetUserAndPassword(newStr)
+	_, pass, _ = cs.GetUserAndPassword(newStr)
 	if pass != newStr {
 		t.Fatalf("%s's Password should be '%s'", newStr, newStr)
 	}
