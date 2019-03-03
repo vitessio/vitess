@@ -51,7 +51,7 @@ func TestThrottledLogger(t *testing.T) {
 	if got, want := skippedCount(tl), 0; got != want {
 		t.Errorf("skippedCount is %v but was expecting %v after waiting", got, want)
 	}
-	if got := time.Now().Sub(start); got < interval {
+	if got := time.Since(start); got < interval {
 		t.Errorf("didn't wait long enough before logging, got %v, want >= %v", got, interval)
 	}
 
