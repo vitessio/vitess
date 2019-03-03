@@ -66,7 +66,7 @@ type vplayer struct {
 	timeLastSaved time.Time
 	// lastTimestampNs is the last timestamp seen so far.
 	lastTimestampNs int64
-	// timeOffsetNs keeps track of the time offset w.r.t. source tablet.
+	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
 	timeOffsetNs int64
 	stopPos      mysql.Position
 
@@ -204,7 +204,8 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		if err != nil {
 			return err
 		}
-		// No events were received. Update SecondsBehindMaster.
+		// No events were received. This likely means that there's a network partition.
+		// So, we should assume we're falling behind.
 		if len(items) == 0 {
 			behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
 			vp.stats.SecondsBehindMaster.Set(behind / 1e9)
