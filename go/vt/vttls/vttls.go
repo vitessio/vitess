@@ -103,11 +103,11 @@ func ServerConfig(cert, key, ca string) (*tls.Config, error) {
 	if ca != "" {
 		b, err := ioutil.ReadFile(ca)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to read ca file: %v", err)
+			return nil, fmt.Errorf("failed to read ca file: %v", err)
 		}
 		cp := x509.NewCertPool()
 		if !cp.AppendCertsFromPEM(b) {
-			return nil, fmt.Errorf("Failed to append certificates")
+			return nil, fmt.Errorf("failed to append certificates")
 		}
 		config.ClientCAs = cp
 		config.ClientAuth = tls.RequireAndVerifyClientCert
