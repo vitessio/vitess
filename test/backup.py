@@ -276,6 +276,15 @@ class TestBackup(unittest.TestCase):
     self._insert_data(tablet_master, 1)
     self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
 
+    # This will fail, make sure we get the right error.
+    _, err = utils.run_vtctl(['Backup', tablet_master.tablet_alias],
+                             auto_log=True, expect_fail=True)
+    self.assertIn('type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master', err)
+
+    # And make sure there is no backup left.
+    backups = self._list_backups()
+    self.assertEqual(len(backups), 0, 'invalid backups: %s' % backups)
+
     # backup the master
     utils.run_vtctl(['Backup', '-allow_master=true', tablet_master.tablet_alias], auto_log=True)
 
