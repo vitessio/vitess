@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/mysql"
@@ -63,6 +63,9 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 		t.Errorf("want 0, got %d", commitCount)
 	}
 	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	if logStats.CommitTime != 0 {
+		t.Errorf("logstats: expected zero CommitTime")
+	}
 
 	// commit.
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
@@ -110,8 +113,8 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	if rollbackCount := sbclookup.RollbackCount.Get(); rollbackCount != 1 {
 		t.Errorf("want 1, got %d", rollbackCount)
 	}
-	logStats = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
-	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	_ = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	logStats = testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
 	if logStats.CommitTime == 0 {
 		t.Errorf("logstats: expected non-zero CommitTime")
@@ -170,7 +173,7 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 0 {
 		t.Errorf("want 0, got %d", commitCount)
 	}
-	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 
 	// commit.
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "select id from main1", nil)
@@ -189,7 +192,7 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 		t.Errorf("want 1, got %d", commitCount)
 	}
 
-	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats := testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	if logStats.CommitTime != 0 {
 		t.Errorf("logstats: expected zero CommitTime")
 	}
@@ -465,7 +468,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	logStats = testQueryLog(t, logChan, "TestExecute", "SET", "set autocommit=1", 0)
+	_ = testQueryLog(t, logChan, "TestExecute", "SET", "set autocommit=1", 0)
 
 	// Setting autocommit=1 commits existing transaction.
 	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
@@ -502,7 +505,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	logStats = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "update main1 set id=1", nil)
 	if err != nil {
@@ -537,7 +540,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
-	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
+	_ = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
 
 	// transition autocommit from 0 to 1 in the middle of a transaction.
 	startCount = sbclookup.CommitCount.Get()
@@ -785,6 +788,9 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes", nil)
+	if err != nil {
+		t.Error(err)
+	}
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
@@ -806,6 +812,9 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.user", nil)
+	if err != nil {
+		t.Error(err)
+	}
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
@@ -818,13 +827,13 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show vschema vindexes on TestExecutor.user:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on user", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on user", nil)
 	wantErr := errNoKeyspace.Error()
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("show vschema vindexes on user: %v, want %v", err, wantErr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.garbage", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.garbage", nil)
 	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("show vschema vindexes on user: %v, want %v", err, wantErr)
@@ -832,6 +841,9 @@ func TestExecutorShow(t *testing.T) {
 
 	session.TargetString = "TestExecutor"
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on user", nil)
+	if err != nil {
+		t.Error(err)
+	}
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
@@ -846,6 +858,9 @@ func TestExecutorShow(t *testing.T) {
 
 	session.TargetString = "TestExecutor"
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on user2", nil)
+	if err != nil {
+		t.Error(err)
+	}
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
@@ -858,13 +873,16 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show vschema vindexes on user2:\n%+v, want\n%+v", qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on garbage", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on garbage", nil)
 	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("show vschema vindexes on user: %v, want %v", err, wantErr)
 	}
 
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show warnings", nil)
+	if err != nil {
+		t.Error(err)
+	}
 	wantqr = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "Level", Type: sqltypes.VarChar},
@@ -881,6 +899,9 @@ func TestExecutorShow(t *testing.T) {
 
 	session.Warnings = []*querypb.QueryWarning{}
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show warnings", nil)
+	if err != nil {
+		t.Error(err)
+	}
 	wantqr = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "Level", Type: sqltypes.VarChar},
@@ -899,6 +920,9 @@ func TestExecutorShow(t *testing.T) {
 		{Code: mysql.EROutOfResources, Message: "ks/-40: query timed out"},
 	}
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show warnings", nil)
+	if err != nil {
+		t.Error(err)
+	}
 	wantqr = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "Level", Type: sqltypes.VarChar},
@@ -961,20 +985,20 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	session = NewSafeSession(&vtgatepb.Session{})
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema tables", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema tables", nil)
 	want := errNoKeyspace.Error()
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema tables: %v, want %v", err, want)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show 10", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show 10", nil)
 	want = "syntax error at position 8 near '10'"
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema tables: %v, want %v", err, want)
 	}
 
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "no_such_keyspace"})
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema tables", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema tables", nil)
 	want = "keyspace no_such_keyspace not found in vschema"
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema tables: %v, want %v", err, want)
@@ -1175,7 +1199,6 @@ func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSche
 			if !ok {
 				t.Errorf("updated vschema did not contain %s", name)
 			}
-			break
 		default:
 			time.Sleep(time.Millisecond)
 		}
@@ -1268,7 +1291,7 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 	})
 
 	vschema := <-vschemaUpdates
-	vindex, ok := vschema.Keyspaces[ks].Vindexes["test_vindex"]
+	_, ok := vschema.Keyspaces[ks].Vindexes["test_vindex"]
 	if ok {
 		t.Fatalf("test_vindex should not exist in original vschema")
 	}
@@ -1280,7 +1303,7 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 		t.Error(err)
 	}
 
-	vschema, vindex = waitForVindex(t, ks, "test_vindex", vschemaUpdates, executor)
+	_, vindex := waitForVindex(t, ks, "test_vindex", vschemaUpdates, executor)
 	if vindex == nil || vindex.Type != "hash" {
 		t.Errorf("updated vschema did not contain test_vindex")
 	}
@@ -1291,8 +1314,8 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 		t.Errorf("create duplicate vindex: %v, want %s", err, wantErr)
 	}
 	select {
-	case vschema = <-vschemaUpdates:
-		t.Errorf("vschema should not be updated on error")
+	case <-vschemaUpdates:
+		t.Error("vschema should not be updated on error")
 	default:
 	}
 
@@ -1357,14 +1380,14 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	vschema = waitForVschemaTables(t, ks, append(vschemaTables, "test_table"), executor)
+	_ = waitForVschemaTables(t, ks, append(vschemaTables, "test_table"), executor)
 
 	stmt = "alter vschema add table test_table2"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	if err != nil {
 		t.Error(err)
 	}
-	vschema = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_table", "test_table2"}...), executor)
+	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_table", "test_table2"}...), executor)
 
 	// Should fail on a sharded keyspace
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
@@ -1401,7 +1424,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	})
 
 	vschema := <-vschemaUpdates
-	vindex, ok := vschema.Keyspaces[ks].Vindexes["test_hash"]
+	_, ok := vschema.Keyspaces[ks].Vindexes["test_hash"]
 	if ok {
 		t.Fatalf("test_hash should not exist in original vschema")
 	}
@@ -1413,12 +1436,12 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 		t.Fatalf("error in %s: %v", stmt, err)
 	}
 
-	vschema, vindex = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
+	_, vindex := waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
 	if vindex.Type != "hash" {
 		t.Errorf("vindex type %s not hash", vindex.Type)
 	}
 
-	vschema = waitForColVindexes(t, ks, "test", []string{"test_hash"}, executor)
+	_ = waitForColVindexes(t, ks, "test", []string{"test_hash"}, executor)
 	qr, err := executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
 	if err != nil {
 		t.Fatalf("error in show vschema vindexes on TestExecutor.test: %v", err)
@@ -1441,9 +1464,9 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 		t.Fatalf("error in %s: %v", stmt, err)
 	}
 
-	vschema, vindex = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
-	vschema = waitForColVindexes(t, ks, "test", []string{}, executor)
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
+	_, _ = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
+	_ = waitForColVindexes(t, ks, "test", []string{}, executor)
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
 	wantErr := "table `test` does not exist in keyspace `TestExecutor`"
 	if err == nil || err.Error() != wantErr {
 		t.Fatalf("expected error in show vschema vindexes on TestExecutor.test %v: got %v", wantErr, err)
@@ -1456,12 +1479,12 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 		t.Fatalf("error in %s: %v", stmt, err)
 	}
 
-	vschema, vindex = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
+	_, vindex = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
 	if vindex.Type != "hash" {
 		t.Errorf("vindex type %s not hash", vindex.Type)
 	}
 
-	vschema = waitForColVindexes(t, ks, "test", []string{"test_hash"}, executor)
+	_ = waitForColVindexes(t, ks, "test", []string{"test_hash"}, executor)
 
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
 	if err != nil {
@@ -1754,17 +1777,17 @@ func TestExecutorVindexDDLNewKeyspace(t *testing.T) {
 		t.Fatalf("keyspace was not created as expected")
 	}
 
-	vindex, _ := ks.Vindexes["test_hash"]
+	vindex := ks.Vindexes["test_hash"]
 	if vindex == nil {
 		t.Fatalf("vindex was not created as expected")
 	}
 
-	vindex2, _ := ks.Vindexes["test_hash2"]
+	vindex2 := ks.Vindexes["test_hash2"]
 	if vindex2 == nil {
 		t.Fatalf("vindex was not created as expected")
 	}
 
-	table, _ := ks.Tables["test"]
+	table := ks.Tables["test"]
 	if table == nil {
 		t.Fatalf("column vindex was not created as expected")
 	}
@@ -1925,7 +1948,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, makeComments(""), r, nil)
 	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, makeComments(""), r, nil)
 
-	logStats1 := NewLogStats(nil, "Test", "", nil)
+	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
 	query1 := "select * from music_user_map where id = 1"
 	plan1, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	if err != nil {
@@ -1936,7 +1959,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
 
-	logStats2 := NewLogStats(nil, "Test", "", nil)
+	logStats2 := NewLogStats(context.Background(), "Test", "", nil)
 	plan2, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats2)
 	if err != nil {
 		t.Error(err)
@@ -1953,7 +1976,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
-	logStats3 := NewLogStats(nil, "Test", "", nil)
+	logStats3 := NewLogStats(context.Background(), "Test", "", nil)
 	plan3, err := r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats3)
 	if err != nil {
 		t.Error(err)
@@ -1964,7 +1987,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if logStats3.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats3.SQL)
 	}
-	logStats4 := NewLogStats(nil, "Test", "", nil)
+	logStats4 := NewLogStats(context.Background(), "Test", "", nil)
 	plan4, err := r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats4)
 	if err != nil {
 		t.Error(err)
@@ -1988,7 +2011,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, makeComments(""), r, nil)
 	query1 := "select * from music_user_map where id = 1"
-	logStats1 := NewLogStats(nil, "Test", "", nil)
+	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
 	if err != nil {
 		t.Error(err)
@@ -2000,7 +2023,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	if logStats1.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
-	logStats2 := NewLogStats(nil, "Test", "", nil)
+	logStats2 := NewLogStats(context.Background(), "Test", "", nil)
 	_, err = r.getPlan(emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
 	if err != nil {
 		t.Error(err)
@@ -2018,7 +2041,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, makeComments(""), r, nil)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
-	logStats1 = NewLogStats(nil, "Test", "", nil)
+	logStats1 = NewLogStats(context.Background(), "Test", "", nil)
 	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	if err != nil {
 		t.Error(err)
@@ -2042,7 +2065,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	r.normalize = true
 	emptyvc := newVCursorImpl(context.Background(), nil, "", 0, makeComments(""), r, nil)
 	query1 := "select * from music_user_map where id = 1"
-	logStats1 := NewLogStats(nil, "Test", "", nil)
+	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
 	if err != nil {
 		t.Error(err)
@@ -2054,7 +2077,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	if logStats1.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
-	logStats2 := NewLogStats(nil, "Test", "", nil)
+	logStats2 := NewLogStats(context.Background(), "Test", "", nil)
 	_, err = r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
 	if err != nil {
 		t.Error(err)
@@ -2072,7 +2095,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	unshardedvc := newVCursorImpl(context.Background(), nil, KsTestUnsharded, 0, makeComments(""), r, nil)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
-	logStats1 = NewLogStats(nil, "Test", "", nil)
+	logStats1 = NewLogStats(context.Background(), "Test", "", nil)
 	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	if err != nil {
 		t.Error(err)
@@ -2100,12 +2123,12 @@ func TestGetPlanNormalized(t *testing.T) {
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
 	normalized := "select * from music_user_map where id = :vtg1"
-	logStats1 := NewLogStats(nil, "Test", "", nil)
+	logStats1 := NewLogStats(context.Background(), "Test", "", nil)
 	plan1, err := r.getPlan(emptyvc, query1, makeComments(" /* comment 1 */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	if err != nil {
 		t.Error(err)
 	}
-	logStats2 := NewLogStats(nil, "Test", "", nil)
+	logStats2 := NewLogStats(context.Background(), "Test", "", nil)
 	plan2, err := r.getPlan(emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false, logStats2)
 	if err != nil {
 		t.Error(err)
@@ -2129,7 +2152,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
 
-	logStats3 := NewLogStats(nil, "Test", "", nil)
+	logStats3 := NewLogStats(context.Background(), "Test", "", nil)
 	plan3, err := r.getPlan(emptyvc, query2, makeComments(" /* comment 3 */"), map[string]*querypb.BindVariable{}, false, logStats3)
 	if err != nil {
 		t.Error(err)
@@ -2142,7 +2165,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats3.SQL)
 	}
 
-	logStats4 := NewLogStats(nil, "Test", "", nil)
+	logStats4 := NewLogStats(context.Background(), "Test", "", nil)
 	plan4, err := r.getPlan(emptyvc, normalized, makeComments(" /* comment 4 */"), map[string]*querypb.BindVariable{}, false, logStats4)
 	if err != nil {
 		t.Error(err)
@@ -2155,7 +2178,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
 	}
 
-	logStats5 := NewLogStats(nil, "Test", "", nil)
+	logStats5 := NewLogStats(context.Background(), "Test", "", nil)
 	plan3, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment 5 */"), map[string]*querypb.BindVariable{}, false, logStats5)
 	if err != nil {
 		t.Error(err)
@@ -2168,7 +2191,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats5.SQL)
 	}
 
-	logStats6 := NewLogStats(nil, "Test", "", nil)
+	logStats6 := NewLogStats(context.Background(), "Test", "", nil)
 	plan4, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment 6 */"), map[string]*querypb.BindVariable{}, false, logStats6)
 	if err != nil {
 		t.Error(err)
@@ -2185,13 +2208,13 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 
 	// Errors
-	logStats7 := NewLogStats(nil, "Test", "", nil)
+	logStats7 := NewLogStats(context.Background(), "Test", "", nil)
 	_, err = r.getPlan(emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, false, logStats7)
 	wantErr := "syntax error at position 7 near 'syntax'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
 	}
-	logStats8 := NewLogStats(nil, "Test", "", nil)
+	logStats8 := NewLogStats(context.Background(), "Test", "", nil)
 	_, err = r.getPlan(emptyvc, "create table a(id int)", makeComments(""), map[string]*querypb.BindVariable{}, false, logStats8)
 	wantErr = "unsupported construct: ddl"
 	if err == nil || err.Error() != wantErr {

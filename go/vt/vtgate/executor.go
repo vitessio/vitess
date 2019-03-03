@@ -274,7 +274,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		logStats.SQL = sql
 		logStats.BindVariables = bindVars
 		result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-		logStats.ExecuteTime = time.Now().Sub(execStart)
+		logStats.ExecuteTime = time.Since(execStart)
 		queriesRouted.Add("ShardDirect", int64(logStats.ShardQueries))
 		return result, err
 	}
@@ -394,7 +394,7 @@ func (e *Executor) handleVSchemaDDL(ctx context.Context, safeSession *SafeSessio
 		return errNoKeyspace
 	}
 
-	ks, _ := vschema.Keyspaces[ksName]
+	ks := vschema.Keyspaces[ksName]
 	ks, err := topotools.ApplyVSchemaDDL(ksName, ks, ddl)
 
 	if err != nil {
@@ -917,7 +917,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}
 		sort.Strings(ksNames)
 		for _, ksName := range ksNames {
-			ks, _ := vschema.Keyspaces[ksName]
+			ks := vschema.Keyspaces[ksName]
 
 			vindexNames := make([]string, 0, len(ks.Vindexes))
 			for name := range ks.Vindexes {
@@ -925,7 +925,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			}
 			sort.Strings(vindexNames)
 			for _, vindexName := range vindexNames {
-				vindex, _ := ks.Vindexes[vindexName]
+				vindex := ks.Vindexes[vindexName]
 
 				params := make([]string, 0, 4)
 				for k, v := range vindex.GetParams() {
@@ -946,7 +946,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			{Name: "Type", Type: sqltypes.Uint16},
 			{Name: "Message", Type: sqltypes.VarChar},
 		}
-		rows := make([][]sqltypes.Value, 0, 0)
+		rows := make([][]sqltypes.Value, 0)
 
 		if safeSession.Warnings != nil {
 			for _, warning := range safeSession.Warnings {
@@ -1026,7 +1026,7 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 }
 
 func (e *Executor) handleComment(sql string) (*sqltypes.Result, error) {
-	_, sql = sqlparser.ExtractMysqlComment(sql)
+	_, _ = sqlparser.ExtractMysqlComment(sql)
 	// Not sure if this is a good idea.
 	return &sqltypes.Result{}, nil
 }
