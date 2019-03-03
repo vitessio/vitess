@@ -328,7 +328,7 @@ func ExplainsAsText(explains []*Explain) string {
 		fmt.Fprintf(&b, "\n")
 	}
 	fmt.Fprintf(&b, "----------------------------------------------------------------------\n")
-	return string(b.Bytes())
+	return b.String()
 }
 
 // ExplainsAsJSON returns a json representation of the explains

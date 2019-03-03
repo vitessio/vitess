@@ -160,7 +160,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc := hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	qr, err = f(sc, []string{"0"})
+	_, err = f(sc, []string{"0"})
 	want := fmt.Sprintf("target: %v.0.replica, used tablet: aa-0 (0): INVALID_ARGUMENT error", name)
 	// Verify server error string.
 	if err == nil || err.Error() != want {
@@ -217,7 +217,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	hc.Reset()
 	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
-	qr, err = f(sc, []string{"0", "0"})
+	_, _ = f(sc, []string{"0", "0"})
 	// Ensure that we executed only once.
 	if execCount := sbc.ExecCount.Get(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
