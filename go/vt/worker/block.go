@@ -17,10 +17,11 @@ limitations under the License.
 package worker
 
 import (
-	"errors"
 	"html/template"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/wrangler"
 )
@@ -96,5 +97,5 @@ func (bw *BlockWorker) run(ctx context.Context) error {
 	bw.wr.Logger().Printf("Block command finished because the context is done: '%v'.\n", ctx.Err())
 	bw.SetState(WorkerStateDone)
 
-	return errors.New("command 'Block' was canceled")
+	return vterrors.New(vtrpc.Code_CANCELED, "command 'Block' was canceled")
 }

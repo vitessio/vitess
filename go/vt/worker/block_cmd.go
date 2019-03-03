@@ -18,10 +18,10 @@ package worker
 
 import (
 	"flag"
-	"fmt"
 	"html/template"
 	"net/http"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -54,7 +54,7 @@ func commandBlock(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	}
 	if subFlags.NArg() != 0 {
 		subFlags.Usage()
-		return nil, fmt.Errorf("command Block does not accept any parameter")
+		return nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "command Block does not accept any parameter")
 	}
 
 	worker, err := NewBlockWorker(wr)

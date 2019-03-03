@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -46,7 +48,7 @@ func (t *tableStatusList) initialize(schema *tabletmanagerdatapb.SchemaDefinitio
 	defer t.mu.Unlock()
 
 	if t.initialized {
-		panic(fmt.Errorf("tableStatusList is already initialized: %v", t.tableStatuses))
+		panic(vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "tableStatusList is already initialized: %v", t.tableStatuses))
 	}
 
 	t.tableStatuses = make([]*tableStatus, len(schema.TableDefinitions))

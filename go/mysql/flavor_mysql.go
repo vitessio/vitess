@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // mysqlFlavor implements the Flavor interface for Mysql.
@@ -34,7 +36,7 @@ func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
 		return nil, err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return nil, fmt.Errorf("unexpected result format for gtid_executed: %#v", qr)
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
 	}
 	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
@@ -55,7 +57,7 @@ func (mysqlFlavor) stopSlaveCommand() string {
 func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error {
 	gtidSet, ok := startPos.GTIDSet.(Mysql56GTIDSet)
 	if !ok {
-		return fmt.Errorf("startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
 	}
 
 	// Build the command.
@@ -106,7 +108,7 @@ func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
 	status := parseSlaveStatus(resultMap)
 	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
-		return SlaveStatus{}, fmt.Errorf("SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v): %v", resultMap["Executed_Gtid_Set"], err)
+		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
 	return status, nil
 }
@@ -118,7 +120,7 @@ func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := deadline.Sub(time.Now())
 		if timeout <= 0 {
-			return "", fmt.Errorf("timed out waiting for position %v", pos)
+			return "", vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 		}
 
 		// Only whole numbers of seconds are supported.

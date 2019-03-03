@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const mysql56FlavorID = "MySQL56"
@@ -30,19 +33,19 @@ func parseMysql56GTID(s string) (GTID, error) {
 	// Split into parts.
 	parts := strings.Split(s, ":")
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid MySQL 5.6 GTID (%v): expecting UUID:Sequence", s)
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid MySQL 5.6 GTID (%v): expecting UUID:Sequence", s)
 	}
 
 	// Parse Server ID.
 	sid, err := ParseSID(parts[0])
 	if err != nil {
-		return nil, fmt.Errorf("invalid MySQL 5.6 GTID Server ID (%v): %v", parts[0], err)
+		return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID Server ID (%v)", parts[0])
 	}
 
 	// Parse Sequence number.
 	seq, err := strconv.ParseInt(parts[1], 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid MySQL 5.6 GTID Sequence number (%v): %v", parts[1], err)
+		return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID Sequence number (%v)", parts[1])
 	}
 
 	return Mysql56GTID{Server: sid, Sequence: seq}, nil
@@ -65,7 +68,7 @@ func (sid SID) String() string {
 // ParseSID parses an SID in the form used by MySQL 5.6.
 func ParseSID(s string) (sid SID, err error) {
 	if len(s) != 36 || s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
-		return sid, fmt.Errorf("invalid MySQL 5.6 SID %q", s)
+		return sid, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid MySQL 5.6 SID %q", s)
 	}
 
 	// Drop the dashes so we can just check the error of Decode once.
@@ -77,7 +80,7 @@ func ParseSID(s string) (sid SID, err error) {
 	b = append(b, s[24:]...)
 
 	if _, err := hex.Decode(sid[:], b); err != nil {
-		return sid, fmt.Errorf("invalid MySQL 5.6 SID %q: %v", s, err)
+		return sid, vterrors.Wrapf(err, "invalid MySQL 5.6 SID %q", s)
 	}
 	return sid, nil
 }

@@ -22,6 +22,8 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/event"
@@ -309,7 +311,7 @@ func Validate(ctx context.Context, ts *Server, tabletAlias *topodatapb.TabletAli
 		return err
 	}
 	if !topoproto.TabletAliasEqual(tablet.Alias, tabletAlias) {
-		return fmt.Errorf("bad tablet alias data for tablet %v: %#v", topoproto.TabletAliasString(tabletAlias), tablet.Alias)
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "bad tablet alias data for tablet %v: %#v", topoproto.TabletAliasString(tabletAlias), tablet.Alias)
 	}
 
 	// Validate the entry in the shard replication nodes
@@ -319,7 +321,7 @@ func Validate(ctx context.Context, ts *Server, tabletAlias *topodatapb.TabletAli
 	}
 
 	if _, err = si.GetShardReplicationNode(tabletAlias); err != nil {
-		return fmt.Errorf("tablet %v not found in cell %v shard replication: %v", tabletAlias, tablet.Alias.Cell, err)
+		return vterrors.Wrapf(err, "tablet %v not found in cell %v shard replication", tabletAlias, tablet.Alias.Cell)
 	}
 
 	return nil

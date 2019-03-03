@@ -19,7 +19,6 @@ package topo
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"os"
 	"os/user"
 	"path"
@@ -27,6 +26,8 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
@@ -87,7 +88,7 @@ func newLock(action string) *Lock {
 func (l *Lock) ToJSON() (string, error) {
 	data, err := json.MarshalIndent(l, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("cannot JSON-marshal node: %v", err)
+		return "", vterrors.Wrapf(err, "cannot JSON-marshal node")
 	}
 	return string(data), nil
 }
@@ -146,7 +147,7 @@ func (ts *Server) LockKeyspace(ctx context.Context, keyspace, action string) (co
 
 	// check that we're not already locked
 	if _, ok = i.info[keyspace]; ok {
-		return nil, nil, fmt.Errorf("lock for keyspace %v is already held", keyspace)
+		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "lock for keyspace %v is already held", keyspace)
 	}
 
 	// lock
@@ -169,7 +170,7 @@ func (ts *Server) LockKeyspace(ctx context.Context, keyspace, action string) (co
 			if *finalErr != nil {
 				log.Errorf("trying to unlock keyspace %v multiple times", keyspace)
 			} else {
-				*finalErr = fmt.Errorf("trying to unlock keyspace %v multiple times", keyspace)
+				*finalErr = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "trying to unlock keyspace %v multiple times", keyspace)
 			}
 			return
 		}
@@ -193,7 +194,7 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 	// extract the locksInfo pointer
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
-		return fmt.Errorf("keyspace %v is not locked (no locksInfo)", keyspace)
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %v is not locked (no locksInfo)", keyspace)
 	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -201,7 +202,7 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 	// find the individual entry
 	_, ok = i.info[keyspace]
 	if !ok {
-		return fmt.Errorf("keyspace %v is not locked (no lockInfo in map)", keyspace)
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %v is not locked (no lockInfo in map)", keyspace)
 	}
 
 	// TODO(alainjobart): check the lock server implementation
@@ -291,7 +292,7 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string)
 	// check that we're not already locked
 	mapKey := keyspace + "/" + shard
 	if _, ok = i.info[mapKey]; ok {
-		return nil, nil, fmt.Errorf("lock for shard %v/%v is already held", keyspace, shard)
+		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "lock for shard %v/%v is already held", keyspace, shard)
 	}
 
 	// lock
@@ -314,7 +315,7 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string)
 			if *finalErr != nil {
 				log.Errorf("trying to unlock shard %v/%v multiple times", keyspace, shard)
 			} else {
-				*finalErr = fmt.Errorf("trying to unlock shard %v/%v multiple times", keyspace, shard)
+				*finalErr = vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to unlock shard %v/%v multiple times", keyspace, shard)
 			}
 			return
 		}
@@ -338,7 +339,7 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 	// extract the locksInfo pointer
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
-		return fmt.Errorf("shard %v/%v is not locked (no locksInfo)", keyspace, shard)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "shard %v/%v is not locked (no locksInfo)", keyspace, shard)
 	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -347,7 +348,7 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 	mapKey := keyspace + "/" + shard
 	li, ok := i.info[mapKey]
 	if !ok {
-		return fmt.Errorf("shard %v/%v is not locked (no lockInfo in map)", keyspace, shard)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "shard %v/%v is not locked (no lockInfo in map)", keyspace, shard)
 	}
 
 	// Check the lock server implementation still holds the lock.
