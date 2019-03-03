@@ -17,12 +17,12 @@ limitations under the License.
 package zk2topo
 
 import (
-	"fmt"
 	"path"
 	"sort"
 
 	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -103,7 +103,7 @@ func (mp *zkMasterParticipation) WaitForMastership() (context.Context, error) {
 	// Create the current proposal.
 	proposal, err := mp.zs.conn.Create(ctx, zkPath+"/", mp.id, zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile))
 	if err != nil {
-		return nil, fmt.Errorf("cannot create proposal file in %v: %v", zkPath, err)
+		return nil, vterrors.Wrapf(err, "cannot create proposal file in %v", zkPath)
 	}
 
 	// Wait until we are it, or we are interrupted. Using a

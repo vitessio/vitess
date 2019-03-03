@@ -17,7 +17,7 @@ limitations under the License.
 package mysql
 
 import (
-	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -123,19 +123,22 @@ func TestJSON(t *testing.T) {
 	}, {
 		// opaque, bit field. Not yet implemented.
 		data:     []byte{15, 16, 2, 202, 254},
-		expected: `ERROR: opaque type 16 is not supported yet, with data [2 202 254]`,
+		expected: `opaque type 16 is not supported yet, with data [2 202 254]`,
 	}}
 
 	for _, tcase := range testcases {
-		r, err := printJSONData(tcase.data)
-		got := ""
-		if err != nil {
-			got = fmt.Sprintf("ERROR: %v", err)
-		} else {
-			got = string(r)
-		}
-		if got != tcase.expected {
-			t.Errorf("unexpected output for %v: got %v expected %v", tcase.data, got, tcase.expected)
-		}
+		t.Run(tcase.expected, func(t *testing.T) {
+			r, err := printJSONData(tcase.data)
+			if err != nil {
+				if got := err.Error(); !strings.HasPrefix(got, tcase.expected) {
+					t.Errorf("unexpected output for %v: got [%v] expected [%v]", tcase.data, got, tcase.expected)
+				}
+			} else {
+				if got := string(r); got != tcase.expected {
+					t.Errorf("unexpected output for %v: got [%v] expected [%v]", tcase.data, got, tcase.expected)
+				}
+			}
+
+		})
 	}
 }

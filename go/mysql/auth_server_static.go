@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -30,6 +29,8 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -180,7 +181,7 @@ func validateConfig(config map[string][]*AuthServerStaticEntry) error {
 	for _, entries := range config {
 		for _, entry := range entries {
 			if entry.SourceHost != "" && entry.SourceHost != localhostName {
-				return fmt.Errorf("Invalid SourceHost found (only localhost is supported): %v", entry.SourceHost)
+				return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Invalid SourceHost found (only localhost is supported): %v", entry.SourceHost)
 			}
 		}
 	}

@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -158,7 +159,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 			for rowNum, row := range rows {
 				innerpv, err := sqlparser.NewPlanValue(row[colNum])
 				if err != nil {
-					return nil, fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
+					return nil, vterrors.Wrapf(err, "could not compute value for vindex or auto-inc column")
 				}
 				routeValues[vIdx].Values[colIdx].Values[rowNum] = innerpv
 				row[colNum] = sqlparser.NewValArg([]byte(baseName + strconv.Itoa(rowNum)))

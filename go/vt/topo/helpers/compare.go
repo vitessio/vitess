@@ -19,34 +19,35 @@ limitations under the License.
 package helpers
 
 import (
-	"fmt"
 	"reflect"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // CompareKeyspaces will compare the keyspaces in the destination topo.
 func CompareKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) error {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
-		return fmt.Errorf("GetKeyspace(%v): %v", keyspaces, err)
+		return vterrors.Wrapf(err, "GetKeyspace(%v)", keyspaces)
 	}
 
 	for _, keyspace := range keyspaces {
 
 		fromKs, err := fromTS.GetKeyspace(ctx, keyspace)
 		if err != nil {
-			return fmt.Errorf("GetKeyspace(%v): %v", keyspace, err)
+			return vterrors.Wrapf(err, "GetKeyspace(%v)", keyspace)
 		}
 
 		toKs, err := toTS.GetKeyspace(ctx, keyspace)
 		if err != nil {
-			return fmt.Errorf("GetKeyspace(%v): %v", keyspace, err)
+			return vterrors.Wrapf(err, "GetKeyspace(%v)", keyspace)
 		}
 
 		if !reflect.DeepEqual(fromKs.Keyspace, toKs.Keyspace) {
-			return fmt.Errorf("Keyspace: %v does not match between from and to topology", keyspace)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Keyspace: %v does not match between from and to topology", keyspace)
 		}
 
 		fromVs, err := fromTS.GetVSchema(ctx, keyspace)
@@ -56,7 +57,7 @@ func CompareKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) error {
 		case topo.IsErrType(err, topo.NoNode):
 			// Nothing to do.
 		default:
-			return fmt.Errorf("GetVSchema(%v): %v", keyspace, err)
+			return vterrors.Wrapf(err, "GetVSchema(%v)", keyspace)
 		}
 
 		toVs, err := toTS.GetVSchema(ctx, keyspace)
@@ -66,11 +67,11 @@ func CompareKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) error {
 		case topo.IsErrType(err, topo.NoNode):
 			// Nothing to do.
 		default:
-			return fmt.Errorf("GetVSchema(%v): %v", keyspace, err)
+			return vterrors.Wrapf(err, "GetVSchema(%v)", keyspace)
 		}
 
 		if !reflect.DeepEqual(fromVs, toVs) {
-			return fmt.Errorf("Vschema for keyspace: %v does not match between from and to topology", keyspace)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Vschema for keyspace: %v does not match between from and to topology", keyspace)
 		}
 	}
 	return nil
@@ -80,27 +81,27 @@ func CompareKeyspaces(ctx context.Context, fromTS, toTS *topo.Server) error {
 func CompareShards(ctx context.Context, fromTS, toTS *topo.Server) error {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
-		return fmt.Errorf("fromTS.GetKeyspaces: %v", err)
+		return vterrors.Wrapf(err, "fromTS.GetKeyspaces")
 	}
 
 	for _, keyspace := range keyspaces {
 		shards, err := fromTS.GetShardNames(ctx, keyspace)
 		if err != nil {
-			return fmt.Errorf("GetShardNames(%v): %v", keyspace, err)
+			return vterrors.Wrapf(err, "GetShardNames(%v)", keyspace)
 		}
 
 		for _, shard := range shards {
 			fromSi, err := fromTS.GetShard(ctx, keyspace, shard)
 			if err != nil {
-				return fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err)
+				return vterrors.Wrapf(err, "GetShard(%v, %v)", keyspace, shard)
 			}
 			toSi, err := toTS.GetShard(ctx, keyspace, shard)
 			if err != nil {
-				return fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err)
+				return vterrors.Wrapf(err, "GetShard(%v, %v)", keyspace, shard)
 			}
 
 			if !reflect.DeepEqual(fromSi.Shard, toSi.Shard) {
-				return fmt.Errorf("Shard %v for keyspace: %v does not match between from and to topology", shard, keyspace)
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Shard %v for keyspace: %v does not match between from and to topology", shard, keyspace)
 			}
 		}
 	}
@@ -111,27 +112,27 @@ func CompareShards(ctx context.Context, fromTS, toTS *topo.Server) error {
 func CompareTablets(ctx context.Context, fromTS, toTS *topo.Server) error {
 	cells, err := fromTS.GetKnownCells(ctx)
 	if err != nil {
-		return fmt.Errorf("fromTS.GetKnownCells: %v", err)
+		return vterrors.Wrapf(err, "fromTS.GetKnownCells")
 	}
 
 	for _, cell := range cells {
 		tabletAliases, err := fromTS.GetTabletsByCell(ctx, cell)
 		if err != nil {
-			return fmt.Errorf("GetTabletsByCell(%v): %v", cell, err)
+			return vterrors.Wrapf(err, "GetTabletsByCell(%v)", cell)
 		}
 		for _, tabletAlias := range tabletAliases {
 
 			// read the source tablet
 			fromTi, err := fromTS.GetTablet(ctx, tabletAlias)
 			if err != nil {
-				return fmt.Errorf("GetTablet(%v): %v", tabletAlias, err)
+				return vterrors.Wrapf(err, "GetTablet(%v)", tabletAlias)
 			}
 			toTi, err := toTS.GetTablet(ctx, tabletAlias)
 			if err != nil {
-				return fmt.Errorf("GetTablet(%v): %v", tabletAlias, err)
+				return vterrors.Wrapf(err, "GetTablet(%v)", tabletAlias)
 			}
 			if !reflect.DeepEqual(fromTi.Tablet, toTi.Tablet) {
-				return fmt.Errorf("Tablet %v:  does not match between from and to topology", tabletAlias)
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Tablet %v:  does not match between from and to topology", tabletAlias)
 			}
 		}
 	}
@@ -143,13 +144,13 @@ func CompareTablets(ctx context.Context, fromTS, toTS *topo.Server) error {
 func CompareShardReplications(ctx context.Context, fromTS, toTS *topo.Server) error {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
-		return fmt.Errorf("fromTS.GetKeyspaces: %v", err)
+		return vterrors.Wrapf(err, "fromTS.GetKeyspaces")
 	}
 
 	for _, keyspace := range keyspaces {
 		shards, err := fromTS.GetShardNames(ctx, keyspace)
 		if err != nil {
-			return fmt.Errorf("GetShardNames(%v): %v", keyspace, err)
+			return vterrors.Wrapf(err, "GetShardNames(%v)", keyspace)
 		}
 
 		for _, shard := range shards {
@@ -157,20 +158,20 @@ func CompareShardReplications(ctx context.Context, fromTS, toTS *topo.Server) er
 			// read the source shard to get the cells
 			si, err := fromTS.GetShard(ctx, keyspace, shard)
 			if err != nil {
-				return fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err)
+				return vterrors.Wrapf(err, "GetShard(%v, %v)", keyspace, shard)
 			}
 
 			for _, cell := range si.Shard.Cells {
 				fromSRi, err := fromTS.GetShardReplication(ctx, cell, keyspace, shard)
 				if err != nil {
-					return fmt.Errorf("GetShardReplication(%v, %v, %v): %v", cell, keyspace, shard, err)
+					return vterrors.Wrapf(err, "GetShardReplication(%v, %v, %v)", cell, keyspace, shard)
 				}
 				toSRi, err := toTS.GetShardReplication(ctx, cell, keyspace, shard)
 				if err != nil {
-					return fmt.Errorf("GetShardReplication(%v, %v, %v): %v", cell, keyspace, shard, err)
+					return vterrors.Wrapf(err, "GetShardReplication(%v, %v, %v)", cell, keyspace, shard)
 				}
 				if !reflect.DeepEqual(fromSRi.ShardReplication, toSRi.ShardReplication) {
-					return fmt.Errorf(
+					return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
 						"Shard Replication in cell %v, keyspace %v, shard %v:  does not match between from and to topology",
 						cell,
 						keyspace,

@@ -17,11 +17,12 @@ limitations under the License.
 package topo
 
 import (
-	"fmt"
 	"path"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -139,19 +140,19 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string) error {
 	// Get all keyspaces.
 	keyspaces, err := ts.GetKeyspaces(ctx)
 	if err != nil {
-		return fmt.Errorf("GetKeyspaces() failed: %v", err)
+		return vterrors.Wrap(err, "GetKeyspaces() failed")
 	}
 
 	// For each keyspace, make sure no shard points at the cell.
 	for _, keyspace := range keyspaces {
 		shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
 		if err != nil {
-			return fmt.Errorf("FindAllShardsInKeyspace(%v) failed: %v", keyspace, err)
+			return vterrors.Wrapf(err, "FindAllShardsInKeyspace(%v) failed", keyspace)
 		}
 
 		for shard, si := range shards {
 			if si.HasCell(cell) {
-				return fmt.Errorf("cell %v is used by shard %v/%v, cannot remove it. Use 'vtctl RemoveShardCell' to remove unused cells in a Shard", cell, keyspace, shard)
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cell %v is used by shard %v/%v, cannot remove it. Use 'vtctl RemoveShardCell' to remove unused cells in a Shard", cell, keyspace, shard)
 			}
 		}
 	}

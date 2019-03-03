@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -127,11 +128,11 @@ func NewRowDiffer2(ctx context.Context, left, right ResultReader, td *tabletmana
 
 func compareFields(left, right []*querypb.Field) error {
 	if len(left) != len(right) {
-		return fmt.Errorf("Cannot diff inputs with different number of fields: left: %v right: %v", left, right)
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot diff inputs with different number of fields: left: %v right: %v", left, right)
 	}
 	for i, field := range left {
 		if field.Type != right[i].Type {
-			return fmt.Errorf("Cannot diff inputs with different types: field %v types are %v and %v", i, field.Type, right[i].Type)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot diff inputs with different types: field %v types are %v and %v", i, field.Type, right[i].Type)
 		}
 	}
 	return nil
@@ -364,5 +365,5 @@ func (rr *RowRouter) Route(row []sqltypes.Value) (int, error) {
 			return i, nil
 		}
 	}
-	return -1, fmt.Errorf("no shard's key range includes the keyspace id: %v for the row: %#v", k, row)
+	return -1, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no shard's key range includes the keyspace id: %v for the row: %#v", k, row)
 }
