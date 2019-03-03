@@ -64,25 +64,25 @@ func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType topodatapb.TabletTyp
 	// master is a special case with a few extra checks
 	if tabletType == topodatapb.TabletType_MASTER {
 		if !remove {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Cannot add master back to %v", ki.keyspace)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot add master back to %v", ki.keyspace)
 		}
 		if len(cells) > 0 {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Cannot migrate only some cells for master removal in keyspace %v", ki.keyspace)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot migrate only some cells for master removal in keyspace %v", ki.keyspace)
 		}
 		if len(ki.ServedFroms) > 1 {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Cannot migrate master into %v until everything else is migrated", ki.keyspace)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot migrate master into %v until everything else is migrated", ki.keyspace)
 		}
 	}
 
 	// we can't remove a type we don't have
 	if ki.GetServedFrom(tabletType) == nil && remove {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Supplied type cannot be migrated")
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "supplied type cannot be migrated")
 	}
 
 	// check the keyspace is consistent in any case
 	for _, ksf := range ki.ServedFroms {
 		if ksf.Keyspace != keyspace {
-			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Inconsistent keypace specified in migration: %v != %v for type %v", keyspace, ksf.Keyspace, ksf.TabletType)
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "inconsistent keypace specified in migration: %v != %v for type %v", keyspace, ksf.Keyspace, ksf.TabletType)
 		}
 	}
 

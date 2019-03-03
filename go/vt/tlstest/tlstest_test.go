@@ -80,20 +80,21 @@ func TestClientServer(t *testing.T) {
 	//
 	// Positive case: accept on server side, connect a client, send data.
 	//
-
+	var clientErr error
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		clientConn, err := tls.Dial("tcp", addr, clientConfig)
-		if err != nil {
-			t.Fatalf("Dial failed: %v", err)
+		clientConn, clientErr := tls.Dial("tcp", addr, clientConfig)
+		if clientErr == nil {
+			clientConn.Write([]byte{42})
+			clientConn.Close()
 		}
-
-		clientConn.Write([]byte{42})
-		clientConn.Close()
 	}()
 
 	serverConn, err := listener.Accept()
+	if clientErr != nil {
+		t.Fatalf("Dial failed: %v", clientErr)
+	}
 	if err != nil {
 		t.Fatalf("Accept failed: %v", err)
 	}
@@ -123,22 +124,25 @@ func TestClientServer(t *testing.T) {
 		t.Fatalf("TLSClientConfig failed: %v", err)
 	}
 
+	var serverErr error
 	wg.Add(1)
 	go func() {
 		// We expect the Accept to work, but the first read to fail.
 		defer wg.Done()
-		serverConn, err := listener.Accept()
-		if err != nil {
-			t.Fatalf("Connection failed: %v", err)
-		}
-
+		serverConn, serverErr := listener.Accept()
 		// This will fail.
-		result := make([]byte, 1)
-		if n, err := serverConn.Read(result); err == nil {
-			fmt.Printf("Was able to read from server: %v\n", n)
+		if serverErr == nil {
+			result := make([]byte, 1)
+			if n, err := serverConn.Read(result); err == nil {
+				fmt.Printf("Was able to read from server: %v\n", n)
+			}
+			serverConn.Close()
 		}
-		serverConn.Close()
 	}()
+
+	if serverErr != nil {
+		t.Fatalf("Connection failed: %v", serverErr)
+	}
 
 	// When using TLS 1.2, the Dial will fail.
 	// With TLS 1.3, the Dial will succeed and the first Read will fail.
