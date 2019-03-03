@@ -165,8 +165,8 @@ func KeyRangeEqual(left, right *topodatapb.KeyRange) bool {
 	if right == nil {
 		return len(left.Start) == 0 && len(left.End) == 0
 	}
-	return bytes.Compare(left.Start, right.Start) == 0 &&
-		bytes.Compare(left.End, right.End) == 0
+	return bytes.Equal(left.Start, right.Start) &&
+		bytes.Equal(left.End, right.End)
 }
 
 // KeyRangeStartEqual returns true if both key ranges have the same start
@@ -177,7 +177,7 @@ func KeyRangeStartEqual(left, right *topodatapb.KeyRange) bool {
 	if right == nil {
 		return len(left.Start) == 0
 	}
-	return bytes.Compare(left.Start, right.Start) == 0
+	return bytes.Equal(left.Start, right.Start)
 }
 
 // KeyRangeEndEqual returns true if both key ranges have the same end
@@ -188,7 +188,7 @@ func KeyRangeEndEqual(left, right *topodatapb.KeyRange) bool {
 	if right == nil {
 		return len(left.End) == 0
 	}
-	return bytes.Compare(left.End, right.End) == 0
+	return bytes.Equal(left.End, right.End)
 }
 
 // For more info on the following functions, see:
