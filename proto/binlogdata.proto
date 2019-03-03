@@ -231,3 +231,21 @@ message VStreamRequest {
 message VStreamResponse {
   repeated VEvent events = 1;
 }
+
+// VStreamRowsRequest is the payload for VStreamRows
+message VStreamRowsRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  query.VTGateCallerID immediate_caller_id = 2;
+  query.Target target = 3;
+
+  string query = 4;
+  repeated query.Value lastpk = 5;
+}
+
+// VStreamRowsResponse is the response from VStreamRows
+message VStreamRowsResponse {
+  repeated query.Field fields = 1;
+  repeated query.Field pkfields = 2;
+  repeated query.Row rows = 3;
+  query.Row lastpk = 4;
+}

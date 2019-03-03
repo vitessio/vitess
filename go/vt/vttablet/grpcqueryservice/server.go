@@ -392,6 +392,19 @@ func (q *query) VStream(request *binlogdatapb.VStreamRequest, stream queryservic
 	return nil
 }
 
+// VStreamRows is part of the queryservice.QueryServer interface
+func (q *query) VStreamRows(request *binlogdatapb.VStreamRowsRequest, stream queryservicepb.Query_VStreamRowsServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	if err := q.server.VStreamRows(ctx, request.Target, request.Query, request.Lastpk, stream.Send); err != nil {
+		return vterrors.ToGRPC(err)
+	}
+	return nil
+}
+
 // Register registers the implementation on the provide gRPC Server.
 func Register(s *grpc.Server, server queryservice.QueryService) {
 	queryservicepb.RegisterQueryServer(s, &query{server})
