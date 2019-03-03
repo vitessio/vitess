@@ -105,7 +105,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	}
 	expiry = time.Now().Add(5 * time.Second)
 	for {
-		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
+		_, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 		if topo.IsErrType(err, topo.NoNode) {
 			break
 		}
@@ -138,7 +138,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	// Now simulate a topo service error and see that the last value is
 	// cached for at least half of the expected ttl.
 	errorTestStart := time.Now()
-	errorReqsBefore, _ := rs.counts.Counts()[errorCategory]
+	errorReqsBefore := rs.counts.Counts()[errorCategory]
 	forceErr := fmt.Errorf("test topo error")
 	factory.SetError(forceErr)
 
@@ -234,7 +234,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	// Check that the expected number of errors were counted during the
 	// interval
-	errorReqs, _ := rs.counts.Counts()[errorCategory]
+	errorReqs := rs.counts.Counts()[errorCategory]
 	expectedErrors := int64(time.Since(errorTestStart) / *srvTopoCacheRefresh)
 	if errorReqs-errorReqsBefore > expectedErrors {
 		t.Errorf("expected <= %v error requests got %d", expectedErrors, errorReqs-errorReqsBefore)
