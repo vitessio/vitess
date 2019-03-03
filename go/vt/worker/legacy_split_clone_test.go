@@ -251,7 +251,7 @@ func (sq *legacyTestQueryService) StreamExecute(ctx context.Context, target *que
 				return err
 			}
 		} else if strings.HasPrefix(part, "`id`<") {
-			max, err = strconv.Atoi(part[5:])
+			max, _ = strconv.Atoi(part[5:])
 		}
 	}
 	sq.t.Logf("legacyTestQueryService: got query: %v with min %v max %v", sql, min, max)
@@ -466,6 +466,7 @@ func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
 	// is too late because this Go routine potentially reads it before the worker
 	// resets the old value.
 	statsRetryCounters.ResetAll()
+	var err error
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -477,7 +478,7 @@ func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
 
 			select {
 			case <-ctx.Done():
-				t.Fatalf("timed out waiting for vtworker to retry due to NoMasterAvailable: %v", ctx.Err())
+				err = ctx.Err()
 			case <-time.After(10 * time.Millisecond):
 				// Poll constantly.
 			}
@@ -489,6 +490,9 @@ func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
 		tc.leftReplicaQs.AddDefaultHealthResponse()
 	}()
 
+	if err != nil {
+		t.Fatalf("timed out waiting for vtworker to retry due to NoMasterAvailable: %v", err)
+	}
 	// Only wait 1 ms between retries, so that the test passes faster.
 	*executeFetchRetryTime = 1 * time.Millisecond
 

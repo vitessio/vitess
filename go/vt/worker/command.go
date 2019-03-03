@@ -145,7 +145,8 @@ func (wi *Instance) RunCommand(ctx context.Context, args []string, wr *wrangler.
 // WaitForCommand blocks until "done" is closed. In the meantime, it logs the status of "wrk".
 func (wi *Instance) WaitForCommand(wrk Worker, done chan struct{}) error {
 	// display the status every second
-	timer := time.Tick(wi.commandDisplayInterval)
+	timer := time.NewTicker(wi.commandDisplayInterval)
+	defer timer.Stop()
 	for {
 		select {
 		case <-done:
@@ -157,7 +158,7 @@ func (wi *Instance) WaitForCommand(wrk Worker, done chan struct{}) error {
 				return err
 			}
 			return nil
-		case <-timer:
+		case <-timer.C:
 			log.Info(wrk.StatusAsText())
 		}
 	}
