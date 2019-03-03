@@ -919,6 +919,8 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 			t.Fatalf("%v: evs\n%v, want\n%v", input, evs, wantset)
 		}
 		for i, want := range wantset {
+			// CurrentTime is not testable.
+			evs[i].CurrentTime = 0
 			switch want {
 			case "gtid|begin":
 				if evs[i].Type != binlogdatapb.VEventType_GTID && evs[i].Type != binlogdatapb.VEventType_BEGIN {
