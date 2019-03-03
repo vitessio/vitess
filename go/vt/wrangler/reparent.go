@@ -218,7 +218,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 			defer wg.Done()
 			wr.logger.Infof("resetting replication on tablet %v", alias)
 			if err := wr.tmc.ResetReplication(resetCtx, tabletInfo.Tablet); err != nil {
-				rec.RecordError(fmt.Errorf("Tablet %v ResetReplication failed (either fix it, or Scrap it): %v", alias, err))
+				rec.RecordError(fmt.Errorf("tablet %v ResetReplication failed (either fix it, or Scrap it): %v", alias, err))
 			}
 		}(alias, tabletInfo)
 	}
@@ -277,7 +277,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 				defer wgSlaves.Done()
 				wr.logger.Infof("initializing slave %v", alias)
 				if err := wr.tmc.InitSlave(replCtx, tabletInfo.Tablet, masterElectTabletAlias, rp, now); err != nil {
-					rec.RecordError(fmt.Errorf("Tablet %v InitSlave failed: %v", alias, err))
+					rec.RecordError(fmt.Errorf("tablet %v InitSlave failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)
 		}
@@ -480,7 +480,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 				// also restart replication on old master
 				forceStartSlave := alias == oldMasterTabletInfoAliasStr
 				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, forceStartSlave); err != nil {
-					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", alias, err))
+					rec.RecordError(fmt.Errorf("tablet %v SetMaster failed: %v", alias, err))
 					return
 				}
 			}(alias, tabletInfo)
@@ -776,7 +776,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 					forceStartSlave = status.SlaveIoRunning || status.SlaveSqlRunning
 				}
 				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, forceStartSlave); err != nil {
-					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", alias, err))
+					rec.RecordError(fmt.Errorf("tablet %v SetMaster failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)
 		}

@@ -68,7 +68,7 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 		// If the shard already has sources, maybe it's already been restored,
 		// so let's be safe and abort right here.
 		if len(si.SourceShards) > 0 {
-			return fmt.Errorf("Shard %v/%v already has SourceShards, not overwriting them (full record: %v)", keyspace, shard, *si.Shard)
+			return fmt.Errorf("shard %v/%v already has SourceShards, not overwriting them (full record: %v)", keyspace, shard, *si.Shard)
 		}
 
 		si.SourceShards = sourceShards

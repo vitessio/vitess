@@ -405,7 +405,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg Gateway, target *queryp
 	// tablet without connection
 	hc.Reset()
 	dg.tsc.ResetForTesting()
-	ep1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil).Tablet()
+	_ = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil).Tablet()
 	err = f(dg, target)
 	verifyShardErrors(t, err, want, vtrpcpb.Code_UNAVAILABLE)
 
@@ -416,7 +416,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg Gateway, target *queryp
 	sc2 := hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	ep1 = sc1.Tablet()
+	ep1 := sc1.Tablet()
 	ep2 := sc2.Tablet()
 
 	err = f(dg, target)
@@ -486,7 +486,7 @@ func testDiscoveryGatewayTransact(t *testing.T, f func(dg Gateway, target *query
 	format := `used tablet: %s`
 	verifyShardErrorEither(t, err,
 		fmt.Sprintf(format, topotools.TabletIdent(ep1)),
-		fmt.Sprintf(format, topotools.TabletIdent(ep2)), )
+		fmt.Sprintf(format, topotools.TabletIdent(ep2)))
 
 	// server error - no retry
 	hc.Reset()
