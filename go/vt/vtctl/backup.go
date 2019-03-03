@@ -127,6 +127,7 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		}
 	}
 
+	// if no other tablet is available and allowMaster is set to true
 	if tabletForBackup == nil && *allowMaster {
 		for i := range tablets {
 			switch tablets[i].Type {
