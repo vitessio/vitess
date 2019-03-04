@@ -43,10 +43,11 @@ var createMessage = `create table vitess_message(
 comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
 func TestMessage(t *testing.T) {
+	var err error
 	ch := make(chan *sqltypes.Result)
 	done := make(chan struct{})
 	client := framework.NewClient()
-	if _, err := client.Execute(createMessage, nil); err != nil {
+	if _, err = client.Execute(createMessage, nil); err != nil {
 		t.Fatal(err)
 	}
 	defer client.Execute("drop table vitess_message", nil)
@@ -60,7 +61,7 @@ func TestMessage(t *testing.T) {
 
 	// Start goroutine to consume message stream.
 	go func() {
-		if err := client.MessageStream("vitess_message", func(qr *sqltypes.Result) error {
+		err = client.MessageStream("vitess_message", func(qr *sqltypes.Result) error {
 			select {
 			case <-done:
 				return io.EOF
@@ -68,11 +69,12 @@ func TestMessage(t *testing.T) {
 			}
 			ch <- qr
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
 		close(ch)
 	}()
+	if err != nil {
+		t.Fatal(err)
+	}
 	got := <-ch
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
@@ -93,7 +95,7 @@ func TestMessage(t *testing.T) {
 	defer func() { close(done) }()
 
 	// Create message.
-	err := client.Begin(false)
+	err = client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
@@ -240,16 +242,17 @@ var createThreeColMessage = `create table vitess_message3(
 comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
 func TestThreeColMessage(t *testing.T) {
+	var err error
 	ch := make(chan *sqltypes.Result)
 	done := make(chan struct{})
 	client := framework.NewClient()
-	if _, err := client.Execute(createThreeColMessage, nil); err != nil {
+	if _, err = client.Execute(createThreeColMessage, nil); err != nil {
 		t.Fatal(err)
 	}
 	defer client.Execute("drop table vitess_message3", nil)
 
 	go func() {
-		if err := client.MessageStream("vitess_message3", func(qr *sqltypes.Result) error {
+		err = client.MessageStream("vitess_message3", func(qr *sqltypes.Result) error {
 			select {
 			case <-done:
 				return io.EOF
@@ -257,11 +260,12 @@ func TestThreeColMessage(t *testing.T) {
 			}
 			ch <- qr
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
 		close(ch)
 	}()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Verify fields.
 	got := <-ch
@@ -285,7 +289,7 @@ func TestThreeColMessage(t *testing.T) {
 	}
 	runtime.Gosched()
 	defer func() { close(done) }()
-	err := client.Begin(false)
+	err = client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
@@ -349,17 +353,18 @@ comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=1,vt_cache_
 
 // TestMessageAuto tests for the case where id is an auto-inc column.
 func TestMessageAuto(t *testing.T) {
+	var err error
 	ch := make(chan *sqltypes.Result)
 	done := make(chan struct{})
 	client := framework.NewClient()
-	if _, err := client.Execute(createMessageAuto, nil); err != nil {
+	if _, err = client.Execute(createMessageAuto, nil); err != nil {
 		t.Fatal(err)
 	}
 	defer client.Execute("drop table vitess_message_auto", nil)
 
 	// Start goroutine to consume message stream.
 	go func() {
-		if err := client.MessageStream("vitess_message_auto", func(qr *sqltypes.Result) error {
+		err = client.MessageStream("vitess_message_auto", func(qr *sqltypes.Result) error {
 			select {
 			case <-done:
 				return io.EOF
@@ -367,16 +372,17 @@ func TestMessageAuto(t *testing.T) {
 			}
 			ch <- qr
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
 		close(ch)
 	}()
+	if err != nil {
+		t.Fatal(err)
+	}
 	<-ch
 	defer func() { close(done) }()
 
 	// Create message.
-	err := client.Begin(false)
+	err = client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return

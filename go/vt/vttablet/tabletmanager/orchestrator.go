@@ -156,7 +156,7 @@ func (orc *orcClient) InActiveShardRecovery(tablet *topodatapb.Tablet) (bool, er
 	active, ok := r[0]["IsActive"].(bool)
 
 	if !ok {
-		return false, fmt.Errorf("Error parsing JSON response from Orchestrator")
+		return false, fmt.Errorf("error parsing JSON response from Orchestrator")
 	}
 	return active, nil
 }

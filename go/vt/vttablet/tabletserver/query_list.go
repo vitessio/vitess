@@ -118,7 +118,7 @@ func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
 			Query:       qd.conn.Current(),
 			ContextHTML: callinfo.HTMLFromContext(qd.ctx),
 			Start:       qd.start,
-			Duration:    time.Now().Sub(qd.start),
+			Duration:    time.Since(qd.start),
 			ConnID:      qd.connID,
 		}
 		rows = append(rows, row)
