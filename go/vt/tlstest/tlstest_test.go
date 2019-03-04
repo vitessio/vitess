@@ -140,10 +140,6 @@ func TestClientServer(t *testing.T) {
 		}
 	}()
 
-	if serverErr != nil {
-		t.Fatalf("Connection failed: %v", serverErr)
-	}
-
 	// When using TLS 1.2, the Dial will fail.
 	// With TLS 1.3, the Dial will succeed and the first Read will fail.
 	clientConn, err := tls.Dial("tcp", addr, badClientConfig)
@@ -153,6 +149,11 @@ func TestClientServer(t *testing.T) {
 		}
 		return
 	}
+	wg.Wait()
+	if serverErr != nil {
+		t.Fatalf("Connection failed: %v", serverErr)
+	}
+
 	data := make([]byte, 1)
 	_, err = clientConn.Read(data)
 	if err == nil {
