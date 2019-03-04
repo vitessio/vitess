@@ -414,7 +414,7 @@ func main() {
 	flaky := 0
 
 	// Listen for signals.
-	sigchan := make(chan os.Signal)
+	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGINT)
 
 	// Run tests.
@@ -563,7 +563,7 @@ func main() {
 	}
 
 	// Print summary.
-	log.Printf(strings.Repeat("=", 60))
+	log.Print(strings.Repeat("=", 60))
 	for _, t := range tests {
 		tname := t.flavor + "." + t.name
 		switch {
@@ -577,7 +577,7 @@ func main() {
 			log.Printf("%-40s\tSKIPPED", tname)
 		}
 	}
-	log.Printf(strings.Repeat("=", 60))
+	log.Print(strings.Repeat("=", 60))
 	skipped := len(tests) - passed - flaky - failed
 	log.Printf("%v PASSED, %v FLAKY, %v FAILED, %v SKIPPED", passed, flaky, failed, skipped)
 	log.Printf("Total time: %v", round(time.Since(startTime)))

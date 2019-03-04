@@ -306,10 +306,8 @@ func (te *TxEngine) unknownStateError() error {
 }
 
 func (te *TxEngine) blockUntilEndOfTransition() error {
-	select {
-	case <-te.transitionSignal:
-		return nil
-	}
+	<-te.transitionSignal
+	return nil
 }
 
 func (te *TxEngine) transitionTo(nextState txEngineState) error {

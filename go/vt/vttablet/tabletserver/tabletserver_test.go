@@ -233,14 +233,14 @@ func TestDecideAction(t *testing.T) {
 	}
 
 	tsv.setState(StateTransitioning)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
+	_, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	want := "cannot SetServingType"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("decideAction: %v, must contain %s", err, want)
 	}
 
 	tsv.setState(StateShuttingDown)
-	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
+	_, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
 	want = "cannot SetServingType"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("decideAction: %v, must contain %s", err, want)
@@ -1919,7 +1919,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 
 	wg.Wait()
 
-	got, _ := tabletenv.WaitStats.Counts()["TxSerializer"]
+	got := tabletenv.WaitStats.Counts()["TxSerializer"]
 	want := countStart + 0
 	if got != want {
 		t.Fatalf("tx2 should have failed early and not tracked as serialized: got: %v want: %v", got, want)
@@ -2013,7 +2013,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 
 	wg.Wait()
 
-	got, _ := tabletenv.WaitStats.Counts()["TxSerializer"]
+	got := tabletenv.WaitStats.Counts()["TxSerializer"]
 	want := countStart + 0
 	if got != want {
 		t.Fatalf("tx2 should have failed early and not tracked as serialized: got: %v want: %v", got, want)
