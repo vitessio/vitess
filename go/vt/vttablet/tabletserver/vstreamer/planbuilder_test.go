@@ -67,6 +67,83 @@ func init() {
 	testKSChema = kschema
 }
 
+/*
+func TestBuildSelect(t *testing.T) {
+	t1 := &Table{
+		TableMap: &mysql.TableMap{
+			Name: "t1",
+		},
+		Columns: []schema.TableColumn{{
+			Name: sqlparser.NewColIdent("v1"),
+			Type: sqltypes.Int64,
+		}, {
+			Name: sqlparser.NewColIdent("v2"),
+			Type: sqltypes.VarBinary,
+		}, {
+			Name: sqlparser.NewColIdent("v3"),
+			Type: sqltypes.VarBinary,
+		}},
+		PKColumns: []int{0},
+	}
+	t2 := &Table{
+		TableMap: &mysql.TableMap{
+			Name: "t2",
+		},
+		Columns: []schema.TableColumn{{
+			Name: sqlparser.NewColIdent("v1"),
+			Type: sqltypes.Int64,
+		}, {
+			Name: sqlparser.NewColIdent("v2"),
+			Type: sqltypes.VarBinary,
+		}, {
+			Name: sqlparser.NewColIdent("v3"),
+			Type: sqltypes.VarBinary,
+		}},
+		PKColumns: []int{0, 1},
+	}
+
+	testcases := []struct {
+		inTable   *Table
+		inValues  []sqltypes.Value
+		outSelect string
+		outErr    string
+	}{{
+		inTable:   t1,
+		inValues:  nil,
+		outSelect: "select v1, v2, v3 from t1 order by v1",
+	}, {
+		inTable:   t2,
+		inValues:  nil,
+		outSelect: "select v1, v2, v3 from t2 order by v1, v2",
+	}, {
+		inTable:   t1,
+		inValues:  []sqltypes.Value{sqltypes.NewInt64(1)},
+		outSelect: "select v1, v2, v3 from t1 v1 > 1 order by v1",
+	}, {
+		inTable:   t2,
+		inValues:  []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
+		outSelect: "select v1, v2, v3 from t2 v1 >= 1 and v2 > 2 order by v1, v2",
+	}, {
+		inTable:  t2,
+		inValues: []sqltypes.Value{sqltypes.NewInt64(1)},
+		outErr:   "primary key values don't match length: [INT64(1)] vs [0 1]",
+	}}
+	for _, tcase := range testcases {
+		got, err := tcase.inTable.buildSelect(tcase.inValues)
+		gotErr := ""
+		if err != nil {
+			gotErr = err.Error()
+		}
+		if gotErr != tcase.outErr {
+			t.Errorf("buildSelect(%v, %v) err: %v, want %v", tcase.inTable, tcase.inValues, err, tcase.outErr)
+		}
+		if got != tcase.outSelect {
+			t.Errorf("buildSelect(%v, %v): %v, want %v", tcase.inTable, tcase.inValues, got, tcase.outSelect)
+		}
+	}
+}
+*/
+
 func TestMustSendDDL(t *testing.T) {
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -150,9 +227,7 @@ func TestMustSendDDL(t *testing.T) {
 
 func TestPlanbuilder(t *testing.T) {
 	t1 := &Table{
-		TableMap: &mysql.TableMap{
-			Name: "t1",
-		},
+		Name: "t1",
 		Columns: []schema.TableColumn{{
 			Name: sqlparser.NewColIdent("id"),
 			Type: sqltypes.Int64,
@@ -163,18 +238,14 @@ func TestPlanbuilder(t *testing.T) {
 	}
 	// t1alt has no id column
 	t1alt := &Table{
-		TableMap: &mysql.TableMap{
-			Name: "t1",
-		},
+		Name: "t1",
 		Columns: []schema.TableColumn{{
 			Name: sqlparser.NewColIdent("val"),
 			Type: sqltypes.VarBinary,
 		}},
 	}
 	t2 := &Table{
-		TableMap: &mysql.TableMap{
-			Name: "t2",
-		},
+		Name: "t2",
 		Columns: []schema.TableColumn{{
 			Name: sqlparser.NewColIdent("id"),
 			Type: sqltypes.Int64,
@@ -420,6 +491,8 @@ func TestPlanbuilder(t *testing.T) {
 			if !reflect.DeepEqual(tcase.outPlan, plan) {
 				t.Errorf("Plan(%v, %v):\n%v, want\n%v", tcase.inTable, tcase.inRule, plan, tcase.outPlan)
 			}
+		} else if tcase.outPlan != nil {
+			t.Errorf("Plan(%v, %v):\nnil, want\n%v", tcase.inTable, tcase.inRule, tcase.outPlan)
 		}
 		gotErr := ""
 		if err != nil {
