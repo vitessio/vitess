@@ -466,7 +466,7 @@ func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
 	// is too late because this Go routine potentially reads it before the worker
 	// resets the old value.
 	statsRetryCounters.ResetAll()
-	var err error
+	errs := make(chan error, 1)
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -478,7 +478,9 @@ func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
 
 			select {
 			case <-ctx.Done():
-				err = ctx.Err()
+				errs <- ctx.Err()
+				close(errs)
+				return
 			case <-time.After(10 * time.Millisecond):
 				// Poll constantly.
 			}
@@ -488,17 +490,20 @@ func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
 		tc.leftReplica.Agent.TabletExternallyReparented(ctx, "1")
 		tc.leftReplicaQs.UpdateType(topodatapb.TabletType_MASTER)
 		tc.leftReplicaQs.AddDefaultHealthResponse()
+		errs <- nil
+		close(errs)
 	}()
 
-	if err != nil {
-		t.Fatalf("timed out waiting for vtworker to retry due to NoMasterAvailable: %v", err)
-	}
 	// Only wait 1 ms between retries, so that the test passes faster.
 	*executeFetchRetryTime = 1 * time.Millisecond
 
 	// Run the vtworker command.
 	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
 		t.Fatal(err)
+	}
+	err := <-errs
+	if err != nil {
+		t.Fatalf("timed out waiting for vtworker to retry due to NoMasterAvailable: %v", err)
 	}
 }
 
