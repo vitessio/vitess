@@ -175,7 +175,7 @@ func TestRegexp(t *testing.T) {
 	runCases(t, filter, testcases)
 }
 
-func TestREKeyrange(t *testing.T) {
+func TestREKeyRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
