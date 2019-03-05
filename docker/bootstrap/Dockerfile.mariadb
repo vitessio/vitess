@@ -1,9 +1,7 @@
 FROM vitess/bootstrap:common
 
-# Install MariaDB 10.3
-RUN apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 0xF1656F24C74CD1D8 \
- && echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.3/debian stretch main' > /etc/apt/sources.list.d/mariadb.list \
- && apt-get update \
+# Install MariaDB 10
+RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       bzip2 \
       mariadb-server \
