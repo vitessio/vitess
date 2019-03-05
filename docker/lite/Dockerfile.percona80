@@ -22,14 +22,22 @@ FROM debian:stretch-slim
 
 # Install dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg dirmngr ca-certificates \
- && apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 0xF1656F24C74CD1D8 \
- && echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.2/debian stretch main' > /etc/apt/sources.list.d/mariadb.list \
- && apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      bzip2 \
-      mariadb-server \
- && rm -rf /var/lib/apt/lists/* \
- && groupadd -r vitess && useradd -r -g vitess vitess
+    && apt-key adv --no-tty --recv-keys --keyserver keys.gnupg.net 9334A25F8507EFA5 \
+    && echo 'deb http://repo.percona.com/ps-80/apt stretch main' > /etc/apt/sources.list.d/percona.list && \
+    { \
+        echo debconf debconf/frontend select Noninteractive; \
+        echo percona-server-server-8.0 percona-server-server/root_password password 'unused'; \
+        echo percona-server-server-8.0 percona-server-server/root_password_again password 'unused'; \
+    } | debconf-set-selections \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        percona-server-server \
+	libperconaserverclient21 \
+	percona-server-tokudb \
+	percona-server-rocksdb \
+	bzip2 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r vitess && useradd -r -g vitess vitess
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTTOP /vt/src/vitess.io/vitess
@@ -41,6 +49,7 @@ ENV GOPATH $VTROOT
 ENV PATH $VTROOT/bin:$PATH
 ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
+
 
 # Copy binaries (placed by build.sh)
 COPY --from=staging /vt/ /vt/

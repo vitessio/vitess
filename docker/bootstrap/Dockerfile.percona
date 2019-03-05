@@ -1,7 +1,7 @@
 FROM vitess/bootstrap:common
 
 # Install Percona 5.6
-RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --recv-keys 8507EFA5 && break; done && \
+RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --recv-keys 9334A25F8507EFA5 && break; done && \
     add-apt-repository 'deb http://repo.percona.com/apt stretch main' && \
     { \
         echo debconf debconf/frontend select Noninteractive; \
