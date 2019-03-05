@@ -21,15 +21,17 @@ RUN chown -R vitess:vitess /vt
 FROM debian:stretch-slim
 
 # Install dependencies
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg dirmngr ca-certificates \
- && apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 0xF1656F24C74CD1D8 \
- && echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.2/debian stretch main' > /etc/apt/sources.list.d/mariadb.list \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg dirmngr ca-certificates && apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 8C718D3B5072E1F5 \
+ && echo 'deb http://repo.mysql.com/apt/debian/ stretch mysql-8.0' > /etc/apt/sources.list.d/mysql.list \
  && apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+ && DEBIAN_FRONTEND=noninteractive \
+    apt-get install -y --no-install-recommends \
       bzip2 \
-      mariadb-server \
- && rm -rf /var/lib/apt/lists/* \
- && groupadd -r vitess && useradd -r -g vitess vitess
+      libmysqlclient21 \
+      mysql-client \
+      mysql-server \
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd -r vitess && useradd -r -g vitess vitess
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTTOP /vt/src/vitess.io/vitess

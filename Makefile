@@ -160,7 +160,7 @@ $(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
 # Please read docker/README.md to understand the different available images.
 
 # This rule builds the bootstrap images for all flavors.
-DOCKER_IMAGES_FOR_TEST = mariadb mysql56 mysql57 percona percona57
+DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql56 mysql57 mysql80 percona percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
 docker_bootstrap:
 	for i in $(DOCKER_IMAGES); do echo "building bootstrap image: $$i"; docker/bootstrap/build.sh $$i || exit 1; done
@@ -184,9 +184,17 @@ docker_base_mysql56:
 	chmod -R o=g *
 	docker build -f docker/base/Dockerfile.mysql56 -t vitess/base:mysql56 .
 
+docker_base_mysql80:
+	chmod -R o=g *
+	docker build -f docker/base/Dockerfile.mysql56 -t vitess/base:mysql80 .
+
 docker_base_mariadb:
 	chmod -R o=g *
 	docker build -f docker/base/Dockerfile.mariadb -t vitess/base:mariadb .
+
+docker_base_mariadb103:
+	chmod -R o=g *
+	docker build -f docker/base/Dockerfile.mariadb -t vitess/base:mariadb103 .
 
 docker_base_percona:
 	chmod -R o=g *
@@ -195,6 +203,10 @@ docker_base_percona:
 docker_base_percona57:
 	chmod -R o=g *
 	docker build -f docker/base/Dockerfile.percona57 -t vitess/base:percona57 .
+
+docker_base_percona80:
+	chmod -R o=g *
+	docker build -f docker/base/Dockerfile.percona57 -t vitess/base:percona80 .
 
 # Run "make docker_lite PROMPT_NOTICE=false" to avoid that the script
 # prompts you to press ENTER and confirm that the vitess/base image is not
@@ -205,14 +217,26 @@ docker_lite:
 docker_lite_mysql56:
 	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mysql56
 
+docker_lite_mysql57:
+	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mysql57
+
+docker_lite_mysql80:
+	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mysql80
+
 docker_lite_mariadb:
 	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mariadb
+
+docker_lite_mariadb103:
+	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mariadb103
 
 docker_lite_percona:
 	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) percona
 
 docker_lite_percona57:
 	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) percona57
+
+docker_lite_percona80:
+	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) percona80
 
 docker_lite_alpine:
 	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) alpine
