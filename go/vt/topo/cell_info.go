@@ -140,8 +140,7 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string) error {
 	switch {
 	case err == nil:
 		if len(srvKeyspaces) != 0 {
-			// TODO @rafael - implement this function and expose it via a vtctld command
-			return fmt.Errorf("cell %v has serving keyspaces. Before deleting, delete serving keyspace with: DeleteSrvKeyspaces", cell)
+			return fmt.Errorf("cell %v has serving keyspaces. Before deleting, delete keyspace with: DeleteKeyspace", cell)
 		}
 	case IsErrType(err, NoNode):
 		// Nothing to do.
