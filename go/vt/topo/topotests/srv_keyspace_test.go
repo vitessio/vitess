@@ -24,6 +24,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
+	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -235,4 +237,348 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 
 	// Cancel should still work here, although it does nothing.
 	cancel()
+}
+
+func TestUpdateSrvKeyspacePartitions(t *testing.T) {
+	cell := "cell1"
+	cell2 := "cell2"
+	keyspace := "ks1"
+	ctx := context.Background()
+	ts := memorytopo.NewServer(cell, cell2)
+
+	keyRange, err := key.ParseShardingSpec("-")
+	if err != nil || len(keyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+	}
+	// Create initial value
+	initial := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType: topodatapb.TabletType_MASTER,
+				ShardReferences: []*topodatapb.ShardReference{
+					&topodatapb.ShardReference{
+						Name:     "-",
+						KeyRange: keyRange[0],
+					},
+				},
+			},
+		},
+	}
+
+	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, initial); err != nil {
+		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	}
+
+	if err := ts.UpdateSrvKeyspace(ctx, cell2, keyspace, initial); err != nil {
+		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	}
+
+	ks := &topodatapb.Keyspace{}
+	if err := ts.CreateKeyspace(ctx, keyspace, ks); err != nil {
+		t.Fatalf("CreateKeyspace() failed: %v", err)
+	}
+
+	leftKeyRange, err := key.ParseShardingSpec("-80")
+	if err != nil || len(leftKeyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
+	}
+
+	rightKeyRange, err := key.ParseShardingSpec("80-")
+	if err != nil || len(leftKeyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
+	}
+
+	wantSrvKeyspace := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType: topodatapb.TabletType_MASTER,
+				ShardReferences: []*topodatapb.ShardReference{
+					&topodatapb.ShardReference{
+						Name:     "-",
+						KeyRange: keyRange[0],
+					},
+					&topodatapb.ShardReference{
+						Name:     "-80",
+						KeyRange: leftKeyRange[0],
+					},
+					&topodatapb.ShardReference{
+						Name:     "80-",
+						KeyRange: rightKeyRange[0],
+					},
+				},
+			},
+		},
+	}
+
+	shards := []*topo.ShardInfo{
+		topo.NewShardInfo(keyspace, "-80", &topodatapb.Shard{KeyRange: leftKeyRange[0]}, nil),
+		topo.NewShardInfo(keyspace, "80-", &topodatapb.Shard{KeyRange: rightKeyRange[0]}, nil),
+	}
+
+	ctx, unlock, err := ts.LockKeyspace(ctx, keyspace, "Locking for tests")
+	if err != nil {
+		t.Fatalf("LockKeyspace() failed: %v", err)
+	}
+	defer unlock(&err)
+
+	if err := ts.UpdateSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_MASTER, []string{cell}, false /* remove */); err != nil {
+		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	}
+
+	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
+	if err != nil {
+		t.Fatalf("GetSrvKeyspace() failed: %v", err)
+	}
+
+	got, err := json2.MarshalPB(srvKeyspace)
+	if err != nil {
+		t.Fatalf("MarshalPB() failed: %v", err)
+	}
+
+	want, err := json2.MarshalPB(wantSrvKeyspace)
+	if err != nil {
+		t.Fatalf("MarshalPB() failed: %v", err)
+	}
+
+	if string(got) != string(want) {
+		t.Errorf("UpdateSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+	}
+
+	// removing works
+	wantSrvKeyspace = &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType: topodatapb.TabletType_MASTER,
+				ShardReferences: []*topodatapb.ShardReference{
+					&topodatapb.ShardReference{
+						Name:     "-",
+						KeyRange: keyRange[0],
+					},
+				},
+			},
+		},
+	}
+
+	if err = ts.UpdateSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_MASTER, []string{cell}, true /* remove */); err != nil {
+		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	}
+
+	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
+	if err != nil {
+		t.Fatalf("GetSrvKeyspace() failed: %v", err)
+	}
+
+	got, err = json2.MarshalPB(srvKeyspace)
+	if err != nil {
+		t.Fatalf("MarshalPB() failed: %v", err)
+	}
+
+	want, err = json2.MarshalPB(wantSrvKeyspace)
+	if err != nil {
+		t.Fatalf("MarshalPB() failed: %v", err)
+	}
+
+	if string(got) != string(want) {
+		t.Errorf("UpdateSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+	}
+
+	// You can add to partitions that do not exist
+	wantSrvKeyspace = &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType: topodatapb.TabletType_MASTER,
+				ShardReferences: []*topodatapb.ShardReference{
+					&topodatapb.ShardReference{
+						Name:     "-",
+						KeyRange: keyRange[0],
+					},
+				},
+			},
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType: topodatapb.TabletType_REPLICA,
+				ShardReferences: []*topodatapb.ShardReference{
+					&topodatapb.ShardReference{
+						Name:     "-80",
+						KeyRange: leftKeyRange[0],
+					},
+					&topodatapb.ShardReference{
+						Name:     "80-",
+						KeyRange: rightKeyRange[0],
+					},
+				},
+			},
+		},
+	}
+
+	if err = ts.UpdateSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_REPLICA, []string{cell}, false /* remove */); err != nil {
+		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	}
+
+	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
+	if err != nil {
+		t.Fatalf("GetSrvKeyspace() failed: %v", err)
+	}
+
+	got, err = json2.MarshalPB(srvKeyspace)
+	if err != nil {
+		t.Fatalf("MarshalPB() failed: %v", err)
+	}
+
+	want, err = json2.MarshalPB(wantSrvKeyspace)
+	if err != nil {
+		t.Fatalf("MarshalPB() failed: %v", err)
+	}
+
+	if string(got) != string(want) {
+		t.Errorf("UpdateSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+	}
+
+	// it works in multiple cells
+
+	if err = ts.UpdateSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_REPLICA, nil, false /* remove */); err != nil {
+		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	}
+
+	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
+	if err != nil {
+		t.Fatalf("GetSrvKeyspace() failed: %v", err)
+	}
+
+	got, err = json2.MarshalPB(srvKeyspace)
+	if err != nil {
+		t.Fatalf("MarshalPB() failed: %v", err)
+	}
+
+	want, err = json2.MarshalPB(wantSrvKeyspace)
+	if err != nil {
+		t.Fatalf("MarshalPB() failed: %v", err)
+	}
+
+	if string(got) != string(want) {
+		t.Errorf("UpdateSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+	}
+
+	// Now let's get the srvKeyspace in cell2. Partition should have been added there too.
+	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell2, keyspace)
+	if err != nil {
+		t.Fatalf("GetSrvKeyspace() failed: %v", err)
+	}
+
+	if string(got) != string(want) {
+		t.Errorf("UpdateSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+	}
+
+}
+
+func TestUpdateUpdateDisableQueryService(t *testing.T) {
+	cell := "cell1"
+	cell2 := "cell2"
+	keyspace := "ks1"
+	ctx := context.Background()
+	ts := memorytopo.NewServer(cell, cell2)
+
+	leftKeyRange, err := key.ParseShardingSpec("-80")
+	if err != nil || len(leftKeyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
+	}
+
+	rightKeyRange, err := key.ParseShardingSpec("80-")
+	if err != nil || len(rightKeyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
+	}
+	// Create initial value
+	initial := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType: topodatapb.TabletType_MASTER,
+				ShardReferences: []*topodatapb.ShardReference{
+					&topodatapb.ShardReference{
+						Name:     "-80",
+						KeyRange: leftKeyRange[0],
+					},
+					&topodatapb.ShardReference{
+						Name:     "80-",
+						KeyRange: rightKeyRange[0],
+					},
+				},
+			},
+		},
+	}
+
+	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, initial); err != nil {
+		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	}
+
+	if err := ts.UpdateSrvKeyspace(ctx, cell2, keyspace, initial); err != nil {
+		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	}
+
+	ks := &topodatapb.Keyspace{}
+	if err := ts.CreateKeyspace(ctx, keyspace, ks); err != nil {
+		t.Fatalf("CreateKeyspace() failed: %v", err)
+	}
+
+	wantSrvKeyspace := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			&topodatapb.SrvKeyspace_KeyspacePartition{
+				ServedType: topodatapb.TabletType_MASTER,
+				ShardReferences: []*topodatapb.ShardReference{
+					&topodatapb.ShardReference{
+						Name:     "-80",
+						KeyRange: leftKeyRange[0],
+					},
+					&topodatapb.ShardReference{
+						Name:     "80-",
+						KeyRange: rightKeyRange[0],
+					},
+				},
+				ShardTabletControls: []*topodatapb.ShardTabletControl{
+					&topodatapb.ShardTabletControl{
+						Name:                 "-80",
+						KeyRange:             leftKeyRange[0],
+						QueryServiceDisabled: true,
+					},
+					&topodatapb.ShardTabletControl{
+						Name:                 "80-",
+						KeyRange:             rightKeyRange[0],
+						QueryServiceDisabled: true,
+					},
+				},
+			},
+		},
+	}
+
+	shards := []*topo.ShardInfo{
+		topo.NewShardInfo(keyspace, "-80", &topodatapb.Shard{KeyRange: leftKeyRange[0]}, nil),
+		topo.NewShardInfo(keyspace, "80-", &topodatapb.Shard{KeyRange: rightKeyRange[0]}, nil),
+	}
+
+	ctx, unlock, err := ts.LockKeyspace(ctx, keyspace, "Locking for tests")
+	if err != nil {
+		t.Fatalf("LockKeyspace() failed: %v", err)
+	}
+	defer unlock(&err)
+
+	if err := ts.UpdateDisableQueryService(ctx, keyspace, shards, topodatapb.TabletType_MASTER, []string{cell}, true /* disableQueryService */); err != nil {
+		t.Fatalf("UpdateDisableQueryService() failed: %v", err)
+	}
+
+	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
+	if err != nil {
+		t.Fatalf("GetSrvKeyspace() failed: %v", err)
+	}
+
+	got, err := json2.MarshalPB(srvKeyspace)
+	if err != nil {
+		t.Fatalf("MarshalPB() failed: %v", err)
+	}
+
+	want, err := json2.MarshalPB(wantSrvKeyspace)
+	if err != nil {
+		t.Fatalf("MarshalPB() failed: %v", err)
+	}
+
+	if string(got) != string(want) {
+		t.Errorf("UpdateDisableQueryService() failure. Got %v, want: %v", string(got), string(want))
+	}
 }
