@@ -1517,10 +1517,10 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 
 		_, tx1, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
 		if err != nil {
-			t.Fatalf("failed to execute query: %s: %s", q1, err)
+			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
 		if err := tsv.Commit(ctx, &target, tx1); err != nil {
-			t.Fatalf("call TabletServer.Commit failed: %v", err)
+			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
 
@@ -1532,7 +1532,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		<-tx1Started
 		_, tx2, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
 		if err != nil {
-			t.Fatalf("failed to execute query: %s: %s", q2, err)
+			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
 		// TODO(mberlin): This should actually be in the BeforeFunc() of tx1 but
 		// then the test is hanging. It looks like the MySQL C client library cannot
@@ -1540,7 +1540,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		// still pending.
 		<-tx3Finished
 		if err := tsv.Commit(ctx, &target, tx2); err != nil {
-			t.Fatalf("call TabletServer.Commit failed: %v", err)
+			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
 
@@ -1552,10 +1552,10 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		<-tx1Started
 		_, tx3, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
 		if err != nil {
-			t.Fatalf("failed to execute query: %s: %s", q3, err)
+			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
 		if err := tsv.Commit(ctx, &target, tx3); err != nil {
-			t.Fatalf("call TabletServer.Commit failed: %v", err)
+			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 		close(tx3Finished)
 	}()
@@ -1645,10 +1645,10 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 			BindVariables: bvTx1,
 		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
 		if err != nil {
-			t.Fatalf("failed to execute query: %s: %s", q1, err)
+			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
 		if len(results) != 1 || results[0].RowsAffected != 1 {
-			t.Fatalf("TabletServer.ExecuteBatch returned wrong results: %+v", results)
+			t.Errorf("TabletServer.ExecuteBatch returned wrong results: %+v", results)
 		}
 	}()
 
@@ -1663,10 +1663,10 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 			BindVariables: bvTx2,
 		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
 		if err != nil {
-			t.Fatalf("failed to execute query: %s: %s", q2, err)
+			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
 		if len(results) != 1 || results[0].RowsAffected != 1 {
-			t.Fatalf("TabletServer.ExecuteBatch returned wrong results: %+v", results)
+			t.Errorf("TabletServer.ExecuteBatch returned wrong results: %+v", results)
 		}
 	}()
 
@@ -1681,10 +1681,10 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 			BindVariables: bvTx3,
 		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
 		if err != nil {
-			t.Fatalf("failed to execute query: %s: %s", q3, err)
+			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
 		if len(results) != 1 || results[0].RowsAffected != 1 {
-			t.Fatalf("TabletServer.ExecuteBatch returned wrong results: %+v", results)
+			t.Errorf("TabletServer.ExecuteBatch returned wrong results: %+v", results)
 		}
 	}()
 
@@ -1757,11 +1757,11 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 
 		_, tx1, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
 		if err != nil {
-			t.Fatalf("failed to execute query: %s: %s", q1, err)
+			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
 
 		if err := tsv.Commit(ctx, &target, tx1); err != nil {
-			t.Fatalf("call TabletServer.Commit failed: %v", err)
+			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
 
@@ -1776,11 +1776,11 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 
 		_, tx2, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
 		if err != nil {
-			t.Fatalf("failed to execute query: %s: %s", q2, err)
+			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
 
 		if err := tsv.Commit(ctx, &target, tx2); err != nil {
-			t.Fatalf("call TabletServer.Commit failed: %v", err)
+			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
 
@@ -1795,11 +1795,11 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 
 		_, tx3, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
 		if err != nil {
-			t.Fatalf("failed to execute query: %s: %s", q3, err)
+			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
 
 		if err := tsv.Commit(ctx, &target, tx3); err != nil {
-			t.Fatalf("call TabletServer.Commit failed: %v", err)
+			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
 
@@ -1896,10 +1896,10 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 
 		_, tx1, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
 		if err != nil {
-			t.Fatalf("failed to execute query: %s: %s", q1, err)
+			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
 		if err := tsv.Commit(ctx, &target, tx1); err != nil {
-			t.Fatalf("call TabletServer.Commit failed: %v", err)
+			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
 
@@ -1912,7 +1912,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 		<-tx1Started
 		_, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and name = 1')" {
-			t.Fatalf("tx2 should have failed because there are too many pending requests: %v", err)
+			t.Errorf("tx2 should have failed because there are too many pending requests: %v", err)
 		}
 		// No commit necessary because the Begin failed.
 	}()
@@ -1988,10 +1988,10 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 			BindVariables: bvTx1,
 		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
 		if err != nil {
-			t.Fatalf("failed to execute query: %s: %s", q1, err)
+			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
 		if len(results) != 1 || results[0].RowsAffected != 1 {
-			t.Fatalf("TabletServer.ExecuteBatch returned wrong results: %+v", results)
+			t.Errorf("TabletServer.ExecuteBatch returned wrong results: %+v", results)
 		}
 	}()
 
@@ -2007,7 +2007,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 			BindVariables: bvTx2,
 		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and name = 1')" {
-			t.Fatalf("tx2 should have failed because there are too many pending requests: %v results: %+v", err, results)
+			t.Errorf("tx2 should have failed because there are too many pending requests: %v results: %+v", err, results)
 		}
 	}()
 
@@ -2083,11 +2083,11 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 
 		_, tx1, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
 		if err != nil {
-			t.Fatalf("failed to execute query: %s: %s", q1, err)
+			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
 
 		if err := tsv.Commit(ctx, &target, tx1); err != nil {
-			t.Fatalf("call TabletServer.Commit failed: %v", err)
+			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
 
@@ -2103,7 +2103,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 
 		_, _, err := tsv.BeginExecute(ctxTx2, &target, q2, bvTx2, nil)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_CANCELED || err.Error() != "context canceled" {
-			t.Fatalf("tx2 should have failed because the context was canceled: %v", err)
+			t.Errorf("tx2 should have failed because the context was canceled: %v", err)
 		}
 		// No commit necessary because the Begin failed.
 	}()
@@ -2115,16 +2115,16 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 
 		// Wait until tx1 and tx2 are pending to make the test deterministic.
 		if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 2); err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 
 		_, tx3, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
 		if err != nil {
-			t.Fatalf("failed to execute query: %s: %s", q3, err)
+			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
 
 		if err := tsv.Commit(ctx, &target, tx3); err != nil {
-			t.Fatalf("call TabletServer.Commit failed: %v", err)
+			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
 
@@ -2545,7 +2545,7 @@ func TestHandleExecTabletError(t *testing.T) {
 		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tablet error"),
 		nil,
 	)
-	fmt.Println(">>>>>"+err.Error())
+	fmt.Println(">>>>>" + err.Error())
 	want := "tablet error"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("got `%v`, want '%s'", err, want)

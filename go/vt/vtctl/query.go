@@ -190,8 +190,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 
 	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
-		//lint:ignore ST1005 function name
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("BuildBindVariables failed: %v", err)
 	}
 
 	qr, err := session.Execute(ctx, subFlags.Arg(0), bindVars)
@@ -246,14 +245,12 @@ func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subF
 
 	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
-		//lint:ignore ST1005 function name
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("BuildBindVariables failed: %v", err)
 	}
 
 	qr, err := vtgateConn.ExecuteShards(ctx, subFlags.Arg(0), *keyspace, shards, bindVars, t, executeOptions)
 	if err != nil {
-		//lint:ignore ST1005 function name
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("ExecuteShards failed: %v", err)
 	}
 	if *json {
 		return printJSON(wr.Logger(), qr)
@@ -309,14 +306,12 @@ func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler,
 
 	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
-		//lint:ignore ST1005 function name
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("BuildBindVariables failed: %v", err)
 	}
 
 	qr, err := vtgateConn.ExecuteKeyspaceIds(ctx, subFlags.Arg(0), *keyspace, keyspaceIDs, bindVars, t, executeOptions)
 	if err != nil {
-		//lint:ignore ST1005 function name
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("ExecuteKeyspaceIds failed: %v", err)
 	}
 	if *json {
 		return printJSON(wr.Logger(), qr)
@@ -377,8 +372,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 
 	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
-		//lint:ignore ST1005 function name
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("BuildBindVariables failed: %v", err)
 	}
 
 	r, err := vtgateConn.SplitQuery(
@@ -441,8 +435,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 
 	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
-		//lint:ignore ST1005 function name
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("BuildBindVariables failed: %v", err)
 	}
 
 	qr, err := conn.Execute(ctx, &querypb.Target{
