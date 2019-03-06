@@ -1355,6 +1355,30 @@ alter_statement:
         },
       }
   }
+| ALTER VSCHEMA ON table_name SET update_list
+  {
+    $$ = &DDL{
+        Action: SetVschemaUpdatesStr,
+        Table: $4,
+        VschemaUpdates: $6,
+      }
+  }
+| ALTER VSCHEMA ON table_name ADD COLUMN column_definition
+  {
+    $$ = &DDL{
+        Action: AddAuthColumnStr,
+        Table: $4,
+        AuthColumn: $7,
+      }
+  }
+| ALTER VSCHEMA ON table_name DROP COLUMN sql_id
+  {
+    $$ = &DDL{
+        Action: DropAuthColumnStr,
+        Table: $4,
+        AuthColumn: &ColumnDefinition{Name:$7},
+      }
+  }
 
 alter_object_type:
   COLUMN

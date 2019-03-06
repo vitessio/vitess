@@ -962,6 +962,20 @@ var (
 		input:  "alter vschema on a drop vindex `add`",
 		output: "alter vschema on a drop vindex `add`",
 	}, {
+		input: "alter vschema on a add column name varchar(16)",
+	}, {
+		input: "alter vschema on a drop column name",
+	}, {
+		input: "alter vschema on a set authoritative = true",
+	}, {
+		input:  "alter vschema on a set authoritative=true",
+		output: "alter vschema on a set authoritative = true",
+	}, {
+		input: "alter vschema on a set authoritative = false",
+	}, {
+		input:  "alter vschema on a set authoritative=false",
+		output: "alter vschema on a set authoritative = false",
+	}, {
 		input:  "create index a on b",
 		output: "alter table b",
 	}, {

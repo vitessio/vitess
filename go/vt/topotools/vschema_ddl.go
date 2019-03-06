@@ -180,6 +180,56 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 			}
 		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s not defined in table %s.%s", name, ksName, tableName)
+
+	case sqlparser.AddAuthColumnStr:
+		if table == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s.%s not defined in vschema", ksName, tableName)
+		}
+		table.Columns = append(table.Columns, &vschemapb.Column{Name: ddl.AuthColumn.Name.Lowered(), Type: ddl.AuthColumn.Type.SQLType()})
+		ks.Tables[tableName] = table
+		return ks, nil
+
+	case sqlparser.DropAuthColumnStr:
+		if table == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s.%s not defined in vschema", ksName, tableName)
+		}
+		if len(table.ColumnVindexes) > 0 {
+			primaryVindex := table.ColumnVindexes[0]
+			for _, primaryVindexCol := range primaryVindex.Columns {
+				if ddl.AuthColumn.Name.EqualString(primaryVindexCol) {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s.%s cannot drop its primary vindex %s column %s", ksName, tableName, primaryVindex.Name, primaryVindexCol)
+				}
+			}
+		}
+		purged := make([]*vschemapb.Column, 0, len(table.Columns))
+		for _, col := range table.Columns {
+			if !ddl.AuthColumn.Name.EqualString(col.Name) {
+				purged = append(purged, col)
+			}
+		}
+		table.Columns = purged
+		ks.Tables[tableName] = table
+		return ks, nil
+	case sqlparser.SetVschemaUpdatesStr:
+		name := ddl.Table.Name.String()
+		if _, ok := ks.Tables[name]; !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain table %s in keyspace %s", name, ksName)
+		}
+
+		for _, update := range ddl.VschemaUpdates {
+			if update.Name.Name.Lowered() == "authoritative" {
+				switch expr := update.Expr.(type) {
+				case sqlparser.BoolVal:
+					ks.Tables[name].ColumnListAuthoritative = bool(expr)
+					// jump to the next update
+					continue
+				default:
+				}
+			}
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema update table %s in keyspace %s unknown setting %s", name, ksName, update.Name.Name)
+		}
+
+		return ks, nil
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected vindex ddl operation %s", ddl.Action)
