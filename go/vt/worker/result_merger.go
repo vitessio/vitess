@@ -21,9 +21,11 @@ import (
 	"fmt"
 	"io"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -41,8 +43,9 @@ const ResultSizeRows = 64
 // The output stream will be sorted by ascending primary key order.
 // It implements the ResultReader interface.
 type ResultMerger struct {
-	inputs []ResultReader
-	fields []*querypb.Field
+	inputs    []ResultReader
+	allInputs []ResultReader
+	fields    []*querypb.Field
 	// output is the buffer of merged rows. Once it's full, we'll return it in
 	// Next() (wrapped in a sqltypes.Result).
 	output [][]sqltypes.Value
@@ -68,11 +71,9 @@ func NewResultMerger(inputs []ResultReader, pkFieldCount int) (*ResultMerger, er
 		return nil, err
 	}
 
-	for i := 0; i < pkFieldCount; i++ {
-		typ := fields[i].Type
-		if !sqltypes.IsIntegral(typ) && !sqltypes.IsFloat(typ) && !sqltypes.IsBinary(typ) {
-			return nil, fmt.Errorf("unsupported type: %v cannot compare fields with this type. Use the vtworker LegacySplitClone command instead", typ)
-		}
+	err := CheckValidTypesForResultMerger(fields, pkFieldCount)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "invalid PK types for ResultMerger. Use the vtworker LegacySplitClone command instead. %v", err.Error())
 	}
 
 	// Initialize the priority queue with all input ResultReader which have at
@@ -93,11 +94,23 @@ func NewResultMerger(inputs []ResultReader, pkFieldCount int) (*ResultMerger, er
 
 	rm := &ResultMerger{
 		inputs:      activeInputs,
+		allInputs:   inputs,
 		fields:      fields,
 		nextRowHeap: nextRowHeap,
 	}
 	rm.reset()
 	return rm, nil
+}
+
+// CheckValidTypesForResultMerger returns an error if the provided fields are not compatible with how ResultMerger works
+func CheckValidTypesForResultMerger(fields []*querypb.Field, pkFieldCount int) error {
+	for i := 0; i < pkFieldCount; i++ {
+		typ := fields[i].Type
+		if !sqltypes.IsIntegral(typ) && !sqltypes.IsFloat(typ) && !sqltypes.IsBinary(typ) {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "unsupported type: %v cannot compare fields with this type", typ)
+		}
+	}
+	return nil
 }
 
 // Fields returns the field information for the columns in the result.
@@ -168,6 +181,13 @@ func (rm *ResultMerger) Next() (*sqltypes.Result, error) {
 	return result, nil
 }
 
+// Close closes all inputs
+func (rm *ResultMerger) Close(ctx context.Context) {
+	for _, i := range rm.allInputs {
+		i.Close(ctx)
+	}
+}
+
 func (rm *ResultMerger) deleteInput(deleteMe ResultReader) {
 	for i, input := range rm.inputs {
 		if input == deleteMe {
@@ -182,17 +202,24 @@ func (rm *ResultMerger) reset() {
 	rm.output = make([][]sqltypes.Value, 0, ResultSizeRows)
 }
 
+func equalFields(a, b []*querypb.Field) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, aField := range a {
+		bField := b[i]
+		if !proto.Equal(aField, bField) {
+			return false
+		}
+	}
+	return true
+}
+
 func checkFieldsEqual(fields []*querypb.Field, inputs []ResultReader) error {
 	for i := 1; i < len(inputs); i++ {
 		otherFields := inputs[i].Fields()
-		if len(fields) != len(otherFields) {
-			return fmt.Errorf("input ResultReaders have conflicting Fields data: ResultReader[0]: %v != ResultReader[%d]: %v", fields, i, otherFields)
-		}
-		for j, field := range fields {
-			otherField := otherFields[j]
-			if !proto.Equal(field, otherField) {
-				return fmt.Errorf("input ResultReaders have conflicting Fields data: ResultReader[0]: %v != ResultReader[%d]: %v", fields, i, otherFields)
-			}
+		if !equalFields(fields, otherFields) {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "input ResultReaders have conflicting Fields data: ResultReader[0]: %v != ResultReader[%d]: %v", fields, i, otherFields)
 		}
 	}
 	return nil

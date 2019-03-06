@@ -17,13 +17,14 @@ limitations under the License.
 package etcd2topo
 
 import (
-	"fmt"
 	"path"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -56,7 +57,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	// not have that much history.
 	watcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(initial.Header.Revision))
 	if watcher == nil {
-		return &topo.WatchData{Err: fmt.Errorf("Watch failed")}, nil, nil
+		return &topo.WatchData{Err: vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Watch failed")}, nil, nil
 	}
 
 	// Create the notifications channel, send updates to it.
@@ -117,7 +118,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 						return
 					default:
 						notifications <- &topo.WatchData{
-							Err: fmt.Errorf("unexpected event received: %v", ev),
+							Err: vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected event received: %v", ev),
 						}
 						return
 					}

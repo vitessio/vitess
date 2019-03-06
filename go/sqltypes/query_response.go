@@ -16,7 +16,9 @@ limitations under the License.
 
 package sqltypes
 
-import "reflect"
+import (
+	"vitess.io/vitess/go/vt/vterrors"
+)
 
 // QueryResponse represents a query response for ExecuteBatch.
 type QueryResponse struct {
@@ -34,7 +36,7 @@ func QueryResponsesEqual(r1, r2 []QueryResponse) bool {
 		if !r.QueryResult.Equal(r2[i].QueryResult) {
 			return false
 		}
-		if !reflect.DeepEqual(r.QueryError, r2[i].QueryError) {
+		if !vterrors.Equals(r.QueryError, r2[i].QueryError) {
 			return false
 		}
 	}

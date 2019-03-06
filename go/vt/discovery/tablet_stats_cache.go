@@ -56,6 +56,8 @@ type TabletStatsCache struct {
 	entries map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry
 	// tsm is a helper to broadcast aggregate stats.
 	tsm srvtopo.TargetStatsMultiplexer
+	// cellRegions is a cache of cell regions
+	cellRegions map[string]string
 }
 
 // tabletStatsCacheEntry is the per keyspace/shard/tabletType
@@ -68,7 +70,7 @@ type tabletStatsCacheEntry struct {
 	all map[string]*TabletStats
 	// healthy only has the healthy ones.
 	healthy []*TabletStats
-	// aggregates has the per-cell aggregates.
+	// aggregates has the per-region aggregates.
 	aggregates map[string]*querypb.AggregateStats
 }
 
@@ -134,6 +136,7 @@ func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListen
 		aggregatesChan: make(chan []*srvtopo.TargetStatsEntry, 100),
 		entries:        make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
 		tsm:            srvtopo.NewTargetStatsMultiplexer(),
+		cellRegions:    make(map[string]string),
 	}
 
 	if setListener {
@@ -141,7 +144,6 @@ func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListen
 		// upon type change.
 		hc.SetListener(tc, true /*sendDownEvents*/)
 	}
-	go tc.broadcastAggregateStats()
 	return tc
 }
 
@@ -195,12 +197,24 @@ func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStat
 }
 
 func (tc *TabletStatsCache) getRegionByCell(cell string) string {
-	return topo.GetRegionByCell(context.Background(), tc.ts, cell)
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	if region, ok := tc.cellRegions[cell]; ok {
+		return region
+	}
+
+	region := topo.GetRegionByCell(context.Background(), tc.ts, cell)
+	tc.cellRegions[cell] = region
+
+	return region
 }
 
 // StatsUpdate is part of the HealthCheckStatsListener interface.
 func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
-	if ts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Tablet.Alias.Cell != tc.cell && tc.getRegionByCell(ts.Tablet.Alias.Cell) != tc.getRegionByCell(tc.cell) {
+	if ts.Target.TabletType != topodatapb.TabletType_MASTER &&
+		ts.Tablet.Alias.Cell != tc.cell &&
+		tc.getRegionByCell(ts.Tablet.Alias.Cell) != tc.getRegionByCell(tc.cell) {
 		// this is for a non-master tablet in a different cell and a different region, drop it
 		return
 	}
@@ -266,18 +280,18 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 	tc.updateAggregateMap(ts.Target.Keyspace, ts.Target.Shard, ts.Target.TabletType, e, allArray)
 }
 
-// MakeAggregateMap takes a list of TabletStats and builds a per-cell
+// makeAggregateMap takes a list of TabletStats and builds a per-region
 // AggregateStats map.
-func MakeAggregateMap(stats []*TabletStats) map[string]*querypb.AggregateStats {
+func (tc *TabletStatsCache) makeAggregateMap(stats []*TabletStats) map[string]*querypb.AggregateStats {
 	result := make(map[string]*querypb.AggregateStats)
 	for _, ts := range stats {
-		cell := ts.Tablet.Alias.Cell
-		agg, ok := result[cell]
+		region := tc.getRegionByCell(ts.Tablet.Alias.Cell)
+		agg, ok := result[region]
 		if !ok {
 			agg = &querypb.AggregateStats{
 				SecondsBehindMasterMin: math.MaxUint32,
 			}
-			result[cell] = agg
+			result[region] = agg
 		}
 
 		if ts.Serving && ts.LastError == nil {
@@ -295,101 +309,12 @@ func MakeAggregateMap(stats []*TabletStats) map[string]*querypb.AggregateStats {
 	return result
 }
 
-// MakeAggregateMapDiff computes the entries that need to be broadcast
-// when the map goes from oldMap to newMap.
-func MakeAggregateMapDiff(keyspace, shard string, tabletType topodatapb.TabletType, ter int64, oldMap map[string]*querypb.AggregateStats, newMap map[string]*querypb.AggregateStats) []*srvtopo.TargetStatsEntry {
-	var result []*srvtopo.TargetStatsEntry
-	for cell, oldValue := range oldMap {
-		newValue, ok := newMap[cell]
-		if ok {
-			// We have both an old and a new value. If equal,
-			// skip it.
-			if oldValue.HealthyTabletCount == newValue.HealthyTabletCount &&
-				oldValue.UnhealthyTabletCount == newValue.UnhealthyTabletCount &&
-				oldValue.SecondsBehindMasterMin == newValue.SecondsBehindMasterMin &&
-				oldValue.SecondsBehindMasterMax == newValue.SecondsBehindMasterMax {
-				continue
-			}
-			// The new value is different, send it.
-			result = append(result, &srvtopo.TargetStatsEntry{
-				Target: &querypb.Target{
-					Keyspace:   keyspace,
-					Shard:      shard,
-					TabletType: tabletType,
-					Cell:       cell,
-				},
-				Stats: newValue,
-				TabletExternallyReparentedTimestamp: ter,
-			})
-		} else {
-			// We only have the old value, send an empty
-			// record to clear it.
-			result = append(result, &srvtopo.TargetStatsEntry{
-				Target: &querypb.Target{
-					Keyspace:   keyspace,
-					Shard:      shard,
-					TabletType: tabletType,
-					Cell:       cell,
-				},
-			})
-		}
-	}
-
-	for cell, newValue := range newMap {
-		if _, ok := oldMap[cell]; ok {
-			continue
-		}
-		// New value, no old value, just send it.
-		result = append(result, &srvtopo.TargetStatsEntry{
-			Target: &querypb.Target{
-				Keyspace:   keyspace,
-				Shard:      shard,
-				TabletType: tabletType,
-				Cell:       cell,
-			},
-			Stats: newValue,
-			TabletExternallyReparentedTimestamp: ter,
-		})
-	}
-	return result
-}
-
 // updateAggregateMap will update the aggregate map for the
 // tabletStatsCacheEntry. It may broadcast the changes too if we have listeners.
 // e.mu needs to be locked.
 func (tc *TabletStatsCache) updateAggregateMap(keyspace, shard string, tabletType topodatapb.TabletType, e *tabletStatsCacheEntry, stats []*TabletStats) {
 	// Save the new value
-	oldAgg := e.aggregates
-	newAgg := MakeAggregateMap(stats)
-	e.aggregates = newAgg
-
-	// And broadcast the change in the background, if we need to.
-	tc.mu.RLock()
-	if !tc.tsm.HasSubscribers() {
-		// Shortcut: no subscriber, we can be done.
-		tc.mu.RUnlock()
-		return
-	}
-	tc.mu.RUnlock()
-
-	var ter int64
-	if len(stats) > 0 {
-		ter = stats[0].TabletExternallyReparentedTimestamp
-	}
-	diffs := MakeAggregateMapDiff(keyspace, shard, tabletType, ter, oldAgg, newAgg)
-	tc.aggregatesChan <- diffs
-}
-
-// broadcastAggregateStats is called in the background to send aggregate stats
-// in the right order to our subscribers.
-func (tc *TabletStatsCache) broadcastAggregateStats() {
-	for diffs := range tc.aggregatesChan {
-		tc.mu.RLock()
-		for _, d := range diffs {
-			tc.tsm.Broadcast(d)
-		}
-		tc.mu.RUnlock()
-	}
+	e.aggregates = tc.makeAggregateMap(stats)
 }
 
 // GetTabletStats returns the full list of available targets.
@@ -436,51 +361,6 @@ func (tc *TabletStatsCache) ResetForTesting() {
 	tc.entries = make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry)
 }
 
-// Subscribe is part of the TargetStatsListener interface.
-func (tc *TabletStatsCache) Subscribe() (int, []srvtopo.TargetStatsEntry, <-chan (*srvtopo.TargetStatsEntry), error) {
-	var allTS []srvtopo.TargetStatsEntry
-
-	// Make sure the map cannot change. Also blocks any update from
-	// propagating.
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
-	for keyspace, shardMap := range tc.entries {
-		for shard, typeMap := range shardMap {
-			for tabletType, e := range typeMap {
-				e.mu.RLock()
-				var ter int64
-				if len(e.healthy) > 0 {
-					ter = e.healthy[0].TabletExternallyReparentedTimestamp
-				}
-				for cell, agg := range e.aggregates {
-					allTS = append(allTS, srvtopo.TargetStatsEntry{
-						Target: &querypb.Target{
-							Keyspace:   keyspace,
-							Shard:      shard,
-							TabletType: tabletType,
-							Cell:       cell,
-						},
-						Stats: agg,
-						TabletExternallyReparentedTimestamp: ter,
-					})
-				}
-				e.mu.RUnlock()
-			}
-		}
-	}
-
-	// Now create the listener, add it to our list.
-	id, c := tc.tsm.Subscribe()
-	return id, allTS, c, nil
-}
-
-// Unsubscribe is part of the TargetStatsListener interface.
-func (tc *TabletStatsCache) Unsubscribe(i int) error {
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
-	return tc.tsm.Unsubscribe(i)
-}
-
 // GetAggregateStats is part of the TargetStatsListener interface.
 func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.AggregateStats, error) {
 	e := tc.getEntry(target.Keyspace, target.Shard, target.TabletType)
@@ -498,7 +378,8 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 			return agg, nil
 		}
 	}
-	agg, ok := e.aggregates[target.Cell]
+	targetRegion := tc.getRegionByCell(target.Cell)
+	agg, ok := e.aggregates[targetRegion]
 	if !ok {
 		return nil, topo.NewError(topo.NoNode, topotools.TargetIdent(target))
 	}
@@ -530,4 +411,3 @@ func (tc *TabletStatsCache) GetMasterCell(keyspace, shard string) (cell string, 
 
 // Compile-time interface check.
 var _ HealthCheckStatsListener = (*TabletStatsCache)(nil)
-var _ srvtopo.TargetStatsListener = (*TabletStatsCache)(nil)

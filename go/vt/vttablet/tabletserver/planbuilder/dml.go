@@ -202,6 +202,14 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 		return nil, err
 	}
 
+	if sel.Where != nil {
+		comp, ok := sel.Where.Expr.(*sqlparser.ComparisonExpr)
+		if ok && comp.IsImpossible() {
+			plan.PlanID = PlanSelectImpossible
+			return plan, nil
+		}
+	}
+
 	// Check if it's a NEXT VALUE statement.
 	if nextVal, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
 		if table.Type != schema.Sequence {
@@ -315,13 +323,17 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 	}
 	table, tableErr := plan.setTable(tableName, tables)
 
-	// In passthrough dml mode, allow the operation even if the
-	// table is unknown in the schema.
-	if PassthroughDMLs {
-		return plan, nil
-	}
+	switch {
+	case tableErr == nil && table.Type == schema.Message:
+		// message inserts need to continue being strict, even in passthrough dml mode,
+		// because field defaults are set here
 
-	if tableErr != nil {
+	case PassthroughDMLs:
+		// In passthrough dml mode, allow the operation even if the
+		// table is unknown in the schema.
+		return plan, nil
+
+	case tableErr != nil:
 		return nil, tableErr
 	}
 
@@ -466,7 +478,14 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "subquery not allowed for message table: %s", table.Name.String())
 	}
 	if ins.OnDup != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "'on duplicate key' construct not allowed for message table: %s", table.Name.String())
+		// only allow 'on duplicate key' where time_scheduled and id are not referenced
+		ts := sqlparser.NewColIdent("time_scheduled")
+		id := sqlparser.NewColIdent("id")
+		for _, updateExpr := range ins.OnDup {
+			if updateExpr.Name.Name.Equal(ts) || updateExpr.Name.Name.Equal(id) {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "'on duplicate key' cannot reference time_scheduled or id for message table: %s", table.Name.String())
+			}
+		}
 	}
 	if len(ins.Columns) == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column list must be specified for message table insert: %s", table.Name.String())

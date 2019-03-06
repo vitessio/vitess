@@ -162,7 +162,6 @@ esac
 
 # Construct "cp" command to copy the source code.
 #
-# TODO(mberlin): Copy vendor/vendor.json file such that we can run a diff against the file on the image.
 # Copy the full source tree except:
 # - vendor
 # That's because these directories are already part of the image.
@@ -172,10 +171,18 @@ esac
 # we do not move or overwrite the existing files while copying the other
 # directories. Therefore, the existing files do not count as changed and will
 # not be part of the new Docker layer of the cache image.
-copy_src_cmd="cp -R /tmp/src/!(vendor) ."
+copy_src_cmd="cp -R /tmp/src/!(vendor|bootstrap.sh) ."
 # Copy the .git directory because travis/check_make_proto.sh needs a working
 # Git repository.
 copy_src_cmd=$(append_cmd "$copy_src_cmd" "cp -R /tmp/src/.git .")
+
+# Copy vendor/vendor.json file if it changed
+run_bootstrap_cmd="if [[ \$(diff -w vendor/vendor.json /tmp/src/vendor/vendor.json) ]]; then cp -f /tmp/src/vendor/vendor.json vendor/; sync_vendor=1; fi"
+# Copy bootstrap.sh if it changed
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "if [[ \$(diff -w bootstrap.sh /tmp/src/bootstrap.sh) ]]; then cp -f /tmp/src/bootstrap.sh .; bootstrap=1; fi")
+# run bootstrap.sh if necessary
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "if [[ -n \$bootstrap ]]; then ./bootstrap.sh; else if [[ -n \$sync_vendor ]]; then govendor sync; fi; fi")
+copy_src_cmd=$(append_cmd "$copy_src_cmd" "$run_bootstrap_cmd")
 
 # Construct the command we will actually run.
 #

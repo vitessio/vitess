@@ -191,7 +191,7 @@ enum Type {
   // SET specifies a SET type.
   // Properties: 27, IsQuoted.
   SET = 2075;
-  // TUPLE specifies a a tuple. This cannot
+  // TUPLE specifies a tuple. This cannot
   // be returned in a QueryResult, but it can
   // be sent as a bind var.
   // Properties: 28, None.
@@ -288,11 +288,15 @@ message ExecuteOptions {
     READ_COMMITTED = 2;
     READ_UNCOMMITTED = 3;
     SERIALIZABLE = 4;
+
+    // This is not an "official" transaction level but it will do a
+    // START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY
+    CONSISTENT_SNAPSHOT_READ_ONLY = 5;
   }
 
   TransactionIsolation transaction_isolation = 9;
 
-  // skip_query_plan_cache specifies if the query plan shoud be cached by vitess.
+  // skip_query_plan_cache specifies if the query plan should be cached by vitess.
   // By default all query plans are cached.
   bool skip_query_plan_cache = 10;
 }
@@ -453,6 +457,7 @@ message StreamExecuteRequest {
   Target target = 3;
   BoundQuery query = 4;
   ExecuteOptions options = 5;
+  int64 transaction_id = 6;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute

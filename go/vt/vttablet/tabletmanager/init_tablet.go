@@ -30,19 +30,20 @@ import (
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
-	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
-	initKeyspace       = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
-	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
-	initTags           flagutil.StringMapValue
-	initTabletType     = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
-	initTimeout        = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
+	initDbNameOverride   = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
+	initKeyspace         = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
+	initShard            = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
+	initTags             flagutil.StringMapValue
+	initTabletType       = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
+	initTimeout          = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
+	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables")
 )
 
 func init() {
@@ -204,6 +205,16 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		}
 	default:
 		return vterrors.Wrap(err, "CreateTablet failed")
+	}
+
+	// optionally populate metadata records
+	if *initPopulateMetadata {
+		agent.setTablet(tablet)
+		localMetadata := agent.getLocalMetadataValues(tablet.Type)
+		err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata)
+		if err != nil {
+			return vterrors.Wrap(err, "failed to -init_populate_metadata")
+		}
 	}
 
 	return nil

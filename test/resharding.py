@@ -880,14 +880,25 @@ primary key (name)
     # use vtworker to compare the data (after health-checking the destination
     # rdonly tablets so discovery works)
     utils.run_vtctl(['RunHealthCheck', shard_3_rdonly1.tablet_alias])
-    logging.debug('Running vtworker SplitDiff')
-    utils.run_vtworker(['-cell', 'test_nj',
-                        '--use_v3_resharding_mode=false',
-                        'SplitDiff',
-                        '--exclude_tables', 'unrelated',
-                        '--min_healthy_rdonly_tablets', '1',
-                        'test_keyspace/c0-'],
-                       auto_log=True)
+
+    if base_sharding.use_multi_split_diff:
+        logging.debug('Running vtworker MultiSplitDiff')
+        utils.run_vtworker(['-cell', 'test_nj',
+                            '--use_v3_resharding_mode=false',
+                            'MultiSplitDiff',
+                            '--exclude_tables', 'unrelated',
+                            '--min_healthy_rdonly_tablets', '1',
+                            'test_keyspace/80-'],
+                           auto_log=True)
+    else:
+        logging.debug('Running vtworker SplitDiff')
+        utils.run_vtworker(['-cell', 'test_nj',
+                            '--use_v3_resharding_mode=false',
+                            'SplitDiff',
+                            '--exclude_tables', 'unrelated',
+                            '--min_healthy_rdonly_tablets', '1',
+                            'test_keyspace/c0-'],
+                           auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias, 'rdonly'],
                     auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_3_rdonly1.tablet_alias, 'rdonly'],
@@ -1067,14 +1078,25 @@ primary key (name)
     self._check_lots_timeout(3000, 80, 10, base=2000)
 
     # use vtworker to compare the data again
-    logging.debug('Running vtworker SplitDiff')
-    utils.run_vtworker(['-cell', 'test_nj',
-                        '--use_v3_resharding_mode=false',
-                        'SplitDiff',
-                        '--exclude_tables', 'unrelated',
-                        '--min_healthy_rdonly_tablets', '1',
-                        'test_keyspace/c0-'],
-                       auto_log=True)
+    if base_sharding.use_multi_split_diff:
+        logging.debug('Running vtworker MultiSplitDiff')
+        utils.run_vtworker(['-cell', 'test_nj',
+                            '--use_v3_resharding_mode=false',
+                            'MultiSplitDiff',
+                            '--exclude_tables', 'unrelated',
+                            '--min_healthy_rdonly_tablets', '1',
+                            'test_keyspace/80-'],
+                           auto_log=True)
+    else:
+        logging.debug('Running vtworker SplitDiff')
+        utils.run_vtworker(['-cell', 'test_nj',
+                          '--use_v3_resharding_mode=false',
+                          'SplitDiff',
+                          '--exclude_tables', 'unrelated',
+                          '--min_healthy_rdonly_tablets', '1',
+                          'test_keyspace/c0-'],
+                         auto_log=True)
+
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias, 'rdonly'],
                     auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_3_rdonly1.tablet_alias, 'rdonly'],
@@ -1192,7 +1214,7 @@ primary key (name)
     utils.run_vtctl(['DeleteTablet', '-allow_master',
                      shard_1_master.tablet_alias], auto_log=True)
 
-    # rebuild the serving graph, all mentions of the old shards shoud be gone
+    # rebuild the serving graph, all mentions of the old shards should be gone
     utils.run_vtctl(
         ['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 

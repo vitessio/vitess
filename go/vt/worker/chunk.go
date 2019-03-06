@@ -19,6 +19,7 @@ package worker
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -97,10 +98,10 @@ func generateChunks(ctx context.Context, wr *wrangler.Wrangler, tablet *topodata
 	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, tablet, true, []byte(query), 1)
 	cancel()
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "tablet: %v, table: %v: cannot determine MIN and MAX of the first primary key column. ExecuteFetchAsApp: %v", topoproto.TabletAliasString(tablet.Alias), td.Name, err)
+		return nil, vterrors.Wrapf(err, "tablet: %v, table: %v: cannot determine MIN and MAX of the first primary key column. ExecuteFetchAsApp", topoproto.TabletAliasString(tablet.Alias), td.Name)
 	}
 	if len(qr.Rows) != 1 {
-		return nil, fmt.Errorf("tablet: %v, table: %v: cannot determine MIN and MAX of the first primary key column. Zero rows were returned", topoproto.TabletAliasString(tablet.Alias), td.Name)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "tablet: %v, table: %v: cannot determine MIN and MAX of the first primary key column. Zero rows were returned", topoproto.TabletAliasString(tablet.Alias), td.Name)
 	}
 
 	result := sqltypes.Proto3ToResult(qr)

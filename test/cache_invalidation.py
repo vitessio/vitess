@@ -284,7 +284,7 @@ class InvalidatorThread(threading.Thread):
       # 1. If we can't compare the EventTokens, we want to store the
       # invalidation, so it's safer.
       # 2. If we have exactly the same EventToken, we do not want to
-      # store the ivalidation. We have either an invalidation or a
+      # store the invalidation. We have either an invalidation or a
       # value, in both cases we're fine keeping it.
       logging.debug('  invalidation event is older or equal than cache value,'
                     ' ignoring')

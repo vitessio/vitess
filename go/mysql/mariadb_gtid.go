@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const mariadbFlavorID = "MariaDB"
@@ -29,25 +32,25 @@ func parseMariadbGTID(s string) (GTID, error) {
 	// Split into parts.
 	parts := strings.Split(s, "-")
 	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid MariaDB GTID (%v): expecting Domain-Server-Sequence", s)
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid MariaDB GTID (%v): expecting Domain-Server-Sequence", s)
 	}
 
 	// Parse Domain ID.
 	Domain, err := strconv.ParseUint(parts[0], 10, 32)
 	if err != nil {
-		return nil, fmt.Errorf("invalid MariaDB GTID Domain ID (%v): %v", parts[0], err)
+		return nil, vterrors.Wrapf(err, "invalid MariaDB GTID Domain ID (%v)", parts[0])
 	}
 
 	// Parse Server ID.
 	Server, err := strconv.ParseUint(parts[1], 10, 32)
 	if err != nil {
-		return nil, fmt.Errorf("invalid MariaDB GTID Server ID (%v): %v", parts[1], err)
+		return nil, vterrors.Wrapf(err, "invalid MariaDB GTID Server ID (%v)", parts[1])
 	}
 
 	// Parse Sequence number.
 	Sequence, err := strconv.ParseUint(parts[2], 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid MariaDB GTID Sequence number (%v): %v", parts[2], err)
+		return nil, vterrors.Wrapf(err, "invalid MariaDB GTID Sequence number (%v)", parts[2])
 	}
 
 	return MariadbGTID{

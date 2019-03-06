@@ -617,7 +617,7 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 	err = conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 		data, err := json.Marshal(shr)
 		if err != nil {
-			wr.Logger().Errorf("cannot json-marshal structure: %v", err)
+			wr.Logger().Errorf2(err, "cannot json-marshal structure")
 		} else {
 			wr.Logger().Printf("%v\n", string(data))
 		}
@@ -672,7 +672,7 @@ func commandVtTabletUpdateStream(ctx context.Context, wr *wrangler.Wrangler, sub
 	}, *position, int64(*timestamp), func(se *querypb.StreamEvent) error {
 		data, err := json.Marshal(se)
 		if err != nil {
-			wr.Logger().Errorf("cannot json-marshal structure: %v", err)
+			wr.Logger().Errorf2(err, "cannot json-marshal structure")
 		} else {
 			wr.Logger().Printf("%v\n", string(data))
 		}

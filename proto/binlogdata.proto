@@ -23,6 +23,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/binlogdata";
 
 package binlogdata;
 
+import "vtrpc.proto";
 import "query.proto";
 import "topodata.proto";
 
@@ -114,6 +115,31 @@ message StreamTablesResponse {
   BinlogTransaction binlog_transaction = 1;
 }
 
+// Rule represents one rule.
+message Rule {
+  // match can be a table name or a regular expression
+  // delineated by '/' and '/'.
+  string match = 1;
+  // filter can be an empty string or keyrange if the match
+  // is a regular expression. Otherwise, it must be a select
+  // query.
+  string filter = 2;
+}
+
+// Filter represents a list of ordered rules. First match
+// wins.
+message Filter {
+  repeated Rule rules = 1;
+}
+
+// OnDDLAction lists the possible actions for DDLs.
+enum OnDDLAction {
+  IGNORE = 0;
+  STOP = 1;
+  EXEC = 2;
+  EXEC_IGNORE = 3;
+}
+
 // BinlogSource specifies the source  and filter parameters for
 // Filtered Replication. It currently supports a keyrange
 // or a list of tables.
@@ -132,4 +158,76 @@ message BinlogSource {
 
   // tables is set if the request is for a list of tables
   repeated string tables = 5;
+
+  // filter is set if we're using the generalized representation
+  // for the filter.
+  Filter filter = 6;
+
+  // on_ddl specifies the action to be taken when a DDL is encountered.
+  OnDDLAction on_ddl = 7;
+}
+
+// VEventType enumerates the event types.
+// This list is comprehensive. Many of these types
+// will not be encountered in RBR mode.
+enum VEventType {
+  UNKNOWN = 0;
+  GTID = 1;
+  BEGIN = 2;
+  COMMIT = 3;
+  ROLLBACK = 4;
+  DDL = 5;
+  INSERT = 6;
+  REPLACE = 7;
+  UPDATE = 8;
+  DELETE = 9;
+  SET = 10;
+  OTHER = 11;
+  ROW = 12;
+  FIELD = 13;
+  HEARTBEAT = 14;
+}
+
+// RowChange represents one row change
+message RowChange {
+  query.Row before = 1;
+  query.Row after = 2;
+}
+
+// RowEvent represent row events for one table
+message RowEvent {
+  string table_name = 1;
+  repeated RowChange row_changes = 2;
+}
+
+message FieldEvent {
+  string table_name = 1;
+  repeated query.Field fields = 2;
+}
+
+// VEvent represents a vstream event
+message VEvent {
+  VEventType type = 1;
+  int64 timestamp = 2;
+  string gtid = 3;
+  string ddl = 4;
+  RowEvent row_event = 5;
+  FieldEvent field_event = 6;
+  // current_time specifies the current time to handle clock skew.
+  int64 current_time = 20;
+}
+
+// VStreamRequest is the payload for VStream
+message VStreamRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  query.VTGateCallerID immediate_caller_id = 2;
+  query.Target target = 3;
+
+  string position = 4;
+  Filter filter = 5;
+}
+
+// VStreamResponse is the response from VStream
+message VStreamResponse {
+  repeated VEvent events = 1;
 }

@@ -93,6 +93,16 @@ func (client *FakeTabletManagerClient) GetPermissions(ctx context.Context, table
 	return &tabletmanagerdatapb.Permissions{}, nil
 }
 
+// LockTables is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) LockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
+}
+
+// UnlockTables is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) UnlockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
+}
+
 //
 // Various read-write methods
 //
@@ -186,6 +196,11 @@ func (client *FakeTabletManagerClient) StartSlave(ctx context.Context, tablet *t
 	return nil
 }
 
+// StartSlaveUntilAfter is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error {
+	return nil
+}
+
 // TabletExternallyReparented is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) TabletExternallyReparented(ctx context.Context, tablet *topodatapb.Tablet, externalID string) error {
 	return nil
@@ -238,6 +253,11 @@ func (client *FakeTabletManagerClient) InitSlave(ctx context.Context, tablet *to
 // DemoteMaster is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	return "", nil
+}
+
+// UndoDemoteMaster is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
 }
 
 // PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface.

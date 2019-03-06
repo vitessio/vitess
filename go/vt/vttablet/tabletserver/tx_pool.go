@@ -54,15 +54,22 @@ const (
 
 const txLogInterval = time.Duration(1 * time.Minute)
 
+type queries struct {
+	setIsolationLevel string
+	openTransaction   string
+}
+
 var (
 	txOnce  sync.Once
 	txStats = stats.NewTimings("Transactions", "Transaction stats", "operation")
 
-	txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]string{
-		querypb.ExecuteOptions_REPEATABLE_READ:  "set transaction isolation level REPEATABLE READ",
-		querypb.ExecuteOptions_READ_COMMITTED:   "set transaction isolation level READ COMMITTED",
-		querypb.ExecuteOptions_READ_UNCOMMITTED: "set transaction isolation level READ UNCOMMITTED",
-		querypb.ExecuteOptions_SERIALIZABLE:     "set transaction isolation level SERIALIZABLE",
+	txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]queries{
+		querypb.ExecuteOptions_DEFAULT:                       {setIsolationLevel: "", openTransaction: "begin"},
+		querypb.ExecuteOptions_REPEATABLE_READ:               {setIsolationLevel: "REPEATABLE READ", openTransaction: "begin"},
+		querypb.ExecuteOptions_READ_COMMITTED:                {setIsolationLevel: "READ COMMITTED", openTransaction: "begin"},
+		querypb.ExecuteOptions_READ_UNCOMMITTED:              {setIsolationLevel: "READ UNCOMMITTED", openTransaction: "begin"},
+		querypb.ExecuteOptions_SERIALIZABLE:                  {setIsolationLevel: "SERIALIZABLE", openTransaction: "begin"},
+		querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY: {setIsolationLevel: "REPEATABLE READ", openTransaction: "start transaction with consistent snapshot, read only"},
 	}
 )
 
@@ -171,7 +178,7 @@ func (axp *TxPool) RollbackNonBusy(ctx context.Context) {
 
 func (axp *TxPool) transactionKiller() {
 	defer tabletenv.LogError()
-	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), "for rollback") {
+	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), "for tx killer rollback") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", axp.Timeout(), conn.Format(nil))
 		tabletenv.KillStats.Add("Transactions", 1)
@@ -232,14 +239,18 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 		return 0, err
 	}
 
-	if query, ok := txIsolations[options.GetTransactionIsolation()]; ok {
-		if _, err := conn.Exec(ctx, query, 1, false); err != nil {
+	if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
+		if queries.setIsolationLevel != "" {
+			if _, err := conn.Exec(ctx, "set transaction isolation level "+queries.setIsolationLevel, 1, false); err != nil {
+				return 0, err
+			}
+		}
+
+		if _, err := conn.Exec(ctx, queries.openTransaction, 1, false); err != nil {
 			return 0, err
 		}
-	}
-
-	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
-		return 0, err
+	} else {
+		return 0, fmt.Errorf("don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 	}
 
 	beginSucceeded = true

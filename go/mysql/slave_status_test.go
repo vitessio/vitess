@@ -16,7 +16,9 @@ limitations under the License.
 
 package mysql
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestStatusSlaveRunning(t *testing.T) {
 	input := &SlaveStatus{

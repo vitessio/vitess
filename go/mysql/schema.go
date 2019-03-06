@@ -34,6 +34,8 @@ import (
 // DescribeTableFields contains the fields returned by a
 // 'describe <table>' command. They are validated by the testDescribeTable
 // test.
+// Column lengths returned seem to differ between versions. So, we
+// don't compare them.
 var DescribeTableFields = []*querypb.Field{
 	{
 		Name:         "Field",
@@ -42,7 +44,7 @@ var DescribeTableFields = []*querypb.Field{
 		OrgTable:     "COLUMNS",
 		Database:     "information_schema",
 		OrgName:      "COLUMN_NAME",
-		ColumnLength: 192,
+		ColumnLength: 0,
 		Charset:      33,
 		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
@@ -53,7 +55,7 @@ var DescribeTableFields = []*querypb.Field{
 		OrgTable:     "COLUMNS",
 		Database:     "information_schema",
 		OrgName:      "COLUMN_TYPE",
-		ColumnLength: 589815,
+		ColumnLength: 0,
 		Charset:      33,
 		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_BLOB_FLAG),
 	},
@@ -64,7 +66,7 @@ var DescribeTableFields = []*querypb.Field{
 		OrgTable:     "COLUMNS",
 		Database:     "information_schema",
 		OrgName:      "IS_NULLABLE",
-		ColumnLength: 9,
+		ColumnLength: 0,
 		Charset:      33,
 		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
@@ -75,7 +77,7 @@ var DescribeTableFields = []*querypb.Field{
 		OrgTable:     "COLUMNS",
 		Database:     "information_schema",
 		OrgName:      "COLUMN_KEY",
-		ColumnLength: 9,
+		ColumnLength: 0,
 		Charset:      33,
 		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
@@ -86,7 +88,7 @@ var DescribeTableFields = []*querypb.Field{
 		OrgTable:     "COLUMNS",
 		Database:     "information_schema",
 		OrgName:      "COLUMN_DEFAULT",
-		ColumnLength: 589815,
+		ColumnLength: 0,
 		Charset:      33,
 		Flags:        uint32(querypb.MySqlFlag_BLOB_FLAG),
 	},
@@ -97,7 +99,7 @@ var DescribeTableFields = []*querypb.Field{
 		OrgTable:     "COLUMNS",
 		Database:     "information_schema",
 		OrgName:      "EXTRA",
-		ColumnLength: 90,
+		ColumnLength: 0,
 		Charset:      33,
 		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
@@ -308,8 +310,8 @@ func ShowIndexFromTableRow(table string, unique bool, keyName string, seqInIndex
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(columnName)),
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("A")), // Collation
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),   // Cardinality
-		sqltypes.NULL,                                       // Sub_part
-		sqltypes.NULL,                                       // Packed
+		sqltypes.NULL, // Sub_part
+		sqltypes.NULL, // Packed
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(nullableStr)),
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BTREE")), // Index_type
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),      // Comment

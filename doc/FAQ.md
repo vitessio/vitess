@@ -20,7 +20,7 @@ If no tablet type was specified, then VTGate chooses its default, which can be o
 
 Vitess supports different modes. In OLTP mode, the result size is typically limited to a preset number (10,000 rows by default). This limit can be adjusted based on your needs.
 
-However, OLAP mode has no limit to the number of rows returned. In order to change to this mode, you may issue the following command command before executing your query:
+However, OLAP mode has no limit to the number of rows returned. In order to change to this mode, you may issue the following command before executing your query:
 
 ```
 set workload='olap'
@@ -32,7 +32,7 @@ The general convention is to send OLTP queries to `REPLICA` tablet types, and OL
 
 ## Is there a list of supported/unsupported queries?
 
-The list of unsupported constructs is currently in the form of test cases contained in this [test file](https://github.com/vitessio/vitess/blob/master/data/test/vtgate/unsupported_cases.txt). However, contrary to the test cases, there is limited support for SET, DDL and DBA constructs. This will be documented soon.
+The list of unsupported constructs is currently in the form of test cases contained in this [test file](https://github.com/vitessio/vitess/blob/master/go/vt/vtgate/planbuilder/testdata/unsupported_cases.txt). However, contrary to the test cases, there is limited support for SET, DDL and DBA constructs. This will be documented soon.
 
 
 ## If I have a log of all queries from my app. Is there a way I can try them against vitess to see how they’ll work?

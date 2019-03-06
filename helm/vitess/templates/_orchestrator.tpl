@@ -89,7 +89,7 @@ spec:
       containers:
         - name: orchestrator
           image: {{ $orc.image | quote }}
-          ImagePullPolicy: IfNotPresent
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
               name: web
@@ -123,8 +123,8 @@ spec:
               value: "15999"
 
         - name: recovery-log
-          image: vitess/logtail:latest
-          ImagePullPolicy: IfNotPresent
+          image: vitess/logtail:helm-1.0.6
+          imagePullPolicy: IfNotPresent
           env:
           - name: TAIL_FILEPATH
             value: /tmp/recovery.log
@@ -133,8 +133,8 @@ spec:
               mountPath: /tmp
 
         - name: audit-log
-          image: vitess/logtail:latest
-          ImagePullPolicy: IfNotPresent
+          image: vitess/logtail:helm-1.0.6
+          imagePullPolicy: IfNotPresent
           env:
           - name: TAIL_FILEPATH
             value: /tmp/orchestrator-audit.log

@@ -18,6 +18,8 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"os"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
@@ -36,6 +38,7 @@ var (
 	toServerAddress  = flag.String("to_server", "", "topology server address to copy data to")
 	toRoot           = flag.String("to_root", "", "topology server root to copy data to")
 
+	compare             = flag.Bool("compare", false, "compares data between topologies")
 	doKeyspaces         = flag.Bool("do-keyspaces", false, "copies the keyspace information")
 	doShards            = flag.Bool("do-shards", false, "copies the shard information")
 	doShardReplications = flag.Bool("do-shard-replications", false, "copies the shard replication information")
@@ -64,6 +67,14 @@ func main() {
 
 	ctx := context.Background()
 
+	if *compare {
+		compareTopos(ctx, fromTS, toTS)
+		return
+	}
+	copyTopos(ctx, fromTS, toTS)
+}
+
+func copyTopos(ctx context.Context, fromTS, toTS *topo.Server) {
 	if *doKeyspaces {
 		helpers.CopyKeyspaces(ctx, fromTS, toTS)
 	}
@@ -75,5 +86,38 @@ func main() {
 	}
 	if *doTablets {
 		helpers.CopyTablets(ctx, fromTS, toTS)
+	}
+
+}
+
+func compareTopos(ctx context.Context, fromTS, toTS *topo.Server) {
+	var err error
+	if *doKeyspaces {
+		err = helpers.CompareKeyspaces(ctx, fromTS, toTS)
+		if err != nil {
+			log.Exitf("Compare keyspaces failed: %v", err)
+		}
+	}
+	if *doShards {
+		err = helpers.CompareShards(ctx, fromTS, toTS)
+		if err != nil {
+			log.Exitf("Compare shards failed: %v", err)
+		}
+	}
+	if *doShardReplications {
+		err = helpers.CompareShardReplications(ctx, fromTS, toTS)
+		if err != nil {
+			log.Exitf("Compare shard replications failed: %v", err)
+		}
+	}
+	if *doTablets {
+		err = helpers.CompareTablets(ctx, fromTS, toTS)
+		if err != nil {
+			log.Exitf("Compare tablets failed: %v", err)
+		}
+	}
+	if err == nil {
+		fmt.Println("Topologies are in sync")
+		os.Exit(0)
 	}
 }

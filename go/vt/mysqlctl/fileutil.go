@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2018 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,13 +17,10 @@ limitations under the License.
 package mysqlctl
 
 import (
-	//	"crypto/md5"
 	"encoding/hex"
 	"hash"
-	//	"hash/crc64"
+	"hash/crc32"
 	"os"
-
-	"vitess.io/vitess/go/cgzip"
 )
 
 // Use this to simulate failures in tests
@@ -36,39 +33,13 @@ func init() {
 	simulateFailures = statErr == nil
 }
 
-// our hasher, implemented using md5
-// type hasher struct {
-// 	hash.Hash
-// }
-
-// func newHasher() *hasher {
-// 	return &hasher{md5.New()}
-// }
-
-// func (h *hasher) HashString() string {
-// 	return hex.EncodeToString(h.Sum(nil))
-// }
-
-// our hasher, implemented using crc64
-//type hasher struct {
-//	hash.Hash64
-//}
-
-//func newHasher() *hasher {
-//	return &hasher{crc64.New(crc64.MakeTable(crc64.ECMA))}
-//}
-
-//func (h *hasher) HashString() string {
-//	return hex.EncodeToString(h.Sum(nil))
-//}
-
-// our hasher, implemented using cgzip crc32
+// our hasher, implemented using crc32
 type hasher struct {
 	hash.Hash32
 }
 
 func newHasher() *hasher {
-	return &hasher{cgzip.NewCrc32()}
+	return &hasher{crc32.NewIEEE()}
 }
 
 func (h *hasher) HashString() string {

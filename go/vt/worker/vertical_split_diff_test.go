@@ -46,7 +46,7 @@ type verticalDiffTabletServer struct {
 	*fakes.StreamHealthQueryService
 }
 
-func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+func (sq *verticalDiffTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
 	if !strings.Contains(sql, "moving1") {
 		sq.t.Errorf("Vertical Split Diff operation should only operate on the 'moving1' table. query: %v", sql)
 	}
@@ -171,7 +171,7 @@ func TestVerticalSplitDiff(t *testing.T) {
 		qs := fakes.NewStreamHealthQueryService(rdonly.Target())
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(rdonly.RPCServer, &verticalDiffTabletServer{
-			t: t,
+			t:                        t,
 			StreamHealthQueryService: qs,
 		})
 	}

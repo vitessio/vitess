@@ -114,7 +114,6 @@ import (
 	"vitess.io/vitess/go/sync2"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -333,7 +332,7 @@ var commands = []commandGroup{
 				"[-ping-tablets]",
 				"Validates that all nodes reachable from the global replication graph and that all tablets in all discoverable cells are consistent."},
 			{"ListAllTablets", commandListAllTablets,
-				"<cell name>",
+				"<cell name1>, <cell name2>, ...",
 				"Lists all tablets in an awk-friendly way."},
 			{"ListTablets", commandListTablets,
 				"<tablet alias> ...",
@@ -502,7 +501,7 @@ func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []*to
 	for _, tabletAlias := range tabletAliases {
 		ti, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
 		if !ok {
-			log.Warningf("failed to load tablet %v", tabletAlias)
+			wr.Logger().Warningf("failed to load tablet %v", tabletAlias)
 		} else {
 			wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
 		}
@@ -1158,7 +1157,7 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 
 	err = wr.TopoServer().CreateShard(ctx, keyspace, shard)
 	if *force && topo.IsErrType(err, topo.NodeExists) {
-		log.Infof("shard %v/%v already exists (ignoring error with -force)", keyspace, shard)
+		wr.Logger().Infof("shard %v/%v already exists (ignoring error with -force)", keyspace, shard)
 		err = nil
 	}
 	return err
@@ -1485,7 +1484,7 @@ func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		case err == nil:
 			// keep going
 		case topo.IsErrType(err, topo.NoNode):
-			log.Infof("Shard %v/%v doesn't exist, skipping it", ks.Keyspace, ks.Shard)
+			wr.Logger().Infof("Shard %v/%v doesn't exist, skipping it", ks.Keyspace, ks.Shard)
 		default:
 			return err
 		}
@@ -1790,7 +1789,7 @@ func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	}
 
 	if subFlags.NArg() != 0 {
-		log.Warningf("action Validate doesn't take any parameter any more")
+		wr.Logger().Warningf("action Validate doesn't take any parameter any more")
 	}
 	return wr.Validate(ctx, *pingTablets)
 }
@@ -1799,12 +1798,24 @@ func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <cell name> argument is required for the ListAllTablets command")
+	var cells []string
+	var err error
+	if subFlags.NArg() == 1 {
+		cells = strings.Split(subFlags.Arg(0), ",")
+	} else {
+		cells, err = wr.TopoServer().GetKnownCells(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
-	cell := subFlags.Arg(0)
-	return dumpAllTablets(ctx, wr, cell)
+	for _, cell := range cells {
+		err := dumpAllTablets(ctx, wr, cell)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2053,7 +2064,7 @@ func commandGetPermissions(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 	p, err := wr.GetPermissions(ctx, tabletAlias)
 	if err == nil {
-		log.Infof("%v", p.String()) // they can contain '%'
+		wr.Logger().Infof("%v", p.String()) // they can contain '%'
 	}
 	return err
 }
@@ -2097,7 +2108,7 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(schema, "", "  ")
+	b, err := json2.MarshalIndentPB(schema, "  ")
 	if err != nil {
 		wr.Logger().Printf("%v\n", err)
 		return err
@@ -2206,7 +2217,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 
 	b, err := json2.MarshalIndentPB(vs, "  ")
 	if err != nil {
-		wr.Logger().Errorf("Failed to marshal VSchema for display: %v", err)
+		wr.Logger().Errorf2(err, "Failed to marshal VSchema for display")
 	} else {
 		wr.Logger().Printf("New VSchema object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", b)
 	}

@@ -96,7 +96,7 @@ spec:
         shard: {{ $shardClean | quote }}
         type: {{ $tablet.type | quote }}
     spec:
-      terminationGracePeriodSeconds: 600
+      terminationGracePeriodSeconds: 60000000
 {{ include "pod-security" . | indent 6 }}
 {{ include "vttablet-affinity" (tuple $cellClean $keyspaceClean $shardClean $cell.region) | indent 6 }}
 
@@ -111,7 +111,7 @@ spec:
 {{ include "cont-mysql-generallog" . | indent 8 }}
 {{ include "cont-mysql-errorlog" . | indent 8 }}
 {{ include "cont-mysql-slowlog" . | indent 8 }}
-{{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace) | indent 8 }}{{ end }}
+{{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace $keyspace) | indent 8 }}{{ end }}
 
       volumes:
         - name: vt
@@ -119,6 +119,11 @@ spec:
 {{ include "backup-volume" $config.backup | indent 8 }}
 {{ include "user-config-volume" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 8 }}
 {{ include "user-secret-volumes" (.secrets | default $defaultVttablet.secrets) | indent 8 }}
+{{ if $keyspace.pmm }}{{if $keyspace.pmm.config }}
+        - name: config
+          configMap:
+            name: {{ $keyspace.pmm.config }}
+{{ end }}{{ end }}
 
   volumeClaimTemplates:
     - metadata:
@@ -162,7 +167,7 @@ spec:
 
 - name: "init-mysql"
   image: "vitess/mysqlctld:{{$vitessTag}}"
-  ImagePullPolicy: IfNotPresent
+  imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
       mountPath: "/vtdataroot"
@@ -188,6 +193,9 @@ spec:
       touch /vtdataroot/tabletdata/slow-query.log
       touch /vtdataroot/tabletdata/general.log
 
+      # remove the old socket file if it is still around
+      rm -f /vtdataroot/tabletdata/mysql.sock
+
 {{- end -}}
 
 ###################################
@@ -203,7 +211,7 @@ spec:
 
 - name: init-vttablet
   image: "vitess/vtctl:{{$vitessTag}}"
-  ImagePullPolicy: IfNotPresent
+  imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
       mountPath: "/vtdataroot"
@@ -268,7 +276,7 @@ spec:
 
 - name: vttablet
   image: "vitess/vttablet:{{$vitessTag}}"
-  ImagePullPolicy: IfNotPresent
+  imagePullPolicy: IfNotPresent
   readinessProbe:
     httpGet:
       path: /debug/health
@@ -336,13 +344,27 @@ spec:
             # - use GTID_SUBTRACT
 
             RETRY_COUNT=0
-            MAX_RETRY_COUNT=5
+            MAX_RETRY_COUNT=100000
+            hostname=$(hostname -s)
 
             # retry reparenting
             until [ $DONE_REPARENTING ]; do
 
+{{ if $orc.enabled }}
+              # tell orchestrator to not attempt a recovery for 10 seconds while we are in the middle of reparenting
+              wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/begin-downtime/$hostname.vttablet/3306/preStopHook/VitessPlannedReparent/10s"
+{{ end }}
+
               # reparent before shutting down
               /vt/bin/vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC PlannedReparentShard -keyspace_shard={{ $keyspace.name }}/{{ $shard.name }} -avoid_master=$current_alias
+
+{{ if $orc.enabled }}
+              # tell orchestrator to refresh its view of this tablet
+              wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/refresh/$hostname.vttablet/3306"
+
+              # let orchestrator attempt recoveries now
+              wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/end-downtime/$hostname.vttablet/3306"
+{{ end }}
 
               # if PlannedReparentShard succeeded, then don't retry
               if [ $? -eq 0 ]; then
@@ -363,6 +385,12 @@ spec:
             # delete the current tablet from topology. Not strictly necessary, but helps to prevent
             # edge cases where there are two masters
             /vt/bin/vtctlclient ${VTCTL_EXTRA_FLAGS[@]} -server $VTCTLD_SVC DeleteTablet $current_alias
+
+
+{{ if $orc.enabled }}
+            # tell orchestrator to forget the tablet, to prevent confusion / race conditions while the tablet restarts
+            wget -q -S -O - "http://orchestrator.{{ $namespace }}/api/forget/$hostname.vttablet/3306"
+{{ end }}
 
   command: ["bash"]
   args:
@@ -428,7 +456,7 @@ spec:
 
 - name: mysql
   image: {{.mysqlImage | default $defaultVttablet.mysqlImage | quote}}
-  ImagePullPolicy: IfNotPresent
+  imagePullPolicy: IfNotPresent
   readinessProbe:
     exec:
       command: ["mysqladmin", "ping", "-uroot", "--socket=/vtdataroot/tabletdata/mysql.sock"]
@@ -505,8 +533,8 @@ spec:
 {{ define "cont-logrotate" }}
 
 - name: logrotate
-  image: vitess/logrotate:latest
-  ImagePullPolicy: IfNotPresent
+  image: vitess/logrotate:helm-1.0.6
+  imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
       mountPath: /vtdataroot
@@ -519,8 +547,8 @@ spec:
 {{ define "cont-mysql-errorlog" }}
 
 - name: error-log
-  image: vitess/logtail:latest
-  ImagePullPolicy: IfNotPresent
+  image: vitess/logtail:helm-1.0.6
+  imagePullPolicy: IfNotPresent
 
   env:
   - name: TAIL_FILEPATH
@@ -537,8 +565,8 @@ spec:
 {{ define "cont-mysql-slowlog" }}
 
 - name: slow-log
-  image: vitess/logtail:latest
-  ImagePullPolicy: IfNotPresent
+  image: vitess/logtail:helm-1.0.6
+  imagePullPolicy: IfNotPresent
 
   env:
   - name: TAIL_FILEPATH
@@ -555,8 +583,8 @@ spec:
 {{ define "cont-mysql-generallog" }}
 
 - name: general-log
-  image: vitess/logtail:latest
-  ImagePullPolicy: IfNotPresent
+  image: vitess/logtail:helm-1.0.6
+  imagePullPolicy: IfNotPresent
 
   env:
   - name: TAIL_FILEPATH

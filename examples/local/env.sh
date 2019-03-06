@@ -1,3 +1,4 @@
+#!/bin/bash
 # Copyright 2017 Google Inc.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +17,7 @@ hostname=`hostname -f`
 vtctld_web_port=15000
 
 # Set up environment.
-export VTTOP=$VTROOT/src/vitess.io/vitess
+export VTTOP=${VTTOP-$VTROOT/src/vitess.io/vitess}
 
 # Try to find mysqld_safe on PATH.
 if [ -z "$VT_MYSQL_ROOT" ]; then

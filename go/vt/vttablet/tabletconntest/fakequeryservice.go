@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -457,7 +458,7 @@ var StreamExecuteQueryResult2 = sqltypes.Result{
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.Panics && f.StreamExecutePanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}
@@ -751,14 +752,14 @@ var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 		Shard:      "test_shard",
 		TabletType: topodatapb.TabletType_RDONLY,
 	},
-	Serving: true,
+	Serving:                             true,
 	TabletExternallyReparentedTimestamp: 1234589,
 	RealtimeStats: &querypb.RealtimeStats{
 		HealthError:                            "random error",
 		SecondsBehindMaster:                    234,
 		BinlogPlayersCount:                     1,
 		SecondsBehindMasterFilteredReplication: 2,
-		CpuUsage: 1.0,
+		CpuUsage:                               1.0,
 	},
 }
 
@@ -848,6 +849,11 @@ func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Tar
 		f.t.Errorf("callback2 failed: %v", err)
 	}
 	return nil
+}
+
+// VStream is part of the queryservice.QueryService interface
+func (f *FakeQueryService) VStream(ctx context.Context, target *querypb.Target, position string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	panic("not implemented")
 }
 
 // CreateFakeServer returns the fake server for the tests

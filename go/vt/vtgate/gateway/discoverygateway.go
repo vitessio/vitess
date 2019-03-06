@@ -87,8 +87,13 @@ type discoveryGateway struct {
 func createDiscoveryGateway(hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int) Gateway {
 	var topoServer *topo.Server
 	if serv != nil {
-		topoServer = serv.GetTopoServer()
+		var err error
+		topoServer, err = serv.GetTopoServer()
+		if err != nil {
+			log.Exitf("Unable to create new discoverygateway: %v", err)
+		}
 	}
+
 	dg := &discoveryGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(topoServer, cell),
@@ -111,6 +116,10 @@ func createDiscoveryGateway(hc discovery.HealthCheck, serv srvtopo.Server, cell 
 		}
 		var tr discovery.TabletRecorder = dg.hc
 		if len(tabletFilters) > 0 {
+			if len(KeyspacesToWatch) > 0 {
+				log.Exitf("Only one of -keyspaces_to_watch and -tablet_filters may be specified at a time")
+			}
+
 			fbs, err := discovery.NewFilterByShard(dg.hc, tabletFilters)
 			if err != nil {
 				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
@@ -199,12 +208,6 @@ func (dg *discoveryGateway) GetAggregateStats(target *querypb.Target) (*querypb.
 func (dg *discoveryGateway) GetMasterCell(keyspace, shard string) (string, queryservice.QueryService, error) {
 	cell, err := dg.tsc.GetMasterCell(keyspace, shard)
 	return cell, dg, err
-}
-
-// StreamHealth is not forwarded to any other tablet,
-// but we handle it directly here.
-func (dg *discoveryGateway) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	return StreamHealthFromTargetStatsListener(ctx, dg.tsc, callback)
 }
 
 // Close shuts down underlying connections.
@@ -324,7 +327,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		}
 		break
 	}
-	return NewShardError(err, target, tabletLastUsed, inTransaction)
+	return NewShardError(err, target, tabletLastUsed)
 }
 
 func shuffleTablets(cell string, tablets []discovery.TabletStats) {

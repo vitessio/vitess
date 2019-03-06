@@ -794,7 +794,14 @@ func TestJSONType(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%v, want \n%v", prettyPrint(*qr), prettyPrint(want))
+		// MariaDB 10.3 has different behavior.
+		want2 := want.Copy()
+		want2.Fields[1].Type = sqltypes.Blob
+		want2.Fields[1].Charset = 33
+		want2.Rows[0][1] = sqltypes.TestValue(sqltypes.Blob, "{\"foo\": \"bar\"}")
+		if !reflect.DeepEqual(*qr, *want2) {
+			t.Errorf("Execute:\n%v, want\n%v or\n%v", prettyPrint(*qr), prettyPrint(want), prettyPrint(*want2))
+		}
 	}
 
 }

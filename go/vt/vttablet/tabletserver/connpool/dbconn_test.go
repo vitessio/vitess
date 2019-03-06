@@ -102,7 +102,7 @@ func TestDBConnExec(t *testing.T) {
 
 	startCounts = tabletenv.MySQLStats.Counts()
 
-	// Set the connection fail flag and and try again.
+	// Set the connection fail flag and try again.
 	// This time the initial query fails as does the reconnect attempt.
 	db.EnableConnFail()
 	_, err = dbConn.Exec(ctx, sql, 1, false)

@@ -24,7 +24,7 @@ config files](https://github.com/vitessio/vitess/blob/312064b96ac0070d9f8990e57a
 To customize the `my.cnf`, you can either add overrides in an additional
 `EXTRA_MY_CNF` file, or modify the files in `$VTROOT/config/mycnf` before
 distributing to your servers. In Kubernetes, you can use a
-[ConfigMap](http://kubernetes.io/docs/user-guide/configmap/) to overwrite
+[ConfigMap](https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/) to overwrite
 the entire `$VTROOT/config/mycnf` directory with your custom versions,
 rather than baking them into a custom container image.
 
@@ -71,7 +71,7 @@ This rule is not strictly enforced. You are allowed to add these things, but at 
 
 Similar guidelines should be used when deciding to bypass Vitess to send statements directly to MySQL.
 
-Vitess also requires you to turn on STRICT_TRANS_TABLES mode. Otherwise, it cannot accurately predict what will be written to the database.
+Vitess also requires you to turn on STRICT_TRANS_TABLES or STRICT_ALL_TABLES mode. Otherwise, it cannot accurately predict what will be written to the database.
 
 It’s safe to apply backward compatible DDLs directly to MySQL. VTTablets can be configured to periodically check the schema for changes.
 
@@ -504,7 +504,7 @@ This URL prints out a simple "ok" or “not ok” string that can be used to che
 
 #### /querylogz, /debug/querylog, /txlogz, /debug/txlog
 
-* /debug/querylog is a never-ending stream of currently executing queries with verbose information about each query. This URL can generate a lot of data because it streams every query processed by VTTablet. The details are as per this function: [https://github.com/vitessio/vitess/blob/master/go/vt/tabletserver/logstats.go#L202](https://github.com/vitessio/vitess/blob/master/go/vt/tabletserver/logstats.go#L202)
+* /debug/querylog is a never-ending stream of currently executing queries with verbose information about each query. This URL can generate a lot of data because it streams every query processed by VTTablet. The details are as per this function: [https://github.com/vitessio/vitess/tree/master/go/vt/vttablet/tabletserver/tabletenv/logstats.go#L202](https://github.com/vitessio/vitess/tree/master/go/vt/vttablet/tabletserver/tabletenv/logstats.go#L202)
 * /querylogz is a limited human readable version of /debug/querylog. It prints the next 300 queries by default. The limit can be specified with a limit=N parameter on the URL.
 * /txlogz is like /querylogz, but for transactions.
 * /debug/txlog is the JSON counterpart to /txlogz.
@@ -552,6 +552,7 @@ Load-balancer in front of vtgate to scale up (not covered by Vitess). Stateless,
 ### Parameters
 
 * **cells_to_watch**: which cell vtgate is in and will monitor tablets from. Cross-cell master access needs multiple cells here.
+* **keyspaces_to_watch**: Specifies that a vtgate will only be able to perform queries against or view the topology of these keyspaces
 * **tablet_types_to_wait**: VTGate waits for at least one serving tablet per tablet type specified here during startup, before listening to the serving port. So VTGate does not serve error. It should match the available tablet types VTGate connects to (master, replica, rdonly).
 * **discovery_low_replication_lag**: when replication lags of all VTTablet in a particular shard and tablet type are less than or equal the flag (in seconds), VTGate does not filter them by replication lag and uses all to balance traffic.
 * **degraded_threshold (30s)**: a tablet will publish itself as degraded if replication lag exceeds this threshold. This will cause VTGates to choose more up-to-date servers over this one. If all servers are degraded, VTGate resorts to serving from all of them.

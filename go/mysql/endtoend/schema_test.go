@@ -42,7 +42,7 @@ func testDescribeTable(t *testing.T) {
 	// This is because without this, we have exceptions:
 	// - MariaDB and MySQL 5.6 return '0' as default.
 	// - MySQL 5.7 returns NULL as default.
-	// So we explicitely set it, to avoid having to check both cases below.
+	// So we explicitly set it, to avoid having to check both cases below.
 	if _, err := conn.ExecuteFetch("create table for_describe(id int default 0, name varchar(128), primary key(id))", 0, false); err != nil {
 		t.Fatal(err)
 	}
@@ -52,10 +52,9 @@ func testDescribeTable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// MariaDB has '81' instead of '90' of Extra ColumnLength.
-	// Just try it and see if it's the only difference.
-	if conn.IsMariaDB() && result.Fields[5].ColumnLength == 81 {
-		result.Fields[5].ColumnLength = 90
+	// Zero-out the column lengths, because they can't be compared.
+	for i := range result.Fields {
+		result.Fields[i].ColumnLength = 0
 	}
 
 	if !sqltypes.FieldsEqual(result.Fields, mysql.DescribeTableFields) {

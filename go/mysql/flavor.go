@@ -24,6 +24,8 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -44,6 +46,10 @@ type flavor interface {
 
 	// startSlave returns the command to start the slave.
 	startSlaveCommand() string
+
+	// startSlaveUntilAfter will restart replication, but only allow it
+	// to run until `pos` is reached. After reaching pos, replication will be stopped again
+	startSlaveUntilAfter(pos Position) string
 
 	// stopSlave returns the command to stop the slave.
 	stopSlaveCommand() string
@@ -146,6 +152,11 @@ func (c *Conn) StartSlaveCommand() string {
 	return c.flavor.startSlaveCommand()
 }
 
+// StartSlaveUntilAfterCommand returns the command to start the slave.
+func (c *Conn) StartSlaveUntilAfterCommand(pos Position) string {
+	return c.flavor.startSlaveUntilAfter(pos)
+}
+
 // StopSlaveCommand returns the command to stop the slave.
 func (c *Conn) StopSlaveCommand() string {
 	return c.flavor.stopSlaveCommand()
@@ -215,10 +226,10 @@ func resultToMap(qr *sqltypes.Result) (map[string]string, error) {
 		return nil, nil
 	}
 	if len(qr.Rows) > 1 {
-		return nil, fmt.Errorf("query returned %d rows, expected 1", len(qr.Rows))
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "query returned %d rows, expected 1", len(qr.Rows))
 	}
 	if len(qr.Fields) != len(qr.Rows[0]) {
-		return nil, fmt.Errorf("query returned %d column names, expected %d", len(qr.Fields), len(qr.Rows[0]))
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "query returned %d column names, expected %d", len(qr.Fields), len(qr.Rows[0]))
 	}
 
 	result := make(map[string]string, len(qr.Fields))

@@ -178,6 +178,22 @@ func (s *server) ApplySchema(ctx context.Context, request *tabletmanagerdatapb.A
 	return response, err
 }
 
+func (s *server) LockTables(ctx context.Context, req *tabletmanagerdatapb.LockTablesRequest) (*tabletmanagerdatapb.LockTablesResponse, error) {
+	err := s.agent.LockTables(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &tabletmanagerdatapb.LockTablesResponse{}, nil
+}
+
+func (s *server) UnlockTables(ctx context.Context, req *tabletmanagerdatapb.UnlockTablesRequest) (*tabletmanagerdatapb.UnlockTablesResponse, error) {
+	err := s.agent.UnlockTables(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &tabletmanagerdatapb.UnlockTablesResponse{}, nil
+}
+
 func (s *server) ExecuteFetchAsDba(ctx context.Context, request *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (response *tabletmanagerdatapb.ExecuteFetchAsDbaResponse, err error) {
 	defer s.agent.HandleRPCPanic(ctx, "ExecuteFetchAsDba", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -265,6 +281,13 @@ func (s *server) StartSlave(ctx context.Context, request *tabletmanagerdatapb.St
 	return response, s.agent.StartSlave(ctx)
 }
 
+func (s *server) StartSlaveUntilAfter(ctx context.Context, request *tabletmanagerdatapb.StartSlaveUntilAfterRequest) (response *tabletmanagerdatapb.StartSlaveUntilAfterResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "StartSlave", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.StartSlaveUntilAfterResponse{}
+	return response, s.agent.StartSlaveUntilAfter(ctx, request.Position, time.Duration(request.WaitTimeout))
+}
+
 func (s *server) TabletExternallyReparented(ctx context.Context, request *tabletmanagerdatapb.TabletExternallyReparentedRequest) (response *tabletmanagerdatapb.TabletExternallyReparentedResponse, err error) {
 	defer s.agent.HandleRPCPanic(ctx, "TabletExternallyReparented", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -346,6 +369,14 @@ func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.
 	if err == nil {
 		response.Position = position
 	}
+	return response, err
+}
+
+func (s *server) UndoDemoteMaster(ctx context.Context, request *tabletmanagerdatapb.UndoDemoteMasterRequest) (response *tabletmanagerdatapb.UndoDemoteMasterResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "UndoDemoteMaster", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.UndoDemoteMasterResponse{}
+	err = s.agent.UndoDemoteMaster(ctx)
 	return response, err
 }
 

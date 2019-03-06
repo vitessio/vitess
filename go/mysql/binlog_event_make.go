@@ -16,7 +16,9 @@ limitations under the License.
 
 package mysql
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+)
 
 // This file contains utility methods to create binlog replication
 // packets. They are mostly used for testing.
@@ -127,7 +129,7 @@ func NewFormatDescriptionEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent 
 		1 // (undocumented) checksum algorithm
 	data := make([]byte, length)
 	binary.LittleEndian.PutUint16(data[0:2], f.FormatVersion)
-	copy(data[2:52], []byte(f.ServerVersion))
+	copy(data[2:52], f.ServerVersion)
 	binary.LittleEndian.PutUint32(data[52:56], s.Timestamp)
 	data[56] = f.HeaderLength
 	copy(data[57:], f.HeaderSizes)
@@ -197,7 +199,7 @@ func NewQueryEvent(f BinlogFormat, s *FakeBinlogStream, q Query) BinlogEvent {
 		data[pos+6] = byte(q.Charset.Server >> 8)
 		pos += 7
 	}
-	pos += copy(data[pos:pos+len(q.Database)], []byte(q.Database))
+	pos += copy(data[pos:pos+len(q.Database)], q.Database)
 	data[pos] = 0
 	pos++
 	copy(data[pos:], q.SQL)
@@ -310,11 +312,11 @@ func NewTableMapEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, tm *T
 	data[6] = byte(tm.Flags)
 	data[7] = byte(tm.Flags >> 8)
 	data[8] = byte(len(tm.Database))
-	pos := 6 + 2 + 1 + copy(data[9:], []byte(tm.Database))
+	pos := 6 + 2 + 1 + copy(data[9:], tm.Database)
 	data[pos] = 0
 	pos++
 	data[pos] = byte(len(tm.Name))
-	pos += 1 + copy(data[pos+1:], []byte(tm.Name))
+	pos += 1 + copy(data[pos+1:], tm.Name)
 	data[pos] = 0
 	pos++
 

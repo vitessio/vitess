@@ -23,6 +23,7 @@ package mysqlctl
 import (
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -81,6 +82,19 @@ func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("postflight_start_slave")
 	h.ExtraEnv = hookExtraEnv
 	return h.ExecuteOptional()
+}
+
+// StartSlaveUntilAfter starts a slave until replication has come to `targetPos`, then it stops replication
+func (mysqld *Mysqld) StartSlaveUntilAfter(ctx context.Context, targetPos mysql.Position) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	queries := []string{conn.StartSlaveUntilAfterCommand(targetPos)}
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
 }
 
 // StopSlave stops a slave.
@@ -293,7 +307,14 @@ func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 			if err != nil {
 				return nil, fmt.Errorf("FindSlaves: malformed addr %v", err)
 			}
-			addrs = append(addrs, host)
+			var ips []string
+			ips, err = net.LookupHost(host)
+			if err != nil {
+				return nil, fmt.Errorf("FindSlaves: LookupHost failed %v", err)
+			}
+			for _, ip := range ips {
+				addrs = append(addrs, ip)
+			}
 		}
 	}
 

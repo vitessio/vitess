@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,20 +20,23 @@ import static org.junit.Assert.assertEquals;
 
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
+
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.BindVariable;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Collection;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
-import io.vitess.proto.Query;
-import io.vitess.proto.Query.BindVariable;
-
 @RunWith(value = Parameterized.class)
 public class BindVarTest {
+
   private Object input;
   private BindVariable expected;
 
@@ -50,9 +53,9 @@ public class BindVarTest {
             BindVariable.newBuilder().setType(Query.Type.VARCHAR)
                 .setValue(ByteString.copyFromUtf8("hello world")).build()},
         // Bytes
-        {new byte[] {1, 2, 3},
+        {new byte[]{1, 2, 3},
             BindVariable.newBuilder().setType(Query.Type.VARBINARY)
-                .setValue(ByteString.copyFrom(new byte[] {1, 2, 3})).build()},
+                .setValue(ByteString.copyFrom(new byte[]{1, 2, 3})).build()},
         // Int
         {123,
             BindVariable.newBuilder().setType(Query.Type.INT64)
@@ -78,12 +81,12 @@ public class BindVarTest {
             BindVariable.newBuilder().setType(Query.Type.FLOAT64)
                 .setValue(ByteString.copyFromUtf8("1.23")).build()},
         // List of Bytes
-        {Arrays.asList(new byte[] {1, 2, 3}, new byte[] {4, 5, 6}),
+        {Arrays.asList(new byte[]{1, 2, 3}, new byte[]{4, 5, 6}),
             BindVariable.newBuilder().setType(Query.Type.TUPLE)
                 .addValues(Query.Value.newBuilder().setType(Query.Type.VARBINARY)
-                    .setValue(ByteString.copyFrom(new byte[] {1, 2, 3})).build())
+                    .setValue(ByteString.copyFrom(new byte[]{1, 2, 3})).build())
                 .addValues(Query.Value.newBuilder().setType(Query.Type.VARBINARY)
-                    .setValue(ByteString.copyFrom(new byte[] {4, 5, 6})).build())
+                    .setValue(ByteString.copyFrom(new byte[]{4, 5, 6})).build())
                 .build()},
         // Boolean
         {true,

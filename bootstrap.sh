@@ -23,6 +23,7 @@
 # 3. Detection of installed MySQL and setting MYSQL_FLAVOR.
 # 4. Installation of development related steps e.g. creating Git hooks.
 
+BUILD_TESTS=${BUILD_TESTS:-1}
 
 #
 # 0. Initialization and helper methods.
@@ -45,9 +46,14 @@ function fail() {
 [[ "$(dirname "$0")" = "." ]] || fail "bootstrap.sh must be run from its current directory"
 
 go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
+[[ "$(go version 2>&1)" =~ go1\.[1-9][1-9] ]] || fail "Go is not version 1.11+"
 
 # Set up the proper GOPATH for go get below.
-source ./dev.env
+if [ "$BUILD_TESTS" == 1 ] ; then
+    source ./dev.env
+else
+    source ./build.env
+fi
 
 # Create main directories.
 mkdir -p "$VTROOT/dist"
@@ -55,15 +61,21 @@ mkdir -p "$VTROOT/bin"
 mkdir -p "$VTROOT/lib"
 mkdir -p "$VTROOT/vthook"
 
-# Set up required soft links.
-# TODO(mberlin): Which of these can be deleted?
-ln -snf "$VTTOP/config" "$VTROOT/config"
-ln -snf "$VTTOP/data" "$VTROOT/data"
-ln -snf "$VTTOP/py" "$VTROOT/py-vtdb"
-ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
-ln -snf "$VTTOP/test/vthook-test.sh" "$VTROOT/vthook/test.sh"
-ln -snf "$VTTOP/test/vthook-test_backup_error" "$VTROOT/vthook/test_backup_error"
-ln -snf "$VTTOP/test/vthook-test_backup_transform" "$VTROOT/vthook/test_backup_transform"
+if [ "$BUILD_TESTS" == 1 ] ; then
+    # Set up required soft links.
+    # TODO(mberlin): Which of these can be deleted?
+    ln -snf "$VTTOP/config" "$VTROOT/config"
+    ln -snf "$VTTOP/data" "$VTROOT/data"
+    ln -snf "$VTTOP/py" "$VTROOT/py-vtdb"
+    ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
+    ln -snf "$VTTOP/test/vthook-test.sh" "$VTROOT/vthook/test.sh"
+    ln -snf "$VTTOP/test/vthook-test_backup_error" "$VTROOT/vthook/test_backup_error"
+    ln -snf "$VTTOP/test/vthook-test_backup_transform" "$VTROOT/vthook/test_backup_transform"
+else
+    ln -snf "$VTTOP/config" "$VTROOT/config"
+    ln -snf "$VTTOP/data" "$VTROOT/data"
+    ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
+fi
 
 # install_dep is a helper function to generalize the download and installation of dependencies.
 #
@@ -136,8 +148,10 @@ function install_grpc() {
   grpcio_ver=$version
   $PIP install --upgrade grpcio=="$grpcio_ver" grpcio-tools=="$grpcio_ver"
 }
-install_dep "gRPC" "1.16.0" "$VTROOT/dist/grpc" install_grpc
 
+if [ "$BUILD_TESTS" == 1 ] ; then
+    install_dep "gRPC" "1.16.0" "$VTROOT/dist/grpc" install_grpc
+fi
 
 # Install protoc.
 function install_protoc() {
@@ -225,8 +239,9 @@ function install_pymock() {
   popd >/dev/null
 }
 pymock_version=1.0.1
-install_dep "py-mock" "$pymock_version" "$VTROOT/dist/py-mock-$pymock_version" install_pymock
-
+if [ "$BUILD_TESTS" == 1 ] ; then
+    install_dep "py-mock" "$pymock_version" "$VTROOT/dist/py-mock-$pymock_version" install_pymock
+fi
 
 # Download Selenium (necessary to run test/vtctld_web_test.py).
 function install_selenium() {
@@ -239,7 +254,9 @@ function install_selenium() {
   # instead of go/dist/selenium/lib/python3.5/site-packages and then can't find module 'pip._vendor.requests'
   PYTHONPATH='' $PIP install selenium
 }
-install_dep "Selenium" "latest" "$VTROOT/dist/selenium" install_selenium
+if [ "$BUILD_TESTS" == 1 ] ; then
+    install_dep "Selenium" "latest" "$VTROOT/dist/selenium" install_selenium
+fi
 
 
 # Download chromedriver (necessary to run test/vtctld_web_test.py).
@@ -247,11 +264,13 @@ function install_chromedriver() {
   local version="$1"
   local dist="$2"
 
-  curl -sL "http://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
+  curl -sL "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
   unzip -o -q chromedriver_linux64.zip -d "$dist"
   rm chromedriver_linux64.zip
 }
-install_dep "chromedriver" "2.44" "$VTROOT/dist/chromedriver" install_chromedriver
+if [ "$BUILD_TESTS" == 1 ] ; then
+    install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
+fi
 
 
 #
@@ -300,47 +319,52 @@ govendor sync || fail "Failed to download/update dependencies with govendor. Ple
 
 
 # find mysql and prepare to use libmysqlclient
-if [ -z "$MYSQL_FLAVOR" ]; then
-  export MYSQL_FLAVOR=MySQL56
-  echo "MYSQL_FLAVOR environment variable not set. Using default: $MYSQL_FLAVOR"
+
+if [ "$BUILD_TESTS" == 1 ] ; then
+  if [ -z "$MYSQL_FLAVOR" ]; then
+    export MYSQL_FLAVOR=MySQL56
+    echo "MYSQL_FLAVOR environment variable not set. Using default: $MYSQL_FLAVOR"
+  fi
+  case "$MYSQL_FLAVOR" in
+    "MySQL56")
+      myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
+      [[ "$myversion" =~ Distrib\ 5\.[67] || "$myversion" =~ Ver\ 8\. ]] || fail "Couldn't find MySQL 5.6+ in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
+      echo "Found MySQL 5.6+ installation in $VT_MYSQL_ROOT."
+      ;;
+
+    "MariaDB")
+      myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
+      [[ "$myversion" =~ MariaDB ]] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
+      echo "Found MariaDB installation in $VT_MYSQL_ROOT."
+      ;;
+
+    *)
+      fail "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
+      ;;
+
+  esac
+  # save the flavor that was used in bootstrap, so it can be restored
+  # every time dev.env is sourced.
+  echo "$MYSQL_FLAVOR" > "$VTROOT/dist/MYSQL_FLAVOR"
 fi
-case "$MYSQL_FLAVOR" in
-  "MySQL56")
-    myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
-    [[ "$myversion" =~ Distrib\ 5\.[67] ]] || fail "Couldn't find MySQL 5.6+ in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-    echo "Found MySQL 5.6+ installation in $VT_MYSQL_ROOT."
-    ;;
-
-  "MariaDB")
-    myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
-    [[ "$myversion" =~ MariaDB ]] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-    echo "Found MariaDB installation in $VT_MYSQL_ROOT."
-    ;;
-
-  *)
-    fail "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
-    ;;
-
-esac
-
-# save the flavor that was used in bootstrap, so it can be restored
-# every time dev.env is sourced.
-echo "$MYSQL_FLAVOR" > "$VTROOT/dist/MYSQL_FLAVOR"
-
 
 #
 # 4. Installation of development related steps e.g. creating Git hooks.
 #
 
+if [ "$BUILD_TESTS" == 1 ] ; then
+ # Create the Git hooks.
+ echo "creating git hooks"
+ mkdir -p "$VTTOP/.git/hooks"
+ ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
+ ln -sf "$VTTOP/misc/git/prepare-commit-msg.bugnumber" "$VTTOP/.git/hooks/prepare-commit-msg"
+ ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
+ (cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
+ echo
+ echo "bootstrap finished - run 'source dev.env' in your shell before building."
+else
+ echo
+ echo "bootstrap finished - run 'source build.env' in your shell before building."    
+fi
 
-# Create the Git hooks.
-echo "creating git hooks"
-mkdir -p "$VTTOP/.git/hooks"
-ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
-ln -sf "$VTTOP/misc/git/prepare-commit-msg.bugnumber" "$VTTOP/.git/hooks/prepare-commit-msg"
-ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
-(cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
 
-
-echo
-echo "bootstrap finished - run 'source dev.env' in your shell before building."

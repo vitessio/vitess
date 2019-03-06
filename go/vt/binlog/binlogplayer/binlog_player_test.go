@@ -37,8 +37,8 @@ var (
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"),    // pos
-				sqltypes.NULL,                                // stop_pos
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
+				sqltypes.NULL, // stop_pos
 				sqltypes.NewVarBinary("9223372036854775807"), // max_tps
 				sqltypes.NewVarBinary("9223372036854775807"), // max_replication_lag
 			},
@@ -355,7 +355,7 @@ func TestUpdateVReplicationPos(t *testing.T) {
 		"set pos='MariaDB/0-1-8283', time_updated=88822 " +
 		"where id=78522"
 
-	got := updateVReplicationPos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0)
+	got := GenerateUpdatePos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0)
 	if got != want {
 		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
 	}
@@ -367,7 +367,7 @@ func TestUpdateVReplicationTimestamp(t *testing.T) {
 		"set pos='MariaDB/0-2-582', time_updated=88822, transaction_timestamp=481828 " +
 		"where id=78522"
 
-	got := updateVReplicationPos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828)
+	got := GenerateUpdatePos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828)
 	if got != want {
 		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
 	}
@@ -377,6 +377,14 @@ func TestReadVReplicationPos(t *testing.T) {
 	want := "select pos from _vt.vreplication where id=482821"
 	got := ReadVReplicationPos(482821)
 	if got != want {
-		t.Errorf("ReadVReplicationThrottlerSettings(482821) = %#v, want %#v", got, want)
+		t.Errorf("ReadVReplicationPos(482821) = %#v, want %#v", got, want)
+	}
+}
+
+func TestReadVReplicationStatus(t *testing.T) {
+	want := "select pos, state, message from _vt.vreplication where id=482821"
+	got := ReadVReplicationStatus(482821)
+	if got != want {
+		t.Errorf("ReadVReplicationStatus(482821) = %#v, want %#v", got, want)
 	}
 }

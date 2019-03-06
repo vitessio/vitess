@@ -6,7 +6,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     automake \
     bison \
     bzip2 \
-    chromium \
+    chromium=70.0.3538.110-1~deb9u1 \
     curl \
     g++ \
     git \
@@ -52,7 +52,7 @@ ENV PKG_CONFIG_PATH $VTROOT/lib
 ENV USER vitess
 
 # Copy files needed for bootstrap
-COPY bootstrap.sh dev.env /vt/src/vitess.io/vitess/
+COPY bootstrap.sh dev.env build.env /vt/src/vitess.io/vitess/
 COPY config /vt/src/vitess.io/vitess/config
 COPY third_party /vt/src/vitess.io/vitess/third_party
 COPY tools /vt/src/vitess.io/vitess/tools

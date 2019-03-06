@@ -19,9 +19,11 @@ package vtgate
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -596,7 +598,7 @@ func TestSelectKeyRangeUnique(t *testing.T) {
 func TestSelectIN(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
-	// Constant in IN is just a number, not a bind variable.
+	// Constant in IN clause is just a number, not a bind variable.
 	_, err := executorExec(executor, "select id from user where id in (1)", nil)
 	if err != nil {
 		t.Error(err)
@@ -614,7 +616,7 @@ func TestSelectIN(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 
-	// Constant in IN is just a couple numbers, not bind variables.
+	// Constants in IN clause are just numbers, not bind variables.
 	// They result in two different queries on two shards.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
@@ -806,9 +808,12 @@ func TestSelectScatterPartial(t *testing.T) {
 	// Fail 1 of N without the directive fails the whole operation
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	results, err := executorExec(executor, "select id from user", nil)
-	wantErr := "target: TestExecutor.40-60.master, used tablet: aa-0 (40-60), RESOURCE_EXHAUSTED error"
-	if err == nil || err.Error() != wantErr {
+	wantErr := "TestExecutor.40-60.master, used tablet: aa-0 (40-60)"
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("want error %v, got %v", wantErr, err)
+	}
+	if vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED {
+		t.Errorf("want error code Code_RESOURCE_EXHAUSTED, but got %v", vterrors.Code(err))
 	}
 	if results != nil {
 		t.Errorf("want nil results, got %v", results)

@@ -30,7 +30,7 @@ import (
 )
 
 // getPoolReconnect gets a connection from a pool, tests it, and reconnects if
-// it gets errno 2006.
+// the connection is lost.
 func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*dbconnpool.PooledDBConnection, error) {
 	conn, err := pool.Get(ctx)
 	if err != nil {
@@ -39,7 +39,7 @@ func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*db
 	// Run a test query to see if this connection is still good.
 	if _, err := conn.ExecuteFetch("SELECT 1", 1, false); err != nil {
 		// If we get a connection error, try to reconnect.
-		if sqlErr, ok := err.(*mysql.SQLError); ok && (sqlErr.Number() == 2006 || sqlErr.Number() == 2013) {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && (sqlErr.Number() == mysql.CRServerGone || sqlErr.Number() == mysql.CRServerLost) {
 			if err := conn.Reconnect(); err != nil {
 				conn.Recycle()
 				return nil, err

@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,6 +17,7 @@
 package io.vitess.mysql;
 
 import com.google.common.math.IntMath;
+
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
@@ -29,10 +30,11 @@ import java.util.Calendar;
  * Utility methods for processing MySQL TIME, DATE, DATETIME, and TIMESTAMP.
  *
  * <p>These provide functionality similar to {@code valueOf()} and {@code toString()}
- * in {@link java.sql.Date} et al. The difference is that these support MySQL-specific
- * syntax like fractional seconds, negative times, and hours > 24 for elapsed time.
+ * in {@link java.sql.Date} et al. The difference is that these support MySQL-specific syntax like
+ * fractional seconds, negative times, and hours > 24 for elapsed time.
  */
 public class DateTime {
+
   private static final String DATE_FORMAT = "yyyy-MM-dd";
   private static final String DATETIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
 
@@ -139,7 +141,7 @@ public class DateTime {
           }
         }
       }
-    } catch (NumberFormatException e) {
+    } catch (NumberFormatException exc) {
       throw new ParseException("Invalid MYSQL TIME format: " + value, 0);
     }
 
@@ -165,8 +167,8 @@ public class DateTime {
    * Format a {@link Time} as a MySQL TIME with the default time zone.
    *
    * <p>This should match {@link Time#toString()} for the values it supports.
-   * For MySQL-specific syntax (like fractional seconds, negative times,
-   * and hours > 24) the results will differ.
+   * For MySQL-specific syntax (like fractional seconds, negative times, and hours > 24) the results
+   * will differ.
    */
   public static String formatTime(Time value) {
     return formatTime(value, Calendar.getInstance());
@@ -177,8 +179,8 @@ public class DateTime {
    *
    * <p>The range for TIME values is '-838:59:59.000000' to '838:59:59.000000'
    * <a href="http://dev.mysql.com/doc/refman/5.6/en/time.html">[1]</a>.
-   * We don't enforce that range, but we do print >24 hours rather than
-   * wrapping around to the next day.
+   * We don't enforce that range, but we do print >24 hours rather than wrapping around to the next
+   * day.
    */
   public static String formatTime(Time value, Calendar cal) {
     long millis = value.getTime();
@@ -243,7 +245,7 @@ public class DateTime {
         }
         try {
           nanos = Integer.parseInt(fraction) * IntMath.pow(10, 9 - fraction.length());
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException exc) {
           throw new ParseException("Invalid MySQL TIMESTAMP format: " + value, dotIndex + 1);
         }
       }

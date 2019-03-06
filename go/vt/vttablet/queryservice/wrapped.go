@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -175,10 +176,10 @@ func (ws *wrappedService) Execute(ctx context.Context, target *querypb.Target, q
 	return qr, err
 }
 
-func (ws *wrappedService) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (ws *wrappedService) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	return ws.wrapper(ctx, target, ws.impl, "StreamExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (error, bool) {
 		streamingStarted := false
-		innerErr := conn.StreamExecute(ctx, target, query, bindVars, options, func(qr *sqltypes.Result) error {
+		innerErr := conn.StreamExecute(ctx, target, query, bindVars, transactionID, options, func(qr *sqltypes.Result) error {
 			streamingStarted = true
 			return callback(qr)
 		})
@@ -246,6 +247,13 @@ func (ws *wrappedService) SplitQuery(ctx context.Context, target *querypb.Target
 func (ws *wrappedService) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
 	return ws.wrapper(ctx, target, ws.impl, "UpdateStream", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (error, bool) {
 		innerErr := conn.UpdateStream(ctx, target, position, timestamp, callback)
+		return innerErr, canRetry(ctx, innerErr)
+	})
+}
+
+func (ws *wrappedService) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	return ws.wrapper(ctx, target, ws.impl, "UpdateStream", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (error, bool) {
+		innerErr := conn.VStream(ctx, target, startPos, filter, send)
 		return innerErr, canRetry(ctx, innerErr)
 	})
 }

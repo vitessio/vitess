@@ -388,7 +388,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 	}
 
 	for i, ddl := range ddls {
-		table := ddl.Table.Name.String()
+		table := sqlparser.String(ddl.Table.Name)
 		schemaQueries[mysql.BaseShowTablesForTable(table)] = &sqltypes.Result{
 			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 1,
@@ -511,9 +511,10 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			return callback(&sqltypes.Result{})
 		}
 
-		colTypeMap := tableColumns[table.String()]
-		if colTypeMap == nil && table.String() != "dual" {
-			return fmt.Errorf("unable to resolve table name %s", table.String())
+		tableName := sqlparser.String(table)
+		colTypeMap := tableColumns[tableName]
+		if colTypeMap == nil && tableName != "dual" {
+			return fmt.Errorf("unable to resolve table name %s", tableName)
 		}
 
 		colNames := make([]string, 0, 4)
