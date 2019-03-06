@@ -217,7 +217,8 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 		}
 
 		for _, update := range ddl.VschemaUpdates {
-			if update.Name.Name.Lowered() == "authoritative" {
+			// for now the only setting we accept is `authoritative`
+			if update.Name.Name.EqualString("authoritative") {
 				switch expr := update.Expr.(type) {
 				case sqlparser.BoolVal:
 					ks.Tables[name].ColumnListAuthoritative = bool(expr)
@@ -226,7 +227,7 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 				default:
 				}
 			}
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema update table %s in keyspace %s unknown setting %s", name, ksName, update.Name.Name)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema update table %s in keyspace %s has unknown setting %s", name, ksName, update.Name.Name)
 		}
 
 		return ks, nil
