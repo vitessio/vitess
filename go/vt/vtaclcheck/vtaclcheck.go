@@ -22,6 +22,7 @@ package vtaclcheck
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 )
@@ -30,6 +31,8 @@ import (
 type Options struct {
 	// AclFile is the file with the JSON acl configuration
 	ACLFile string
+	// StaticAuthFile is the file containing the mysql auth_server_static JSON
+	StaticAuthFile string
 }
 
 var options *Options
@@ -41,8 +44,8 @@ func Init(opts *Options) error {
 		return fmt.Errorf("vtaclcheck.Init: opts is NULL")
 	}
 	// Verify options
-	if len(opts.ACLFile) == 0 {
-		return fmt.Errorf("-acl_file <filename> provided but len(filename) is zero")
+	if opts.ACLFile == "" && opts.StaticAuthFile == "" {
+		return fmt.Errorf("No options specified")
 	}
 
 	options = opts
@@ -52,18 +55,24 @@ func Init(opts *Options) error {
 
 // Run the check on the given file
 func Run() error {
-	filename := options.ACLFile
+	if options.ACLFile != "" {
+		tableacl.Register("simpleacl", &simpleacl.Factory{})
+		err := tableacl.Init(
+			options.ACLFile,
+			func() {},
+		)
+		if err != nil {
+			return fmt.Errorf("Fail to initialize Table ACL: %v", err)
+		}
 
-	tableacl.Register("simpleacl", &simpleacl.Factory{})
-	err := tableacl.Init(
-		filename,
-		func() {},
-	)
-	if err != nil {
-		return fmt.Errorf("Fail to initialize Table ACL: %v", err)
+		fmt.Printf("JSON ACL file %s looks good\n", options.ACLFile)
 	}
 
-	fmt.Printf("JSON ACL file %s looks good\n", filename)
+	if options.StaticAuthFile != "" {
+		mysql.RegisterAuthServerStaticFromParams(options.StaticAuthFile, "")
+
+		fmt.Printf("Static auth file %s looks good\n", options.StaticAuthFile)
+	}
 
 	return nil
 }
