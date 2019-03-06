@@ -28,11 +28,13 @@ import (
 )
 
 var (
-	aclFileFlag = flag.String("acl_file", "", "Identifies the JSON ACL file to check")
+	aclFileFlag        = flag.String("acl_file", "", "The path of the JSON ACL file to check")
+	staticAuthFileFlag = flag.String("static_auth_file", "", "The path of the auth_server_static JSON file to check")
 
 	// vtaclcheckFlags lists all the flags that should show in usage
 	vtaclcheckFlags = []string{
 		"acl_file",
+		"static_auth_file",
 	}
 )
 
@@ -41,7 +43,7 @@ func usage() {
 	for _, name := range vtaclcheckFlags {
 		f := flag.Lookup(name)
 		if f == nil {
-			panic("unkown flag " + name)
+			panic("unknown flag " + name)
 		}
 		flagUsage(f)
 	}
@@ -93,15 +95,12 @@ func main() {
 }
 
 func parseAndRun() error {
-	if aclFileFlag == nil {
-		return fmt.Errorf("-acl_file <filename> option not provided")
-	}
-
 	opts := &vtaclcheck.Options{
-		ACLFile: *aclFileFlag,
+		ACLFile:        *aclFileFlag,
+		StaticAuthFile: *staticAuthFileFlag,
 	}
 
-	log.V(100).Infof("acl_file %s\n", *aclFileFlag)
+	log.V(100).Infof("acl_file %s\nstatic_auth_file %s\n", *aclFileFlag, *staticAuthFileFlag)
 
 	if err := vtaclcheck.Init(opts); err != nil {
 		return err
