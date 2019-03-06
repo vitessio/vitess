@@ -50,7 +50,7 @@ var kebabConverters = []struct {
 	// example: CCa -> C-Ca (e.g. CCamel -> C-Camel).
 	{regexp.MustCompile("([A-Z])([A-Z][a-z])"), "$1-$2"},
 	{regexp.MustCompile("_"), "-"},
-	{regexp.MustCompile("\\."), "_"},
+	{regexp.MustCompile(`\.`), "_"},
 }
 
 var memoizer = memoizerType{

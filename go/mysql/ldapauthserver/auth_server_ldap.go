@@ -43,11 +43,12 @@ var (
 type AuthServerLdap struct {
 	Client
 	ServerConfig
-	Method         string
-	User           string
-	Password       string
-	GroupQuery     string
-	UserDnPattern  string
+	Method        string
+	User          string
+	Password      string
+	GroupQuery    string
+	UserDnPattern string
+	// staticcheck: var RefreshSeconds is of type time.Duration; don't use unit-specific suffix "Seconds" (ST1011)
 	RefreshSeconds time.Duration
 }
 
@@ -221,6 +222,9 @@ type ClientImpl struct {
 // This must be called before any other methods
 func (lci *ClientImpl) Connect(network string, config *ServerConfig) error {
 	conn, err := ldap.Dial(network, config.LdapServer)
+	if err != nil {
+		return err
+	}
 	lci.Conn = conn
 	// Reconnect with TLS ... why don't we simply DialTLS directly?
 	serverName, _, err := netutil.SplitHostPort(config.LdapServer)

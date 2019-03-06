@@ -92,7 +92,7 @@ func (t *Timings) Add(name string, elapsed time.Duration) {
 // Record is a convenience function that records completion
 // timing data based on the provided start time of an event.
 func (t *Timings) Record(name string, startTime time.Time) {
-	t.Add(name, time.Now().Sub(startTime))
+	t.Add(name, time.Since(startTime))
 }
 
 // String is for expvar.

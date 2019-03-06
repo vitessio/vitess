@@ -402,6 +402,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		got.Fields, err = cConn.Fields()
 		if err != nil {
 			fatalError = fmt.Sprintf("Fields(%v) failed: %v", query, err)
+			return
 		}
 		if len(got.Fields) == 0 {
 			got.Fields = nil

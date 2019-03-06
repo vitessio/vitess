@@ -21,7 +21,7 @@ import (
 	"net/http"
 )
 
-var fallbackError = errors.New("not allowed: fallback policy")
+var errFallback = errors.New("not allowed: fallback policy")
 
 // FallbackPolicy is the policy that's used if the
 // requested policy cannot be found. It rejects all
@@ -30,10 +30,10 @@ type FallbackPolicy struct{}
 
 // CheckAccessActor disallows all actor access.
 func (fp FallbackPolicy) CheckAccessActor(actor, role string) error {
-	return fallbackError
+	return errFallback
 }
 
 // CheckAccessHTTP disallows all HTTP access.
 func (fp FallbackPolicy) CheckAccessHTTP(req *http.Request, role string) error {
-	return fallbackError
+	return errFallback
 }

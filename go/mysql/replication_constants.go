@@ -152,82 +152,54 @@ const (
 // These constants describe the event types.
 // See: http://dev.mysql.com/doc/internals/en/binlog-event-type.html
 const (
-	//lint:ignore U1000 unused for now, reserved for future use
-	eUnknownEvent = 0
-	//lint:ignore U1000 unused for now, reserved for future use
-	eStartEventV3 = 1
-	eQueryEvent   = 2
-	//lint:ignore U1000 unused for now, reserved for future use
-	eStopEvent   = 3
-	eRotateEvent = 4
-	eIntVarEvent = 5
-	//lint:ignore U1000 unused for now, reserved for future use
-	eLoadEvent = 6
-	//lint:ignore U1000 unused for now, reserved for future use
-	eSlaveEvent = 7
-	//lint:ignore U1000 unused for now, reserved for future use
-	eCreateFileEvent = 8
-	//lint:ignore U1000 unused for now, reserved for future use
-	eAppendBlockEvent = 9
-	//lint:ignore U1000 unused for now, reserved for future use
-	eExecLoadEvent = 10
-	//lint:ignore U1000 unused for now, reserved for future use
-	eDeleteFileEvent = 11
-	//lint:ignore U1000 unused for now, reserved for future use
-	eNewLoadEvent = 12
-	eRandEvent    = 13
-	//lint:ignore U1000 unused for now, reserved for future use
+	eUnknownEvent           = 0
+	eStartEventV3           = 1
+	eQueryEvent             = 2
+	eStopEvent              = 3
+	eRotateEvent            = 4
+	eIntVarEvent            = 5
+	eLoadEvent              = 6
+	eSlaveEvent             = 7
+	eCreateFileEvent        = 8
+	eAppendBlockEvent       = 9
+	eExecLoadEvent          = 10
+	eDeleteFileEvent        = 11
+	eNewLoadEvent           = 12
+	eRandEvent              = 13
 	eUserVarEvent           = 14
 	eFormatDescriptionEvent = 15
 	eXIDEvent               = 16
-	//lint:ignore U1000 unused for now, reserved for future use
-	eBeginLoadQueryEvent = 17
-	//lint:ignore U1000 unused for now, reserved for future use
-	eExecuteLoadQueryEvent = 18
-	eTableMapEvent         = 19
-	//lint:ignore U1000 unused for now, reserved for future use
-	eWriteRowsEventV0 = 20
-	//lint:ignore U1000 unused for now, reserved for future use
-	eUpdateRowsEventV0 = 21
-	//lint:ignore U1000 unused for now, reserved for future use
-	eDeleteRowsEventV0 = 22
-	eWriteRowsEventV1  = 23
-	eUpdateRowsEventV1 = 24
-	eDeleteRowsEventV1 = 25
-	//lint:ignore U1000 unused for now, reserved for future use
-	eIncidentEvent = 26
-	//lint:ignore U1000 unused for now, reserved for future use
-	eHeartbeatEvent = 27
-	//lint:ignore U1000 unused for now, reserved for future use
-	eIgnorableEvent = 28
-	//lint:ignore U1000 unused for now, reserved for future use
-	eRowsQueryEvent    = 29
-	eWriteRowsEventV2  = 30
-	eUpdateRowsEventV2 = 31
-	eDeleteRowsEventV2 = 32
-	eGTIDEvent         = 33
-	//lint:ignore U1000 unused for now, reserved for future use
-	eAnonymousGTIDEvent = 34
-	ePreviousGTIDsEvent = 35
+	eBeginLoadQueryEvent    = 17
+	eExecuteLoadQueryEvent  = 18
+	eTableMapEvent          = 19
+	eWriteRowsEventV0       = 20
+	eUpdateRowsEventV0      = 21
+	eDeleteRowsEventV0      = 22
+	eWriteRowsEventV1       = 23
+	eUpdateRowsEventV1      = 24
+	eDeleteRowsEventV1      = 25
+	eIncidentEvent          = 26
+	eHeartbeatEvent         = 27
+	eIgnorableEvent         = 28
+	eRowsQueryEvent         = 29
+	eWriteRowsEventV2       = 30
+	eUpdateRowsEventV2      = 31
+	eDeleteRowsEventV2      = 32
+	eGTIDEvent              = 33
+	eAnonymousGTIDEvent     = 34
+	ePreviousGTIDsEvent     = 35
 
 	// MySQL 5.7 events
-	//lint:ignore U1000 unused for now, reserved for future use
 	eTransactionContextEvent = 36
-	//lint:ignore U1000 unused for now, reserved for future use
-	eViewChangeEvent = 37
-	//lint:ignore U1000 unused for now, reserved for future use
-	eXAPrepareLogEvent = 38
+	eViewChangeEvent         = 37
+	eXAPrepareLogEvent       = 38
 
 	// MariaDB specific values. They start at 160.
-	//lint:ignore U1000 unused for now, reserved for future use
-	eMariaAnnotateRowsEvent = 160
-	//lint:ignore U1000 unused for now, reserved for future use
+	eMariaAnnotateRowsEvent     = 160
 	eMariaBinlogCheckpointEvent = 161
 	eMariaGTIDEvent             = 162
-	//lint:ignore U1000 unused for now, reserved for future use
-	eMariaGTIDListEvent = 163
-	//lint:ignore U1000 unused for now, reserved for future use
-	eMariaStartEncryptionEvent = 164
+	eMariaGTIDListEvent         = 163
+	eMariaStartEncryptionEvent  = 164
 )
 
 // These constants describe the type of status variables in q Query packet.

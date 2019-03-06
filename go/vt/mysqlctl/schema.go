@@ -32,7 +32,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-var autoIncr = regexp.MustCompile(` AUTO_INCREMENT=\\d+`)
+var autoIncr = regexp.MustCompile(` AUTO_INCREMENT=\d+`)
 
 // executeSchemaCommands executes some SQL commands, using the mysql
 // command line tool. It uses the dba connection parameters, with credentials.
