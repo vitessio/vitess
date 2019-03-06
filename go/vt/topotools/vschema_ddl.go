@@ -185,6 +185,11 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 		if table == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s.%s not defined in vschema", ksName, tableName)
 		}
+		for _, column := range table.Columns {
+			if ddl.AuthColumn.Name.EqualString(column.Name) {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s.%s has column:%s already defined in vschema", ksName, tableName, column.Name)
+			}
+		}
 		table.Columns = append(table.Columns, &vschemapb.Column{Name: ddl.AuthColumn.Name.Lowered(), Type: ddl.AuthColumn.Type.SQLType()})
 		ks.Tables[tableName] = table
 		return ks, nil
@@ -201,21 +206,27 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 				}
 			}
 		}
+		found := false
 		purged := make([]*vschemapb.Column, 0, len(table.Columns))
 		for _, col := range table.Columns {
 			if !ddl.AuthColumn.Name.EqualString(col.Name) {
 				purged = append(purged, col)
+			} else {
+				found = true
 			}
+		}
+		if !found {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s.%s has no column:%s in vschema", ksName, tableName, ddl.AuthColumn.Name.Lowered())
 		}
 		table.Columns = purged
 		ks.Tables[tableName] = table
 		return ks, nil
+
 	case sqlparser.SetVschemaUpdatesStr:
 		name := ddl.Table.Name.String()
 		if _, ok := ks.Tables[name]; !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain table %s in keyspace %s", name, ksName)
 		}
-
 		for _, update := range ddl.VschemaUpdates {
 			// for now the only setting we accept is `authoritative`
 			if update.Name.Name.EqualString("authoritative") {
@@ -229,8 +240,8 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 			}
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema update table %s in keyspace %s has unknown setting %s", name, ksName, update.Name.Name)
 		}
-
 		return ks, nil
+
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected vindex ddl operation %s", ddl.Action)
