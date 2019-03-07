@@ -196,8 +196,6 @@ func (ts *Server) GetShardServingTypes(ctx context.Context, si *ShardInfo) (serv
 					mu.Lock()
 					defer mu.Unlock()
 					for _, partition := range srvKeyspace.GetPartitions() {
-						// Check that served types hasn't been added already
-						// TODO MAKE SURE TO ADD TO TEST FOR THIS
 						partitionAlreadyAdded := false
 						for _, servingType := range servingTypes {
 							if servingType == partition.ServedType {
@@ -231,68 +229,6 @@ func (ts *Server) GetShardServingTypes(ctx context.Context, si *ShardInfo) (serv
 		return nil, NewError(PartialResult, rec.Error().Error())
 	}
 	return servingTypes, nil
-}
-
-// RemoveShardServingKeyspace ... (Should I REMOVE ???)
-func (ts *Server) RemoveShardServingKeyspace(ctx context.Context, si *ShardInfo, cells []string) (err error) {
-	if err = CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
-		return err
-	}
-
-	// The caller intents to update all cells in this case
-	if len(cells) == 0 {
-		cells, err = ts.GetCellInfoNames(ctx)
-		if err != nil {
-			return err
-		}
-	}
-
-	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
-	for _, cell := range cells {
-		wg.Add(1)
-		go func(cell, keyspace string) {
-			defer wg.Done()
-			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, si.keyspace)
-			switch {
-			case err == nil:
-				shardReferences := make([]*topodatapb.ShardReference, 0)
-				for _, partition := range srvKeyspace.GetPartitions() {
-
-					for _, shardReference := range partition.ShardReferences {
-						if shardReference.GetName() != si.ShardName() {
-							shardReferences = append(shardReferences, shardReference)
-						}
-					}
-				}
-
-				if err := OrderAndCheckPartitions(cell, srvKeyspace); err != nil {
-					rec.RecordError(err)
-					return
-				}
-
-				err = ts.UpdateSrvKeyspace(ctx, cell, si.keyspace, srvKeyspace)
-				if err != nil {
-					rec.RecordError(err)
-					return
-				}
-			case IsErrType(err, NoNode):
-				// NOOP
-			default:
-				rec.RecordError(err)
-				return
-			}
-			if err != nil {
-				rec.RecordError(err)
-				return
-			}
-		}(cell, si.Keyspace())
-	}
-	wg.Wait()
-	if rec.HasErrors() {
-		return NewError(PartialResult, rec.Error().Error())
-	}
-	return nil
 }
 
 // UpdateSrvKeyspacePartitions will make sure the disableQueryService is
