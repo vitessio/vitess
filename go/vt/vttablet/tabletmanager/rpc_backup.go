@@ -30,7 +30,7 @@ import (
 )
 
 // Backup takes a db backup and sends it to the BackupStorage
-func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
+func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -45,16 +45,16 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	// but the process didn't find out about this.
 	// It is not safe to take backups from tablet in this state
 	currentTablet := agent.Tablet()
-	if currentTablet.Type == topodatapb.TabletType_MASTER {
-		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, restart vttablet in replica mode")
+	if !allowMaster && currentTablet.Type == topodatapb.TabletType_MASTER {
+		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
 	}
 
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return err
 	}
-	if tablet.Type == topodatapb.TabletType_MASTER {
-		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, restart vttablet in replica mode")
+	if !allowMaster && tablet.Type == topodatapb.TabletType_MASTER {
+		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
 	}
 	originalType := tablet.Type
 
