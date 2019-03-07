@@ -21,21 +21,17 @@ RUN chown -R vitess:vitess /vt
 FROM debian:stretch-slim
 
 # Install dependencies
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg dirmngr ca-certificates \
-    && apt-key adv --no-tty --recv-keys --keyserver keys.gnupg.net 9334A25F8507EFA5 \
-    && echo 'deb http://repo.percona.com/apt stretch main' > /etc/apt/sources.list.d/percona.list && \
-    { \
-        echo debconf debconf/frontend select Noninteractive; \
-        echo percona-server-server-5.7 percona-server-server/root_password password 'unused'; \
-        echo percona-server-server-5.7 percona-server-server/root_password_again password 'unused'; \
-    } | debconf-set-selections \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
-        percona-server-server-5.7 \
-	libperconaserverclient20 \
-	bzip2 \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd -r vitess && useradd -r -g vitess vitess
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg dirmngr ca-certificates && apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 8C718D3B5072E1F5 \
+ && echo 'deb http://repo.mysql.com/apt/debian/ stretch mysql-5.7' > /etc/apt/sources.list.d/mysql.list \
+ && apt-get update \
+ && DEBIAN_FRONTEND=noninteractive \
+    apt-get install -y --no-install-recommends \
+      bzip2 \
+      libmysqlclient20 \
+      mysql-client \
+      mysql-server \
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd -r vitess && useradd -r -g vitess vitess
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTTOP /vt/src/vitess.io/vitess
