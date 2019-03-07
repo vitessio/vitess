@@ -17,31 +17,31 @@ limitations under the License.
 package tabletserver
 
 import (
-	"fmt"
-	"net/url"
-	"strings"
-	"sync"
-	"time"
+  "fmt"
+  "net/url"
+  "strings"
+  "sync"
+  "time"
 
-	"golang.org/x/net/context"
+  "golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/pools"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
+  "vitess.io/vitess/go/mysql"
+  "vitess.io/vitess/go/pools"
+  "vitess.io/vitess/go/sqltypes"
+  "vitess.io/vitess/go/stats"
+  "vitess.io/vitess/go/sync2"
+  "vitess.io/vitess/go/timer"
+  "vitess.io/vitess/go/trace"
+  "vitess.io/vitess/go/vt/callerid"
+  "vitess.io/vitess/go/vt/log"
+  "vitess.io/vitess/go/vt/vterrors"
+  "vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+  "vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
+  "vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+  "vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+  querypb "vitess.io/vitess/go/vt/proto/query"
+  vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // These consts identify how a transaction was resolved.

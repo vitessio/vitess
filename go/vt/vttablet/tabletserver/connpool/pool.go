@@ -17,10 +17,10 @@ limitations under the License.
 package connpool
 
 import (
-	"sync"
-	"time"
+  "sync"
+  "time"
 
-	"golang.org/x/net/context"
+  "golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
@@ -32,7 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+  vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // ErrConnPoolClosed is returned when the connection pool is closed.
