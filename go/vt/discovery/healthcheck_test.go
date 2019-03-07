@@ -545,28 +545,31 @@ func TestHealthCheckTimeout(t *testing.T) {
 		t.Errorf("StreamHealth should be canceled after timeout, but is not")
 	}
 
-	// repeat the wait. There should be no error or cancelation.
+	// repeat the wait. It will timeout one more time trying to get the connection.
 	fc.resetCanceledFlag()
-	time.Sleep(2 * timeout)
+	time.Sleep(timeout)
 	t.Logf(`Sleep(2 * timeout)`)
 
-	select {
-	case res = <-l.output:
-		t.Errorf(`<-l.output: %+v; want not message`, res)
-	default:
+	res = <-l.output
+	if res.Serving {
+		t.Errorf(`<-l.output: %+v; want not serving`, res)
 	}
 
-	if err := checkErrorCounter("k", "s", topodatapb.TabletType_MASTER, 1); err != nil {
+	if err := checkErrorCounter("k", "s", topodatapb.TabletType_MASTER, 2); err != nil {
 		t.Errorf("%v", err)
 	}
 
-	if fc.isCanceled() {
-		t.Errorf("StreamHealth should not be canceled after timeout")
+	if !fc.isCanceled() {
+		t.Errorf("StreamHealth should be canceled again after timeout")
 	}
 
 	// send a healthcheck response, it should be serving again
+	fc.resetCanceledFlag()
 	input <- shr
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: MASTER}, Serving: true, TabletExternallyReparentedTimestamp: 10, {SecondsBehindMaster: 1, CpuUsage: 0.2}}`)
+
+	// wait for the exponential backoff to wear off and health monitoring to resume.
+	time.Sleep(timeout)
 	res = <-l.output
 	if !reflect.DeepEqual(res, want) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)

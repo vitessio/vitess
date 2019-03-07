@@ -25,6 +25,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -97,7 +99,7 @@ func printJSONValue(typ byte, data []byte, toplevel bool, result *bytes.Buffer) 
 	case jsonTypeOpaque:
 		return printJSONOpaque(data, toplevel, result)
 	default:
-		return fmt.Errorf("unknown object type in JSON: %v", typ)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown object type in JSON: %v", typ)
 	}
 
 	return nil
@@ -108,7 +110,7 @@ func printJSONObject(data []byte, large bool, result *bytes.Buffer) error {
 	elementCount, pos := readOffsetOrSize(data, pos, large)
 	size, pos := readOffsetOrSize(data, pos, large)
 	if size > len(data) {
-		return fmt.Errorf("not enough data for object, have %v bytes need %v", len(data), size)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "not enough data for object, have %v bytes need %v", len(data), size)
 	}
 
 	// Build an array for each key.
@@ -152,7 +154,7 @@ func printJSONArray(data []byte, large bool, result *bytes.Buffer) error {
 	elementCount, pos := readOffsetOrSize(data, pos, large)
 	size, pos := readOffsetOrSize(data, pos, large)
 	if size > len(data) {
-		return fmt.Errorf("not enough data for object, have %v bytes need %v", len(data), size)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "not enough data for object, have %v bytes need %v", len(data), size)
 	}
 
 	// Now read each value, and output them.  The value entry is
@@ -231,7 +233,7 @@ func printJSONLiteral(b byte, toplevel bool, result *bytes.Buffer) error {
 	case jsonFalseLiteral:
 		result.WriteString("false")
 	default:
-		return fmt.Errorf("unknown literal value %v", b)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown literal value %v", b)
 	}
 	if toplevel {
 		result.WriteByte('\'')
@@ -374,7 +376,7 @@ func printJSONOpaque(data []byte, toplevel bool, result *bytes.Buffer) error {
 	// not straightforward (for instance, a bit field seems to
 	// have one byte as metadata, not two as would be expected).
 	// To be on the safer side, we just reject these cases for now.
-	return fmt.Errorf("opaque type %v is not supported yet, with data %v", typ, data[1:])
+	return vterrors.Errorf(vtrpc.Code_INTERNAL, "opaque type %v is not supported yet, with data %v", typ, data[1:])
 }
 
 func printJSONDate(data []byte, toplevel bool, result *bytes.Buffer) error {

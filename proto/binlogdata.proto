@@ -185,6 +185,7 @@ enum VEventType {
   OTHER = 11;
   ROW = 12;
   FIELD = 13;
+  HEARTBEAT = 14;
 }
 
 // RowChange represents one row change
@@ -212,6 +213,8 @@ message VEvent {
   string ddl = 4;
   RowEvent row_event = 5;
   FieldEvent field_event = 6;
+  // current_time specifies the current time to handle clock skew.
+  int64 current_time = 20;
 }
 
 // VStreamRequest is the payload for VStream

@@ -42,7 +42,7 @@ func testDescribeTable(t *testing.T) {
 	// This is because without this, we have exceptions:
 	// - MariaDB and MySQL 5.6 return '0' as default.
 	// - MySQL 5.7 returns NULL as default.
-	// So we explicitely set it, to avoid having to check both cases below.
+	// So we explicitly set it, to avoid having to check both cases below.
 	if _, err := conn.ExecuteFetch("create table for_describe(id int default 0, name varchar(128), primary key(id))", 0, false); err != nil {
 		t.Fatal(err)
 	}

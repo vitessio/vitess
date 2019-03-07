@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/net/context"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -169,7 +170,7 @@ func outer() error {
 
 func TestStackFormat(t *testing.T) {
 	err := outer()
-	got := fmt.Sprintf("%+v", err)
+	got := fmt.Sprintf("%v", err)
 
 	assertStringContains(t, got, "innerMost")
 	assertStringContains(t, got, "middle")
@@ -201,5 +202,77 @@ func TestErrorEquality(t *testing.T) {
 		for j := range vals {
 			_ = vals[i] == vals[j] // mustn't panic
 		}
+	}
+}
+
+func TestCreation(t *testing.T) {
+	testcases := []struct {
+		in, want vtrpcpb.Code
+	}{{
+		in:   vtrpcpb.Code_CANCELED,
+		want: vtrpcpb.Code_CANCELED,
+	}, {
+		in:   vtrpcpb.Code_UNKNOWN,
+		want: vtrpcpb.Code_UNKNOWN,
+	}}
+	for _, tcase := range testcases {
+		if got := Code(New(tcase.in, "")); got != tcase.want {
+			t.Errorf("Code(New(%v)): %v, want %v", tcase.in, got, tcase.want)
+		}
+		if got := Code(Errorf(tcase.in, "")); got != tcase.want {
+			t.Errorf("Code(Errorf(%v)): %v, want %v", tcase.in, got, tcase.want)
+		}
+	}
+}
+
+func TestCode(t *testing.T) {
+	testcases := []struct {
+		in   error
+		want vtrpcpb.Code
+	}{{
+		in:   nil,
+		want: vtrpcpb.Code_OK,
+	}, {
+		in:   errors.New("generic"),
+		want: vtrpcpb.Code_UNKNOWN,
+	}, {
+		in:   New(vtrpcpb.Code_CANCELED, "generic"),
+		want: vtrpcpb.Code_CANCELED,
+	}, {
+		in:   context.Canceled,
+		want: vtrpcpb.Code_CANCELED,
+	}, {
+		in:   context.DeadlineExceeded,
+		want: vtrpcpb.Code_DEADLINE_EXCEEDED,
+	}}
+	for _, tcase := range testcases {
+		if got := Code(tcase.in); got != tcase.want {
+			t.Errorf("Code(%v): %v, want %v", tcase.in, got, tcase.want)
+		}
+	}
+}
+
+func TestWrapping(t *testing.T) {
+	err1 := Errorf(vtrpcpb.Code_UNAVAILABLE, "foo")
+	err2 := Wrapf(err1, "bar")
+	err3 := Wrapf(err2, "baz")
+	errorWithStack := fmt.Sprintf("%v", err3)
+
+	assertEquals(t, err3.Error(), "baz: bar: foo")
+	assertContains(t, errorWithStack, "foo")
+	assertContains(t, errorWithStack, "bar")
+	assertContains(t, errorWithStack, "baz")
+	assertContains(t, errorWithStack, "TestWrapping")
+}
+
+func assertContains(t *testing.T, s, substring string) {
+	if !strings.Contains(s, substring) {
+		t.Fatalf("expected string that contains [%s] but got [%s]", substring, s)
+	}
+}
+
+func assertEquals(t *testing.T, a, b interface{}) {
+	if a != b {
+		t.Fatalf("expected [%s] to be equal to [%s]", a, b)
 	}
 }

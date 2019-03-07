@@ -17,9 +17,9 @@
 """This module contains a base class and utility functions for sharding tests.
 """
 
-import struct
-
 import logging
+
+import struct
 
 from vtdb import keyrange_constants
 

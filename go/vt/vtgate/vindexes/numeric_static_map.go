@@ -21,12 +21,12 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -92,14 +92,14 @@ func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]
 		var keybytes [8]byte
 		num, err := sqltypes.ToUint64(ids[i])
 		if err != nil {
-			return nil, fmt.Errorf("NumericStaticMap.Verify: %v", err)
+			return nil, vterrors.Wrap(err, "NumericStaticMap.Verify")
 		}
 		lookupNum, ok := vind.lookup[num]
 		if ok {
 			num = lookupNum
 		}
 		binary.BigEndian.PutUint64(keybytes[:], num)
-		out[i] = (bytes.Compare(keybytes[:], ksids[i]) == 0)
+		out[i] = bytes.Compare(keybytes[:], ksids[i]) == 0
 	}
 	return out, nil
 }

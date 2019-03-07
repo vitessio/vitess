@@ -184,7 +184,7 @@ func TestCodexBuildStreamComment(t *testing.T) {
 	pk2SecVal := sqltypes.NewVarChar("xyz")
 	secondaryPKValues := []sqltypes.PlanValue{{}, {Value: pk2SecVal}}
 	secondaryList, _ := buildSecondaryList(table, pkList, secondaryPKValues, bindVars)
-	want := []byte(" /* _stream `Table` (pk1 pk2 ) (1 'YWJj' ) (1 'eHl6' ); */")
+	want := " /* _stream `Table` (pk1 pk2 ) (1 'YWJj' ) (1 'eHl6' ); */"
 	got := buildStreamComment(table, pkList, secondaryList)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("case 1 failed, got\n%s, want\n%s", got, want)

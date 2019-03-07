@@ -18,7 +18,9 @@ package mysql
 
 import (
 	"encoding/binary"
-	"fmt"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // mysql56BinlogEvent wraps a raw packet buffer and provides methods to examine
@@ -81,6 +83,6 @@ func (ev mysql56BinlogEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte,
 	default:
 		// MySQL 5.6 does not guarantee that future checksum algorithms will be
 		// 4 bytes, so we can't support them a priori.
-		return ev, nil, fmt.Errorf("unsupported checksum algorithm: %v", f.ChecksumAlgorithm)
+		return ev, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported checksum algorithm: %v", f.ChecksumAlgorithm)
 	}
 }

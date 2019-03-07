@@ -20,12 +20,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -118,7 +118,7 @@ func NewTransactionalQueryResultReaderForTablet(ctx context.Context, ts *topo.Se
 	// read the columns, or grab the error
 	cols, err := stream.Recv()
 	if err != nil {
-		return nil, fmt.Errorf("Cannot read Fields for query '%v': %v", sql, err)
+		return nil, vterrors.Wrapf(err, "cannot read Fields for query '%v'", sql)
 	}
 
 	return &QueryResultReader{
@@ -343,7 +343,7 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts *topo.Serve
 			}
 		}
 	default:
-		return nil, fmt.Errorf("Unsupported ShardingColumnType: %v", shardingColumnType)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Unsupported ShardingColumnType: %v", shardingColumnType)
 	}
 
 	sql := fmt.Sprintf("SELECT %v FROM %v %v", strings.Join(escapeAll(orderedColumns(td)), ", "), sqlescape.EscapeID(td.Name), where)
@@ -356,7 +356,7 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts *topo.Serve
 
 // ErrStoppedRowReader is returned by RowReader.Next() when
 // StopAfterCurrentResult() and it finished the current result.
-var ErrStoppedRowReader = errors.New("RowReader won't advance to the next Result because StopAfterCurrentResult() was called")
+var ErrStoppedRowReader = vterrors.New(vtrpc.Code_ABORTED, "RowReader won't advance to the next Result because StopAfterCurrentResult() was called")
 
 // RowReader returns individual rows from a ResultReader.
 type RowReader struct {
@@ -508,7 +508,7 @@ func CompareRows(fields []*querypb.Field, compareCount int, left, right []sqltyp
 			r := rv.([]byte)
 			return bytes.Compare(l, r), nil
 		default:
-			return 0, fmt.Errorf("Unsupported type %T returned by mysql.proto.Convert", l)
+			return 0, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Unsupported type %T returned by mysql.proto.Convert", l)
 		}
 	}
 	return 0, nil
@@ -528,11 +528,11 @@ func NewRowDiffer(left, right ResultReader, tableDefinition *tabletmanagerdatapb
 	leftFields := left.Fields()
 	rightFields := right.Fields()
 	if len(leftFields) != len(rightFields) {
-		return nil, fmt.Errorf("[table=%v] Cannot diff inputs with different types", tableDefinition.Name)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "[table=%v] Cannot diff inputs with different types", tableDefinition.Name)
 	}
 	for i, field := range leftFields {
 		if field.Type != rightFields[i].Type {
-			return nil, fmt.Errorf("[table=%v] Cannot diff inputs with different types: field %v types are %v and %v", tableDefinition.Name, i, field.Type, rightFields[i].Type)
+			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "[table=%v] Cannot diff inputs with different types: field %v types are %v and %v", tableDefinition.Name, i, field.Type, rightFields[i].Type)
 		}
 	}
 	return &RowDiffer{
@@ -664,7 +664,7 @@ func createTransactions(ctx context.Context, numberOfScanners int, wr *wrangler.
 			TransactionIsolation: query.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("could not open transaction on %v\n%v", topoproto.TabletAliasString(tabletInfo.Alias), err)
+			return nil, vterrors.Wrapf(err, "could not open transaction on %v", topoproto.TabletAliasString(tabletInfo.Alias))
 		}
 
 		// Remember to rollback the transactions
@@ -743,13 +743,17 @@ func CreateConsistentTableScanners(ctx context.Context, tablet *topo.TabletInfo,
 // CreateConsistentTransactions creates a number of consistent snapshot transactions,
 // all starting from the same spot in the tx log
 func CreateConsistentTransactions(ctx context.Context, tablet *topo.TabletInfo, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, numberOfScanners int) ([]int64, string, error) {
+	if numberOfScanners < 1 {
+		return nil, "", vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "need more than zero scanners: %d", numberOfScanners)
+	}
+
 	tm := tmclient.NewTabletManagerClient()
 	defer tm.Close()
 
 	// Lock all tables with a read lock to pause replication
 	err := tm.LockTables(ctx, tablet.Tablet)
 	if err != nil {
-		return nil, "", fmt.Errorf("could not lock tables on %v\n%v", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
+		return nil, "", vterrors.Wrapf(err, "could not lock tables on %v", topoproto.TabletAliasString(tablet.Tablet.Alias))
 	}
 	defer func() {
 		tm := tmclient.NewTabletManagerClient()
@@ -766,12 +770,12 @@ func CreateConsistentTransactions(ctx context.Context, tablet *topo.TabletInfo, 
 	defer queryService.Close(ctx)
 	connections, err := createTransactions(ctx, numberOfScanners, wr, cleaner, queryService, target, tablet.Tablet)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to create transactions on %v: %v", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
+		return nil, "", vterrors.Wrapf(err, "failed to create transactions on %v", topoproto.TabletAliasString(tablet.Tablet.Alias))
 	}
 	wr.Logger().Infof("transactions created on %v", topoproto.TabletAliasString(tablet.Tablet.Alias))
 	executedGtid, err := tm.MasterPosition(ctx, tablet.Tablet)
 	if err != nil {
-		return nil, "", fmt.Errorf("could not read executed GTID set on %v\n%v", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
+		return nil, "", vterrors.Wrapf(err, "could not read executed GTID set on %v", topoproto.TabletAliasString(tablet.Tablet.Alias))
 	}
 
 	return connections, executedGtid, nil

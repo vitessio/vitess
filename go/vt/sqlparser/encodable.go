@@ -17,7 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
-	"bytes"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -27,7 +27,7 @@ import (
 // Encodable defines the interface for types that can
 // be custom-encoded into SQL.
 type Encodable interface {
-	EncodeSQL(buf *bytes.Buffer)
+	EncodeSQL(buf *strings.Builder)
 }
 
 // InsertValues is a custom SQL encoder for the values of
@@ -35,7 +35,7 @@ type Encodable interface {
 type InsertValues [][]sqltypes.Value
 
 // EncodeSQL performs the SQL encoding for InsertValues.
-func (iv InsertValues) EncodeSQL(buf *bytes.Buffer) {
+func (iv InsertValues) EncodeSQL(buf *strings.Builder) {
 	for i, rows := range iv {
 		if i != 0 {
 			buf.WriteString(", ")
@@ -60,7 +60,7 @@ type TupleEqualityList struct {
 
 // EncodeSQL generates the where clause constraints for the tuple
 // equality.
-func (tpl *TupleEqualityList) EncodeSQL(buf *bytes.Buffer) {
+func (tpl *TupleEqualityList) EncodeSQL(buf *strings.Builder) {
 	if len(tpl.Columns) == 1 {
 		tpl.encodeAsIn(buf)
 		return
@@ -68,7 +68,7 @@ func (tpl *TupleEqualityList) EncodeSQL(buf *bytes.Buffer) {
 	tpl.encodeAsEquality(buf)
 }
 
-func (tpl *TupleEqualityList) encodeAsIn(buf *bytes.Buffer) {
+func (tpl *TupleEqualityList) encodeAsIn(buf *strings.Builder) {
 	Append(buf, tpl.Columns[0])
 	buf.WriteString(" in (")
 	for i, r := range tpl.Rows {
@@ -80,7 +80,7 @@ func (tpl *TupleEqualityList) encodeAsIn(buf *bytes.Buffer) {
 	buf.WriteByte(')')
 }
 
-func (tpl *TupleEqualityList) encodeAsEquality(buf *bytes.Buffer) {
+func (tpl *TupleEqualityList) encodeAsEquality(buf *strings.Builder) {
 	for i, r := range tpl.Rows {
 		if i != 0 {
 			buf.WriteString(" or ")

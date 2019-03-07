@@ -17,7 +17,7 @@ Looking at the vindex interface defined [here](https://github.com/vitessio/vites
 * Verify: `select 1 from my_vdx where id = :id and keyspace_id = :keyspace_id`.
 * ReverseMap: `select id from my_vdx where keyspace_id = :keyspace_id`.
 
-The supported SQL syntax will be limited because of the limited functions that vindexes can perform. However, we can expand this meaningully. For example, we can allow `IN` clauses and multi-value constructs in the above cases. We can also add additional convenience functions like `vt_shard(keyspace_id)` that will map a keyspace_id to a shard.
+The supported SQL syntax will be limited because of the limited functions that vindexes can perform. However, we can expand this meaningfully. For example, we can allow `IN` clauses and multi-value constructs in the above cases. We can also add additional convenience functions like `vt_shard(keyspace_id)` that will map a keyspace_id to a shard.
 
 The advantage of this approach is that we don't need to build new APIs to support these functionalities.
 

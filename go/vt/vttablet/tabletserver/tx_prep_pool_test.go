@@ -99,7 +99,7 @@ func TestPrepFetchForCommit(t *testing.T) {
 		t.Errorf("pp.Get(aa): %p, want %p", got, conn)
 	}
 	got, err = pp.FetchForCommit("aa")
-	want := "commiting"
+	want := "committing"
 	if err == nil || err.Error() != want {
 		t.Errorf("FetchForCommit err: %v, want %s", err, want)
 	}

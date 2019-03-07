@@ -181,15 +181,17 @@ func TestErrors(t *testing.T) {
 
 		{
 			SQL: "SELECT * FROM table_not_in_schema",
-			Err: "vtexplain execute error in 'SELECT * FROM table_not_in_schema': target: ks_unsharded.-.master, used tablet: explainCell-0 (ks_unsharded/-), table table_not_in_schema not found in schema",
+			Err: "target: ks_unsharded.-.master, used tablet: explainCell-0 (ks_unsharded/-): table table_not_in_schema not found in schema",
 		},
 	}
 
 	for _, test := range tests {
-		_, err := Run(test.SQL)
-		if err == nil || err.Error() != test.Err {
-			t.Errorf("Run(%s): %v, want %s", test.SQL, err, test.Err)
-		}
+		t.Run(test.SQL, func(t *testing.T) {
+			_, err := Run(test.SQL)
+			if err == nil || !strings.Contains(err.Error(), test.Err) {
+				t.Errorf(">> Query: %s\n>> Got: %v\nWant: %s", test.SQL, err, test.Err)
+			}
+		})
 	}
 }
 

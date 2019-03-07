@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,20 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.sql.SQLException;
-import java.sql.SQLIntegrityConstraintViolationException;
-import java.sql.SQLInvalidAuthorizationSpecException;
-import java.sql.SQLNonTransientException;
-import java.sql.SQLRecoverableException;
-import java.sql.SQLSyntaxErrorException;
-import java.sql.SQLTimeoutException;
-import java.sql.SQLTransientException;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import javax.annotation.Nullable;
 
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.CursorWithError;
@@ -48,11 +34,41 @@ import io.vitess.proto.Vtgate.BoundShardQuery;
 import io.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
 import io.vitess.proto.Vtrpc.RPCError;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
+import java.sql.SQLInvalidAuthorizationSpecException;
+import java.sql.SQLNonTransientException;
+import java.sql.SQLRecoverableException;
+import java.sql.SQLSyntaxErrorException;
+import java.sql.SQLTimeoutException;
+import java.sql.SQLTransientException;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import javax.annotation.Nullable;
+
 /**
  * Proto contains methods for working with Vitess protobuf messages.
  */
 public class Proto {
 
+  public static final Function<byte[], ByteString> BYTE_ARRAY_TO_BYTE_STRING =
+      new Function<byte[], ByteString>() {
+        @Override
+        public ByteString apply(byte[] from) {
+          return ByteString.copyFrom(from);
+        }
+      };
+  public static final Function<Map.Entry<byte[], ?>, EntityId> MAP_ENTRY_TO_ENTITY_KEYSPACE_ID =
+      new Function<Map.Entry<byte[], ?>, EntityId>() {
+        @Override
+        public EntityId apply(Map.Entry<byte[], ?> entry) {
+          return buildEntityId(entry.getKey(), entry.getValue());
+        }
+      };
   private static final int MAX_DECIMAL_UNIT = 30;
 
   /**
@@ -133,7 +149,7 @@ public class Proto {
     }
     try {
       return Integer.parseInt(errorMessage.substring(start, end));
-    } catch (NumberFormatException e) {
+    } catch (NumberFormatException exc) {
       return 0;
     }
   }
@@ -256,7 +272,8 @@ public class Proto {
     return builder.build();
   }
 
-  public static List<CursorWithError> fromQueryResponsesToCursorList(List<Query.ResultWithError> resultWithErrorList) {
+  public static List<CursorWithError> fromQueryResponsesToCursorList(
+      List<Query.ResultWithError> resultWithErrorList) {
     ImmutableList.Builder<CursorWithError> builder = new ImmutableList.Builder<CursorWithError>();
     for (Query.ResultWithError resultWithError : resultWithErrorList) {
       builder.add(new CursorWithError(resultWithError));
@@ -264,26 +281,11 @@ public class Proto {
     return builder.build();
   }
 
-  public static final Function<byte[], ByteString> BYTE_ARRAY_TO_BYTE_STRING =
-      new Function<byte[], ByteString>() {
-        @Override
-        public ByteString apply(byte[] from) {
-          return ByteString.copyFrom(from);
-        }
-      };
-
-  public static final Function<Map.Entry<byte[], ?>, EntityId> MAP_ENTRY_TO_ENTITY_KEYSPACE_ID =
-      new Function<Map.Entry<byte[], ?>, EntityId>() {
-        @Override
-        public EntityId apply(Map.Entry<byte[], ?> entry) {
-          return buildEntityId(entry.getKey(), entry.getValue());
-        }
-      };
-
   /**
    * Represents a type and value in the type system used in query.proto.
    */
   protected static class TypedValue {
+
     Query.Type type;
     ByteString value;
 
@@ -300,7 +302,7 @@ public class Proto {
         this.type = Query.Type.VARBINARY;
         this.value = ByteString.copyFrom((byte[]) value);
       } else if (value instanceof Integer || value instanceof Long || value instanceof Short
-          || value instanceof Byte ) {
+          || value instanceof Byte) {
         // Int32, Int64, Short, Byte
         this.type = Query.Type.INT64;
         this.value = ByteString.copyFromUtf8(value.toString());

@@ -55,6 +55,10 @@
 "select id from (select user.id, user.col from user join user_extra) as t order by id"
 "unsupported: cannot order by on a cross-shard subquery"
 
+# order by on a cross-shard query. Note: this is only a problem when an order by column is from the second table
+"select user.col1 as a, user.col2 b, music.col3 c from user, music where user.id = music.id and user.id = 1 order by c"
+"unsupported: order by spans across shards"
+
 # scatter order by with * expression
 "select * from user order by id"
 "unsupported: in scatter query: order by must reference a column in the select list: id asc"

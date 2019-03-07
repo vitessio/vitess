@@ -39,7 +39,7 @@ All these Vitess images include a specific MySQL/MariaDB version ("flavor").
   * We provide Dockerfile files for multiple flavors (`Dockerfile.<flavor>`).
   * As of April 2017, the following flavors are supported: `mariadb`, `mysql56`, `mysql57`, `percona`(56), `percona57`
   * On Docker Hub we publish only images with MySQL 5.7 to minimize maintenance overhead and avoid confusion.
-  * If you need an image for a different flavor, it is very easy to build it yourself. See the [Custom Docker Build instructions](http://vitess.io/getting-started/docker-build/).
+  * If you need an image for a different flavor, it is very easy to build it yourself. See the [Custom Docker Build instructions](https://vitess.io/getting-started/docker-build/).
 
 If you are looking for a stable version of Vitess, use the **lite** image with a fixed version. If you are looking for the latest Vitess code in binary form, use the "latest" tag of the **base** image.
 
@@ -56,5 +56,5 @@ These images are used by the Vitess project for internal workflows and testing i
 
 | Image | How (When) Updated | Description |
 | --- | --- | --- |
-| **publish-site** | manual | Contains [Jekyll](https://jekyllrb.com/) which we use to generate our [vitess.io](http://vitess.io) website from the Markdown files located in [doc/](https://github.com/vitessio/vitess/tree/master/doc). |
+| **publish-site** | manual | Contains [Jekyll](https://jekyllrb.com/) which we use to generate our [vitess.io](https://vitess.io) website from the Markdown files located in [doc/](https://github.com/vitessio/vitess/tree/master/doc). |
 | **keytar** | manual | Keytar is a Vitess testing framework to run our Kubernetes cluster tests. Dockerfile is located in [`test/cluster/keytar/`](https://github.com/vitessio/vitess/tree/master/test/cluster/keytar). |

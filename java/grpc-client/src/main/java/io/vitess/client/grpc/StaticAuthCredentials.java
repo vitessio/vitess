@@ -5,6 +5,7 @@ import io.grpc.CallCredentials;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+
 import java.util.Objects;
 import java.util.concurrent.Executor;
 
@@ -35,8 +36,8 @@ public class StaticAuthCredentials implements CallCredentials {
         headers.put(USERNAME, username);
         headers.put(PASSWORD, password);
         applier.apply(headers);
-      } catch (Throwable e) {
-        applier.fail(Status.UNAUTHENTICATED.withCause(e));
+      } catch (Throwable exc) {
+        applier.fail(Status.UNAUTHENTICATED.withCause(exc));
       }
     });
   }

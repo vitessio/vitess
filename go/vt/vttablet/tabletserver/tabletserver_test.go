@@ -2189,7 +2189,7 @@ func TestMessageAck(t *testing.T) {
 	}}
 	_, err := tsv.MessageAck(ctx, &target, "nonmsg", ids)
 	want := "message table nonmsg not found in schema"
-	if err == nil || err.Error() != want {
+	if err == nil || strings.HasPrefix(err.Error(), want) {
 		t.Errorf("tsv.MessageAck(invalid): %v, want %s", err, want)
 	}
 
@@ -2232,7 +2232,7 @@ func TestRescheduleMessages(t *testing.T) {
 
 	_, err := tsv.PostponeMessages(ctx, &target, "nonmsg", []string{"1", "2"})
 	want := "message table nonmsg not found in schema"
-	if err == nil || err.Error() != want {
+	if err == nil || strings.HasPrefix(err.Error(), want) {
 		t.Errorf("tsv.PostponeMessages(invalid): %v, want %s", err, want)
 	}
 
@@ -2275,7 +2275,7 @@ func TestPurgeMessages(t *testing.T) {
 
 	_, err := tsv.PurgeMessages(ctx, &target, "nonmsg", 0)
 	want := "message table nonmsg not found in schema"
-	if err == nil || err.Error() != want {
+	if err == nil || strings.HasPrefix(err.Error(), want) {
 		t.Errorf("tsv.PurgeMessages(invalid): %v, want %s", err, want)
 	}
 
@@ -2545,13 +2545,14 @@ func TestHandleExecTabletError(t *testing.T) {
 		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tablet error"),
 		nil,
 	)
+	fmt.Println(">>>>>"+err.Error())
 	want := "tablet error"
-	if err == nil || err.Error() != want {
-		t.Errorf("%v, want '%s'", err, want)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("got `%v`, want '%s'", err, want)
 	}
-	wantLog := "tablet error: Sql: \"select * from test_table\", BindVars: {}"
-	if wantLog != getTestLog(0) {
-		t.Errorf("error log %s, want '%s'", getTestLog(0), wantLog)
+	want = "Sql: \"select * from test_table\", BindVars: {}"
+	if !strings.Contains(getTestLog(0), want) {
+		t.Errorf("error log %s, want '%s'", getTestLog(0), want)
 	}
 }
 
@@ -2571,12 +2572,12 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 		nil,
 	)
 	want := "tablet error"
-	if err == nil || err.Error() != want {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("%v, want '%s'", err, want)
 	}
-	wantLog := "tablet error: Sql: \"select * from test_table\", BindVars: {}"
-	if wantLog != getTestLog(0) {
-		t.Errorf("error log %s, want '%s'", getTestLog(0), wantLog)
+	want = "Sql: \"select * from test_table\", BindVars: {}"
+	if !strings.Contains(getTestLog(0), want) {
+		t.Errorf("error log %s, want '%s'", getTestLog(0), want)
 	}
 }
 
@@ -2620,12 +2621,12 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	defer clearTestLogger()
 	err := tsv.convertAndLogError(ctx, "", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "sensitive message"), nil)
 	want := "sensitive message"
-	if err == nil || err.Error() != want {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("%v, want '%s'", err, want)
 	}
-	wantLog := "sensitive message: Sql: \"\", BindVars: {}"
-	if wantLog != getTestLog(0) {
-		t.Errorf("error log '%s', want '%s'", getTestLog(0), wantLog)
+	want = "Sql: \"\", BindVars: {}"
+	if !strings.Contains(getTestLog(0), want) {
+		t.Errorf("error log '%s', want '%s'", getTestLog(0), want)
 	}
 }
 

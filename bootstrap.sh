@@ -269,7 +269,7 @@ function install_chromedriver() {
   rm chromedriver_linux64.zip
 }
 if [ "$BUILD_TESTS" == 1 ] ; then
-    install_dep "chromedriver" "2.44" "$VTROOT/dist/chromedriver" install_chromedriver
+    install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
 fi
 
 

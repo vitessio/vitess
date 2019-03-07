@@ -1,6 +1,6 @@
 This guide walks you through the process of sharding an existing unsharded
 Vitess [keyspace]({% link overview/concepts.md %}#keyspace) in
-[Kubernetes](http://kubernetes.io/).
+[Kubernetes](https://kubernetes.io/).
 
 ## Prerequisites
 

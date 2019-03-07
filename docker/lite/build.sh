@@ -29,15 +29,12 @@ if [[ "$1" == "--prompt"* ]]; then
 fi
 
 flavor=$1
-
 base_image=vitess/base
-make_target=docker_base
 lite_image=vitess/lite
 dockerfile=Dockerfile
 tag=latest
+
 if [[ -n "$flavor" ]]; then
-  base_image=vitess/base:$flavor
-  make_target=docker_base_$flavor
   lite_image=vitess/lite:$flavor
   dockerfile=Dockerfile.$flavor
   tag=$flavor
@@ -71,40 +68,4 @@ END
   read
 fi
 
-# cleanup both temporary folders when exiting, even in case of errors
-function cleanup {
-  rm -rf $PWD/base $PWD/lite
-}
-trap cleanup EXIT
-
-# Extract files from vitess/base image
-mkdir base
-# Ignore permission errors. They occur for directories we do not care e.g. ".git".
-# (Copying them fails because they are owned by root and not $UID and have stricter permissions.)
-docker run --rm -v $PWD/base:/base -u $UID $base_image bash -c 'cp -R /vt /base/ 2>&1 | grep -v "Permission denied"' || true
-
-# Grab only what we need
-lite=$PWD/lite
-vttop=vt/src/vitess.io/vitess
-mkdir -p $lite/vt/vtdataroot
-
-mkdir -p $lite/vt/bin
-(cd base/vt/bin; cp mysqlctld vtctld vtctlclient vtgate vttablet vtworker $lite/vt/bin/)
-
-mkdir -p $lite/$vttop/web
-cp -R base/$vttop/web/vtctld $lite/$vttop/web/
-mkdir $lite/$vttop/web/vtctld2
-cp -R base/$vttop/web/vtctld2/app $lite/$vttop/web/vtctld2/
-
-mkdir -p $lite/$vttop/config
-cp -R base/$vttop/config/* $lite/$vttop/config/
-ln -s /$vttop/config $lite/vt/config
-
-# remove the base folder now -- not needed for the final build
-rm -rf $PWD/base
-
-# Fix permissions for AUFS workaround
-chmod -R o=g lite
-
-# Build vitess/lite image
 docker build --no-cache -f $dockerfile -t $lite_image .

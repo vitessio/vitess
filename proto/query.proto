@@ -191,7 +191,7 @@ enum Type {
   // SET specifies a SET type.
   // Properties: 27, IsQuoted.
   SET = 2075;
-  // TUPLE specifies a a tuple. This cannot
+  // TUPLE specifies a tuple. This cannot
   // be returned in a QueryResult, but it can
   // be sent as a bind var.
   // Properties: 28, None.
@@ -296,7 +296,7 @@ message ExecuteOptions {
 
   TransactionIsolation transaction_isolation = 9;
 
-  // skip_query_plan_cache specifies if the query plan shoud be cached by vitess.
+  // skip_query_plan_cache specifies if the query plan should be cached by vitess.
   // By default all query plans are cached.
   bool skip_query_plan_cache = 10;
 }

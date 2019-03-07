@@ -663,6 +663,17 @@ func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Table
 	return response.Position, nil
 }
 
+// UndoDemoteMaster is part of the tmclient.TabletManagerClient interface.
+func (client *Client) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error {
+	cc, c, err := client.dial(tablet)
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	_, err = c.UndoDemoteMaster(ctx, &tabletmanagerdatapb.UndoDemoteMasterRequest{})
+	return err
+}
+
 // PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface.
 func (client *Client) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topodatapb.Tablet, pos string) (string, error) {
 	cc, c, err := client.dial(tablet)
@@ -764,7 +775,7 @@ func (e *backupStreamAdapter) Recv() (*logutilpb.Event, error) {
 }
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int) (logutil.EventStream, error) {
+func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowMaster bool) (logutil.EventStream, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return nil, err
@@ -772,6 +783,7 @@ func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, con
 
 	stream, err := c.Backup(ctx, &tabletmanagerdatapb.BackupRequest{
 		Concurrency: int64(concurrency),
+		AllowMaster: bool(allowMaster),
 	})
 	if err != nil {
 		cc.Close()

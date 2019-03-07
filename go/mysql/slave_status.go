@@ -17,9 +17,8 @@ limitations under the License.
 package mysql
 
 import (
-	"fmt"
-
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // SlaveStatus holds replication information from SHOW SLAVE STATUS.
@@ -56,7 +55,7 @@ func SlaveStatusToProto(s SlaveStatus) *replicationdatapb.Status {
 func ProtoToSlaveStatus(s *replicationdatapb.Status) SlaveStatus {
 	pos, err := DecodePosition(s.Position)
 	if err != nil {
-		panic(fmt.Errorf("cannot decode Position: %v", err))
+		panic(vterrors.Wrapf(err, "cannot decode Position"))
 	}
 	return SlaveStatus{
 		Position:            pos,

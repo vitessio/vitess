@@ -1,6 +1,7 @@
 package io.client.grpc;
 
 import com.google.common.base.Throwables;
+
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.vitess.client.Context;
@@ -9,11 +10,14 @@ import io.vitess.client.RpcClientTest;
 import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.client.grpc.StaticAuthCredentials;
 import io.vitess.proto.Vtgate.GetSrvKeyspaceRequest;
+
+import org.joda.time.Duration;
+
 import java.net.ServerSocket;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
-import org.joda.time.Duration;
+
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -23,6 +27,7 @@ import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class GrpcClientStaticAuthTest extends RpcClientTest {
+
   private static Process vtgateclienttest;
   private static int port;
 
@@ -32,7 +37,8 @@ public class GrpcClientStaticAuthTest extends RpcClientTest {
     if (vtRoot == null) {
       throw new RuntimeException("cannot find env variable VTROOT; make sure to source dev.env");
     }
-    URI staticAuthFile = GrpcClientStaticAuthTest.class.getResource("grpc_static_auth.json").toURI();
+    URI staticAuthFile = GrpcClientStaticAuthTest.class.getResource("grpc_static_auth.json")
+        .toURI();
 
     ServerSocket socket = new ServerSocket(0);
     port = socket.getLocalPort();
