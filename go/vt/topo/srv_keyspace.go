@@ -421,7 +421,7 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 	return nil
 }
 
-// MigrateServedType will make sure the disableQueryService is
+// MigrateServedType removes/adds shards from srvKeyspace when migrating a served type.
 func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shardsToAdd, shardsToRemove []*ShardInfo, tabletType topodatapb.TabletType, cells []string) (err error) {
 	if err = CheckKeyspaceLocked(ctx, keyspace); err != nil {
 		return err
