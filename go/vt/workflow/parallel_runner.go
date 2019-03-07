@@ -112,7 +112,7 @@ func NewParallelRunner(ctx context.Context, rootUINode *Node, cp *CheckpointWrit
 	return p
 }
 
-// Run is the entry point for controling task executions.
+// Run is the entry point for controlling task executions.
 func (p *ParallelRunner) Run() error {
 	// default value is 0. The task will not run in this case.
 	var parallelNum int
