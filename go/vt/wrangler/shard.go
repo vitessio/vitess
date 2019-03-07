@@ -307,7 +307,14 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 	}
 	defer unlock(&err)
 
-	return wr.ts.RemoveShardServingKeyspace(ctx, shardInfo, shardServingCells)
+	if err = wr.ts.UpdateSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_RDONLY, shardServingCells, true /* remove */); err != nil {
+		return err
+	}
+
+	if err = wr.ts.UpdateSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_REPLICA, shardServingCells, true /* remove */); err != nil {
+		return err
+	}
+	return wr.ts.UpdateSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_MASTER, shardServingCells, true /* remove */)
 }
 
 // SourceShardDelete will delete a SourceShard inside a shard, by index.
