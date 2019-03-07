@@ -110,6 +110,8 @@ type RPCAgent interface {
 
 	DemoteMaster(ctx context.Context) (string, error)
 
+	UndoDemoteMaster(ctx context.Context) error
+
 	PromoteSlaveWhenCaughtUp(ctx context.Context, replicationPosition string) (string, error)
 
 	SlaveWasPromoted(ctx context.Context) error
@@ -124,7 +126,7 @@ type RPCAgent interface {
 
 	// Backup / restore related methods
 
-	Backup(ctx context.Context, concurrency int, logger logutil.Logger) error
+	Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error
 
 	RestoreFromBackup(ctx context.Context, logger logutil.Logger) error
 

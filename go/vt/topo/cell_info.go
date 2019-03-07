@@ -17,11 +17,12 @@ limitations under the License.
 package topo
 
 import (
-	"fmt"
 	"path"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

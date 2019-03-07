@@ -17,9 +17,7 @@ limitations under the License.
 package worker
 
 import (
-	"errors"
-	"fmt"
-
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -55,19 +53,19 @@ type v2Resolver struct {
 // V2 keyspaces have a preset sharding column name and type.
 func newV2Resolver(keyspaceInfo *topo.KeyspaceInfo, td *tabletmanagerdatapb.TableDefinition) (keyspaceIDResolver, error) {
 	if keyspaceInfo.ShardingColumnName == "" {
-		return nil, errors.New("ShardingColumnName needs to be set for a v2 sharding key")
+		return nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "ShardingColumnName needs to be set for a v2 sharding key")
 	}
 	if keyspaceInfo.ShardingColumnType == topodatapb.KeyspaceIdType_UNSET {
-		return nil, errors.New("ShardingColumnType needs to be set for a v2 sharding key")
+		return nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "ShardingColumnType needs to be set for a v2 sharding key")
 	}
 	if td.Type != tmutils.TableBaseTable {
-		return nil, fmt.Errorf("a keyspaceID resolver can only be created for a base table, got %v", td.Type)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "a keyspaceID resolver can only be created for a base table, got %v", td.Type)
 	}
 
 	// Find the sharding key column index.
 	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, keyspaceInfo.ShardingColumnName)
 	if !ok {
-		return nil, fmt.Errorf("table %v doesn't have a column named '%v'", td.Name, keyspaceInfo.ShardingColumnName)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "table %v doesn't have a column named '%v'", td.Name, keyspaceInfo.ShardingColumnName)
 	}
 
 	return &v2Resolver{keyspaceInfo, columnIndex}, nil
@@ -86,7 +84,7 @@ func (r *v2Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 		}
 		return key.Uint64Key(i).Bytes(), nil
 	default:
-		return nil, fmt.Errorf("unsupported ShardingColumnType: %v", r.keyspaceInfo.ShardingColumnType)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unsupported ShardingColumnType: %v", r.keyspaceInfo.ShardingColumnType)
 	}
 }
 
@@ -101,11 +99,11 @@ type v3Resolver struct {
 // newV3ResolverFromTableDefinition returns a keyspaceIDResolver for a v3 table.
 func newV3ResolverFromTableDefinition(keyspaceSchema *vindexes.KeyspaceSchema, td *tabletmanagerdatapb.TableDefinition) (keyspaceIDResolver, error) {
 	if td.Type != tmutils.TableBaseTable {
-		return nil, fmt.Errorf("a keyspaceID resolver can only be created for a base table, got %v", td.Type)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "a keyspaceID resolver can only be created for a base table, got %v", td.Type)
 	}
 	tableSchema, ok := keyspaceSchema.Tables[td.Name]
 	if !ok {
-		return nil, fmt.Errorf("no vschema definition for table %v", td.Name)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no vschema definition for table %v", td.Name)
 	}
 	// use the lowest cost unique vindex as the sharding key
 	colVindex, err := vindexes.FindVindexForSharding(td.Name, tableSchema.ColumnVindexes)
@@ -116,7 +114,7 @@ func newV3ResolverFromTableDefinition(keyspaceSchema *vindexes.KeyspaceSchema, t
 	// Find the sharding key column index.
 	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, colVindex.Columns[0].String())
 	if !ok {
-		return nil, fmt.Errorf("table %v has a Vindex on unknown column %v", td.Name, colVindex.Columns[0])
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "table %v has a Vindex on unknown column %v", td.Name, colVindex.Columns[0])
 	}
 
 	return &v3Resolver{
@@ -129,7 +127,7 @@ func newV3ResolverFromTableDefinition(keyspaceSchema *vindexes.KeyspaceSchema, t
 func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name string, columns []string) (keyspaceIDResolver, error) {
 	tableSchema, ok := keyspaceSchema.Tables[name]
 	if !ok {
-		return nil, fmt.Errorf("no vschema definition for table %v", name)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no vschema definition for table %v", name)
 	}
 	// use the lowest cost unique vindex as the sharding key
 	colVindex, err := vindexes.FindVindexForSharding(name, tableSchema.ColumnVindexes)
@@ -146,7 +144,7 @@ func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name s
 		}
 	}
 	if columnIndex == -1 {
-		return nil, fmt.Errorf("table %v has a Vindex on unknown column %v", name, colVindex.Columns[0])
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "table %v has a Vindex on unknown column %v", name, colVindex.Columns[0])
 	}
 
 	return &v3Resolver{
@@ -163,11 +161,11 @@ func (r *v3Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
 		return nil, err
 	}
 	if len(destinations) != 1 {
-		return nil, fmt.Errorf("mapping row to keyspace id returned an invalid array of keyspace ids: %v", key.DestinationsString(destinations))
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "mapping row to keyspace id returned an invalid array of keyspace ids: %v", key.DestinationsString(destinations))
 	}
 	ksid, ok := destinations[0].(key.DestinationKeyspaceID)
 	if !ok || len(ksid) == 0 {
-		return nil, fmt.Errorf("could not map %v to a keyspace id, got destination %v", v, destinations[0])
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "could not map %v to a keyspace id, got destination %v", v, destinations[0])
 	}
 	return ksid, nil
 }

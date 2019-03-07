@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is a convenience script to run vtctlclient against the local example.
+# This is a convenience script to run the mysql client against the local example.
 
 host=$(minikube service vtgate-zone1 --format "{{.IP}}" | tail -n 1)
 port=$(minikube service vtgate-zone1 --format "{{.Port}}" | tail -n 1)

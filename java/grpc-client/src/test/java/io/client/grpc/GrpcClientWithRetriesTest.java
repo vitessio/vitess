@@ -1,18 +1,20 @@
 package io.client.grpc;
 
-import java.net.ServerSocket;
-import java.util.Arrays;
-
-import org.joda.time.Duration;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-
 import io.vitess.client.Context;
 import io.vitess.client.RpcClientTest;
 import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.client.grpc.RetryingInterceptorConfig;
 
+import org.joda.time.Duration;
+
+import java.net.ServerSocket;
+import java.util.Arrays;
+
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+
 public class GrpcClientWithRetriesTest extends RpcClientTest {
+
   private static Process vtgateclienttest;
   private static int port;
 
@@ -38,7 +40,6 @@ public class GrpcClientWithRetriesTest extends RpcClientTest {
                 "grpc-vtgateservice"))
             .inheritIO()
             .start();
-
 
     client =
         new GrpcClientFactory(RetryingInterceptorConfig.exponentialConfig(5, 60, 2))

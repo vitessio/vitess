@@ -16,7 +16,8 @@ limitations under the License.
 
 package main
 
+// Imports and register the zk2 TopologyServer
+
 import (
-	// Imports and register the zk2 TopologyServer
 	_ "vitess.io/vitess/go/vt/topo/zk2topo"
 )

@@ -705,6 +705,14 @@ int_type:
   {
     $$ = ColumnType{Type: string($1)}
   }
+| BOOL
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+| BOOLEAN
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
 | TINYINT
   {
     $$ = ColumnType{Type: string($1)}
@@ -3288,6 +3296,7 @@ non_reserved_keyword:
 | BIT
 | BLOB
 | BOOL
+| BOOLEAN
 | CASCADE
 | CHAR
 | CHARACTER

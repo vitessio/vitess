@@ -17,7 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -265,9 +264,9 @@ func String(node SQLNode) string {
 }
 
 // Append appends the SQLNode to the buffer.
-func Append(buf *bytes.Buffer, node SQLNode) {
+func Append(buf *strings.Builder, node SQLNode) {
 	tbuf := &TrackedBuffer{
-		Buffer: buf,
+		Builder: buf,
 	}
 	node.Format(tbuf)
 }
@@ -1170,6 +1169,8 @@ func (ct *ColumnType) SQLType() querypb.Type {
 			return sqltypes.Uint64
 		}
 		return sqltypes.Int64
+	case keywordStrings[BOOL], keywordStrings[BOOLEAN]:
+		return sqltypes.Uint8
 	case keywordStrings[TEXT]:
 		return sqltypes.Text
 	case keywordStrings[TINYTEXT]:

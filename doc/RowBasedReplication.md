@@ -97,7 +97,7 @@ same columns as all events in the binlog, plus some other optional columns that
 are then unused. That way, it is possible to add columns to tables without
 breaking anything.
 
-Note if the main use case is Filtered Replicaiton for resharding, this
+Note if the main use case is Filtered Replication for resharding, this
 limitation only exists while the resharding process is running. It is somewhat
 easy to not change the schema at the same time as resharding is on-going.
 

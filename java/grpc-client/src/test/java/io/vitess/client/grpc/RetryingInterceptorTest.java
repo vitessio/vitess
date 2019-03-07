@@ -1,13 +1,5 @@
 package io.vitess.client.grpc;
 
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-
-import javax.annotation.Nullable;
-
-import org.junit.Assert;
-import org.junit.Test;
-
 import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.CallOptions;
@@ -22,15 +14,26 @@ import io.grpc.inprocess.InProcessChannelBuilder;
 import io.vitess.proto.Vtgate;
 import io.vitess.proto.grpc.VitessGrpc;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+
+import javax.annotation.Nullable;
+
+import org.junit.Assert;
+import org.junit.Test;
+
 public class RetryingInterceptorTest {
 
   @Test
   public void testNoopConfigPassesThrough() throws ExecutionException, InterruptedException {
     ForceRetryNTimesInterceptor forceRetryNTimesInterceptor = new ForceRetryNTimesInterceptor(3);
 
-    ManagedChannel channel = InProcessChannelBuilder.forName("foo").intercept(new RetryingInterceptor(RetryingInterceptorConfig.noOpConfig()), forceRetryNTimesInterceptor).build();
+    ManagedChannel channel = InProcessChannelBuilder.forName("foo")
+        .intercept(new RetryingInterceptor(RetryingInterceptorConfig.noOpConfig()),
+            forceRetryNTimesInterceptor).build();
     VitessGrpc.VitessFutureStub stub = VitessGrpc.newFutureStub(channel);
-    ListenableFuture<Vtgate.ExecuteResponse> resp = stub.execute(Vtgate.ExecuteRequest.getDefaultInstance());
+    ListenableFuture<Vtgate.ExecuteResponse> resp = stub
+        .execute(Vtgate.ExecuteRequest.getDefaultInstance());
     try {
       resp.get();
       Assert.fail("Should have failed after 1 attempt");
@@ -42,10 +45,14 @@ public class RetryingInterceptorTest {
   @Test
   public void testRetryAfterBackoff() throws ExecutionException, InterruptedException {
     ForceRetryNTimesInterceptor forceRetryNTimesInterceptor = new ForceRetryNTimesInterceptor(3);
-    RetryingInterceptorConfig retryingInterceptorConfig = RetryingInterceptorConfig.exponentialConfig(5, 60, 2);
-    ManagedChannel channel = InProcessChannelBuilder.forName("foo").intercept(forceRetryNTimesInterceptor, new RetryingInterceptor(retryingInterceptorConfig)).build();
+    RetryingInterceptorConfig retryingInterceptorConfig = RetryingInterceptorConfig
+        .exponentialConfig(5, 60, 2);
+    ManagedChannel channel = InProcessChannelBuilder.forName("foo")
+        .intercept(forceRetryNTimesInterceptor, new RetryingInterceptor(retryingInterceptorConfig))
+        .build();
     VitessGrpc.VitessFutureStub stub = VitessGrpc.newFutureStub(channel);
-    ListenableFuture<Vtgate.ExecuteResponse> resp = stub.execute(Vtgate.ExecuteRequest.getDefaultInstance());
+    ListenableFuture<Vtgate.ExecuteResponse> resp = stub
+        .execute(Vtgate.ExecuteRequest.getDefaultInstance());
     try {
       resp.get();
       Assert.fail("Should have failed after 3 attempt");
@@ -58,10 +65,15 @@ public class RetryingInterceptorTest {
   @Test
   public void testRetryDeadlineExceeded() throws ExecutionException, InterruptedException {
     ForceRetryNTimesInterceptor forceRetryNTimesInterceptor = new ForceRetryNTimesInterceptor(3);
-    RetryingInterceptorConfig retryingInterceptorConfig = RetryingInterceptorConfig.exponentialConfig(5, 60, 2);
-    ManagedChannel channel = InProcessChannelBuilder.forName("foo").intercept(forceRetryNTimesInterceptor, new RetryingInterceptor(retryingInterceptorConfig)).build();
-    VitessGrpc.VitessFutureStub stub = VitessGrpc.newFutureStub(channel).withDeadlineAfter(1, TimeUnit.MILLISECONDS);
-    ListenableFuture<Vtgate.ExecuteResponse> resp = stub.execute(Vtgate.ExecuteRequest.getDefaultInstance());
+    RetryingInterceptorConfig retryingInterceptorConfig = RetryingInterceptorConfig
+        .exponentialConfig(5, 60, 2);
+    ManagedChannel channel = InProcessChannelBuilder.forName("foo")
+        .intercept(forceRetryNTimesInterceptor, new RetryingInterceptor(retryingInterceptorConfig))
+        .build();
+    VitessGrpc.VitessFutureStub stub = VitessGrpc.newFutureStub(channel)
+        .withDeadlineAfter(1, TimeUnit.MILLISECONDS);
+    ListenableFuture<Vtgate.ExecuteResponse> resp = stub
+        .execute(Vtgate.ExecuteRequest.getDefaultInstance());
     try {
       resp.get();
       Assert.fail("Should have failed");
@@ -85,7 +97,8 @@ public class RetryingInterceptorTest {
     }
 
     @Override
-    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+        CallOptions callOptions, Channel next) {
 
       System.out.println("Num failures: " + numRetryableFailures);
       if (numRetryableFailures < timesToForceRetry) {

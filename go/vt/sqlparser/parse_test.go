@@ -967,6 +967,9 @@ var (
 		input:  "create table a (a int, b char, c garbage)",
 		output: "create table a",
 	}, {
+		input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
+		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
+	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
 		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
@@ -2040,6 +2043,13 @@ func TestCreateTable(t *testing.T) {
 			"  stats_sample_pages 1,\n" +
 			"  tablespace tablespace_name storage disk,\n" +
 			"  tablespace tablespace_name\n",
+
+		// boolean columns
+		"create table t (\n" +
+			"	bi bigint not null primary key,\n" +
+			"	b1 bool not null,\n" +
+			"	b2 boolean\n" +
+			")",
 	}
 	for _, sql := range validSQL {
 		sql = strings.TrimSpace(sql)

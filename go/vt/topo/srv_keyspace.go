@@ -26,6 +26,7 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
@@ -67,7 +68,7 @@ func (ts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (
 		cancel()
 		for range wdChannel {
 		}
-		return &WatchSrvKeyspaceData{Err: fmt.Errorf("error unpacking initial SrvKeyspace object: %v", err)}, nil, nil
+		return &WatchSrvKeyspaceData{Err: vterrors.Wrapf(err, "error unpacking initial SrvKeyspace object")}, nil, nil
 	}
 
 	changes := make(chan *WatchSrvKeyspaceData, 10)
@@ -94,7 +95,7 @@ func (ts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (
 				cancel()
 				for range wdChannel {
 				}
-				changes <- &WatchSrvKeyspaceData{Err: fmt.Errorf("error unpacking SrvKeyspace object: %v", err)}
+				changes <- &WatchSrvKeyspaceData{Err: vterrors.Wrapf(err, "error unpacking SrvKeyspace object")}
 				return
 			}
 
@@ -630,7 +631,7 @@ func (ts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*t
 	}
 	srvKeyspace := &topodatapb.SrvKeyspace{}
 	if err := proto.Unmarshal(data, srvKeyspace); err != nil {
-		return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
+		return nil, vterrors.Wrapf(err, "SrvKeyspace unmarshal failed: %v", data)
 	}
 	return srvKeyspace, nil
 }

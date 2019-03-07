@@ -59,6 +59,10 @@ Version: a95cf5d (Git branch 'HEAD') built on Fri May 18 16:54:26 PDT 2018 by gi
 OS, Architecture, and any other information you can provide
 about the environment.
 
+- Operating system (output of `cat /etc/os-release`):
+- Kernel version (output of `uname -sr`):
+- Architecture (output of `uname -m`):
+
 #### Log Fragments
 
 Include appropriate log fragments. If the log is longer than a few dozen lines, please

@@ -17,30 +17,27 @@ limitations under the License.
 package worker
 
 import (
-	"errors"
 	"fmt"
 	"html/template"
 	"strings"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/worker/events"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -162,48 +159,48 @@ func newVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard st
 // TODO(mberlin): Rename SplitCloneWorker to cloneWorker.
 func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, shard string, online, offline bool, tables, excludeTables []string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, destinationWriterCount, minHealthyTablets int, tabletType topodatapb.TabletType, maxTPS, maxReplicationLag int64, useConsistentSnapshot bool) (Worker, error) {
 	if cloneType != horizontalResharding && cloneType != verticalSplit {
-		return nil, fmt.Errorf("unknown cloneType: %v This is a bug. Please report", cloneType)
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown cloneType: %v This is a bug. Please report", cloneType)
 	}
 
 	// Verify user defined flags.
 	if !online && !offline {
-		return nil, errors.New("at least one clone phase (-online, -offline) must be enabled (and not set to false)")
+		return nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "at least one clone phase (-online, -offline) must be enabled (and not set to false)")
 	}
 	if tables != nil && len(tables) == 0 {
-		return nil, errors.New("list of tablets to be split out must not be empty")
+		return nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "list of tablets to be split out must not be empty")
 	}
 	if chunkCount <= 0 {
-		return nil, fmt.Errorf("chunk_count must be > 0: %v", chunkCount)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "chunk_count must be > 0: %v", chunkCount)
 	}
 	if minRowsPerChunk <= 0 {
-		return nil, fmt.Errorf("min_rows_per_chunk must be > 0: %v", minRowsPerChunk)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "min_rows_per_chunk must be > 0: %v", minRowsPerChunk)
 	}
 	if sourceReaderCount <= 0 {
-		return nil, fmt.Errorf("source_reader_count must be > 0: %v", sourceReaderCount)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "source_reader_count must be > 0: %v", sourceReaderCount)
 	}
 	if writeQueryMaxRows <= 0 {
-		return nil, fmt.Errorf("write_query_max_rows must be > 0: %v", writeQueryMaxRows)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "write_query_max_rows must be > 0: %v", writeQueryMaxRows)
 	}
 	if writeQueryMaxSize <= 0 {
-		return nil, fmt.Errorf("write_query_max_size must be > 0: %v", writeQueryMaxSize)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "write_query_max_size must be > 0: %v", writeQueryMaxSize)
 	}
 	if destinationWriterCount <= 0 {
-		return nil, fmt.Errorf("destination_writer_count must be > 0: %v", destinationWriterCount)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "destination_writer_count must be > 0: %v", destinationWriterCount)
 	}
 	if minHealthyTablets < 0 {
-		return nil, fmt.Errorf("min_healthy_tablets must be >= 0: %v", minHealthyTablets)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "min_healthy_tablets must be >= 0: %v", minHealthyTablets)
 	}
 	if maxTPS != throttler.MaxRateModuleDisabled {
 		wr.Logger().Infof("throttling enabled and set to a max of %v transactions/second", maxTPS)
 	}
 	if maxTPS != throttler.MaxRateModuleDisabled && maxTPS < int64(destinationWriterCount) {
-		return nil, fmt.Errorf("-max_tps must be >= -destination_writer_count: %v >= %v", maxTPS, destinationWriterCount)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "-max_tps must be >= -destination_writer_count: %v >= %v", maxTPS, destinationWriterCount)
 	}
 	if maxReplicationLag <= 0 {
-		return nil, fmt.Errorf("max_replication_lag must be >= 1s: %v", maxReplicationLag)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "max_replication_lag must be >= 1s: %v", maxReplicationLag)
 	}
 	if tabletType != topodatapb.TabletType_REPLICA && tabletType != topodatapb.TabletType_RDONLY {
-		return nil, fmt.Errorf("tablet_type must be RDONLY or REPLICA: %v", topodatapb.TabletType_name[int32(tabletType)])
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "tablet_type must be RDONLY or REPLICA: %v", topodatapb.TabletType_name[int32(tabletType)])
 	}
 
 	scw := &SplitCloneWorker{
@@ -507,7 +504,7 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 			return vterrors.Wrap(err, "offline clone() failed")
 		}
 		if err := scw.setUpVReplication(ctx); err != nil {
-			return fmt.Errorf("failed to set up replication: %v", err)
+			return vterrors.Wrap(err, "failed to set up replication")
 		}
 
 		d := time.Since(start)
@@ -590,7 +587,7 @@ func (scw *SplitCloneWorker) initShardsForHorizontalResharding(ctx context.Conte
 	// find the shard we mentioned in there, if any
 	os := topotools.OverlappingShardsForShard(osList, scw.shard)
 	if os == nil {
-		return fmt.Errorf("the specified shard %v/%v is not in any overlapping shard", scw.destinationKeyspace, scw.shard)
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "the specified shard %v/%v is not in any overlapping shard", scw.destinationKeyspace, scw.shard)
 	}
 	scw.wr.Logger().Infof("Found overlapping shards: %+v\n", os)
 
@@ -609,7 +606,7 @@ func (scw *SplitCloneWorker) initShardsForHorizontalResharding(ctx context.Conte
 	}
 
 	if scw.useConsistentSnapshot && len(scw.sourceShards) > 1 {
-		return fmt.Errorf("cannot use consistent snapshot against multiple source shards")
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot use consistent snapshot against multiple source shards")
 	}
 
 	return nil
@@ -617,7 +614,7 @@ func (scw *SplitCloneWorker) initShardsForHorizontalResharding(ctx context.Conte
 
 func (scw *SplitCloneWorker) initShardsForVerticalSplit(ctx context.Context) error {
 	if len(scw.destinationKeyspaceInfo.ServedFroms) == 0 {
-		return fmt.Errorf("destination keyspace %v has no KeyspaceServedFrom", scw.destinationKeyspace)
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "destination keyspace %v has no KeyspaceServedFrom", scw.destinationKeyspace)
 	}
 
 	// Determine the source keyspace.
@@ -625,13 +622,13 @@ func (scw *SplitCloneWorker) initShardsForVerticalSplit(ctx context.Context) err
 	for _, st := range servingTypes {
 		sf := scw.destinationKeyspaceInfo.GetServedFrom(st)
 		if sf == nil {
-			return fmt.Errorf("destination keyspace %v is serving type %v", scw.destinationKeyspace, st)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "destination keyspace %v is serving type %v", scw.destinationKeyspace, st)
 		}
 		if servedFrom == "" {
 			servedFrom = sf.Keyspace
 		} else {
 			if servedFrom != sf.Keyspace {
-				return fmt.Errorf("destination keyspace %v is serving from multiple source keyspaces %v and %v", scw.destinationKeyspace, servedFrom, sf.Keyspace)
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "destination keyspace %v is serving from multiple source keyspaces %v and %v", scw.destinationKeyspace, servedFrom, sf.Keyspace)
 			}
 		}
 	}
@@ -644,7 +641,7 @@ func (scw *SplitCloneWorker) initShardsForVerticalSplit(ctx context.Context) err
 		return vterrors.Wrapf(err, "cannot find source shard for source keyspace %s", sourceKeyspace)
 	}
 	if len(shardMap) != 1 {
-		return fmt.Errorf("found the wrong number of source shards, there should be only one, %v", shardMap)
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "found the wrong number of source shards, there should be only one, %v", shardMap)
 	}
 	var sourceShard string
 	for s := range shardMap {
@@ -670,8 +667,9 @@ func (scw *SplitCloneWorker) sanityCheckShardInfos(ctx context.Context) error {
 	// Verify that filtered replication is not already enabled.
 	for _, si := range scw.destinationShards {
 		if len(si.SourceShards) > 0 {
-			return fmt.Errorf("destination shard %v/%v has filtered replication already enabled from a previous resharding (ShardInfo is set)."+
-				" This requires manual intervention e.g. use vtctl SourceShardDelete to remove it",
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+				"destination shard %v/%v has filtered replication already enabled from a previous resharding (ShardInfo is set)."+
+					" This requires manual intervention e.g. use vtctl SourceShardDelete to remove it",
 				si.Keyspace(), si.ShardName())
 		}
 	}
@@ -742,7 +740,7 @@ func (scw *SplitCloneWorker) loadVSchema(ctx context.Context) error {
 			return vterrors.Wrapf(err, "cannot load VSchema for keyspace %v", scw.destinationKeyspace)
 		}
 		if kschema == nil {
-			return fmt.Errorf("no VSchema for keyspace %v", scw.destinationKeyspace)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no VSchema for keyspace %v", scw.destinationKeyspace)
 		}
 
 		keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, scw.destinationKeyspace)
@@ -788,7 +786,7 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 		err = scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
-			return fmt.Errorf("cannot stop replication on tablet %v", topoproto.TabletAliasString(alias))
+			return vterrors.Wrapf(err, "cannot stop replication on tablet %v", topoproto.TabletAliasString(alias))
 		}
 
 		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i])
@@ -803,7 +801,7 @@ func (scw *SplitCloneWorker) findTransactionalSources(ctx context.Context) error
 	scw.setState(WorkerStateFindTargets)
 
 	if len(scw.sourceShards) > 1 {
-		return fmt.Errorf("consistent snapshot can only be used with a single source shard")
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "consistent snapshot can only be used with a single source shard")
 	}
 	var err error
 
@@ -812,7 +810,7 @@ func (scw *SplitCloneWorker) findTransactionalSources(ctx context.Context) error
 	scw.sourceAliases = make([]*topodatapb.TabletAlias, 1)
 	scw.sourceAliases[0], err = FindHealthyTablet(ctx, scw.wr, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyTablets, scw.tabletType)
 	if err != nil {
-		return fmt.Errorf("FindHealthyTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
+		return vterrors.Wrapf(err, "FindHealthyTablet() failed for %v/%v/%v", scw.cell, si.Keyspace(), si.ShardName())
 	}
 	scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", topoproto.TabletAliasString(scw.sourceAliases[0]), si.Keyspace(), si.ShardName())
 	scw.setFormattedOfflineSources(scw.sourceAliases)
@@ -823,12 +821,15 @@ func (scw *SplitCloneWorker) findTransactionalSources(ctx context.Context) error
 	ti, err := scw.wr.TopoServer().GetTablet(shortCtx, scw.sourceAliases[0])
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot read tablet %v: %v", topoproto.TabletAliasString(scw.sourceAliases[0]), err)
+		return vterrors.Wrapf(err, "cannot read tablet %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
 	}
 	scw.sourceTablets[0] = ti.Tablet
 
 	// stop replication and create transactions to work on
 	txs, gtid, err := CreateConsistentTransactions(ctx, ti, scw.wr, scw.cleaner, scw.sourceReaderCount)
+	if err != nil {
+		return vterrors.Wrapf(err, "error creating consistent transactions")
+	}
 	scw.wr.Logger().Infof("created %v transactions", len(txs))
 	scw.lastPos = gtid
 	scw.transactions = txs
@@ -850,7 +851,7 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 		}
 		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
 		if len(masters) == 0 {
-			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in HealthCheck: empty TabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in HealthCheck: empty TabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
 		}
 		master := masters[0]
 
@@ -902,7 +903,7 @@ func (scw *SplitCloneWorker) findFirstSourceTablet(ctx context.Context, state St
 	tablets := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), scw.tabletType)
 	if len(tablets) == 0 {
 		// We fail fast on this problem and don't retry because at the start all tablets should be healthy.
-		return nil, fmt.Errorf("no healthy %v tablet in source shard (%v) available (required to find out the schema)", topodatapb.TabletType_name[int32(scw.tabletType)], topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no healthy %v tablet in source shard (%v) available (required to find out the schema)", topodatapb.TabletType_name[int32(scw.tabletType)], topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
 	}
 	return tablets[0].Tablet, nil
 }
@@ -944,25 +945,32 @@ func mergeOrSingle(readers []ResultReader, td *tabletmanagerdatapb.TableDefiniti
 	return sourceReader, nil
 }
 
+func closeReaders(ctx context.Context, readers []ResultReader) {
+	for _, reader := range readers {
+		if reader != nil {
+			reader.Close(ctx)
+		}
+	}
+}
+
 func (scw *SplitCloneWorker) getSourceResultReader(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, state StatusWorkerState, chunk chunk, txID int64) (ResultReader, error) {
 	sourceReaders := make([]ResultReader, len(scw.sourceShards))
-	var readers []ResultReader
-	defer func() {
-		for _, i := range readers {
-			i.Close(ctx)
-		}
-	}()
 
 	for shardIndex, si := range scw.sourceShards {
 		var sourceResultReader ResultReader
-		var err error
 		if state == WorkerStateCloneOffline && scw.useConsistentSnapshot {
+			var err error
 			if txID < 1 {
-				return nil, fmt.Errorf("tried using consistent snapshot without a valid transaction")
+				return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "tried using consistent snapshot without a valid transaction")
 			}
 			tp := newShardTabletProvider(scw.tsc, scw.tabletTracker, si.Keyspace(), si.ShardName(), scw.tabletType)
 			sourceResultReader, err = NewTransactionalRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, false, txID)
+			if err != nil {
+				closeReaders(ctx, sourceReaders)
+				return nil, vterrors.Wrapf(err, "NewTransactionalRestartableResultReader for source: %v failed", tp.description())
+			}
 		} else {
+			var err error
 			var tp tabletProvider
 			allowMultipleRetries := true
 			if state == WorkerStateCloneOffline {
@@ -978,39 +986,36 @@ func (scw *SplitCloneWorker) getSourceResultReader(ctx context.Context, td *tabl
 			}
 			sourceResultReader, err = NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, allowMultipleRetries)
 			if err != nil {
-				return nil, fmt.Errorf("NewRestartableResultReader for source: %v failed: %v", tp.description(), err)
+				closeReaders(ctx, sourceReaders)
+				return nil, vterrors.Wrapf(err, "NewRestartableResultReader for source: %v failed", tp.description())
 			}
-			readers = append(readers, sourceResultReader)
 		}
 		sourceReaders[shardIndex] = sourceResultReader
 	}
 	resultReader, err := mergeOrSingle(sourceReaders, td)
-	if err == nil {
-		readers = readers[:0]
+	if err != nil {
+		closeReaders(ctx, sourceReaders)
+		return nil, err
 	}
 	return resultReader, err
 }
 
 func (scw *SplitCloneWorker) getDestinationResultReader(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, state StatusWorkerState, chunk chunk) (ResultReader, error) {
 	destReaders := make([]ResultReader, len(scw.destinationShards))
-	var readers []ResultReader
-	defer func() {
-		for _, i := range readers {
-			i.Close(ctx)
-		}
-	}()
 
 	for shardIndex, si := range scw.destinationShards {
 		tp := newShardTabletProvider(scw.tsc, scw.tabletTracker, si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
 		destResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, true /* allowMultipleRetries */)
 		if err != nil {
-			return nil, fmt.Errorf("NewRestartableResultReader for destination: %v failed: %v", tp.description(), err)
+			closeReaders(ctx, destReaders)
+			return nil, vterrors.Wrapf(err, "NewRestartableResultReader for destination: %v failed", tp.description())
 		}
 		destReaders[shardIndex] = destResultReader
 	}
 	resultReader, err := mergeOrSingle(destReaders, td)
-	if err == nil {
-		readers = readers[:0]
+	if err != nil {
+		closeReaders(ctx, destReaders)
+		return nil, err
 	}
 	return resultReader, err
 }
@@ -1086,7 +1091,7 @@ func (scw *SplitCloneWorker) startCloningData(ctx context.Context, state StatusW
 	workPipeline := make(chan workUnit, 10) // We'll use a small buffer so producers do not run too far ahead of consumers
 	queryService, err := tabletconn.GetDialer()(firstSourceTablet, true)
 	if err != nil {
-		return fmt.Errorf("failed to create queryService: %v", err)
+		return vterrors.Wrap(err, "failed to create queryService")
 	}
 	defer queryService.Close(ctx)
 
@@ -1114,14 +1119,14 @@ func (scw *SplitCloneWorker) startCloningData(ctx context.Context, state StatusW
 
 		keyResolver, err := scw.createKeyResolver(td)
 		if err != nil {
-			return fmt.Errorf("cannot resolve sharding keys for keyspace %v: %v", scw.destinationKeyspace, err)
+			return vterrors.Wrapf(err, "cannot resolve sharding keys for keyspace %v", scw.destinationKeyspace)
 		}
 
 		// TODO(mberlin): We're going to chunk *all* source shards based on the MIN
 		// and MAX values of the *first* source shard. Is this going to be a problem?
 		chunks, err := generateChunks(ctx, scw.wr, firstSourceTablet, td, scw.chunkCount, scw.minRowsPerChunk)
 		if err != nil {
-			return fmt.Errorf("failed to split table into chunks: %v", err)
+			return vterrors.Wrap(err, "failed to split table into chunks")
 		}
 		tableStatusList.setThreadCount(tableIndex, len(chunks))
 
@@ -1181,7 +1186,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		// and overwriting the variable will not cause any problems
 		scw.wr.Logger().Errorf(format, args...)
 		if firstError == nil {
-			firstError = fmt.Errorf(format, args...)
+			firstError = vterrors.Errorf(vtrpc.Code_INTERNAL, format, args...)
 			cancelCopy()
 		}
 	}
@@ -1218,7 +1223,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 	err = scw.startCloningData(ctx, state, sourceSchemaDefinition, processError, firstSourceTablet, tableStatusList, start, statsCounters, insertChannels, &readers)
 	if err != nil {
-		return fmt.Errorf("failed to startCloningData : %v", err)
+		return vterrors.Wrap(err, "failed to startCloningData")
 	}
 	readers.Wait()
 
@@ -1287,19 +1292,19 @@ func (scw *SplitCloneWorker) setUpVReplication(ctx context.Context) error {
 				// TODO(mberlin): Fill in scw.maxReplicationLag once the adapative throttler is enabled by default.
 				qr, err := exc.vreplicationExec(cancelableCtx, binlogplayer.CreateVReplication("SplitClone", bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix()))
 				if err != nil {
-					handleError(fmt.Errorf("vreplication queries failed: %v", err))
+					handleError(vterrors.Wrap(err, "vreplication queries failed"))
 					cancel()
 					return
 				}
 				if err := scw.wr.SourceShardAdd(cancelableCtx, keyspace, shard, uint32(qr.InsertID), src.Keyspace(), src.ShardName(), src.Shard.KeyRange, scw.tables); err != nil {
-					handleError(fmt.Errorf("could not add source shard: %v", err))
+					handleError(vterrors.Wrap(err, "could not add source shard"))
 					break
 				}
 			}
 			// refreshState will cause the destination to become non-serving because
 			// it's now participating in the resharding workflow.
 			if err := exc.refreshState(ctx); err != nil {
-				handleError(fmt.Errorf("RefreshState failed on tablet %v/%v: %v", keyspace, shard, err))
+				handleError(vterrors.Wrapf(err, "RefreshState failed on tablet %v/%v", keyspace, shard))
 			}
 		}(si.Keyspace(), si.ShardName(), si.KeyRange)
 	}
@@ -1321,11 +1326,11 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 		return nil, vterrors.Wrapf(err, "cannot get schema from source %v", topoproto.TabletAliasString(tablet.Alias))
 	}
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
-		return nil, fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(tablet.Alias))
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no tables matching the table filter in tablet %v", topoproto.TabletAliasString(tablet.Alias))
 	}
 	for _, td := range sourceSchemaDefinition.TableDefinitions {
 		if len(td.Columns) == 0 {
-			return nil, fmt.Errorf("schema for table %v has no columns", td.Name)
+			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "schema for table %v has no columns", td.Name)
 		}
 	}
 	return sourceSchemaDefinition, nil

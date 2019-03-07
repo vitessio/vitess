@@ -327,7 +327,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		}
 		break
 	}
-	return NewShardError(err, target, tabletLastUsed, inTransaction)
+	return NewShardError(err, target, tabletLastUsed)
 }
 
 func shuffleTablets(cell string, tablets []discovery.TabletStats) {

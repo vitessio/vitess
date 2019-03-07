@@ -62,6 +62,14 @@ func TestJsonConfigParser(t *testing.T) {
 	if len(config["mysql_user"][2].Groups) != 1 || config["mysql_user"][2].Groups[0] != "user_group" {
 		t.Fatalf("Groups should be equal to [\"user_group\"]")
 	}
+
+	jsonConfig = `{
+		"mysql_user": [{"Password": "123", "UserData": "mysql_user_all", "InvalidKey": "oops"}]
+	}`
+	err = parseConfig([]byte(jsonConfig), &config)
+	if err == nil {
+		t.Fatalf("Invalid config should have errored, but didn't")
+	}
 }
 
 func TestValidateHashGetter(t *testing.T) {

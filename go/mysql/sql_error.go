@@ -38,6 +38,7 @@ type SQLError struct {
 
 // NewSQLError creates a new SQLError.
 // If sqlState is left empty, it will default to "HY000" (general error).
+// TODO: Should be aligned with vterrors, stack traces and wrapping
 func NewSQLError(number int, sqlState string, format string, args ...interface{}) *SQLError {
 	if sqlState == "" {
 		sqlState = SSUnknownSQLState

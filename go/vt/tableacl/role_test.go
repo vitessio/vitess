@@ -16,7 +16,9 @@ limitations under the License.
 
 package tableacl
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestRoleName(t *testing.T) {
 	if READER.Name() != roleNames[READER] {

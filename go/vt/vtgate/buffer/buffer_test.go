@@ -687,7 +687,7 @@ func isCanceledError(err error) error {
 	if got, want := vterrors.Code(err), vtrpcpb.Code_UNAVAILABLE; got != want {
 		return fmt.Errorf("wrong error code for canceled buffered request. got = %v, want = %v", got, want)
 	}
-	if got, want := err.Error(), "context was canceled before failover finished: context canceled"; got != want {
+	if got, want := err.Error(), "context was canceled before failover finished"; !strings.Contains(got, want) {
 		return fmt.Errorf("canceled buffered request should return a different error message. got = %v, want = %v", got, want)
 	}
 	return nil

@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,6 +18,11 @@ package io.vitess.client.cursor;
 
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
+
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.Field;
+import io.vitess.proto.Query.QueryResult;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;
@@ -28,17 +33,15 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.TimeZone;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import io.vitess.proto.Query;
-import io.vitess.proto.Query.Field;
-import io.vitess.proto.Query.QueryResult;
-
 @RunWith(JUnit4.class)
 public class CursorTest {
+
   private static final Calendar GMT = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
 
   @Test
@@ -58,16 +61,20 @@ public class CursorTest {
   @Test
   public void testFindColumnAlternateIndexes() throws Exception {
     try (Cursor cursor = new SimpleCursor(
-        QueryResult.newBuilder().addFields(Field.newBuilder().setName("col1").setTable("Table1").build())
-        .addFields(Field.newBuilder().setName("myAlias").setOrgName("boringColName").setTable("Table2").build())
-        .build())) {
+        QueryResult.newBuilder()
+            .addFields(Field.newBuilder().setName("col1").setTable("Table1").build())
+            .addFields(
+                Field.newBuilder().setName("myAlias").setOrgName("boringColName").setTable("Table2")
+                    .build())
+            .build())) {
       Assert.assertEquals(1, cursor.findColumn("Table1.col1"));
       Assert.assertEquals(1, cursor.findColumn("Table1.Col1"));
       Assert.assertEquals(2, cursor.findColumn("myAlias"));
       Assert.assertEquals(2, cursor.findColumn("Table2.myAlias"));
       Assert.assertEquals(2, cursor.findColumn("boringColName"));
       try {
-        int idx = cursor.findColumn("Table2.boringColName"); // don't do what mysql-connector-j doesn't do
+        int idx = cursor
+            .findColumn("Table2.boringColName"); // don't do what mysql-connector-j doesn't do
         Assert.fail("no exception thrown for findColumn(\"Table2.boringColName\")");
       } catch (Exception ex) {
         Assert.assertEquals(SQLDataException.class, ex.getClass());
@@ -103,9 +110,10 @@ public class CursorTest {
     try (Cursor cursor = new SimpleCursor(QueryResult.newBuilder()
         .addFields(Field.newBuilder().setName("col1").setType(Query.Type.UINT64).build())
         .addFields(Field.newBuilder().setName("null").setType(Query.Type.UINT64).build())
-        .addRows(Query.Row.newBuilder().addLengths("18446744073709551615".length()).addLengths(-1) // SQL
-                                                                                                   // NULL
-            .setValues(ByteString.copyFromUtf8("18446744073709551615")))
+        .addRows(
+            Query.Row.newBuilder().addLengths("18446744073709551615".length()).addLengths(-1) // SQL
+                // NULL
+                .setValues(ByteString.copyFromUtf8("18446744073709551615")))
         .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
@@ -121,9 +129,10 @@ public class CursorTest {
     try (Cursor cursor = new SimpleCursor(QueryResult.newBuilder()
         .addFields(Field.newBuilder().setName("col1").setType(Query.Type.UINT64).build())
         .addFields(Field.newBuilder().setName("null").setType(Query.Type.UINT64).build())
-        .addRows(Query.Row.newBuilder().addLengths("18446744073709551615".length()).addLengths(-1) // SQL
-            // NULL
-            .setValues(ByteString.copyFromUtf8("18446744073709551615")))
+        .addRows(
+            Query.Row.newBuilder().addLengths("18446744073709551615".length()).addLengths(-1) // SQL
+                // NULL
+                .setValues(ByteString.copyFromUtf8("18446744073709551615")))
         .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
@@ -222,7 +231,7 @@ public class CursorTest {
           .addFields(Field.newBuilder().setName("col1").setType(type).build())
           .addFields(Field.newBuilder().setName("null").setType(type).build())
           .addRows(Query.Row.newBuilder().addLengths("2008-01-02".length()).addLengths(-1) // SQL
-                                                                                           // NULL
+              // NULL
               .setValues(ByteString.copyFromUtf8("2008-01-02")))
           .build())) {
         Row row = cursor.next();
@@ -291,7 +300,7 @@ public class CursorTest {
           .addFields(Field.newBuilder().setName("col1").setType(type).build())
           .addFields(Field.newBuilder().setName("null").setType(type).build())
           .addRows(Query.Row.newBuilder().addLengths("hello world".length()).addLengths(-1) // SQL
-                                                                                            // NULL
+              // NULL
               .setValues(ByteString.copyFromUtf8("hello world")))
           .build())) {
         Row row = cursor.next();
@@ -312,7 +321,7 @@ public class CursorTest {
           .addFields(Field.newBuilder().setName("col1").setType(type).build())
           .addFields(Field.newBuilder().setName("null").setType(type).build())
           .addRows(Query.Row.newBuilder().addLengths("1234.56789".length()).addLengths(-1) // SQL
-                                                                                           // NULL
+              // NULL
               .setValues(ByteString.copyFromUtf8("1234.56789")))
           .build())) {
         Row row = cursor.next();
@@ -376,9 +385,9 @@ public class CursorTest {
   public void testGetBinaryInputStream() throws Exception {
     ByteString travel = ByteString.copyFromUtf8("მოგზაურობა");
     try (Cursor cursor = new SimpleCursor(QueryResult.newBuilder()
-                                          .addFields(Field.newBuilder().setName("col1").setType(Query.Type.INT32).build())
-                                          .addRows(Query.Row.newBuilder().addLengths(travel.size()).setValues(travel))
-                                          .build())) {
+        .addFields(Field.newBuilder().setName("col1").setType(Query.Type.INT32).build())
+        .addRows(Query.Row.newBuilder().addLengths(travel.size()).setValues(travel))
+        .build())) {
       Row row = cursor.next();
       Assert.assertNotNull(row);
 

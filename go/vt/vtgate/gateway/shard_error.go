@@ -26,15 +26,15 @@ import (
 )
 
 // NewShardError returns a new error with the shard info amended.
-func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet, inTransaction bool) error {
+func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet) error {
 	if in == nil {
 		return nil
 	}
 	if tablet != nil {
-		return vterrors.Errorf(vterrors.Code(in), "target: %s.%s.%s, used tablet: %s, %v", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), topotools.TabletIdent(tablet), in)
+		return vterrors.Wrapf(in, "target: %s.%s.%s, used tablet: %s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), topotools.TabletIdent(tablet))
 	}
 	if target != nil {
-		return vterrors.Errorf(vterrors.Code(in), "target: %s.%s.%s, %v", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), in)
+		return vterrors.Wrapf(in, "target: %s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType))
 	}
-	return vterrors.Errorf(vterrors.Code(in), "%v", in)
+	return in
 }

@@ -83,7 +83,7 @@ test` from the root of the Git tree.
 If you haven't installed all dependencies for `make test`, you can rely on the Travis CI test results as well.
 These results will be linked on your pull request.
 
-## Commiting your work
+## Committing your work
 
 When running `git commit` use the `-s` option to add a Signed-off-by line.
 This is needed for [the Developer Certificate of Origin](https://github.com/apps/dco).

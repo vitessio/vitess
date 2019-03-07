@@ -42,6 +42,7 @@ import vtgate_gateway_flavor.discoverygateway
 
 from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.chrome.options import Options
 
 from vttest import mysql_flavor
 
@@ -235,6 +236,13 @@ def reset_mysql_flavor():
 
 def create_webdriver():
   """Creates a webdriver object (local or remote for Travis)."""
+
+  # Set common Options
+  chrome_options = Options()
+  chrome_options.add_argument("--disable-gpu")
+  chrome_options.add_argument("--no-sandbox")  
+  chrome_options.headless = True
+
   if os.environ.get('CI') == 'true' and os.environ.get('TRAVIS') == 'true':
     username = os.environ['SAUCE_USERNAME']
     access_key = os.environ['SAUCE_ACCESS_KEY']
@@ -243,17 +251,22 @@ def create_webdriver():
     capabilities['build'] = os.environ['TRAVIS_BUILD_NUMBER']
     capabilities['platform'] = 'Linux'
     capabilities['browserName'] = 'chrome'
+    capabilities['chromeOptions'] = chrome_options
     hub_url = '%s:%s@localhost:4445' % (username, access_key)
     driver = webdriver.Remote(
         desired_capabilities=capabilities,
         command_executor='http://%s/wd/hub' % hub_url)
+
   else:
     # Only testing against Chrome for now
     os.environ['webdriver.chrome.driver'] = os.path.join(vtroot, 'dist')
     service_log_path = os.path.join(tmproot, 'chromedriver.log')
+    
     try:
       driver = webdriver.Chrome(service_args=['--verbose'],
-                                service_log_path=service_log_path)
+                                service_log_path=service_log_path,
+                                chrome_options=chrome_options
+      )
     except WebDriverException as e:
       if 'Chrome failed to start' not in str(e):
         # Not a Chrome issue. Just re-raise the exception.

@@ -18,10 +18,10 @@ package worker
 
 import (
 	"flag"
-	"fmt"
 	"html/template"
 	"net/http"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -56,7 +56,7 @@ func commandPing(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 	}
 	if subFlags.NArg() != 1 {
 		subFlags.Usage()
-		return nil, fmt.Errorf("command Ping requires <message>")
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "command Ping requires <message>")
 	}
 	message := subFlags.Arg(0)
 

@@ -1092,7 +1092,7 @@ func (shardSwap *shardSchemaSwap) takeSeedBackup() (err error) {
 	}
 
 	shardSwap.addShardLog(fmt.Sprintf("Taking backup on the seed tablet %v", seedTablet.Alias))
-	eventStream, err := shardSwap.parent.tabletClient.Backup(shardSwap.parent.ctx, seedTablet, *backupConcurrency)
+	eventStream, err := shardSwap.parent.tabletClient.Backup(shardSwap.parent.ctx, seedTablet, *backupConcurrency, false)
 	if err != nil {
 		return err
 	}

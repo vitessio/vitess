@@ -192,6 +192,11 @@ class TabletManagerStub(object):
         request_serializer=tabletmanagerdata__pb2.DemoteMasterRequest.SerializeToString,
         response_deserializer=tabletmanagerdata__pb2.DemoteMasterResponse.FromString,
         )
+    self.UndoDemoteMaster = channel.unary_unary(
+        '/tabletmanagerservice.TabletManager/UndoDemoteMaster',
+        request_serializer=tabletmanagerdata__pb2.UndoDemoteMasterRequest.SerializeToString,
+        response_deserializer=tabletmanagerdata__pb2.UndoDemoteMasterResponse.FromString,
+        )
     self.PromoteSlaveWhenCaughtUp = channel.unary_unary(
         '/tabletmanagerservice.TabletManager/PromoteSlaveWhenCaughtUp',
         request_serializer=tabletmanagerdata__pb2.PromoteSlaveWhenCaughtUpRequest.SerializeToString,
@@ -522,6 +527,13 @@ class TabletManagerServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
+  def UndoDemoteMaster(self, request, context):
+    """UndoDemoteMaster reverts all changes made by DemoteMaster
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def PromoteSlaveWhenCaughtUp(self, request, context):
     """PromoteSlaveWhenCaughtUp tells the remote tablet to catch up,
     and then be the master
@@ -760,6 +772,11 @@ def add_TabletManagerServicer_to_server(servicer, server):
           servicer.DemoteMaster,
           request_deserializer=tabletmanagerdata__pb2.DemoteMasterRequest.FromString,
           response_serializer=tabletmanagerdata__pb2.DemoteMasterResponse.SerializeToString,
+      ),
+      'UndoDemoteMaster': grpc.unary_unary_rpc_method_handler(
+          servicer.UndoDemoteMaster,
+          request_deserializer=tabletmanagerdata__pb2.UndoDemoteMasterRequest.FromString,
+          response_serializer=tabletmanagerdata__pb2.UndoDemoteMasterResponse.SerializeToString,
       ),
       'PromoteSlaveWhenCaughtUp': grpc.unary_unary_rpc_method_handler(
           servicer.PromoteSlaveWhenCaughtUp,

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -30,6 +29,8 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -155,7 +156,9 @@ func (a *AuthServerStatic) installSignalHandlers() {
 }
 
 func parseConfig(jsonConfig []byte, config *map[string][]*AuthServerStaticEntry) error {
-	if err := json.Unmarshal(jsonConfig, config); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(jsonConfig))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(config); err != nil {
 		// Couldn't parse, will try to parse with legacy config
 		return parseLegacyConfig(jsonConfig, config)
 	}
@@ -165,22 +168,23 @@ func parseConfig(jsonConfig []byte, config *map[string][]*AuthServerStaticEntry)
 func parseLegacyConfig(jsonConfig []byte, config *map[string][]*AuthServerStaticEntry) error {
 	// legacy config doesn't have an array
 	legacyConfig := make(map[string]*AuthServerStaticEntry)
-	err := json.Unmarshal(jsonConfig, &legacyConfig)
-	if err == nil {
-		log.Warningf("Config parsed using legacy configuration. Please update to the latest format: {\"user\":[{\"Password\": \"xxx\"}, ...]}")
-		for key, value := range legacyConfig {
-			(*config)[key] = append((*config)[key], value)
-		}
-		return nil
+	decoder := json.NewDecoder(bytes.NewReader(jsonConfig))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&legacyConfig); err != nil {
+		return err
 	}
-	return err
+	log.Warningf("Config parsed using legacy configuration. Please update to the latest format: {\"user\":[{\"Password\": \"xxx\"}, ...]}")
+	for key, value := range legacyConfig {
+		(*config)[key] = append((*config)[key], value)
+	}
+	return nil
 }
 
 func validateConfig(config map[string][]*AuthServerStaticEntry) error {
 	for _, entries := range config {
 		for _, entry := range entries {
 			if entry.SourceHost != "" && entry.SourceHost != localhostName {
-				return fmt.Errorf("Invalid SourceHost found (only localhost is supported): %v", entry.SourceHost)
+				return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Invalid SourceHost found (only localhost is supported): %v", entry.SourceHost)
 			}
 		}
 	}

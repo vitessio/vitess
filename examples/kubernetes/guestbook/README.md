@@ -3,7 +3,7 @@
 This is a Docker image for a sample guestbook app that uses Vitess.
 
 It is essentially a port of the
-[kubernetes/guestbook-go](https://github.com/GoogleCloudPlatform/kubernetes/tree/master/examples/guestbook-go)
+[kubernetes/guestbook-go](https://github.com/kubernetes/examples/tree/master/guestbook-go)
 example, but using Python instead of Go for the app server,
 and Vitess instead of Redis for the storage engine.
 

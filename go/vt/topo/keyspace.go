@@ -17,12 +17,13 @@ limitations under the License.
 package topo
 
 import (
-	"fmt"
 	"path"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -63,25 +64,25 @@ func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType topodatapb.TabletTyp
 	// master is a special case with a few extra checks
 	if tabletType == topodatapb.TabletType_MASTER {
 		if !remove {
-			return fmt.Errorf("Cannot add master back to %v", ki.keyspace)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Cannot add master back to %v", ki.keyspace)
 		}
 		if len(cells) > 0 {
-			return fmt.Errorf("Cannot migrate only some cells for master removal in keyspace %v", ki.keyspace)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Cannot migrate only some cells for master removal in keyspace %v", ki.keyspace)
 		}
 		if len(ki.ServedFroms) > 1 {
-			return fmt.Errorf("Cannot migrate master into %v until everything else is migrated", ki.keyspace)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Cannot migrate master into %v until everything else is migrated", ki.keyspace)
 		}
 	}
 
 	// we can't remove a type we don't have
 	if ki.GetServedFrom(tabletType) == nil && remove {
-		return fmt.Errorf("Supplied type cannot be migrated")
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Supplied type cannot be migrated")
 	}
 
 	// check the keyspace is consistent in any case
 	for _, ksf := range ki.ServedFroms {
 		if ksf.Keyspace != keyspace {
-			return fmt.Errorf("Inconsistent keypace specified in migration: %v != %v for type %v", keyspace, ksf.Keyspace, ksf.TabletType)
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Inconsistent keypace specified in migration: %v != %v for type %v", keyspace, ksf.Keyspace, ksf.TabletType)
 		}
 	}
 
@@ -130,7 +131,7 @@ func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType topodatapb.TabletType, ce
 		}
 	} else {
 		if ksf.Keyspace != keyspace {
-			return fmt.Errorf("cannot UpdateServedFromMap on existing record for keyspace %v, different keyspace: %v != %v", ki.keyspace, ksf.Keyspace, keyspace)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot UpdateServedFromMap on existing record for keyspace %v, different keyspace: %v != %v", ki.keyspace, ksf.Keyspace, keyspace)
 		}
 		ksf.Cells = addCells(ksf.Cells, cells)
 	}
@@ -181,7 +182,7 @@ func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceIn
 
 	k := &topodatapb.Keyspace{}
 	if err = proto.Unmarshal(data, k); err != nil {
-		return nil, fmt.Errorf("bad keyspace data %v", err)
+		return nil, vterrors.Wrap(err, "bad keyspace data")
 	}
 
 	return &KeyspaceInfo{
@@ -222,7 +223,7 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) (map[string]*ShardInfo, error) {
 	shards, err := ts.GetShardNames(ctx, keyspace)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get list of shards for keyspace '%v': %v", keyspace, err)
+		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
 	}
 
 	result := make(map[string]*ShardInfo, len(shards))
@@ -238,7 +239,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 				if IsErrType(err, NoNode) {
 					log.Warningf("GetShard(%v, %v) returned ErrNoNode, consider checking the topology.", keyspace, shard)
 				} else {
-					rec.RecordError(fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err))
+					rec.RecordError(vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard))
 				}
 				return
 			}
