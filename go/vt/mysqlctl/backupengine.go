@@ -28,8 +28,8 @@ import (
 
 var (
 	// BackupEngineImplementation is the implementation to use
-	// for BackupEngine. Exported for test purposes.
-	BackupEngineImplementation = flag.String("backup_engine_implementation", "builtin", "which implementation to use for the backup storage engine")
+	// for BackupEngine.
+	BackupEngineImplementation = flag.String("backup_engine_implementation", "builtin", "which implementation to use for the backup method, builtin or xtrabackup")
 )
 
 // BackupEngine is the interface to the backup engine

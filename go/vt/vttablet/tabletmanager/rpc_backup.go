@@ -29,6 +29,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+const (
+	xtrabackupEngine = "xtrabackup"
+)
+
 // Backup takes a db backup and sends it to the BackupStorage
 func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error {
 	if err := agent.lock(ctx); err != nil {
@@ -58,16 +62,17 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	}
 	originalType := tablet.Type
 
-	// update our type to BACKUP
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP); err != nil {
-		return err
-	}
+	if *mysqlctl.BackupEngineImplementation != xtrabackupEngine {
+		// update our type to BACKUP
+		if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP); err != nil {
+			return err
+		}
 
-	// let's update our internal state (stop query service and other things)
-	if err := agent.refreshTablet(ctx, "before backup"); err != nil {
-		return err
+		// let's update our internal state (stop query service and other things)
+		if err := agent.refreshTablet(ctx, "before backup"); err != nil {
+			return err
+		}
 	}
-
 	// create the loggers: tee to console and source
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
@@ -76,22 +81,23 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	name := fmt.Sprintf("%v.%v", time.Now().UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tablet.Alias))
 	returnErr := mysqlctl.Backup(ctx, agent.Cnf, agent.MysqlDaemon, l, dir, name, concurrency, agent.hookExtraEnv())
 
-	// change our type back to the original value
-	_, err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType)
-	if err != nil {
-		// failure in changing the topology type is probably worse,
-		// so returning that (we logged the snapshot error anyway)
-		if returnErr != nil {
-			l.Errorf("mysql backup command returned error: %v", returnErr)
+	if *mysqlctl.BackupEngineImplementation != xtrabackupEngine {
+		// change our type back to the original value
+		_, err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType)
+		if err != nil {
+			// failure in changing the topology type is probably worse,
+			// so returning that (we logged the snapshot error anyway)
+			if returnErr != nil {
+				l.Errorf("mysql backup command returned error: %v", returnErr)
+			}
+			returnErr = err
 		}
-		returnErr = err
-	}
 
-	// let's update our internal state (start query service and other things)
-	if err := agent.refreshTablet(ctx, "after backup"); err != nil {
-		return err
+		// let's update our internal state (start query service and other things)
+		if err := agent.refreshTablet(ctx, "after backup"); err != nil {
+			return err
+		}
 	}
-
 	// and re-run health check to be sure to capture any replication delay
 	agent.runHealthCheckLocked()
 
