@@ -17,11 +17,11 @@ limitations under the License.
 package topo
 
 import (
+	"fmt"
 	"path"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -141,12 +141,12 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string) error {
 	switch {
 	case err == nil:
 		if len(srvKeyspaces) != 0 {
-			return fmt.Errorf("cell %v has serving keyspaces. Before deleting, delete keyspace with: DeleteKeyspace", cell)
+			return vterrors.Wrap(err, fmt.Sprintf("cell %v has serving keyspaces. Before deleting, delete keyspace with: DeleteKeyspace", cell))
 		}
 	case IsErrType(err, NoNode):
 		// Nothing to do.
 	default:
-		return fmt.Errorf("GetSrvKeyspaceNames() failed: %v", err)
+		return vterrors.Wrap(err, "GetSrvKeyspaceNames() failed")
 	}
 
 	filePath := pathForCellInfo(cell)
