@@ -123,6 +123,25 @@ func (wr *Wrangler) UpdateDisableQueryService(ctx context.Context, keyspace, sha
 	return wr.ts.UpdateDisableQueryService(ctx, keyspace, []*topo.ShardInfo{si}, tabletType, cells, disableQueryService)
 }
 
+// UpdateSrvKeyspacePartitions changes the SrvKeyspaceGraph
+// for a shard.  It updates serving graph
+//
+// This takes the keyspace lock as to not interfere with resharding operations.
+func (wr *Wrangler) UpdateSrvKeyspacePartitions(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, remove bool) (err error) {
+	// lock the keyspace
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "UpdateSrvKeyspacePartitions")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+
+	si, err := wr.ts.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return err
+	}
+	return wr.ts.UpdateSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{si}, tabletType, cells, remove)
+}
+
 // DeleteShard will do all the necessary changes in the topology server
 // to entirely remove a shard.
 func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, recursive, evenIfServing bool) error {
