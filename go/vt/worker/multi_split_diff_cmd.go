@@ -69,7 +69,7 @@ const multiSplitDiffHTML2 = `
   			<OPTION selected value="RDONLY">RDONLY</OPTION>
   			<OPTION value="REPLICA">REPLICA</OPTION>
 			</SELECT>
-			</BR>
+			<BR>
       <LABEL for="excludeTables">Exclude Tables: </LABEL>
         <INPUT type="text" id="excludeTables" name="excludeTables" value=""></BR>
       <LABEL for="minHealthyTablets">Minimum Number of required healthy tablets: </LABEL>

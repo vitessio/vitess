@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"sync"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -61,10 +63,18 @@ const verticalSplitDiffHTML2 = `
   <h1>Vertical Split Diff Action</h1>
     <form action="/Diffs/VerticalSplitDiff" method="post">
 			<INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
-			<LABEL for="minHealthyRdonlyTablets">Minimum Number of required healthy RDONLY tablets: </LABEL>
-        <INPUT type="text" id="minHealthyRdonlyTablets" name="minHealthyRdonlyTablets" value="{{.DefaultMinHealthyRdonlyTablets}}"></BR>
+      <LABEL for="tabletType">Tablet Type:</LABEL>
+			<SELECT id="tabletType" name="tabletType">
+  			<OPTION selected value="RDONLY">RDONLY</OPTION>
+  			<OPTION value="REPLICA">REPLICA</OPTION>
+			</SELECT>
+			<BR>
+			<LABEL for="minHealthyTablets">Minimum Number of required healthy tablets: </LABEL>
+        <INPUT type="text" id="minHealthyTablets" name="minHealthyTablets" value="{{.DefaultMinHealthyTablets}}"></BR>
       <LABEL for="parallelDiffsCount">Number of tables to diff in parallel: </LABEL>
         <INPUT type="text" id="parallelDiffsCount" name="parallelDiffsCount" value="{{.DefaultParallelDiffsCount}}"></BR>
+      <LABEL for="useConsistentSnapshot">Use consistent snapshot</LABEL>
+        <INPUT type="checkbox" id="useConsistentSnapshot" name="useConsistentSnapshot" value="true"><a href="https://dev.mysql.com/doc/refman/5.7/en/glossary.html#glos_consistent_read" target="_blank">?</a></BR>
       <INPUT type="hidden" name="shard" value="{{.Shard}}"/>
       <INPUT type="submit" name="submit" value="Vertical Split Diff"/>
     </form>
@@ -75,9 +85,10 @@ var verticalSplitDiffTemplate = mustParseTemplate("verticalSplitDiff", verticalS
 var verticalSplitDiffTemplate2 = mustParseTemplate("verticalSplitDiff2", verticalSplitDiffHTML2)
 
 func commandVerticalSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
-	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyTablets, "minimum number of healthy RDONLY tablets before taking out one")
+	minHealthyTablets := subFlags.Int("min_healthy_tablets", defaultMinHealthyTablets, "minimum number of healthy tablets before taking out one")
 	parallelDiffsCount := subFlags.Int("parallel_diffs_count", defaultParallelDiffsCount, "number of tables to diff in parallel")
-	destTabletTypeStr := subFlags.String("dest_tablet_type", defaultDestTabletType, "destination tablet type (RDONLY or REPLICA) that will be used to compare the shards")
+	tabletTypeStr := subFlags.String("tablet_type", defaultDestTabletType, "tablet type (RDONLY or REPLICA) that will be used to compare the shards")
+	useConsistentSnapshot := subFlags.Bool("use_consistent_snapshot", defaultUseConsistentSnapshot, "Instead of pausing replication on the source, uses transactions with consistent snapshot to have a stable view of the data.")
 	if err := subFlags.Parse(args); err != nil {
 		return nil, err
 	}
@@ -90,12 +101,12 @@ func commandVerticalSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *fla
 		return nil, err
 	}
 
-	destTabletType, ok := topodatapb.TabletType_value[*destTabletTypeStr]
+	tabletType, ok := topodatapb.TabletType_value[*tabletTypeStr]
 	if !ok {
-		return nil, fmt.Errorf("command VerticalSplitDiff invalid dest_tablet_type: %v", destTabletType)
+		return nil, fmt.Errorf("command VerticalSplitDiff invalid dest_tablet_type: %v", tabletType)
 	}
 
-	return NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, *minHealthyRdonlyTablets, *parallelDiffsCount, topodatapb.TabletType(destTabletType)), nil
+	return NewVerticalMultiSplitDiffWorker(wr, wi.cell, keyspace, shard, nil, *minHealthyTablets, *parallelDiffsCount, false, *useConsistentSnapshot, topodatapb.TabletType(tabletType)), nil
 }
 
 // shardsWithTablesSources returns all the shards that have SourceShards set
@@ -183,26 +194,34 @@ func interactiveVerticalSplitDiff(ctx context.Context, wi *Instance, wr *wrangle
 		result := make(map[string]interface{})
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
-		result["DefaultMinHealthyRdonlyTablets"] = fmt.Sprintf("%v", defaultMinHealthyTablets)
+		result["DefaultMinHealthyTablets"] = fmt.Sprintf("%v", defaultMinHealthyTablets)
 		result["DefaultParallelDiffsCount"] = fmt.Sprintf("%v", defaultParallelDiffsCount)
 		return nil, verticalSplitDiffTemplate2, result, nil
 	}
 
 	// get other parameters
-	minHealthyRdonlyTabletsStr := r.FormValue("minHealthyRdonlyTablets")
-	minHealthyRdonlyTablets, err := strconv.ParseInt(minHealthyRdonlyTabletsStr, 0, 64)
+	minHealthyTabletsStr := r.FormValue("minHealthyTablets")
+	minHealthyTablets, err := strconv.ParseInt(minHealthyTabletsStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, vterrors.Wrap(err, "cannot parse minHealthyRdonlyTablets")
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse minHealthyTablets")
 	}
 	parallelDiffsCountStr := r.FormValue("parallelDiffsCount")
 	parallelDiffsCount, err := strconv.ParseInt(parallelDiffsCountStr, 0, 64)
 	if err != nil {
 		return nil, nil, nil, vterrors.Wrap(err, "cannot parse parallelDiffsCount")
 	}
+	useConsistentSnapshotStr := r.FormValue("useConsistentSnapshot")
+	useConsistentSnapshot := useConsistentSnapshotStr == "true"
+
+	tabletTypeStr := r.FormValue("tabletType")
+	tabletType, ok := topodatapb.TabletType_value[tabletTypeStr]
+	if !ok {
+		return nil, nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot parse tabletType: %s", tabletTypeStr)
+	}
 
 	// start the diff job
 	// TODO: @rafael - Add option to set destination tablet type in UI form.
-	wrk := NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, int(minHealthyRdonlyTablets), int(parallelDiffsCount), topodatapb.TabletType_RDONLY)
+	wrk := NewVerticalMultiSplitDiffWorker(wr, wi.cell, keyspace, shard, nil, int(minHealthyTablets), int(parallelDiffsCount), false, useConsistentSnapshot, topodatapb.TabletType(tabletType))
 	return wrk, nil, nil, nil
 }
 
@@ -210,6 +229,6 @@ func init() {
 	AddCommand("Diffs", Command{"VerticalSplitDiff",
 		commandVerticalSplitDiff, interactiveVerticalSplitDiff,
 		"<keyspace/shard>",
-		"Diffs an rdonly tablet from the (destination) keyspace/shard against an rdonly tablet from the respective source keyspace/shard." +
+		"Diffs a tablet from the (destination) keyspace/shard against a tablet from the respective source keyspace/shard." +
 			" Only compares the tables which were set by a previous VerticalSplitClone command."})
 }

@@ -83,10 +83,11 @@ const verticalSplitCloneHTML2 = `
       <LABEL for="destinationWriterCount">Destination Writer Count: </LABEL>
         <INPUT type="text" id="destinationWriterCount" name="destinationWriterCount" value="{{.DefaultDestinationWriterCount}}"></BR>
       <LABEL for="tabletType">Tablet Type:</LABEL>
-			<SELECT id="tabletType" name="tabletType">
+			<SELECT id="tabletsplitType" name="tabletType">
   			<OPTION selected value="RDONLY">RDONLY</OPTION>
   			<OPTION value="REPLICA">REPLICA</OPTION>
 			</SELECT>
+			</BR>
       <LABEL for="minHealthyTablets">Minimum Number of required healthy tablets: </LABEL>
         <INPUT type="text" id="minHealthyTablets" name="minHealthyTablets" value="{{.DefaultMinHealthyTablets}}"></BR>
       <LABEL for="maxTPS">Maximum Write Transactions/second (If non-zero, writes on the destination will be throttled. Unlimited by default.): </LABEL>

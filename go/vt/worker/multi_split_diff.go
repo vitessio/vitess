@@ -60,12 +60,17 @@ type MultiSplitDiffWorker struct {
 	keyspace                          string
 	shard                             string
 	excludeTables                     []string
+	includeTables                     []string
 	minHealthyTablets                 int
 	parallelDiffsCount                int
 	waitForFixedTimeRatherThanGtidSet bool
 	cleaner                           *wrangler.Cleaner
 	useConsistentSnapshot             bool
 	tabletType                        topodatapb.TabletType
+
+	// Only set if you're doing a vertical split diff
+	destinationKeyspace string
+	destinationShard    string
 
 	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo      *topo.KeyspaceInfo
@@ -87,6 +92,26 @@ func NewMultiSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string
 		cell:                              cell,
 		keyspace:                          keyspace,
 		shard:                             shard,
+		excludeTables:                     excludeTables,
+		minHealthyTablets:                 minHealthyTablets,
+		parallelDiffsCount:                parallelDiffsCount,
+		cleaner:                           &wrangler.Cleaner{},
+		useConsistentSnapshot:             useConsistentSnapshot,
+		waitForFixedTimeRatherThanGtidSet: waitForFixedTimeRatherThanGtidSet,
+		tabletType:                        tabletType,
+	}
+}
+
+// NewMultiSplitDiffWorker returns a new MultiSplitDiffWorker object.
+func NewVerticalMultiSplitDiffWorker(wr *wrangler.Wrangler, cell, destinationKeyspace string, destinationShard string, excludeTables []string, minHealthyTablets, parallelDiffsCount int, waitForFixedTimeRatherThanGtidSet bool, useConsistentSnapshot bool, tabletType topodatapb.TabletType) Worker {
+	return &MultiSplitDiffWorker{
+		StatusWorker:                      NewStatusWorker(),
+		wr:                                wr,
+		cell:                              cell,
+		keyspace:                          "",
+		destinationKeyspace:               destinationKeyspace,
+		destinationShard:                  destinationShard,
+		shard:                             "",
 		excludeTables:                     excludeTables,
 		minHealthyTablets:                 minHealthyTablets,
 		parallelDiffsCount:                parallelDiffsCount,
@@ -199,6 +224,25 @@ func (msdw *MultiSplitDiffWorker) init(ctx context.Context) error {
 		msdw.wr.Logger().Infof("splitting using STOP SLAVE")
 	}
 
+	if msdw.destinationKeyspace != "" {
+		destinationShard, err := msdw.findDestinationShardForVerticalSplitDiff(ctx)
+		if err != nil {
+			return vterrors.Wrapf(err, "findDestinationShardForVerticalSplitDiff() failed for %v/%v/%v", msdw.cell, msdw.destinationKeyspace, msdw.destinationShard)
+		}
+		msdw.destinationShards = []*topo.ShardInfo{destinationShard}
+
+		if len(destinationShard.SourceShards) != 1 {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "not just a single vreplication stream, don't know which source shard to diff with")
+		}
+
+		sourceShard := destinationShard.SourceShards[0]
+
+		msdw.includeTables = sourceShard.Tables
+		msdw.sourceUID = sourceShard.Uid
+		msdw.keyspace = sourceShard.Keyspace
+		msdw.shard = sourceShard.Shard
+	}
+
 	var err error
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	msdw.keyspaceInfo, err = msdw.wr.TopoServer().GetKeyspace(shortCtx, msdw.keyspace)
@@ -217,11 +261,13 @@ func (msdw *MultiSplitDiffWorker) init(ctx context.Context) error {
 		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "shard %v/%v has no master", msdw.keyspace, msdw.shard)
 	}
 
-	destinationShards, err := msdw.findDestinationShards(ctx)
-	if err != nil {
-		return vterrors.Wrapf(err, "findDestinationShards() failed for %v/%v/%v", msdw.cell, msdw.keyspace, msdw.shard)
+	if msdw.destinationKeyspace == "" {
+		destinationShards, err := msdw.findDestinationShards(ctx)
+		if err != nil {
+			return vterrors.Wrapf(err, "findDestinationShards() failed for %v/%v/%v", msdw.cell, msdw.keyspace, msdw.shard)
+		}
+		msdw.destinationShards = destinationShards
 	}
-	msdw.destinationShards = destinationShards
 
 	return nil
 }
@@ -251,6 +297,34 @@ func (msdw *MultiSplitDiffWorker) findDestinationShards(ctx context.Context) ([]
 	return resultArray, nil
 }
 
+// findDestinationShards finds all the shards that have filtered replication from the source shard
+func (msdw *MultiSplitDiffWorker) findDestinationShardForVerticalSplitDiff(ctx context.Context) (*topo.ShardInfo, error) {
+	keyspace := msdw.destinationKeyspace
+
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	shards, err := msdw.wr.TopoServer().GetShardNames(shortCtx, keyspace)
+	cancel()
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
+	}
+
+	if len(shards) != 1 {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "")
+	}
+
+	shard := shards[0]
+
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	si, err := msdw.wr.TopoServer().GetShard(shortCtx, keyspace, shard)
+	cancel()
+	if err != nil {
+		return nil, vterrors.Wrap(err, "failed to get shard info from toposerver")
+	}
+
+	return si, nil
+}
+
+// findShardsInKeyspace finds shards in the keyspace that has vreplication running from the source shard
 func (msdw *MultiSplitDiffWorker) findShardsInKeyspace(ctx context.Context, keyspace string) ([]*topo.ShardInfo, error) {
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	shards, err := msdw.wr.TopoServer().GetShardNames(shortCtx, keyspace)
@@ -283,6 +357,7 @@ func (msdw *MultiSplitDiffWorker) findShardsInKeyspace(ctx context.Context, keys
 	return resultArray, nil
 }
 
+// getShardInfo returns the shard info and the vreplication uid IFF the shard is vreplicating from the source shard
 func (msdw *MultiSplitDiffWorker) getShardInfo(ctx context.Context, keyspace string, shard string) (*topo.ShardInfo, uint32, error) {
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	si, err := msdw.wr.TopoServer().GetShard(shortCtx, keyspace, shard)
@@ -527,6 +602,7 @@ func (msdw *MultiSplitDiffWorker) useTransactionScanners(ctx context.Context, so
 	}
 	return pos, connections, nil
 }
+
 func (msdw *MultiSplitDiffWorker) useNonTransactionalScanners(ctx context.Context, source *topo.TabletInfo, destVreplicationPos []string) (string, []TableScanner, error) {
 	pos, err := msdw.stopReplicationOnSourceTabletAt(ctx, destVreplicationPos)
 	if err != nil {
@@ -564,8 +640,6 @@ func (msdw *MultiSplitDiffWorker) synchronizeSrcAndDestTxState(ctx context.Conte
 	source, _ := msdw.wr.TopoServer().GetTablet(shortCtx, msdw.sourceAlias)
 	cancel()
 
-	var sourcePosition string
-
 	// 2. Stop replication on destination
 	destVreplicationPos, err := msdw.stopVreplicationOnAll(ctx, masterInfos)
 	if err != nil {
@@ -573,6 +647,7 @@ func (msdw *MultiSplitDiffWorker) synchronizeSrcAndDestTxState(ctx context.Conte
 	}
 
 	// 3. Pause updates on the source and create consistent snapshot connections
+	var sourcePosition string
 	var scanners []TableScanner
 	if msdw.useConsistentSnapshot {
 		sourcePosition, scanners, err = msdw.useTransactionScanners(ctx, source)
@@ -680,31 +755,43 @@ func (msdw *MultiSplitDiffWorker) diffSingleTable(ctx context.Context, wg *sync.
 	}
 	defer sourceQueryResultReader.Close(ctx)
 
-	destinationQueryResultReaders := make([]ResultReader, len(msdw.destinationAliases))
-	for i := range msdw.destinationAliases {
-		scanner := destinationScanners[i]
+	var mergedResultReader ResultReader
+	if len(msdw.destinationAliases) == 1 {
+		scanner := destinationScanners[0]
 		destinationQueryResultReader, err := scanner.ScanTable(ctx, tableDefinition)
 		if err != nil {
 			return vterrors.Wrapf(err, "TableScan(destination) on %v failed", tableDefinition.String())
 		}
-
-		// For the first result scanner, let's check the PKs are of types that we can work with
-		if i == 0 {
-			err = CheckValidTypesForResultMerger(destinationQueryResultReader.fields, len(tableDefinition.PrimaryKeyColumns))
+		defer destinationQueryResultReader.Close(ctx)
+		mergedResultReader = destinationQueryResultReader
+	} else {
+		destinationQueryResultReaders := make([]ResultReader, len(msdw.destinationAliases))
+		for i := range msdw.destinationAliases {
+			scanner := destinationScanners[i]
+			destinationQueryResultReader, err := scanner.ScanTable(ctx, tableDefinition)
 			if err != nil {
-				return vterrors.Wrapf(err, "invalid types for multi split diff. use the regular split diff instead")
+				return vterrors.Wrapf(err, "TableScan(destination) on %v failed", tableDefinition.String())
 			}
+
+			// For the first result scanner, let's check the PKs are of types that we can work with
+			if i == 0 {
+				err = CheckValidTypesForResultMerger(destinationQueryResultReader.fields, len(tableDefinition.PrimaryKeyColumns))
+				if err != nil {
+					return vterrors.Wrapf(err, "invalid types for multi split diff. use the regular split diff instead")
+				}
+			}
+
+			// We are knowingly using defer inside the for loop.
+			// All these readers need to be active until the diff is done
+			//noinspection GoDeferInLoop
+			defer destinationQueryResultReader.Close(ctx)
+			destinationQueryResultReaders[i] = destinationQueryResultReader
 		}
 
-		// We are knowingly using defer inside the for loop.
-		// All these readers need to be active until the diff is done
-		//noinspection GoDeferInLoop
-		defer destinationQueryResultReader.Close(ctx)
-		destinationQueryResultReaders[i] = destinationQueryResultReader
-	}
-	mergedResultReader, err := NewResultMerger(destinationQueryResultReaders, len(tableDefinition.PrimaryKeyColumns))
-	if err != nil {
-		return err
+		mergedResultReader, err = NewResultMerger(destinationQueryResultReaders, len(tableDefinition.PrimaryKeyColumns))
+		if err != nil {
+			return err
+		}
 	}
 
 	// Create the row differ.
@@ -760,7 +847,7 @@ func (msdw *MultiSplitDiffWorker) gatherSchemaInfo(ctx context.Context) ([]*tabl
 			var err error
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 			destinationSchemaDefinition, err := msdw.wr.GetSchema(
-				shortCtx, destinationAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
+				shortCtx, destinationAlias, msdw.includeTables, msdw.excludeTables, false /* includeViews */)
 			cancel()
 			if err != nil {
 				msdw.markAsWillFail(rec, err)
@@ -775,7 +862,7 @@ func (msdw *MultiSplitDiffWorker) gatherSchemaInfo(ctx context.Context) ([]*tabl
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		sourceSchemaDefinition, err = msdw.wr.GetSchema(
-			shortCtx, msdw.sourceAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
+			shortCtx, msdw.sourceAlias, msdw.includeTables, msdw.excludeTables, false /* includeViews */)
 		cancel()
 		if err != nil {
 			msdw.markAsWillFail(rec, err)
