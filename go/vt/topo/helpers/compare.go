@@ -148,7 +148,7 @@ func CompareShardReplications(ctx context.Context, fromTS, toTS *topo.Server) er
 	}
 	cells, err := fromTS.GetCellInfoNames(ctx)
 	if err != nil {
-		return fmt.Errorf("GetCellInfoNames(): %v", err)
+		return vterrors.Wrap(err, "GetCellInfoNames()")
 	}
 
 	for _, keyspace := range keyspaces {

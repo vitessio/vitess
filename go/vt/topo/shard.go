@@ -18,6 +18,7 @@ package topo
 
 import (
 	"encoding/hex"
+	"fmt"
 	"path"
 	"reflect"
 	"sort"
@@ -527,7 +528,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 			case IsErrType(err, NoNode):
 				// There is no shard replication for this shard in this cell. NOOP
 			default:
-				rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
+				rec.RecordError(vterrors.Wrap(err, fmt.Sprintf("GetShardReplication(%v, %v, %v) failed.", cell, keyspace, shard)))
 				return
 			}
 		}(cell)

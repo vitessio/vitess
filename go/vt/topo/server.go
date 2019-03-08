@@ -44,6 +44,7 @@ package topo
 
 import (
 	"flag"
+	"fmt"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -263,10 +264,10 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 		ts.cells[cell] = conn
 		return conn, nil
 	case IsErrType(err, NoNode):
-		err = fmt.Errorf("failed to create topo connection to %v, %v: %v", ci.ServerAddress, ci.Root, err)
+		err = vterrors.Wrap(err, fmt.Sprintf("failed to create topo connection to %v, %v", ci.ServerAddress, ci.Root))
 		return nil, NewError(NoNode, err.Error())
 	default:
-		return nil, fmt.Errorf("failed to create topo connection to %v, %v: %v", ci.ServerAddress, ci.Root, err)
+		return nil, vterrors.Wrap(err, fmt.Sprintf("failed to create topo connection to %v, %v", ci.ServerAddress, ci.Root))
 	}
 }
 
