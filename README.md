@@ -37,6 +37,12 @@ Subscribe to
 or the [Vitess Blog](https://blog.vitess.io/)
 for low-frequency updates like new features and releases.
 
+## Security
+
+### Security Audit
+
+A third party security audit was performed by Cure53, you can see the full report [here](docs/SECURITY_AUDIT.pdf).
+
 ## License
 
 Unless otherwise noted, the Vitess source files are distributed
