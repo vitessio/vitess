@@ -41,7 +41,7 @@ for low-frequency updates like new features and releases.
 
 ### Security Audit
 
-A third party security audit was performed by Cure53, you can see the full report [here](doc/VIT-01-report.pdf).
+A third party security audit was performed by Cure53. You can see the full report [here](doc/VIT-01-report.pdf).
 
 ## License
 
