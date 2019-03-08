@@ -249,6 +249,9 @@ var commands = []commandGroup{
 					"To set the DisableQueryServiceFlag, keep 'blacklisted_tables' empty, and set 'disable_query_service' to true or false. Useful to fix horizontal splits gone wrong.\n" +
 					"To change the blacklisted tables list, specify the 'blacklisted_tables' parameter with the new list. Useful to fix tables that are being blocked after a vertical split.\n" +
 					"To just remove the ShardTabletControl entirely, use the 'remove' flag, useful after a vertical split is finished to remove serving restrictions."},
+			{"UpdateSrvKeyspacePartition", commandUpdateSrvKeyspacePartition,
+				"[--cells=c1,c2,...] [--remove] <keyspace/shard> <tablet type>",
+				"Updates KeyspaceGraph partition for a shard and type. Only use this for an emergency fix during an horizontal shard split. The *MigrateServedType* commands set this field appropriately already. Specify the remove flag, if you want the shard to be removed from the desired partition."},
 			{"SourceShardDelete", commandSourceShardDelete,
 				"<keyspace/shard> <uid>",
 				"Deletes the SourceShard record with the provided index. This is meant as an emergency cleanup function. It does not call RefreshState for the shard master."},
@@ -1288,6 +1291,37 @@ func commandSetShardServedTypes(ctx context.Context, wr *wrangler.Wrangler, subF
 	}
 
 	return wr.SetShardServedTypes(ctx, keyspace, shard, cells, servedType, *remove)
+}
+
+func commandUpdateSrvKeyspacePartition(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
+	remove := subFlags.Bool("remove", false, "Removes shard from serving keyspace partition")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("the <keyspace/shard> and <tablet type> arguments are both required for the UpdateSrvKeyspacePartition command")
+	}
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletType, err := parseServingTabletType3(subFlags.Arg(1))
+	if err != nil {
+		return err
+	}
+
+	var cells []string
+	if *cellsStr != "" {
+		cells = strings.Split(*cellsStr, ",")
+	}
+
+	err = wr.UpdateSrvKeyspacePartitions(ctx, keyspace, shard, tabletType, cells, *remove)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
