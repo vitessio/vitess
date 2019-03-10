@@ -18,49 +18,10 @@ package vreplication
 
 import (
 	"encoding/json"
-	"sort"
 	"testing"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
-
-func (pp *PlayerPlan) MarshalJSON() ([]byte, error) {
-	var targets []string
-	for k := range pp.TargetTables {
-		targets = append(targets, k)
-	}
-	sort.Strings(targets)
-	v := struct {
-		VStreamFilter *binlogdatapb.Filter
-		TargetTables  []string
-		TablePlans    map[string]*TablePlan
-	}{
-		VStreamFilter: pp.VStreamFilter,
-		TargetTables:  targets,
-		TablePlans:    pp.TablePlans,
-	}
-	return json.Marshal(&v)
-}
-
-func (tp *TablePlan) MarshalJSON() ([]byte, error) {
-	v := struct {
-		Name         string
-		SendRule     string
-		PKReferences []string               `json:",omitempty"`
-		Insert       *sqlparser.ParsedQuery `json:",omitempty"`
-		Update       *sqlparser.ParsedQuery `json:",omitempty"`
-		Delete       *sqlparser.ParsedQuery `json:",omitempty"`
-	}{
-		Name:         tp.Name,
-		SendRule:     tp.SendRule.Match,
-		PKReferences: tp.PKReferences,
-		Insert:       tp.Insert,
-		Update:       tp.Update,
-		Delete:       tp.Delete,
-	}
-	return json.Marshal(&v)
-}
 
 type TestPlayerPlan struct {
 	VStreamFilter *binlogdatapb.Filter
@@ -148,7 +109,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 					Name:         "t1",
 					SendRule:     "t2",
 					PKReferences: []string{"c1"},
-					Insert:       "insert into t1 set c1=:a_c1, c2=:a_c2",
+					Insert:       "insert into t1(c1,c2) values (:a_c1,:a_c2)",
 					Update:       "update t1 set c2=:a_c2 where c1=:b_c1",
 					Delete:       "delete from t1 where c1=:b_c1",
 				},
@@ -175,7 +136,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 					Name:         "t1",
 					SendRule:     "t2",
 					PKReferences: []string{"c1"},
-					Insert:       "insert into t1 set c1=:a_c1, c2=:a_c2, c3=:a_c3 on duplicate key update c2=:a_c2",
+					Insert:       "insert into t1(c1,c2,c3) values (:a_c1,:a_c2,:a_c3) on duplicate key update c2=values(c2)",
 					Update:       "update t1 set c2=:a_c2 where c1=:b_c1",
 					Delete:       "update t1 set c2=null where c1=:b_c1",
 				},
@@ -202,8 +163,8 @@ func TestBuildPlayerPlan(t *testing.T) {
 					Name:         "t1",
 					SendRule:     "t2",
 					PKReferences: []string{"c1"},
-					Insert:       "insert ignore into t1 set c1=:a_c1, c2=:a_c2, c3=:a_c3",
-					Update:       "insert ignore into t1 set c1=:a_c1, c2=:a_c2, c3=:a_c3",
+					Insert:       "insert ignore into t1(c1,c2,c3) values (:a_c1,:a_c2,:a_c3)",
+					Update:       "insert ignore into t1(c1,c2,c3) values (:a_c1,:a_c2,:a_c3)",
 				},
 			},
 		},
@@ -227,7 +188,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 					Name:         "t1",
 					SendRule:     "t1",
 					PKReferences: []string{"a"},
-					Insert:       "insert into t1 set c1=foo(:a_a), c2=:a_b",
+					Insert:       "insert into t1(c1,c2) values (foo(:a_a),:a_b)",
 					Update:       "update t1 set c2=:a_b where c1=(foo(:b_a))",
 					Delete:       "delete from t1 where c1=(foo(:b_a))",
 				},
@@ -253,7 +214,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 					Name:         "t1",
 					SendRule:     "t1",
 					PKReferences: []string{"a", "b"},
-					Insert:       "insert into t1 set c1=:a_a + :a_b, c2=:a_c",
+					Insert:       "insert into t1(c1,c2) values (:a_a + :a_b,:a_c)",
 					Update:       "update t1 set c2=:a_c where c1=(:b_a + :b_b)",
 					Delete:       "delete from t1 where c1=(:b_a + :b_b)",
 				},

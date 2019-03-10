@@ -220,9 +220,15 @@ func (tpb *tablePlanBuilder) generate(tableKeys map[string][]string) *TablePlan 
 		pkrefs = append(pkrefs, k)
 	}
 	sort.Strings(pkrefs)
+
+	bvf := &bindvarFormatter{}
+
 	return &TablePlan{
 		Name:         tpb.name.String(),
 		PKReferences: pkrefs,
+		InsertFront:  tpb.generateInsertPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
+		InsertValues: tpb.generateValuesPart(sqlparser.NewTrackedBuffer(bvf.formatter), bvf),
+		InsertOnDup:  tpb.generateOnDupPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
 		Insert:       tpb.generateInsertStatement(),
 		Update:       tpb.generateUpdateStatement(),
 		Delete:       tpb.generateDeleteStatement(),
@@ -405,15 +411,69 @@ func (tpb *tablePlanBuilder) findCol(name sqlparser.ColIdent) *colExpr {
 func (tpb *tablePlanBuilder) generateInsertStatement() *sqlparser.ParsedQuery {
 	bvf := &bindvarFormatter{}
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
+
+	tpb.generateInsertPart(buf)
+	tpb.generateValuesPart(buf, bvf)
+	tpb.generateOnDupPart(buf)
+
+	return buf.ParsedQuery()
+}
+
+func (tpb *tablePlanBuilder) generateInsertPart(buf *sqlparser.TrackedBuffer) *sqlparser.ParsedQuery {
 	if tpb.onInsert == insertIgnore {
-		buf.Myprintf("insert ignore into %v set ", tpb.name)
+		buf.Myprintf("insert ignore into %v(", tpb.name)
 	} else {
-		buf.Myprintf("insert into %v set ", tpb.name)
+		buf.Myprintf("insert into %v(", tpb.name)
 	}
-	tpb.generateInsertValues(buf, bvf)
-	if tpb.onInsert == insertOndup {
-		buf.Myprintf(" on duplicate key update ")
-		tpb.generateUpdate(buf, bvf, false /* before */, true /* after */)
+	separator := ""
+	for _, cexpr := range tpb.colExprs {
+		buf.Myprintf("%s%s", separator, cexpr.colName.String())
+		separator = ","
+	}
+	buf.Myprintf(") values", tpb.name)
+	return buf.ParsedQuery()
+}
+
+func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) *sqlparser.ParsedQuery {
+	bvf.mode = bvAfter
+	separator := " ("
+	for _, cexpr := range tpb.colExprs {
+		buf.Myprintf("%s", separator)
+		separator = ","
+		switch cexpr.operation {
+		case opExpr:
+			buf.Myprintf("%v", cexpr.expr)
+		case opCount:
+			buf.WriteString("1")
+		case opSum:
+			buf.Myprintf("ifnull(%v, 0)", cexpr.expr)
+		}
+	}
+	buf.Myprintf(")")
+	return buf.ParsedQuery()
+}
+
+func (tpb *tablePlanBuilder) generateOnDupPart(buf *sqlparser.TrackedBuffer) *sqlparser.ParsedQuery {
+	if tpb.onInsert != insertOndup {
+		return nil
+	}
+	buf.Myprintf(" on duplicate key update ")
+	separator := ""
+	for _, cexpr := range tpb.colExprs {
+		if cexpr.isGrouped || cexpr.isPK {
+			continue
+		}
+		buf.Myprintf("%s%s=", separator, cexpr.colName.String())
+		separator = ", "
+		switch cexpr.operation {
+		case opExpr:
+			buf.Myprintf("values(%s)", cexpr.colName.String())
+		case opCount:
+			buf.Myprintf("%s+1", cexpr.colName.String())
+		case opSum:
+			buf.Myprintf("%s", cexpr.colName.String())
+			buf.Myprintf("+ifnull(values(%s), 0)", cexpr.colName.String())
+		}
 	}
 	return buf.ParsedQuery()
 }
@@ -425,7 +485,27 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 	bvf := &bindvarFormatter{}
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 	buf.Myprintf("update %v set ", tpb.name)
-	tpb.generateUpdate(buf, bvf, true /* before */, true /* after */)
+	separator := ""
+	for _, cexpr := range tpb.colExprs {
+		if cexpr.isGrouped || cexpr.isPK {
+			continue
+		}
+		buf.Myprintf("%s%s=", separator, cexpr.colName.String())
+		separator = ", "
+		switch cexpr.operation {
+		case opExpr:
+			bvf.mode = bvAfter
+			buf.Myprintf("%v", cexpr.expr)
+		case opCount:
+			buf.Myprintf("%s", cexpr.colName.String())
+		case opSum:
+			buf.Myprintf("%s", cexpr.colName.String())
+			bvf.mode = bvBefore
+			buf.Myprintf("-ifnull(%v, 0)", cexpr.expr)
+			bvf.mode = bvAfter
+			buf.Myprintf("+ifnull(%v, 0)", cexpr.expr)
+		}
+	}
 	tpb.generateWhere(buf, bvf)
 	return buf.ParsedQuery()
 }
@@ -438,69 +518,29 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 		buf.Myprintf("delete from %v", tpb.name)
 		tpb.generateWhere(buf, bvf)
 	case insertOndup:
+		bvf.mode = bvBefore
 		buf.Myprintf("update %v set ", tpb.name)
-		tpb.generateUpdate(buf, bvf, true /* before */, false /* after */)
+		separator := ""
+		for _, cexpr := range tpb.colExprs {
+			if cexpr.isGrouped || cexpr.isPK {
+				continue
+			}
+			buf.Myprintf("%s%s=", separator, cexpr.colName.String())
+			separator = ", "
+			switch cexpr.operation {
+			case opExpr:
+				buf.WriteString("null")
+			case opCount:
+				buf.Myprintf("%s-1", cexpr.colName.String())
+			case opSum:
+				buf.Myprintf("%s-ifnull(%v, 0)", cexpr.colName.String(), cexpr.expr)
+			}
+		}
 		tpb.generateWhere(buf, bvf)
 	case insertIgnore:
 		return nil
 	}
 	return buf.ParsedQuery()
-}
-
-func (tpb *tablePlanBuilder) generateInsertValues(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {
-	bvf.mode = bvAfter
-	separator := ""
-	for _, cexpr := range tpb.colExprs {
-		buf.Myprintf("%s%s=", separator, cexpr.colName.String())
-		separator = ", "
-		switch cexpr.operation {
-		case opExpr:
-			buf.Myprintf("%v", cexpr.expr)
-		case opCount:
-			buf.WriteString("1")
-		case opSum:
-			buf.Myprintf("ifnull(%v, 0)", cexpr.expr)
-		}
-	}
-}
-
-func (tpb *tablePlanBuilder) generateUpdate(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, before, after bool) {
-	separator := ""
-	for _, cexpr := range tpb.colExprs {
-		if cexpr.isGrouped || cexpr.isPK {
-			continue
-		}
-		buf.Myprintf("%s%s=", separator, cexpr.colName.String())
-		separator = ", "
-		switch cexpr.operation {
-		case opExpr:
-			if after {
-				bvf.mode = bvAfter
-				buf.Myprintf("%v", cexpr.expr)
-			} else {
-				buf.WriteString("null")
-			}
-		case opCount:
-			switch {
-			case before && after:
-				buf.Myprintf("%s", cexpr.colName.String())
-			case before:
-				buf.Myprintf("%s-1", cexpr.colName.String())
-			case after:
-				buf.Myprintf("%s+1", cexpr.colName.String())
-			}
-		case opSum:
-			buf.Myprintf("%s", cexpr.colName.String())
-			if before {
-				bvf.mode = bvBefore
-				buf.Myprintf("-ifnull(%v, 0)", cexpr.expr)
-			}
-			if after {
-				bvf.mode = bvAfter
-				buf.Myprintf("+ifnull(%v, 0)", cexpr.expr)
-			}
-		}
-	}
 }
 
 func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {
@@ -525,8 +565,7 @@ type bindvarFormatter struct {
 type bindvarMode int
 
 const (
-	bvNone = bindvarMode(iota)
-	bvBefore
+	bvBefore = bindvarMode(iota)
 	bvAfter
 )
 
