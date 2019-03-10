@@ -17,6 +17,10 @@ limitations under the License.
 package vreplication
 
 import (
+	"encoding/json"
+	"sort"
+	"strings"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -31,21 +35,85 @@ type PlayerPlan struct {
 	TablePlans    map[string]*TablePlan
 }
 
+// MarshalJSON performs a custom JSON Marshalling.
+func (pp *PlayerPlan) MarshalJSON() ([]byte, error) {
+	var targets []string
+	for k := range pp.TargetTables {
+		targets = append(targets, k)
+	}
+	sort.Strings(targets)
+	v := struct {
+		VStreamFilter *binlogdatapb.Filter
+		TargetTables  []string
+		TablePlans    map[string]*TablePlan
+	}{
+		VStreamFilter: pp.VStreamFilter,
+		TargetTables:  targets,
+		TablePlans:    pp.TablePlans,
+	}
+	return json.Marshal(&v)
+}
+
 // TablePlan is the execution plan for a table within a player stream.
 type TablePlan struct {
 	Name         string
 	SendRule     *binlogdatapb.Rule
-	PKReferences []string               `json:",omitempty"`
-	Insert       *sqlparser.ParsedQuery `json:",omitempty"`
-	Update       *sqlparser.ParsedQuery `json:",omitempty"`
-	Delete       *sqlparser.ParsedQuery `json:",omitempty"`
-	Fields       []*querypb.Field       `json:",omitempty"`
+	PKReferences []string
+	InsertFront  *sqlparser.ParsedQuery
+	InsertValues *sqlparser.ParsedQuery
+	InsertOnDup  *sqlparser.ParsedQuery
+	Insert       *sqlparser.ParsedQuery
+	Update       *sqlparser.ParsedQuery
+	Delete       *sqlparser.ParsedQuery
+	Fields       []*querypb.Field
+}
+
+// MarshalJSON performs a custom JSON Marshalling.
+func (tp *TablePlan) MarshalJSON() ([]byte, error) {
+	v := struct {
+		Name         string
+		SendRule     string
+		PKReferences []string               `json:",omitempty"`
+		Insert       *sqlparser.ParsedQuery `json:",omitempty"`
+		Update       *sqlparser.ParsedQuery `json:",omitempty"`
+		Delete       *sqlparser.ParsedQuery `json:",omitempty"`
+	}{
+		Name:         tp.Name,
+		SendRule:     tp.SendRule.Match,
+		PKReferences: tp.PKReferences,
+		Insert:       tp.Insert,
+		Update:       tp.Update,
+		Delete:       tp.Delete,
+	}
+	return json.Marshal(&v)
+}
+
+func (tp *TablePlan) generateBulkInsert(rows *binlogdatapb.VStreamRowsResponse) (string, error) {
+	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
+	var buf strings.Builder
+	if err := tp.InsertFront.Append(&buf, nil, nil); err != nil {
+		return "", err
+	}
+	separator := ""
+	for _, row := range rows.Rows {
+		vals := sqltypes.MakeRowTrusted(tp.Fields, row)
+		for i, field := range tp.Fields {
+			bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+		}
+		buf.WriteString(separator)
+		separator = ", "
+		tp.InsertValues.Append(&buf, bindvars, nil)
+	}
+	if tp.InsertOnDup != nil {
+		tp.InsertOnDup.Append(&buf, nil, nil)
+	}
+	return buf.String(), nil
 }
 
 func (tp *TablePlan) generateStatements(rowChange *binlogdatapb.RowChange) ([]string, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var before, after bool
-	bindvars := make(map[string]*querypb.BindVariable)
+	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 	if rowChange.Before != nil {
 		before = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
