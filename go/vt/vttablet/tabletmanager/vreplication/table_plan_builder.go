@@ -84,6 +84,7 @@ func buildPlayerPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string)
 		TargetTables:  make(map[string]*TablePlan),
 		TablePlans:    make(map[string]*TablePlan),
 	}
+nextTable:
 	for tableName := range tableKeys {
 		for _, rule := range filter.Rules {
 			switch {
@@ -107,6 +108,7 @@ func buildPlayerPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string)
 				}
 				plan.TargetTables[tableName] = tablePlan
 				plan.TablePlans[tableName] = tablePlan
+				continue nextTable
 			case rule.Match == tableName:
 				sendRule, tablePlan, err := buildTablePlan(rule, tableKeys)
 				if err != nil {
@@ -118,6 +120,7 @@ func buildPlayerPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string)
 				plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, sendRule)
 				plan.TargetTables[tableName] = tablePlan
 				plan.TablePlans[sendRule.Match] = tablePlan
+				continue nextTable
 			}
 		}
 	}
