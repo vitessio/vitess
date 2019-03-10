@@ -125,6 +125,8 @@ func addTablet(id int, shard string, tabletType topodatapb.TabletType, serving, 
 
 func deleteTablet(t *topodatapb.Tablet) {
 	env.TopoServ.DeleteTablet(context.Background(), t.Alias)
+	// This is not automatically removed from shard replication, which results in log spam.
+	topo.DeleteTabletReplicationData(context.Background(), env.TopoServ, t)
 }
 
 func newTablet(id int, shard string, tabletType topodatapb.TabletType, serving, healthy bool) *topodatapb.Tablet {
