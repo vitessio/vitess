@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -120,21 +121,19 @@ func (vp *vplayer) Play(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("error reading VReplication settings: %v", err)
 	}
+
 	if settings.State == binlogplayer.VReplicationInit {
 		if err := vp.initTablesForCopy(ctx); err != nil {
 			return err
 		}
-		return nil
+		settings.State = binlogplayer.VReplicationCopying
 	}
 
-	settings, err = binlogplayer.ReadVRSettings(vp.dbClient, vp.id)
-	if err != nil {
-		return fmt.Errorf("error reading VReplication settings: %v", err)
-	}
 	if settings.State == binlogplayer.VReplicationCopying {
 		if err := vp.copyTables(ctx); err != nil {
 			return err
 		}
+		settings.State = binlogplayer.BlpRunning
 		return nil
 	}
 
@@ -188,8 +187,8 @@ func (vp *vplayer) copyTables(ctx context.Context) error {
 		}
 		var inflight, inflightpk string
 		for _, row := range qr.Rows {
-			tableName := row[0].String()
-			lastpk := row[1].String()
+			tableName := row[0].ToString()
+			lastpk := row[1].ToString()
 			// We have to copy either the first table or the one that's already inflight.
 			// The first table is expected to be the one in-flight. But there's no need to check.
 			if inflight == "" || lastpk != "" {
@@ -212,9 +211,11 @@ func (vp *vplayer) copyTables(ctx context.Context) error {
 func (vp *vplayer) copyTable(ctx context.Context, tableName, lastpk string) error {
 	defer vp.dbClient.Rollback()
 
-	tplan, ok := vp.pplan.TablePlans[tableName]
+	log.Infof("Copying table %s, lastpk: %s", tableName, lastpk)
+
+	tplan, ok := vp.pplan.TargetTables[tableName]
 	if !ok {
-		return fmt.Errorf("plan not found for table: %s", tableName)
+		return fmt.Errorf("plan not found for table: %s, curret plans are: %#v", tableName, vp.pplan.TargetTables)
 	}
 
 	vsClient, err := tabletconn.GetDialer()(vp.sourceTablet, grpcclient.FailFast(false))
@@ -231,21 +232,22 @@ func (vp *vplayer) copyTable(ctx context.Context, tableName, lastpk string) erro
 		TabletType: vp.sourceTablet.Type,
 	}
 
-	var lastpkvals *querypb.QueryResult
+	var lastpkqr *querypb.QueryResult
 	if lastpk != "" {
-		var pk querypb.QueryResult
-		if err := proto.UnmarshalText(lastpk, &pk); err != nil {
+		var r querypb.QueryResult
+		if err := proto.UnmarshalText(lastpk, &r); err != nil {
 			return err
 		}
-		if len(pk.Rows) != 1 {
-			return fmt.Errorf("unexpected value decoding lastpk: %v", pk)
+		if len(r.Rows) != 1 {
+			return fmt.Errorf("unexpected value decoding lastpk: %v", r)
 		}
-		lastpkvals = &pk
+		lastpkqr = &r
 	}
 
+	var pkfields []*querypb.Field
 	var updateCopyState *sqlparser.ParsedQuery
-	err = vsClient.VStreamRows(ctx, target, tplan.SendRule.Filter, lastpkvals, func(rows *binlogdatapb.VStreamRowsResponse) error {
-		if tplan == nil {
+	err = vsClient.VStreamRows(ctx, target, tplan.SendRule.Filter, lastpkqr, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		if pkfields == nil {
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
 			}
@@ -257,11 +259,33 @@ func (vp *vplayer) copyTable(ctx context.Context, tableName, lastpk string) erro
 				return err
 			}
 			tplan = vp.tplans[tableName]
+			pkfields = rows.Pkfields
 			buf := sqlparser.NewTrackedBuffer(nil)
-			buf.Myprintf("update _vt.copy_state set lastpk=%a where vrepl_id=%s", ":lastpk", strconv.Itoa(int(vp.id)))
+			buf.Myprintf("update _vt.copy_state set lastpk=%a where vrepl_id=%s and table_name=%s", ":lastpk", strconv.Itoa(int(vp.id)), encodeString(tableName))
 			updateCopyState = buf.ParsedQuery()
 		}
+		if len(rows.Rows) == 0 {
+			return nil
+		}
 		query, err := tplan.generateBulkInsert(rows)
+		if err != nil {
+			return err
+		}
+		var buf bytes.Buffer
+		err = proto.CompactText(&buf, &querypb.QueryResult{
+			Fields: pkfields,
+			Rows:   []*querypb.Row{rows.Lastpk},
+		})
+		if err != nil {
+			return err
+		}
+		bv := map[string]*querypb.BindVariable{
+			"lastpk": {
+				Type:  sqltypes.VarBinary,
+				Value: buf.Bytes(),
+			},
+		}
+		updateState, err := updateCopyState.GenerateQuery(bv, nil)
 		if err != nil {
 			return err
 		}
@@ -271,12 +295,20 @@ func (vp *vplayer) copyTable(ctx context.Context, tableName, lastpk string) erro
 		if _, err := vp.dbClient.ExecuteFetch(query, 0); err != nil {
 			return err
 		}
+		if _, err := vp.dbClient.ExecuteFetch(updateState, 0); err != nil {
+			return err
+		}
 		if err := vp.dbClient.Commit(); err != nil {
 			return err
 		}
 		return nil
 	})
 	if err != nil {
+		return err
+	}
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("delete from _vt.copy_state where vrepl_id=%s and table_name=%s", strconv.Itoa(int(vp.id)), encodeString(tableName))
+	if _, err := vp.dbClient.ExecuteFetch(buf.String(), 0); err != nil {
 		return err
 	}
 	return nil

@@ -187,6 +187,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.
 	vse.watcherOnce.Do(vse.setWatch)
+	log.Infof("Streaming rows for query %s, lastpk: %s", query, lastpk)
 
 	// Create stream and add it to the map.
 	rowStreamer, idx, err := func() (*rowStreamer, int, error) {
