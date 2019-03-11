@@ -789,12 +789,11 @@ func (qre *QueryExecutor) execSet() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
-	span := trace.NewSpanFromContext(qre.ctx)
-	span.StartLocal("QueryExecutor.getConn")
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getConn", trace.Local)
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := qre.tsv.qe.getQueryConn(qre.ctx)
+	conn, err := qre.tsv.qe.getQueryConn(ctx)
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Since(start)
@@ -806,12 +805,11 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 }
 
 func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
-	span := trace.NewSpanFromContext(qre.ctx)
-	span.StartLocal("QueryExecutor.getStreamConn")
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getStreamConn", trace.Local)
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := qre.tsv.qe.streamConns.Get(qre.ctx)
+	conn, err := qre.tsv.qe.streamConns.Get(ctx)
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Since(start)

@@ -28,26 +28,28 @@ import (
 // represented by this Span. Call Finish() when that work is done to record the
 // Span. A Span may be reused by calling Start again.
 type Span interface {
-	// StartLocal marks the beginning of a span representing time spent doing
-	// work locally.
-	StartLocal(label string)
-	// StartClient marks the beginning of a span representing time spent acting as
-	// a client and waiting for a response.
-	StartClient(label string)
-	// StartServer marks the beginning of a span representing time spent doing
-	// work in service of a remote client request.
-	StartServer(label string)
-	// Finish marks the span as complete.
 	Finish()
 	// Annotate records a key/value pair associated with a Span. It should be
 	// called between Start and Finish.
 	Annotate(key string, value interface{})
 }
 
+type SpanType int
+
+const (
+  Local SpanType = iota
+  Client
+  Server
+)
+
 // NewSpan creates a new Span with the currently installed tracing plugin.
 // If no tracing plugin is installed, it returns a fake Span that does nothing.
-func NewSpan(parent Span) Span {
-	return spanFactory.New(parent)
+func NewSpan(inCtx context.Context, label string, spanType SpanType) (Span, context.Context) {
+  parent, _ := spanFactory.FromContext(inCtx)
+  span := spanFactory.New(parent, label, spanType)
+  outCtx := spanFactory.NewContext(inCtx, span)
+
+  return span, outCtx
 }
 
 // FromContext returns the Span from a Context if present. The bool return
@@ -61,15 +63,6 @@ func NewContext(parent context.Context, span Span) context.Context {
 	return spanFactory.NewContext(parent, span)
 }
 
-// NewSpanFromContext returns a new Span whose parent is the Span from the given
-// Context if present, or a new Span with no parent if not.
-func NewSpanFromContext(ctx context.Context) Span {
-	if parent, ok := FromContext(ctx); ok {
-		return NewSpan(parent)
-	}
-	return NewSpan(nil)
-}
-
 // CopySpan creates a new context from parentCtx, with only the trace span
 // copied over from spanCtx, if it has any. If not, parentCtx is returned.
 func CopySpan(parentCtx, spanCtx context.Context) context.Context {
@@ -81,12 +74,10 @@ func CopySpan(parentCtx, spanCtx context.Context) context.Context {
 
 // SpanFactory is an interface for creating spans or extracting them from Contexts.
 type SpanFactory interface {
-	New(parent Span) Span
-	FromContext(ctx context.Context) (Span, bool)
-	NewContext(parent context.Context, span Span) context.Context
+  New(parent Span, label string, spanType SpanType) Span
+  FromContext(ctx context.Context) (Span, bool)
+  NewContext(parent context.Context, span Span) context.Context
 }
-
-var spanFactory SpanFactory = fakeSpanFactory{}
 
 // RegisterSpanFactory should be called by a plugin during init() to install a
 // factory that creates Spans for that plugin's tracing framework. Each call to
@@ -97,17 +88,16 @@ func RegisterSpanFactory(sf SpanFactory) {
 	spanFactory = sf
 }
 
+var spanFactory SpanFactory = fakeSpanFactory{}
+
 type fakeSpanFactory struct{}
 
-func (fakeSpanFactory) New(parent Span) Span                                         { return fakeSpan{} }
-func (fakeSpanFactory) FromContext(ctx context.Context) (Span, bool)                 { return nil, false }
-func (fakeSpanFactory) NewContext(parent context.Context, span Span) context.Context { return parent }
+func (fakeSpanFactory) New(Span, string, SpanType) Span                           { return fakeSpan{} }
+func (fakeSpanFactory) FromContext(context.Context) (Span, bool)                  { return nil, false }
+func (fakeSpanFactory) NewContext(parent context.Context, _ Span) context.Context { return parent }
 
 // fakeSpan implements Span with no-op methods.
 type fakeSpan struct{}
 
-func (fakeSpan) StartLocal(string)            {}
-func (fakeSpan) StartClient(string)           {}
-func (fakeSpan) StartServer(string)           {}
 func (fakeSpan) Finish()                      {}
 func (fakeSpan) Annotate(string, interface{}) {}
