@@ -28,6 +28,7 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
@@ -71,6 +72,9 @@ func main() {
 
 	args := servenv.ParseFlagsWithArgs("vtctl")
 	action := args[0]
+
+	closer := trace.StartTracing("vtctl")
+	defer trace.LogErrorsWhenClosing(closer)
 
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
 
