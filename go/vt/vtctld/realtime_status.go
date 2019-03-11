@@ -51,7 +51,7 @@ func newRealtimeStats(ts *topo.Server) (*realtimeStats, error) {
 	}
 	var watchers []*discovery.TopologyWatcher
 	for _, cell := range cells {
-		watcher := discovery.NewCellTabletsWatcher(ts, hc, cell, *vtctl.HealthCheckTopologyRefresh, true /* refreshKnownTablets */, discovery.DefaultTopoReadConcurrency)
+		watcher := discovery.NewCellTabletsWatcher(context.Background(), ts, hc, cell, *vtctl.HealthCheckTopologyRefresh, true /* refreshKnownTablets */, discovery.DefaultTopoReadConcurrency)
 		watchers = append(watchers, watcher)
 	}
 	r.cellWatchers = watchers

@@ -837,7 +837,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	tsc := discovery.NewTabletStatsCache(hc, wr.TopoServer(), cell)
 
 	// Create a tablet watcher.
-	watcher := discovery.NewShardReplicationWatcher(wr.TopoServer(), hc, cell, keyspace, shard, healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
+	watcher := discovery.NewShardReplicationWatcher(ctx, wr.TopoServer(), hc, cell, keyspace, shard, healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 	defer watcher.Stop()
 
 	// Wait for at least one tablet.
