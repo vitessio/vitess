@@ -25,6 +25,8 @@ import (
 
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/opentracing-contrib/go-grpc"
+	"github.com/opentracing/opentracing-go"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -184,6 +186,12 @@ func interceptors() []grpc.ServerOption {
 
 	if *grpccommon.EnableGRPCPrometheus {
 		interceptors.Add(grpc_prometheus.StreamServerInterceptor, grpc_prometheus.UnaryServerInterceptor)
+	}
+
+	tracer := opentracing.GlobalTracer()
+	_, isNoopTracer := tracer.(*opentracing.NoopTracer)
+	if !isNoopTracer {
+		interceptors.Add(otgrpc.OpenTracingStreamServerInterceptor(tracer), otgrpc.OpenTracingServerInterceptor(tracer))
 	}
 
 	if interceptors.NonEmpty() {
