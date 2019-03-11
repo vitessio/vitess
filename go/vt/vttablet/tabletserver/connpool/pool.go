@@ -22,10 +22,10 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -145,6 +145,11 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 	if p == nil {
 		return nil, ErrConnPoolClosed
 	}
+	span.Annotate("capacity", p.Capacity())
+	span.Annotate("in_use", p.InUse())
+	span.Annotate("available", p.Available())
+	span.Annotate("active", p.Active())
+
 	r, err := p.Get(ctx)
 	if err != nil {
 		return nil, err
