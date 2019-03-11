@@ -31,6 +31,7 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -68,6 +69,9 @@ func main() {
 
 	flag.Parse()
 	args := flag.Args()
+
+	closer := trace.StartTracing("vtworker")
+	defer trace.LogErrorsWhenClosing(closer)
 
 	servenv.Init()
 	defer servenv.Close()

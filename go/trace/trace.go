@@ -20,7 +20,13 @@ limitations under the License.
 package trace
 
 import (
-	"golang.org/x/net/context"
+  "flag"
+  "io"
+
+  "github.com/opentracing/opentracing-go"
+  "golang.org/x/net/context"
+  "vitess.io/vitess/go/vt/log"
+  "vitess.io/vitess/go/vt/vterrors"
 )
 
 // Span represents a unit of work within a trace. After creating a Span with
@@ -101,3 +107,40 @@ type fakeSpan struct{}
 
 func (fakeSpan) Finish()                      {}
 func (fakeSpan) Annotate(string, interface{}) {}
+
+var (
+  tracingServer = flag.String("tracer", "noop", "tracing service to use. available are: noop, jaeger. Configuration is provided using environment variables.")
+)
+
+// StartTracing enables tracing for a named service
+func StartTracing(serviceName string) io.Closer {
+  switch *tracingServer {
+  case "noop":
+    // we are not doing any tracing
+    return &nilCloser{}
+  case "jaeger":
+    tracer, closer, err := NewJagerTracerFromEnv(serviceName)
+    if err != nil {
+      log.Error(vterrors.Wrapf(err, "failed to create a jaeger tracer"))
+      return &nilCloser{}
+    }
+    // Register it for all openTracing enabled plugins, mainly the grpc connections
+    opentracing.SetGlobalTracer(tracer)
+
+    // Register it for the internal Vitess tracing system
+    RegisterSpanFactory(OpenTracingFactory{Tracer: tracer})
+    return closer
+  default:
+    panic("unknown tracing service" + serviceName)
+  }
+}
+
+
+func LogErrorsWhenClosing(in io.Closer) func() {
+  return func() {
+    err := in.Close()
+    if err != nil {
+      log.Error(err)
+    }
+  }
+}
