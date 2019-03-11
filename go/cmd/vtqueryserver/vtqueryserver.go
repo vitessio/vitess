@@ -20,6 +20,7 @@ import (
 	"flag"
 	"os"
 
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -47,6 +48,9 @@ func main() {
 		servenv.AppVersion.Print()
 		os.Exit(0)
 	}
+
+	closer := trace.StartTracing("vtqueryserver")
+	defer trace.LogErrorsWhenClosing(closer)
 
 	if len(flag.Args()) > 0 {
 		flag.Usage()

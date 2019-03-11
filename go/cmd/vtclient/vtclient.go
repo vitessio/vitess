@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -140,6 +141,9 @@ func main() {
 func run() (*results, error) {
 	flag.Parse()
 	args := flag.Args()
+
+	closer := trace.StartTracing("vtclient")
+	defer trace.LogErrorsWhenClosing(closer)
 
 	if len(args) == 0 {
 		flag.Usage()
