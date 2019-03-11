@@ -27,12 +27,14 @@ func TestFakeSpan(t *testing.T) {
 	RegisterSpanFactory(fakeSpanFactory{})
 
 	// It should be safe to call all the usual methods as if a plugin were installed.
-	span := NewSpanFromContext(ctx)
-	span.StartLocal("label")
-	span.StartClient("label")
-	span.StartServer("label")
-	span.Annotate("key", "value")
-	span.Finish()
-	NewContext(ctx, span)
-	CopySpan(ctx, ctx)
+	span1, ctx := NewSpan(ctx, "label", Local)
+	span1.Finish()
+
+	span2, ctx := NewSpan(ctx, "label", Client)
+	span2.Annotate("key", 42)
+	span2.Finish()
+
+	span3, ctx := NewSpan(ctx, "label", Server)
+	span3.Annotate("key", 42)
+	span3.Finish()
 }

@@ -88,11 +88,3 @@ type nilCloser struct {
 }
 
 func (c *nilCloser) Close() error { return nil }
-
-type SpanType int
-
-const (
-  Local SpanType = iota
-  Client
-  Server
-)
