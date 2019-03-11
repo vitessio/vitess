@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
@@ -122,6 +123,11 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell, statsName strin
 
 // Execute executes a non-streaming query.
 func (e *Executor) Execute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (result *sqltypes.Result, err error) {
+	span, ctx := trace.NewClientSpan(ctx, "mysql", "executor.Execute")
+	span.Annotate("method", method)
+	span.Annotate("sql", trace.ExtractFirstCharacters(sql))
+	defer span.Finish()
+
 	logStats := NewLogStats(ctx, method, sql, bindVars)
 	result, err = e.execute(ctx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
