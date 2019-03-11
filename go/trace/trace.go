@@ -58,6 +58,13 @@ func NewSpan(inCtx context.Context, label string, spanType SpanType) (Span, cont
   return span, outCtx
 }
 
+// NewClientSpan returns a span and a context to register calls to dependent services
+func NewClientSpan(inCtx context.Context, serviceName, spanLabel string) (Span, context.Context) {
+  span, ctx := NewSpan(inCtx, spanLabel, Client)
+  span.Annotate("peer.service", serviceName)
+  return span, ctx
+}
+
 // FromContext returns the Span from a Context if present. The bool return
 // value indicates whether a Span was present in the Context.
 func FromContext(ctx context.Context) (Span, bool) {
@@ -96,18 +103,6 @@ func RegisterSpanFactory(sf SpanFactory) {
 
 var spanFactory SpanFactory = fakeSpanFactory{}
 
-type fakeSpanFactory struct{}
-
-func (fakeSpanFactory) New(Span, string, SpanType) Span                           { return fakeSpan{} }
-func (fakeSpanFactory) FromContext(context.Context) (Span, bool)                  { return nil, false }
-func (fakeSpanFactory) NewContext(parent context.Context, _ Span) context.Context { return parent }
-
-// fakeSpan implements Span with no-op methods.
-type fakeSpan struct{}
-
-func (fakeSpan) Finish()                      {}
-func (fakeSpan) Annotate(string, interface{}) {}
-
 var (
   tracingServer = flag.String("tracer", "noop", "tracing service to use. available are: noop, jaeger. Configuration is provided using environment variables.")
 )
@@ -132,15 +127,5 @@ func StartTracing(serviceName string) io.Closer {
     return closer
   default:
     panic("unknown tracing service" + serviceName)
-  }
-}
-
-
-func LogErrorsWhenClosing(in io.Closer) func() {
-  return func() {
-    err := in.Close()
-    if err != nil {
-      log.Error(err)
-    }
   }
 }
