@@ -105,7 +105,7 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, nil, "local", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(context.Background(), hc, nil, "local", 2).(*discoveryGateway)
 
 	// replica should only use local ones
 	hc.Reset()
@@ -211,7 +211,7 @@ func TestDiscoveryGatewayGetAggregateStats(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, nil, "cell1", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(context.Background(), hc, nil, "cell1", 2).(*discoveryGateway)
 
 	// replica should only use local ones
 	hc.Reset()
@@ -237,7 +237,7 @@ func TestDiscoveryGatewayGetAggregateStatsRegion(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, nil, "local-east", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(context.Background(), hc, nil, "local-east", 2).(*discoveryGateway)
 
 	topo.UpdateCellsToRegionsForTests(map[string]string{
 		"local-west": "local",
@@ -271,7 +271,7 @@ func TestDiscoveryGatewayGetAggregateStatsMaster(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, nil, "cell1", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(context.Background(), hc, nil, "cell1", 2).(*discoveryGateway)
 
 	// replica should only use local ones
 	hc.Reset()
@@ -312,7 +312,7 @@ func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, nil, "local", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(context.Background(), hc, nil, "local", 2).(*discoveryGateway)
 	topo.UpdateCellsToRegionsForTests(map[string]string{
 		"local-west": "local",
 		"local-east": "local",
@@ -344,7 +344,7 @@ func benchmarkCellsGetAggregateStats(i int, b *testing.B) {
 	keyspace := "ks"
 	shard := "0"
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, nil, "cell0", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(context.Background(), hc, nil, "cell0", 2).(*discoveryGateway)
 	cellsToregions := make(map[string]string)
 	for j := 0; j < i; j++ {
 		cell := fmt.Sprintf("cell%v", j)
@@ -386,7 +386,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg Gateway, target *queryp
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, nil, "cell", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(context.Background(), hc, nil, "cell", 2).(*discoveryGateway)
 
 	// no tablet
 	hc.Reset()
@@ -469,7 +469,7 @@ func testDiscoveryGatewayTransact(t *testing.T, f func(dg Gateway, target *query
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck()
-	dg := createDiscoveryGateway(hc, nil, "cell", 2).(*discoveryGateway)
+	dg := createDiscoveryGateway(context.Background(), hc, nil, "cell", 2).(*discoveryGateway)
 
 	// retry error - no retry
 	hc.Reset()

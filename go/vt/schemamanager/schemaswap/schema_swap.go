@@ -308,7 +308,7 @@ func (schemaSwap *Swap) executeSwap() error {
 	}
 	errHealthWatchers := schemaSwap.runOnAllShards(
 		func(shard *shardSchemaSwap) error {
-			return shard.startHealthWatchers()
+			return shard.startHealthWatchers(schemaSwap.ctx )
 		})
 	// Note: this defer statement is before the error is checked because some shards may
 	// succeed while others fail. We should try to stop health watching on all shards no
@@ -680,7 +680,7 @@ func (shardSwap *shardSchemaSwap) writeFinishedSwap() error {
 // startHealthWatchers launches the topology watchers and health checking to monitor
 // all tablets on the shard. Function should be called before the start of the schema
 // swap process.
-func (shardSwap *shardSchemaSwap) startHealthWatchers() error {
+func (shardSwap *shardSchemaSwap) startHealthWatchers(ctx context.Context) error {
 	shardSwap.allTablets = make(map[string]*discovery.TabletStats)
 
 	shardSwap.tabletHealthCheck = discovery.NewHealthCheck(*vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
@@ -693,6 +693,7 @@ func (shardSwap *shardSchemaSwap) startHealthWatchers() error {
 	}
 	for _, cell := range cellList {
 		watcher := discovery.NewShardReplicationWatcher(
+			ctx,
 			topoServer,
 			shardSwap.tabletHealthCheck,
 			cell,

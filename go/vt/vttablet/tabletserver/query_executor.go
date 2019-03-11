@@ -931,8 +931,11 @@ type poolConn interface {
 }
 
 func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execSQL", trace.Local)
+	defer span.Finish()
+
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
-	res, err := conn.Exec(qre.ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
+	res, err := conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 	warnThreshold := qre.tsv.qe.warnResultSize.Get()
 	if res != nil && warnThreshold > 0 && int64(len(res.Rows)) > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
@@ -943,8 +946,15 @@ func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callback func(*sqltypes.Result) error) error {
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL", trace.Local)
+	span.Annotate("query", trace.ExtractFirstCharacters(sql))
+	callBackClosingSpan := func(result *sqltypes.Result) error {
+		defer span.Finish()
+		return callback(result)
+	}
+
 	start := time.Now()
-	err := conn.Stream(qre.ctx, sql, callback, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
+	err := conn.Stream(ctx, sql, callBackClosingSpan, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	qre.logStats.AddRewrittenSQL(sql, start)
 	if err != nil {
 		// MySQL error that isn't due to a connection issue
@@ -952,3 +962,4 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callb
 	}
 	return nil
 }
+

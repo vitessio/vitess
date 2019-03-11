@@ -160,7 +160,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	// we can't go on much further, so we log.Fatal out.
 	var gw gateway.Gateway
 	if !*disableLocalGateway {
-		gw = gateway.GetCreator()(hc, serv, cell, retryCount)
+		gw = gateway.GetCreator()(ctx, hc, serv, cell, retryCount)
 		gw.RegisterStats()
 		if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
 			log.Fatalf("gateway.WaitForTablets failed: %v", err)

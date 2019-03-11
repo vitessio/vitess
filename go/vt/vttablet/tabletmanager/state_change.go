@@ -132,7 +132,6 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	span, ctx := trace.NewSpan(ctx, "ActionAgent.refreshTablet", trace.Local)
 	span.Annotate("reason", reason)
 	defer span.Finish()
-	ctx = trace.NewContext(ctx, span)
 
 	// Actions should have side effects on the tablet, so reload the data.
 	ti, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
