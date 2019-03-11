@@ -103,6 +103,16 @@ func TestMain(m *testing.M) {
 		}
 		defer playerEngine.Close()
 
+		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), binlogplayer.CreateVReplicationTable()); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+
+		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), CreateCopyState); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -194,6 +204,19 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*quer
 // VStream directly calls into the pre-initialized engine.
 func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	return streamerEngine.Stream(ctx, startPos, filter, send)
+}
+
+// VStreamRows directly calls into the pre-initialized engine.
+func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	var row []sqltypes.Value
+	if lastpk != nil {
+		r := sqltypes.Proto3ToResult(lastpk)
+		if len(r.Rows) != 1 {
+			return fmt.Errorf("unexpected lastpk input: %v", lastpk)
+		}
+		row = r.Rows[0]
+	}
+	return streamerEngine.StreamRows(ctx, query, row, send)
 }
 
 //--------------------------------------
@@ -373,7 +396,13 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 func expectData(t *testing.T, table string, values [][]string) {
 	t.Helper()
 
-	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), fmt.Sprintf("select * from %s.%s", vrepldb, table))
+	var query string
+	if len(strings.Split(table, ".")) == 1 {
+		query = fmt.Sprintf("select * from %s.%s", vrepldb, table)
+	} else {
+		query = fmt.Sprintf("select * from %s", table)
+	}
+	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), query)
 	if err != nil {
 		t.Error(err)
 		return

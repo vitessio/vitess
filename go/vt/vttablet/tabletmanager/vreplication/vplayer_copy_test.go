@@ -29,11 +29,12 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestPlayerInitTables(t *testing.T) {
+func TestPlayerCopyTables(t *testing.T) {
 	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
 
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
+		"insert into src1 values(2, 'bbb'), (1, 'aaa')",
 		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),
 		"create table yes(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.yes(id int, val varbinary(128), primary key(id))", vrepldb),
@@ -52,9 +53,6 @@ func TestPlayerInitTables(t *testing.T) {
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "dst1",
 			Filter: "select * from src1",
-		}, {
-			Match:  "dst2",
-			Filter: "select id, val1, sum(val2) as sval2, count(*) as rcount from src2 group by id",
 		}, {
 			Match: "/yes",
 		}},
@@ -81,17 +79,95 @@ func TestPlayerInitTables(t *testing.T) {
 		})
 	}()
 
+	expectDBClientQueries(t, []string{
+		"/insert",
+		"begin",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state='Copying'",
+		"commit",
+		"rollback",
+		"begin",
+		"/insert into dst1",
+		"/update _vt.copy_state set lastpk",
+		"commit",
+		"/delete from _vt.copy_state.*dst1",
+		"rollback",
+		"/delete from _vt.copy_state.*yes",
+		"rollback",
+		"/update _vt.vreplication set state='Running'",
+	})
+	expectData(t, "dst1", [][]string{
+		{"1", "aaa"},
+		{"2", "bbb"},
+	})
+	expectData(t, "yes", [][]string{})
+}
+
+func TestPlayerCopyTablePartial(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	execStatements(t, []string{
+		"create table src1(id int, val varbinary(128), primary key(id))",
+		"insert into src1 values(2, 'bbb'), (1, 'aaa')",
+		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.dst1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	execStatements(t, []string{
+		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', '%s')", qr.InsertID, "dst1", `fields:<name:"id" type:INT32 > rows:<lengths:1 values:"1" > `),
+	})
+	qr, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying' where id=%d", qr.InsertID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDBClientQueries(t, []string{
+			"/delete",
+		})
+	}()
+
 	for q := range globalDBQueries {
-		if strings.HasPrefix(q, "create table if not exists _vt.copy_state") {
+		if strings.HasPrefix(q, "update") {
 			break
 		}
 	}
 
 	expectDBClientQueries(t, []string{
 		"begin",
-		"/insert into _vt.copy_state",
-		"/update _vt.vreplication set state='Copying'",
+		"/insert into dst1",
+		"/update _vt.copy_state set lastpk",
 		"commit",
+		"/delete from _vt.copy_state.*dst1",
 		"rollback",
+		"/update _vt.vreplication set state='Running'",
+	})
+	expectData(t, "dst1", [][]string{
+		{"2", "bbb"},
 	})
 }
