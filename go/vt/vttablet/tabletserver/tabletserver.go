@@ -1358,7 +1358,7 @@ func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, st
 }
 
 // VStreamRows streams rows from the specified starting point.
-func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk []*querypb.Value, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	return fmt.Errorf("Not implemented")
 }
 

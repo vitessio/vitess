@@ -239,7 +239,7 @@ message VStreamRowsRequest {
   query.Target target = 3;
 
   string query = 4;
-  repeated query.Value lastpk = 5;
+  query.QueryResult lastpk = 5;
 }
 
 // VStreamRowsResponse is the response from VStreamRows
