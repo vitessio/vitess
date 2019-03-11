@@ -24,6 +24,7 @@ import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.opentracing.contrib.grpc.ClientTracingInterceptor;
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
 import io.vitess.client.RpcClientFactory;
@@ -88,9 +89,11 @@ public class GrpcClientFactory implements RpcClientFactory {
    */
   @Override
   public RpcClient create(Context ctx, String target) {
+    ClientTracingInterceptor tracingInterceptor = new ClientTracingInterceptor();
+
     NettyChannelBuilder channel = channelBuilder(target)
         .negotiationType(NegotiationType.PLAINTEXT)
-        .intercept(new RetryingInterceptor(config));
+        .intercept(new RetryingInterceptor(config), tracingInterceptor);
     if (loadBalancerFactory != null) {
       channel.loadBalancerFactory(loadBalancerFactory);
     }
@@ -180,9 +183,11 @@ public class GrpcClientFactory implements RpcClientFactory {
       throw new RuntimeException(exc);
     }
 
+    ClientTracingInterceptor tracingInterceptor = new ClientTracingInterceptor();
+
     return new GrpcClient(
         channelBuilder(target).negotiationType(NegotiationType.TLS).sslContext(sslContext)
-            .intercept(new RetryingInterceptor(config)).build(), ctx);
+            .intercept(new RetryingInterceptor(config), tracingInterceptor).build(), ctx);
   }
 
   /**
