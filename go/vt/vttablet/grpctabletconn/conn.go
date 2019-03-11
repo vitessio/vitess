@@ -715,7 +715,7 @@ func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target
 }
 
 // VStreamRows streams rows of a query from the specified starting point.
-func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk []*querypb.Value, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	stream, err := func() (queryservicepb.Query_VStreamRowsClient, error) {
 		conn.mu.RLock()
 		defer conn.mu.RUnlock()

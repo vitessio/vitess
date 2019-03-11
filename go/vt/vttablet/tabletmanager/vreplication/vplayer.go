@@ -20,9 +20,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -31,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -53,7 +56,7 @@ var (
 		`create table if not exists _vt.copy_state (
   vrepl_id int,
   table_name varbinary(128),
-  last_pk varbinary(2000),
+  lastpk varbinary(2000),
   primary key (vrepl_id, table_name))`}
 )
 
@@ -123,6 +126,18 @@ func (vp *vplayer) Play(ctx context.Context) error {
 		}
 		return nil
 	}
+
+	settings, err = binlogplayer.ReadVRSettings(vp.dbClient, vp.id)
+	if err != nil {
+		return fmt.Errorf("error reading VReplication settings: %v", err)
+	}
+	if settings.State == binlogplayer.VReplicationCopying {
+		if err := vp.copyTables(ctx); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	return vp.replicate(ctx, settings)
 }
 
@@ -163,6 +178,108 @@ func (vp *vplayer) initTablesForCopy(ctx context.Context) error {
 		return err
 	}
 	return vp.dbClient.Commit()
+}
+
+func (vp *vplayer) copyTables(ctx context.Context) error {
+	for {
+		qr, err := vp.dbClient.ExecuteFetch(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id=%d", vp.id), 10000)
+		if err != nil {
+			return err
+		}
+		var inflight, inflightpk string
+		for _, row := range qr.Rows {
+			tableName := row[0].String()
+			lastpk := row[1].String()
+			// We have to copy either the first table or the one that's already inflight.
+			// The first table is expected to be the one in-flight. But there's no need to check.
+			if inflight == "" || lastpk != "" {
+				inflight = tableName
+				inflightpk = lastpk
+			}
+		}
+		if inflight == "" {
+			if err := vp.setState(binlogplayer.BlpRunning, ""); err != nil {
+				return err
+			}
+			return nil
+		}
+		if err := vp.copyTable(ctx, inflight, inflightpk); err != nil {
+			return err
+		}
+	}
+}
+
+func (vp *vplayer) copyTable(ctx context.Context, tableName, lastpk string) error {
+	defer vp.dbClient.Rollback()
+
+	tplan, ok := vp.pplan.TablePlans[tableName]
+	if !ok {
+		return fmt.Errorf("plan not found for table: %s", tableName)
+	}
+
+	vsClient, err := tabletconn.GetDialer()(vp.sourceTablet, grpcclient.FailFast(false))
+	if err != nil {
+		return fmt.Errorf("error dialing tablet: %v", err)
+	}
+	defer vsClient.Close(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	target := &querypb.Target{
+		Keyspace:   vp.sourceTablet.Keyspace,
+		Shard:      vp.sourceTablet.Shard,
+		TabletType: vp.sourceTablet.Type,
+	}
+
+	var lastpkvals *querypb.QueryResult
+	if lastpk != "" {
+		var pk querypb.QueryResult
+		if err := proto.UnmarshalText(lastpk, &pk); err != nil {
+			return err
+		}
+		if len(pk.Rows) != 1 {
+			return fmt.Errorf("unexpected value decoding lastpk: %v", pk)
+		}
+		lastpkvals = &pk
+	}
+
+	var updateCopyState *sqlparser.ParsedQuery
+	err = vsClient.VStreamRows(ctx, target, tplan.SendRule.Filter, lastpkvals, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		if tplan == nil {
+			if len(rows.Fields) == 0 {
+				return fmt.Errorf("expecting field event first, got: %v", rows)
+			}
+			fieldEvent := &binlogdatapb.FieldEvent{
+				TableName: tableName,
+				Fields:    rows.Fields,
+			}
+			if err := vp.updatePlan(fieldEvent); err != nil {
+				return err
+			}
+			tplan = vp.tplans[tableName]
+			buf := sqlparser.NewTrackedBuffer(nil)
+			buf.Myprintf("update _vt.copy_state set lastpk=%a where vrepl_id=%s", ":lastpk", strconv.Itoa(int(vp.id)))
+			updateCopyState = buf.ParsedQuery()
+		}
+		query, err := tplan.generateBulkInsert(rows)
+		if err != nil {
+			return err
+		}
+		if err := vp.dbClient.Begin(); err != nil {
+			return err
+		}
+		if _, err := vp.dbClient.ExecuteFetch(query, 0); err != nil {
+			return err
+		}
+		if err := vp.dbClient.Commit(); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (vp *vplayer) replicate(ctx context.Context, settings binlogplayer.VRSettings) error {
@@ -206,6 +323,7 @@ func (vp *vplayer) play(ctx context.Context, settings binlogplayer.VRSettings) e
 	if err != nil {
 		return fmt.Errorf("error dialing tablet: %v", err)
 	}
+	defer vsClient.Close(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
