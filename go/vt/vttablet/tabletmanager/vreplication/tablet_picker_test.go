@@ -22,7 +22,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -30,7 +29,7 @@ func TestPickSimple(t *testing.T) {
 	want := addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true)
 	defer deleteTablet(want)
 
-	tp, err := newTabletPicker(env.TopoServ, env.Cells[0], env.KeyspaceName, env.ShardName, "replica")
+	tp, err := newTabletPicker(context.Background(), env.TopoServ, env.Cells[0], env.KeyspaceName, env.ShardName, "replica")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +50,7 @@ func TestPickFromTwoHealthy(t *testing.T) {
 	want2 := addTablet(101, "0", topodatapb.TabletType_RDONLY, true, true)
 	defer deleteTablet(want2)
 
-	tp, err := newTabletPicker(env.TopoServ, env.Cells[0], env.KeyspaceName, env.ShardName, "replica,rdonly")
+	tp, err := newTabletPicker(context.Background(), env.TopoServ, env.Cells[0], env.KeyspaceName, env.ShardName, "replica,rdonly")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +64,7 @@ func TestPickFromTwoHealthy(t *testing.T) {
 		t.Errorf("Pick:\n%v, want\n%v", tablet, want1)
 	}
 
-	tp, err = newTabletPicker(env.TopoServ, env.Cells[0], env.KeyspaceName, env.ShardName, "rdonly,replica")
+	tp, err = newTabletPicker(context.Background(), env.TopoServ, env.Cells[0], env.KeyspaceName, env.ShardName, "rdonly,replica")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +84,7 @@ func TestPickFromSomeUnhealthy(t *testing.T) {
 	want := addTablet(101, "0", topodatapb.TabletType_RDONLY, false, true)
 	defer deleteTablet(want)
 
-	tp, err := newTabletPicker(env.TopoServ, env.Cells[0], env.KeyspaceName, env.ShardName, "replica,rdonly")
+	tp, err := newTabletPicker(context.Background(), env.TopoServ, env.Cells[0], env.KeyspaceName, env.ShardName, "replica,rdonly")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,13 +102,13 @@ func TestPickFromSomeUnhealthy(t *testing.T) {
 func TestPickError(t *testing.T) {
 	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, false, false))
 
-	_, err := newTabletPicker(env.TopoServ, env.Cells[0], env.KeyspaceName, env.ShardName, "badtype")
+	_, err := newTabletPicker(context.Background(), env.TopoServ, env.Cells[0], env.KeyspaceName, env.ShardName, "badtype")
 	want := "failed to parse list of tablet types: badtype"
 	if err == nil || err.Error() != want {
 		t.Errorf("newTabletPicker err: %v, want %v", err, want)
 	}
 
-	tp, err := newTabletPicker(env.TopoServ, env.Cells[0], env.KeyspaceName, env.ShardName, "replica,rdonly")
+	tp, err := newTabletPicker(context.Background(), env.TopoServ, env.Cells[0], env.KeyspaceName, env.ShardName, "replica,rdonly")
 	if err != nil {
 		t.Fatal(err)
 	}
