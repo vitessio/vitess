@@ -26,6 +26,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -988,7 +989,7 @@ func (scw *SplitCloneWorker) getDestinationResultReader(ctx context.Context, td 
 	return resultReader, err
 }
 
-func (scw *SplitCloneWorker) cloneAChunk(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, tableIndex int, chunk chunk, processError func(string, ...interface{}), state StatusWorkerState, tableStatusList *tableStatusList, keyResolver keyspaceIDResolver, start time.Time, insertChannels []chan string, txID int64, statsCounters []*stats.CountersWithSingleLabel) {
+func (scw *SplitCloneWorker) cloneAChunk(ctx context.Context, td *tabletmanagerdatapb.TableDefinition, generatedColumns map[string]bool, tableIndex int, chunk chunk, processError func(string, ...interface{}), state StatusWorkerState, tableStatusList *tableStatusList, keyResolver keyspaceIDResolver, start time.Time, insertChannels []chan string, txID int64, statsCounters []*stats.CountersWithSingleLabel) {
 	errPrefix := fmt.Sprintf("table=%v chunk=%v", td.Name, chunk)
 
 	var err error
@@ -1032,7 +1033,7 @@ func (scw *SplitCloneWorker) cloneAChunk(ctx context.Context, td *tabletmanagerd
 	// Compare the data and reconcile any differences.
 	differ, err := NewRowDiffer2(ctx, sourceReader, destReader, td, tableStatusList, tableIndex,
 		scw.destinationShards, keyResolver,
-		insertChannels, ctx.Done(), dbNames, scw.writeQueryMaxRows, scw.writeQueryMaxSize, statsCounters)
+		insertChannels, ctx.Done(), dbNames, scw.writeQueryMaxRows, scw.writeQueryMaxSize, statsCounters, generatedColumns)
 	if err != nil {
 		processError("%v: NewRowDiffer2 failed: %v", errPrefix, err)
 		return
@@ -1053,7 +1054,7 @@ type workUnit struct {
 }
 
 func (scw *SplitCloneWorker) startCloningData(ctx context.Context, state StatusWorkerState, sourceSchemaDefinition *tabletmanagerdatapb.SchemaDefinition,
-	processError func(string, ...interface{}), firstSourceTablet *topodatapb.Tablet, tableStatusList *tableStatusList,
+	generatedColumns map[string]map[string]bool, processError func(string, ...interface{}), firstSourceTablet *topodatapb.Tablet, tableStatusList *tableStatusList,
 	start time.Time, statsCounters []*stats.CountersWithSingleLabel, insertChannels []chan string, wg *sync.WaitGroup) error {
 
 	workPipeline := make(chan workUnit, 10) // We'll use a small buffer so producers do not run too far ahead of consumers
@@ -1076,7 +1077,7 @@ func (scw *SplitCloneWorker) startCloningData(ctx context.Context, state StatusW
 		go func() {
 			defer wg.Done()
 			for work := range workPipeline {
-				scw.cloneAChunk(ctx, work.td, work.threadID, work.chunk, processError, state, tableStatusList, work.resolver, start, insertChannels, txID, statsCounters)
+				scw.cloneAChunk(ctx, work.td, generatedColumns[work.td.Name], work.threadID, work.chunk, processError, state, tableStatusList, work.resolver, start, insertChannels, txID, statsCounters)
 			}
 		}()
 	}
@@ -1137,7 +1138,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	}
 	defer scw.closeThrottlers()
 
-	sourceSchemaDefinition, err := scw.getSourceSchema(ctx, firstSourceTablet)
+	sourceSchemaDefinition, generatedColumns, err := scw.getSourceSchema(ctx, firstSourceTablet)
 	if err != nil {
 		return err
 	}
@@ -1189,7 +1190,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	// insertChannels
 	readers := sync.WaitGroup{}
 
-	err = scw.startCloningData(ctx, state, sourceSchemaDefinition, processError, firstSourceTablet, tableStatusList, start, statsCounters, insertChannels, &readers)
+	err = scw.startCloningData(ctx, state, sourceSchemaDefinition, generatedColumns, processError, firstSourceTablet, tableStatusList, start, statsCounters, insertChannels, &readers)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to startCloningData")
 	}
@@ -1281,7 +1282,7 @@ func (scw *SplitCloneWorker) setUpVReplication(ctx context.Context) error {
 	return rec.Error()
 }
 
-func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.SchemaDefinition, map[string]map[string]bool, error) {
 	// get source schema from the first shard
 	// TODO(alainjobart): for now, we assume the schema is compatible
 	// on all source shards. Furthermore, we estimate the number of rows
@@ -1291,17 +1292,37 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, tablet.Alias, scw.tables, scw.excludeTables, false /* includeViews */)
 	cancel()
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "cannot get schema from source %v", topoproto.TabletAliasString(tablet.Alias))
+		return nil, nil, vterrors.Wrapf(err, "cannot get schema from source %v", topoproto.TabletAliasString(tablet.Alias))
 	}
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no tables matching the table filter in tablet %v", topoproto.TabletAliasString(tablet.Alias))
+		return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no tables matching the table filter in tablet %v", topoproto.TabletAliasString(tablet.Alias))
 	}
 	for _, td := range sourceSchemaDefinition.TableDefinitions {
 		if len(td.Columns) == 0 {
-			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "schema for table %v has no columns", td.Name)
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "schema for table %v has no columns", td.Name)
 		}
 	}
-	return sourceSchemaDefinition, nil
+
+	//get the generated columns so we can exclude them from the insert statements
+	query := fmt.Sprintf("select TABLE_NAME, COLUMN_NAME from information_schema.COLUMNS where TABLE_SCHEMA = '%s' and GENERATION_EXPRESSION != ''", scw.sourceShards[0].Keyspace())
+	executor := newExecutor(scw.wr, scw.tsc, nil, scw.sourceShards[0].Keyspace(), scw.sourceShards[0].ShardName(), 0)
+	cancellableCtx, cancel := context.WithCancel(ctx)
+	qr, err := executor.wr.TabletManagerClient().ExecuteFetchAsApp(cancellableCtx, tablet, true, []byte(query), 0)
+	cancel()
+	if err != nil {
+		return nil, nil, vterrors.Wrapf(err, "cannot get generated columns from source %v", topoproto.TabletAliasString(tablet.Alias))
+	}
+	generatedColumns := make(map[string]map[string]bool)
+	result := sqltypes.Proto3ToResult(qr)
+	for _, row := range result.Rows {
+		rowset, ok := generatedColumns[row[0].ToString()]
+		if !ok {
+			rowset = make(map[string]bool)
+			generatedColumns[row[0].String()] = rowset
+		}
+		rowset[row[1].ToString()] = true
+	}
+	return sourceSchemaDefinition, generatedColumns, nil
 }
 
 // createKeyResolver is called at the start of each chunk pipeline.

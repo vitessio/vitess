@@ -59,15 +59,16 @@ type RowAggregator struct {
 // The index of the elements in statCounters must match the elements
 // in "DiffTypes" i.e. the first counter is for inserts, second for updates
 // and the third for deletes.
-func NewRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel chan string, dbName string, td *tabletmanagerdatapb.TableDefinition, diffType DiffType, statsCounters *stats.CountersWithSingleLabel) *RowAggregator {
+func NewRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel chan string, dbName string, td *tabletmanagerdatapb.TableDefinition, diffType DiffType, statsCounters *stats.CountersWithSingleLabel, generatedColumns map[string]bool) *RowAggregator {
 	// Construct head and tail base commands for the reconciliation statement.
 	var builder QueryBuilder
 	switch diffType {
 	case DiffMissing:
 		// Example: INSERT INTO test (id, sub_id, msg) VALUES (0, 10, 'a'), (1, 11, 'b')
-		builder = NewInsertsQueryBuilder(dbName, td)
+		builder = NewInsertsQueryBuilder(dbName, td, generatedColumns)
 	case DiffNotEqual:
 		// Example: UPDATE test SET msg='a' WHERE id=0 AND sub_id=10
+		// TODO(acharis): We may possibly also need to know about generatedColumns here as well.
 		builder = NewUpdatesQueryBuilder(dbName, td)
 		// UPDATE ... SET does not support multiple rows as input.
 		maxRows = 1
@@ -179,28 +180,51 @@ func (b *BaseQueryBuilder) WriteSeparator(buffer *bytes.Buffer) {
 // InsertsQueryBuilder implements the QueryBuilder interface for INSERT queries.
 type InsertsQueryBuilder struct {
 	BaseQueryBuilder
+	excludedColumns map[int]bool
 }
 
 // NewInsertsQueryBuilder creates a new InsertsQueryBuilder.
-func NewInsertsQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefinition) *InsertsQueryBuilder {
+func NewInsertsQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefinition, generatedColumns map[string]bool) *InsertsQueryBuilder {
 	// Example: INSERT INTO test (id, sub_id, msg) VALUES (0, 10, 'a'), (1, 11, 'b')
+
+	finalColumns := make([]string, len(td.Columns))
+	excludedColumns := make(map[int]bool, len(td.Columns))
+	for i, col := range td.Columns {
+		_, ok := generatedColumns[col]
+		if ok {
+			excludedColumns[i] = true
+		} else {
+			finalColumns = append(finalColumns, col)
+		}
+	}
+
 	return &InsertsQueryBuilder{
 		BaseQueryBuilder{
-			head:      "INSERT INTO " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(td.Name) + " (" + strings.Join(escapeAll(td.Columns), ", ") + ") VALUES ",
+			head:      "INSERT INTO " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(td.Name) + " (" + strings.Join(escapeAll(finalColumns), ", ") + ") VALUES ",
 			separator: ",",
-		},
+		}, excludedColumns,
 	}
 }
 
+func (iqb *InsertsQueryBuilder) excluded(idx int) bool {
+	_, ok := iqb.excludedColumns[idx]
+	return ok
+}
+
 // WriteRow implements the QueryBuilder interface.
-func (*InsertsQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Value) {
+func (iqb *InsertsQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Value) {
 	// Example: (0, 10, 'a'), (1, 11, 'b')
 	buffer.WriteByte('(')
+	written := false
 	for i, value := range row {
-		if i > 0 {
+		if iqb.excluded(i) {
+			continue
+		}
+		if written {
 			buffer.WriteByte(',')
 		}
 		value.EncodeSQL(buffer)
+		written = true
 	}
 	buffer.WriteByte(')')
 }
