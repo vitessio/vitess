@@ -68,8 +68,7 @@ func NewRowAggregator(ctx context.Context, maxRows, maxSize int, insertChannel c
 		builder = NewInsertsQueryBuilder(dbName, td, generatedColumns)
 	case DiffNotEqual:
 		// Example: UPDATE test SET msg='a' WHERE id=0 AND sub_id=10
-		// TODO(acharis): We may possibly also need to know about generatedColumns here as well.
-		builder = NewUpdatesQueryBuilder(dbName, td)
+		builder = NewUpdatesQueryBuilder(dbName, td, generatedColumns)
 		// UPDATE ... SET does not support multiple rows as input.
 		maxRows = 1
 	case DiffExtraneous:
@@ -236,10 +235,16 @@ type UpdatesQueryBuilder struct {
 	// nonPrimaryKeyColumns is td.Columns filtered by td.PrimaryKeyColumns.
 	// The order of td.Columns is preserved.
 	nonPrimaryKeyColumns []string
+	excludedColumns      map[int]bool
+}
+
+func (b *UpdatesQueryBuilder) excluded(idx int) bool {
+	_, ok := b.excludedColumns[idx]
+	return ok
 }
 
 // NewUpdatesQueryBuilder creates a new UpdatesQueryBuilder.
-func NewUpdatesQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefinition) *UpdatesQueryBuilder {
+func NewUpdatesQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefinition, generatedColumns map[string]bool) *UpdatesQueryBuilder {
 	// Example: UPDATE test SET msg='a' WHERE id=0 AND sub_id=10
 	//
 	// Note: We cannot use INSERT INTO ... ON DUPLICATE KEY UPDATE here because
@@ -248,6 +253,15 @@ func NewUpdatesQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefiniti
 	// triggered if a unique, non-primary key index matches the row. In that
 	// case, we would update the wrong row (it gets selected by the unique key
 	// and not the primary key).
+
+	excludedColumns := make(map[int]bool, len(td.Columns))
+	for i, col := range td.Columns {
+		_, ok := generatedColumns[col]
+		if ok {
+			excludedColumns[i] = true
+		}
+	}
+
 	return &UpdatesQueryBuilder{
 		BaseQueryBuilder: BaseQueryBuilder{
 			head: "UPDATE " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(td.Name) + " SET ",
@@ -255,6 +269,7 @@ func NewUpdatesQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefiniti
 		td: td,
 		// Build list of non-primary key columns (required for update statements).
 		nonPrimaryKeyColumns: orderedColumnsWithoutPrimaryKeyColumns(td),
+		excludedColumns:      excludedColumns,
 	}
 }
 
@@ -268,13 +283,18 @@ func (b *UpdatesQueryBuilder) WriteSeparator(buffer *bytes.Buffer) {
 func (b *UpdatesQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Value) {
 	// Example: msg='a' WHERE id=0 AND sub_id=10
 	nonPrimaryOffset := len(b.td.PrimaryKeyColumns)
+	written := false
 	for i, column := range b.nonPrimaryKeyColumns {
-		if i > 0 {
+		if b.excluded(nonPrimaryOffset + i) {
+			continue
+		}
+		if written {
 			buffer.WriteByte(',')
 		}
 		sqlescape.WriteEscapeID(buffer, column)
 		buffer.WriteByte('=')
 		row[nonPrimaryOffset+i].EncodeSQL(buffer)
+		written = true
 	}
 	buffer.WriteString(" WHERE ")
 	for i, pkColumn := range b.td.PrimaryKeyColumns {
