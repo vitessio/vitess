@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 )
 
 func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
@@ -33,6 +34,7 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 		t.Fatalf("Listen failed: %v", err)
 	}
 	addr := listener.Addr().String()
+	listener.(*net.TCPListener).SetDeadline(time.Now().Add(10 * time.Second))
 
 	// Dial a client, Accept a server.
 	wg := sync.WaitGroup{}
@@ -42,7 +44,7 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		clientConn, clientErr = net.Dial("tcp", addr)
+		clientConn, clientErr = net.DialTimeout("tcp", addr, 10*time.Second)
 	}()
 
 	var serverConn net.Conn
