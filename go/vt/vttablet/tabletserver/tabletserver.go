@@ -1866,6 +1866,14 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 // HeartbeatLag returns the current lag as calculated by the heartbeat
 // package, if heartbeat is enabled. Otherwise returns 0.
 func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
+	// If the reader is closed and we are not serving, then the
+	// query service is shutdown and this value is not being updated.
+	// We return healthy from this as a signal to the healtcheck to attempt
+	// to start the query service again. If the query service fails to start
+	// with an error, then that error is be reported by the healthcheck.
+	if !tsv.hr.IsOpen() && !tsv.IsServing() {
+		return 0, nil
+	}
 	return tsv.hr.GetLatest()
 }
 
