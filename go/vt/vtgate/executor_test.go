@@ -1305,6 +1305,51 @@ func waitForColVindexes(t *testing.T, ks, table string, names []string, executor
 	return nil
 }
 
+func waitForVschemaCol(t *testing.T, ks, table string, name string, drop bool, executor *Executor) (*vschemapb.SrvVSchema, *vschemapb.Column) {
+	t.Helper()
+
+	// Wait up to 10ms until the vindex manager gets notified of the update
+	for i := 0; i < 10; i++ {
+		vschema := executor.vm.GetCurrentSrvVschema()
+		if table, ok := vschema.Keyspaces[ks].Tables[table]; ok {
+			found := false
+			for _, col := range table.Columns {
+				if name == col.Name {
+					found = true
+					if !drop {
+						return vschema, col
+					}
+				}
+			}
+			if drop && !found {
+				return vschema, nil
+			}
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	t.Fatalf("updated vschema did not contain column %v on table %s", name, table)
+	return nil, nil
+}
+
+func waitForVschemaUpdates(t *testing.T, ks, table string, authoritative bool, executor *Executor) (*vschemapb.SrvVSchema, *vschemapb.Table) {
+	t.Helper()
+
+	// Wait up to 10ms until the vindex manager gets notified of the update
+	for i := 0; i < 10; i++ {
+		vschema := executor.vm.GetCurrentSrvVschema()
+		if table, ok := vschema.Keyspaces[ks].Tables[table]; ok {
+			if table.ColumnListAuthoritative == authoritative {
+				return vschema, table
+			}
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	t.Fatalf("updated vschema did not contain table %s", table)
+	return nil, nil
+}
+
 func TestExecutorCreateVindexDDL(t *testing.T) {
 	*vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
@@ -1766,6 +1811,158 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	}
 	if !reflect.DeepEqual(gotCount, wantCount) {
 		t.Errorf("Exec %s: %v, want %v", "", gotCount, wantCount)
+	}
+}
+
+func TestExecutorAddDropVschemaColDDL(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, _, _, _ := createExecutorEnv()
+	ks := KsTestUnsharded
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+		vschemaUpdates <- vschema
+	})
+
+	vschema := <-vschemaUpdates
+	_, ok := vschema.Keyspaces[ks].Tables["test_table"]
+	if ok {
+		t.Fatalf("test_table should not exist in original vschema")
+	}
+
+	vschemaTables := []string{}
+	for t := range vschema.Keyspaces[ks].Tables {
+		vschemaTables = append(vschemaTables, t)
+	}
+
+	stmt := "alter vschema add table test_table"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	vschema = waitForVschemaTables(t, ks, append(vschemaTables, "test_table"), executor)
+
+	if len(vschema.Keyspaces[ks].Tables["test_table"].Columns) > 0 {
+		t.Fatalf("vschema columns should not exist in original vschema")
+	}
+
+	// Create a new vschema column with the statement
+	stmt = "alter vschema on test_table add column id bigint"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+	vschema, vcol := waitForVschemaCol(t, ks, "test_table", "id", false, executor)
+	if vcol == nil {
+		t.Fatalf("vschema column id should have been added")
+	}
+
+	qr, err := executor.Execute(context.Background(), "TestExecute", session, "show vschema columns on "+ks+".test_table", nil)
+	if err != nil {
+		t.Fatalf("error in show vschema columns on %s.test_table: %v", ks, err)
+	}
+	wantqr := &sqltypes.Result{
+		Fields: buildVarCharFields("Name", "Type"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("id", "INT64"),
+		},
+		RowsAffected: 1,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vschema columns on %s.test_table:\n%+v, want\n%+v", ks, qr, wantqr)
+	}
+
+	// drop a vschema column with the statement
+	stmt = "alter vschema on test_table drop column id"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Fatalf("error in %s: %v", stmt, err)
+	}
+	vschema, vcol = waitForVschemaCol(t, ks, "test_table", "id", true, executor)
+	if vcol != nil {
+		t.Fatalf("vschema column id should have been dropped")
+	}
+
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema columns on "+ks+".test_table", nil)
+	if err != nil {
+		t.Fatalf("error in show vschema columns on %s.test_table: %v", ks, err)
+	}
+	wantqr = &sqltypes.Result{
+		Fields:       buildVarCharFields("Name", "Type"),
+		Rows:         [][]sqltypes.Value{},
+		RowsAffected: 0,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vschema columns on %s.test_table:\n%+v, want\n%+v", ks, qr, wantqr)
+	}
+}
+
+func TestExecutorSetVschemaUpdatesDDL(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, _, _, _ := createExecutorEnv()
+	ks := KsTestUnsharded
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+		vschemaUpdates <- vschema
+	})
+
+	vschema := <-vschemaUpdates
+	_, ok := vschema.Keyspaces[ks].Tables["test_table"]
+	if ok {
+		t.Fatalf("test_table should not exist in original vschema")
+	}
+
+	vschemaTables := []string{}
+	for t := range vschema.Keyspaces[ks].Tables {
+		vschemaTables = append(vschemaTables, t)
+	}
+
+	stmt := "alter vschema add table test_table"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	vschema = waitForVschemaTables(t, ks, append(vschemaTables, "test_table"), executor)
+
+	if vschema.Keyspaces[ks].Tables["test_table"].ColumnListAuthoritative {
+		t.Fatalf("test_table should not be authoritative yet")
+	}
+	stmt = "alter vschema on test_table set column_list_authoritative=true"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	vschema, _ = waitForVschemaUpdates(t, ks, "test_table", true, executor)
+	if !vschema.Keyspaces[ks].Tables["test_table"].ColumnListAuthoritative {
+		t.Fatalf("test_table should be authoritative now")
+	}
+	stmt = "alter vschema on test_table set column_list_authoritative=false"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	vschema, _ = waitForVschemaUpdates(t, ks, "test_table", false, executor)
+	if vschema.Keyspaces[ks].Tables["test_table"].ColumnListAuthoritative {
+		t.Fatalf("test_table should not be authoritative now")
+	}
+
+	stmt = "alter vschema on test_table set column_list_authoritative=invalid"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err == nil || !strings.Contains(err.Error(), "must be bool type") {
+		t.Fatalf("column_list_authoritative type should be bool")
+	}
+
+	stmt = "alter vschema on test_table set unknown_attribute=false"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err == nil || !strings.Contains(err.Error(), "unknown setting") {
+		t.Fatalf("column_list_authoritative is the only known attribute for now")
 	}
 }
 

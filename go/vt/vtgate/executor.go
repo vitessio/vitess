@@ -341,7 +341,10 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 			sqlparser.AddVschemaTableStr,
 			sqlparser.DropVschemaTableStr,
 			sqlparser.AddColVindexStr,
-			sqlparser.DropColVindexStr:
+			sqlparser.DropColVindexStr,
+			sqlparser.AddVschemaColStr,
+			sqlparser.DropVschemaColStr,
+			sqlparser.SetVschemaUpdatesStr:
 
 			err := e.handleVSchemaDDL(ctx, safeSession, dest, destKeyspace, destTabletType, ddl, logStats)
 			logStats.ExecuteTime = time.Since(execStart)
@@ -956,6 +959,46 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}
 		return &sqltypes.Result{
 			Fields:       buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
+			Rows:         rows,
+			RowsAffected: uint64(len(rows)),
+		}, nil
+	case "vschema columns":
+		if !show.HasOnTable() {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "show vschema column must provide table")
+		}
+
+		vschema := e.vm.GetCurrentSrvVschema()
+		if vschema == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
+		}
+
+		rows := make([][]sqltypes.Value, 0, 16)
+		// If the table reference is not fully qualified, then
+		// pull the keyspace from the session. Fail if the keyspace
+		// isn't specified or isn't valid, or if the table isn't
+		// known.
+		ksName := show.OnTable.Qualifier.String()
+		if ksName == "" {
+			ksName = destKeyspace
+		}
+
+		ks, ok := vschema.Keyspaces[ksName]
+		if !ok {
+			return nil, errNoKeyspace
+		}
+
+		tableName := show.OnTable.Name.String()
+		table, ok := ks.Tables[tableName]
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table `%s` does not exist in keyspace `%s`", tableName, ksName)
+		}
+
+		for _, col := range table.Columns {
+			rows = append(rows, buildVarCharRow(col.Name, col.Type.String()))
+		}
+
+		return &sqltypes.Result{
+			Fields:       buildVarCharFields("Name", "Type"),
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil

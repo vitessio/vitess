@@ -1013,6 +1013,20 @@ var (
 		input:  "alter vschema on a drop vindex `add`",
 		output: "alter vschema on a drop vindex `add`",
 	}, {
+		input: "alter vschema on a add column name varchar(16)",
+	}, {
+		input: "alter vschema on a drop column name",
+	}, {
+		input: "alter vschema on a set column_list_authoritative = true",
+	}, {
+		input:  "alter vschema on a set column_list_authoritative=true",
+		output: "alter vschema on a set column_list_authoritative = true",
+	}, {
+		input: "alter vschema on a set column_list_authoritative = false",
+	}, {
+		input:  "alter vschema on a set column_list_authoritative=false",
+		output: "alter vschema on a set column_list_authoritative = false",
+	}, {
 		input:  "create index a on b",
 		output: "alter table b",
 	}, {
@@ -1266,6 +1280,8 @@ var (
 		input: "show vschema vindexes",
 	}, {
 		input: "show vschema vindexes on t",
+	}, {
+		input: "show vschema columns on t",
 	}, {
 		input:  "show warnings",
 		output: "show warnings",

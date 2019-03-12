@@ -1338,6 +1338,30 @@ alter_statement:
         },
       }
   }
+| ALTER VSCHEMA ON table_name ADD COLUMN column_definition
+  {
+    $$ = &DDL{
+        Action: AddVschemaColStr,
+        Table: $4,
+        VschemaCol: $7,
+      }
+  }
+| ALTER VSCHEMA ON table_name DROP COLUMN sql_id
+  {
+    $$ = &DDL{
+        Action: DropVschemaColStr,
+        Table: $4,
+        VschemaCol: &ColumnDefinition{Name:$7},
+      }
+  }
+| ALTER VSCHEMA ON table_name SET update_list
+  {
+    $$ = &DDL{
+        Action: SetVschemaUpdatesStr,
+        Table: $4,
+        VschemaUpdates: $6,
+      }
+  }
 
 alter_object_type:
   COLUMN
@@ -1571,6 +1595,10 @@ show_statement:
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
 | SHOW VSCHEMA VINDEXES ON table_name
+  {
+    $$ = &Show{Type: string($2) + " " + string($3), OnTable: $5}
+  }
+| SHOW VSCHEMA COLUMNS ON table_name
   {
     $$ = &Show{Type: string($2) + " " + string($3), OnTable: $5}
   }

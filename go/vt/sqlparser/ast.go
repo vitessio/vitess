@@ -739,22 +739,31 @@ type DDL struct {
 
 	// VindexCols is set for AddColVindexStr.
 	VindexCols []ColIdent
+
+	// VschemaUpdates are key=value expressions to set vschema values like `Authoritative`
+	VschemaUpdates UpdateExprs
+
+	// VschemaCol is set for add/drop a vschema column
+	VschemaCol *ColumnDefinition
 }
 
 // DDL strings.
 const (
-	CreateStr           = "create"
-	AlterStr            = "alter"
-	DropStr             = "drop"
-	RenameStr           = "rename"
-	TruncateStr         = "truncate"
-	FlushStr            = "flush"
-	CreateVindexStr     = "create vindex"
-	DropVindexStr       = "drop vindex"
-	AddVschemaTableStr  = "add vschema table"
-	DropVschemaTableStr = "drop vschema table"
-	AddColVindexStr     = "on table add vindex"
-	DropColVindexStr    = "on table drop vindex"
+	CreateStr            = "create"
+	AlterStr             = "alter"
+	DropStr              = "drop"
+	RenameStr            = "rename"
+	TruncateStr          = "truncate"
+	FlushStr             = "flush"
+	CreateVindexStr      = "create vindex"
+	DropVindexStr        = "drop vindex"
+	AddVschemaTableStr   = "add vschema table"
+	DropVschemaTableStr  = "drop vschema table"
+	AddColVindexStr      = "on table add vindex"
+	DropColVindexStr     = "on table drop vindex"
+	AddVschemaColStr     = "on table add column"
+	DropVschemaColStr    = "on table drop column"
+	SetVschemaUpdatesStr = "on table set"
 
 	// Vindex DDL param to specify the owner of a vindex
 	VindexOwnerStr = "owner"
@@ -813,6 +822,19 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		}
 	case DropColVindexStr:
 		buf.Myprintf("alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
+	case AddVschemaColStr:
+		buf.Myprintf("alter vschema on %v add column %v ", node.Table, node.VschemaCol.Name)
+		node.VschemaCol.Type.Format(buf)
+	case DropVschemaColStr:
+		buf.Myprintf("alter vschema on %v drop column %v", node.Table, node.VschemaCol.Name)
+	case SetVschemaUpdatesStr:
+		buf.Myprintf("alter vschema on %v set ", node.Table)
+		for i, update := range node.VschemaUpdates {
+			if i != 0 {
+				buf.Myprintf(", ")
+			}
+			update.Format(buf)
+		}
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}
