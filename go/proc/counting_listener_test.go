@@ -35,7 +35,7 @@ func TestPublished(t *testing.T) {
 			conn, err := l.Accept()
 			opened <- struct{}{}
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
 			}
 			go func() {
 				b := make([]byte, 100)

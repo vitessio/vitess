@@ -95,7 +95,7 @@ func (wr *Wrangler) validateAllTablets(ctx context.Context, wg *sync.WaitGroup, 
 			go func(alias *topodatapb.TabletAlias) {
 				defer wg.Done()
 				if err := topo.Validate(ctx, wr.ts, alias); err != nil {
-					results <- fmt.Errorf("Validate(%v) failed: %v", topoproto.TabletAliasString(alias), err)
+					results <- fmt.Errorf("topo.Validate(%v) failed: %v", topoproto.TabletAliasString(alias), err)
 				} else {
 					wr.Logger().Infof("tablet %v is valid", topoproto.TabletAliasString(alias))
 				}
@@ -162,7 +162,7 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 		go func(alias *topodatapb.TabletAlias) {
 			defer wg.Done()
 			if err := topo.Validate(ctx, wr.ts, alias); err != nil {
-				results <- fmt.Errorf("Validate(%v) failed: %v", topoproto.TabletAliasString(alias), err)
+				results <- fmt.Errorf("topo.Validate(%v) failed: %v", topoproto.TabletAliasString(alias), err)
 			} else {
 				wr.Logger().Infof("tablet %v is valid", topoproto.TabletAliasString(alias))
 			}
@@ -173,8 +173,6 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 		wr.validateReplication(ctx, shardInfo, tabletMap, results)
 		wr.pingTablets(ctx, tabletMap, wg, results)
 	}
-
-	return
 }
 
 func normalizeIP(ip string) string {
@@ -253,6 +251,7 @@ func (wr *Wrangler) pingTablets(ctx context.Context, tabletMap map[string]*topo.
 			defer wg.Done()
 
 			if err := wr.tmc.Ping(ctx, tabletInfo.Tablet); err != nil {
+				//lint:ignore ST1005 function name
 				results <- fmt.Errorf("Ping(%v) failed: %v tablet hostname: %v", tabletAlias, err, tabletInfo.Hostname)
 			}
 		}(tabletAlias, tabletInfo)

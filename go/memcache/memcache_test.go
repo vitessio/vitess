@@ -166,7 +166,7 @@ func TestMemcache(t *testing.T) {
 		t.Errorf("want false, got %v", stored)
 	}
 	expect(t, c, "Data", "Set")
-	stored, err = c.Cas("Data", 0, 0, []byte("Changed"), cas)
+	_, err = c.Cas("Data", 0, 0, []byte("Changed"), cas)
 	if err != nil {
 		t.Fatalf("Set: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestMemcache(t *testing.T) {
 
 	// FlushAll
 	// Set
-	stored, err = c.Set("Flush", 0, 0, []byte("Test"))
+	_, err = c.Set("Flush", 0, 0, []byte("Test"))
 	if err != nil {
 		t.Errorf("Set: %v", err)
 	}
@@ -237,8 +237,8 @@ func TestMemcache(t *testing.T) {
 	}
 
 	// Multi
-	stored, _ = c.Set("key1", 0, 0, []byte("val1"))
-	stored, _ = c.Set("key2", 0, 0, []byte("val2"))
+	_, _ = c.Set("key1", 0, 0, []byte("val1"))
+	_, _ = c.Set("key2", 0, 0, []byte("val2"))
 
 	results, _ = c.Get("key1", "key2")
 	if len(results) != 2 {
@@ -276,7 +276,7 @@ func TestMemcache(t *testing.T) {
 
 	// timeout test
 	c.timeout = 1 * time.Nanosecond
-	results, err = c.Gets("key1", "key3", "key2")
+	_, err = c.Gets("key1", "key3", "key2")
 	want := "i/o timeout"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("\"%v\" does not contain \"%s\"", err, want)

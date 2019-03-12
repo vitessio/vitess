@@ -440,7 +440,7 @@ func addCommand(groupName string, c command) {
 			return
 		}
 	}
-	panic(fmt.Errorf("Trying to add to missing group %v", groupName))
+	panic(fmt.Errorf("trying to add to missing group %v", groupName))
 }
 
 func addCommandGroup(groupName string) {
@@ -524,7 +524,7 @@ func getFileParam(flag, flagFile, name string) (string, error) {
 	}
 	data, err := ioutil.ReadFile(flagFile)
 	if err != nil {
-		return "", fmt.Errorf("Cannot read file %v: %v", flagFile, err)
+		return "", fmt.Errorf("cannot read file %v: %v", flagFile, err)
 	}
 	return string(data), nil
 }
@@ -539,15 +539,13 @@ func keyspaceParamsToKeyspaces(ctx context.Context, wr *wrangler.Wrangler, param
 	for _, param := range params {
 		if param[0] == '/' {
 			// this is a topology-specific path
-			for _, path := range params {
-				result = append(result, path)
-			}
+			result = append(result, params...)
 		} else {
 			// this is not a path, so assume a keyspace name,
 			// possibly with wildcards
 			keyspaces, err := wr.TopoServer().ResolveKeyspaceWildcard(ctx, param)
 			if err != nil {
-				return nil, fmt.Errorf("Failed to resolve keyspace wildcard %v: %v", param, err)
+				return nil, fmt.Errorf("failed to resolve keyspace wildcard %v: %v", param, err)
 			}
 			result = append(result, keyspaces...)
 		}
@@ -577,7 +575,7 @@ func shardParamsToKeyspaceShards(ctx context.Context, wr *wrangler.Wrangler, par
 			// name / shard name, each possibly with wildcards
 			keyspaceShards, err := wr.TopoServer().ResolveShardWildcard(ctx, param)
 			if err != nil {
-				return nil, fmt.Errorf("Failed to resolve keyspace/shard wildcard %v: %v", param, err)
+				return nil, fmt.Errorf("failed to resolve keyspace/shard wildcard %v: %v", param, err)
 			}
 			result = append(result, keyspaceShards...)
 		}
@@ -607,7 +605,7 @@ func parseTabletType(param string, types []topodatapb.TabletType) (topodatapb.Ta
 		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("invalid tablet type %v: %v", param, err)
 	}
 	if !topoproto.IsTypeInList(topodatapb.TabletType(tabletType), types) {
-		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("Type %v is not one of: %v", tabletType, strings.Join(topoproto.MakeStringTypeList(types), " "))
+		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("type %v is not one of: %v", tabletType, strings.Join(topoproto.MakeStringTypeList(types), " "))
 	}
 	return tabletType, nil
 }

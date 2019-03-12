@@ -425,7 +425,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	}
 	result.State = querypb.TransactionState(st)
 	if result.State < querypb.TransactionState_PREPARE || result.State > querypb.TransactionState_ROLLBACK {
-		return nil, fmt.Errorf("Unexpected state for dtid %s: %v", dtid, result.State)
+		return nil, fmt.Errorf("unexpected state for dtid %s: %v", dtid, result.State)
 	}
 	// A failure in time parsing will show up as a very old time,
 	// which is harmless.

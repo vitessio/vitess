@@ -143,7 +143,7 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	}
 
 	// Decimals is a byte.
-	decimals, pos, ok := readByte(colDef, pos)
+	decimals, _, ok := readByte(colDef, pos)
 	if !ok {
 		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v decimals failed", index)
 	}
@@ -228,7 +228,7 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 	}
 
 	// flags is 2 bytes
-	flags, pos, ok := readUint16(colDef, pos)
+	flags, _, ok := readUint16(colDef, pos)
 	if !ok {
 		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v flags failed", index)
 	}

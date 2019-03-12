@@ -71,7 +71,7 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 		if force {
 			wr.Logger().Warningf("Forcing keyspace ShardingColumnName change from %v to %v", ki.ShardingColumnName, shardingColumnName)
 		} else {
-			return fmt.Errorf("Cannot change ShardingColumnName from %v to %v (use -force to override)", ki.ShardingColumnName, shardingColumnName)
+			return fmt.Errorf("cannot change ShardingColumnName from %v to %v (use -force to override)", ki.ShardingColumnName, shardingColumnName)
 		}
 	}
 
@@ -79,7 +79,7 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 		if force {
 			wr.Logger().Warningf("Forcing keyspace ShardingColumnType change from %v to %v", ki.ShardingColumnType, shardingColumnType)
 		} else {
-			return fmt.Errorf("Cannot change ShardingColumnType from %v to %v (use -force to override)", ki.ShardingColumnType, shardingColumnType)
+			return fmt.Errorf("cannot change ShardingColumnType from %v to %v (use -force to override)", ki.ShardingColumnType, shardingColumnType)
 		}
 	}
 
@@ -184,7 +184,7 @@ func (wr *Wrangler) cancelHorizontalResharding(ctx context.Context, keyspace, sh
 	// find our shard in there
 	os := topotools.OverlappingShardsForShard(osList, shard)
 	if os == nil {
-		return fmt.Errorf("Shard %v is not involved in any overlapping shards", shard)
+		return fmt.Errorf("shard %v is not involved in any overlapping shards", shard)
 	}
 
 	_, destinationShards, err := wr.findSourceDest(ctx, os)
@@ -229,14 +229,14 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 		// we cannot migrate a master back, since when master migration
 		// is done, the source shards are dead
 		if reverse {
-			return fmt.Errorf("Cannot migrate master back to %v/%v", keyspace, shard)
+			return fmt.Errorf("cannot migrate master back to %v/%v", keyspace, shard)
 		}
 		// we cannot skip refresh state for a master
 		if skipReFreshState {
-			return fmt.Errorf("Cannot skip refresh state for master migration on %v/%v", keyspace, shard)
+			return fmt.Errorf("cannot skip refresh state for master migration on %v/%v", keyspace, shard)
 		}
 		if cells != nil {
-			return fmt.Errorf("Cannot specify cells for master migration on %v/%v", keyspace, shard)
+			return fmt.Errorf("cannot specify cells for master migration on %v/%v", keyspace, shard)
 		}
 	}
 
@@ -257,7 +257,7 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 	// find our shard in there
 	os := topotools.OverlappingShardsForShard(osList, shard)
 	if os == nil {
-		return fmt.Errorf("Shard %v is not involved in any overlapping shards", shard)
+		return fmt.Errorf("shard %v is not involved in any overlapping shards", shard)
 	}
 
 	sourceShards, destinationShards, err := wr.findSourceDest(ctx, os)
@@ -817,14 +817,14 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 
 		if len(drainedHealthyTablets) == len(healthyTablets) {
 			wr.Logger().Infof("%v: All %d healthy tablets were drained after %.1f seconds (not counting %.1f seconds for the initial wait).",
-				cell, len(healthyTablets), time.Now().Sub(startTime).Seconds(), healthCheckTimeout.Seconds())
+				cell, len(healthyTablets), time.Since(startTime).Seconds(), healthCheckTimeout.Seconds())
 			break
 		}
 
 		// Continue waiting, sleep in between.
 		deadlineString := ""
 		if d, ok := ctx.Deadline(); ok {
-			deadlineString = fmt.Sprintf(" up to %.1f more seconds", d.Sub(time.Now()).Seconds())
+			deadlineString = fmt.Sprintf(" up to %.1f more seconds", time.Until(d).Seconds())
 		}
 		wr.Logger().Infof("%v: Waiting%v for all healthy tablets to be drained (%d/%d done).",
 			cell, deadlineString, len(drainedHealthyTablets), len(healthyTablets))
@@ -924,7 +924,7 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 		return err
 	}
 	if len(ki.ServedFroms) == 0 {
-		return fmt.Errorf("Destination keyspace %v is not a vertical split target", keyspace)
+		return fmt.Errorf("destination keyspace %v is not a vertical split target", keyspace)
 	}
 
 	// read the destination shard, check it
@@ -933,7 +933,7 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 		return err
 	}
 	if len(si.SourceShards) != 1 || len(si.SourceShards[0].Tables) == 0 {
-		return fmt.Errorf("Destination shard %v/%v is not a vertical split target", keyspace, shard)
+		return fmt.Errorf("destination shard %v/%v is not a vertical split target", keyspace, shard)
 	}
 
 	// check the migration is valid before locking (will also be checked
@@ -985,7 +985,7 @@ func (wr *Wrangler) migrateServedFromLocked(ctx context.Context, ki *topo.Keyspa
 		return err
 	}
 	if len(destinationShard.SourceShards) != 1 {
-		return fmt.Errorf("Destination shard %v/%v is not a vertical split target", destinationShard.Keyspace(), destinationShard.ShardName())
+		return fmt.Errorf("destination shard %v/%v is not a vertical split target", destinationShard.Keyspace(), destinationShard.ShardName())
 	}
 	tables := destinationShard.SourceShards[0].Tables
 

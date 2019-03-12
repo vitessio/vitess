@@ -48,7 +48,7 @@ type AuthServerLdap struct {
 	Password       string
 	GroupQuery     string
 	UserDnPattern  string
-	RefreshSeconds time.Duration
+	RefreshSeconds int64
 }
 
 // Init is public so it can be called from plugin_auth_ldap.go (go/cmd/vtgate)
@@ -189,7 +189,7 @@ func (lud *LdapUserData) update() {
 
 // Get returns wrapped username and LDAP groups and possibly updates the cache
 func (lud *LdapUserData) Get() *querypb.VTGateCallerID {
-	if time.Since(lud.lastUpdated) > lud.asl.RefreshSeconds*time.Second {
+	if int64(time.Since(lud.lastUpdated).Seconds()) > lud.asl.RefreshSeconds {
 		go lud.update()
 	}
 	return &querypb.VTGateCallerID{Username: lud.username, Groups: lud.groups}
@@ -221,6 +221,9 @@ type ClientImpl struct {
 // This must be called before any other methods
 func (lci *ClientImpl) Connect(network string, config *ServerConfig) error {
 	conn, err := ldap.Dial(network, config.LdapServer)
+	if err != nil {
+		return err
+	}
 	lci.Conn = conn
 	// Reconnect with TLS ... why don't we simply DialTLS directly?
 	serverName, _, err := netutil.SplitHostPort(config.LdapServer)

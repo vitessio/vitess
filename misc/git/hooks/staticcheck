@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# git unused pre-commit hook
+# git staticcheck pre-commit hook
 
 if [ -z "$GOPATH" ]; then
-  echo "ERROR: pre-commit hook for unused: \$GOPATH is empty. Please run 'source dev.env' to set the correct \$GOPATH."
+  echo "ERROR: pre-commit hook for staticcheck: \$GOPATH is empty. Please run 'source dev.env' to set the correct \$GOPATH."
   exit 1
 fi
 
-if [ -z "$(which unused)" ]; then
-  echo "unused not found, please run: go get honnef.co/go/tools/cmd/unused"
+if [ -z "$(which staticcheck)" ]; then
+  echo "staticcheck not found, please run: go get honnef.co/go/tools/cmd/staticcheck"
   exit 1
 fi
 
@@ -27,11 +27,11 @@ warnings=
 gopackages_with_warnings=()
 for gopackage in $gopackages
 do
-  warningcount="$(unused "vitess.io/vitess/$gopackage" | wc -l)"
+  warningcount="$(staticcheck "vitess.io/vitess/$gopackage" | wc -l)"
   if [ "$warningcount" -gt "0" ]; then
     warnings=YES
     echo "$warningcount reports for:"
-    echo "unused vitess.io/vitess/$gopackage"
+    echo "staticcheck vitess.io/vitess/$gopackage"
     gopackages_with_warnings+=($gopackage)
   fi
 done
@@ -43,7 +43,7 @@ exec < /dev/tty
 if [[ $? -eq 0 ]]; then
   # interactive shell. Prompt the user.
   echo
-  echo "Suggestions from the go 'unused' program were found."
+  echo "Suggestions from the go 'staticcheck' program were found."
   echo "They're not enforced, but we're pausing to let you know"
   echo "before they get clobbered in the scrollback buffer."
   echo
@@ -60,7 +60,7 @@ if [[ $? -eq 0 ]]; then
         echo "Press enter to show the warnings for the next file."
         read
       fi
-      unused "vitess.io/vitess/$gopackage"
+      staticcheck "vitess.io/vitess/$gopackage"
       first_file="false"
     done
   fi
@@ -68,7 +68,7 @@ else
   # non-interactive shell (e.g. called from Eclipse). Just display the warnings.
   for gopackage in "${gopackages_with_warnings[@]}"
   do
-    unused "vitess.io/vitess/$gopackage"
+    staticcheck "vitess.io/vitess/$gopackage"
   done
 fi
 exit 1

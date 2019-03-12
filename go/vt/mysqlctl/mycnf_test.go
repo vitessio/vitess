@@ -86,7 +86,7 @@ func TestMycnf(t *testing.T) {
 // 3. go test
 // 4. \rm $VTROOT/vthook/make_mycnf
 // 5. Add No Prefix back
-
+//lint:ignore U1000 Test for Mycnf hook changes
 func NoTestMycnfHook(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "MariaDB")
 	uid := uint32(11111)
@@ -105,11 +105,11 @@ func NoTestMycnfHook(t *testing.T) {
 	// this is not being passed, so it should be nil
 	os.Setenv("MY_VAR", "myvalue")
 
-	dbcfgs, err := dbconfigs.Init(cnf.SocketFile)
+	dbcfgs, _ := dbconfigs.Init(cnf.SocketFile)
 	mysqld := NewMysqld(dbcfgs)
 	servenv.OnClose(mysqld.Close)
 
-	err = mysqld.InitConfig(cnf)
+	err := mysqld.InitConfig(cnf)
 	if err != nil {
 		t.Errorf("err: %v", err)
 	}

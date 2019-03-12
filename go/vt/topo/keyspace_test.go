@@ -95,10 +95,10 @@ func TestUpdateServedFromMap(t *testing.T) {
 	}
 
 	// couple error cases
-	if err := ki.UpdateServedFromMap(topodatapb.TabletType_RDONLY, []string{"second"}, "othersource", true, allCells); err == nil || (err.Error() != "Inconsistent keypace specified in migration: othersource != source for type MASTER" && err.Error() != "Inconsistent keypace specified in migration: othersource != source for type RDONLY") {
+	if err := ki.UpdateServedFromMap(topodatapb.TabletType_RDONLY, []string{"second"}, "othersource", true, allCells); err == nil || (err.Error() != "inconsistent keypace specified in migration: othersource != source for type MASTER" && err.Error() != "inconsistent keypace specified in migration: othersource != source for type RDONLY") {
 		t.Fatalf("different keyspace should fail: %v", err)
 	}
-	if err := ki.UpdateServedFromMap(topodatapb.TabletType_MASTER, nil, "source", true, allCells); err == nil || err.Error() != "Cannot migrate master into ks until everything else is migrated" {
+	if err := ki.UpdateServedFromMap(topodatapb.TabletType_MASTER, nil, "source", true, allCells); err == nil || err.Error() != "cannot migrate master into ks until everything else is migrated" {
 		t.Fatalf("migrate the master early should have failed: %v", err)
 	}
 
@@ -112,12 +112,12 @@ func TestUpdateServedFromMap(t *testing.T) {
 	}) {
 		t.Fatalf("remove all cells failed: %v", ki)
 	}
-	if err := ki.UpdateServedFromMap(topodatapb.TabletType_RDONLY, nil, "source", true, allCells); err == nil || err.Error() != "Supplied type cannot be migrated" {
+	if err := ki.UpdateServedFromMap(topodatapb.TabletType_RDONLY, nil, "source", true, allCells); err == nil || err.Error() != "supplied type cannot be migrated" {
 		t.Fatalf("migrate rdonly again should have failed: %v", err)
 	}
 
 	// finally migrate the master
-	if err := ki.UpdateServedFromMap(topodatapb.TabletType_MASTER, []string{"second"}, "source", true, allCells); err == nil || err.Error() != "Cannot migrate only some cells for master removal in keyspace ks" {
+	if err := ki.UpdateServedFromMap(topodatapb.TabletType_MASTER, []string{"second"}, "source", true, allCells); err == nil || err.Error() != "cannot migrate only some cells for master removal in keyspace ks" {
 		t.Fatalf("migrate master with cells should have failed: %v", err)
 	}
 	if err := ki.UpdateServedFromMap(topodatapb.TabletType_MASTER, nil, "source", true, allCells); err != nil || ki.ServedFroms != nil {
@@ -125,7 +125,7 @@ func TestUpdateServedFromMap(t *testing.T) {
 	}
 
 	// error case again
-	if err := ki.UpdateServedFromMap(topodatapb.TabletType_MASTER, nil, "source", true, allCells); err == nil || err.Error() != "Supplied type cannot be migrated" {
+	if err := ki.UpdateServedFromMap(topodatapb.TabletType_MASTER, nil, "source", true, allCells); err == nil || err.Error() != "supplied type cannot be migrated" {
 		t.Fatalf("migrate the master again should have failed: %v", err)
 	}
 }

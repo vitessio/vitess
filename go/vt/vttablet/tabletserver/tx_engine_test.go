@@ -49,7 +49,7 @@ func TestTxEngineClose(t *testing.T) {
 	te.open()
 	start := time.Now()
 	te.close(false)
-	if diff := time.Now().Sub(start); diff > 500*time.Millisecond {
+	if diff := time.Since(start); diff > 500*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.5s", diff)
 	}
 
@@ -62,7 +62,7 @@ func TestTxEngineClose(t *testing.T) {
 	c.Recycle()
 	start = time.Now()
 	te.close(false)
-	if diff := time.Now().Sub(start); diff < 500*time.Millisecond {
+	if diff := time.Since(start); diff < 500*time.Millisecond {
 		t.Errorf("Close time: %v, must be over 0.5s", diff)
 	}
 
@@ -75,7 +75,7 @@ func TestTxEngineClose(t *testing.T) {
 	c.Recycle()
 	start = time.Now()
 	te.close(true)
-	if diff := time.Now().Sub(start); diff > 500*time.Millisecond {
+	if diff := time.Since(start); diff > 500*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.5s", diff)
 	}
 
@@ -89,10 +89,10 @@ func TestTxEngineClose(t *testing.T) {
 	c.Recycle()
 	start = time.Now()
 	te.close(false)
-	if diff := time.Now().Sub(start); diff > 500*time.Millisecond {
+	if diff := time.Since(start); diff > 500*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.5s", diff)
 	}
-	if diff := time.Now().Sub(start); diff < 250*time.Millisecond {
+	if diff := time.Since(start); diff < 250*time.Millisecond {
 		t.Errorf("Close time: %v, must be over 0.25s", diff)
 	}
 
@@ -114,10 +114,10 @@ func TestTxEngineClose(t *testing.T) {
 	}()
 	start = time.Now()
 	te.close(false)
-	if diff := time.Now().Sub(start); diff > 250*time.Millisecond {
+	if diff := time.Since(start); diff > 250*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.25s", diff)
 	}
-	if diff := time.Now().Sub(start); diff < 100*time.Millisecond {
+	if diff := time.Since(start); diff < 100*time.Millisecond {
 		t.Errorf("Close time: %v, must be over 0.1", diff)
 	}
 
@@ -133,10 +133,10 @@ func TestTxEngineClose(t *testing.T) {
 	}()
 	start = time.Now()
 	te.close(true)
-	if diff := time.Now().Sub(start); diff > 250*time.Millisecond {
+	if diff := time.Since(start); diff > 250*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.25s", diff)
 	}
-	if diff := time.Now().Sub(start); diff < 100*time.Millisecond {
+	if diff := time.Since(start); diff < 100*time.Millisecond {
 		t.Errorf("Close time: %v, must be over 0.1", diff)
 	}
 }

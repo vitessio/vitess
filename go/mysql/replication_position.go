@@ -51,7 +51,7 @@ type Position struct {
 	// a problem until the runtime panic. Note that this must not be
 	// the last field of the struct, or else the Go compiler will add
 	// padding to prevent pointers to this field from becoming invalid.
-	_ [0]struct{ notComparable []byte }
+	_ [0]struct{ _ []byte }
 
 	// GTIDSet is the underlying GTID set. It must not be anonymous,
 	// or else Position would itself also implement the GTIDSet interface.

@@ -424,7 +424,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 	scw.setState(WorkerStateCloneOffline)
 	start := time.Now()
 	defer func() {
-		statsStateDurationsNs.Set(string(WorkerStateCloneOffline), time.Now().Sub(start).Nanoseconds())
+		statsStateDurationsNs.Set(string(WorkerStateCloneOffline), time.Since(start).Nanoseconds())
 	}()
 
 	// get source schema from the first shard
