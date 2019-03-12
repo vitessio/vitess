@@ -217,7 +217,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe.strictTransTables = config.EnforceStrictTransTables
 
 	if config.TableACLExemptACL != "" {
-		if f, err := tableacl.GetCurrentAclFactory(); err == nil {
+		if f, err := tableacl.GetCurrentACLFactory(); err == nil {
 			if exemptACL, err := f.New([]string{config.TableACLExemptACL}); err == nil {
 				log.Infof("Setting Table ACL exempt rule for %v", config.TableACLExemptACL)
 				qe.exemptACL = exemptACL

@@ -335,8 +335,7 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	splits := []*querypb.QuerySplit{}
-	splits, err = q.server.SplitQuery(
+	splits, err := q.server.SplitQuery(
 		ctx,
 		request.Target,
 		request.Query,

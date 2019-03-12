@@ -343,6 +343,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		query += " NOWARNINGS"
 	}
 
+	var fatalError string
 	// Use a go routine to run ExecuteFetch.
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -367,7 +368,8 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 			return
 		}
 		if err != nil {
-			t.Fatalf("executeFetch failed: %v", err)
+			fatalError = fmt.Sprintf("executeFetch failed: %v", err)
+			return
 		}
 		expected := *result
 		if !wantfields {
@@ -380,7 +382,8 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 					t.Logf("Expected field(%v) = %v", i, expected.Fields[i])
 				}
 			}
-			t.Fatalf("ExecuteFetch(wantfields=%v) returned:\n%v\nBut was expecting:\n%v", wantfields, got, expected)
+			fatalError = fmt.Sprintf("ExecuteFetch(wantfields=%v) returned:\n%v\nBut was expecting:\n%v", wantfields, got, expected)
+			return
 		}
 
 		if gotWarnings != warningCount {
@@ -390,14 +393,16 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		// Test ExecuteStreamFetch, build a Result.
 		expected = *result
 		if err := cConn.ExecuteStreamFetch(query); err != nil {
-			t.Fatalf("ExecuteStreamFetch(%v) failed: %v", query, err)
+			fatalError = fmt.Sprintf("ExecuteStreamFetch(%v) failed: %v", query, err)
+			return
 		}
 		got = &sqltypes.Result{}
 		got.RowsAffected = result.RowsAffected
 		got.InsertID = result.InsertID
 		got.Fields, err = cConn.Fields()
 		if err != nil {
-			t.Fatalf("Fields(%v) failed: %v", query, err)
+			fatalError = fmt.Sprintf("Fields(%v) failed: %v", query, err)
+			return
 		}
 		if len(got.Fields) == 0 {
 			got.Fields = nil
@@ -405,7 +410,8 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		for {
 			row, err := cConn.FetchNext()
 			if err != nil {
-				t.Fatalf("FetchNext(%v) failed: %v", query, err)
+				fatalError = fmt.Sprintf("FetchNext(%v) failed: %v", query, err)
+				return
 			}
 			if row == nil {
 				// Done.
@@ -454,8 +460,13 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	}
 
 	wg.Wait()
+
+	if fatalError != "" {
+		t.Fatalf(fatalError)
+	}
 }
 
+//lint:ignore U1000 for now, because deleting this function causes more errors
 func writeResult(conn *Conn, result *sqltypes.Result) error {
 	if len(result.Fields) == 0 {
 		return conn.writeOKPacket(result.RowsAffected, result.InsertID, conn.StatusFlags, 0)

@@ -153,7 +153,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			// Perform an action on a keyspace.
 		case "POST":
 			if keyspace == "" {
-				return nil, errors.New("A POST request needs a keyspace in the URL")
+				return nil, errors.New("a POST request needs a keyspace in the URL")
 			}
 			if err := r.ParseForm(); err != nil {
 				return nil, err
@@ -161,7 +161,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 
 			action := r.FormValue("action")
 			if action == "" {
-				return nil, errors.New("A POST request must specify action")
+				return nil, errors.New("a POST request must specify action")
 			}
 			return actions.ApplyKeyspaceAction(ctx, action, keyspace, r), nil
 		default:
@@ -275,7 +275,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		if keyspace != "" {
 			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 			if err != nil {
-				return nil, fmt.Errorf("Can't get server keyspace: %v", err)
+				return nil, fmt.Errorf("can't get server keyspace: %v", err)
 			}
 			return srvKeyspace, nil
 		}

@@ -23,9 +23,9 @@ import (
 	"io/ioutil"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -56,7 +56,7 @@ type StaticAuthPlugin struct {
 func (sa *StaticAuthPlugin) Authenticate(ctx context.Context, fullMethod string) (context.Context, error) {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if len(md["username"]) == 0 || len(md["password"]) == 0 {
-			return nil, grpc.Errorf(codes.Unauthenticated, "username and password must be provided")
+			return nil, status.Errorf(codes.Unauthenticated, "username and password must be provided")
 		}
 		username := md["username"][0]
 		password := md["password"][0]
@@ -65,9 +65,9 @@ func (sa *StaticAuthPlugin) Authenticate(ctx context.Context, fullMethod string)
 				return ctx, nil
 			}
 		}
-		return nil, grpc.Errorf(codes.PermissionDenied, "auth failure: caller %q provided invalid credentials", username)
+		return nil, status.Errorf(codes.PermissionDenied, "auth failure: caller %q provided invalid credentials", username)
 	}
-	return nil, grpc.Errorf(codes.Unauthenticated, "username and password must be provided")
+	return nil, status.Errorf(codes.Unauthenticated, "username and password must be provided")
 }
 
 func staticAuthPluginInitializer() (Authenticator, error) {

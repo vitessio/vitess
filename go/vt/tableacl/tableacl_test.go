@@ -221,7 +221,7 @@ func TestGetCurrentAclFactory(t *testing.T) {
 	name := "tableacl-name-TestGetCurrentAclFactory"
 	aclFactory := &simpleacl.Factory{}
 	Register(name+"-1", aclFactory)
-	f, err := GetCurrentAclFactory()
+	f, err := GetCurrentACLFactory()
 	if err != nil {
 		t.Errorf("Fail to get current ACL Factory: %v", err)
 	}
@@ -229,13 +229,13 @@ func TestGetCurrentAclFactory(t *testing.T) {
 		t.Fatalf("should return registered acl factory even if default acl is not set.")
 	}
 	Register(name+"-2", aclFactory)
-	_, err = GetCurrentAclFactory()
+	_, err = GetCurrentACLFactory()
 	if err == nil {
 		t.Fatalf("there are more than one acl factories, but the default is not set")
 	}
 }
 
-func TestGetCurrentAclFactoryWithWrongDefault(t *testing.T) {
+func TestGetCurrentACLFactoryWithWrongDefault(t *testing.T) {
 	acls = make(map[string]acl.Factory)
 	defaultACL = ""
 	name := "tableacl-name-TestGetCurrentAclFactoryWithWrongDefault"
@@ -243,7 +243,7 @@ func TestGetCurrentAclFactoryWithWrongDefault(t *testing.T) {
 	Register(name+"-1", aclFactory)
 	Register(name+"-2", aclFactory)
 	SetDefaultACL("wrong_name")
-	_, err := GetCurrentAclFactory()
+	_, err := GetCurrentACLFactory()
 	if err == nil {
 		t.Fatalf("there are more than one acl factories, but the default given does not match any of these.")
 	}

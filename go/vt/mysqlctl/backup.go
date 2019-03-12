@@ -263,7 +263,7 @@ func Restore(
 			err = ErrNoBackup
 		}
 
-		if err = PopulateMetadataTables(mysqld, localMetadata); err == nil {
+		if err2 := PopulateMetadataTables(mysqld, localMetadata); err2 == nil {
 			err = ErrNoBackup
 		}
 		return mysql.Position{}, err

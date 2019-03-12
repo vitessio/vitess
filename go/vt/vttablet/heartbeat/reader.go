@@ -207,7 +207,7 @@ func (r *Reader) bindHeartbeatFetch() (string, error) {
 // parseHeartbeatResult turns a raw result into the timestamp for processing.
 func parseHeartbeatResult(res *sqltypes.Result) (int64, error) {
 	if len(res.Rows) != 1 {
-		return 0, fmt.Errorf("Failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows))
+		return 0, fmt.Errorf("failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows))
 	}
 	ts, err := sqltypes.ToInt64(res.Rows[0][0])
 	if err != nil {

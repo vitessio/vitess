@@ -325,7 +325,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 	} else {
 		if l.RequireSecureTransport {
-			c.writeErrorPacketFromError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "Server does not allow insecure connections, client must use SSL/TLS"))
+			c.writeErrorPacketFromError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "server does not allow insecure connections, client must use SSL/TLS"))
 		}
 		connCountByTLSVer.Add(versionNoTLS, 1)
 		defer connCountByTLSVer.Add(versionNoTLS, -1)
@@ -361,6 +361,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		if err != nil {
 			return
 		}
+		//lint:ignore SA4006 This line is required because the binary protocol requires padding with 0
 		data := make([]byte, 21)
 		data = append(salt, byte(0x00))
 		if err := c.writeAuthSwitchRequest(MysqlNativePassword, data); err != nil {
@@ -683,7 +684,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	// Decode connection attributes send by the client
 	if clientFlags&CapabilityClientConnAttr != 0 {
 		var err error
-		_, pos, err = parseConnAttrs(data, pos)
+		_, _, err = parseConnAttrs(data, pos)
 		if err != nil {
 			return "", "", nil, err
 		}

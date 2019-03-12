@@ -41,18 +41,18 @@ func TestNumbered(t *testing.T) {
 	if v.(int64) != id {
 		t.Errorf("want %v, got %v", id, v.(int64))
 	}
-	if v, err = p.Get(id, "test1"); err.Error() != "in use: test" {
+	if _, err = p.Get(id, "test1"); err.Error() != "in use: test" {
 		t.Errorf("want 'in use: test', got '%v'", err)
 	}
 	p.Put(id)
-	if v, err = p.Get(1, "test2"); err.Error() != "not found" {
+	if _, err = p.Get(1, "test2"); err.Error() != "not found" {
 		t.Errorf("want 'not found', got '%v'", err)
 	}
 	p.Unregister(1, "test") // Should not fail
 	p.Unregister(0, "test")
 	// p is now empty
 
-	if v, err = p.Get(0, "test3"); !(strings.HasPrefix(err.Error(), "ended at") && strings.HasSuffix(err.Error(), "(test)")) {
+	if _, err = p.Get(0, "test3"); !(strings.HasPrefix(err.Error(), "ended at") && strings.HasSuffix(err.Error(), "(test)")) {
 		t.Errorf("want prefix 'ended at' and suffix '(test'), got '%v'", err)
 	}
 
@@ -71,7 +71,7 @@ func TestNumbered(t *testing.T) {
 	if num := len(vals); num != 2 {
 		t.Errorf("want 2, got %v", num)
 	}
-	if v, err = p.Get(vals[0].(int64), "test1"); err.Error() != "in use: by outdated" {
+	if _, err = p.Get(vals[0].(int64), "test1"); err.Error() != "in use: by outdated" {
 		t.Errorf("want 'in use: by outdated', got '%v'", err)
 	}
 	for _, v := range vals {
@@ -85,7 +85,7 @@ func TestNumbered(t *testing.T) {
 	if len(vals) != 1 {
 		t.Errorf("want 1, got %v", len(vals))
 	}
-	if v, err = p.Get(vals[0].(int64), "test1"); err.Error() != "in use: by idle" {
+	if _, err = p.Get(vals[0].(int64), "test1"); err.Error() != "in use: by idle" {
 		t.Errorf("want 'in use: by idle', got '%v'", err)
 	}
 	if vals[0].(int64) != 3 {

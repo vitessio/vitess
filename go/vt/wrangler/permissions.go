@@ -65,7 +65,7 @@ func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shar
 
 	// get permissions from the master, or error
 	if !si.HasMaster() {
-		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
+		return fmt.Errorf("no master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering permissions for master %v", topoproto.TabletAliasString(si.MasterAlias))
 	masterPermissions, err := wr.GetPermissions(ctx, si.MasterAlias)
@@ -92,7 +92,7 @@ func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shar
 	}
 	wg.Wait()
 	if er.HasErrors() {
-		return fmt.Errorf("Permissions diffs: %v", er.Error().Error())
+		return fmt.Errorf("permissions diffs: %v", er.Error().Error())
 	}
 	return nil
 }
@@ -108,7 +108,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 
 	// corner cases
 	if len(shards) == 0 {
-		return fmt.Errorf("No shards in keyspace %v", keyspace)
+		return fmt.Errorf("no shards in keyspace %v", keyspace)
 	}
 	sort.Strings(shards)
 	if len(shards) == 1 {
@@ -121,7 +121,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 		return err
 	}
 	if !si.HasMaster() {
-		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
+		return fmt.Errorf("no master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.MasterAlias
 	log.Infof("Gathering permissions for reference master %v", topoproto.TabletAliasString(referenceAlias))
@@ -151,7 +151,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 	}
 	wg.Wait()
 	if er.HasErrors() {
-		return fmt.Errorf("Permissions diffs: %v", er.Error().Error())
+		return fmt.Errorf("permissions diffs: %v", er.Error().Error())
 	}
 	return nil
 }

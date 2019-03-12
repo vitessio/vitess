@@ -82,7 +82,7 @@ func AddKeyspaceIDs(sql string, keyspaceIDs [][]byte, marginComments string) str
 func ExtractKeyspaceIDS(sql string) (keyspaceIDs [][]byte, err error) {
 	_, comments := sqlparser.SplitMarginComments(sql)
 	keyspaceIDString, hasKeyspaceID := extractStringBetween(comments.Trailing, "/* vtgate:: keyspace_id:", " ")
-	hasUnfriendlyAnnotation := (strings.Index(sql, filteredReplicationUnfriendlyAnnotation) != -1)
+	hasUnfriendlyAnnotation := strings.Contains(sql, filteredReplicationUnfriendlyAnnotation)
 	if !hasKeyspaceID {
 		if hasUnfriendlyAnnotation {
 			return nil, &ExtractKeySpaceIDError{

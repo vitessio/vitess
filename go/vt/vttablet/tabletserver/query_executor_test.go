@@ -146,6 +146,10 @@ func TestQueryExecutorPassthroughDml(t *testing.T) {
 
 	tsv.SetAllowUnsafeDMLs(true)
 	got, err = qre.Execute()
+
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
@@ -612,7 +616,6 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("qre.Execute() = %v, want %v", err, wantErr)
 	}
-	wantqueries = []string{}
 	if gotqueries = fetchRecordedQueries(qre); gotqueries != nil {
 		t.Errorf("queries: %v, want nil", gotqueries)
 	}
@@ -1830,7 +1833,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 
 	// table acl should be ignored since this is an exempt user.
 	username = "exempt-acl"
-	f, _ := tableacl.GetCurrentAclFactory()
+	f, _ := tableacl.GetCurrentACLFactory()
 	if tsv.qe.exemptACL, err = f.New([]string{username}); err != nil {
 		t.Fatalf("Cannot load exempt ACL for Table ACL: %v", err)
 	}

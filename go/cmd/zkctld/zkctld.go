@@ -62,7 +62,7 @@ func main() {
 	}
 
 	log.Infof("waiting for signal or server shutdown...")
-	sig := make(chan os.Signal)
+	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case <-zkd.Done():

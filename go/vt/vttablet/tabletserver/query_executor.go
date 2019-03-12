@@ -74,7 +74,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	planName := qre.plan.PlanID.String()
 	qre.logStats.PlanType = planName
 	defer func(start time.Time) {
-		duration := time.Now().Sub(start)
+		duration := time.Since(start)
 		tabletenv.QueryStats.Add(planName, duration)
 		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "Execute", int64(duration))
 
@@ -115,7 +115,6 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 				Extras:       nil,
 			}, nil
 		}
-		break
 	}
 
 	if qre.transactionID != 0 {
@@ -212,7 +211,7 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 
 	defer func(start time.Time) {
 		tabletenv.QueryStats.Record(qre.plan.PlanID.String(), start)
-		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "Stream", int64(time.Now().Sub(start)))
+		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "Stream", int64(time.Since(start)))
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
@@ -251,7 +250,7 @@ func (qre *QueryExecutor) MessageStream(callback func(*sqltypes.Result) error) e
 
 	defer func(start time.Time) {
 		tabletenv.QueryStats.Record(qre.plan.PlanID.String(), start)
-		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "MessageStream", int64(time.Now().Sub(start)))
+		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "MessageStream", int64(time.Since(start)))
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
@@ -798,7 +797,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 	conn, err := qre.tsv.qe.getQueryConn(qre.ctx)
 	switch err {
 	case nil:
-		qre.logStats.WaitingForConnection += time.Now().Sub(start)
+		qre.logStats.WaitingForConnection += time.Since(start)
 		return conn, nil
 	case connpool.ErrConnPoolClosed:
 		return nil, err
@@ -815,7 +814,7 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
 	conn, err := qre.tsv.qe.streamConns.Get(qre.ctx)
 	switch err {
 	case nil:
-		qre.logStats.WaitingForConnection += time.Now().Sub(start)
+		qre.logStats.WaitingForConnection += time.Since(start)
 		return conn, nil
 	case connpool.ErrConnPoolClosed:
 		return nil, err

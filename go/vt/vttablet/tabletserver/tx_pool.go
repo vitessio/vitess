@@ -342,7 +342,7 @@ func (axp *TxPool) localRollback(ctx context.Context, conn *TxConnection) error 
 func (axp *TxPool) LogActive() {
 	axp.logMu.Lock()
 	defer axp.logMu.Unlock()
-	if time.Now().Sub(axp.lastLog) < txLogInterval {
+	if time.Since(axp.lastLog) < txLogInterval {
 		return
 	}
 	axp.lastLog = time.Now()
