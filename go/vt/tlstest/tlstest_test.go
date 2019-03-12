@@ -21,11 +21,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"path"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -74,6 +76,9 @@ func TestClientServer(t *testing.T) {
 	}
 	addr := listener.Addr().String()
 	defer listener.Close()
+	// create a dialer with timeout
+	dialer := new(net.Dialer)
+	dialer.Timeout = 10 * time.Second
 
 	wg := sync.WaitGroup{}
 
@@ -84,7 +89,7 @@ func TestClientServer(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		clientConn, clientErr := tls.Dial("tcp", addr, clientConfig)
+		clientConn, clientErr := tls.DialWithDialer(dialer, "tcp", addr, clientConfig)
 		if clientErr == nil {
 			clientConn.Write([]byte{42})
 			clientConn.Close()
@@ -142,7 +147,7 @@ func TestClientServer(t *testing.T) {
 
 	// When using TLS 1.2, the Dial will fail.
 	// With TLS 1.3, the Dial will succeed and the first Read will fail.
-	clientConn, err := tls.Dial("tcp", addr, badClientConfig)
+	clientConn, err := tls.DialWithDialer(dialer, "tcp", addr, badClientConfig)
 	if err != nil {
 		if !strings.Contains(err.Error(), "bad certificate") {
 			t.Errorf("Wrong error returned: %v", err)

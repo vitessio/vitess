@@ -43,13 +43,12 @@ var (
 type AuthServerLdap struct {
 	Client
 	ServerConfig
-	Method        string
-	User          string
-	Password      string
-	GroupQuery    string
-	UserDnPattern string
-	// staticcheck: var RefreshSeconds is of type time.Duration; don't use unit-specific suffix "Seconds" (ST1011)
-	RefreshSeconds time.Duration
+	Method         string
+	User           string
+	Password       string
+	GroupQuery     string
+	UserDnPattern  string
+	RefreshSeconds int64
 }
 
 // Init is public so it can be called from plugin_auth_ldap.go (go/cmd/vtgate)
@@ -190,7 +189,7 @@ func (lud *LdapUserData) update() {
 
 // Get returns wrapped username and LDAP groups and possibly updates the cache
 func (lud *LdapUserData) Get() *querypb.VTGateCallerID {
-	if time.Since(lud.lastUpdated) > lud.asl.RefreshSeconds*time.Second {
+	if int64(time.Since(lud.lastUpdated).Seconds()) > lud.asl.RefreshSeconds {
 		go lud.update()
 	}
 	return &querypb.VTGateCallerID{Username: lud.username, Groups: lud.groups}
