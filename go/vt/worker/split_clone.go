@@ -1320,7 +1320,7 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 		rowset, ok := generatedColumns[row[0].ToString()]
 		if !ok {
 			rowset = make(map[string]bool)
-			generatedColumns[row[0].String()] = rowset
+			generatedColumns[row[0].ToString()] = rowset
 		}
 		rowset[row[1].ToString()] = true
 	}
