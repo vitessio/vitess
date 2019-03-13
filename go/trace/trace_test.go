@@ -17,8 +17,10 @@ limitations under the License.
 package trace
 
 import (
+	"io"
 	"testing"
 
+	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 )
 
@@ -38,3 +40,45 @@ func TestFakeSpan(t *testing.T) {
 	span3.Annotate("key", 42)
 	span3.Finish()
 }
+
+func TestRegisterService(t *testing.T) {
+	fakeName := "test"
+	tracingBackendFactories[fakeName] = func(s string) (opentracing.Tracer, io.Closer, error) {
+		tracer := fakeTracer{name: s}
+		return tracer, tracer, nil
+	}
+
+	tracingServer = &fakeName
+
+	serviceName := "vtservice"
+	closer := StartTracing(serviceName)
+	tracer, ok := closer.(fakeTracer)
+	if !ok {
+		t.Fatalf("did not get the expected tracer")
+	}
+
+	if tracer.name != serviceName {
+		t.Fatalf("expected the name to be `%v` but it was `%v`", serviceName, tracer.name)
+	}
+}
+
+type fakeTracer struct {
+	name string
+}
+
+func (fakeTracer) Close() error {
+	panic("implement me")
+}
+
+func (fakeTracer) StartSpan(operationName string, opts ...opentracing.StartSpanOption) opentracing.Span {
+	panic("implement me")
+}
+
+func (fakeTracer) Inject(sm opentracing.SpanContext, format interface{}, carrier interface{}) error {
+	panic("implement me")
+}
+
+func (fakeTracer) Extract(format interface{}, carrier interface{}) (opentracing.SpanContext, error) {
+	panic("implement me")
+}
+
