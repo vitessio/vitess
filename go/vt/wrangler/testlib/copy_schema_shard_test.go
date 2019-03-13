@@ -99,6 +99,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	sourceRdonly.FakeMysqlDaemon.Schema = schema
 
 	changeToDb := "USE vt_ks"
+	disableFkChecksSession := "set foreign_key_checks = 0"
 	createDb := "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"
 	createTable := "CREATE TABLE `vt_ks`.`table1` (\n" +
 		"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n" +
@@ -140,6 +141,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 
 	// The destination table is asked to create the new schema.
 	destinationMasterDb.AddQuery(changeToDb, &sqltypes.Result{})
+	destinationMasterDb.AddQuery(disableFkChecksSession, &sqltypes.Result{})
 	destinationMasterDb.AddQuery(createDb, &sqltypes.Result{})
 	destinationMasterDb.AddQuery(createTable, &sqltypes.Result{})
 	destinationMasterDb.AddQuery(createTableView, &sqltypes.Result{})

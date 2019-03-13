@@ -323,6 +323,12 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		return fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %v", sourceTabletAlias, tables, excludeTables, includeViews, err)
 	}
 	createSQL := tmutils.SchemaDefinitionToSQLStrings(sourceSd)
+
+	// We're not clever enough to create tables in an order that's fk friendly,
+	// so we disable fk checks for the remainder of the (non-pooled) db connection
+	// using a session variable.
+	createSQL = append([]string{"set foreign_key_checks = 0"}, createSQL...)
+
 	destTabletInfo, err := wr.ts.GetTablet(ctx, destShardInfo.MasterAlias)
 	if err != nil {
 		return fmt.Errorf("GetTablet(%v) failed: %v", destShardInfo.MasterAlias, err)
@@ -434,6 +440,8 @@ func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletIn
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	// Need to make sure that we enable binlog, since we're only applying the statement on masters.
+	// Do not set "usePool" to true. The SQL statements may change session settings, like
+	// disabling foreign key checks.
 	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo.Tablet, false, []byte(filledChange), 0, false, reloadSchema)
 	return err
 }
