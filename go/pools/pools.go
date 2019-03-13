@@ -3,7 +3,6 @@ package pools
 import (
 	"context"
 	"errors"
-	"os"
 	"time"
 )
 
@@ -73,9 +72,7 @@ func New(poolImpl Impl, f CreateFactory, cap, maxCap int, idleTimeout time.Durat
 	// Have an environment override so that several of the tests
 	// outside this package don't need to be written twice.
 	// e.g. VT_EXPERIMENTAL_FAST_POOL=1 make unit_test
-	if os.Getenv("VT_EXPERIMENTAL_FAST_POOL") != "" {
-		poolImpl = FastImpl
-	}
+	poolImpl = FastImpl
 
 	switch poolImpl {
 	case ResourceImpl:
