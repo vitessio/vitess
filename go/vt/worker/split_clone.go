@@ -1297,17 +1297,19 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
 		return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no tables matching the table filter in tablet %v", topoproto.TabletAliasString(tablet.Alias))
 	}
+	totalColumns := 0
 	for _, td := range sourceSchemaDefinition.TableDefinitions {
 		if len(td.Columns) == 0 {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "schema for table %v has no columns", td.Name)
 		}
+		totalColumns += len(td.Columns)
 	}
 
 	//get the generated columns so we can exclude them from the insert statements
 	query := fmt.Sprintf("select TABLE_NAME, COLUMN_NAME from information_schema.COLUMNS where TABLE_SCHEMA = '%s' and GENERATION_EXPRESSION != ''", scw.sourceShards[0].Keyspace())
 	executor := newExecutor(scw.wr, scw.tsc, nil, scw.sourceShards[0].Keyspace(), scw.sourceShards[0].ShardName(), 0)
 	cancellableCtx, cancel := context.WithCancel(ctx)
-	qr, err := executor.wr.TabletManagerClient().ExecuteFetchAsApp(cancellableCtx, tablet, true, []byte(query), 0)
+	qr, err := executor.wr.TabletManagerClient().ExecuteFetchAsApp(cancellableCtx, tablet, true, []byte(query), totalColumns)
 	cancel()
 	if err != nil {
 		return nil, nil, vterrors.Wrapf(err, "cannot get generated columns from source %v", topoproto.TabletAliasString(tablet.Alias))
