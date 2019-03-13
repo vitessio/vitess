@@ -19,11 +19,12 @@ package mysqlctl
 import (
 	"context"
 	"flag"
-	"fmt"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -46,7 +47,7 @@ var BackupEngineMap = make(map[string]BackupEngine)
 func GetBackupEngine() (BackupEngine, error) {
 	be, ok := BackupEngineMap[*BackupEngineImplementation]
 	if !ok {
-		return nil, fmt.Errorf("no registered implementation of BackupEngine")
+		return nil, vterrors.New(vtrpc.Code_NOT_FOUND, "no registered implementation of BackupEngine")
 	}
 	return be, nil
 }

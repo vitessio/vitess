@@ -19,9 +19,8 @@ package mysqlctl
 import (
 	"bufio"
 	"context"
-	"errors"
+	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -33,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -45,12 +45,11 @@ type XtrabackupEngine struct {
 
 var (
 	// path where backup engine program is located
-	// TODO assume lives on path and remove this option?
 	xtrabackupEnginePath = flag.String("xtrabackup_root_path", "", "directory location of the xtrabackup executable, e.g., /usr/bin")
-	// TBD whether to support flags to pass through to backup engine
+	// flags to pass through to backup engine
 	xtrabackupBackupFlags = flag.String("xtrabackup_backup_flags", "", "flags to pass to backup command. these will be added to the end of the command")
-	// TBD whether to support flags to pass through to restore phase
-	xtrabackupRestoreFlags = flag.String("xtrabackup_restore_flags", "", "flags to pass to restore command. these will be added to the end of the command")
+	// flags to pass through to restore phase
+	xtrabackupRestoreFlags = flag.String("xtrabackup_restore_flags", "", "flags to pass to restore command. these will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
 	// streaming mode
 	xtrabackupStreamMode = flag.String("xtrabackup_stream_mode", "tar", "which mode to use if streaming, valid values are tar and xbstream")
 )
@@ -62,6 +61,17 @@ const (
 	binlogInfoFileName = "xtrabackup_binlog_info"
 	successMsg         = "completed OK!"
 )
+
+// XtraBackupManifest represents the backup.
+type XtraBackupManifest struct {
+	// FileName is the name of the backup file
+	FileName string
+	// BackupMethod, set to xtrabackup
+	BackupMethod string
+	// SkipCompress can be set if the backup files were not run
+	// through gzip.
+	SkipCompress bool
+}
 
 func (be *XtrabackupEngine) backupFileName() string {
 	fileName := "backup"
@@ -79,11 +89,6 @@ func (be *XtrabackupEngine) backupFileName() string {
 // and an overall error.
 func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error) {
 
-	/* TODO uncomment if we keep this option
-	if *xtrabackupEnginePath == "" {
-		return false, errors.New("xtrabackup_root_path must be provided")
-	}
-	*/
 	backupProgram := path.Join(*xtrabackupEnginePath, xtrabackup)
 	// TODO check that the executable file exists, exit if it doesn't or isn't executable
 
@@ -109,7 +114,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 
 	wc, err := bh.AddFile(ctx, backupFileName, 0)
 	if err != nil {
-		return false, fmt.Errorf("cannot create backup file %v: %v", backupFileName, err)
+		return false, vterrors.Wrapf(err, "cannot create backup file %v", backupFileName)
 	}
 	defer func() {
 		if closeErr := wc.Close(); err == nil {
@@ -128,30 +133,32 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	if *backupStorageCompress {
 		gzip, err = pgzip.NewWriterLevel(writer, pgzip.BestSpeed)
 		if err != nil {
-			return false, fmt.Errorf("cannot create gziper: %v", err)
+			return false, vterrors.Wrap(err, "cannot create gziper")
 		}
 		gzip.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
 		writer = gzip
 	}
 
-	backupCmd.Start()
+	if err = backupCmd.Start(); err != nil {
+		return false, vterrors.Wrap(err, "unable to start backup")
+	}
 
 	// Copy from the stream output to destination file (optional gzip)
 	_, err = io.Copy(writer, backupOut)
 	if err != nil {
-		return false, fmt.Errorf("cannot copy data: %v", err)
+		return false, vterrors.Wrap(err, "cannot copy output from xtrabackup command")
 	}
 
 	// Close gzip to flush it, after that all data is sent to writer.
 	if gzip != nil {
 		if err = gzip.Close(); err != nil {
-			return false, fmt.Errorf("cannot close gzip: %v", err)
+			return false, vterrors.Wrap(err, "cannot close gzip")
 		}
 	}
 
 	// Flush the buffer to finish writing on destination.
 	if err = dst.Flush(); err != nil {
-		return false, fmt.Errorf("cannot flush dst: %v", err)
+		return false, vterrors.Wrapf(err, "cannot flush destination: %v", backupFileName)
 	}
 
 	errOutput, err := ioutil.ReadAll(backupErr)
@@ -161,6 +168,32 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	logger.Infof("Xtrabackup backup command output: %v", output)
 	// check for success message : xtrabackup: completed OK!
 	usable := (err == nil && strings.Contains(output, successMsg))
+
+	// open the MANIFEST
+	wc, err = bh.AddFile(ctx, backupManifest, 0)
+	if err != nil {
+		return usable, vterrors.Wrapf(err, "cannot add %v to backup", backupManifest)
+	}
+	defer func() {
+		if closeErr := wc.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
+	// JSON-encode and write the MANIFEST
+	bm := &XtraBackupManifest{
+		FileName:     backupFileName,
+		BackupMethod: xtrabackup,
+		SkipCompress: !*backupStorageCompress,
+	}
+
+	data, err := json.MarshalIndent(bm, "", "  ")
+	if err != nil {
+		return usable, vterrors.Wrapf(err, "cannot JSON encode %v", backupManifest)
+	}
+	if _, err := wc.Write([]byte(data)); err != nil {
+		return usable, vterrors.Wrapf(err, "cannot write %v", backupManifest)
+	}
 
 	return usable, nil
 }
@@ -175,11 +208,6 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	bhs []backupstorage.BackupHandle,
 	restoreConcurrency int,
 	hookExtraEnv map[string]string) (mysql.Position, error) {
-
-	/* TODO uncomment if we keep this option
-	if *xtrabackupEnginePath == "" {
-		return mysql.Position{}, errors.New("xtrabackup_root_path must be provided")
-	} */
 
 	// Starting from here we won't be able to recover if we get stopped by a cancelled
 	// context. Thus we use the background context to get through to the finish.
@@ -218,15 +246,18 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	// copy / extract files
 	logger.Infof("Restore: Preparing the files")
 	// prepare the backup
-	program := path.Join(*xtrabackupEnginePath, xtrabackup)
+	restoreProgram := path.Join(*xtrabackupEnginePath, xtrabackup)
 	flagsToExec := []string{"--defaults-file=" + cnf.path,
 		"--prepare",
 		"--target-dir=" + cnf.TmpDir,
 	}
-	prepareCmd := exec.Command(program, flagsToExec...)
+	prepareCmd := exec.Command(restoreProgram, flagsToExec...)
 	prepareOut, _ := prepareCmd.StdoutPipe()
 	prepareErr, _ := prepareCmd.StderrPipe()
-	prepareCmd.Start()
+	if err = prepareCmd.Start(); err != nil {
+		return mysql.Position{}, vterrors.Wrap(err, "unable to start prepare")
+	}
+
 	errOutput, _ := ioutil.ReadAll(prepareErr)
 	stdOutput, _ := ioutil.ReadAll(prepareOut)
 	err = prepareCmd.Wait()
@@ -244,7 +275,7 @@ func (be *XtrabackupEngine) ExecuteRestore(
 		return mysql.Position{}, err
 	}
 	if !strings.Contains(output, successMsg) {
-		return mysql.Position{}, errors.New("Prepare step failed")
+		return mysql.Position{}, vterrors.Errorf(vtrpc.Code_UNKNOWN, "prepare step failed: %v", output)
 	}
 
 	// then copy-back
@@ -254,11 +285,15 @@ func (be *XtrabackupEngine) ExecuteRestore(
 		"--copy-back",
 		"--target-dir=" + cnf.TmpDir,
 	}
-	copybackCmd := exec.Command(program, flagsToExec...)
+	copybackCmd := exec.Command(restoreProgram, flagsToExec...)
 	// TODO: check stdout for OK message
 	copybackErr, _ := copybackCmd.StderrPipe()
 	copybackOut, _ := copybackCmd.StdoutPipe()
-	copybackCmd.Start()
+
+	if err = copybackCmd.Start(); err != nil {
+		return mysql.Position{}, vterrors.Wrap(err, "unable to start copy-back")
+	}
+
 	errOutput, _ = ioutil.ReadAll(copybackErr)
 	stdOutput, _ = ioutil.ReadAll(copybackOut)
 	err = copybackCmd.Wait()
@@ -276,7 +311,7 @@ func (be *XtrabackupEngine) ExecuteRestore(
 		return mysql.Position{}, err
 	}
 	if !strings.Contains(output, successMsg) {
-		return mysql.Position{}, errors.New("Copy-back step failed")
+		return mysql.Position{}, vterrors.Errorf(vtrpc.Code_UNKNOWN, "copy-back step failed: %v", output)
 	}
 
 	// now find the slave position and return that
@@ -366,12 +401,12 @@ func (be *XtrabackupEngine) restoreFile(
 			logger.Infof("error from tar: %v ", string(errOutput))
 		}
 		if err != nil {
-			return vterrors.Wrapf(err, "error from tar")
+			return vterrors.Wrap(err, "error from tar")
 		}
 
 	case xbstream:
 		// now extract the files by running xbstream
-		xbstreamProgram := path.Join(*xtrabackupEnginePath, xbstream)
+		xbstreamProgram := xbstream
 		flagsToExec := []string{"-C", cnf.TmpDir, "-x"}
 		xbstreamCmd := exec.Command(xbstreamProgram, flagsToExec...)
 		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
@@ -390,7 +425,7 @@ func (be *XtrabackupEngine) restoreFile(
 			logger.Infof("error from xbstream: %v", string(errOutput))
 		}
 		if err != nil {
-			return vterrors.Wrapf(err, "error from xbstream")
+			return vterrors.Wrap(err, "error from xbstream")
 		}
 	default:
 	}
