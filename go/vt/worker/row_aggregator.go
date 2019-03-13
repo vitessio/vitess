@@ -186,7 +186,7 @@ type InsertsQueryBuilder struct {
 func NewInsertsQueryBuilder(dbName string, td *tabletmanagerdatapb.TableDefinition, generatedColumns map[string]bool) *InsertsQueryBuilder {
 	// Example: INSERT INTO test (id, sub_id, msg) VALUES (0, 10, 'a'), (1, 11, 'b')
 
-	finalColumns := make([]string, len(td.Columns))
+	finalColumns := make([]string, 0, len(td.Columns))
 	excludedColumns := make(map[int]bool, len(td.Columns))
 	for i, col := range td.Columns {
 		_, ok := generatedColumns[col]
