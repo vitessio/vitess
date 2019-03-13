@@ -6,7 +6,11 @@ RUN apt-get update \
       bzip2 \
       mariadb-server \
       libmariadbclient-dev \
- && rm -rf /var/lib/apt/lists/*
+      libdbd-mysql-perl rsync libev4 && \
+      rm -rf /var/lib/apt/lists/* && \
+      wget https://www.percona.com/downloads/XtraBackup/Percona-XtraBackup-2.4.13/binary/debian/stretch/x86_64/percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb && \
+      dpkg -i percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb && \
+      rm -f percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb
 
 # Bootstrap Vitess
 WORKDIR /vt/src/vitess.io/vitess
