@@ -22,10 +22,12 @@ package trace
 import (
   "flag"
   "io"
+  "strings"
 
   "github.com/opentracing/opentracing-go"
   "golang.org/x/net/context"
   "vitess.io/vitess/go/vt/log"
+  "vitess.io/vitess/go/vt/proto/vtrpc"
   "vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -92,6 +94,10 @@ type SpanFactory interface {
   NewContext(parent context.Context, span Span) context.Context
 }
 
+type TracerFactory func(serviceName string) (opentracing.Tracer, io.Closer, error)
+
+var tracingBackendFactories = make(map[string]TracerFactory)
+
 // RegisterSpanFactory should be called by a plugin during init() to install a
 // factory that creates Spans for that plugin's tracing framework. Each call to
 // RegisterSpanFactory will overwrite any previous setting. If no factory is
@@ -104,28 +110,40 @@ func RegisterSpanFactory(sf SpanFactory) {
 var spanFactory SpanFactory = fakeSpanFactory{}
 
 var (
-  tracingServer = flag.String("tracer", "noop", "tracing service to use. available are: noop, jaeger. Configuration is provided using environment variables.")
+  tracingServer = flag.String("tracer", "noop", "tracing service to use.")
 )
 
 // StartTracing enables tracing for a named service
 func StartTracing(serviceName string) io.Closer {
-  switch *tracingServer {
-  case "noop":
-    // we are not doing any tracing
-    return &nilCloser{}
-  case "jaeger":
-    tracer, closer, err := NewJagerTracerFromEnv(serviceName)
-    if err != nil {
-      log.Error(vterrors.Wrapf(err, "failed to create a jaeger tracer"))
-      return &nilCloser{}
+  factory, ok := tracingBackendFactories[*tracingServer]
+  if !ok {
+    options := make([]string, len(tracingBackendFactories))
+    for k := range tracingBackendFactories {
+      options = append(options, k)
     }
-    // Register it for all openTracing enabled plugins, mainly the grpc connections
-    opentracing.SetGlobalTracer(tracer)
 
-    // Register it for the internal Vitess tracing system
-    RegisterSpanFactory(OpenTracingFactory{Tracer: tracer})
-    return closer
-  default:
-    panic("unknown tracing service" + serviceName)
+    altStr := strings.Join(options, ", ")
+    log.Error(vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no such tracing service found. alternatives are: %v", altStr))
+    return &nilCloser{}
   }
+
+  tracer, closer, err := factory(serviceName)
+  if err != nil {
+    log.Error(vterrors.Wrapf(err, "failed to create a %s tracer", *tracingServer))
+    return &nilCloser{}
+  }
+
+  _, isNoopTracer := tracer.(opentracing.NoopTracer)
+  if isNoopTracer {
+    // We don't have a real tracer to work with. Let's leave early
+    return &nilCloser{}
+  }
+
+  // Register it for all openTracing enabled plugins, mainly the grpc connections
+  opentracing.SetGlobalTracer(tracer)
+
+  // Register it for the internal Vitess tracing system
+  RegisterSpanFactory(OpenTracingFactory{Tracer: tracer})
+
+  return closer
 }

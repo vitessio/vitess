@@ -25,7 +25,23 @@ type OpenTracingFactory struct {
 }
 
 // NewJagerTracerFromEnv will instantiate a SpanFactory implemented by Jaeger,
-// taking configuration from environment variables, as described:
+// taking configuration from environment variables. Available properties are:
+// JAEGER_SERVICE_NAME -- If this is set, the service name used in code will be ignored and this value used instead
+// JAEGER_RPC_METRICS
+// JAEGER_TAGS
+// JAEGER_SAMPLER_TYPE
+// JAEGER_SAMPLER_PARAM
+// JAEGER_SAMPLER_MANAGER_HOST_PORT
+// JAEGER_SAMPLER_MAX_OPERATIONS
+// JAEGER_SAMPLER_REFRESH_INTERVAL
+// JAEGER_REPORTER_MAX_QUEUE_SIZE
+// JAEGER_REPORTER_FLUSH_INTERVAL
+// JAEGER_REPORTER_LOG_SPANS
+// JAEGER_ENDPOINT
+// JAEGER_USER
+// JAEGER_PASSWORD
+// JAEGER_AGENT_HOST
+// JAEGER_AGENT_PORT
 func NewJagerTracerFromEnv(serviceName string) (opentracing.Tracer, io.Closer, error) {
 
   cfg, err := config.FromEnv()
@@ -76,3 +92,7 @@ type nilCloser struct {
 }
 
 func (c *nilCloser) Close() error { return nil }
+
+func init() {
+  tracingBackendFactories["jaeger"] = NewJagerTracerFromEnv
+}
