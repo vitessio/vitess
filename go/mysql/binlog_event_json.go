@@ -484,10 +484,10 @@ func readOffsetOrSize(data []byte, pos int, large bool) (int, int) {
 }
 
 func readVariableInt(data []byte, pos int) (int, int) {
-	var b byte
+	var b int8
 	var result int
 	for {
-		b = data[pos]
+		b = int8(data[pos])
 		pos++
 		result = (result << 7) + int(b&0x7f)
 		if b >= 0 {

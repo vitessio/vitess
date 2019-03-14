@@ -1383,7 +1383,7 @@ func (tsv *TabletServer) SplitQuery(
 			}
 			defer func(start time.Time) {
 				splitTableName := splitParams.GetSplitTableName()
-				tabletenv.RecordUserQuery(ctx, splitTableName, "SplitQuery", int64(time.Now().Sub(start)))
+				tabletenv.RecordUserQuery(ctx, splitTableName, "SplitQuery", int64(time.Since(start)))
 			}(time.Now())
 			sqlExecuter, err := newSplitQuerySQLExecuter(ctx, logStats, tsv)
 			if err != nil {
@@ -1557,7 +1557,7 @@ func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVa
 		fmt.Fprintf(buf, "%s: %q", key, valString)
 	}
 	fmt.Fprintf(buf, "}")
-	bv := string(buf.Bytes())
+	bv := buf.String()
 	maxLen := *sqlparser.TruncateErrLen
 	if maxLen != 0 && len(bv) > maxLen {
 		bv = bv[:maxLen-12] + " [TRUNCATED]"
@@ -1706,7 +1706,7 @@ func createSplitParams(
 		return splitquery.NewSplitParamsGivenSplitCount(
 			query, splitColumns, splitCount, schema)
 	default:
-		panic(fmt.Errorf("Exactly one of {numRowsPerQueryPart, splitCount} must be"+
+		panic(fmt.Errorf("exactly one of {numRowsPerQueryPart, splitCount} must be"+
 			" non zero. This should have already been caught by 'validateSplitQueryParameters' and "+
 			" returned as an error. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
 			numRowsPerQueryPart,
@@ -1781,7 +1781,7 @@ func createSplitQueryAlgorithmObject(
 	case querypb.SplitQueryRequest_EQUAL_SPLITS:
 		return splitquery.NewEqualSplitsAlgorithm(splitParams, sqlExecuter)
 	default:
-		panic(fmt.Errorf("Unknown algorithm enum: %+v", algorithm))
+		panic(fmt.Errorf("unknown algorithm enum: %+v", algorithm))
 	}
 }
 
@@ -1866,6 +1866,14 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 // HeartbeatLag returns the current lag as calculated by the heartbeat
 // package, if heartbeat is enabled. Otherwise returns 0.
 func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
+	// If the reader is closed and we are not serving, then the
+	// query service is shutdown and this value is not being updated.
+	// We return healthy from this as a signal to the healtcheck to attempt
+	// to start the query service again. If the query service fails to start
+	// with an error, then that error is be reported by the healthcheck.
+	if !tsv.hr.IsOpen() && !tsv.IsServing() {
+		return 0, nil
+	}
 	return tsv.hr.GetLatest()
 }
 
@@ -2191,7 +2199,7 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable) s
 		fmt.Fprintf(buf, "%s: %q", key, valString)
 	}
 	fmt.Fprintf(buf, "}")
-	return string(buf.Bytes())
+	return buf.String()
 }
 
 // withTimeout returns a context based on the specified timeout.

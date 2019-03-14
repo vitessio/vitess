@@ -121,7 +121,7 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 		// try to parse tableacl as json file
 		if jsonErr := json2.Unmarshal(data, config); jsonErr != nil {
 			log.Infof("unable to parse tableACL config file as a json file: %v", jsonErr)
-			return fmt.Errorf("Unable to unmarshal Table ACL data: %v", data)
+			return fmt.Errorf("unable to unmarshal Table ACL data: %v", data)
 		}
 	}
 	return tacl.Set(config)
@@ -176,7 +176,7 @@ func load(config *tableaclpb.Config, newACL func([]string) (acl.ACL, error)) (en
 
 func (tacl *tableACL) aclFactory() (acl.Factory, error) {
 	if tacl.factory == nil {
-		return GetCurrentAclFactory()
+		return GetCurrentACLFactory()
 	}
 	return tacl.factory, nil
 }
@@ -301,8 +301,8 @@ func SetDefaultACL(name string) {
 	defaultACL = name
 }
 
-// GetCurrentAclFactory returns current table acl implementation.
-func GetCurrentAclFactory() (acl.Factory, error) {
+// GetCurrentACLFactory returns current table acl implementation.
+func GetCurrentACLFactory() (acl.Factory, error) {
 	mu.Lock()
 	defer mu.Unlock()
 	if len(acls) == 0 {

@@ -189,7 +189,7 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 	ctx := context.Background()
 	err := Run(ctx, controller, executor)
 
-	if err == nil || !strings.Contains(err.Error(), "Schema change failed") {
+	if err == nil || !strings.Contains(err.Error(), "schema change failed") {
 		t.Fatalf("schema change should fail, but got err: %v", err)
 	}
 }

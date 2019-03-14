@@ -50,6 +50,9 @@ func TestPrepPut(t *testing.T) {
 		t.Errorf("Put err: %v, want %s", err, want)
 	}
 	_, err = pp.FetchForCommit("aa")
+	if err != nil {
+		t.Error(err)
+	}
 	err = pp.Put(nil, "aa")
 	want = "duplicate DTID in Prepare: aa"
 	if err == nil || err.Error() != want {
@@ -98,19 +101,19 @@ func TestPrepFetchForCommit(t *testing.T) {
 	if got != conn {
 		t.Errorf("pp.Get(aa): %p, want %p", got, conn)
 	}
-	got, err = pp.FetchForCommit("aa")
+	_, err = pp.FetchForCommit("aa")
 	want := "committing"
 	if err == nil || err.Error() != want {
 		t.Errorf("FetchForCommit err: %v, want %s", err, want)
 	}
 	pp.SetFailed("aa")
-	got, err = pp.FetchForCommit("aa")
+	_, err = pp.FetchForCommit("aa")
 	want = "failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("FetchForCommit err: %v, want %s", err, want)
 	}
 	pp.SetFailed("bb")
-	got, err = pp.FetchForCommit("bb")
+	_, err = pp.FetchForCommit("bb")
 	want = "failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("FetchForCommit err: %v, want %s", err, want)

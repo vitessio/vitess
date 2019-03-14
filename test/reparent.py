@@ -367,7 +367,7 @@ class TestReparent(unittest.TestCase):
     _, stderr = utils.run_vtctl(['PlannedReparentShard',
                      '-keyspace_shard', 'test_keyspace/' + shard_id,
                      '-new_master', tablet_62044.tablet_alias], expect_fail=True)
-    self.assertIn('Tablet test_ny-0000031981 SetMaster failed', stderr)
+    self.assertIn('tablet test_ny-0000031981 SetMaster failed', stderr)
 
     self._check_master_tablet(tablet_62044)
 

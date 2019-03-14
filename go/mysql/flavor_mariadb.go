@@ -152,7 +152,7 @@ func (mariadbFlavor) status(c *Conn) (SlaveStatus, error) {
 // if the slave thread stops. If that is a problem, we'll have to change this.
 func (mariadbFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
 	if deadline, ok := ctx.Deadline(); ok {
-		timeout := deadline.Sub(time.Now())
+		timeout := time.Until(deadline)
 		if timeout <= 0 {
 			return "", vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 		}

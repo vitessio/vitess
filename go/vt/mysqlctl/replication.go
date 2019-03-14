@@ -273,6 +273,7 @@ func (mysqld *Mysqld) ResetReplication(ctx context.Context) error {
 //
 // Array indices for the results of SHOW PROCESSLIST.
 const (
+	//lint:ignore U1000 unused fields are needed for correct indexing of result columns
 	colConnectionID = iota
 	colUsername
 	colClientAddr
@@ -312,9 +313,7 @@ func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 			if err != nil {
 				return nil, fmt.Errorf("FindSlaves: LookupHost failed %v", err)
 			}
-			for _, ip := range ips {
-				addrs = append(addrs, ip)
-			}
+			addrs = append(addrs, ips...)
 		}
 	}
 

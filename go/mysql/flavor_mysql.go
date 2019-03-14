@@ -118,7 +118,7 @@ func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (
 	// A timeout of 0 means wait indefinitely.
 	timeoutSeconds := 0
 	if deadline, ok := ctx.Deadline(); ok {
-		timeout := deadline.Sub(time.Now())
+		timeout := time.Until(deadline)
 		if timeout <= 0 {
 			return "", vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 		}

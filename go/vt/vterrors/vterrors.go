@@ -202,11 +202,9 @@ func (w *wrapping) Format(s fmt.State, verb rune) {
 		return
 	}
 
-	if rune('s') == verb || rune('q')  == verb {
+	if rune('s') == verb || rune('q') == verb {
 		panicIfError(io.WriteString(s, w.Error()))
 	}
-
-	return
 }
 
 // since we can't return an error, let's panic if something goes wrong here

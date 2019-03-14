@@ -195,7 +195,7 @@ func (hook *Hook) ExecuteAsWritePipe(out io.Writer) (io.WriteCloser, WaitFunc, i
 	// Configure the process's stdin, stdout, and stderr.
 	in, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, nil, HOOK_GENERIC_ERROR, fmt.Errorf("Failed to configure stdin: %v", err)
+		return nil, nil, HOOK_GENERIC_ERROR, fmt.Errorf("failed to configure stdin: %v", err)
 	}
 	cmd.Stdout = out
 	var stderr bytes.Buffer
@@ -234,7 +234,7 @@ func (hook *Hook) ExecuteAsReadPipe(in io.Reader) (io.Reader, WaitFunc, int, err
 	// Configure the process's stdin, stdout, and stderr.
 	out, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, nil, HOOK_GENERIC_ERROR, fmt.Errorf("Failed to configure stdout: %v", err)
+		return nil, nil, HOOK_GENERIC_ERROR, fmt.Errorf("failed to configure stdout: %v", err)
 	}
 	cmd.Stdin = in
 	var stderr bytes.Buffer

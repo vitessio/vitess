@@ -29,11 +29,11 @@ import (
 var (
 	// ErrNilUnderlyingServer is returned when attempting to create a new keyspace
 	// filtering server if a nil underlying server implementation is provided.
-	ErrNilUnderlyingServer = fmt.Errorf("Unable to construct filtering server without an underlying server")
+	ErrNilUnderlyingServer = fmt.Errorf("unable to construct filtering server without an underlying server")
 
 	// ErrTopoServerNotAvailable is returned if a caller tries to access the
 	// topo.Server supporting this srvtopo.Server.
-	ErrTopoServerNotAvailable = fmt.Errorf("Cannot access underlying topology server when keyspace filtering is enabled")
+	ErrTopoServerNotAvailable = fmt.Errorf("cannot access underlying topology server when keyspace filtering is enabled")
 )
 
 // NewKeyspaceFilteringServer constructs a new server based on the provided

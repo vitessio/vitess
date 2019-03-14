@@ -94,7 +94,7 @@ func (wr *Wrangler) diffVersion(ctx context.Context, masterVersion string, maste
 	}
 
 	if masterVersion != slaveVersion {
-		er.RecordError(fmt.Errorf("Master %v version %v is different than slave %v version %v", topoproto.TabletAliasString(masterAlias), masterVersion, topoproto.TabletAliasString(alias), slaveVersion))
+		er.RecordError(fmt.Errorf("master %v version %v is different than slave %v version %v", topoproto.TabletAliasString(masterAlias), masterVersion, topoproto.TabletAliasString(alias), slaveVersion))
 	}
 }
 
@@ -108,7 +108,7 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 
 	// get version from the master, or error
 	if !si.HasMaster() {
-		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
+		return fmt.Errorf("no master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering version for master %v", topoproto.TabletAliasString(si.MasterAlias))
 	masterVersion, err := wr.GetVersion(ctx, si.MasterAlias)
@@ -136,7 +136,7 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 	}
 	wg.Wait()
 	if er.HasErrors() {
-		return fmt.Errorf("Version diffs: %v", er.Error().Error())
+		return fmt.Errorf("version diffs: %v", er.Error().Error())
 	}
 	return nil
 }
@@ -152,7 +152,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 
 	// corner cases
 	if len(shards) == 0 {
-		return fmt.Errorf("No shards in keyspace %v", keyspace)
+		return fmt.Errorf("no shards in keyspace %v", keyspace)
 	}
 	sort.Strings(shards)
 	if len(shards) == 1 {
@@ -165,7 +165,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 		return err
 	}
 	if !si.HasMaster() {
-		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
+		return fmt.Errorf("no master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.MasterAlias
 	log.Infof("Gathering version for reference master %v", topoproto.TabletAliasString(referenceAlias))
@@ -195,7 +195,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 	}
 	wg.Wait()
 	if er.HasErrors() {
-		return fmt.Errorf("Version diffs: %v", er.Error().Error())
+		return fmt.Errorf("version diffs: %v", er.Error().Error())
 	}
 	return nil
 }

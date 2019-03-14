@@ -82,7 +82,7 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 		// return the right error to the client (ctx.Err(), vs
 		// DialTimeout() error).
 		if deadline, ok := ctx.Deadline(); ok {
-			timeout := deadline.Sub(time.Now()) + 5*time.Second
+			timeout := time.Until(deadline) + 5*time.Second
 			conn, err = net.DialTimeout(netProto, addr, timeout)
 		} else {
 			conn, err = net.Dial(netProto, addr)
@@ -531,7 +531,7 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 	pos = writeZeroes(data, pos, 4)
 
 	// Character set.
-	pos = writeByte(data, pos, characterSet)
+	_ = writeByte(data, pos, characterSet)
 
 	// And send it as is.
 	if err := c.writeEphemeralPacket(); err != nil {

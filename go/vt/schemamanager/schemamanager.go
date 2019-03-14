@@ -132,7 +132,7 @@ func Run(ctx context.Context, controller Controller, executor Executor) error {
 	}
 	if result.ExecutorErr != "" || len(result.FailedShards) > 0 {
 		out, _ := json.MarshalIndent(result, "", "  ")
-		return fmt.Errorf("Schema change failed, ExecuteResult: %v\n", string(out))
+		return fmt.Errorf("schema change failed, ExecuteResult: %v", string(out))
 	}
 	return nil
 }

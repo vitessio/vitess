@@ -47,7 +47,7 @@ func main() {
 
 	// We can't do much without a -server flag
 	if *server == "" {
-		log.Error(errors.New("Please specify -server <vtctld_host:vtctld_port> to specify the vtctld server to connect to"))
+		log.Error(errors.New("please specify -server <vtctld_host:vtctld_port> to specify the vtctld server to connect to"))
 		os.Exit(1)
 	}
 

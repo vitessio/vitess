@@ -47,6 +47,21 @@ func TestJSON(t *testing.T) {
 		data:     []byte{12, 13, 115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103},
 		expected: `'"scalar string"'`,
 	}, {
+		// repeat the same string 10 times, to test readVariableInt when length of string
+		// requires 2 bytes to store
+		data: []byte{12, 129, 2,
+			115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
+			115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
+			115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
+			115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
+			115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
+			115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
+			115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
+			115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
+			115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
+			115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103},
+		expected: `'"scalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar stringscalar string"'`,
+	}, {
 		data:     []byte{4, 1},
 		expected: `'true'`,
 	}, {

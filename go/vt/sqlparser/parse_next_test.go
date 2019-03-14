@@ -203,11 +203,11 @@ func TestParseNextStrictNonStrict(t *testing.T) {
 
 	// Now try again with strict parsing and observe the expected error.
 	tokens = NewStringTokenizer(input)
-	tree, err := ParseNextStrictDDL(tokens)
+	_, err := ParseNextStrictDDL(tokens)
 	if err == nil || !strings.Contains(err.Error(), "ignore") {
-		t.Fatalf("ParseNext(%q) err = %q, want nil", input, err)
+		t.Fatalf("ParseNext(%q) err = %q, want ignore", input, err)
 	}
-	tree, err = ParseNextStrictDDL(tokens)
+	tree, err := ParseNextStrictDDL(tokens)
 	if err != nil {
 		t.Fatalf("ParseNext(%q) err = %q, want nil", input, err)
 	}
