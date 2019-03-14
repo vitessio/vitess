@@ -232,9 +232,8 @@ func (ts *Server) GetShardServingTypes(ctx context.Context, si *ShardInfo) (serv
 	return servingTypes, nil
 }
 
-// UpdateSrvKeyspacePartitions will make sure the disableQueryService is
-// set appropriately in tablet controls in srvKeyspace.
-func (ts *Server) UpdateSrvKeyspacePartitions(ctx context.Context, keyspace string, shards []*ShardInfo, tabletType topodatapb.TabletType, cells []string, remove bool) (err error) {
+// AddSrvKeyspacePartitions adds partitions to srvKeyspace
+func (ts *Server) AddSrvKeyspacePartitions(ctx context.Context, keyspace string, shards []*ShardInfo, tabletType topodatapb.TabletType, cells []string) (err error) {
 	if err = CheckKeyspaceLocked(ctx, keyspace); err != nil {
 		return err
 	}
@@ -272,28 +271,18 @@ func (ts *Server) UpdateSrvKeyspacePartitions(ctx context.Context, keyspace stri
 							}
 						}
 
-						if !found && !remove {
+						if !found {
 							shardReference := &topodatapb.ShardReference{
 								Name:     si.ShardName(),
 								KeyRange: si.KeyRange,
 							}
 							partition.ShardReferences = append(partition.GetShardReferences(), shardReference)
 						}
-
-						if found && remove {
-							shardReferences := make([]*topodatapb.ShardReference, 0)
-							for _, shardReference := range partition.GetShardReferences() {
-								if !key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
-									shardReferences = append(shardReferences, shardReference)
-								}
-							}
-							partition.ShardReferences = shardReferences
-						}
 					}
 				}
 
 				// Partition does not exist at all, we need to create it
-				if !partitionFound && !remove {
+				if !partitionFound {
 
 					partition := &topodatapb.SrvKeyspace_KeyspacePartition{
 						ServedType: tabletType,
@@ -311,6 +300,74 @@ func (ts *Server) UpdateSrvKeyspacePartitions(ctx context.Context, keyspace stri
 					partition.ShardReferences = shardReferences
 
 					srvKeyspace.Partitions = append(srvKeyspace.GetPartitions(), partition)
+				}
+
+				err = ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
+				if err != nil {
+					rec.RecordError(err)
+					return
+				}
+			case IsErrType(err, NoNode):
+				// NOOP
+			default:
+				rec.RecordError(err)
+				return
+			}
+		}(cell)
+	}
+	wg.Wait()
+	if rec.HasErrors() {
+		return NewError(PartialResult, rec.Error().Error())
+	}
+	return nil
+}
+
+// DeleteSrvKeyspacePartitions deletes shards from srvKeyspace partitions
+func (ts *Server) DeleteSrvKeyspacePartitions(ctx context.Context, keyspace string, shards []*ShardInfo, tabletType topodatapb.TabletType, cells []string) (err error) {
+	if err = CheckKeyspaceLocked(ctx, keyspace); err != nil {
+		return err
+	}
+
+	// The caller intents to update all cells in this case
+	if len(cells) == 0 {
+		cells, err = ts.GetCellInfoNames(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for _, cell := range cells {
+		wg.Add(1)
+		go func(cell string) {
+			defer wg.Done()
+			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
+			switch {
+			case err == nil:
+				for _, partition := range srvKeyspace.GetPartitions() {
+					if partition.GetServedType() != tabletType {
+						continue
+					}
+
+					for _, si := range shards {
+						found := false
+						for _, shardReference := range partition.GetShardReferences() {
+							if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+								found = true
+							}
+						}
+
+						if found {
+							shardReferences := make([]*topodatapb.ShardReference, 0)
+							for _, shardReference := range partition.GetShardReferences() {
+								if !key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+									shardReferences = append(shardReferences, shardReference)
+								}
+							}
+							partition.ShardReferences = shardReferences
+						}
+					}
 				}
 
 				err = ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
@@ -568,53 +625,6 @@ func (ts *Server) GetSrvKeyspaceAllCells(ctx context.Context, keyspace string) (
 		}
 	}
 	return srvKeyspaces, nil
-}
-
-// IsShardQueryServiceDisabled returns served types for given shard across all cells
-func (ts *Server) IsShardQueryServiceDisabled(ctx context.Context, si *ShardInfo) (queryServiceDisabled bool, err error) {
-	cells, err := ts.GetCellInfoNames(ctx)
-	if err != nil {
-		return queryServiceDisabled, err
-	}
-
-	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
-	var mu sync.Mutex
-	for _, cell := range cells {
-		wg.Add(1)
-		go func(cell, keyspace string) {
-			defer wg.Done()
-			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, si.keyspace)
-			switch {
-			case err == nil:
-				func() {
-					mu.Lock()
-					defer mu.Unlock()
-					if queryServiceDisabled {
-						return
-					}
-					for _, partition := range srvKeyspace.GetPartitions() {
-						for _, shardReference := range partition.ShardReferences {
-							if shardReference.GetName() == si.ShardName() {
-							}
-						}
-
-					}
-				}()
-			case IsErrType(err, NoNode):
-				// NOOP
-				return
-			default:
-				rec.RecordError(err)
-				return
-			}
-		}(cell, si.Keyspace())
-	}
-	wg.Wait()
-	if rec.HasErrors() {
-		return queryServiceDisabled, NewError(PartialResult, rec.Error().Error())
-	}
-	return queryServiceDisabled, nil
 }
 
 // GetSrvKeyspace returns the SrvKeyspace for a cell/keyspace.

@@ -139,7 +139,11 @@ func (wr *Wrangler) UpdateSrvKeyspacePartitions(ctx context.Context, keyspace, s
 	if err != nil {
 		return err
 	}
-	return wr.ts.UpdateSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{si}, tabletType, cells, remove)
+
+	if remove {
+		return wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{si}, tabletType, cells)
+	}
+	return wr.ts.AddSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{si}, tabletType, cells)
 }
 
 // DeleteShard will do all the necessary changes in the topology server
@@ -326,14 +330,14 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 	}
 	defer unlock(&err)
 
-	if err = wr.ts.UpdateSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_RDONLY, shardServingCells, true /* remove */); err != nil {
+	if err = wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_RDONLY, shardServingCells); err != nil {
 		return err
 	}
 
-	if err = wr.ts.UpdateSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_REPLICA, shardServingCells, true /* remove */); err != nil {
+	if err = wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_REPLICA, shardServingCells); err != nil {
 		return err
 	}
-	return wr.ts.UpdateSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_MASTER, shardServingCells, true /* remove */)
+	return wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_MASTER, shardServingCells)
 }
 
 // SourceShardDelete will delete a SourceShard inside a shard, by index.
