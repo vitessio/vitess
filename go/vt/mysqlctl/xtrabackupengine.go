@@ -68,9 +68,13 @@ type XtraBackupManifest struct {
 	FileName string
 	// BackupMethod, set to xtrabackup
 	BackupMethod string
+	// Position at which the backup was taken
+	Position string
 	// SkipCompress can be set if the backup files were not run
 	// through gzip.
 	SkipCompress bool
+	// Params are the parameters that backup was run with
+	Params string `json:"ExtraCommandLineParams"`
 }
 
 func (be *XtrabackupEngine) backupFileName() string {
@@ -168,6 +172,19 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	logger.Infof("Xtrabackup backup command output: %v", output)
 	// check for success message : xtrabackup: completed OK!
 	usable := (err == nil && strings.Contains(output, successMsg))
+	substrs := strings.Split(output, "'")
+	index := -1
+	for i, str := range substrs {
+		if strings.Contains(str, "GTID of the last change") {
+			index = i + 1
+			break
+		}
+	}
+	position := ""
+	if index != -1 {
+		position = substrs[index]
+	}
+	logger.Infof("Found position: %v", position)
 
 	// open the MANIFEST
 	wc, err = bh.AddFile(ctx, backupManifest, 0)
@@ -184,7 +201,9 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	bm := &XtraBackupManifest{
 		FileName:     backupFileName,
 		BackupMethod: xtrabackup,
+		Position:     position,
 		SkipCompress: !*backupStorageCompress,
+		Params:       *xtrabackupBackupFlags,
 	}
 
 	data, err := json.MarshalIndent(bm, "", "  ")
