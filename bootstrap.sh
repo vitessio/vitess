@@ -325,7 +325,7 @@ if [ "$BUILD_TESTS" == 1 ] ; then
     echo "MYSQL_FLAVOR environment variable not set. Using default: $MYSQL_FLAVOR"
   fi
   case "$MYSQL_FLAVOR" in
-    "MySQL56")
+    "MySQL56" | "MySQL80")
       myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
       [[ "$myversion" =~ Distrib\ 5\.[67] || "$myversion" =~ Ver\ 8\. ]] || fail "Couldn't find MySQL 5.6+ in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
       echo "Found MySQL 5.6+ installation in $VT_MYSQL_ROOT."
