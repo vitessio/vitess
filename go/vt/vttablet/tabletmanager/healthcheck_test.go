@@ -719,9 +719,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	if err := agent.TabletExternallyReparented(ctx, "unused_id"); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-agent.finalizeReparentCtx.Done():
-	}
+	<-agent.finalizeReparentCtx.Done()
 	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)

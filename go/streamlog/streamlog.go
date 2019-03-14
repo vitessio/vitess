@@ -171,9 +171,9 @@ func (logger *StreamLogger) LogToFile(path string, logf LogFormatter) (chan inte
 	go func() {
 		for {
 			select {
-			case record, _ := <-logChan:
+			case record := <-logChan:
 				logf(f, formatParams, record)
-			case _, _ = <-rotateChan:
+			case <-rotateChan:
 				f.Close()
 				f, _ = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 			}

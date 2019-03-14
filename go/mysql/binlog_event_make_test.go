@@ -356,11 +356,11 @@ func TestRowsEvent(t *testing.T) {
 
 	// Test the Rows we just created, to be sure.
 	// 1076895760 is 0x40302010.
-	identifies, err := rows.StringIdentifiesForTests(tm, 0)
+	identifies, _ := rows.StringIdentifiesForTests(tm, 0)
 	if expected := []string{"1076895760", "abc"}; !reflect.DeepEqual(identifies, expected) {
 		t.Fatalf("bad Rows idenfity, got %v expected %v", identifies, expected)
 	}
-	values, err := rows.StringValuesForTests(tm, 0)
+	values, _ := rows.StringValuesForTests(tm, 0)
 	if expected := []string{"1076895760", "abcd"}; !reflect.DeepEqual(values, expected) {
 		t.Fatalf("bad Rows data, got %v expected %v", values, expected)
 	}
@@ -373,7 +373,7 @@ func TestRowsEvent(t *testing.T) {
 		t.Fatalf("NewRowsEvent().IsUpdateRows() if false")
 	}
 
-	event, _, err = event.StripChecksum(f)
+	event, _, err := event.StripChecksum(f)
 	if err != nil {
 		t.Fatalf("StripChecksum failed: %v", err)
 	}

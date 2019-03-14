@@ -544,7 +544,7 @@ func TestCellLengthAndData(t *testing.T) {
 
 		// Test CellValue.
 		out, l, err := CellValue(padded, 1, tcase.typ, tcase.metadata, tcase.styp)
-		if err != nil || l != len(tcase.data) || out.Type() != tcase.out.Type() || bytes.Compare(out.Raw(), tcase.out.Raw()) != 0 {
+		if err != nil || l != len(tcase.data) || out.Type() != tcase.out.Type() || !bytes.Equal(out.Raw(), tcase.out.Raw()) {
 			t.Errorf("testcase cellData(%v,%v) returned unexpected result: %v %v %v, was expecting %v %v <nil>", tcase.typ, tcase.data, out, l, err, tcase.out, len(tcase.data))
 		}
 	}

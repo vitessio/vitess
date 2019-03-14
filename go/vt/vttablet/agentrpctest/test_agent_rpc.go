@@ -1271,6 +1271,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	agentRPCTestStopSlave(ctx, t, client, tablet)
 	agentRPCTestStopSlaveMinimum(ctx, t, client, tablet)
 	agentRPCTestStartSlave(ctx, t, client, tablet)
+	agentRPCTestStartSlaveUntilAfter(ctx, t, client, tablet)
 	agentRPCTestTabletExternallyReparented(ctx, t, client, tablet)
 	agentRPCTestGetSlaves(ctx, t, client, tablet)
 

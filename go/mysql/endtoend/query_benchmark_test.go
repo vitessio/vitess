@@ -111,12 +111,12 @@ func benchmarkParallelReads(b *testing.B, params *mysql.ConnParams, parallelCoun
 
 			conn, err := mysql.Connect(ctx, params)
 			if err != nil {
-				b.Fatal(err)
+				b.Error(err)
 			}
 
 			for j := 0; j < b.N; j++ {
 				if _, err := conn.ExecuteFetch("select * from a", 10000, true); err != nil {
-					b.Fatalf("ExecuteFetch(%v, %v) failed: %v", i, j, err)
+					b.Errorf("ExecuteFetch(%v, %v) failed: %v", i, j, err)
 				}
 			}
 			conn.Close()

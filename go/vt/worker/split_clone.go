@@ -1151,7 +1151,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 	scw.setState(state)
 	start := time.Now()
 	defer func() {
-		statsStateDurationsNs.Set(string(state), time.Now().Sub(start).Nanoseconds())
+		statsStateDurationsNs.Set(string(state), time.Since(start).Nanoseconds())
 	}()
 
 	var firstSourceTablet, err = scw.findFirstSourceTablet(ctx, state)
@@ -1237,10 +1237,6 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 func (scw *SplitCloneWorker) setUpVReplication(ctx context.Context) error {
 	wg := sync.WaitGroup{}
-	// Create and populate the vreplication table to give filtered replication
-	// a starting point.
-	queries := make([]string, 0, 4)
-	queries = append(queries, binlogplayer.CreateVReplicationTable()...)
 
 	// get the current position from the sources
 	sourcePositions := make([]string, len(scw.sourceShards))

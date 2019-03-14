@@ -107,7 +107,7 @@ func (ts *Server) ResolveShardWildcard(ctx context.Context, param string) ([]Key
 			for _, s := range shardNames {
 				matched, err := path.Match(shard, s)
 				if err != nil {
-					return nil, vterrors.Wrapf(err, "Invalid pattern %v", shard)
+					return nil, vterrors.Wrapf(err, "invalid pattern %v", shard)
 				}
 				if matched {
 					result = append(result, KeyspaceShard{matchedKeyspace, s})
@@ -130,7 +130,7 @@ func (ts *Server) ResolveShardWildcard(ctx context.Context, param string) ([]Key
 					// no shard, ignore
 				default:
 					// other error
-					return nil, vterrors.Wrapf(err, "Cannot read shard %v/%v", matchedKeyspace, shard)
+					return nil, vterrors.Wrapf(err, "cannot read shard %v/%v", matchedKeyspace, shard)
 				}
 			} else {
 				// keyspace and shards are not wildcards, just add the value

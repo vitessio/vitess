@@ -134,12 +134,9 @@ func BenchmarkThrottlerDisabled(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		for {
-			backoff := throttler.Throttle(0)
-			if backoff != NotThrottled {
-				b.Fatalf("unthrottled throttler should never have throttled us: %v", backoff)
-			}
-			break
+		backoff := throttler.Throttle(0)
+		if backoff != NotThrottled {
+			b.Fatalf("unthrottled throttler should never have throttled us: %v", backoff)
 		}
 	}
 }

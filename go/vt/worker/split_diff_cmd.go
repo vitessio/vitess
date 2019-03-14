@@ -216,9 +216,12 @@ func interactiveSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangl
 	minHealthyRdonlyTabletsStr := r.FormValue("minHealthyRdonlyTablets")
 	parallelDiffsCountStr := r.FormValue("parallelDiffsCount")
 	minHealthyRdonlyTablets, err := strconv.ParseInt(minHealthyRdonlyTabletsStr, 0, 64)
-	parallelDiffsCount, err := strconv.ParseInt(parallelDiffsCountStr, 0, 64)
 	if err != nil {
 		return nil, nil, nil, vterrors.Wrap(err, "cannot parse minHealthyRdonlyTablets")
+	}
+	parallelDiffsCount, err := strconv.ParseInt(parallelDiffsCountStr, 0, 64)
+	if err != nil {
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse parallelDiffsCount")
 	}
 
 	// start the diff job

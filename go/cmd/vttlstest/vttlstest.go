@@ -87,7 +87,7 @@ func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %v:\n", os.Args[0])
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, doc)
+		fmt.Fprint(os.Stderr, doc)
 	}
 	flag.Parse()
 	args := flag.Args()

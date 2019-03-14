@@ -209,7 +209,8 @@ type ActionAgent struct {
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
 	_lockTablesConnection *dbconnpool.DBConnection
 	_lockTablesTimer      *time.Timer
-	_lockTablesTimeout    *time.Duration
+	// unused
+	//_lockTablesTimeout    *time.Duration
 }
 
 // NewActionAgent creates a new ActionAgent and registers all the
