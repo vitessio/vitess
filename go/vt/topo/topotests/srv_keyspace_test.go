@@ -322,8 +322,8 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	}
 	defer unlock(&err)
 
-	if err := ts.UpdateSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_MASTER, []string{cell}, false /* remove */); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	if err := ts.AddSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_MASTER, []string{cell}); err != nil {
+		t.Fatalf("AddSrvKeyspacePartitions() failed: %v", err)
 	}
 
 	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
@@ -342,7 +342,7 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	}
 
 	if string(got) != string(want) {
-		t.Errorf("UpdateSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+		t.Errorf("AddSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
 	}
 
 	// removing works
@@ -360,8 +360,8 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 		},
 	}
 
-	if err = ts.UpdateSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_MASTER, []string{cell}, true /* remove */); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	if err = ts.DeleteSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_MASTER, []string{cell}); err != nil {
+		t.Fatalf("DeleteSrvKeyspacePartitions() failed: %v", err)
 	}
 
 	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
@@ -380,7 +380,7 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	}
 
 	if string(got) != string(want) {
-		t.Errorf("UpdateSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+		t.Errorf("DeleteSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
 	}
 
 	// You can add to partitions that do not exist
@@ -411,8 +411,8 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 		},
 	}
 
-	if err = ts.UpdateSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_REPLICA, []string{cell}, false /* remove */); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	if err = ts.AddSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_REPLICA, []string{cell}); err != nil {
+		t.Fatalf("AddSrvKeyspacePartitions() failed: %v", err)
 	}
 
 	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
@@ -431,13 +431,13 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	}
 
 	if string(got) != string(want) {
-		t.Errorf("UpdateSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+		t.Errorf("SrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
 	}
 
 	// it works in multiple cells
 
-	if err = ts.UpdateSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_REPLICA, nil, false /* remove */); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	if err = ts.AddSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_REPLICA, nil); err != nil {
+		t.Fatalf("AddSrvKeyspacePartitions() failed: %v", err)
 	}
 
 	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
@@ -456,7 +456,7 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	}
 
 	if string(got) != string(want) {
-		t.Errorf("UpdateSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+		t.Errorf("AddSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
 	}
 
 	// Now let's get the srvKeyspace in cell2. Partition should have been added there too.
@@ -466,7 +466,7 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	}
 
 	if string(got) != string(want) {
-		t.Errorf("UpdateSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+		t.Errorf("GetSrvKeyspace() failure. Got %v, want: %v", string(got), string(want))
 	}
 
 }
