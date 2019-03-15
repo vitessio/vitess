@@ -189,12 +189,12 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		player := binlogplayer.NewBinlogPlayerKeyRange(dbClient, tablet, ct.source.KeyRange, ct.id, ct.blpStats)
 		return player.ApplyBinlogEvents(ctx)
 	case ct.source.Filter != nil:
-		// VPlayer requires the timezone to be UTC.
+		// vreplicator requires the timezone to be UTC.
 		if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", 10000); err != nil {
 			return err
 		}
-		vplayer := newVPlayer(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld)
-		return vplayer.Play(ctx)
+		vreplicator := newVReplicator(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld)
+		return vreplicator.Play(ctx)
 	}
 	return fmt.Errorf("missing source")
 }

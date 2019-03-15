@@ -1987,10 +1987,26 @@ func (tsv *TabletServer) startRequest(ctx context.Context, target *querypb.Targe
 	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state %s", stateName[tsv.state])
 
 verifyTarget:
-	if err := tsv.verifyTarget(ctx, target); err != nil {
-		return err
+	if target != nil {
+		// a valid target needs to be used
+		switch {
+		case target.Keyspace != tsv.target.Keyspace:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
+		case target.Shard != tsv.target.Shard:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
+		case target.TabletType != tsv.target.TabletType:
+			for _, otherType := range tsv.alsoAllow {
+				if target.TabletType == otherType {
+					goto ok
+				}
+			}
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
+		}
+	} else if !tabletenv.IsLocalContext(ctx) {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
 	}
 
+ok:
 	tsv.requests.Add(1)
 	return nil
 }
