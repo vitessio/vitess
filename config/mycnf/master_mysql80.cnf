@@ -30,5 +30,9 @@ plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisy
 rpl_semi_sync_master_timeout = 1000000000000000000
 rpl_semi_sync_master_wait_no_slave = 1
 
-#disable mysqlx
+# disable mysqlx
 mysqlx = 0
+
+# 8.0 changes the default auth-plugin to caching_sha2_password
+default_authentication_plugin = mysql_native_password
+secure_file_priv = NULL
