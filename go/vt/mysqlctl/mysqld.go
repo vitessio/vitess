@@ -653,6 +653,11 @@ func getMycnfTemplates(root string) []string {
 		if !contains(cnfTemplatePaths, path) {
 			cnfTemplatePaths = append(cnfTemplatePaths, path)
 		}
+	case "MySQL80":
+		path := path.Join(root, "config/mycnf/master_mysql80.cnf")
+		if !contains(cnfTemplatePaths, path) {
+			cnfTemplatePaths = append(cnfTemplatePaths, path)
+		}
 	default:
 		path := path.Join(root, "config/mycnf/master_mysql56.cnf")
 		// By default we assume Mysql56 compatable
