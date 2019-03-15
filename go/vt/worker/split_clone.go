@@ -1314,7 +1314,7 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 	if err != nil {
 		return nil, nil, vterrors.Wrapf(err, "cannot get generated columns from source %v", topoproto.TabletAliasString(tablet.Alias))
 	}
-	generatedColumns := make(map[string]map[string]bool)
+	generatedColumns := make(map[string]map[string]bool) //in hindsight, this should have been map[string]bool tableName.columnName->t/f
 	result := sqltypes.Proto3ToResult(qr)
 	for _, row := range result.Rows {
 		rowset, ok := generatedColumns[row[0].ToString()]

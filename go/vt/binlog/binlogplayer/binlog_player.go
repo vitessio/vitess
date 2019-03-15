@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -123,13 +124,14 @@ type BinlogPlayer struct {
 	tables []string
 
 	// common to all
-	uid            uint32
-	position       mysql.Position
-	stopPosition   mysql.Position
-	blplStats      *Stats
-	defaultCharset *binlogdatapb.Charset
-	currentCharset *binlogdatapb.Charset
-	deadlockRetry  time.Duration
+	uid              uint32
+	position         mysql.Position
+	stopPosition     mysql.Position
+	blplStats        *Stats
+	defaultCharset   *binlogdatapb.Charset
+	currentCharset   *binlogdatapb.Charset
+	deadlockRetry    time.Duration
+	generatedColumns map[string][]int64
 }
 
 // NewBinlogPlayerKeyRange returns a new BinlogPlayer pointing at the server
@@ -137,7 +139,7 @@ type BinlogPlayer struct {
 // with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
 func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRange *topodatapb.KeyRange, uid uint32, blplStats *Stats) *BinlogPlayer {
-	result := &BinlogPlayer{
+	blp := &BinlogPlayer{
 		tablet:        tablet,
 		dbClient:      dbClient,
 		keyRange:      keyRange,
@@ -145,7 +147,27 @@ func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRa
 		blplStats:     blplStats,
 		deadlockRetry: 1 * time.Second,
 	}
-	return result
+	qr, err := blp.exec(fmt.Sprintf("select TABLE_NAME, ORDINAL_POSITION from information_schema.COLUMNS where TABLE_SCHEMA = '%s' and GENERATION_EXPRESSION != ''", tablet.Keyspace))
+	if err != nil {
+		log.Warning("could not determine generated columns (query failure)")
+	}
+	generatedColumns := make(map[string][]int64)
+	for _, row := range qr.Rows {
+		arr, ok := generatedColumns[row[0].ToString()]
+		if !ok {
+			arr = make([]int64, 0, len(qr.Rows))
+			generatedColumns[row[0].ToString()] = arr
+		}
+		position, err := sqltypes.ToInt64(row[1])
+		if err != nil {
+			log.Warning("could not determine generated columns (conversion failure)")
+		}
+		// we subtract 1 here because mysql indexes columns starting at 1
+		// but we want to use this to remove entries from 0-indexed arrays
+		arr = append(arr, position-1)
+	}
+	blp.generatedColumns = generatedColumns
+	return blp
 }
 
 // NewBinlogPlayerTables returns a new BinlogPlayer pointing at the server
@@ -153,7 +175,7 @@ func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRa
 // with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
 func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables []string, uid uint32, blplStats *Stats) *BinlogPlayer {
-	result := &BinlogPlayer{
+	blp := &BinlogPlayer{
 		tablet:        tablet,
 		dbClient:      dbClient,
 		tables:        tables,
@@ -161,7 +183,27 @@ func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables 
 		blplStats:     blplStats,
 		deadlockRetry: 1 * time.Second,
 	}
-	return result
+	qr, err := blp.exec(fmt.Sprintf("select TABLE_NAME, ORDINAL_POSITION from information_schema.COLUMNS where TABLE_SCHEMA = '%s' and GENERATION_EXPRESSION != ''", tablet.Keyspace))
+	if err != nil {
+		log.Warning("could not determine generated columns (query failure)")
+	}
+	generatedColumns := make(map[string][]int64)
+	for _, row := range qr.Rows {
+		arr, ok := generatedColumns[row[0].ToString()]
+		if !ok {
+			arr = make([]int64, 0, len(qr.Rows))
+			generatedColumns[row[0].ToString()] = arr
+		}
+		position, err := sqltypes.ToInt64(row[1])
+		if err != nil {
+			log.Warning("could not determine generated columns (conversion failure)")
+		}
+		// we subtract 1 here because mysql indexes columns starting at 1
+		// but we want to use this to remove entries from 0-indexed arrays
+		arr = append(arr, position-1)
+	}
+	blp.generatedColumns = generatedColumns
+	return blp
 }
 
 // ApplyBinlogEvents makes an RPC request to BinlogServer
@@ -365,6 +407,10 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 	}
 }
 
+func (blp *BinlogPlayer) generatedColumnIndexes(tableName string) []int64 {
+	return blp.generatedColumns[tableName]
+}
+
 func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) (ok bool, err error) {
 	txnStartTime := time.Now()
 	if err = blp.dbClient.Begin(); err != nil {
@@ -394,7 +440,64 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				blp.currentCharset = stmtCharset
 			}
 		}
-		if _, err = blp.exec(string(stmt.Sql)); err == nil {
+		var sql string
+		switch stmt.Category {
+		case binlogdatapb.BinlogTransaction_Statement_BL_INSERT:
+			ins, err := sqlparser.Parse(string(stmt.Sql))
+			if err != nil {
+				return false, err
+			}
+			insert, ok := ins.(*sqlparser.Insert)
+			if !ok {
+				return false, fmt.Errorf("binlog_player encountered a statement of category INSERT for which sqlparser returns other than Insert: %s", stmt.Sql)
+			}
+			indexesToDrop := blp.generatedColumnIndexes(insert.Table.Name.String())
+			var idx int64
+			for i := len(indexesToDrop) - 1; i >= 0; i-- {
+				idx = indexesToDrop[i]
+				insert.Columns = append(insert.Columns[:idx], insert.Columns[idx+1:]...)
+			}
+			values, ok := insert.Rows.(sqlparser.Values)
+			if !ok {
+				return false, fmt.Errorf("binlog_player encountered an insert where InsertRows is not of type Values: %s", stmt.Sql)
+			}
+			// i think there will only ever be one row here in the binlog
+			for _, row := range values {
+				for i := len(indexesToDrop) - 1; i >= 0; i-- {
+					idx = indexesToDrop[i]
+					row = append(row[:idx], row[idx+1:]...)
+				}
+			}
+			sql = sqlparser.String(insert)
+		case binlogdatapb.BinlogTransaction_Statement_BL_UPDATE:
+			upd, err := sqlparser.Parse(string(stmt.Sql))
+			if err != nil {
+				return false, err
+			}
+			update, ok := upd.(*sqlparser.Update)
+			if !ok {
+				return false, fmt.Errorf("binlog_player encountered a statement of category UPDATE for which sqlparser returns other than Update: %s", stmt.Sql)
+			}
+			tblExpr, ok := update.TableExprs[0].(*sqlparser.AliasedTableExpr)
+			if !ok {
+				return false, fmt.Errorf("binlog_player encountered an update with TableExpression not of type AliasedTableExpression: %s", stmt.Sql)
+			}
+			tblName, ok := tblExpr.Expr.(sqlparser.TableName)
+			if !ok {
+				return false, fmt.Errorf("binlog_player encountered an update with SimpleTableExpr not of type TableName: %s", stmt.Sql)
+			}
+			tableName := tblName.Name.String()
+			indexesToDrop := blp.generatedColumnIndexes(tableName)
+			var idx int64
+			for i := len(indexesToDrop) - 1; i >= 0; i-- {
+				idx = indexesToDrop[i]
+				update.Exprs = append(update.Exprs[:idx], update.Exprs[idx+1:]...)
+			}
+			sql = sqlparser.String(update)
+		default:
+			sql = string(stmt.Sql)
+		}
+		if _, err = blp.exec(sql); err == nil {
 			continue
 		}
 		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock {
