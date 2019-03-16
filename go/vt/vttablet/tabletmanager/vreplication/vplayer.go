@@ -38,10 +38,9 @@ type vplayer struct {
 	vr *vreplicator
 
 	pos mysql.Position
-	// unsavedGTID when we receive a GTID event and reset
-	// if it gets saved. If Fetch returns on idleTimeout,
-	// we save the last unsavedGTID.
-	unsavedGTID *binlogdatapb.VEvent
+	// unsavedEvent is saved any time we skip an event without
+	// saving: This can be an empty commit or a skipped DDL.
+	unsavedEvent *binlogdatapb.VEvent
 	// timeLastSaved is set every time a GTID is saved.
 	timeLastSaved time.Time
 	// lastTimestampNs is the last timestamp seen so far.
@@ -50,24 +49,24 @@ type vplayer struct {
 	timeOffsetNs int64
 	stopPos      mysql.Position
 
-	// tplans[table] is built for each table based on pplan and schema info
+	// tablePlans[table] is built for each table based on pplan and schema info
 	// about the table.
-	tplans map[string]*TablePlan
+	tablePlans map[string]*TablePlan
 }
 
 func newVPlayer(vr *vreplicator) *vplayer {
 	return &vplayer{
 		vr:            vr,
 		timeLastSaved: time.Now(),
-		tplans:        make(map[string]*TablePlan),
+		tablePlans:    make(map[string]*TablePlan),
 	}
 }
 
-func (vp *vplayer) replicate(ctx context.Context, settings binlogplayer.VRSettings) error {
+func (vp *vplayer) play(ctx context.Context, settings binlogplayer.VRSettings) error {
 	if err := vp.vr.setState(binlogplayer.BlpRunning, ""); err != nil {
 		return err
 	}
-	if err := vp.play(ctx, settings); err != nil {
+	if err := vp.fetchAndApply(ctx, settings); err != nil {
 		msg := err.Error()
 		vp.vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 			Time:    time.Now(),
@@ -81,7 +80,7 @@ func (vp *vplayer) replicate(ctx context.Context, settings binlogplayer.VRSettin
 	return nil
 }
 
-func (vp *vplayer) play(ctx context.Context, settings binlogplayer.VRSettings) error {
+func (vp *vplayer) fetchAndApply(ctx context.Context, settings binlogplayer.VRSettings) error {
 	var err error
 	vp.pos, err = mysql.DecodePosition(settings.StartPos)
 	if err != nil {
@@ -115,10 +114,10 @@ func (vp *vplayer) play(ctx context.Context, settings binlogplayer.VRSettings) e
 		Shard:      vp.vr.sourceTablet.Shard,
 		TabletType: vp.vr.sourceTablet.Type,
 	}
-	log.Infof("Sending vstream command: %v", vp.vr.pplan.VStreamFilter)
+	log.Infof("Sending vstream command: %v", vp.vr.replicatorPlan.VStreamFilter)
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vsClient.VStream(ctx, target, settings.StartPos, vp.vr.pplan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+		streamErr <- vsClient.VStream(ctx, target, settings.StartPos, vp.vr.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
 	}()
@@ -164,7 +163,7 @@ func (vp *vplayer) play(ctx context.Context, settings binlogplayer.VRSettings) e
 }
 
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
-	tplan := vp.tplans[rowEvent.TableName]
+	tplan := vp.tablePlans[rowEvent.TableName]
 	if tplan == nil {
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
@@ -188,7 +187,7 @@ func (vp *vplayer) updatePos(ts int64) error {
 		vp.vr.dbClient.Rollback()
 		return fmt.Errorf("error %v updating position", err)
 	}
-	vp.unsavedGTID = nil
+	vp.unsavedEvent = nil
 	vp.timeLastSaved = time.Now()
 	vp.vr.stats.SetLastPosition(vp.pos)
 	return nil
@@ -243,13 +242,9 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		// 1. Fetch was idle for idleTimeout.
 		// 2. We've been receiving empty events for longer than idleTimeout.
 		// In both cases, now > timeLastSaved. If so, any unsaved GTID should be saved.
-		if time.Since(vp.timeLastSaved) >= idleTimeout && vp.unsavedGTID != nil {
-			// Although unlikely, we should not save if a transaction is still open.
-			// This can happen if a large transaction is split as multiple events.
-			if !vp.vr.dbClient.InTransaction {
-				if err := vp.updatePos(vp.unsavedGTID.Timestamp); err != nil {
-					return err
-				}
+		if time.Since(vp.timeLastSaved) >= idleTimeout && vp.unsavedEvent != nil {
+			if err := vp.updatePos(vp.unsavedEvent.Timestamp); err != nil {
+				return err
 			}
 		}
 		for i, events := range items {
@@ -304,7 +299,8 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		vp.pos = pos
-		vp.unsavedGTID = event
+		// A new position should not be saved until a commit or DDL.
+		vp.unsavedEvent = nil
 		if vp.stopPos.IsZero() {
 			return nil
 		}
@@ -325,6 +321,8 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 
 		if !vp.vr.dbClient.InTransaction {
+			// We're skipping an empty transaction. We may have to save the position on inactivity.
+			vp.unsavedEvent = event
 			return nil
 		}
 		if err := vp.updatePos(event.Timestamp); err != nil {
@@ -350,7 +348,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err != nil {
 			return err
 		}
-		vp.tplans[event.FieldEvent.TableName] = tplan
+		vp.tablePlans[event.FieldEvent.TableName] = tplan
 	case binlogdatapb.VEventType_ROW:
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
@@ -364,7 +362,8 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 		switch vp.vr.source.OnDdl {
 		case binlogdatapb.OnDDLAction_IGNORE:
-			// no-op
+			// We're skipping a DDL. We may have to save the position on inactivity.
+			vp.unsavedEvent = event
 		case binlogdatapb.OnDDLAction_STOP:
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err

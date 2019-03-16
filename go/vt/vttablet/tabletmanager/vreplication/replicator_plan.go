@@ -28,15 +28,15 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// PlayerPlan is the execution plan for a player stream.
-type PlayerPlan struct {
+// ReplicatorPlan is the execution plan for the replicator.
+type ReplicatorPlan struct {
 	VStreamFilter *binlogdatapb.Filter
 	TargetTables  map[string]*TablePlan
 	TablePlans    map[string]*TablePlan
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
-func (pp *PlayerPlan) MarshalJSON() ([]byte, error) {
+func (pp *ReplicatorPlan) MarshalJSON() ([]byte, error) {
 	var targets []string
 	for k := range pp.TargetTables {
 		targets = append(targets, k)
@@ -56,7 +56,7 @@ func (pp *PlayerPlan) MarshalJSON() ([]byte, error) {
 
 // TablePlan is the execution plan for a table within a player stream.
 type TablePlan struct {
-	Name         string
+	TargetName   string
 	SendRule     *binlogdatapb.Rule
 	PKReferences []string
 	InsertFront  *sqlparser.ParsedQuery
@@ -71,14 +71,14 @@ type TablePlan struct {
 // MarshalJSON performs a custom JSON Marshalling.
 func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 	v := struct {
-		Name         string
+		TargetName   string
 		SendRule     string
 		PKReferences []string               `json:",omitempty"`
 		Insert       *sqlparser.ParsedQuery `json:",omitempty"`
 		Update       *sqlparser.ParsedQuery `json:",omitempty"`
 		Delete       *sqlparser.ParsedQuery `json:",omitempty"`
 	}{
-		Name:         tp.Name,
+		TargetName:   tp.TargetName,
 		SendRule:     tp.SendRule.Match,
 		PKReferences: tp.PKReferences,
 		Insert:       tp.Insert,

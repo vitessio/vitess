@@ -73,13 +73,13 @@ const (
 	insertIgnore
 )
 
-// buildPlayerPlan builds a PlayerPlan from the input filter.
+// buildPlayerPlan builds a ReplicatorPlan from the input filter.
 // The filter is matched against the target schema. For every table matched,
 // a table-specific rule is built to be sent to the source. We don't send the
 // original rule to the source because it may not match the same tables as the
 // target.
-func buildPlayerPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string) (*PlayerPlan, error) {
-	plan := &PlayerPlan{
+func buildPlayerPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string) (*ReplicatorPlan, error) {
+	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{},
 		TargetTables:  make(map[string]*TablePlan),
 		TablePlans:    make(map[string]*TablePlan),
@@ -103,23 +103,23 @@ nextTable:
 				}
 				plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, sendRule)
 				tablePlan := &TablePlan{
-					Name:     tableName,
-					SendRule: sendRule,
+					TargetName: tableName,
+					SendRule:   sendRule,
 				}
 				plan.TargetTables[tableName] = tablePlan
 				plan.TablePlans[tableName] = tablePlan
 				continue nextTable
 			case rule.Match == tableName:
-				sendRule, tablePlan, err := buildTablePlan(rule, tableKeys)
+				tablePlan, err := buildTablePlan(rule, tableKeys)
 				if err != nil {
 					return nil, err
 				}
-				if _, ok := plan.TablePlans[sendRule.Match]; ok {
+				if _, ok := plan.TablePlans[tablePlan.SendRule.Match]; ok {
 					continue
 				}
-				plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, sendRule)
+				plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, tablePlan.SendRule)
 				plan.TargetTables[tableName] = tablePlan
-				plan.TablePlans[sendRule.Match] = tablePlan
+				plan.TablePlans[tablePlan.SendRule.Match] = tablePlan
 				continue nextTable
 			}
 		}
@@ -136,10 +136,10 @@ func buildQuery(tableName, filter string) string {
 	return buf.String()
 }
 
-func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string) (*binlogdatapb.Rule, *TablePlan, error) {
+func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string) (*TablePlan, error) {
 	sel, fromTable, err := analyzeSelectFrom(rule.Filter)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	sendRule := &binlogdatapb.Rule{
 		Match: fromTable,
@@ -147,17 +147,17 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string) (*bi
 
 	if expr, ok := sel.SelectExprs[0].(*sqlparser.StarExpr); ok {
 		if len(sel.SelectExprs) != 1 {
-			return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(sel))
+			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(sel))
 		}
 		if !expr.TableName.IsEmpty() {
-			return nil, nil, fmt.Errorf("unsupported qualifier for '*' expression: %v", sqlparser.String(expr))
+			return nil, fmt.Errorf("unsupported qualifier for '*' expression: %v", sqlparser.String(expr))
 		}
 		sendRule.Filter = rule.Filter
 		tablePlan := &TablePlan{
-			Name:     rule.Match,
-			SendRule: sendRule,
+			TargetName: rule.Match,
+			SendRule:   sendRule,
 		}
-		return sendRule, tablePlan, nil
+		return tablePlan, nil
 	}
 
 	tpb := &tablePlanBuilder{
@@ -170,19 +170,19 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string) (*bi
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if err := tpb.analyzePK(tableKeys); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	sendRule.Filter = sqlparser.String(tpb.sendSelect)
 	tablePlan := tpb.generate(tableKeys)
 	tablePlan.SendRule = sendRule
-	return sendRule, tablePlan, nil
+	return tablePlan, nil
 }
 
 func buildTablePlanFromFields(tableName string, fields []*querypb.Field, tableKeys map[string][]string) (*TablePlan, error) {
@@ -224,7 +224,7 @@ func (tpb *tablePlanBuilder) generate(tableKeys map[string][]string) *TablePlan 
 	bvf := &bindvarFormatter{}
 
 	return &TablePlan{
-		Name:         tpb.name.String(),
+		TargetName:   tpb.name.String(),
 		PKReferences: pkrefs,
 		InsertFront:  tpb.generateInsertPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
 		InsertValues: tpb.generateValuesPart(sqlparser.NewTrackedBuffer(bvf.formatter), bvf),

@@ -130,7 +130,7 @@ func TestPlayerCopyTablePartial(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped, playerEngine.dbName)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)

@@ -61,8 +61,8 @@ type vreplicator struct {
 
 	tableKeys map[string][]string
 
-	// pplan is built based on the source Filter at the beginning.
-	pplan *PlayerPlan
+	// replicatorPlan is built based on the source Filter at the beginning.
+	replicatorPlan *ReplicatorPlan
 }
 
 func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topodatapb.Tablet, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon) *vreplicator {
@@ -76,7 +76,7 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *
 	}
 }
 
-func (vr *vreplicator) Play(ctx context.Context) error {
+func (vr *vreplicator) Replicate(ctx context.Context) error {
 	tableKeys, err := vr.buildTableKeys()
 	if err != nil {
 		return err
@@ -86,7 +86,7 @@ func (vr *vreplicator) Play(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	vr.pplan = plan
+	vr.replicatorPlan = plan
 
 	settings, err := binlogplayer.ReadVRSettings(vr.dbClient, vr.id)
 	if err != nil {
@@ -108,7 +108,7 @@ func (vr *vreplicator) Play(ctx context.Context) error {
 		return nil
 	}
 
-	return newVPlayer(vr).replicate(ctx, settings)
+	return newVPlayer(vr).play(ctx, settings)
 }
 
 func (vr *vreplicator) buildTableKeys() (map[string][]string, error) {
@@ -132,18 +132,17 @@ func (vr *vreplicator) setState(state, message string) error {
 }
 
 func (vr *vreplicator) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent) (*TablePlan, error) {
-	prelim := vr.pplan.TablePlans[fieldEvent.TableName]
+	prelim := vr.replicatorPlan.TablePlans[fieldEvent.TableName]
 	if prelim == nil {
-		prelim = &TablePlan{
-			Name: fieldEvent.TableName,
-		}
+		// Unreachable code.
+		return nil, fmt.Errorf("plan not found for %s", fieldEvent.TableName)
 	}
 	if prelim.Insert != nil {
 		tplanv := *prelim
 		tplanv.Fields = fieldEvent.Fields
 		return &tplanv, nil
 	}
-	tplan, err := buildTablePlanFromFields(prelim.Name, fieldEvent.Fields, vr.tableKeys)
+	tplan, err := buildTablePlanFromFields(prelim.TargetName, fieldEvent.Fields, vr.tableKeys)
 	if err != nil {
 		return nil, err
 	}
