@@ -30,7 +30,7 @@ type TestPlayerPlan struct {
 }
 
 type TestTablePlan struct {
-	Name         string
+	TargetName   string
 	SendRule     string
 	PKReferences []string `json:",omitempty"`
 	Insert       string   `json:",omitempty"`
@@ -60,8 +60,8 @@ func TestBuildPlayerPlan(t *testing.T) {
 			TargetTables: []string{"t1"},
 			TablePlans: map[string]*TestTablePlan{
 				"t1": {
-					Name:     "t1",
-					SendRule: "t1",
+					TargetName: "t1",
+					SendRule:   "t1",
 				},
 			},
 		},
@@ -83,8 +83,8 @@ func TestBuildPlayerPlan(t *testing.T) {
 			TargetTables: []string{"t1"},
 			TablePlans: map[string]*TestTablePlan{
 				"t2": {
-					Name:     "t1",
-					SendRule: "t2",
+					TargetName: "t1",
+					SendRule:   "t2",
 				},
 			},
 		},
@@ -106,7 +106,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 			TargetTables: []string{"t1"},
 			TablePlans: map[string]*TestTablePlan{
 				"t2": {
-					Name:         "t1",
+					TargetName:   "t1",
 					SendRule:     "t2",
 					PKReferences: []string{"c1"},
 					Insert:       "insert into t1(c1,c2) values (:a_c1,:a_c2)",
@@ -133,7 +133,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 			TargetTables: []string{"t1"},
 			TablePlans: map[string]*TestTablePlan{
 				"t2": {
-					Name:         "t1",
+					TargetName:   "t1",
 					SendRule:     "t2",
 					PKReferences: []string{"c1"},
 					Insert:       "insert into t1(c1,c2,c3) values (:a_c1,:a_c2,:a_c3) on duplicate key update c2=values(c2)",
@@ -160,7 +160,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 			TargetTables: []string{"t1"},
 			TablePlans: map[string]*TestTablePlan{
 				"t2": {
-					Name:         "t1",
+					TargetName:   "t1",
 					SendRule:     "t2",
 					PKReferences: []string{"c1"},
 					Insert:       "insert ignore into t1(c1,c2,c3) values (:a_c1,:a_c2,:a_c3)",
@@ -185,7 +185,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 			TargetTables: []string{"t1"},
 			TablePlans: map[string]*TestTablePlan{
 				"t1": {
-					Name:         "t1",
+					TargetName:   "t1",
 					SendRule:     "t1",
 					PKReferences: []string{"a"},
 					Insert:       "insert into t1(c1,c2) values (foo(:a_a),:a_b)",
@@ -211,7 +211,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 			TargetTables: []string{"t1"},
 			TablePlans: map[string]*TestTablePlan{
 				"t1": {
-					Name:         "t1",
+					TargetName:   "t1",
 					SendRule:     "t1",
 					PKReferences: []string{"a", "b"},
 					Insert:       "insert into t1(c1,c2) values (:a_a + :a_b,:a_c)",
