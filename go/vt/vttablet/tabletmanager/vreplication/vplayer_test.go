@@ -612,7 +612,6 @@ func TestPlayerDDL(t *testing.T) {
 	// It should stop at the next DDL
 	expectDBClientQueries(t, []string{
 		"/update.*'Running'",
-		"/update.*'Running'",
 		"begin",
 		fmt.Sprintf("/update.*'%s'", pos2),
 		"/update _vt.vreplication set state='Stopped'",
@@ -630,7 +629,7 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 add column val2 varchar(128)"})
 	expectDBClientQueries(t, []string{
 		"alter table t1 add column val2 varchar(128)",
-		"/update _vt.vreplication set state='Error'",
+		"/update _vt.vreplication set message='Duplicate",
 	})
 	cancel()
 
@@ -704,8 +703,7 @@ func TestPlayerStopPos(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectDBClientQueries(t, []string{
-		"/update.*'Running'", // done by Engine
-		"/update.*'Running'", // done by vplayer on start
+		"/update.*'Running'",
 		"begin",
 		"insert into yes(id,val) values (1,'aaa')",
 		fmt.Sprintf("/update.*'%s'", stopPos),
@@ -727,8 +725,7 @@ func TestPlayerStopPos(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectDBClientQueries(t, []string{
-		"/update.*'Running'", // done by Engine
-		"/update.*'Running'", // done by vplayer on start
+		"/update.*'Running'",
 		"begin",
 		// Since 'no' generates empty transactions that are skipped by
 		// vplayer, a commit is done only for the stop position event.
@@ -743,8 +740,7 @@ func TestPlayerStopPos(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectDBClientQueries(t, []string{
-		"/update.*'Running'", // done by Engine
-		"/update.*'Running'", // done by vplayer on start
+		"/update.*'Running'",
 		"/update.*'Stopped'.*already reached",
 	})
 }
@@ -1202,7 +1198,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 
 	streamerEngine.Close()
 	expectDBClientQueries(t, []string{
-		"/update.*'Error'.*vstream ended",
+		"/update _vt.vreplication set message='vstream ended'",
 	})
 	if err := streamerEngine.Open(env.KeyspaceName, env.ShardName); err != nil {
 		t.Fatal(err)
@@ -1212,7 +1208,6 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 		"insert into t1 values(2, 'aaa')",
 	})
 	expectDBClientQueries(t, []string{
-		"/update.*'Running'",
 		"begin",
 		"insert into t1(id,val) values (2,'aaa')",
 		"/update _vt.vreplication set pos=",
@@ -1287,12 +1282,9 @@ func startVReplication(t *testing.T, filter *binlogdatapb.Filter, onddl binlogda
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Eat all the initialization queries
-	for q := range globalDBQueries {
-		if strings.HasPrefix(q, "update") {
-			break
-		}
-	}
+	expectDBClientQueries(t, []string{
+		"/insert",
+	})
 	return func() {
 		t.Helper()
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)

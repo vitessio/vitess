@@ -585,7 +585,7 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64) string {
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
-			"update _vt.vreplication set pos=%v, time_updated=%v, transaction_timestamp=%v where id=%v",
+			"update _vt.vreplication set pos=%v, time_updated=%v, transaction_timestamp=%v, message='' where id=%v",
 			encodeString(mysql.EncodePosition(pos)), timeUpdated, txTimestamp, uid)
 	}
 
