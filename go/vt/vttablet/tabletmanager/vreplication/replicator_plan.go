@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -29,16 +30,60 @@ import (
 )
 
 // ReplicatorPlan is the execution plan for the replicator.
+// The constructor for this is in table_plan_builder.go
 type ReplicatorPlan struct {
 	VStreamFilter *binlogdatapb.Filter
 	TargetTables  map[string]*TablePlan
 	TablePlans    map[string]*TablePlan
+	tableKeys     map[string][]string
+}
+
+func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent) (*TablePlan, error) {
+	prelim := rp.TablePlans[fieldEvent.TableName]
+	if prelim == nil {
+		// Unreachable code.
+		return nil, fmt.Errorf("plan not found for %s", fieldEvent.TableName)
+	}
+	if prelim.Insert != nil {
+		tplanv := *prelim
+		tplanv.Fields = fieldEvent.Fields
+		return &tplanv, nil
+	}
+	tplan, err := rp.buildFromFields(prelim.TargetName, fieldEvent.Fields)
+	if err != nil {
+		return nil, err
+	}
+	tplan.Fields = fieldEvent.Fields
+	return tplan, nil
+}
+
+func (rp *ReplicatorPlan) buildFromFields(tableName string, fields []*querypb.Field) (*TablePlan, error) {
+	tpb := &tablePlanBuilder{
+		name: sqlparser.NewTableIdent(tableName),
+	}
+	for _, field := range fields {
+		colName := sqlparser.NewColIdent(field.Name)
+		cexpr := &colExpr{
+			colName: colName,
+			expr: &sqlparser.ColName{
+				Name: colName,
+			},
+			references: map[string]bool{
+				field.Name: true,
+			},
+		}
+		tpb.colExprs = append(tpb.colExprs, cexpr)
+	}
+	if err := tpb.analyzePK(rp.tableKeys); err != nil {
+		return nil, err
+	}
+	return tpb.generate(rp.tableKeys), nil
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
-func (pp *ReplicatorPlan) MarshalJSON() ([]byte, error) {
+func (rp *ReplicatorPlan) MarshalJSON() ([]byte, error) {
 	var targets []string
-	for k := range pp.TargetTables {
+	for k := range rp.TargetTables {
 		targets = append(targets, k)
 	}
 	sort.Strings(targets)
@@ -47,9 +92,9 @@ func (pp *ReplicatorPlan) MarshalJSON() ([]byte, error) {
 		TargetTables  []string
 		TablePlans    map[string]*TablePlan
 	}{
-		VStreamFilter: pp.VStreamFilter,
+		VStreamFilter: rp.VStreamFilter,
 		TargetTables:  targets,
-		TablePlans:    pp.TablePlans,
+		TablePlans:    rp.TablePlans,
 	}
 	return json.Marshal(&v)
 }
@@ -74,6 +119,9 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 		TargetName   string
 		SendRule     string
 		PKReferences []string               `json:",omitempty"`
+		InsertFront  *sqlparser.ParsedQuery `json:",omitempty"`
+		InsertValues *sqlparser.ParsedQuery `json:",omitempty"`
+		InsertOnDup  *sqlparser.ParsedQuery `json:",omitempty"`
 		Insert       *sqlparser.ParsedQuery `json:",omitempty"`
 		Update       *sqlparser.ParsedQuery `json:",omitempty"`
 		Delete       *sqlparser.ParsedQuery `json:",omitempty"`
@@ -81,6 +129,9 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 		TargetName:   tp.TargetName,
 		SendRule:     tp.SendRule.Match,
 		PKReferences: tp.PKReferences,
+		InsertFront:  tp.InsertFront,
+		InsertValues: tp.InsertValues,
+		InsertOnDup:  tp.InsertOnDup,
 		Insert:       tp.Insert,
 		Update:       tp.Update,
 		Delete:       tp.Delete,
@@ -94,6 +145,7 @@ func (tp *TablePlan) generateBulkInsert(rows *binlogdatapb.VStreamRowsResponse) 
 	if err := tp.InsertFront.Append(&buf, nil, nil); err != nil {
 		return "", err
 	}
+	buf.WriteString(" values ")
 	separator := ""
 	for _, row := range rows.Rows {
 		vals := sqltypes.MakeRowTrusted(tp.Fields, row)

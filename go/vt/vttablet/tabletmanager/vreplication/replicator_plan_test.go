@@ -20,10 +20,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-type TestPlayerPlan struct {
+type TestReplicatorPlan struct {
 	VStreamFilter *binlogdatapb.Filter
 	TargetTables  []string
 	TablePlans    map[string]*TestTablePlan
@@ -33,6 +34,9 @@ type TestTablePlan struct {
 	TargetName   string
 	SendRule     string
 	PKReferences []string `json:",omitempty"`
+	InsertFront  string   `json:",omitempty"`
+	InsertValues string   `json:",omitempty"`
+	InsertOnDup  string   `json:",omitempty"`
 	Insert       string   `json:",omitempty"`
 	Update       string   `json:",omitempty"`
 	Delete       string   `json:",omitempty"`
@@ -40,9 +44,10 @@ type TestTablePlan struct {
 
 func TestBuildPlayerPlan(t *testing.T) {
 	testcases := []struct {
-		input *binlogdatapb.Filter
-		plan  *TestPlayerPlan
-		err   string
+		input  *binlogdatapb.Filter
+		plan   *TestReplicatorPlan
+		planpk *TestReplicatorPlan
+		err    string
 	}{{
 		// Regular expression
 		input: &binlogdatapb.Filter{
@@ -50,7 +55,22 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Match: "/.*",
 			}},
 		},
-		plan: &TestPlayerPlan{
+		plan: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select * from t1",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName: "t1",
+					SendRule:   "t1",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t1",
@@ -73,7 +93,22 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select * from t2",
 			}},
 		},
-		plan: &TestPlayerPlan{
+		plan: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t2",
+					Filter: "select * from t2",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t2": {
+					TargetName: "t1",
+					SendRule:   "t2",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t2",
@@ -96,7 +131,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select c1, c2 from t2",
 			}},
 		},
-		plan: &TestPlayerPlan{
+		plan: &TestReplicatorPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t2",
@@ -109,9 +144,32 @@ func TestBuildPlayerPlan(t *testing.T) {
 					TargetName:   "t1",
 					SendRule:     "t2",
 					PKReferences: []string{"c1"},
+					InsertFront:  "insert into t1(c1,c2)",
+					InsertValues: "(:a_c1,:a_c2)",
 					Insert:       "insert into t1(c1,c2) values (:a_c1,:a_c2)",
 					Update:       "update t1 set c2=:a_c2 where c1=:b_c1",
 					Delete:       "delete from t1 where c1=:b_c1",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t2",
+					Filter: "select c1, c2, pk1, pk2 from t2",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t2": {
+					TargetName:   "t1",
+					SendRule:     "t2",
+					PKReferences: []string{"c1"},
+					InsertFront:  "insert into t1(c1,c2)",
+					InsertValues: "(:a_c1,:a_c2)",
+					Insert:       "insert into t1(c1,c2) select :a_c1, :a_c2 where :a_pk1 <= 1 and :a_pk2 <= 'aaa'",
+					Update:       "update t1 set c2=:a_c2 where c1=:b_c1 and :b_pk1 <= 1 and :b_pk2 <= 'aaa'",
+					Delete:       "delete from t1 where c1=:b_c1 and :b_pk1 <= 1 and :b_pk2 <= 'aaa'",
 				},
 			},
 		},
@@ -123,7 +181,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select c1, c2, c3 from t2 group by c3, c1",
 			}},
 		},
-		plan: &TestPlayerPlan{
+		plan: &TestReplicatorPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t2",
@@ -136,9 +194,34 @@ func TestBuildPlayerPlan(t *testing.T) {
 					TargetName:   "t1",
 					SendRule:     "t2",
 					PKReferences: []string{"c1"},
+					InsertFront:  "insert into t1(c1,c2,c3)",
+					InsertValues: "(:a_c1,:a_c2,:a_c3)",
+					InsertOnDup:  "on duplicate key update c2=values(c2)",
 					Insert:       "insert into t1(c1,c2,c3) values (:a_c1,:a_c2,:a_c3) on duplicate key update c2=values(c2)",
 					Update:       "update t1 set c2=:a_c2 where c1=:b_c1",
 					Delete:       "update t1 set c2=null where c1=:b_c1",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t2",
+					Filter: "select c1, c2, c3, pk1, pk2 from t2",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t2": {
+					TargetName:   "t1",
+					SendRule:     "t2",
+					PKReferences: []string{"c1"},
+					InsertFront:  "insert into t1(c1,c2,c3)",
+					InsertValues: "(:a_c1,:a_c2,:a_c3)",
+					InsertOnDup:  "on duplicate key update c2=values(c2)",
+					Insert:       "insert into t1(c1,c2,c3) select :a_c1, :a_c2, :a_c3 where :a_pk1 <= 1 and :a_pk2 <= 'aaa' on duplicate key update c2=values(c2)",
+					Update:       "update t1 set c2=:a_c2 where c1=:b_c1 and :b_pk1 <= 1 and :b_pk2 <= 'aaa'",
+					Delete:       "update t1 set c2=null where c1=:b_c1 and :b_pk1 <= 1 and :b_pk2 <= 'aaa'",
 				},
 			},
 		},
@@ -150,7 +233,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select c1, c2, c3 from t2 group by c3, c1, c2",
 			}},
 		},
-		plan: &TestPlayerPlan{
+		plan: &TestReplicatorPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t2",
@@ -163,8 +246,30 @@ func TestBuildPlayerPlan(t *testing.T) {
 					TargetName:   "t1",
 					SendRule:     "t2",
 					PKReferences: []string{"c1"},
+					InsertFront:  "insert ignore into t1(c1,c2,c3)",
+					InsertValues: "(:a_c1,:a_c2,:a_c3)",
 					Insert:       "insert ignore into t1(c1,c2,c3) values (:a_c1,:a_c2,:a_c3)",
 					Update:       "insert ignore into t1(c1,c2,c3) values (:a_c1,:a_c2,:a_c3)",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t2",
+					Filter: "select c1, c2, c3, pk1, pk2 from t2",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t2": {
+					TargetName:   "t1",
+					SendRule:     "t2",
+					PKReferences: []string{"c1"},
+					InsertFront:  "insert ignore into t1(c1,c2,c3)",
+					InsertValues: "(:a_c1,:a_c2,:a_c3)",
+					Insert:       "insert ignore into t1(c1,c2,c3) select :a_c1, :a_c2, :a_c3 where :a_pk1 <= 1 and :a_pk2 <= 'aaa'",
+					Update:       "insert ignore into t1(c1,c2,c3) select :a_c1, :a_c2, :a_c3 where :a_pk1 <= 1 and :a_pk2 <= 'aaa'",
 				},
 			},
 		},
@@ -175,7 +280,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select foo(a) as c1, b c2 from t1",
 			}},
 		},
-		plan: &TestPlayerPlan{
+		plan: &TestReplicatorPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t1",
@@ -188,9 +293,32 @@ func TestBuildPlayerPlan(t *testing.T) {
 					TargetName:   "t1",
 					SendRule:     "t1",
 					PKReferences: []string{"a"},
+					InsertFront:  "insert into t1(c1,c2)",
+					InsertValues: "(foo(:a_a),:a_b)",
 					Insert:       "insert into t1(c1,c2) values (foo(:a_a),:a_b)",
 					Update:       "update t1 set c2=:a_b where c1=(foo(:b_a))",
 					Delete:       "delete from t1 where c1=(foo(:b_a))",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select a, b, pk1, pk2 from t1",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName:   "t1",
+					SendRule:     "t1",
+					PKReferences: []string{"a"},
+					InsertFront:  "insert into t1(c1,c2)",
+					InsertValues: "(foo(:a_a),:a_b)",
+					Insert:       "insert into t1(c1,c2) select foo(:a_a), :a_b where :a_pk1 <= 1 and :a_pk2 <= 'aaa'",
+					Update:       "update t1 set c2=:a_b where c1=(foo(:b_a)) and :b_pk1 <= 1 and :b_pk2 <= 'aaa'",
+					Delete:       "delete from t1 where c1=(foo(:b_a)) and :b_pk1 <= 1 and :b_pk2 <= 'aaa'",
 				},
 			},
 		},
@@ -201,7 +329,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select a + b as c1, c as c2 from t1",
 			}},
 		},
-		plan: &TestPlayerPlan{
+		plan: &TestReplicatorPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t1",
@@ -214,9 +342,32 @@ func TestBuildPlayerPlan(t *testing.T) {
 					TargetName:   "t1",
 					SendRule:     "t1",
 					PKReferences: []string{"a", "b"},
+					InsertFront:  "insert into t1(c1,c2)",
+					InsertValues: "(:a_a + :a_b,:a_c)",
 					Insert:       "insert into t1(c1,c2) values (:a_a + :a_b,:a_c)",
 					Update:       "update t1 set c2=:a_c where c1=(:b_a + :b_b)",
 					Delete:       "delete from t1 where c1=(:b_a + :b_b)",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select a, b, c, pk1, pk2 from t1",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName:   "t1",
+					SendRule:     "t1",
+					PKReferences: []string{"a", "b"},
+					InsertFront:  "insert into t1(c1,c2)",
+					InsertValues: "(:a_a + :a_b,:a_c)",
+					Insert:       "insert into t1(c1,c2) select :a_a + :a_b, :a_c where :a_pk1 <= 1 and :a_pk2 <= 'aaa'",
+					Update:       "update t1 set c2=:a_c where c1=(:b_a + :b_b) and :b_pk1 <= 1 and :b_pk2 <= 'aaa'",
+					Delete:       "delete from t1 where c1=(:b_a + :b_b) and :b_pk1 <= 1 and :b_pk2 <= 'aaa'",
 				},
 			},
 		},
@@ -370,8 +521,18 @@ func TestBuildPlayerPlan(t *testing.T) {
 		"t1": {"c1"},
 	}
 
+	copyState := map[string]*sqltypes.Result{
+		"t1": sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"pk1|pk2",
+				"int64|varchar",
+			),
+			"1|aaa",
+		),
+	}
+
 	for _, tcase := range testcases {
-		plan, err := buildPlayerPlan(tcase.input, tableKeys)
+		plan, err := buildReplicatorPlan(tcase.input, tableKeys, nil)
 		gotPlan, _ := json.Marshal(plan)
 		wantPlan, _ := json.Marshal(tcase.plan)
 		if string(gotPlan) != string(wantPlan) {
@@ -383,6 +544,16 @@ func TestBuildPlayerPlan(t *testing.T) {
 		}
 		if gotErr != tcase.err {
 			t.Errorf("Filter err(%v): %s, want %v", tcase.input, gotErr, tcase.err)
+		}
+
+		plan, err = buildReplicatorPlan(tcase.input, tableKeys, copyState)
+		if err != nil {
+			continue
+		}
+		gotPlan, _ = json.Marshal(plan)
+		wantPlan, _ = json.Marshal(tcase.planpk)
+		if string(gotPlan) != string(wantPlan) {
+			t.Errorf("Filter(%v,copyState):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
 		}
 	}
 }

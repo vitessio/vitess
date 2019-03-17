@@ -60,9 +60,6 @@ type vreplicator struct {
 	mysqld mysqlctl.MysqlDaemon
 
 	tableKeys map[string][]string
-
-	// replicatorPlan is built based on the source Filter at the beginning.
-	replicatorPlan *ReplicatorPlan
 }
 
 func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topodatapb.Tablet, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon) *vreplicator {
@@ -82,11 +79,6 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 		return err
 	}
 	vr.tableKeys = tableKeys
-	plan, err := buildPlayerPlan(vr.source.Filter, tableKeys)
-	if err != nil {
-		return err
-	}
-	vr.replicatorPlan = plan
 
 	settings, err := binlogplayer.ReadVRSettings(vr.dbClient, vr.id)
 	if err != nil {
@@ -108,7 +100,7 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 		return nil
 	}
 
-	return newVPlayer(vr).play(ctx, settings)
+	return newVPlayer(vr).play(ctx, settings, nil)
 }
 
 func (vr *vreplicator) buildTableKeys() (map[string][]string, error) {
@@ -129,25 +121,6 @@ func (vr *vreplicator) buildTableKeys() (map[string][]string, error) {
 
 func (vr *vreplicator) setState(state, message string) error {
 	return binlogplayer.SetVReplicationState(vr.dbClient, vr.id, state, message)
-}
-
-func (vr *vreplicator) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent) (*TablePlan, error) {
-	prelim := vr.replicatorPlan.TablePlans[fieldEvent.TableName]
-	if prelim == nil {
-		// Unreachable code.
-		return nil, fmt.Errorf("plan not found for %s", fieldEvent.TableName)
-	}
-	if prelim.Insert != nil {
-		tplanv := *prelim
-		tplanv.Fields = fieldEvent.Fields
-		return &tplanv, nil
-	}
-	tplan, err := buildTablePlanFromFields(prelim.TargetName, fieldEvent.Fields, vr.tableKeys)
-	if err != nil {
-		return nil, err
-	}
-	tplan.Fields = fieldEvent.Fields
-	return tplan, nil
 }
 
 func encodeString(in string) string {
