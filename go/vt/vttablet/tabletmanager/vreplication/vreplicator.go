@@ -119,6 +119,18 @@ func (vr *vreplicator) buildTableKeys() (map[string][]string, error) {
 	return tableKeys, nil
 }
 
+func (vr *vreplicator) setMessage(message string) error {
+	vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
+		Time:    time.Now(),
+		Message: message,
+	})
+	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(message), vr.id)
+	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
+		return fmt.Errorf("could not set message: %v: %v", query, err)
+	}
+	return nil
+}
+
 func (vr *vreplicator) setState(state, message string) error {
 	return binlogplayer.SetVReplicationState(vr.dbClient, vr.id, state, message)
 }

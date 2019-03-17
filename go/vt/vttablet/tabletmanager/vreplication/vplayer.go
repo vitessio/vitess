@@ -69,16 +69,13 @@ func (vp *vplayer) play(ctx context.Context, settings binlogplayer.VRSettings, c
 	}
 	vp.replicatorPlan = plan
 
-	if err := vp.vr.setState(binlogplayer.BlpRunning, ""); err != nil {
-		return err
-	}
 	if err := vp.fetchAndApply(ctx, settings); err != nil {
 		msg := err.Error()
 		vp.vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 			Time:    time.Now(),
 			Message: msg,
 		})
-		if err := vp.vr.setState(binlogplayer.BlpError, msg); err != nil {
+		if err := vp.vr.setMessage(msg); err != nil {
 			log.Errorf("Failed to set error state: %v", err)
 		}
 		return err
