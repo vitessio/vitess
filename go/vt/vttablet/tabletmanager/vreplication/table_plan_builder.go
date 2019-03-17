@@ -22,10 +22,10 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type tablePlanBuilder struct {
@@ -35,6 +35,7 @@ type tablePlanBuilder struct {
 	colExprs   []*colExpr
 	onInsert   insertType
 	pkCols     []*colExpr
+	lastpk     *sqltypes.Result
 }
 
 // colExpr describes the processing to be performed to
@@ -78,14 +79,20 @@ const (
 // a table-specific rule is built to be sent to the source. We don't send the
 // original rule to the source because it may not match the same tables as the
 // target.
-func buildPlayerPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string) (*ReplicatorPlan, error) {
+func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string, copyState map[string]*sqltypes.Result) (*ReplicatorPlan, error) {
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{},
 		TargetTables:  make(map[string]*TablePlan),
 		TablePlans:    make(map[string]*TablePlan),
+		tableKeys:     tableKeys,
 	}
 nextTable:
 	for tableName := range tableKeys {
+		lastpk, ok := copyState[tableName]
+		if ok && lastpk == nil {
+			// Don't replicate uncopied tables.
+			continue
+		}
 		for _, rule := range filter.Rules {
 			switch {
 			case strings.HasPrefix(rule.Match, "/"):
@@ -110,7 +117,7 @@ nextTable:
 				plan.TablePlans[tableName] = tablePlan
 				continue nextTable
 			case rule.Match == tableName:
-				tablePlan, err := buildTablePlan(rule, tableKeys)
+				tablePlan, err := buildTablePlan(rule, tableKeys, lastpk)
 				if err != nil {
 					return nil, err
 				}
@@ -136,7 +143,7 @@ func buildQuery(tableName, filter string) string {
 	return buf.String()
 }
 
-func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string) (*TablePlan, error) {
+func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string, lastpk *sqltypes.Result) (*TablePlan, error) {
 	sel, fromTable, err := analyzeSelectFrom(rule.Filter)
 	if err != nil {
 		return nil, err
@@ -167,10 +174,16 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string) (*Ta
 			Where: sel.Where,
 		},
 		selColumns: make(map[string]bool),
+		lastpk:     lastpk,
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
 		return nil, err
+	}
+	if tpb.lastpk != nil {
+		for _, f := range tpb.lastpk.Fields {
+			tpb.addCol(sqlparser.NewColIdent(f.Name))
+		}
 	}
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
 		return nil, err
@@ -183,29 +196,6 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string) (*Ta
 	tablePlan := tpb.generate(tableKeys)
 	tablePlan.SendRule = sendRule
 	return tablePlan, nil
-}
-
-func buildTablePlanFromFields(tableName string, fields []*querypb.Field, tableKeys map[string][]string) (*TablePlan, error) {
-	tpb := &tablePlanBuilder{
-		name: sqlparser.NewTableIdent(tableName),
-	}
-	for _, field := range fields {
-		colName := sqlparser.NewColIdent(field.Name)
-		cexpr := &colExpr{
-			colName: colName,
-			expr: &sqlparser.ColName{
-				Name: colName,
-			},
-			references: map[string]bool{
-				field.Name: true,
-			},
-		}
-		tpb.colExprs = append(tpb.colExprs, cexpr)
-	}
-	if err := tpb.analyzePK(tableKeys); err != nil {
-		return nil, err
-	}
-	return tpb.generate(tableKeys), nil
 }
 
 func (tpb *tablePlanBuilder) generate(tableKeys map[string][]string) *TablePlan {
@@ -413,7 +403,12 @@ func (tpb *tablePlanBuilder) generateInsertStatement() *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 
 	tpb.generateInsertPart(buf)
-	tpb.generateValuesPart(buf, bvf)
+	if tpb.lastpk == nil {
+		buf.Myprintf(" values ", tpb.name)
+		tpb.generateValuesPart(buf, bvf)
+	} else {
+		tpb.generateSelectPart(buf, bvf)
+	}
 	tpb.generateOnDupPart(buf)
 
 	return buf.ParsedQuery()
@@ -430,13 +425,13 @@ func (tpb *tablePlanBuilder) generateInsertPart(buf *sqlparser.TrackedBuffer) *s
 		buf.Myprintf("%s%s", separator, cexpr.colName.String())
 		separator = ","
 	}
-	buf.Myprintf(") values", tpb.name)
+	buf.Myprintf(")", tpb.name)
 	return buf.ParsedQuery()
 }
 
 func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) *sqlparser.ParsedQuery {
 	bvf.mode = bvAfter
-	separator := " ("
+	separator := "("
 	for _, cexpr := range tpb.colExprs {
 		buf.Myprintf("%s", separator)
 		separator = ","
@@ -450,6 +445,32 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 		}
 	}
 	buf.Myprintf(")")
+	return buf.ParsedQuery()
+}
+
+func (tpb *tablePlanBuilder) generateSelectPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) *sqlparser.ParsedQuery {
+	bvf.mode = bvAfter
+	buf.WriteString(" select ")
+	separator := ""
+	for _, cexpr := range tpb.colExprs {
+		buf.Myprintf("%s", separator)
+		separator = ", "
+		switch cexpr.operation {
+		case opExpr:
+			buf.Myprintf("%v", cexpr.expr)
+		case opCount:
+			buf.WriteString("1")
+		case opSum:
+			buf.Myprintf("ifnull(%v, 0)", cexpr.expr)
+		}
+	}
+	buf.WriteString(" where ")
+	separator = ""
+	for i, pkname := range tpb.lastpk.Fields {
+		buf.Myprintf("%s%v <= ", separator, &sqlparser.ColName{Name: sqlparser.NewColIdent(pkname.Name)})
+		separator = " and "
+		tpb.lastpk.Rows[0][i].EncodeSQL(buf)
+	}
 	return buf.ParsedQuery()
 }
 
@@ -555,6 +576,12 @@ func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bi
 			buf.Myprintf("%s%s=(%v)", separator, cexpr.colName.String(), cexpr.expr)
 		}
 		separator = " and "
+	}
+	if tpb.lastpk != nil {
+		for i, pkname := range tpb.lastpk.Fields {
+			buf.Myprintf("%s%v <= ", separator, &sqlparser.ColName{Name: sqlparser.NewColIdent(pkname.Name)})
+			tpb.lastpk.Rows[0][i].EncodeSQL(buf)
+		}
 	}
 }
 

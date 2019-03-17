@@ -50,6 +50,11 @@ func newVCopier(vr *vreplicator) *vcopier {
 func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	defer vc.vr.dbClient.Rollback()
 
+	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.tableKeys, nil)
+	if err != nil {
+		return err
+	}
+
 	// Check if table exists.
 	if _, err := vc.vr.dbClient.ExecuteFetch("select * from _vt.copy_state limit 1", 10); err != nil {
 		// If it's a not found error, create it.
@@ -69,11 +74,11 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 		return err
 	}
 	// Insert the table list only if at least one table matches.
-	if len(vc.vr.replicatorPlan.TargetTables) != 0 {
+	if len(plan.TargetTables) != 0 {
 		var buf strings.Builder
 		buf.WriteString("insert into _vt.copy_state(vrepl_id, table_name) values ")
 		prefix := ""
-		for name := range vc.vr.replicatorPlan.TargetTables {
+		for name := range plan.TargetTables {
 			fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vc.vr.id, encodeString(name))
 			prefix = ", "
 		}
@@ -93,37 +98,48 @@ func (vc *vcopier) copyTables(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		var inflight, inflightpk string
+		var tableToCopy string
+		copyState := make(map[string]*sqltypes.Result)
 		for _, row := range qr.Rows {
 			tableName := row[0].ToString()
 			lastpk := row[1].ToString()
-			// We have to copy either the first table or the one that's already inflight.
-			// The first table is expected to be the one in-flight. But there's no need to check.
-			if inflight == "" || lastpk != "" {
-				inflight = tableName
-				inflightpk = lastpk
+			if tableToCopy == "" {
+				tableToCopy = tableName
+			}
+			copyState[tableName] = nil
+			if lastpk != "" {
+				var r querypb.QueryResult
+				if err := proto.UnmarshalText(lastpk, &r); err != nil {
+					return err
+				}
+				copyState[tableName] = sqltypes.Proto3ToResult(&r)
 			}
 		}
-		if inflight == "" {
+		if len(copyState) == 0 {
 			if err := vc.vr.setState(binlogplayer.BlpRunning, ""); err != nil {
 				return err
 			}
 			return nil
 		}
-		if err := vc.copyTable(ctx, inflight, inflightpk); err != nil {
+		if err := vc.copyTable(ctx, tableToCopy, copyState); err != nil {
 			return err
 		}
 	}
 }
 
-func (vc *vcopier) copyTable(ctx context.Context, tableName, lastpk string) error {
+func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState map[string]*sqltypes.Result) error {
 	defer vc.vr.dbClient.Rollback()
 
-	log.Infof("Copying table %s, lastpk: %s", tableName, lastpk)
+	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
-	initialPlan, ok := vc.vr.replicatorPlan.TargetTables[tableName]
+	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.tableKeys, nil)
+	if err != nil {
+		return err
+	}
+
+	initialPlan, ok := plan.TargetTables[tableName]
 	if !ok {
-		return fmt.Errorf("plan not found for table: %s, curret plans are: %#v", tableName, vc.vr.replicatorPlan.TargetTables)
+		return fmt.Errorf("plan not found for table: %s, curret plans are: %#v", tableName, plan.TargetTables)
 	}
 
 	vsClient, err := tabletconn.GetDialer()(vc.vr.sourceTablet, grpcclient.FailFast(false))
@@ -140,21 +156,14 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName, lastpk string) erro
 		TabletType: vc.vr.sourceTablet.Type,
 	}
 
-	var lastpkqr *querypb.QueryResult
-	if lastpk != "" {
-		var r querypb.QueryResult
-		if err := proto.UnmarshalText(lastpk, &r); err != nil {
-			return err
-		}
-		if len(r.Rows) != 1 {
-			return fmt.Errorf("unexpected value decoding lastpk: %v", r)
-		}
-		lastpkqr = &r
+	var lastpkpb *querypb.QueryResult
+	if lastpkqr := copyState[tableName]; lastpkqr != nil {
+		lastpkpb = sqltypes.ResultToProto3(lastpkqr)
 	}
 
 	var pkfields []*querypb.Field
 	var updateCopyState *sqlparser.ParsedQuery
-	err = vsClient.VStreamRows(ctx, target, initialPlan.SendRule.Filter, lastpkqr, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	err = vsClient.VStreamRows(ctx, target, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vc.tablePlan == nil {
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
@@ -163,7 +172,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName, lastpk string) erro
 				TableName: initialPlan.SendRule.Match,
 				Fields:    rows.Fields,
 			}
-			vc.tablePlan, err = vc.vr.buildExecutionPlan(fieldEvent)
+			vc.tablePlan, err = plan.buildExecutionPlan(fieldEvent)
 			if err != nil {
 				return err
 			}

@@ -24,6 +24,7 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -49,9 +50,8 @@ type vplayer struct {
 	timeOffsetNs int64
 	stopPos      mysql.Position
 
-	// tablePlans[table] is built for each table based on pplan and schema info
-	// about the table.
-	tablePlans map[string]*TablePlan
+	replicatorPlan *ReplicatorPlan
+	tablePlans     map[string]*TablePlan
 }
 
 func newVPlayer(vr *vreplicator) *vplayer {
@@ -62,7 +62,13 @@ func newVPlayer(vr *vreplicator) *vplayer {
 	}
 }
 
-func (vp *vplayer) play(ctx context.Context, settings binlogplayer.VRSettings) error {
+func (vp *vplayer) play(ctx context.Context, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result) error {
+	plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.tableKeys, copyState)
+	if err != nil {
+		return err
+	}
+	vp.replicatorPlan = plan
+
 	if err := vp.vr.setState(binlogplayer.BlpRunning, ""); err != nil {
 		return err
 	}
@@ -114,10 +120,10 @@ func (vp *vplayer) fetchAndApply(ctx context.Context, settings binlogplayer.VRSe
 		Shard:      vp.vr.sourceTablet.Shard,
 		TabletType: vp.vr.sourceTablet.Type,
 	}
-	log.Infof("Sending vstream command: %v", vp.vr.replicatorPlan.VStreamFilter)
+	log.Infof("Sending vstream command: %v", vp.replicatorPlan.VStreamFilter)
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vsClient.VStream(ctx, target, settings.StartPos, vp.vr.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+		streamErr <- vsClient.VStream(ctx, target, settings.StartPos, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
 	}()
@@ -344,7 +350,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
 		}
-		tplan, err := vp.vr.buildExecutionPlan(event.FieldEvent)
+		tplan, err := vp.replicatorPlan.buildExecutionPlan(event.FieldEvent)
 		if err != nil {
 			return err
 		}
