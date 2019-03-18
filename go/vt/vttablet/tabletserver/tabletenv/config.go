@@ -101,6 +101,7 @@ func init() {
 
 	flag.BoolVar(&Config.EnforceStrictTransTables, "enforce_strict_trans_tables", DefaultQsConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
 	flag.BoolVar(&Config.EnableConsolidator, "enable-consolidator", DefaultQsConfig.EnableConsolidator, "This option enables the query consolidator.")
+	flag.BoolVar(&Config.EnableAggregateQueryTimings, "enable-aggregate-query-timings", DefaultQsConfig.EnableAggregateQueryTimings, "This enables median and 99th timings for all queries.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -171,8 +172,9 @@ type TabletConfig struct {
 	HeartbeatEnable   bool
 	HeartbeatInterval time.Duration
 
-	EnforceStrictTransTables bool
-	EnableConsolidator       bool
+	EnforceStrictTransTables    bool
+	EnableConsolidator          bool
+	EnableAggregateQueryTimings bool
 }
 
 // TransactionLimitConfig captures configuration of transaction pool slots
@@ -246,8 +248,9 @@ var DefaultQsConfig = TabletConfig{
 	HeartbeatEnable:   false,
 	HeartbeatInterval: 1 * time.Second,
 
-	EnforceStrictTransTables: true,
-	EnableConsolidator:       true,
+	EnforceStrictTransTables:    true,
+	EnableConsolidator:          true,
+	EnableAggregateQueryTimings: false,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration

@@ -67,6 +67,7 @@ func NewLogStats(ctx context.Context, methodName, sql string, bindVars map[strin
 func (stats *LogStats) Send() {
 	stats.EndTime = time.Now()
 	QueryLogger.Send(stats)
+	TimingStatistics.recordStats(stats)
 }
 
 // Context returns the context used by LogStats.

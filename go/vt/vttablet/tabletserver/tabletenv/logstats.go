@@ -76,6 +76,9 @@ func NewLogStats(ctx context.Context, methodName string) *LogStats {
 func (stats *LogStats) Send() {
 	stats.EndTime = time.Now()
 	StatsLogger.Send(stats)
+	if Config.EnableAggregateQueryTimings {
+		TimingStatistics.recordStats(stats)
+	}
 }
 
 // Context returns the context used by LogStats.
