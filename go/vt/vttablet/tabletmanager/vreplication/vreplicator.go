@@ -93,14 +93,14 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	}
 
 	if settings.State == binlogplayer.VReplicationCopying {
-		if err := newVCopier(vr).copyTables(ctx); err != nil {
+		if err := newVCopier(vr).copyTables(ctx, settings); err != nil {
 			return err
 		}
 		settings.State = binlogplayer.BlpRunning
 		return nil
 	}
 
-	return newVPlayer(vr).play(ctx, settings, nil)
+	return newVPlayer(vr, settings, nil).play(ctx)
 }
 
 func (vr *vreplicator) buildTableKeys() (map[string][]string, error) {

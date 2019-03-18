@@ -19,8 +19,10 @@ package vreplication
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -31,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -85,14 +88,18 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 		if _, err := vc.vr.dbClient.ExecuteFetch(buf.String(), 1); err != nil {
 			return err
 		}
-	}
-	if err := vc.vr.setState(binlogplayer.VReplicationCopying, ""); err != nil {
-		return err
+		if err := vc.vr.setState(binlogplayer.VReplicationCopying, ""); err != nil {
+			return err
+		}
+	} else {
+		if err := vc.vr.setState(binlogplayer.BlpStopped, "There is nothing to replicate"); err != nil {
+			return err
+		}
 	}
 	return vc.vr.dbClient.Commit()
 }
 
-func (vc *vcopier) copyTables(ctx context.Context) error {
+func (vc *vcopier) copyTables(ctx context.Context, settings binlogplayer.VRSettings) error {
 	for {
 		qr, err := vc.vr.dbClient.ExecuteFetch(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id=%d", vc.vr.id), 10000)
 		if err != nil {
@@ -121,14 +128,114 @@ func (vc *vcopier) copyTables(ctx context.Context) error {
 			}
 			return nil
 		}
-		if err := vc.copyTable(ctx, tableToCopy, copyState); err != nil {
+		if err := vc.copyTable(ctx, tableToCopy, copyState, func() error { return nil }); err != nil {
 			return err
 		}
 	}
 }
 
-func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState map[string]*sqltypes.Result) error {
-	defer vc.vr.dbClient.Rollback()
+func (vc *vcopier) catchupAndLock(ctx context.Context, settings binlogplayer.VRSettings, tableName string, copyState map[string]*sqltypes.Result) (unlock func() error, err error) {
+	if settings.StartPos.IsZero() {
+		return vc.initialCatchupAndLock(ctx, tableName)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Hour)
+	// Start vreplication.
+	errch := make(chan error)
+	go func() {
+		defer cancel()
+		errch <- newVPlayer(vc.vr, settings, copyState).play(ctx)
+	}()
+
+	// Wait for catchup.
+	tmr := time.NewTimer(1 * time.Second)
+	defer tmr.Stop()
+	for {
+		sbm := vc.vr.stats.SecondsBehindMaster.Get()
+		if sbm < 10 {
+			break
+		}
+		select {
+		case err := <-errch:
+			if err != nil {
+				return nil, err
+			}
+			return nil, io.EOF
+		case <-ctx.Done():
+			return nil, io.EOF
+		case <-tmr.C:
+		}
+	}
+
+	// Lock the source table.
+	unlock, pos, err := vc.lockTable(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Wait for vreplication to reach (or go past) pos and stop vreplication.
+	for {
+		lp := vc.vr.stats.LastPosition()
+		if lp.AtLeast(pos) {
+			cancel()
+			<-errch
+			return unlock, nil
+		}
+		select {
+		case <-ctx.Done():
+			// Don't forget to unlock on error.
+			_ = unlock()
+			return nil, io.EOF
+		case <-tmr.C:
+		}
+	}
+}
+
+func (vc *vcopier) initialCatchupAndLock(ctx context.Context, tableName string) (unlock func() error, err error) {
+	unlock, pos, err := vc.lockTable(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	updatePos := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0)
+	if _, err := vc.vr.dbClient.ExecuteFetch(updatePos, 0); err != nil {
+		// Don't forget to unlock on error.
+		_ = unlock()
+		return nil, err
+	}
+	return unlock, nil
+}
+
+func (vc *vcopier) lockTable(ctx context.Context, tableName string) (unlock func() error, pos mysql.Position, err error) {
+	tm := tmclient.NewTabletManagerClient()
+	defer tm.Close()
+
+	if err := tm.LockTables(ctx, vc.vr.sourceTablet); err != nil {
+		return nil, pos, err
+	}
+	gtid, err := tm.MasterPosition(ctx, vc.vr.sourceTablet)
+	if err != nil {
+		return nil, pos, err
+	}
+	pos, err = mysql.DecodePosition(gtid)
+	if err != nil {
+		return nil, pos, err
+	}
+	unlock = func() error {
+		tm := tmclient.NewTabletManagerClient()
+		defer tm.Close()
+		return tm.UnlockTables(ctx, vc.vr.sourceTablet)
+	}
+	return unlock, pos, nil
+}
+
+func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState map[string]*sqltypes.Result, unlock func() error) error {
+	tablesUnlocked := false
+	defer func() {
+		vc.vr.dbClient.Rollback()
+		if !tablesUnlocked {
+			_ = unlock()
+		}
+	}()
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
@@ -165,6 +272,10 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var updateCopyState *sqlparser.ParsedQuery
 	err = vsClient.VStreamRows(ctx, target, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vc.tablePlan == nil {
+			tablesUnlocked = true
+			if err := unlock(); err != nil {
+				return err
+			}
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
 			}

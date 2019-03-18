@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -112,6 +113,7 @@ func NewStats() *Stats {
 	bps.Timings = stats.NewTimings("", "", "")
 	bps.Rates = stats.NewRates("", bps.Timings, 15, 60e9)
 	bps.History = history.New(3)
+	bps.SecondsBehindMaster.Set(math.MaxInt64)
 	return bps
 }
 
@@ -200,18 +202,8 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		log.Error(err)
 		return err
 	}
-	blp.position, err = mysql.DecodePosition(settings.StartPos)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	if settings.StopPos != "" {
-		blp.stopPosition, err = mysql.DecodePosition(settings.StopPos)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-	}
+	blp.position = settings.StartPos
+	blp.stopPosition = settings.StopPos
 	t, err := throttler.NewThrottler(
 		fmt.Sprintf("BinlogPlayer/%d", blp.uid),
 		"transactions",
@@ -525,8 +517,8 @@ func SetVReplicationState(dbClient DBClient, uid uint32, state, message string) 
 
 // VRSettings contains the settings of a vreplication table.
 type VRSettings struct {
-	StartPos          string
-	StopPos           string
+	StartPos          mysql.Position
+	StopPos           mysql.Position
 	MaxTPS            int64
 	MaxReplicationLag int64
 	State             string
@@ -553,10 +545,18 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
 	}
+	startPos, err := mysql.DecodePosition(qr.Rows[0][0].ToString())
+	if err != nil {
+		return VRSettings{}, fmt.Errorf("failed to parse pos column: %v", err)
+	}
+	stopPos, err := mysql.DecodePosition(qr.Rows[0][1].ToString())
+	if err != nil {
+		return VRSettings{}, fmt.Errorf("failed to parse stop_pos column: %v", err)
+	}
 
 	return VRSettings{
-		StartPos:          qr.Rows[0][0].ToString(),
-		StopPos:           qr.Rows[0][1].ToString(),
+		StartPos:          startPos,
+		StopPos:           stopPos,
 		MaxTPS:            maxTPS,
 		MaxReplicationLag: maxReplicationLag,
 		State:             qr.Rows[0][4].ToString(),
