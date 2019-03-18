@@ -674,6 +674,34 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
 	}
 
+	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown_table", nil)
+	if err != errNoKeyspace {
+		t.Errorf("Got: %v. Want: %v", err, errNoKeyspace)
+	}
+
+	// SHOW CREATE table using vschema to find keyspace.
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show create table user_seq", nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	lastQuery := sbclookup.Queries[len(sbclookup.Queries)-1].Sql
+	wantQuery := "show create table user_seq"
+	if lastQuery != wantQuery {
+		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
+	}
+
+	// SHOW CREATE table with query-provided keyspace
+	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show create table %v.unknown", KsTestUnsharded), nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
+	wantQuery = "show create table unknown"
+	if lastQuery != wantQuery {
+		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
+	}
+
 	for _, query := range []string{"show charset", "show charset like '%foo'", "show character set", "show character set like '%foo'"} {
 		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
 		if err != nil {

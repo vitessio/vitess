@@ -1469,9 +1469,9 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
-| SHOW CREATE TABLE ddl_skip_to_end
+| SHOW CREATE TABLE table_name
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3), Table: $4}
   }
 | SHOW CREATE TRIGGER ddl_skip_to_end
   {
