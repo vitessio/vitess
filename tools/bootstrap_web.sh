@@ -30,10 +30,10 @@ if [[ -x $node_dist/bin/node && `$node_dist/bin/node -v` == "$node_ver" ]]; then
   echo "skipping nodejs download. remove $node_dist to force redownload."
 else
   echo "Downloading nodejs"
-  rm -rf $node_dist
+  rm -rf "${node_dist}"
   node_tar="node_linux64.tar.xz"
   curl -sL https://nodejs.org/dist/$node_ver/node-$node_ver-linux-x64.tar.xz -o $node_tar
-  tar xf $node_tar -C $VTROOT/dist
+  tar xf "${node_tar}" -C "${VTROOT}/dist"
   mv $VTROOT/dist/node-$node_ver-linux-x64 $node_dist
   rm $node_tar
   # Add the node directory to PATH to make sure that the Angular
