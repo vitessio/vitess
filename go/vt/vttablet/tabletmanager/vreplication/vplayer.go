@@ -179,16 +179,22 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	return nil
 }
 
-func (vp *vplayer) updatePos(ts int64) error {
-	updatePos := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts)
-	if _, err := vp.vr.dbClient.ExecuteFetch(updatePos, 0); err != nil {
+func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
+	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts)
+	if _, err := vp.vr.dbClient.ExecuteFetch(update, 0); err != nil {
 		vp.vr.dbClient.Rollback()
-		return fmt.Errorf("error %v updating position", err)
+		return false, fmt.Errorf("error %v updating position", err)
 	}
 	vp.unsavedEvent = nil
 	vp.timeLastSaved = time.Now()
 	vp.vr.stats.SetLastPosition(vp.pos)
-	return nil
+	posReached = !vp.stopPos.IsZero() && vp.pos.Equal(vp.stopPos)
+	if posReached {
+		if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
+			return false, err
+		}
+	}
+	return posReached, nil
 }
 
 func (vp *vplayer) exec(ctx context.Context, sql string) error {
@@ -241,8 +247,13 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		// 2. We've been receiving empty events for longer than idleTimeout.
 		// In both cases, now > timeLastSaved. If so, any unsaved GTID should be saved.
 		if time.Since(vp.timeLastSaved) >= idleTimeout && vp.unsavedEvent != nil {
-			if err := vp.updatePos(vp.unsavedEvent.Timestamp); err != nil {
+			posReached, err := vp.updatePos(vp.unsavedEvent.Timestamp)
+			if err != nil {
 				return err
+			}
+			if posReached {
+				// Unreachable.
+				return nil
 			}
 		}
 		for i, events := range items {
@@ -323,14 +334,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			vp.unsavedEvent = event
 			return nil
 		}
-		if err := vp.updatePos(event.Timestamp); err != nil {
+		posReached, err := vp.updatePos(event.Timestamp)
+		if err != nil {
 			return err
-		}
-		posReached := !vp.stopPos.IsZero() && vp.pos.Equal(vp.stopPos)
-		if posReached {
-			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
-				return err
-			}
 		}
 		if err := vp.vr.dbClient.Commit(); err != nil {
 			return err
@@ -360,13 +366,19 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 		switch vp.vr.source.OnDdl {
 		case binlogdatapb.OnDDLAction_IGNORE:
-			// We're skipping a DDL. We may have to save the position on inactivity.
-			vp.unsavedEvent = event
+			// We still have to update the position.
+			posReached, err := vp.updatePos(event.Timestamp)
+			if err != nil {
+				return err
+			}
+			if posReached {
+				return io.EOF
+			}
 		case binlogdatapb.OnDDLAction_STOP:
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err
 			}
-			if err := vp.updatePos(event.Timestamp); err != nil {
+			if _, err := vp.updatePos(event.Timestamp); err != nil {
 				return err
 			}
 			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at DDL %s", event.Ddl)); err != nil {
@@ -380,15 +392,23 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.exec(ctx, event.Ddl); err != nil {
 				return err
 			}
-			if err := vp.updatePos(event.Timestamp); err != nil {
+			posReached, err := vp.updatePos(event.Timestamp)
+			if err != nil {
 				return err
+			}
+			if posReached {
+				return io.EOF
 			}
 		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
 			if err := vp.exec(ctx, event.Ddl); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Ddl)
 			}
-			if err := vp.updatePos(event.Timestamp); err != nil {
+			posReached, err := vp.updatePos(event.Timestamp)
+			if err != nil {
 				return err
+			}
+			if posReached {
+				return io.EOF
 			}
 		}
 	case binlogdatapb.VEventType_HEARTBEAT:
