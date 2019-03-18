@@ -86,6 +86,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		"/update _vt.vreplication set state='Copying'",
 		"commit",
 		"rollback",
+		"/update _vt.vreplication set pos=",
 		"begin",
 		"/insert into dst1",
 		"/update _vt.copy_state set lastpk",
@@ -138,12 +139,13 @@ func TestPlayerCopyTablePartial(t *testing.T) {
 	execStatements(t, []string{
 		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', '%s')", qr.InsertID, "dst1", `fields:<name:"id" type:INT32 > rows:<lengths:1 values:"1" > `),
 	})
-	qr, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying' where id=%d", qr.InsertID))
+	id := qr.InsertID
+	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying' where id=%d", id))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
-		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", id)
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
@@ -159,6 +161,7 @@ func TestPlayerCopyTablePartial(t *testing.T) {
 	}
 
 	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set pos=",
 		"begin",
 		"/insert into dst1",
 		"/update _vt.copy_state set lastpk",
