@@ -51,6 +51,8 @@ there are some slight differences in flag handling.
 
 zk -h - provide help on overriding cell selection
 
+zk addAuth digest user:pass
+
 zk cat /zk/path
 zk cat -l /zk/path1 /zk/path2 (list filename before file data)
 
@@ -111,18 +113,19 @@ var zconn *zk2topo.ZkConn
 
 func init() {
 	cmdMap = map[string]cmdFunc{
-		"cat":   cmdCat,
-		"chmod": cmdChmod,
-		"cp":    cmdCp,
-		"edit":  cmdEdit,
-		"ls":    cmdLs,
-		"rm":    cmdRm,
-		"stat":  cmdStat,
-		"touch": cmdTouch,
-		"unzip": cmdUnzip,
-		"wait":  cmdWait,
-		"watch": cmdWatch,
-		"zip":   cmdZip,
+		"addAuth": cmdAddAuth,
+		"cat":     cmdCat,
+		"chmod":   cmdChmod,
+		"cp":      cmdCp,
+		"edit":    cmdEdit,
+		"ls":      cmdLs,
+		"rm":      cmdRm,
+		"stat":    cmdStat,
+		"touch":   cmdTouch,
+		"unzip":   cmdUnzip,
+		"wait":    cmdWait,
+		"watch":   cmdWatch,
+		"zip":     cmdZip,
 	}
 }
 
@@ -498,6 +501,15 @@ func cmdRm(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		return fmt.Errorf("rm: some paths had errors")
 	}
 	return nil
+}
+
+func cmdAddAuth(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
+	subFlags.Parse(args)
+	if subFlags.NArg() < 2 {
+		return fmt.Errorf("addAuth: expected args <scheme> <auth>")
+	}
+	scheme, auth := subFlags.Arg(0), subFlags.Arg(1)
+	return zconn.AddAuth(ctx, scheme, []byte(auth))
 }
 
 func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {

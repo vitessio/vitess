@@ -57,6 +57,7 @@ var (
 	certPath = flag.String("topo_zk_tls_cert", "", "the cert to use to connect to the zk topo server, requires topo_zk_tls_key, enables TLS")
 	keyPath  = flag.String("topo_zk_tls_key", "", "the key to use to connect to the zk topo server, enables TLS")
 	caPath   = flag.String("topo_zk_tls_ca", "", "the server ca to use to validate servers when connecting to the zk topo server")
+	authFile = flag.String("topo_zk_auth_file", "", "auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass")
 )
 
 // Time returns a time.Time from a ZK int64 milliseconds since Epoch time.
@@ -108,7 +109,6 @@ func (c *ZkConn) Get(ctx context.Context, path string) (data []byte, stat *zk.St
 	return
 }
 
-// GetW is part of the Conn interface.
 func (c *ZkConn) GetW(ctx context.Context, path string) (data []byte, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		data, stat, watch, err = conn.GetW(path)
@@ -117,7 +117,6 @@ func (c *ZkConn) GetW(ctx context.Context, path string) (data []byte, stat *zk.S
 	return
 }
 
-// Children is part of the Conn interface.
 func (c *ZkConn) Children(ctx context.Context, path string) (children []string, stat *zk.Stat, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		children, stat, err = conn.Children(path)
@@ -126,7 +125,6 @@ func (c *ZkConn) Children(ctx context.Context, path string) (children []string, 
 	return
 }
 
-// ChildrenW is part of the Conn interface.
 func (c *ZkConn) ChildrenW(ctx context.Context, path string) (children []string, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		children, stat, watch, err = conn.ChildrenW(path)
@@ -135,7 +133,6 @@ func (c *ZkConn) ChildrenW(ctx context.Context, path string) (children []string,
 	return
 }
 
-// Exists is part of the Conn interface.
 func (c *ZkConn) Exists(ctx context.Context, path string) (exists bool, stat *zk.Stat, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		exists, stat, err = conn.Exists(path)
@@ -144,7 +141,6 @@ func (c *ZkConn) Exists(ctx context.Context, path string) (exists bool, stat *zk
 	return
 }
 
-// ExistsW is part of the Conn interface.
 func (c *ZkConn) ExistsW(ctx context.Context, path string) (exists bool, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		exists, stat, watch, err = conn.ExistsW(path)
@@ -178,7 +174,6 @@ func (c *ZkConn) Delete(ctx context.Context, path string, version int32) error {
 	})
 }
 
-// GetACL is part of the Conn interface.
 func (c *ZkConn) GetACL(ctx context.Context, path string) (aclv []zk.ACL, stat *zk.Stat, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		aclv, stat, err = conn.GetACL(path)
@@ -187,10 +182,16 @@ func (c *ZkConn) GetACL(ctx context.Context, path string) (aclv []zk.ACL, stat *
 	return
 }
 
-// SetACL is part of the Conn interface.
 func (c *ZkConn) SetACL(ctx context.Context, path string, aclv []zk.ACL, version int32) error {
 	return c.withRetry(ctx, func(conn *zk.Conn) error {
 		_, err := conn.SetACL(path, aclv, version)
+		return err
+	})
+}
+
+func (c *ZkConn) AddAuth(ctx context.Context, scheme string, auth []byte) error {
+	return c.withRetry(ctx, func(conn *zk.Conn) error {
+		err := conn.AddAuth(scheme, auth)
 		return err
 	})
 }
@@ -271,8 +272,32 @@ func (c *ZkConn) getConn(ctx context.Context) (*zk.Conn, error) {
 		}
 		c.conn = conn
 		go c.handleSessionEvents(conn, events)
+		c.maybeAddAuth(ctx)
 	}
 	return c.conn, nil
+}
+
+// maybeAddAuth calls AddAuth if the `-topo_zk_auth_file` flag was specified
+func (c *ZkConn) maybeAddAuth(ctx context.Context) {
+	if *authFile == "" {
+		return
+	}
+	authInfoBytes, err := ioutil.ReadFile(*authFile)
+	if err != nil {
+		log.Errorf("failed to read topo_zk_auth_file: %v", err)
+		return
+	}
+	authInfo := string(authInfoBytes)
+	authInfoParts := strings.SplitN(authInfo, ":", 2)
+	if len(authInfoParts) != 2 {
+		log.Errorf("failed to parse topo_zk_auth_file contents, expected format <scheme>:<auth> but saw: %s", authInfo)
+		return
+	}
+	err = c.conn.AddAuth(authInfoParts[0], []byte(authInfoParts[1]))
+	if err != nil {
+		log.Errorf("failed to add auth from topo_zk_auth_file: %v", err)
+		return
+	}
 }
 
 // handleSessionEvents is processing events from the session channel.
