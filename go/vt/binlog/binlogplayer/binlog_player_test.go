@@ -369,7 +369,7 @@ func TestUpdateVReplicationPos(t *testing.T) {
 func TestUpdateVReplicationTimestamp(t *testing.T) {
 	gtid := mysql.MustParseGTID("MariaDB", "0-2-582")
 	want := "update _vt.vreplication " +
-		"set pos='MariaDB/0-2-582', time_updated=88822, transaction_timestamp=481828 " +
+		"set pos='MariaDB/0-2-582', time_updated=88822, transaction_timestamp=481828, message='' " +
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828)

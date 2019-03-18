@@ -36,7 +36,13 @@ import (
 )
 
 type vplayer struct {
-	vr *vreplicator
+	vr        *vreplicator
+	startPos  mysql.Position
+	stopPos   mysql.Position
+	copyState map[string]*sqltypes.Result
+
+	replicatorPlan *ReplicatorPlan
+	tablePlans     map[string]*TablePlan
 
 	pos mysql.Position
 	// unsavedEvent is saved any time we skip an event without
@@ -48,28 +54,33 @@ type vplayer struct {
 	lastTimestampNs int64
 	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
 	timeOffsetNs int64
-	stopPos      mysql.Position
-
-	replicatorPlan *ReplicatorPlan
-	tablePlans     map[string]*TablePlan
 }
 
-func newVPlayer(vr *vreplicator) *vplayer {
+func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result) *vplayer {
 	return &vplayer{
 		vr:            vr,
+		startPos:      settings.StartPos,
+		pos:           settings.StartPos,
+		stopPos:       settings.StopPos,
+		copyState:     copyState,
 		timeLastSaved: time.Now(),
 		tablePlans:    make(map[string]*TablePlan),
 	}
 }
 
-func (vp *vplayer) play(ctx context.Context, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result) error {
-	plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.tableKeys, copyState)
+// play is not resumable. If pausePos is set, play returns without updating the vreplication state.
+func (vp *vplayer) play(ctx context.Context) error {
+	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
+		return vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
+	}
+
+	plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.tableKeys, vp.copyState)
 	if err != nil {
 		return err
 	}
 	vp.replicatorPlan = plan
 
-	if err := vp.fetchAndApply(ctx, settings); err != nil {
+	if err := vp.fetchAndApply(ctx); err != nil {
 		msg := err.Error()
 		vp.vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 			Time:    time.Now(),
@@ -83,24 +94,8 @@ func (vp *vplayer) play(ctx context.Context, settings binlogplayer.VRSettings, c
 	return nil
 }
 
-func (vp *vplayer) fetchAndApply(ctx context.Context, settings binlogplayer.VRSettings) error {
-	var err error
-	vp.pos, err = mysql.DecodePosition(settings.StartPos)
-	if err != nil {
-		return vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("error decoding start position %v: %v", settings.StartPos, err))
-	}
-	if settings.StopPos != "" {
-		vp.stopPos, err = mysql.DecodePosition(settings.StopPos)
-		if err != nil {
-			return vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("error decoding stop position %v: %v", settings.StopPos, err))
-		}
-	}
-	if !vp.stopPos.IsZero() {
-		if vp.pos.AtLeast(vp.stopPos) {
-			return vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.pos, vp.stopPos))
-		}
-	}
-	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, source: %v, filter: %v", vp.vr.id, settings.StartPos, vp.stopPos, vp.vr.sourceTablet, vp.vr.source)
+func (vp *vplayer) fetchAndApply(ctx context.Context) error {
+	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, source: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.vr.sourceTablet, vp.vr.source)
 
 	vsClient, err := tabletconn.GetDialer()(vp.vr.sourceTablet, grpcclient.FailFast(false))
 	if err != nil {
@@ -120,7 +115,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context, settings binlogplayer.VRSe
 	log.Infof("Sending vstream command: %v", vp.replicatorPlan.VStreamFilter)
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vsClient.VStream(ctx, target, settings.StartPos, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+		streamErr <- vsClient.VStream(ctx, target, mysql.EncodePosition(vp.startPos), vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
 	}()
