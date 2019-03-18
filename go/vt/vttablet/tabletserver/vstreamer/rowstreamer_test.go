@@ -197,8 +197,14 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantStream
 	// We don't want to report errors inside callback functions because
 	// line numbers come out wrong.
 	go func() {
+		first := true
 		defer close(ch)
 		err := engine.StreamRows(ctx, query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
+			if first && rows.Gtid == "" {
+				ch <- fmt.Errorf("stream gtid is empty")
+			}
+			first = false
+			rows.Gtid = ""
 			if i >= len(wantStream) {
 				ch <- fmt.Errorf("unexpected stream rows: %v", rows)
 				return nil
