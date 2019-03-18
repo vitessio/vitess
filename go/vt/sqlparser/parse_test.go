@@ -1107,7 +1107,7 @@ var (
 		output: "show create procedure",
 	}, {
 		input:  "show create table t",
-		output: "show create table",
+		output: "show create table t",
 	}, {
 		input:  "show create trigger t",
 		output: "show create trigger",
