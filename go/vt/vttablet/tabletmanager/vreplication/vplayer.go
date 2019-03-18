@@ -39,6 +39,7 @@ type vplayer struct {
 	vr        *vreplicator
 	startPos  mysql.Position
 	stopPos   mysql.Position
+	saveStop  bool
 	copyState map[string]*sqltypes.Result
 
 	replicatorPlan *ReplicatorPlan
@@ -56,12 +57,18 @@ type vplayer struct {
 	timeOffsetNs int64
 }
 
-func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result) *vplayer {
+func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position) *vplayer {
+	saveStop := true
+	if !pausePos.IsZero() {
+		settings.StopPos = pausePos
+		saveStop = false
+	}
 	return &vplayer{
 		vr:            vr,
 		startPos:      settings.StartPos,
 		pos:           settings.StartPos,
 		stopPos:       settings.StopPos,
+		saveStop:      saveStop,
 		copyState:     copyState,
 		timeLastSaved: time.Now(),
 		tablePlans:    make(map[string]*TablePlan),
@@ -190,8 +197,10 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	vp.vr.stats.SetLastPosition(vp.pos)
 	posReached = !vp.stopPos.IsZero() && vp.pos.Equal(vp.stopPos)
 	if posReached {
-		if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
-			return false, err
+		if vp.saveStop {
+			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
+				return false, err
+			}
 		}
 	}
 	return posReached, nil

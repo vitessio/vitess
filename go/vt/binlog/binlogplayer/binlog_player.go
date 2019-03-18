@@ -590,7 +590,7 @@ func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTime
 	}
 
 	return fmt.Sprintf(
-		"update _vt.vreplication set pos=%v, time_updated=%v where id=%v",
+		"update _vt.vreplication set pos=%v, time_updated=%v, message='' where id=%v",
 		encodeString(mysql.EncodePosition(pos)), timeUpdated, uid)
 }
 

@@ -23,8 +23,10 @@ import (
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -80,27 +82,24 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	}
 	vr.tableKeys = tableKeys
 
-	settings, err := binlogplayer.ReadVRSettings(vr.dbClient, vr.id)
-	if err != nil {
-		return fmt.Errorf("error reading VReplication settings: %v", err)
-	}
-
-	if settings.State == binlogplayer.VReplicationInit {
-		if err := newVCopier(vr).initTablesForCopy(ctx); err != nil {
-			return err
+	for {
+		settings, numTablesToCopy, err := vr.readSettings(ctx)
+		if err != nil {
+			return fmt.Errorf("error reading VReplication settings: %v", err)
 		}
-		settings.State = binlogplayer.VReplicationCopying
-	}
-
-	if settings.State == binlogplayer.VReplicationCopying {
-		if err := newVCopier(vr).copyTables(ctx, settings); err != nil {
-			return err
+		switch {
+		case numTablesToCopy != 0:
+			if err := newVCopier(vr).copyTables(ctx, settings); err != nil {
+				return err
+			}
+		case settings.StartPos.IsZero():
+			if err := newVCopier(vr).initTablesForCopy(ctx); err != nil {
+				return err
+			}
+		default:
+			return newVPlayer(vr, settings, nil, mysql.Position{}).play(ctx)
 		}
-		settings.State = binlogplayer.BlpRunning
-		return nil
 	}
-
-	return newVPlayer(vr, settings, nil).play(ctx)
 }
 
 func (vr *vreplicator) buildTableKeys() (map[string][]string, error) {
@@ -117,6 +116,43 @@ func (vr *vreplicator) buildTableKeys() (map[string][]string, error) {
 		}
 	}
 	return tableKeys, nil
+}
+
+func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {
+	settings, err = binlogplayer.ReadVRSettings(vr.dbClient, vr.id)
+	if err != nil {
+		return settings, numTablesToCopy, fmt.Errorf("error reading VReplication settings: %v", err)
+	}
+
+	query := fmt.Sprintf("select count(*) from _vt.copy_state where vrepl_id=%d", vr.id)
+	qr, err := vr.dbClient.ExecuteFetch(query, 10)
+	if err != nil {
+		// If it's a not found error, create it.
+		merr, isSQLErr := err.(*mysql.SQLError)
+		if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb) {
+			return settings, numTablesToCopy, err
+		}
+		log.Info("Looks like _vt.copy_state table may not exist. Trying to create... ")
+		for _, query := range CreateCopyState {
+			if _, merr := vr.dbClient.ExecuteFetch(query, 0); merr != nil {
+				log.Errorf("Failed to ensure _vt.copy_state table exists: %v", merr)
+				return settings, numTablesToCopy, err
+			}
+		}
+		// Redo the read.
+		qr, err = vr.dbClient.ExecuteFetch(query, 10)
+		if err != nil {
+			return settings, numTablesToCopy, err
+		}
+	}
+	if len(qr.Rows) == 0 || len(qr.Rows[0]) == 0 {
+		return settings, numTablesToCopy, fmt.Errorf("unexpected result from %s: %v", query, qr)
+	}
+	numTablesToCopy, err = sqltypes.ToInt64(qr.Rows[0][0])
+	if err != nil {
+		return settings, numTablesToCopy, err
+	}
+	return settings, numTablesToCopy, nil
 }
 
 func (vr *vreplicator) setMessage(message string) error {
