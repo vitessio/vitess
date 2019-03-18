@@ -590,7 +590,7 @@ func TestPlayerDDL(t *testing.T) {
 
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
 	execStatements(t, []string{"alter table t1 drop column val"})
-	expectDBClientQueries(t, []string{})
+	expectDBClientQueries(t, []string{"/update _vt.vreplication set pos="})
 	cancel()
 
 	cancel, id := startVReplication(t, filter, binlogdatapb.OnDDLAction_STOP, "")
