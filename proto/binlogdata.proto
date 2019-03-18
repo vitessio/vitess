@@ -246,6 +246,7 @@ message VStreamRowsRequest {
 message VStreamRowsResponse {
   repeated query.Field fields = 1;
   repeated query.Field pkfields = 2;
-  repeated query.Row rows = 3;
-  query.Row lastpk = 4;
+  string gtid = 3;
+  repeated query.Row rows = 4;
+  query.Row lastpk = 5;
 }

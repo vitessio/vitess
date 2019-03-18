@@ -357,7 +357,7 @@ func TestDDLAddColumn(t *testing.T) {
 	go func() {
 		defer close(ch)
 		if err := vstream(ctx, t, pos, filter, ch); err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 	}()
 	expectLog(ctx, t, "ddls", ch, [][]string{{

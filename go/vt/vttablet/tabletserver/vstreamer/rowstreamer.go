@@ -19,6 +19,7 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -163,8 +164,13 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 
 // ExecuteStreamFetch overwrites mysql.Conn.ExecuteStreamFetch.
 func (rs *rowStreamer) streamQuery(conn *mysql.Conn, query string, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	err := conn.ExecuteStreamFetch(query)
+	unlock, gtid, err := rs.lockTable()
 	if err != nil {
+		return err
+	}
+	defer unlock()
+
+	if err := conn.ExecuteStreamFetch(query); err != nil {
 		return err
 	}
 
@@ -184,9 +190,13 @@ func (rs *rowStreamer) streamQuery(conn *mysql.Conn, query string, send func(*bi
 	err = send(&binlogdatapb.VStreamRowsResponse{
 		Fields:   rs.plan.fields(),
 		Pkfields: pkfields,
+		Gtid:     gtid,
 	})
 	if err != nil {
 		return fmt.Errorf("stream send error: %v", err)
+	}
+	if err := unlock(); err != nil {
+		return err
 	}
 
 	response := &binlogdatapb.VStreamRowsResponse{}
@@ -242,4 +252,33 @@ func (rs *rowStreamer) streamQuery(conn *mysql.Conn, query string, send func(*bi
 	}
 
 	return nil
+}
+
+func (rs *rowStreamer) lockTable() (unlock func() error, gtid string, err error) {
+	conn, err := mysql.Connect(rs.ctx, rs.cp)
+	if err != nil {
+		return nil, "", err
+	}
+	// mysql recommends this before locking tables.
+	if _, err := conn.ExecuteFetch("set autocommit=0", 0, false); err != nil {
+		return nil, "", err
+	}
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("lock tables %s read", sqlparser.String(sqlparser.NewTableIdent(rs.plan.Table.Name))), 0, false); err != nil {
+		return nil, "", err
+	}
+	var once sync.Once
+	unlock = func() error {
+		var err error
+		once.Do(func() {
+			_, err = conn.ExecuteFetch("unlock tables", 0, false)
+			conn.Close()
+		})
+		return err
+	}
+	pos, err := conn.MasterPosition()
+	if err != nil {
+		unlock()
+		return nil, "", err
+	}
+	return unlock, mysql.EncodePosition(pos), nil
 }
