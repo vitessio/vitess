@@ -30,7 +30,7 @@ To make sure you're writing idiomatic Go code, please read the following documen
 
 * Go Readability slides: https://talks.golang.org/2014/readability.slide
   * Talk about Go readability with many specific examples.
-* "Effective Go": https://golang.org/doc/effective_go.html
+* `Effective Go`: https://golang.org/doc/effective_go.html
   * Recommendations for writing good Go code.
 * Go Code Review Comments: https://github.com/golang/go/wiki/CodeReviewComments 
   * The closest thing to a style guide.
