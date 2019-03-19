@@ -160,6 +160,10 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 			// iterate through the shards
 			for _, spb := range kpb.Shards {
 				shard := spb.Name
+				ts.CreateShard(ctx, keyspace, shard)
+				if err != nil {
+					return fmt.Errorf("CreateShard(%v:%v) failed: %v", keyspace, shard, err)
+				}
 
 				for _, cell := range tpb.Cells {
 					dbname := spb.DbNameOverride

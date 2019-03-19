@@ -146,6 +146,10 @@ func CompareShardReplications(ctx context.Context, fromTS, toTS *topo.Server) er
 	if err != nil {
 		return vterrors.Wrapf(err, "fromTS.GetKeyspaces")
 	}
+	cells, err := fromTS.GetCellInfoNames(ctx)
+	if err != nil {
+		return vterrors.Wrap(err, "GetCellInfoNames()")
+	}
 
 	for _, keyspace := range keyspaces {
 		shards, err := fromTS.GetShardNames(ctx, keyspace)
@@ -154,14 +158,7 @@ func CompareShardReplications(ctx context.Context, fromTS, toTS *topo.Server) er
 		}
 
 		for _, shard := range shards {
-
-			// read the source shard to get the cells
-			si, err := fromTS.GetShard(ctx, keyspace, shard)
-			if err != nil {
-				return vterrors.Wrapf(err, "GetShard(%v, %v)", keyspace, shard)
-			}
-
-			for _, cell := range si.Shard.Cells {
+			for _, cell := range cells {
 				fromSRi, err := fromTS.GetShardReplication(ctx, cell, keyspace, shard)
 				if err != nil {
 					return vterrors.Wrapf(err, "GetShardReplication(%v, %v, %v)", cell, keyspace, shard)

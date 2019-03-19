@@ -27,7 +27,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -51,17 +50,8 @@ func TestAPI(t *testing.T) {
 	// Populate topo. Remove ServedTypes from shards to avoid ordering issues.
 	ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{ShardingColumnName: "shardcol"})
 	ts.CreateShard(ctx, "ks1", "-80")
-	ts.UpdateShardFields(ctx, "ks1", "-80", func(si *topo.ShardInfo) error {
-		si.Shard.Cells = cells
-		si.Shard.ServedTypes = nil
-		return nil
-	})
+
 	ts.CreateShard(ctx, "ks1", "80-")
-	ts.UpdateShardFields(ctx, "ks1", "80-", func(si *topo.ShardInfo) error {
-		si.Shard.Cells = cells
-		si.Shard.ServedTypes = nil
-		return nil
-	})
 
 	tablet1 := topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
@@ -147,8 +137,8 @@ func TestAPI(t *testing.T) {
 				},
 				"served_types": [],
 				"source_shards": [],
-				"cells": ["cell1", "cell2"],
-				"tablet_controls": []
+				"tablet_controls": [],
+				"is_master_serving": true
 			}`},
 		{"GET", "shards/ks1/-DEAD", "", "404 page not found"},
 		{"POST", "shards/ks1/-80?action=TestShardAction", "", `{

@@ -547,7 +547,7 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 		}
 	}
 
-	if err := scw.sanityCheckShardInfos(); err != nil {
+	if err := scw.sanityCheckShardInfos(ctx); err != nil {
 		return vterrors.Wrap(err, "failed sanityCheckShardInfos")
 	}
 
@@ -593,7 +593,11 @@ func (scw *SplitCloneWorker) initShardsForHorizontalResharding(ctx context.Conte
 
 	// one side should have served types, the other one none,
 	// figure out wich is which, then double check them all
-	if len(os.Left[0].ServedTypes) > 0 {
+	leftServingTypes, err := scw.wr.TopoServer().GetShardServingTypes(ctx, os.Left[0])
+	if err != nil {
+		return fmt.Errorf("cannot get shard serving cells for: %v", os.Left[0])
+	}
+	if len(leftServingTypes) > 0 {
 		scw.sourceShards = os.Left
 		scw.destinationShards = os.Right
 	} else {
@@ -659,7 +663,7 @@ func (scw *SplitCloneWorker) initShardsForVerticalSplit(ctx context.Context) err
 	return nil
 }
 
-func (scw *SplitCloneWorker) sanityCheckShardInfos() error {
+func (scw *SplitCloneWorker) sanityCheckShardInfos(ctx context.Context) error {
 	// Verify that filtered replication is not already enabled.
 	for _, si := range scw.destinationShards {
 		if len(si.SourceShards) > 0 {
@@ -672,8 +676,19 @@ func (scw *SplitCloneWorker) sanityCheckShardInfos() error {
 	// Verify that the source is serving all serving types.
 	for _, st := range servingTypes {
 		for _, si := range scw.sourceShards {
-			if si.GetServedType(st) == nil {
-				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "source shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), st)
+			shardServingTypes, err := scw.wr.TopoServer().GetShardServingTypes(ctx, si)
+			if err != nil {
+				return fmt.Errorf("failed to get ServingTypes for source shard %v/%v", si.Keyspace(), si.ShardName())
+
+			}
+			found := false
+			for _, shardServingType := range shardServingTypes {
+				if shardServingType == st {
+					found = true
+				}
+			}
+			if !found {
+				return fmt.Errorf("source shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), st)
 			}
 		}
 	}
@@ -682,16 +697,33 @@ func (scw *SplitCloneWorker) sanityCheckShardInfos() error {
 	case horizontalResharding:
 		// Verify that the destination is not serving yet.
 		for _, si := range scw.destinationShards {
-			if len(si.ServedTypes) > 0 {
-				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "destination shard %v/%v is serving some types", si.Keyspace(), si.ShardName())
+			shardServingTypes, err := scw.wr.TopoServer().GetShardServingTypes(ctx, si)
+			if err != nil {
+				return fmt.Errorf("failed to get ServingTypes for destination shard %v/%v", si.Keyspace(), si.ShardName())
+
+			}
+			if len(shardServingTypes) > 0 {
+				return fmt.Errorf("destination shard %v/%v is serving some types", si.Keyspace(), si.ShardName())
 			}
 		}
+
 	case verticalSplit:
 		// Verify that the destination is serving all types.
 		for _, st := range servingTypes {
 			for _, si := range scw.destinationShards {
-				if si.GetServedType(st) == nil {
-					return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "source shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), st)
+				shardServingTypes, err := scw.wr.TopoServer().GetShardServingTypes(ctx, si)
+				if err != nil {
+					return fmt.Errorf("failed to get ServingTypes for source shard %v/%v", si.Keyspace(), si.ShardName())
+
+				}
+				found := false
+				for _, shardServingType := range shardServingTypes {
+					if shardServingType == st {
+						found = true
+					}
+				}
+				if !found {
+					return fmt.Errorf("source shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), st)
 				}
 			}
 		}

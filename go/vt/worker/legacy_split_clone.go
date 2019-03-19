@@ -290,7 +290,12 @@ func (scw *LegacySplitCloneWorker) init(ctx context.Context) error {
 
 	// one side should have served types, the other one none,
 	// figure out wich is which, then double check them all
-	if len(os.Left[0].ServedTypes) > 0 {
+
+	leftServingTypes, err := scw.wr.TopoServer().GetShardServingTypes(ctx, os.Left[0])
+	if err != nil {
+		return fmt.Errorf("cannot get shard serving cells for: %v", os.Left[0])
+	}
+	if len(leftServingTypes) > 0 {
 		scw.sourceShards = os.Left
 		scw.destinationShards = os.Right
 	} else {
@@ -311,13 +316,29 @@ func (scw *LegacySplitCloneWorker) init(ctx context.Context) error {
 	servingTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 	for _, st := range servingTypes {
 		for _, si := range scw.sourceShards {
-			if si.GetServedType(st) == nil {
+			shardServingTypes, err := scw.wr.TopoServer().GetShardServingTypes(ctx, si)
+			if err != nil {
+				return fmt.Errorf("failed to get ServingTypes for source shard %v/%v", si.Keyspace(), si.ShardName())
+
+			}
+			found := false
+			for _, shardServingType := range shardServingTypes {
+				if shardServingType == st {
+					found = true
+				}
+			}
+			if !found {
 				return fmt.Errorf("source shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), st)
 			}
 		}
 	}
 	for _, si := range scw.destinationShards {
-		if len(si.ServedTypes) > 0 {
+		shardServingTypes, err := scw.wr.TopoServer().GetShardServingTypes(ctx, si)
+		if err != nil {
+			return fmt.Errorf("failed to get ServingTypes for destination shard %v/%v", si.Keyspace(), si.ShardName())
+
+		}
+		if len(shardServingTypes) > 0 {
 			return fmt.Errorf("destination shard %v/%v is serving some types", si.Keyspace(), si.ShardName())
 		}
 	}
@@ -597,7 +618,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 		destinationWaitGroup.Add(1)
 		go func(keyspace, shard string, kr *topodatapb.KeyRange) {
 			defer destinationWaitGroup.Done()
-			scw.wr.Logger().Infof("Making and populating vreplication table")
+			scw.wr.Logger().Infof("Making and populating vreplication table for %v/%v", keyspace, shard)
 
 			exc := newExecutor(scw.wr, scw.tsc, nil, keyspace, shard, 0)
 			for shardIndex, src := range scw.sourceShards {
