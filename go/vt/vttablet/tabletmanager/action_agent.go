@@ -267,7 +267,7 @@ func NewActionAgent(
 	// VREngine gets to invoke the FilteredWithDB call.
 	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
 		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
-	})
+	}, agent.DBConfigs.FilteredWithDB().DbName)
 	servenv.OnTerm(agent.VREngine.Close)
 
 	var mysqlHost string
@@ -340,6 +340,10 @@ func NewActionAgent(
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
 func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon, preStart func(*ActionAgent)) *ActionAgent {
+	ti, err := ts.GetTablet(batchCtx, tabletAlias)
+	if err != nil {
+		panic(vterrors.Wrap(err, "failed reading tablet"))
+	}
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -350,7 +354,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
-		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient),
+		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName()),
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
@@ -389,7 +393,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           dbcfgs,
-		VREngine:            vreplication.NewEngine(nil, "", nil, nil),
+		VREngine:            vreplication.NewEngine(nil, "", nil, nil, ""),
 		gotMysqlPort:        true,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),

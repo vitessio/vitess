@@ -682,7 +682,7 @@ func TestPlayerStopPos(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
 	startPos := masterPosition(t)
-	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogplayer.BlpStopped)
+	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogplayer.BlpStopped, vrepldb)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -792,7 +792,7 @@ func TestPlayerIdleUpdate(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set pos=",
 	})
-	if duration := time.Now().Sub(start); duration < idleTimeout {
+	if duration := time.Since(start); duration < idleTimeout {
 		t.Errorf("duration: %v, must be at least %v", duration, idleTimeout)
 	}
 }
@@ -1282,7 +1282,7 @@ func startVReplication(t *testing.T, filter *binlogdatapb.Filter, onddl binlogda
 	if pos == "" {
 		pos = masterPosition(t)
 	}
-	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0)
+	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)

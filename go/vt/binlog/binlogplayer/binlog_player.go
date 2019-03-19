@@ -503,6 +503,7 @@ func CreateVReplicationTable() []string {
   transaction_timestamp BIGINT(20) NOT NULL,
   state VARBINARY(100) NOT NULL,
   message VARBINARY(1000) DEFAULT NULL,
+  db_name VARBINARY(64) NOT NULL,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB`}
 }
@@ -558,19 +559,19 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 
 // CreateVReplication returns a statement to populate the first value into
 // the _vt.vreplication table.
-func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64) string {
+func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64, dbName string) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v')",
-		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag, timeUpdated, BlpRunning)
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v)",
+		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag, timeUpdated, BlpRunning, encodeString(dbName))
 }
 
 // CreateVReplicationState returns a statement to create a stopped vreplication.
-func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource, position, state string) string {
+func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource, position, state string, dbName string) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v')",
-		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state)
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v)",
+		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state, encodeString(dbName))
 }
 
 // GenerateUpdatePos returns a statement to update a value in the
