@@ -87,6 +87,11 @@ var (
 	// This is the minimum amount of time a client should wait before sending a keepalive ping.
 	GRPCKeepAliveEnforcementPolicyMinTime = flag.Duration("grpc_server_keepalive_enforcement_policy_min_time", 5*time.Minute, "grpc server minimum keepalive time")
 
+	// EnforcementPolicy PermitWithoutStream - If true, server allows keepalive pings
+	// even when there are no active streams (RPCs). If false, and client sends ping when
+	// there are no active streams, server will send GOAWAY and close the connection.
+	GRPCKeepAliveEnforcementPolicyPermitWithoutStream = flag.Bool("grpc_server_keepalive_enforcement_policy_permit_without_stream", false, "grpc server permit client keepalive pings even when there are no active streams (RPCs)")
+
 	authPlugin Authenticator
 )
 
@@ -148,7 +153,8 @@ func createGRPCServer() {
 	}
 
 	ep := keepalive.EnforcementPolicy{
-		MinTime: *GRPCKeepAliveEnforcementPolicyMinTime,
+		MinTime:             *GRPCKeepAliveEnforcementPolicyMinTime,
+		PermitWithoutStream: *GRPCKeepAliveEnforcementPolicyPermitWithoutStream,
 	}
 	opts = append(opts, grpc.KeepaliveEnforcementPolicy(ep))
 
