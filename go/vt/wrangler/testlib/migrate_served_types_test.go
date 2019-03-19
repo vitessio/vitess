@@ -153,9 +153,9 @@ func TestMigrateServedTypes(t *testing.T) {
 	// Override with a fake VREngine after Agent is initialized in action loop.
 	dbClient1 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory1 := func() binlogplayer.DBClient { return dbClient1 }
-	dest1Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1)
+	dest1Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, dbClient1.DBName())
 	// select * from _vt.vreplication during Open
-	dbClient1.ExpectRequest("select * from _vt.vreplication", &sqltypes.Result{}, nil)
+	dbClient1.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	if err := dest1Master.Agent.VREngine.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -182,9 +182,9 @@ func TestMigrateServedTypes(t *testing.T) {
 	// Override with a fake VREngine after Agent is initialized in action loop.
 	dbClient2 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory2 := func() binlogplayer.DBClient { return dbClient2 }
-	dest2Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2)
+	dest2Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, dbClient2.DBName())
 	// select * from _vt.vreplication during Open
-	dbClient2.ExpectRequest("select * from _vt.vreplication", &sqltypes.Result{}, nil)
+	dbClient2.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	if err := dest2Master.Agent.VREngine.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}

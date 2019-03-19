@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -61,17 +62,19 @@ type Engine struct {
 	cell            string
 	mysqld          mysqlctl.MysqlDaemon
 	dbClientFactory func() binlogplayer.DBClient
+	dbName          string
 }
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient) *Engine {
+func NewEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient, dbName string) *Engine {
 	vre := &Engine{
 		controllers:     make(map[int]*controller),
 		ts:              ts,
 		cell:            cell,
 		mysqld:          mysqld,
 		dbClientFactory: dbClientFactory,
+		dbName:          dbName,
 	}
 	return vre
 }
@@ -133,7 +136,7 @@ func (vre *Engine) initAll() error {
 	}
 	defer dbClient.Close()
 
-	rows, err := readAllRows(dbClient)
+	rows, err := readAllRows(dbClient, vre.dbName)
 	if err != nil {
 		// Handle Table not found.
 		if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERNoSuchTable {
@@ -347,8 +350,8 @@ func (vre *Engine) updateStats() {
 	}
 }
 
-func readAllRows(dbClient binlogplayer.DBClient) ([]map[string]string, error) {
-	qr, err := dbClient.ExecuteFetch("select * from _vt.vreplication", 10000)
+func readAllRows(dbClient binlogplayer.DBClient, dbName string) ([]map[string]string, error) {
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(dbName)), 10000)
 	if err != nil {
 		return nil, err
 	}
@@ -388,4 +391,10 @@ func rowToMap(qr *sqltypes.Result, rownum int) (map[string]string, error) {
 		m[fld.Name] = row[i].ToString()
 	}
 	return m, nil
+}
+
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
 }
