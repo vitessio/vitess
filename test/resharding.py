@@ -984,6 +984,13 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_1_ny_rdonly, True, False)
     utils.check_tablet_query_service(self, shard_1_rdonly1, False, True)
 
+    # Shouldn't be able to rebuild keyspace graph while migration is on going
+    # (i.e there are records that have tablet controls set)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],
+                    auto_log=True,
+                    expect_fail=True,
+    )
+
     # rerun migrate to ensure it doesn't fail
     # skip refresh to make it go faster
     utils.run_vtctl(['MigrateServedTypes', '--cells=test_nj',
@@ -1015,7 +1022,7 @@ primary key (name)
                      'test_keyspace/80-', 'rdonly'], auto_log=True)
 
     # then serve replica from the split shards
-    destination_shards = ['test_keyspace/80-c0', 'test_keyspace/c0-']
+    destination_shards = ['80-c0', 'c0-']
 
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
                     auto_log=True)
@@ -1037,7 +1044,9 @@ primary key (name)
     # Destination tablets would have query service disabled for other
     # reasons than the migration, so check the shard record instead of
     # the tablets directly.
-    utils.check_shard_query_services(self, destination_shards,
+    utils.check_shard_query_services(self, 'test_nj', 'test_keyspace', destination_shards,
+                                     topodata_pb2.REPLICA, False)
+    utils.check_shard_query_services(self, 'test_ny', 'test_keyspace', destination_shards,
                                      topodata_pb2.REPLICA, False)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n'
@@ -1054,7 +1063,9 @@ primary key (name)
     # Destination tablets would have query service disabled for other
     # reasons than the migration, so check the shard record instead of
     # the tablets directly
-    utils.check_shard_query_services(self, destination_shards,
+    utils.check_shard_query_services(self, 'test_nj', 'test_keyspace', destination_shards,
+                                     topodata_pb2.REPLICA, True)
+    utils.check_shard_query_services(self, 'test_ny', 'test_keyspace', destination_shards,
                                      topodata_pb2.REPLICA, True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n'
@@ -1143,11 +1154,26 @@ primary key (name)
                              sharding_column_name='custom_ksid_col')
     utils.check_tablet_query_service(self, shard_1_master, True, False)
 
-    # sabotage master migration and make it fail in an unfinished state
+    # sabotage master migration and make it fail in an unfinished state.
     utils.run_vtctl(['SetShardTabletControl', '-blacklisted_tables=t',
                      'test_keyspace/c0-', 'master'], auto_log=True)
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],
                     auto_log=True, expect_fail=True)
+
+    # Query service is disabled in source shard as failure occurred after point of no return
+    utils.check_tablet_query_service(self, shard_1_master, False, True)
+
+    # Global topology records should not change as migration did not succeed
+    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/80-'])
+    self.assertEqual(shard['is_master_serving'], True, 'source shards should be set in destination shard')
+
+    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/c0-'])
+    self.assertEqual(len(shard['source_shards']), 1, 'source shards should be set in destination shard')
+    self.assertEqual(shard['is_master_serving'], False, 'source shards should be set in destination shard')
+
+    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/80-c0'])
+    self.assertEqual(len(shard['source_shards']), 1, 'source shards should be set in destination shard')
+    self.assertEqual(shard['is_master_serving'], False, 'source shards should be set in destination shard')
 
     # remove sabotage, but make it fail early. This should not result
     # in the source master serving, because this failure is past the
@@ -1158,6 +1184,7 @@ primary key (name)
                      '-filtered_replication_wait_time', '0s',
                      'test_keyspace/80-', 'master'],
                      auto_log=True, expect_fail=True)
+
     utils.check_tablet_query_service(self, shard_1_master, False, True)
 
     # do the migration that's expected to succeed
@@ -1170,6 +1197,11 @@ primary key (name)
                              keyspace_id_type=base_sharding.keyspace_id_type,
                              sharding_column_name='custom_ksid_col')
     utils.check_tablet_query_service(self, shard_1_master, False, True)
+
+    # check destination shards are serving
+
+    utils.check_tablet_query_service(self, shard_2_master, True, False)
+    utils.check_tablet_query_service(self, shard_3_master, True, False)
 
     # check the binlog players are gone now
     self.check_no_binlog_player(shard_2_master)

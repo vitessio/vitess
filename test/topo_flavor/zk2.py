@@ -40,7 +40,7 @@ class Zk2TopoServer(server.TopoServer):
     self.addr = 'localhost:%d' % (self.zk_port_base + 2)
     self.ports_assigned = True
 
-  def setup(self, add_bad_host=False):
+  def setup(self):
     from environment import run, binary_args, vtlogroot  # pylint: disable=g-import-not-at-top,g-multiple-import
     import utils  # pylint: disable=g-import-not-at-top
 
@@ -60,8 +60,6 @@ class Zk2TopoServer(server.TopoServer):
                            '-server_address', self.addr,
                            'test_ny'])
     ca_addr = self.addr
-    if add_bad_host:
-      ca_addr += ',does.not.exists:1234'
     # Use UpdateCellInfo for this one, more coverage.
     utils.run_vtctl_vtctl(['UpdateCellInfo',
                            '-root', '/test_ca',

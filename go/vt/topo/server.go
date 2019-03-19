@@ -44,6 +44,7 @@ package topo
 
 import (
 	"flag"
+	"fmt"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -257,12 +258,17 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 
 	// Create the connection.
 	conn, err = ts.factory.Create(cell, ci.ServerAddress, ci.Root)
-	if err != nil {
-		return nil, vterrors.Wrapf(err, "failed to create topo connection to %v, %v", ci.ServerAddress, ci.Root)
+	switch {
+	case err == nil:
+		conn = NewStatsConn(cell, conn)
+		ts.cells[cell] = conn
+		return conn, nil
+	case IsErrType(err, NoNode):
+		err = vterrors.Wrap(err, fmt.Sprintf("failed to create topo connection to %v, %v", ci.ServerAddress, ci.Root))
+		return nil, NewError(NoNode, err.Error())
+	default:
+		return nil, vterrors.Wrap(err, fmt.Sprintf("failed to create topo connection to %v, %v", ci.ServerAddress, ci.Root))
 	}
-	conn = NewStatsConn(cell, conn)
-	ts.cells[cell] = conn
-	return conn, nil
 }
 
 // GetRegionByCell returns the region group this `cell` belongs to, if there's none, it returns the `cell` as region.
