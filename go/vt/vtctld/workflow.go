@@ -100,7 +100,7 @@ func runWorkflowManagerElection(ts *topo.Server) {
 	// We use servenv.ListeningURL which is only populated during Run,
 	// so we have to start this with OnRun.
 	servenv.OnRun(func() {
-		span, ctx := trace.NewSpan(context.Background(), "WorkflowManagerElection", trace.Local)
+		span, ctx := trace.NewSpan(context.Background(), "WorkflowManagerElection")
 		defer span.Finish()
 
 		conn, err := ts.ConnForCell(ctx, topo.GlobalCell)

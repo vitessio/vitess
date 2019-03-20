@@ -130,7 +130,7 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 	// one go function runs the worker, changes state when done
 	go func() {
 		log.Infof("Starting worker...")
-		span, ctx := trace.NewSpan(wi.currentContext, "work", trace.Local)
+		span, ctx := trace.NewSpan(wi.currentContext, "work")
 		span.Annotate("extra", wrk.StatusAsText())
 		defer span.Finish()
 		var err error

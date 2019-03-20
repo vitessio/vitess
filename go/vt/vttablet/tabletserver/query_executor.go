@@ -789,7 +789,7 @@ func (qre *QueryExecutor) execSet() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
-	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getConn", trace.Local)
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getConn")
 	defer span.Finish()
 
 	start := time.Now()
@@ -805,7 +805,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 }
 
 func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
-	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getStreamConn", trace.Local)
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getStreamConn")
 	defer span.Finish()
 
 	start := time.Now()
@@ -930,7 +930,7 @@ type poolConn interface {
 }
 
 func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*sqltypes.Result, error) {
-	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execSQL", trace.Local)
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execSQL")
 	defer span.Finish()
 
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
@@ -945,7 +945,7 @@ func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callback func(*sqltypes.Result) error) error {
-	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL", trace.Local)
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
 	span.Annotate("query", trace.ExtractFirstCharacters(sql))
 	callBackClosingSpan := func(result *sqltypes.Result) error {
 		defer span.Finish()

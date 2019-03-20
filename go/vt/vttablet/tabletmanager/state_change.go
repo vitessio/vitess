@@ -130,7 +130,7 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	agent.checkLock()
 	log.Infof("Executing post-action state refresh: %v", reason)
 
-	span, ctx := trace.NewSpan(ctx, "ActionAgent.refreshTablet", trace.Local)
+	span, ctx := trace.NewSpan(ctx, "ActionAgent.refreshTablet")
 	span.Annotate("reason", reason)
 	defer span.Finish()
 
@@ -189,7 +189,7 @@ func (agent *ActionAgent) updateState(ctx context.Context, newTablet *topodatapb
 func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *topodatapb.Tablet) {
 	agent.checkLock()
 
-	span, ctx := trace.NewSpan(ctx, "ActionAgent.changeCallback", trace.Local)
+	span, ctx := trace.NewSpan(ctx, "ActionAgent.changeCallback")
 	defer span.Finish()
 
 	allowQuery := topo.IsRunningQueryService(newTablet.Type)

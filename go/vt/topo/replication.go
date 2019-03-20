@@ -78,7 +78,7 @@ func (sri *ShardReplicationInfo) GetShardReplicationNode(tabletAlias *topodatapb
 // UpdateShardReplicationRecord is a low level function to add / update an
 // entry to the ShardReplication object.
 func UpdateShardReplicationRecord(ctx context.Context, ts *Server, keyspace, shard string, tabletAlias *topodatapb.TabletAlias) error {
-	span, ctx := trace.NewSpan(ctx, "TopoServer.UpdateShardReplicationFields", trace.Client)
+	span, ctx := trace.NewSpan(ctx, "TopoServer.UpdateShardReplicationFields")
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
 	span.Annotate("tablet", topoproto.TabletAliasString(tabletAlias))

@@ -25,7 +25,7 @@ import (
 
 type fakeSpanFactory struct{}
 
-func (fakeSpanFactory) New(Span, string, SpanType) Span                           { return fakeSpan{} }
+func (fakeSpanFactory) New(Span, string) Span                                     { return fakeSpan{} }
 func (fakeSpanFactory) FromContext(context.Context) (Span, bool)                  { return nil, false }
 func (fakeSpanFactory) NewContext(parent context.Context, _ Span) context.Context { return parent }
 
