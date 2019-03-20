@@ -1,27 +1,27 @@
 package trace
 
 import (
-  "io"
+	"io"
 
-  "github.com/opentracing/opentracing-go"
-  "github.com/uber/jaeger-client-go/config"
-  "golang.org/x/net/context"
+	"github.com/opentracing/opentracing-go"
+	"github.com/uber/jaeger-client-go/config"
+	"golang.org/x/net/context"
 )
 
 type JaegerSpan struct {
-  otSpan opentracing.Span
+	otSpan opentracing.Span
 }
 
 func (js JaegerSpan) Finish() {
-  js.otSpan.Finish()
+	js.otSpan.Finish()
 }
 
 func (js JaegerSpan) Annotate(key string, value interface{}) {
-  js.otSpan.SetTag(key, value)
+	js.otSpan.SetTag(key, value)
 }
 
 type OpenTracingFactory struct {
-  Tracer opentracing.Tracer
+	Tracer opentracing.Tracer
 }
 
 // NewJagerTracerFromEnv will instantiate a SpanFactory implemented by Jaeger,
@@ -43,49 +43,48 @@ type OpenTracingFactory struct {
 // JAEGER_AGENT_HOST
 // JAEGER_AGENT_PORT
 func NewJagerTracerFromEnv(serviceName string) (opentracing.Tracer, io.Closer, error) {
+	cfg, err := config.FromEnv()
+	if cfg.ServiceName == "" {
+		cfg.ServiceName = serviceName
+	}
 
-  cfg, err := config.FromEnv()
-  if cfg.ServiceName == "" {
-    cfg.ServiceName = serviceName
-  }
+	tracer, closer, err := cfg.NewTracer()
 
-  tracer, closer, err := cfg.NewTracer()
+	if err != nil {
+		return nil, &nilCloser{}, err
+	}
 
-  if err != nil {
-    return nil, &nilCloser{}, err
-  }
-
-  return tracer, closer, nil
+	return tracer, closer, nil
 }
 
 func (jf OpenTracingFactory) New(parent Span, label string, spanType SpanType) Span {
-  var innerSpan opentracing.Span
-  if parent == nil {
-    innerSpan = jf.Tracer.StartSpan(label)
-  } else {
-    jaegerParent := parent.(JaegerSpan)
-    span := jaegerParent.otSpan
-    innerSpan = jf.Tracer.StartSpan(label, opentracing.ChildOf(span.Context()))
-  }
-  return JaegerSpan{otSpan: innerSpan}
+	var innerSpan opentracing.Span
+	if parent == nil {
+		innerSpan = jf.Tracer.StartSpan(label)
+	} else {
+		jaegerParent := parent.(JaegerSpan)
+		span := jaegerParent.otSpan
+		innerSpan = jf.Tracer.StartSpan(label, opentracing.ChildOf(span.Context()))
+	}
+	return JaegerSpan{otSpan: innerSpan}
 }
 
 func (jf OpenTracingFactory) FromContext(ctx context.Context) (Span, bool) {
-  innerSpan := opentracing.SpanFromContext(ctx)
+	innerSpan := opentracing.SpanFromContext(ctx)
 
-  if innerSpan != nil {
-    return JaegerSpan{otSpan: innerSpan}, true
-  } else {
-    return nil, false
-  }
+	if innerSpan != nil {
+		return JaegerSpan{otSpan: innerSpan}, true
+	} else {
+		return nil, false
+	}
 }
 
 func (jf OpenTracingFactory) NewContext(parent context.Context, s Span) context.Context {
-  span, ok := s.(JaegerSpan)
-  if !ok {
-    return nil
-  }
-  return opentracing.ContextWithSpan(parent, span.otSpan)
+	span, ok := s.(JaegerSpan)
+	if !ok {
+		return nil
+	}
+	return opentracing.ContextWithSpan(parent, span.otSpan)
 }
 
 type nilCloser struct {
@@ -94,5 +93,5 @@ type nilCloser struct {
 func (c *nilCloser) Close() error { return nil }
 
 func init() {
-  tracingBackendFactories["jaeger"] = NewJagerTracerFromEnv
+	tracingBackendFactories["jaeger"] = NewJagerTracerFromEnv
 }

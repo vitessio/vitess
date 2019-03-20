@@ -17,10 +17,10 @@ limitations under the License.
 package trace
 
 import (
-  "io"
+	"io"
 
-  "github.com/opentracing/opentracing-go"
-  "golang.org/x/net/context"
+	"github.com/opentracing/opentracing-go"
+	"golang.org/x/net/context"
 )
 
 type fakeSpanFactory struct{}
@@ -36,7 +36,7 @@ func (fakeSpan) Finish()                      {}
 func (fakeSpan) Annotate(string, interface{}) {}
 
 func init() {
-  tracingBackendFactories["noop"] = func(_ string) (opentracing.Tracer, io.Closer, error) {
-    return opentracing.NoopTracer{}, &nilCloser{}, nil
-  }
+	tracingBackendFactories["noop"] = func(_ string) (opentracing.Tracer, io.Closer, error) {
+		return opentracing.NoopTracer{}, &nilCloser{}, nil
+	}
 }
