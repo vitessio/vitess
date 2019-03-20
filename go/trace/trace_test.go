@@ -81,4 +81,3 @@ func (fakeTracer) Inject(sm opentracing.SpanContext, format interface{}, carrier
 func (fakeTracer) Extract(format interface{}, carrier interface{}) (opentracing.SpanContext, error) {
 	panic("implement me")
 }
-
