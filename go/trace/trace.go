@@ -24,8 +24,10 @@ import (
 	"io"
 	"strings"
 
+	"github.com/opentracing-contrib/go-grpc"
 	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -78,6 +80,30 @@ func CopySpan(parentCtx, spanCtx context.Context) context.Context {
 		return NewContext(parentCtx, span)
 	}
 	return parentCtx
+}
+
+func GetGrpcClientOptions() []grpc.DialOption {
+	tracer := opentracing.GlobalTracer()
+	_, isNoopTracer := tracer.(opentracing.NoopTracer)
+	if isNoopTracer {
+		return []grpc.DialOption{}
+
+	} else {
+		return []grpc.DialOption{
+			grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(tracer)),
+			grpc.WithStreamInterceptor(otgrpc.OpenTracingStreamClientInterceptor(tracer)),
+		}
+	}
+}
+
+func AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
+	tracer := opentracing.GlobalTracer()
+	_, isNoopTracer := tracer.(*opentracing.NoopTracer)
+	if isNoopTracer {
+		return
+	}
+
+	addInterceptors(otgrpc.OpenTracingStreamServerInterceptor(tracer), otgrpc.OpenTracingServerInterceptor(tracer))
 }
 
 // SpanFactory is an interface for creating spans or extracting them from Contexts.
