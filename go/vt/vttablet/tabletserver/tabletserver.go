@@ -965,7 +965,7 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 
 // Execute executes the query and returns the result as response.
 func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
-	span, ctx := trace.NewSpan(ctx, "TabletServer.Execute", trace.Local)
+	span, ctx := trace.NewSpan(ctx, "TabletServer.Execute")
 	span.Annotate("sql", trace.ExtractFirstCharacters(sql))
 	defer span.Finish()
 
@@ -1045,7 +1045,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 // the AsTransaction flag which will execute all statements inside an independent
 // transaction. If AsTransaction is true, TransactionId must be 0.
 func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (results []sqltypes.Result, err error) {
-	span, ctx := trace.NewSpan(ctx, "TabletServer.ExecuteBatch", trace.Local)
+	span, ctx := trace.NewSpan(ctx, "TabletServer.ExecuteBatch")
 	defer span.Finish()
 
 	if len(queries) == 0 {
@@ -1431,7 +1431,7 @@ func (tsv *TabletServer) execRequest(
 	target *querypb.Target, options *querypb.ExecuteOptions, isBegin, allowOnShutdown bool,
 	exec func(ctx context.Context, logStats *tabletenv.LogStats) error,
 ) (err error) {
-	span, ctx := trace.NewSpan(ctx, "TabletServer."+requestName, trace.Local)
+	span, ctx := trace.NewSpan(ctx, "TabletServer."+requestName)
 	if options != nil {
 		span.Annotate("isolation-level", options.TransactionIsolation)
 	}

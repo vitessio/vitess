@@ -42,27 +42,20 @@ type Span interface {
 	Annotate(key string, value interface{})
 }
 
-type SpanType int
-
-const (
-	Local SpanType = iota
-	Client
-	Server
-)
-
 // NewSpan creates a new Span with the currently installed tracing plugin.
 // If no tracing plugin is installed, it returns a fake Span that does nothing.
-func NewSpan(inCtx context.Context, label string, spanType SpanType) (Span, context.Context) {
+func NewSpan(inCtx context.Context, label string) (Span, context.Context) {
 	parent, _ := spanFactory.FromContext(inCtx)
-	span := spanFactory.New(parent, label, spanType)
+	span := spanFactory.New(parent, label)
 	outCtx := spanFactory.NewContext(inCtx, span)
 
 	return span, outCtx
 }
 
-// NewClientSpan returns a span and a context to register calls to dependent services
+// NewClientSpan returns a span and a context to register calls to dependent services. It annotates
+// the span with "peer.service" per https://github.com/opentracing/specification/blob/master/semantic_conventions.md
 func NewClientSpan(inCtx context.Context, serviceName, spanLabel string) (Span, context.Context) {
-	span, ctx := NewSpan(inCtx, spanLabel, Client)
+	span, ctx := NewSpan(inCtx, spanLabel)
 	span.Annotate("peer.service", serviceName)
 	return span, ctx
 }
@@ -90,7 +83,7 @@ func CopySpan(parentCtx, spanCtx context.Context) context.Context {
 // SpanFactory is an interface for creating spans or extracting them from Contexts.
 type SpanFactory interface {
 	// New creates a new span from an existing one, if provided. The parent can also be nil
-	New(parent Span, label string, spanType SpanType) Span
+	New(parent Span, label string) Span
 
 	// Extracts a span from a context, making it possible to annotate the span with additional information.
 	FromContext(ctx context.Context) (Span, bool)

@@ -177,7 +177,7 @@ func (si *ShardInfo) HasMaster() bool {
 // GetShard is a high level function to read shard data.
 // It generates trace spans.
 func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardInfo, error) {
-	span, ctx := trace.NewSpan(ctx, "TopoServer.GetShard", trace.Local)
+	span, ctx := trace.NewSpan(ctx, "TopoServer.GetShard")
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
 	defer span.Finish()
@@ -203,7 +203,7 @@ func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardI
 // updateShard updates the shard data, with the right version.
 // It also creates a span, and dispatches the event.
 func (ts *Server) updateShard(ctx context.Context, si *ShardInfo) error {
-	span, ctx := trace.NewSpan(ctx, "TopoServer.UpdateShard", trace.Client)
+	span, ctx := trace.NewSpan(ctx, "TopoServer.UpdateShard")
 	span.Annotate("keyspace", si.keyspace)
 	span.Annotate("shard", si.shardName)
 	defer span.Finish()
@@ -476,7 +476,7 @@ func (ts *Server) FindAllTabletAliasesInShard(ctx context.Context, keyspace, sha
 //
 // The tablet aliases are sorted by cell, then by UID.
 func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspace, shard string, cells []string) ([]*topodatapb.TabletAlias, error) {
-	span, ctx := trace.NewSpan(ctx, "topo.FindAllTabletAliasesInShardbyCell", trace.Client)
+	span, ctx := trace.NewSpan(ctx, "topo.FindAllTabletAliasesInShardbyCell")
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
 	span.Annotate("num_cells", len(cells))

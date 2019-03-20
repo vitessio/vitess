@@ -220,7 +220,7 @@ func (l *Lock) lockKeyspace(ctx context.Context, ts *Server, keyspace string) (L
 	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
 	defer cancel()
 
-	span, ctx := trace.NewSpan(ctx, "TopoServer.LockKeyspaceForAction", trace.Client)
+	span, ctx := trace.NewSpan(ctx, "TopoServer.LockKeyspaceForAction")
 	span.Annotate("action", l.Action)
 	span.Annotate("keyspace", keyspace)
 	defer span.Finish()
@@ -244,7 +244,7 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts *Server, keyspace string, 
 	ctx, cancel := context.WithTimeout(ctx, defaultLockTimeout)
 	defer cancel()
 
-	span, ctx := trace.NewSpan(ctx, "TopoServer.UnlockKeyspaceForAction", trace.Client)
+	span, ctx := trace.NewSpan(ctx, "TopoServer.UnlockKeyspaceForAction")
 	span.Annotate("action", l.Action)
 	span.Annotate("keyspace", keyspace)
 	defer span.Finish()
@@ -361,7 +361,7 @@ func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string
 	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
 	defer cancel()
 
-	span, ctx := trace.NewSpan(ctx, "TopoServer.LockShardForAction", trace.Client)
+	span, ctx := trace.NewSpan(ctx, "TopoServer.LockShardForAction")
 	span.Annotate("action", l.Action)
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
@@ -385,7 +385,7 @@ func (l *Lock) unlockShard(ctx context.Context, ts *Server, keyspace, shard stri
 	ctx, cancel := context.WithTimeout(ctx, defaultLockTimeout)
 	defer cancel()
 
-	span, ctx := trace.NewSpan(ctx, "TopoServer.UnlockShardForAction", trace.Client)
+	span, ctx := trace.NewSpan(ctx, "TopoServer.UnlockShardForAction")
 	span.Annotate("action", l.Action)
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
