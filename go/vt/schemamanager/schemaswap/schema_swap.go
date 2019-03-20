@@ -308,7 +308,7 @@ func (schemaSwap *Swap) executeSwap() error {
 	}
 	errHealthWatchers := schemaSwap.runOnAllShards(
 		func(shard *shardSchemaSwap) error {
-			return shard.startHealthWatchers(schemaSwap.ctx )
+			return shard.startHealthWatchers(schemaSwap.ctx)
 		})
 	// Note: this defer statement is before the error is checked because some shards may
 	// succeed while others fail. We should try to stop health watching on all shards no
