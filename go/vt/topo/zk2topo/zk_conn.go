@@ -109,6 +109,7 @@ func (c *ZkConn) Get(ctx context.Context, path string) (data []byte, stat *zk.St
 	return
 }
 
+// GetW is part of the Conn interface.
 func (c *ZkConn) GetW(ctx context.Context, path string) (data []byte, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		data, stat, watch, err = conn.GetW(path)
@@ -117,6 +118,7 @@ func (c *ZkConn) GetW(ctx context.Context, path string) (data []byte, stat *zk.S
 	return
 }
 
+// Children is part of the Conn interface.
 func (c *ZkConn) Children(ctx context.Context, path string) (children []string, stat *zk.Stat, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		children, stat, err = conn.Children(path)
@@ -125,6 +127,7 @@ func (c *ZkConn) Children(ctx context.Context, path string) (children []string, 
 	return
 }
 
+// ChildrenW is part of the Conn interface.
 func (c *ZkConn) ChildrenW(ctx context.Context, path string) (children []string, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		children, stat, watch, err = conn.ChildrenW(path)
@@ -133,6 +136,7 @@ func (c *ZkConn) ChildrenW(ctx context.Context, path string) (children []string,
 	return
 }
 
+// Exists is part of the Conn interface.
 func (c *ZkConn) Exists(ctx context.Context, path string) (exists bool, stat *zk.Stat, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		exists, stat, err = conn.Exists(path)
@@ -141,6 +145,7 @@ func (c *ZkConn) Exists(ctx context.Context, path string) (exists bool, stat *zk
 	return
 }
 
+// ExistsW is part of the Conn interface.
 func (c *ZkConn) ExistsW(ctx context.Context, path string) (exists bool, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		exists, stat, watch, err = conn.ExistsW(path)
@@ -174,6 +179,7 @@ func (c *ZkConn) Delete(ctx context.Context, path string, version int32) error {
 	})
 }
 
+// GetACL is part of the Conn interface.
 func (c *ZkConn) GetACL(ctx context.Context, path string) (aclv []zk.ACL, stat *zk.Stat, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		aclv, stat, err = conn.GetACL(path)
@@ -182,6 +188,7 @@ func (c *ZkConn) GetACL(ctx context.Context, path string) (aclv []zk.ACL, stat *
 	return
 }
 
+// SetACL is part of the Conn interface.
 func (c *ZkConn) SetACL(ctx context.Context, path string, aclv []zk.ACL, version int32) error {
 	return c.withRetry(ctx, func(conn *zk.Conn) error {
 		_, err := conn.SetACL(path, aclv, version)
@@ -189,6 +196,7 @@ func (c *ZkConn) SetACL(ctx context.Context, path string, aclv []zk.ACL, version
 	})
 }
 
+// AddAuth is part of the Conn interface.
 func (c *ZkConn) AddAuth(ctx context.Context, scheme string, auth []byte) error {
 	return c.withRetry(ctx, func(conn *zk.Conn) error {
 		err := conn.AddAuth(scheme, auth)
