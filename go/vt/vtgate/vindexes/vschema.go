@@ -301,7 +301,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			seq, err := vschema.findQualified(table.AutoIncrement.Sequence)
 			if err != nil {
 				ksvschema.Error = fmt.Errorf("cannot resolve sequence %s: %v", table.AutoIncrement.Sequence, err)
-				break
+				continue
 			}
 			t.AutoIncrement.Sequence = seq
 		}
