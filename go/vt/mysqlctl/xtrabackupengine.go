@@ -52,6 +52,7 @@ var (
 	xtrabackupRestoreFlags = flag.String("xtrabackup_restore_flags", "", "flags to pass to restore command. these will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
 	// streaming mode
 	xtrabackupStreamMode = flag.String("xtrabackup_stream_mode", "tar", "which mode to use if streaming, valid values are tar and xbstream")
+	xtrabackupUser       = flag.String("xtrabackup_user", "", "User to use for xtrabackup")
 )
 
 const (
@@ -94,17 +95,12 @@ func (be *XtrabackupEngine) backupFileName() string {
 func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error) {
 
 	backupProgram := path.Join(*xtrabackupEnginePath, xtrabackup)
-	// TODO check that the executable file exists, exit if it doesn't or isn't executable
 
-	// add --slave-info assuming this is a replica tablet
-	// TODO what if it is master?
-
-	// TODO need to pass backup username here
 	flagsToExec := []string{"--defaults-file=" + cnf.path,
 		"--backup",
 		"--socket=" + cnf.SocketFile,
 		"--slave-info",
-		//"--user=vt_dba",
+		"--user=" + *xtrabackupUser,
 	}
 	if *xtrabackupStreamMode != "" {
 		flagsToExec = append(flagsToExec, "--stream="+*xtrabackupStreamMode)
