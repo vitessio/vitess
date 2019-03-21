@@ -120,11 +120,15 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot create backup file %v", backupFileName)
 	}
-	defer func() {
+	closeFile := func(wc io.WriteCloser, fileName string) {
 		if closeErr := wc.Close(); err == nil {
 			err = closeErr
+		} else if closeErr != nil {
+			// since we already have an error just log this
+			logger.Errorf("Error closing file %v", fileName)
 		}
-	}()
+	}
+	defer closeFile(wc, backupFileName)
 
 	backupCmd := exec.Command(backupProgram, flagsToExec...)
 	backupOut, _ := backupCmd.StdoutPipe()
@@ -187,15 +191,11 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	logger.Infof("Found position: %v", position)
 
 	// open the MANIFEST
-	wc, err = bh.AddFile(ctx, backupManifest, 0)
+	mwc, err := bh.AddFile(ctx, backupManifest, 0)
 	if err != nil {
 		return usable, vterrors.Wrapf(err, "cannot add %v to backup", backupManifest)
 	}
-	defer func() {
-		if closeErr := wc.Close(); err == nil {
-			err = closeErr
-		}
-	}()
+	defer closeFile(mwc, backupManifest)
 
 	// JSON-encode and write the MANIFEST
 	bm := &XtraBackupManifest{
@@ -210,7 +210,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	if err != nil {
 		return usable, vterrors.Wrapf(err, "cannot JSON encode %v", backupManifest)
 	}
-	if _, err := wc.Write([]byte(data)); err != nil {
+	if _, err := mwc.Write([]byte(data)); err != nil {
 		return usable, vterrors.Wrapf(err, "cannot write %v", backupManifest)
 	}
 
