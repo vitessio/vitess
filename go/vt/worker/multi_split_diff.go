@@ -41,7 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// One of these per paralell runner
+// Scanners encapsulates a source and a destination. We create one of these per paralell runner.
 type Scanners struct {
 	// this is how we get data from the source shard
 	sourceScanner TableScanner
@@ -561,7 +561,7 @@ func (msdw *MultiSplitDiffWorker) synchronizeSrcAndDestTxState(ctx context.Conte
 	}
 
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	source, err := msdw.wr.TopoServer().GetTablet(shortCtx, msdw.sourceAlias)
+	source, _ := msdw.wr.TopoServer().GetTablet(shortCtx, msdw.sourceAlias)
 	cancel()
 
 	var sourcePosition string
@@ -611,7 +611,7 @@ func (msdw *MultiSplitDiffWorker) synchronizeSrcAndDestTxState(ctx context.Conte
 			return vterrors.Wrapf(err, "waitForDestinationTabletToReach: cannot get Tablet record for master %v", msdw.shardInfo.MasterAlias)
 		}
 
-		queryService, err := tabletconn.GetDialer()(source.Tablet, true)
+		queryService, _ := tabletconn.GetDialer()(source.Tablet, true)
 		var destScanners []TableScanner
 
 		if msdw.useConsistentSnapshot {

@@ -157,7 +157,7 @@ func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxR
 	}
 
 	runningThreads := make(map[int]bool, threadCount)
-	threadThrottlers := make([]*threadThrottler, threadCount, threadCount)
+	threadThrottlers := make([]*threadThrottler, threadCount)
 	for i := 0; i < threadCount; i++ {
 		threadThrottlers[i] = newThreadThrottler(i, actualRateHistory)
 		runningThreads[i] = true
@@ -171,7 +171,7 @@ func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxR
 		maxReplicationLagModule: maxReplicationLagModule,
 		rateUpdateChan:          rateUpdateChan,
 		threadThrottlers:        threadThrottlers,
-		threadFinished:          make([]bool, threadCount, threadCount),
+		threadFinished:          make([]bool, threadCount),
 		runningThreads:          runningThreads,
 		nowFunc:                 nowFunc,
 		actualRateHistory:       actualRateHistory,

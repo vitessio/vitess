@@ -45,7 +45,7 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 	var table *vschemapb.Table
 	if !ddl.Table.IsEmpty() {
 		tableName = ddl.Table.Name.String()
-		table, _ = ks.Tables[tableName]
+		table = ks.Tables[tableName]
 	}
 
 	switch ddl.Action {
@@ -151,7 +151,7 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 			}
 		}
 
-		columns := make([]string, len(ddl.VindexCols), len(ddl.VindexCols))
+		columns := make([]string, len(ddl.VindexCols))
 		for i, col := range ddl.VindexCols {
 			columns[i] = col.String()
 		}

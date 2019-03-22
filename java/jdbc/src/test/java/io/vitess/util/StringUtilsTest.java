@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,6 +17,7 @@
 package io.vitess.util;
 
 import com.google.common.collect.Lists;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -40,10 +41,14 @@ public class StringUtilsTest {
     Assert.assertEquals("'this is a test'", StringUtils.quoteIdentifier("this is a test", "'"));
     Assert.assertEquals("'this is a test'", StringUtils.quoteIdentifier("'this is a test'", "'"));
     Assert.assertEquals("'this is'' a test'", StringUtils.quoteIdentifier("this is' a test", "'"));
-    Assert.assertEquals("'this is'''' a test'", StringUtils.quoteIdentifier("this is'' a test", "'"));
-    Assert.assertEquals("'this is'' a test'", StringUtils.quoteIdentifier("'this is'' a test'", "'"));
-    Assert.assertEquals("'this is a ''test'''", StringUtils.quoteIdentifier("this is a 'test'", "'"));
-    Assert.assertEquals("'this is a ''test'''", StringUtils.quoteIdentifier("'this is a ''test'''", "'"));
+    Assert
+        .assertEquals("'this is'''' a test'", StringUtils.quoteIdentifier("this is'' a test", "'"));
+    Assert
+        .assertEquals("'this is'' a test'", StringUtils.quoteIdentifier("'this is'' a test'", "'"));
+    Assert
+        .assertEquals("'this is a ''test'''", StringUtils.quoteIdentifier("this is a 'test'", "'"));
+    Assert.assertEquals("'this is a ''test'''",
+        StringUtils.quoteIdentifier("'this is a ''test'''", "'"));
     Assert.assertEquals(null, StringUtils.quoteIdentifier(null, "'"));
     Assert.assertEquals("this is a test", StringUtils.quoteIdentifier("this is a test", ""));
     Assert.assertEquals("this is a test", StringUtils.quoteIdentifier("this is a test", " "));
@@ -54,16 +59,24 @@ public class StringUtilsTest {
     Assert.assertEquals(null, StringUtils.unQuoteIdentifier(null, "'"));
     Assert.assertEquals("'this is a test'", StringUtils.unQuoteIdentifier("'this is a test'", ""));
     Assert.assertEquals("'this is a test'", StringUtils.unQuoteIdentifier("'this is a test'", " "));
-    Assert.assertEquals("'this is a test'", StringUtils.unQuoteIdentifier("'this is a test'", "\""));
+    Assert
+        .assertEquals("'this is a test'", StringUtils.unQuoteIdentifier("'this is a test'", "\""));
     Assert.assertEquals("this is a test'", StringUtils.unQuoteIdentifier("this is a test'", "'"));
     Assert.assertEquals("this is a test", StringUtils.unQuoteIdentifier("'this is a test'", "'"));
-    Assert.assertEquals("this is 'a' test", StringUtils.unQuoteIdentifier("'this is ''a'' test'", "'"));
-    Assert.assertEquals("this is 'a'' test", StringUtils.unQuoteIdentifier("'this is ''a'''' test'", "'"));
-    Assert.assertEquals("'this is a test'", StringUtils.unQuoteIdentifier("'''this is a test'''", "'"));
-    Assert.assertEquals("this is a test", StringUtils.unQuoteIdentifier("``this is a test``", "``"));
-    Assert.assertEquals("``this is ``a test``", StringUtils.unQuoteIdentifier("``this is ``a test``", "``"));
-    Assert.assertEquals("this is ``a test", StringUtils.unQuoteIdentifier("``this is ````a test``", "``"));
-    Assert.assertEquals("'this is ''a' test'", StringUtils.unQuoteIdentifier("'this is ''a' test'", "'"));
+    Assert.assertEquals("this is 'a' test",
+        StringUtils.unQuoteIdentifier("'this is ''a'' test'", "'"));
+    Assert.assertEquals("this is 'a'' test",
+        StringUtils.unQuoteIdentifier("'this is ''a'''' test'", "'"));
+    Assert.assertEquals("'this is a test'",
+        StringUtils.unQuoteIdentifier("'''this is a test'''", "'"));
+    Assert
+        .assertEquals("this is a test", StringUtils.unQuoteIdentifier("``this is a test``", "``"));
+    Assert.assertEquals("``this is ``a test``",
+        StringUtils.unQuoteIdentifier("``this is ``a test``", "``"));
+    Assert.assertEquals("this is ``a test",
+        StringUtils.unQuoteIdentifier("``this is ````a test``", "``"));
+    Assert.assertEquals("'this is ''a' test'",
+        StringUtils.unQuoteIdentifier("'this is ''a' test'", "'"));
   }
 
   @Test
@@ -74,9 +87,11 @@ public class StringUtilsTest {
     Assert.assertEquals(-1, StringUtils.indexOfIgnoreCase(8, "this is a test", "this", "`", "`"));
     Assert.assertEquals(7, StringUtils.indexOfIgnoreCase(0, "this is a test", " a ", "`", "`"));
     Assert.assertEquals(-1, StringUtils.indexOfIgnoreCase(0, "this is `a` test", "a", "`", "`"));
-    Assert.assertEquals(10, StringUtils.indexOfIgnoreCase(0, "this is \\`a\\` test", "a", "`", "`"));
+    Assert
+        .assertEquals(10, StringUtils.indexOfIgnoreCase(0, "this is \\`a\\` test", "a", "`", "`"));
     Assert.assertEquals(-1, StringUtils.indexOfIgnoreCase(0, "this `is \\`a` test", "a", "`", "`"));
-    Assert.assertEquals(-1, StringUtils.indexOfIgnoreCase(0, "th'is' `is` a test", "is", "`'", "`'"));
+    Assert
+        .assertEquals(-1, StringUtils.indexOfIgnoreCase(0, "th'is' `is` a test", "is", "`'", "`'"));
     Assert.assertEquals(10, StringUtils.indexOfIgnoreCase(0, "this is a test", "TEST", "`", "`"));
     Assert.assertEquals(10, StringUtils.indexOfIgnoreCase(0, "this is ``a` test", "a", "`", "`"));
 
@@ -103,26 +118,39 @@ public class StringUtilsTest {
     } catch (IllegalArgumentException ignored) {
       // expected
     }
-    Assert.assertEquals(Lists.newArrayList("one", "two", "three"), StringUtils.split("one,two,three", ",", "`", "`"));
-    Assert.assertEquals(Lists.newArrayList("one", "`two,three`"), StringUtils.split("one,`two,three`", ",", "`", "`"));
-    Assert.assertEquals(Lists.newArrayList("one", "{tw{o,t}hree}"), StringUtils.split("one,{tw{o,t}hree}", ",", "{", "}"));
-    Assert.assertEquals(Lists.newArrayList("one", "/*two,three*/"), StringUtils.split("one,/*two,three*/", ",", "`", "`"));
-    Assert.assertEquals(Lists.newArrayList("one", "-- two,three\n", "four"), StringUtils.split("one,-- two,three\n,four", ",", "`", "`"));
-    Assert.assertEquals(Lists.newArrayList("one", "-- two,three\r\n", "four"), StringUtils.split("one,-- two,three\r\n,four", ",", "`", "`"));
-    Assert.assertEquals(Lists.newArrayList("one", "#two,three\n", "four"), StringUtils.split("one,#two,three\n,four", ",", "`", "`"));
-    Assert.assertEquals(Lists.newArrayList("one", "--;two", "three", "four"), StringUtils.split("one,--;two,three,four", ",", "`", "`"));
+    Assert.assertEquals(Lists.newArrayList("one", "two", "three"),
+        StringUtils.split("one,two,three", ",", "`", "`"));
+    Assert.assertEquals(Lists.newArrayList("one", "`two,three`"),
+        StringUtils.split("one,`two,three`", ",", "`", "`"));
+    Assert.assertEquals(Lists.newArrayList("one", "{tw{o,t}hree}"),
+        StringUtils.split("one,{tw{o,t}hree}", ",", "{", "}"));
+    Assert.assertEquals(Lists.newArrayList("one", "/*two,three*/"),
+        StringUtils.split("one,/*two,three*/", ",", "`", "`"));
+    Assert.assertEquals(Lists.newArrayList("one", "-- two,three\n", "four"),
+        StringUtils.split("one,-- two,three\n,four", ",", "`", "`"));
+    Assert.assertEquals(Lists.newArrayList("one", "-- two,three\r\n", "four"),
+        StringUtils.split("one,-- two,three\r\n,four", ",", "`", "`"));
+    Assert.assertEquals(Lists.newArrayList("one", "#two,three\n", "four"),
+        StringUtils.split("one,#two,three\n,four", ",", "`", "`"));
+    Assert.assertEquals(Lists.newArrayList("one", "--;two", "three", "four"),
+        StringUtils.split("one,--;two,three,four", ",", "`", "`"));
     // split doesn't use ALLOW_BACKSLASH_ESCAPE, so escaping delimiter doesn't work
-    Assert.assertEquals(Lists.newArrayList("one", "two\\", "three", "four"), StringUtils.split("one,two\\,three,four", ",", "`", "`"));
+    Assert.assertEquals(Lists.newArrayList("one", "two\\", "three", "four"),
+        StringUtils.split("one,two\\,three,four", ",", "`", "`"));
     // the following comment is a special non-comment block, and it should be split
-    Assert.assertEquals(Lists.newArrayList("one", "/*!50110 one", " two */two", "three", "four"), StringUtils.split("one,/*!50110 one, two */two,three,four", ",", "`", "`"));
-    Assert.assertEquals(Lists.newArrayList("one", "/*!5011 one", " two */two", "three", "four"), StringUtils.split("one,/*!5011 one, two */two,three,four", ",", "`", "`"));
+    Assert.assertEquals(Lists.newArrayList("one", "/*!50110 one", " two */two", "three", "four"),
+        StringUtils.split("one,/*!50110 one, two */two,three,four", ",", "`", "`"));
+    Assert.assertEquals(Lists.newArrayList("one", "/*!5011 one", " two */two", "three", "four"),
+        StringUtils.split("one,/*!5011 one, two */two,three,four", ",", "`", "`"));
   }
 
   @Test
   public void firstAlphaCharUcTest() {
-    Assert.assertEquals('S', StringUtils.firstAlphaCharUc("(select * from foo) union (select * from bar)", 0));
+    Assert.assertEquals('S',
+        StringUtils.firstAlphaCharUc("(select * from foo) union (select * from bar)", 0));
     Assert.assertEquals('R', StringUtils.firstAlphaCharUc("replace into table1 values()", 0));
     Assert.assertEquals('S', StringUtils.firstAlphaCharUc("SET replication_speed='ludicrous'", 0));
-    Assert.assertEquals('S', StringUtils.firstAlphaCharUc("/* leading comment */ select * from table2 ", 22));
+    Assert.assertEquals('S',
+        StringUtils.firstAlphaCharUc("/* leading comment */ select * from table2 ", 22));
   }
 }

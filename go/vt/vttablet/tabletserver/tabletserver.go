@@ -32,7 +32,6 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -152,12 +151,12 @@ type TabletServer struct {
 	// for health checks. This does not affect how queries are served.
 	// target specifies the primary target type, and also allow specifies
 	// secondary types that should be additionally allowed.
-	mu            sync.Mutex
-	state         int64
-	lameduck      sync2.AtomicInt32
-	target        querypb.Target
-	alsoAllow     []topodatapb.TabletType
-	requests      sync.WaitGroup
+	mu        sync.Mutex
+	state     int64
+	lameduck  sync2.AtomicInt32
+	target    querypb.Target
+	alsoAllow []topodatapb.TabletType
+	requests  sync.WaitGroup
 
 	// The following variables should be initialized only once
 	// before starting the tabletserver.
@@ -229,7 +228,7 @@ type TxPoolController interface {
 	AcceptReadOnly() error
 
 	// InitDBConfig must be called before Init.
-  InitDBConfig(dbcfgs *dbconfigs.DBConfigs)
+	InitDBConfig(dbcfgs *dbconfigs.DBConfigs)
 
 	// Init must be called once when vttablet starts for setting
 	// up the metadata tables.
@@ -1077,6 +1076,18 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	defer tsv.endRequest(false)
 	defer tsv.handlePanicAndSendLogStats("batch", nil, nil)
 
+	// When all these conditions are met, we send the queries directly
+	// to the MySQL without creating a transaction. This optimization
+	// yields better throughput.
+	// Setting ExecuteOptions_AUTOCOMMIT will get a connection out of the
+	// pool without actually begin/commit the transaction.
+	if (options == nil || options.TransactionIsolation == querypb.ExecuteOptions_DEFAULT) &&
+		tsv.qe.autoCommit.Get() &&
+		asTransaction &&
+		tsv.qe.passthroughDMLs.Get() {
+		options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
+	}
+
 	if asTransaction {
 		transactionID, err = tsv.Begin(ctx, target, options)
 		if err != nil {
@@ -1200,7 +1211,7 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 	}
 
 	// Example: table1 where id = 1 and sub_id = 2
-	key := fmt.Sprintf("%s%s", tableName, hack.String(where))
+	key := fmt.Sprintf("%s%s", tableName, where)
 	return key, tableName.String()
 }
 
@@ -1384,7 +1395,7 @@ func (tsv *TabletServer) SplitQuery(
 			}
 			defer func(start time.Time) {
 				splitTableName := splitParams.GetSplitTableName()
-				tabletenv.RecordUserQuery(ctx, splitTableName, "SplitQuery", int64(time.Now().Sub(start)))
+				tabletenv.RecordUserQuery(ctx, splitTableName, "SplitQuery", int64(time.Since(start)))
 			}(time.Now())
 			sqlExecuter, err := newSplitQuerySQLExecuter(ctx, logStats, tsv)
 			if err != nil {
@@ -1558,7 +1569,7 @@ func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVa
 		fmt.Fprintf(buf, "%s: %q", key, valString)
 	}
 	fmt.Fprintf(buf, "}")
-	bv := string(buf.Bytes())
+	bv := buf.String()
 	maxLen := *sqlparser.TruncateErrLen
 	if maxLen != 0 && len(bv) > maxLen {
 		bv = bv[:maxLen-12] + " [TRUNCATED]"
@@ -1707,7 +1718,7 @@ func createSplitParams(
 		return splitquery.NewSplitParamsGivenSplitCount(
 			query, splitColumns, splitCount, schema)
 	default:
-		panic(fmt.Errorf("Exactly one of {numRowsPerQueryPart, splitCount} must be"+
+		panic(fmt.Errorf("exactly one of {numRowsPerQueryPart, splitCount} must be"+
 			" non zero. This should have already been caught by 'validateSplitQueryParameters' and "+
 			" returned as an error. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
 			numRowsPerQueryPart,
@@ -1766,7 +1777,7 @@ func (se *splitQuerySQLExecuter) SQLExecute(
 		se.conn,
 		parsedQuery,
 		sqltypes.CopyBindVariables(bindVariables),
-		nil,  /* buildStreamComment */
+		"",   /* buildStreamComment */
 		true, /* wantfields */
 	)
 }
@@ -1782,7 +1793,7 @@ func createSplitQueryAlgorithmObject(
 	case querypb.SplitQueryRequest_EQUAL_SPLITS:
 		return splitquery.NewEqualSplitsAlgorithm(splitParams, sqlExecuter)
 	default:
-		panic(fmt.Errorf("Unknown algorithm enum: %+v", algorithm))
+		panic(fmt.Errorf("unknown algorithm enum: %+v", algorithm))
 	}
 }
 
@@ -1845,9 +1856,9 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 	target := tsv.target
 	tsv.mu.Unlock()
 	shr := &querypb.StreamHealthResponse{
-		Target:                              &target,
-		TabletAlias:                         &tsv.alias,
-		Serving:                             tsv.IsServing(),
+		Target:      &target,
+		TabletAlias: &tsv.alias,
+		Serving:     tsv.IsServing(),
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
 	}
@@ -1867,6 +1878,14 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 // HeartbeatLag returns the current lag as calculated by the heartbeat
 // package, if heartbeat is enabled. Otherwise returns 0.
 func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
+	// If the reader is closed and we are not serving, then the
+	// query service is shutdown and this value is not being updated.
+	// We return healthy from this as a signal to the healtcheck to attempt
+	// to start the query service again. If the query service fails to start
+	// with an error, then that error is be reported by the healthcheck.
+	if !tsv.hr.IsOpen() && !tsv.IsServing() {
+		return 0, nil
+	}
 	return tsv.hr.GetLatest()
 }
 
@@ -2192,7 +2211,7 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable) s
 		fmt.Fprintf(buf, "%s: %q", key, valString)
 	}
 	fmt.Fprintf(buf, "}")
-	return string(buf.Bytes())
+	return buf.String()
 }
 
 // withTimeout returns a context based on the specified timeout.

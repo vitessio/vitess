@@ -17,8 +17,6 @@ limitations under the License.
 package topotools
 
 import (
-	"bytes"
-	"encoding/hex"
 	"fmt"
 	"sync"
 
@@ -42,25 +40,6 @@ func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, k
 	return RebuildKeyspaceLocked(ctx, log, ts, keyspace, cells)
 }
 
-// findCellsForRebuild will find all the cells in the given keyspace
-// and create an entry if the map for them
-func findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[string]*topo.ShardInfo, cells []string, srvKeyspaceMap map[string]*topodatapb.SrvKeyspace) {
-	for _, si := range shardMap {
-		for _, cell := range si.Cells {
-			if !topo.InCellList(cell, cells) {
-				continue
-			}
-			if _, ok := srvKeyspaceMap[cell]; !ok {
-				srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
-					ShardingColumnName: ki.ShardingColumnName,
-					ShardingColumnType: ki.ShardingColumnType,
-					ServedFrom:         ki.ComputeCellServedFrom(cell),
-				}
-			}
-		}
-	}
-}
-
 // RebuildKeyspaceLocked should only be used with an action lock on the keyspace
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
@@ -78,10 +57,21 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 		return err
 	}
 
+	// The caller intents to update all cells in this case
+	if len(cells) == 0 {
+		cells, err = ts.GetCellInfoNames(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
 	shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
 	}
+
+	// This is safe to rebuild as long there are not srvKeyspaces with tablet controls set.
+	// TODO: Add this validation.
 
 	// Build the list of cells to work on: we get the union
 	// of all the Cells of all the Shards, limited to the provided cells.
@@ -90,27 +80,43 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 	//   key: cell
 	//   value: topo.SrvKeyspace object being built
 	srvKeyspaceMap := make(map[string]*topodatapb.SrvKeyspace)
-	findCellsForRebuild(ki, shards, cells, srvKeyspaceMap)
+	for _, cell := range cells {
+		srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
+		switch {
+		case err == nil:
+			for _, partition := range srvKeyspace.GetPartitions() {
+				if partition.GetShardTabletControls() != nil {
+					return fmt.Errorf("can't rebuild serving keyspace while a migration is on going. TabletControls is set for partition %v", partition)
+				}
 
-	// Then we add the cells from the keyspaces we might be 'ServedFrom'.
-	for _, ksf := range ki.ServedFroms {
-		servedFromShards, err := ts.FindAllShardsInKeyspace(ctx, ksf.Keyspace)
-		if err != nil {
+			}
+		case topo.IsErrType(err, topo.NoNode):
+			// NOOP
+		default:
 			return err
 		}
-		findCellsForRebuild(ki, servedFromShards, cells, srvKeyspaceMap)
+		srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
+			ShardingColumnName: ki.ShardingColumnName,
+			ShardingColumnType: ki.ShardingColumnType,
+			ServedFrom:         ki.ComputeCellServedFrom(cell),
+		}
 	}
+
+	servedTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 
 	// for each entry in the srvKeyspaceMap map, we do the following:
 	// - get the Shard structures for each shard / cell
 	// - if not present, build an empty one from global Shard
-	// - compute the union of the db types (replica, master, ...)
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
 	for cell, srvKeyspace := range srvKeyspaceMap {
 		for _, si := range shards {
-			servedTypes := si.GetServedTypesPerCell(cell)
-
+			// We rebuild keyspace iff:
+			// 1) shard master is in a serving state.
+			// 2) shard has served type for master (this is for backwards compatibility).
+			if !(si.IsMasterServing || si.GetServedType(topodatapb.TabletType_MASTER) != nil) {
+				continue
+			}
 			// for each type this shard is supposed to serve,
 			// add it to srvKeyspace.Partitions
 			for _, tabletType := range servedTypes {
@@ -128,11 +134,11 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 			}
 		}
 
-		if err := orderAndCheckPartitions(cell, srvKeyspace); err != nil {
+		if err := topo.OrderAndCheckPartitions(cell, srvKeyspace); err != nil {
 			return err
 		}
-	}
 
+	}
 	// And then finally save the keyspace objects, in parallel.
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
@@ -148,43 +154,4 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 	}
 	wg.Wait()
 	return rec.Error()
-}
-
-// orderAndCheckPartitions will re-order the partition list, and check
-// it's correct.
-func orderAndCheckPartitions(cell string, srvKeyspace *topodatapb.SrvKeyspace) error {
-	// now check them all
-	for _, partition := range srvKeyspace.Partitions {
-		tabletType := partition.ServedType
-		topoproto.ShardReferenceArray(partition.ShardReferences).Sort()
-
-		// check the first Start is MinKey, the last End is MaxKey,
-		// and the values in between match: End[i] == Start[i+1]
-		first := partition.ShardReferences[0]
-		if first.KeyRange != nil && len(first.KeyRange.Start) != 0 {
-			return fmt.Errorf("keyspace partition for %v in cell %v does not start with min key", tabletType, cell)
-		}
-		last := partition.ShardReferences[len(partition.ShardReferences)-1]
-		if last.KeyRange != nil && len(last.KeyRange.End) != 0 {
-			return fmt.Errorf("keyspace partition for %v in cell %v does not end with max key", tabletType, cell)
-		}
-		for i := range partition.ShardReferences[0 : len(partition.ShardReferences)-1] {
-			currShard := partition.ShardReferences[i]
-			nextShard := partition.ShardReferences[i+1]
-			currHasKeyRange := currShard.KeyRange != nil
-			nextHasKeyRange := nextShard.KeyRange != nil
-			if currHasKeyRange != nextHasKeyRange {
-				return fmt.Errorf("shards with inconsistent KeyRanges for %v in cell %v. shards: %v, %v", tabletType, cell, currShard, nextShard)
-			}
-			if !currHasKeyRange {
-				// this is the custom sharding case, all KeyRanges must be nil
-				continue
-			}
-			if bytes.Compare(currShard.KeyRange.End, nextShard.KeyRange.Start) != 0 {
-				return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, hex.EncodeToString(currShard.KeyRange.End), hex.EncodeToString(nextShard.KeyRange.Start))
-			}
-		}
-	}
-
-	return nil
 }

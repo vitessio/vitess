@@ -74,7 +74,7 @@ func waitForHealthyTablets(ctx context.Context, wr *wrangler.Wrangler, tsc *disc
 	start := time.Now()
 	deadlineForLog, _ := busywaitCtx.Deadline()
 	log.V(2).Infof("Waiting for enough healthy %v tablets to become available in (%v,%v/%v). required: %v Waiting up to %.1f seconds.", tabletType,
-		cell, keyspace, shard, minHealthyRdonlyTablets, deadlineForLog.Sub(time.Now()).Seconds())
+		cell, keyspace, shard, minHealthyRdonlyTablets, time.Until(deadlineForLog).Seconds())
 
 	// Wait for at least one RDONLY tablet initially before checking the list.
 	if err := tsc.WaitForTablets(busywaitCtx, cell, keyspace, shard, tabletType); err != nil {
@@ -97,7 +97,7 @@ func waitForHealthyTablets(ctx context.Context, wr *wrangler.Wrangler, tsc *disc
 
 		deadlineForLog, _ := busywaitCtx.Deadline()
 		wr.Logger().Infof("Waiting for enough healthy %v tablets to become available (%v,%v/%v). available: %v required: %v Waiting up to %.1f more seconds.",
-			tabletType, cell, keyspace, shard, len(healthyTablets), minHealthyRdonlyTablets, deadlineForLog.Sub(time.Now()).Seconds())
+			tabletType, cell, keyspace, shard, len(healthyTablets), minHealthyRdonlyTablets, time.Until(deadlineForLog).Seconds())
 		// Block for 1 second because 2 seconds is the -health_check_interval flag value in integration tests.
 		timer := time.NewTimer(1 * time.Second)
 		select {
@@ -107,7 +107,7 @@ func waitForHealthyTablets(ctx context.Context, wr *wrangler.Wrangler, tsc *disc
 		}
 	}
 	log.V(2).Infof("At least %v healthy %v tablets are available in (%v,%v/%v) (required: %v). Took %.1f seconds to find this out.",
-		tabletType, len(healthyTablets), cell, keyspace, shard, minHealthyRdonlyTablets, time.Now().Sub(start).Seconds())
+		tabletType, len(healthyTablets), cell, keyspace, shard, minHealthyRdonlyTablets, time.Since(start).Seconds())
 	return healthyTablets, nil
 }
 

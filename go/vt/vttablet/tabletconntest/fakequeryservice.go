@@ -578,7 +578,7 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 		f.t.Errorf("invalid ExecuteBatch.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
 	}
 	f.checkTargetCallerID(ctx, "ExecuteBatch", target)
-	if asTransaction != TestAsTransaction {
+	if !asTransaction {
 		f.t.Errorf("invalid ExecuteBatch.AsTransaction: got %v expected %v", asTransaction, TestAsTransaction)
 	}
 	if transactionID != f.ExpectedTransactionID {

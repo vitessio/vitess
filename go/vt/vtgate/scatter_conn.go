@@ -562,7 +562,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 			default:
 			}
 			firstErrorTimeStamp := lastErrors.Record(rs.Target)
-			if time.Now().Sub(firstErrorTimeStamp) >= *messageStreamGracePeriod {
+			if time.Since(firstErrorTimeStamp) >= *messageStreamGracePeriod {
 				// Cancel all streams and return an error.
 				cancel()
 				return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "message stream from %v has repeatedly failed for longer than %v", rs.Target, *messageStreamGracePeriod)
@@ -693,6 +693,7 @@ func init() {
 // as the random generator used by shuffleQueryParts. This function
 // should only be used in tests and should not be called concurrently.
 // It returns the previous shuffleQueryPartsRandomGenerator used.
+// lint:ignore U1000 available for tests to use
 func injectShuffleQueryPartsRandomGenerator(
 	randGen shuffleQueryPartsRandomGeneratorInterface) shuffleQueryPartsRandomGeneratorInterface {
 	oldRandGen := shuffleQueryPartsRandomGenerator

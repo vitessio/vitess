@@ -39,10 +39,11 @@ func (mlc *MockLdapClient) Search(searchRequest *ldap.SearchRequest) (*ldap.Sear
 
 func TestValidateClearText(t *testing.T) {
 	asl := &AuthServerLdap{
-		Client:        &MockLdapClient{},
-		User:          "testuser",
-		Password:      "testpass",
-		UserDnPattern: "%s",
+		Client:         &MockLdapClient{},
+		User:           "testuser",
+		Password:       "testpass",
+		UserDnPattern:  "%s",
+		RefreshSeconds: 1,
 	}
 	_, err := asl.validate("testuser", "testpass")
 	if err != nil {

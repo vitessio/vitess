@@ -160,7 +160,7 @@ func TestTxExecutorCommit(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	// Commiting an absent transaction should succeed.
+	// Committing an absent transaction should succeed.
 	err = txe.CommitPrepared("bb")
 	if err != nil {
 		t.Error(err)

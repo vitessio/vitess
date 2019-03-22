@@ -88,7 +88,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 
 	tablet.QueryService = queryservice.Wrap(
 		nil,
-		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) (error, bool)) error {
+		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) (bool, error)) error {
 			return fmt.Errorf("explainTablet does not implement %s", name)
 		},
 	)
@@ -388,7 +388,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 	}
 
 	for i, ddl := range ddls {
-		table := ddl.Table.Name.String()
+		table := sqlparser.String(ddl.Table.Name)
 		schemaQueries[mysql.BaseShowTablesForTable(table)] = &sqltypes.Result{
 			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 1,
@@ -501,7 +501,6 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		switch node := selStmt.From[0].(type) {
 		case *sqlparser.AliasedTableExpr:
 			table = sqlparser.GetTableName(node.Expr)
-			break
 		}
 
 		// For complex select queries just return an empty result
@@ -511,9 +510,10 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			return callback(&sqltypes.Result{})
 		}
 
-		colTypeMap := tableColumns[table.String()]
-		if colTypeMap == nil && table.String() != "dual" {
-			return fmt.Errorf("unable to resolve table name %s", table.String())
+		tableName := sqlparser.String(table)
+		colTypeMap := tableColumns[tableName]
+		if colTypeMap == nil && tableName != "dual" {
+			return fmt.Errorf("unable to resolve table name %s", tableName)
 		}
 
 		colNames := make([]string, 0, 4)
@@ -530,12 +530,10 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 					}
 					colNames = append(colNames, col)
 					colTypes = append(colTypes, colType)
-					break
 				case *sqlparser.FuncExpr:
 					// As a shortcut, functions are integral types
 					colNames = append(colNames, sqlparser.String(node))
 					colTypes = append(colTypes, querypb.Type_INT32)
-					break
 				case *sqlparser.SQLVal:
 					colNames = append(colNames, sqlparser.String(node))
 					switch node.Type {
@@ -554,11 +552,9 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 					default:
 						return fmt.Errorf("unsupported sql value %s", sqlparser.String(node))
 					}
-					break
 				default:
 					return fmt.Errorf("unsupported select expression %s", sqlparser.String(node))
 				}
-				break
 			case *sqlparser.StarExpr:
 				for col, colType := range colTypeMap {
 					colNames = append(colNames, col)
@@ -597,15 +593,12 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		resultJSON, _ := json.MarshalIndent(result, "", "    ")
 		log.V(100).Infof("query %s result %s\n", query, string(resultJSON))
 
-		break
 	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtSet, sqlparser.StmtShow:
 		result = &sqltypes.Result{}
-		break
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		result = &sqltypes.Result{
 			RowsAffected: 1,
 		}
-		break
 	default:
 		return fmt.Errorf("unsupported query %s", query)
 	}

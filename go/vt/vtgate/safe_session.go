@@ -96,7 +96,7 @@ func (session *SafeSession) SetAutocommitable(flag bool) {
 }
 
 // AutocommitApproval returns true if we can perform a single round-trip
-// autocommit. If so, the caller is responsible for commiting their
+// autocommit. If so, the caller is responsible for committing their
 // transaction.
 func (session *SafeSession) AutocommitApproval() bool {
 	session.mu.Lock()

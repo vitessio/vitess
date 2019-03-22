@@ -38,7 +38,6 @@ type relayLog struct {
 	curSize  int
 	items    [][]*binlogdatapb.VEvent
 	timedout bool
-	err      error
 	// canAccept is true if: curSize<=maxSize, len(items)<maxItems, and ctx is not Done.
 	canAccept sync.Cond
 	// hasItems is true if len(items)>0, ctx is not Done, and interuptFetch is false.

@@ -91,6 +91,10 @@ func TestQueryzHandler(t *testing.T) {
 		"name": sqltypes.BytesBindVariable([]byte("myname")),
 	})
 
+	if err != nil {
+		t.Error(err)
+	}
+
 	plan3.ExecTime = time.Duration(100 * time.Millisecond)
 	plan4.ExecTime = time.Duration(200 * time.Millisecond)
 

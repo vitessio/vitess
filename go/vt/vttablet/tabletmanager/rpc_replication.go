@@ -332,16 +332,40 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	// Now, set the server read-only. Note all active connections are not
 	// affected.
 	if err := agent.MysqlDaemon.SetReadOnly(true); err != nil {
+		// if this failed, revert the change to serving
+		if _ /* state changed */, err1 := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err1 != nil {
+			log.Warningf("SetServingType(serving=true) failed after failed SetReadOnly %v", err1)
+		}
 		return "", err
 	}
 
 	// If using semi-sync, we need to disable master-side.
 	if err := agent.fixSemiSync(topodatapb.TabletType_REPLICA); err != nil {
+		// if this failed, set server read-only back to false, set tablet back to serving
+		if err1 := agent.MysqlDaemon.SetReadOnly(false); err1 != nil {
+			log.Warningf("SetReadOnly(false) failed after failed fixSemiSync %v", err1)
+		}
+		if _ /* state changed */, err1 := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err1 != nil {
+			log.Warningf("SetServingType(serving=true) failed after failed fixSemiSync %v", err1)
+		}
 		return "", err
 	}
 
 	pos, err := agent.MysqlDaemon.DemoteMaster()
 	if err != nil {
+		// if DemoteMaster failed, undo all the steps before
+		// 1. set server back to read-only false
+		if err1 := agent.MysqlDaemon.SetReadOnly(false); err1 != nil {
+			log.Warningf("SetReadOnly(false) failed after failed DemoteMaster %v", err1)
+		}
+		// 2. set tablet back to serving
+		if _ /* state changed */, err1 := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err1 != nil {
+			log.Warningf("SetServingType(serving=true) failed after failed DemoteMaster %v", err1)
+		}
+		// 3. enable master side again
+		if err1 := agent.fixSemiSync(topodatapb.TabletType_MASTER); err1 != nil {
+			log.Warningf("fixSemiSync(MASTER) failed after failed DemoteMaster %v", err1)
+		}
 		return "", err
 	}
 	return mysql.EncodePosition(pos), nil
@@ -349,6 +373,35 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	// be replaced. Even though writes may fail, reads will
 	// succeed. It will be less noisy to simply leave the entry
 	// until we'll promote the master.
+}
+
+// UndoDemoteMaster reverts a previous call to DemoteMaster
+// it sets read-only to false, fixes semi-sync
+// and returns its master position.
+func (agent *ActionAgent) UndoDemoteMaster(ctx context.Context) error {
+	if err := agent.lock(ctx); err != nil {
+		return err
+	}
+	defer agent.unlock()
+
+	// If using semi-sync, we need to enable master-side.
+	if err := agent.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
+		return err
+	}
+
+	// Now, set the server read-only false.
+	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
+		return err
+	}
+
+	// Update serving graph
+	tablet := agent.Tablet()
+	log.Infof("UndoDemoteMaster re-enabling query service")
+	if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err != nil {
+		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
+	}
+
+	return nil
 }
 
 // PromoteSlaveWhenCaughtUp waits for this slave to be caught up on

@@ -26,6 +26,8 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -100,7 +102,7 @@ func commandMultiSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.F
 	}
 	if subFlags.NArg() != 1 {
 		subFlags.Usage()
-		return nil, fmt.Errorf("command MultiSplitDiff requires <keyspace/shard>")
+		return nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "command MultiSplitDiff requires <keyspace/shard>")
 	}
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
@@ -113,7 +115,7 @@ func commandMultiSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.F
 
 	tabletType, ok := topodata.TabletType_value[*tabletTypeStr]
 	if !ok {
-		return nil, fmt.Errorf("failed to find this tablet type %v", tabletTypeStr)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "failed to find this tablet type %v", tabletTypeStr)
 	}
 
 	return NewMultiSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray, *minHealthyTablets, *parallelDiffsCount, *waitForFixedTimeRatherThanGtidSet, *useConsistentSnapshot, topodata.TabletType(tabletType)), nil
@@ -125,7 +127,7 @@ func shardSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]stri
 	keyspaces, err := wr.TopoServer().GetKeyspaces(shortCtx)
 	cancel()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get list of keyspaces: %v", err)
+		return nil, vterrors.Wrap(err, "failed to get list of keyspaces")
 	}
 
 	wg := sync.WaitGroup{}
@@ -141,7 +143,7 @@ func shardSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]stri
 			shards, err := wr.TopoServer().GetShardNames(shortCtx, keyspace)
 			cancel()
 			if err != nil {
-				rec.RecordError(fmt.Errorf("failed to get list of shards for keyspace '%v': %v", keyspace, err))
+				rec.RecordError(vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace))
 				return
 			}
 			for _, shard := range shards {
@@ -152,7 +154,7 @@ func shardSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]stri
 					si, err := wr.TopoServer().GetShard(shortCtx, keyspace, shard)
 					cancel()
 					if err != nil {
-						rec.RecordError(fmt.Errorf("failed to get details for shard '%v': %v", topoproto.KeyspaceShardString(keyspace, shard), err))
+						rec.RecordError(vterrors.Wrapf(err, "failed to get details for shard '%v'", topoproto.KeyspaceShardString(keyspace, shard)))
 						return
 					}
 
@@ -181,14 +183,14 @@ func shardSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]stri
 		result = append(result, shard)
 	}
 	if len(result) == 0 {
-		return nil, fmt.Errorf("there are no shards with SourceShards")
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "there are no shards with SourceShards")
 	}
 	return result, nil
 }
 
 func interactiveMultiSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, _ http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse form: %s", err)
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse form")
 	}
 	keyspace := r.FormValue("keyspace")
 	shard := r.FormValue("shard")
@@ -226,9 +228,12 @@ func interactiveMultiSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.W
 	minHealthyTabletsStr := r.FormValue("minHealthyTablets")
 	parallelDiffsCountStr := r.FormValue("parallelDiffsCount")
 	minHealthyTablets, err := strconv.ParseInt(minHealthyTabletsStr, 0, 64)
+	if err != nil {
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse minHealthyTablets")
+	}
 	parallelDiffsCount, err := strconv.ParseInt(parallelDiffsCountStr, 0, 64)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse minHealthyTablets: %s", err)
+		return nil, nil, nil, fmt.Errorf("cannot parse parallelDiffsCount: %s", err)
 	}
 	waitForFixedTimeRatherThanGtidSetStr := r.FormValue("waitForFixedTimeRatherThanGtidSet")
 	waitForFixedTimeRatherThanGtidSet := waitForFixedTimeRatherThanGtidSetStr == "true"
@@ -238,7 +243,7 @@ func interactiveMultiSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.W
 	tabletTypeStr := r.FormValue("tabletType")
 	tabletType, ok := topodata.TabletType_value[tabletTypeStr]
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("cannot parse tabletType: %s", tabletTypeStr)
+		return nil, nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot parse tabletType: %s", tabletTypeStr)
 	}
 
 	// start the diff job

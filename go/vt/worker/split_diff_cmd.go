@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -91,7 +92,7 @@ func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSe
 	}
 	if subFlags.NArg() != 1 {
 		subFlags.Usage()
-		return nil, fmt.Errorf("command SplitDiff requires <keyspace/shard>")
+		return nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "command SplitDiff requires <keyspace/shard>")
 	}
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
@@ -104,7 +105,7 @@ func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSe
 
 	destTabletType, ok := topodatapb.TabletType_value[*destTabletTypeStr]
 	if !ok {
-		return nil, fmt.Errorf("command SplitDiff invalid dest_tablet_type: %v", destTabletType)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "command SplitDiff invalid dest_tablet_type: %v", destTabletType)
 	}
 
 	return NewSplitDiffWorker(wr, wi.cell, keyspace, shard, uint32(*sourceUID), excludeTableArray, *minHealthyRdonlyTablets, *parallelDiffsCount, topodatapb.TabletType(destTabletType)), nil
@@ -165,7 +166,7 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 		return nil, rec.Error()
 	}
 	if len(result) == 0 {
-		return nil, fmt.Errorf("there are no shards with SourceShards")
+		return nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "there are no shards with SourceShards")
 	}
 	return result, nil
 }
@@ -215,9 +216,12 @@ func interactiveSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangl
 	minHealthyRdonlyTabletsStr := r.FormValue("minHealthyRdonlyTablets")
 	parallelDiffsCountStr := r.FormValue("parallelDiffsCount")
 	minHealthyRdonlyTablets, err := strconv.ParseInt(minHealthyRdonlyTabletsStr, 0, 64)
-	parallelDiffsCount, err := strconv.ParseInt(parallelDiffsCountStr, 0, 64)
 	if err != nil {
 		return nil, nil, nil, vterrors.Wrap(err, "cannot parse minHealthyRdonlyTablets")
+	}
+	parallelDiffsCount, err := strconv.ParseInt(parallelDiffsCountStr, 0, 64)
+	if err != nil {
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse parallelDiffsCount")
 	}
 
 	// start the diff job

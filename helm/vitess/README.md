@@ -1,6 +1,6 @@
 # Vitess
 
-[Vitess](http://vitess.io) is a database clustering system for horizontal
+[Vitess](https://vitess.io) is a database clustering system for horizontal
 scaling of MySQL. It is an open-source project started at YouTube,
 and has been used there since 2011.
 

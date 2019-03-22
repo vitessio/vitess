@@ -21,6 +21,8 @@ import (
 	"path"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -42,7 +44,7 @@ func (c *Conn) Create(ctx context.Context, filePath string, contents []byte) (to
 	dir, file := path.Split(filePath)
 	p := c.factory.getOrCreatePath(c.cell, dir)
 	if p == nil {
-		return nil, fmt.Errorf("trying to create file %v in cell %v in a path that contains files", filePath, c.cell)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "trying to create file %v in cell %v in a path that contains files", filePath, c.cell)
 	}
 
 	// Check the file doesn't already exist.
@@ -79,7 +81,7 @@ func (c *Conn) Update(ctx context.Context, filePath string, contents []byte, ver
 		}
 		p = c.factory.getOrCreatePath(c.cell, dir)
 		if p == nil {
-			return nil, fmt.Errorf("trying to create file %v in cell %v in a path that contains files", filePath, c.cell)
+			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "trying to create file %v in cell %v in a path that contains files", filePath, c.cell)
 		}
 	}
 
@@ -97,7 +99,7 @@ func (c *Conn) Update(ctx context.Context, filePath string, contents []byte, ver
 
 	// Check if it's a directory.
 	if n.isDirectory() {
-		return nil, fmt.Errorf("Update(%v, %v) failed: it's a directory", c.cell, filePath)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Update(%v, %v) failed: it's a directory", c.cell, filePath)
 	}
 
 	// Check the version.

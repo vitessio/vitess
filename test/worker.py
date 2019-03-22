@@ -229,7 +229,7 @@ class TestBaseSplitClone(unittest.TestCase, base_sharding.BaseShardingTest):
     # Wait for tablet state to change after starting all tablets. This allows
     # us to start all tablets at once, instead of sequentially waiting.
     # NOTE: Replication has to be enabled first or the health check will
-    #       set a a replica or rdonly tablet back to NOT_SERVING.
+    #       set a replica or rdonly tablet back to NOT_SERVING.
     for t in shard_tablets.all_tablets:
       t.wait_for_vttablet_state('SERVING')
 

@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,22 +18,6 @@ package io.vitess.hadoop;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import java.io.IOException;
-import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Random;
-
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapreduce.InputFormat;
-import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.JobContext;
-import org.apache.hadoop.mapreduce.RecordReader;
-import org.apache.hadoop.mapreduce.TaskAttemptContext;
-import org.joda.time.Duration;
-
 import com.google.common.collect.Lists;
 
 import io.vitess.client.Context;
@@ -42,6 +26,23 @@ import io.vitess.client.RpcClientFactory;
 import io.vitess.client.VTGateBlockingConn;
 import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 import io.vitess.proto.Vtgate.SplitQueryResponse;
+
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapreduce.InputFormat;
+import org.apache.hadoop.mapreduce.InputSplit;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hadoop.mapreduce.RecordReader;
+import org.apache.hadoop.mapreduce.TaskAttemptContext;
+
+import org.joda.time.Duration;
+
+import java.io.IOException;
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Random;
 
 /**
  * {@link VitessInputFormat} is the {@link org.apache.hadoop.mapreduce.InputFormat} for tables in
@@ -77,8 +78,8 @@ public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
             conf.getAlgorithm());
       }
     } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | SQLException
-        | IOException e) {
-      throw new RuntimeException(e);
+        | IOException exc) {
+      throw new RuntimeException(exc);
     }
 
     List<InputSplit> splits = Lists.newArrayList();

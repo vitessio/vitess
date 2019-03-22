@@ -38,8 +38,9 @@ func TestTabletStatsCache(t *testing.T) {
 	// HealthCheck object, so we can't call NewTabletStatsCache.
 	// So we just construct this object here.
 	tsc := &TabletStatsCache{
-		cell:    "cell",
-		entries: make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
+		cell:        "cell",
+		entries:     make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
+		cellRegions: make(map[string]string),
 	}
 
 	// empty

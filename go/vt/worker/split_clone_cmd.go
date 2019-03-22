@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -188,7 +189,7 @@ func keyspacesWithOverlappingShards(ctx context.Context, wr *wrangler.Wrangler) 
 		return nil, rec.Error()
 	}
 	if len(result) == 0 {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "there are no keyspaces with overlapping shards")
+		return nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "there are no keyspaces with overlapping shards")
 	}
 	return result, nil
 }

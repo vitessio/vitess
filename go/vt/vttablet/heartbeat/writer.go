@@ -25,7 +25,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
@@ -198,7 +197,7 @@ func (w *Writer) bindHeartbeatVars(query string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return hack.String(bound), nil
+	return bound, nil
 }
 
 // writeHeartbeat updates the heartbeat row for this tablet with the current time in nanoseconds.

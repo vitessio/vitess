@@ -476,7 +476,7 @@ func TestQueryStats(t *testing.T) {
 		t.Fatal(err)
 	}
 	stat := framework.QueryStats()[query]
-	duration := int(time.Now().Sub(start))
+	duration := int(time.Since(start))
 	if stat.Time <= 0 || stat.Time > duration {
 		t.Errorf("stat.Time: %d, must be between 0 and %d", stat.Time, duration)
 	}
@@ -706,7 +706,7 @@ func TestClientFoundRows(t *testing.T) {
 
 func TestLastInsertId(t *testing.T) {
 	client := framework.NewClient()
-	res, err := client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
+	_, err := client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -717,7 +717,7 @@ func TestLastInsertId(t *testing.T) {
 	}
 	defer client.Rollback()
 
-	res, err = client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
+	res, err := client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

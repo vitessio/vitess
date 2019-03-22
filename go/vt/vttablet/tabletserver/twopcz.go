@@ -146,7 +146,6 @@ func twopczHandler(txe *TxExecutor, w http.ResponseWriter, r *http.Request) {
 	var msg string
 	if action != "" {
 		if err != nil {
-			msg = err.Error()
 			msg = fmt.Sprintf("%s(%s): %v", r.FormValue("Action"), dtid, err)
 		} else {
 			msg = fmt.Sprintf("%s(%s): completed.", r.FormValue("Action"), dtid)

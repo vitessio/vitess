@@ -301,7 +301,7 @@ You’ll see how these operands are used in the description of the operators.
 
 ## The operators
 
-If one were to ask what are the minimal set of primitives needed to serve SQL queries, we can use [relational algebra](http://www.tutorialspoint.com/dbms/relational_algebra.htm) as starting point. But databases have extended beyond those basic operations. They allow duplicate tuples and ordering. So, here’s a more practical set:
+If one were to ask what are the minimal set of primitives needed to serve SQL queries, we can use [relational algebra](https://www.tutorialspoint.com/dbms/relational_algebra.htm) as starting point. But databases have extended beyond those basic operations. They allow duplicate tuples and ordering. So, here’s a more practical set:
 
 1. Scan (FROM).
 2. Join: Join two results as cross-product (JOIN).
@@ -1194,7 +1194,7 @@ The overall strategy is as follows:
 
 In order to align ourselves with our priorities, we’ll start off with a limited set of primitives, and then we can expand from there.
 
-VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](https://github.com/vitessio/vitess/blob/sugudoc/doc/V3HighLevelDesign.md#prioritization) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
+VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](https://github.com/vitessio/vitess/blob/master/doc/V3HighLevelDesign.md#prioritization) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
 
 * `Route`: Sends a query to a single shard or unsharded keyspace.
 * `RouteMerge`: Sends a (mostly) identical query to multiple shards and returns the combined results in no particular order.

@@ -19,10 +19,12 @@ package mysql
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type interval struct {
@@ -48,10 +50,10 @@ func parseInterval(s string) (interval, error) {
 	parts := strings.Split(s, "-")
 	start, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
-		return interval{}, fmt.Errorf("invalid interval (%q): %v", s, err)
+		return interval{}, vterrors.Wrapf(err, "invalid interval (%q)", s)
 	}
 	if start < 1 {
-		return interval{}, fmt.Errorf("invalid interval (%q): start must be > 0", s)
+		return interval{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid interval (%q): start must be > 0", s)
 	}
 
 	switch len(parts) {
@@ -60,11 +62,11 @@ func parseInterval(s string) (interval, error) {
 	case 2:
 		end, err := strconv.ParseInt(parts[1], 10, 64)
 		if err != nil {
-			return interval{}, fmt.Errorf("invalid interval (%q): %v", s, err)
+			return interval{}, vterrors.Wrapf(err, "invalid interval (%q)", s)
 		}
 		return interval{start: start, end: end}, nil
 	default:
-		return interval{}, fmt.Errorf("invalid interval (%q): expected start-end or single number", s)
+		return interval{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid interval (%q): expected start-end or single number", s)
 	}
 }
 
@@ -84,13 +86,13 @@ func parseMysql56GTIDSet(s string) (GTIDSet, error) {
 		// uuid_set: uuid:interval[:interval]...
 		parts := strings.Split(uuidSet, ":")
 		if len(parts) < 2 {
-			return nil, fmt.Errorf("invalid MySQL 5.6 GTID set (%q): expected uuid:interval", s)
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid MySQL 5.6 GTID set (%q): expected uuid:interval", s)
 		}
 
 		// Parse Server ID.
 		sid, err := ParseSID(parts[0])
 		if err != nil {
-			return nil, fmt.Errorf("invalid MySQL 5.6 GTID set (%q): %v", s, err)
+			return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", s)
 		}
 
 		// Parse Intervals.
@@ -98,7 +100,7 @@ func parseMysql56GTIDSet(s string) (GTIDSet, error) {
 		for _, part := range parts[1:] {
 			iv, err := parseInterval(part)
 			if err != nil {
-				return nil, fmt.Errorf("invalid MySQL 5.6 GTID set (%q): %v", s, err)
+				return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID set (%q)", s)
 			}
 			if iv.end < iv.start {
 				// According to MySQL 5.6 code:
@@ -377,24 +379,24 @@ func NewMysql56GTIDSetFromSIDBlock(data []byte) (Mysql56GTIDSet, error) {
 	var set Mysql56GTIDSet = make(map[SID][]interval)
 	var nSIDs uint64
 	if err := binary.Read(buf, binary.LittleEndian, &nSIDs); err != nil {
-		return nil, fmt.Errorf("cannot read nSIDs: %v", err)
+		return nil, vterrors.Wrapf(err, "cannot read nSIDs")
 	}
 	for i := uint64(0); i < nSIDs; i++ {
 		var sid SID
 		if c, err := buf.Read(sid[:]); err != nil || c != 16 {
-			return nil, fmt.Errorf("cannot read SID %v: %v %v", i, err, c)
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot read SID %v: %v %v", i, err, c)
 		}
 		var nIntervals uint64
 		if err := binary.Read(buf, binary.LittleEndian, &nIntervals); err != nil {
-			return nil, fmt.Errorf("cannot read nIntervals %v: %v", i, err)
+			return nil, vterrors.Wrapf(err, "cannot read nIntervals %v", i)
 		}
 		for j := uint64(0); j < nIntervals; j++ {
 			var start, end uint64
 			if err := binary.Read(buf, binary.LittleEndian, &start); err != nil {
-				return nil, fmt.Errorf("cannot read start %v/%v: %v", i, j, err)
+				return nil, vterrors.Wrapf(err, "cannot read start %v/%v", i, j)
 			}
 			if err := binary.Read(buf, binary.LittleEndian, &end); err != nil {
-				return nil, fmt.Errorf("cannot read end %v/%v: %v", i, j, err)
+				return nil, vterrors.Wrapf(err, "cannot read end %v/%v", i, j)
 			}
 			set[sid] = append(set[sid], interval{
 				start: int64(start),

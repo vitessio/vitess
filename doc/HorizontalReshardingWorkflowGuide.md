@@ -142,7 +142,7 @@ workflow.
 A "Retry" button will be enabled under the task node if the task failed (click
 the task node if your job get stuck but don't see the Retry button). Click this
 button if you have fixed the bugs and want to retry the failed task. You can
-retry as many times as you want if the task continuelly failed. The workflow
+retry as many times as you want if the task continually failed. The workflow
 can continue from your failure point once it is fixed.
 
 For example, you might forget to bring up a vtworker process. The task which

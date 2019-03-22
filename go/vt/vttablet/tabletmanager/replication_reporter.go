@@ -133,7 +133,7 @@ func repairReplication(ctx context.Context, agent *ActionAgent) error {
 			return err
 		}
 		if re {
-			return fmt.Errorf("Orchestrator actively reparenting shard %v, skipping repairReplication", si)
+			return fmt.Errorf("orchestrator actively reparenting shard %v, skipping repairReplication", si)
 		}
 
 		// Before repairing replication, tell Orchestrator to enter maintenance mode for this tablet and to

@@ -378,6 +378,12 @@ message DemoteMasterResponse {
   string position = 1;
 }
 
+message UndoDemoteMasterRequest {
+}
+
+message UndoDemoteMasterResponse {
+}
+
 message PromoteSlaveWhenCaughtUpRequest {
   string position = 1;
 }
@@ -427,6 +433,7 @@ message PromoteSlaveResponse {
 
 message BackupRequest {
   int64 concurrency = 1;
+  bool allowMaster = 2;
 }
 
 message BackupResponse {

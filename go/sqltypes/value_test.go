@@ -344,7 +344,7 @@ func TestToBytesAndString(t *testing.T) {
 		TestValue(Int64, "1"),
 		TestValue(Int64, "12"),
 	} {
-		if b := v.ToBytes(); bytes.Compare(b, v.Raw()) != 0 {
+		if b := v.ToBytes(); !bytes.Equal(b, v.Raw()) {
 			t.Errorf("%v.ToBytes: %s, want %s", v, b, v.Raw())
 		}
 		if s := v.ToString(); s != string(v.Raw()) {
