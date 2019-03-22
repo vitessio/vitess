@@ -292,6 +292,10 @@ message ExecuteOptions {
     // This is not an "official" transaction level but it will do a
     // START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY
     CONSISTENT_SNAPSHOT_READ_ONLY = 5;
+
+    // This not an "official" transaction level, it will send queries to mysql
+    // without wrapping them in a transaction
+    AUTOCOMMIT = 6;
   }
 
   TransactionIsolation transaction_isolation = 9;

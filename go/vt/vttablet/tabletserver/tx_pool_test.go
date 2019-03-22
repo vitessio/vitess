@@ -265,6 +265,27 @@ func TestTxPoolTransactionIsolation(t *testing.T) {
 	}
 }
 
+func TestTxPoolAutocommit(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	txPool := newTxPool()
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	ctx := context.Background()
+
+	// Start a transaction with autocommit. This will ensure that the executor does not send begin/commit statements
+	// to mysql.
+	// This test is meaningful because if txPool.Begin were to send a BEGIN statement to the connection, it will fatal
+	// because is not in the list of expected queries (i.e db.AddQuery hasn't been called).
+	txid, err := txPool.Begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_AUTOCOMMIT})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = txPool.Commit(ctx, txid, &fakeMessageCommitter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestTxPoolBeginWithPoolConnectionError_TransientErrno2006 tests the case
 // where we see a transient errno 2006 e.g. because MySQL killed the
 // db connection. DBConn.Exec() is going to reconnect and retry automatically
