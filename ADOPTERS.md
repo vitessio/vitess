@@ -7,6 +7,7 @@ This is an alphabetical list of known adopters of Vitess. Some have already gone
 * [HubSpot](https://product.hubspot.com/)
 * [JD](https://jd.com/)
 * [Nozzle](https://nozzle.io)
+* [Pinterest](https://pinterest.com)
 * [Pixel Federation](https://pixelfederation.com)
 * [Quiz of Kings](https://quizofkings.com)
 * [Slack](https://slack.com)
