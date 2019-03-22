@@ -18,6 +18,7 @@ package topotests
 
 import (
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -866,7 +867,9 @@ func TestGetShardServingCells(t *testing.T) {
 		t.Fatalf("GetShardServingCells() failed: %v", err)
 	}
 
-	want = []string{cell2, cell}
+	want = []string{cell, cell2}
+
+	sort.Strings(got)
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("GetShardServingTypes() failure. Got %v, want: %v", got, want)
