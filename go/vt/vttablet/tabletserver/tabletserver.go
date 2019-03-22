@@ -1076,6 +1076,18 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	defer tsv.endRequest(false)
 	defer tsv.handlePanicAndSendLogStats("batch", nil, nil)
 
+	// When all these conditions are met, we send the queries directly
+	// to the MySQL without creating a transaction. This optimization
+	// yields better throughput.
+	// Setting ExecuteOptions_AUTOCOMMIT will get a connection out of the
+	// pool without actually begin/commit the transaction.
+	if (options == nil || options.TransactionIsolation == querypb.ExecuteOptions_DEFAULT) &&
+		tsv.qe.autoCommit.Get() &&
+		asTransaction &&
+		tsv.qe.passthroughDMLs.Get() {
+		options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
+	}
+
 	if asTransaction {
 		transactionID, err = tsv.Begin(ctx, target, options)
 		if err != nil {
@@ -1844,9 +1856,9 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 	target := tsv.target
 	tsv.mu.Unlock()
 	shr := &querypb.StreamHealthResponse{
-		Target:                              &target,
-		TabletAlias:                         &tsv.alias,
-		Serving:                             tsv.IsServing(),
+		Target:      &target,
+		TabletAlias: &tsv.alias,
+		Serving:     tsv.IsServing(),
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
 	}

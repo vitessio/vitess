@@ -239,6 +239,8 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 		return 0, err
 	}
 
+	autocommitTransaction := false
+
 	if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
 		if queries.setIsolationLevel != "" {
 			if _, err := conn.Exec(ctx, "set transaction isolation level "+queries.setIsolationLevel, 1, false); err != nil {
@@ -249,6 +251,8 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 		if _, err := conn.Exec(ctx, queries.openTransaction, 1, false); err != nil {
 			return 0, err
 		}
+	} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
+		autocommitTransaction = true
 	} else {
 		return 0, fmt.Errorf("don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 	}
@@ -263,6 +267,7 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 			axp,
 			immediateCaller,
 			effectiveCaller,
+			autocommitTransaction,
 		),
 		options.GetWorkload() != querypb.ExecuteOptions_DBA,
 	)
@@ -312,6 +317,12 @@ func (axp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOptio
 func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, mc messageCommitter) error {
 	defer conn.conclude(TxCommit, "transaction committed")
 	defer mc.LockDB(conn.NewMessages, conn.ChangedMessages)()
+
+	if conn.Autocommit {
+		mc.UpdateCaches(conn.NewMessages, conn.ChangedMessages)
+		return nil
+	}
+
 	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
 		conn.Close()
 		return err
@@ -379,9 +390,10 @@ type TxConnection struct {
 	LogToFile         sync2.AtomicInt32
 	ImmediateCallerID *querypb.VTGateCallerID
 	EffectiveCallerID *vtrpcpb.CallerID
+	Autocommit        bool
 }
 
-func newTxConnection(conn *connpool.DBConn, transactionID int64, pool *TxPool, immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) *TxConnection {
+func newTxConnection(conn *connpool.DBConn, transactionID int64, pool *TxPool, immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID, autocommit bool) *TxConnection {
 	return &TxConnection{
 		DBConn:            conn,
 		TransactionID:     transactionID,
@@ -391,6 +403,7 @@ func newTxConnection(conn *connpool.DBConn, transactionID int64, pool *TxPool, i
 		ChangedMessages:   make(map[string][]string),
 		ImmediateCallerID: immediate,
 		EffectiveCallerID: effective,
+		Autocommit:        autocommit,
 	}
 }
 
