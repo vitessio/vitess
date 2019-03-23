@@ -101,6 +101,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 		"--socket=" + cnf.SocketFile,
 		"--slave-info",
 		"--user=" + *xtrabackupUser,
+		"--target-dir=" + cnf.TmpDir,
 	}
 	if *xtrabackupStreamMode != "" {
 		flagsToExec = append(flagsToExec, "--stream="+*xtrabackupStreamMode)
