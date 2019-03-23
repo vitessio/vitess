@@ -152,7 +152,7 @@ def tearDownModule():
   tablet_replica2.remove_tree()
 
 
-class TestBackup(unittest.TestCase):
+class TestXtraBackup(unittest.TestCase):
 
   def setUp(self):
     for t in tablet_master, tablet_replica1:
@@ -313,3 +313,5 @@ class TestBackup(unittest.TestCase):
     utils.Vtctld().start()
     self._restore_old_master_test(_terminated_restore)
 
+if __name__ == '__main__':
+  utils.main()

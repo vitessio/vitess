@@ -49,7 +49,7 @@ var (
 	// flags to pass through to backup engine
 	xtrabackupBackupFlags = flag.String("xtrabackup_backup_flags", "", "flags to pass to backup command. these will be added to the end of the command")
 	// flags to pass through to restore phase
-	xtrabackupRestoreFlags = flag.String("xtrabackup_restore_flags", "", "flags to pass to restore command. these will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
+	xbstreamRestoreFlags = flag.String("xbstream_restore_flags", "", "flags to pass to xbstream command during restore. these will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
 	// streaming mode
 	xtrabackupStreamMode = flag.String("xtrabackup_stream_mode", "tar", "which mode to use if streaming, valid values are tar and xbstream")
 	xtrabackupUser       = flag.String("xtrabackup_user", "", "User to use for xtrabackup")
@@ -343,6 +343,9 @@ func (be *XtrabackupEngine) ExecuteRestore(
 		scanner.Scan()
 		if counter == 2 {
 			mysqlFlavor := os.Getenv("MYSQL_FLAVOR")
+			if mysqlFlavor == "" {
+				mysqlFlavor = "MySQL56"
+			}
 			if replicationPosition, err = mysql.ParsePosition(mysqlFlavor, scanner.Text()); err != nil {
 				return mysql.Position{}, err
 			}
@@ -422,7 +425,11 @@ func (be *XtrabackupEngine) restoreFile(
 	case xbstream:
 		// now extract the files by running xbstream
 		xbstreamProgram := xbstream
-		flagsToExec := []string{"-C", cnf.TmpDir, "-x"}
+		flagsToExec := []string{}
+		if *xbstreamRestoreFlags != "" {
+			flagsToExec = append(flagsToExec, strings.Fields(*xbstreamRestoreFlags)...)
+		}
+		flagsToExec = append(flagsToExec, "-C", cnf.TmpDir, "-x")
 		xbstreamCmd := exec.Command(xbstreamProgram, flagsToExec...)
 		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
 		xbstreamCmd.Stdin = reader
