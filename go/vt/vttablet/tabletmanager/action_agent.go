@@ -263,13 +263,6 @@ func NewActionAgent(
 	agent.statsTabletType = stats.NewString("TabletType")
 	agent.statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
 
-	// The db name will get set by the Start function called below, before
-	// VREngine gets to invoke the FilteredWithDB call.
-	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
-	}, agent.DBConfigs.FilteredWithDB().DbName)
-	servenv.OnTerm(agent.VREngine.Close)
-
 	var mysqlHost string
 	var mysqlPort int32
 	if appConfig := dbcfgs.AppWithDB(); appConfig.Host != "" {
@@ -288,6 +281,12 @@ func NewActionAgent(
 	if err := agent.Start(batchCtx, mysqlHost, int32(mysqlPort), port, gRPCPort, true); err != nil {
 		return nil, err
 	}
+
+	// The db name is set by the Start function called above
+	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
+		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
+	}, agent.DBConfigs.FilteredWithDB().DbName)
+	servenv.OnTerm(agent.VREngine.Close)
 
 	// Run a background task to rebuild the SrvKeyspace in our cell/keyspace
 	// if it doesn't exist yet.
