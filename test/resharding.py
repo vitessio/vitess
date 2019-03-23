@@ -1083,6 +1083,8 @@ primary key (name)
     # update our test variables to point at the new master
     shard_2_master, shard_2_replica1 = shard_2_replica1, shard_2_master
 
+    utils.pause('check state of _vt.vreplication')
+
     logging.debug('Inserting lots of data on source shard after reparenting')
     self._insert_lots(3000, base=2000)
     logging.debug('Checking 80 percent of data was sent fairly quickly')
