@@ -83,50 +83,47 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	return vc.vr.dbClient.Commit()
 }
 
-func (vc *vcopier) copyTables(ctx context.Context, settings binlogplayer.VRSettings) error {
-	for {
-		qr, err := vc.vr.dbClient.ExecuteFetch(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id=%d", vc.vr.id), 10000)
-		if err != nil {
-			return err
+func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSettings) error {
+	qr, err := vc.vr.dbClient.ExecuteFetch(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id=%d", vc.vr.id), 10000)
+	if err != nil {
+		return err
+	}
+	var tableToCopy string
+	copyState := make(map[string]*sqltypes.Result)
+	for _, row := range qr.Rows {
+		tableName := row[0].ToString()
+		lastpk := row[1].ToString()
+		if tableToCopy == "" {
+			tableToCopy = tableName
 		}
-		var tableToCopy string
-		copyState := make(map[string]*sqltypes.Result)
-		for _, row := range qr.Rows {
-			tableName := row[0].ToString()
-			lastpk := row[1].ToString()
-			if tableToCopy == "" {
-				tableToCopy = tableName
-			}
-			copyState[tableName] = nil
-			if lastpk != "" {
-				var r querypb.QueryResult
-				if err := proto.UnmarshalText(lastpk, &r); err != nil {
-					return err
-				}
-				copyState[tableName] = sqltypes.Proto3ToResult(&r)
-			}
-		}
-		if len(copyState) == 0 {
-			if err := vc.vr.setState(binlogplayer.BlpRunning, ""); err != nil {
+		copyState[tableName] = nil
+		if lastpk != "" {
+			var r querypb.QueryResult
+			if err := proto.UnmarshalText(lastpk, &r); err != nil {
 				return err
 			}
-			return nil
-		}
-		if err := vc.catchup(ctx, settings, copyState); err != nil {
-			return err
-		}
-		if err := vc.copyTable(ctx, tableToCopy, settings, copyState); err != nil {
-			return err
+			copyState[tableName] = sqltypes.Proto3ToResult(&r)
 		}
 	}
+	if len(copyState) == 0 {
+		return fmt.Errorf("unexpected: there are no tables to copy")
+	}
+	if err := vc.catchup(ctx, copyState); err != nil {
+		return err
+	}
+	return vc.copyTable(ctx, tableToCopy, copyState)
 }
 
-func (vc *vcopier) catchup(ctx context.Context, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result) error {
+func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.Result) error {
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Hour)
+	settings, err := binlogplayer.ReadVRSettings(vc.vr.dbClient, vc.vr.id)
+	if err != nil {
+		return err
+	}
 	if settings.StartPos.IsZero() {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Hour)
 	// Start vreplication.
 	errch := make(chan error, 1)
 	go func() {
@@ -157,7 +154,7 @@ func (vc *vcopier) catchup(ctx context.Context, settings binlogplayer.VRSettings
 	}
 }
 
-func (vc *vcopier) copyTable(ctx context.Context, tableName string, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result) error {
+func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState map[string]*sqltypes.Result) error {
 	defer vc.vr.dbClient.Rollback()
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
@@ -198,7 +195,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, settings bin
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
 			}
-			if err := vc.fastForward(ctx, settings, copyState, rows.Gtid); err != nil {
+			if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
 				return err
 			}
 			fieldEvent := &binlogdatapb.FieldEvent{
@@ -264,8 +261,12 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, settings bin
 	return nil
 }
 
-func (vc *vcopier) fastForward(ctx context.Context, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, gtid string) error {
+func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltypes.Result, gtid string) error {
 	pos, err := mysql.DecodePosition(gtid)
+	if err != nil {
+		return err
+	}
+	settings, err := binlogplayer.ReadVRSettings(vc.vr.dbClient, vc.vr.id)
 	if err != nil {
 		return err
 	}

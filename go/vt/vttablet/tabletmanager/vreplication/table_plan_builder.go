@@ -205,6 +205,11 @@ func (tpb *tablePlanBuilder) generate(tableKeys map[string][]string) *TablePlan 
 			refmap[k] = true
 		}
 	}
+	if tpb.lastpk != nil {
+		for _, f := range tpb.lastpk.Fields {
+			refmap[f.Name] = true
+		}
+	}
 	pkrefs := make([]string, 0, len(refmap))
 	for k := range refmap {
 		pkrefs = append(pkrefs, k)
@@ -465,12 +470,7 @@ func (tpb *tablePlanBuilder) generateSelectPart(buf *sqlparser.TrackedBuffer, bv
 		}
 	}
 	buf.WriteString(" where ")
-	separator = ""
-	for i, pkname := range tpb.lastpk.Fields {
-		buf.Myprintf("%s%v <= ", separator, &sqlparser.ColName{Name: sqlparser.NewColIdent(pkname.Name)})
-		separator = " and "
-		tpb.lastpk.Rows[0][i].EncodeSQL(buf)
-	}
+	tpb.generatePKConstraint(buf, bvf)
 	return buf.ParsedQuery()
 }
 
@@ -578,11 +578,24 @@ func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bi
 		separator = " and "
 	}
 	if tpb.lastpk != nil {
-		for i, pkname := range tpb.lastpk.Fields {
-			buf.Myprintf("%s%v <= ", separator, &sqlparser.ColName{Name: sqlparser.NewColIdent(pkname.Name)})
-			tpb.lastpk.Rows[0][i].EncodeSQL(buf)
-		}
+		buf.WriteString(" and ")
+		tpb.generatePKConstraint(buf, bvf)
 	}
+}
+
+func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {
+	separator := "("
+	for _, pkname := range tpb.lastpk.Fields {
+		buf.Myprintf("%s%v", separator, &sqlparser.ColName{Name: sqlparser.NewColIdent(pkname.Name)})
+		separator = ","
+	}
+	separator = ") <= ("
+	for _, val := range tpb.lastpk.Rows[0] {
+		buf.WriteString(separator)
+		separator = ","
+		val.EncodeSQL(buf)
+	}
+	buf.WriteString(")")
 }
 
 type bindvarFormatter struct {

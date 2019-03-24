@@ -206,8 +206,14 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, 
 	return streamerEngine.Stream(ctx, startPos, filter, send)
 }
 
+// streamRowsHook allows you to do work just before VStreamRows is dispatched.
+var streamRowsHook func()
+
 // VStreamRows directly calls into the pre-initialized engine.
 func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	if streamRowsHook != nil {
+		streamRowsHook()
+	}
 	var row []sqltypes.Value
 	if lastpk != nil {
 		r := sqltypes.Proto3ToResult(lastpk)
@@ -386,6 +392,54 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 	for {
 		select {
 		case got := <-globalDBQueries:
+			t.Errorf("unexpected query: %s", got)
+		default:
+			return
+		}
+	}
+}
+
+// expectNontxQueries disregards transactional statements like begin and commit.
+// It also disregards updates to _vt.vreplication.
+func expectNontxQueries(t *testing.T, queries []string) {
+	t.Helper()
+	failed := false
+	for i, query := range queries {
+		if failed {
+			t.Errorf("no query received, expecting %s", query)
+			continue
+		}
+		var got string
+	retry:
+		select {
+		case got = <-globalDBQueries:
+			if got == "begin" || got == "commit" || strings.Contains(got, "_vt.vreplication") {
+				goto retry
+			}
+			var match bool
+			if query[0] == '/' {
+				result, err := regexp.MatchString(query[1:], got)
+				if err != nil {
+					panic(err)
+				}
+				match = result
+			} else {
+				match = (got == query)
+			}
+			if !match {
+				t.Errorf("query:\n%q, does not match query %d:\n%q", got, i, query)
+			}
+		case <-time.After(5 * time.Second):
+			t.Errorf("no query received, expecting %s", query)
+			failed = true
+		}
+	}
+	for {
+		select {
+		case got := <-globalDBQueries:
+			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "_vt.vreplication") {
+				continue
+			}
 			t.Errorf("unexpected query: %s", got)
 		default:
 			return

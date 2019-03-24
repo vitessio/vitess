@@ -142,16 +142,20 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 		if len(rs.lastpk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("primary key values don't match length: %v vs %v", rs.lastpk, rs.pkColumns)
 		}
-		prefix := " where "
-		for i, pk := range rs.pkColumns {
-			if i == len(rs.lastpk)-1 {
-				buf.Myprintf("%s%v > ", prefix, rs.plan.Table.Columns[pk].Name)
-			} else {
-				buf.Myprintf("%s%v >= ", prefix, rs.plan.Table.Columns[pk].Name)
-			}
-			rs.lastpk[i].EncodeSQL(buf)
-			prefix = " and "
+		buf.WriteString(" where (")
+		prefix := ""
+		for _, pk := range rs.pkColumns {
+			buf.Myprintf("%s%v", prefix, rs.plan.Table.Columns[pk].Name)
+			prefix = ","
 		}
+		buf.WriteString(") > (")
+		prefix = ""
+		for _, val := range rs.lastpk {
+			buf.WriteString(prefix)
+			prefix = ","
+			val.EncodeSQL(buf)
+		}
+		buf.WriteString(")")
 	}
 	buf.Myprintf(" order by ", sqlparser.NewTableIdent(rs.plan.Table.Name))
 	prefix = ""
