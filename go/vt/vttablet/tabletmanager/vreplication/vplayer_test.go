@@ -612,6 +612,8 @@ func TestPlayerDDL(t *testing.T) {
 	// It should stop at the next DDL
 	expectDBClientQueries(t, []string{
 		"/update.*'Running'",
+		// Second update is from vreplicator.
+		"/update.*'Running'",
 		"begin",
 		fmt.Sprintf("/update.*'%s'", pos2),
 		"/update _vt.vreplication set state='Stopped'",
@@ -704,6 +706,8 @@ func TestPlayerStopPos(t *testing.T) {
 	}
 	expectDBClientQueries(t, []string{
 		"/update.*'Running'",
+		// Second update is from vreplicator.
+		"/update.*'Running'",
 		"begin",
 		"insert into yes(id,val) values (1,'aaa')",
 		fmt.Sprintf("/update.*'%s'", stopPos),
@@ -726,6 +730,8 @@ func TestPlayerStopPos(t *testing.T) {
 	}
 	expectDBClientQueries(t, []string{
 		"/update.*'Running'",
+		// Second update is from vreplicator.
+		"/update.*'Running'",
 		"begin",
 		// Since 'no' generates empty transactions that are skipped by
 		// vplayer, a commit is done only for the stop position event.
@@ -740,6 +746,8 @@ func TestPlayerStopPos(t *testing.T) {
 		t.Fatal(err)
 	}
 	expectDBClientQueries(t, []string{
+		"/update.*'Running'",
+		// Second update is from vreplicator.
 		"/update.*'Running'",
 		"/update.*'Stopped'.*already reached",
 	})
@@ -1208,6 +1216,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 		"insert into t1 values(2, 'aaa')",
 	})
 	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set state='Running'",
 		"begin",
 		"insert into t1(id,val) values (2,'aaa')",
 		"/update _vt.vreplication set pos=",
@@ -1283,7 +1292,8 @@ func startVReplication(t *testing.T, filter *binlogdatapb.Filter, onddl binlogda
 		t.Fatal(err)
 	}
 	expectDBClientQueries(t, []string{
-		"/insert",
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set state='Running'",
 	})
 	return func() {
 		t.Helper()

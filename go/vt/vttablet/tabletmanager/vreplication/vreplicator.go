@@ -89,7 +89,7 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 		}
 		switch {
 		case numTablesToCopy != 0:
-			if err := newVCopier(vr).copyTables(ctx, settings); err != nil {
+			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
 				return err
 			}
 		case settings.StartPos.IsZero():
@@ -97,6 +97,9 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 				return err
 			}
 		default:
+			if err := vr.setState(binlogplayer.BlpRunning, ""); err != nil {
+				return err
+			}
 			return newVPlayer(vr, settings, nil, mysql.Position{}).play(ctx)
 		}
 	}
