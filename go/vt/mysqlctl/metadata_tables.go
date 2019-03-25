@@ -28,12 +28,14 @@ import (
 const sqlCreateLocalMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.local_metadata (
   name VARCHAR(255) NOT NULL,
   value VARCHAR(255) NOT NULL,
-  PRIMARY KEY (name)
+  db_name VARBINARY(255) NOT NULL,
+  PRIMARY KEY (db_name, name)
   ) ENGINE=InnoDB`
 const sqlCreateShardMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.shard_metadata (
   name VARCHAR(255) NOT NULL,
   value MEDIUMBLOB NOT NULL,
-  PRIMARY KEY (name)
+  db_name VARBINARY(255) NOT NULL,
+  PRIMARY KEY (db_name, name)
   ) ENGINE=InnoDB`
 
 // PopulateMetadataTables creates and fills the _vt.local_metadata table and
@@ -46,7 +48,7 @@ const sqlCreateShardMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.shard_metada
 // created here to make it easier to create it on databases that were running
 // old version of Vitess, or databases that are getting converted to run under
 // Vitess.
-func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string) error {
+func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string, dbName string) error {
 	log.Infof("Populating _vt.local_metadata table...")
 
 	// Get a non-pooled DBA connection.
@@ -80,12 +82,15 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string)
 	for name, val := range localMetadata {
 		nameValue := sqltypes.NewVarChar(name)
 		valValue := sqltypes.NewVarChar(val)
+		dbNameValue := sqltypes.NewVarBinary(dbName)
 
 		queryBuf := bytes.Buffer{}
-		queryBuf.WriteString("INSERT INTO _vt.local_metadata (name,value) VALUES (")
+		queryBuf.WriteString("INSERT INTO _vt.local_metadata (name,value, db_name) VALUES (")
 		nameValue.EncodeSQL(&queryBuf)
 		queryBuf.WriteByte(',')
 		valValue.EncodeSQL(&queryBuf)
+		queryBuf.WriteByte(',')
+		dbNameValue.EncodeSQL(&queryBuf)
 		queryBuf.WriteString(") ON DUPLICATE KEY UPDATE value = ")
 		valValue.EncodeSQL(&queryBuf)
 

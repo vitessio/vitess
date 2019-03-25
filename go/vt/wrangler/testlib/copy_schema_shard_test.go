@@ -115,7 +115,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 		"  KEY `by_msg` (`msg`)\n" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8"
 	selectInformationSchema := "SELECT 1 FROM information_schema.tables WHERE table_schema = '_vt' AND table_name = 'shard_metadata'"
-	selectShardMetadata := "SELECT name, value FROM _vt.shard_metadata"
+	selectShardMetadata := "SELECT db_name, name, value FROM _vt.shard_metadata"
 
 	// The source table is asked about its schema.
 	// It may be the master or the rdonly.
