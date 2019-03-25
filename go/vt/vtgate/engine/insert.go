@@ -18,6 +18,7 @@ package engine
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"strconv"
 	"strings"
@@ -34,6 +35,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+var seqAutoValueOnZero = flag.Bool("seq-auto-value-on-zero", false, "For sequences, act as if NO_AUTO_VALUE_ON_ZERO is not set")
 
 var _ Primitive = (*Insert)(nil)
 
@@ -262,6 +265,22 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 	return result, nil
 }
 
+func shouldGenerate(v sqltypes.Value) bool {
+	if v.IsNull() {
+		return true
+	}
+	// Unless the NO_AUTO_VALUE_ON_ZERO sql mode is active in mysql, it also
+	// treats 0 as a value that should generate a new ID.
+	if *seqAutoValueOnZero {
+		n, err := sqltypes.ToUint64(v)
+		if err == nil && n == 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 // processGenerate generates new values using a sequence if necessary.
 // If no value was generated, it returns 0. Values are generated only
 // for cases where none are supplied.
@@ -278,7 +297,7 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 	}
 	count := int64(0)
 	for _, val := range resolved {
-		if val.IsNull() {
+		if shouldGenerate(val) {
 			count++
 		}
 	}
@@ -308,7 +327,7 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 	// Fill the holes where no value was supplied.
 	cur := insertID
 	for i, v := range resolved {
-		if v.IsNull() {
+		if shouldGenerate(v) {
 			bindVars[SeqVarName+strconv.Itoa(i)] = sqltypes.Int64BindVariable(cur)
 			cur++
 		} else {

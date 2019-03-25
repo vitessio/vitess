@@ -84,6 +84,65 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 				{Value: sqltypes.NULL},
 				{Value: sqltypes.NewInt64(2)},
 				{Value: sqltypes.NULL},
+				{Value: sqltypes.NewInt64(0)},
+			},
+		},
+	}
+
+	vc := &loggingVCursor{
+		shards: []string{"0"},
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"nextval",
+					"int64",
+				),
+				"4",
+			),
+			{InsertID: 1},
+		},
+	}
+	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		// Fetch two sequence value.
+		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
+		`ExecuteStandalone dummy_generate n: type:INT64 value:"2"  ks2 0`,
+		// Fill those values into the insert.
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: dummy_insert {__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"4" __seq2: type:INT64 value:"2" __seq3: type:INT64 value:"5" __seq4: type:INT64 value:"0" } true true`,
+	})
+
+	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerate.
+	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 4})
+}
+
+func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
+	*seqAutoValueOnZero = true
+	defer func() { *seqAutoValueOnZero = false }()
+
+	ins := NewQueryInsert(
+		InsertUnsharded,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: false,
+		},
+		"dummy_insert",
+	)
+	ins.Generate = &Generate{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks2",
+			Sharded: false,
+		},
+		Query: "dummy_generate",
+		Values: sqltypes.PlanValue{
+			Values: []sqltypes.PlanValue{
+				{Value: sqltypes.NewInt64(1)},
+				{Value: sqltypes.NewInt64(0)},
+				{Value: sqltypes.NewInt64(2)},
+				{Value: sqltypes.NewInt64(0)},
 				{Value: sqltypes.NewInt64(3)},
 			},
 		},
