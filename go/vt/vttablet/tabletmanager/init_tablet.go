@@ -209,7 +209,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	if *initPopulateMetadata {
 		agent.setTablet(tablet)
 		localMetadata := agent.getLocalMetadataValues(tablet.Type)
-		err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata)
+		err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
 		if err != nil {
 			return vterrors.Wrap(err, "failed to -init_populate_metadata")
 		}
