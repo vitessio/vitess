@@ -116,8 +116,7 @@ After this change, you can run `git push` without arguments:
 
 Then go to the [repository page](https://github.com/vitessio/vitess) and it
 should prompt you to create a Pull Request from a branch you recently pushed.
-You can also [choose a branch manually]
-(https://github.com/vitessio/vitess/compare).
+You can also [choose a branch manually](https://github.com/vitessio/vitess/compare).
 
 ## Addressing Changes
 

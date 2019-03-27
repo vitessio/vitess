@@ -19,7 +19,7 @@ This document intends to address the above concerns with some practical trade-of
 
 Although MySQL supports the XA protocol, it’s been unusable due to bugs. Version 5.7 claims to have fixed them all, but the more common versions in use are 5.6 and below, and we need to make 2PC work for those versions also. Even at 5.7, we still have to contend with the chattiness of XA, and the fact that it’s unused code.
 
-The most critical component of the 2PC protocol is the ‘Prepare’ functionality. There is actually a way to implement Prepare on top of a transactional system. This is explained in a [Vitess Blog](https://vitess.io/blog/2016-06-07-distributed-transactions-in-vitess/), which will be used as foundation for this design.
+The most critical component of the 2PC protocol is the `Prepare` functionality. There is actually a way to implement Prepare on top of a transactional system. This is explained in a [Vitess Blog](https://vitess.io/blog/2016-06-07-distributed-transactions-in-vitess/), which will be used as foundation for this design.
 
 Familiarity with the blog and the [2PC algorithm](http://c2.com/cgi/wiki?TwoPhaseCommit) are required to understand the rest of the document.
 
