@@ -1,6 +1,6 @@
 # VTExplain Tool
 
-The vtexplain tool provides information about how Vitess will execute a statement (the Vitess version of MySQL "EXPLAIN").
+The vtexplain tool provides information about how Vitess will execute a statement (the Vitess version of MySQL `EXPLAIN`).
 
 ## Prerequisites
 
