@@ -70,7 +70,7 @@ type XtraBackupManifest struct {
 	// BackupMethod, set to xtrabackup
 	BackupMethod string
 	// Position at which the backup was taken
-	Position string
+	Position mysql.Position
 	// SkipCompress can be set if the backup files were not run
 	// through gzip.
 	SkipCompress bool
@@ -183,9 +183,21 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	}
 	position := ""
 	if index != -1 {
-		position = substrs[index]
+		// since we are extracting this from the log, it contains newlines
+		// replace them with a single space to match the SET GLOBAL gtid_purged command in xtrabackup_slave_info
+		position = strings.Replace(substrs[index], "\n", " ", -1)
 	}
 	logger.Infof("Found position: %v", position)
+	// elsewhere in the code we default MYSQL_FLAVOR to MySQL56 if not set
+	mysqlFlavor := os.Getenv("MYSQL_FLAVOR")
+	if mysqlFlavor == "" {
+		mysqlFlavor = "MySQL56"
+	}
+	// flavor is required to parse a string into a mysql.Position
+	var replicationPosition mysql.Position
+	if replicationPosition, err = mysql.ParsePosition(mysqlFlavor, position); err != nil {
+		return false, err
+	}
 
 	// open the MANIFEST
 	mwc, err := bh.AddFile(ctx, backupManifest, 0)
@@ -198,7 +210,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	bm := &XtraBackupManifest{
 		FileName:     backupFileName,
 		BackupMethod: xtrabackup,
-		Position:     position,
+		Position:     replicationPosition,
 		SkipCompress: !*backupStorageCompress,
 		Params:       *xtrabackupBackupFlags,
 	}
@@ -331,30 +343,22 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	}
 
 	// now find the slave position and return that
-	binlogInfoFile, err := os.Open(path.Join(cnf.TmpDir, binlogInfoFileName))
+	var bm BackupManifest
+	rc, err := bh.ReadFile(ctx, backupManifest)
 	if err != nil {
+		logger.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
 		return mysql.Position{}, err
 	}
-	defer binlogInfoFile.Close()
-	scanner := bufio.NewScanner(binlogInfoFile)
-	scanner.Split(bufio.ScanWords)
-	counter := 0
-	var replicationPosition mysql.Position
-	for counter < 3 {
-		scanner.Scan()
-		if counter == 2 {
-			mysqlFlavor := os.Getenv("MYSQL_FLAVOR")
-			if mysqlFlavor == "" {
-				mysqlFlavor = "MySQL56"
-			}
-			if replicationPosition, err = mysql.ParsePosition(mysqlFlavor, scanner.Text()); err != nil {
-				return mysql.Position{}, err
-			}
-		}
-		counter = counter + 1
+
+	err = json.NewDecoder(rc).Decode(&bm)
+	rc.Close()
+	if err != nil {
+		logger.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
+		return mysql.Position{}, err
 	}
+	logger.Infof("Returning replication position %v", bm.Position)
 	// TODO clean up extracted files from TmpDir
-	return replicationPosition, nil
+	return bm.Position, nil
 }
 
 // restoreFile restores an individual file.
