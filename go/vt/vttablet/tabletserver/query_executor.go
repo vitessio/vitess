@@ -17,7 +17,6 @@ limitations under the License.
 package tabletserver
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"strings"
@@ -44,9 +43,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
-
-// TODO(sougou): remove after affected parties have transitioned to new behavior.
-var legacyTableACL = flag.Bool("legacy-table-acl", false, "deprecated: this flag can be used to revert to the older table ACL behavior, which checked access for at most one table")
 
 // QueryExecutor is used for executing a query request.
 type QueryExecutor struct {
@@ -373,15 +369,9 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return nil
 	}
 
-	if *legacyTableACL {
-		if !qre.plan.TableName().IsEmpty() {
-			return qre.checkAccess(qre.plan.LegacyAuthorized, qre.plan.TableName().String(), callerID)
-		}
-	} else {
-		for i, auth := range qre.plan.Authorized {
-			if err := qre.checkAccess(auth, qre.plan.Permissions[i].TableName, callerID); err != nil {
-				return err
-			}
+	for i, auth := range qre.plan.Authorized {
+		if err := qre.checkAccess(auth, qre.plan.Permissions[i].TableName, callerID); err != nil {
+			return err
 		}
 	}
 
