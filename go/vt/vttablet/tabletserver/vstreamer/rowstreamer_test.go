@@ -55,49 +55,56 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id" type:INT32 > `,
 		`rows:<lengths:1 lengths:3 values:"1aaa" > rows:<lengths:1 lengths:3 values:"2bbb" > lastpk:<lengths:1 values:"2" > `,
 	}
-	checkStream(t, "select * from t1", nil, wantStream)
+	wantQuery := "select id, val from t1 order by id"
+	checkStream(t, "select * from t1", nil, wantQuery, wantStream)
 
 	// t1: lastpk=1
 	wantStream = []string{
 		`fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id" type:INT32 > `,
 		`rows:<lengths:1 lengths:3 values:"2bbb" > lastpk:<lengths:1 values:"2" > `,
 	}
-	checkStream(t, "select * from t1", []sqltypes.Value{sqltypes.NewInt64(1)}, wantStream)
+	wantQuery = "select id, val from t1 where (id) > (1) order by id"
+	checkStream(t, "select * from t1", []sqltypes.Value{sqltypes.NewInt64(1)}, wantQuery, wantStream)
 
-	// t1: different column orderin
+	// t1: different column ordering
 	wantStream = []string{
 		`fields:<name:"val" type:VARBINARY > fields:<name:"id" type:INT32 > pkfields:<name:"id" type:INT32 > `,
 		`rows:<lengths:3 lengths:1 values:"aaa1" > rows:<lengths:3 lengths:1 values:"bbb2" > lastpk:<lengths:1 values:"2" > `,
 	}
-	checkStream(t, "select val, id from t1", nil, wantStream)
+	wantQuery = "select id, val from t1 order by id"
+	checkStream(t, "select val, id from t1", nil, wantQuery, wantStream)
 
 	// t2: all rows
 	wantStream = []string{
 		`fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > pkfields:<name:"id2" type:INT32 > `,
 		`rows:<lengths:1 lengths:1 lengths:3 values:"12aaa" > rows:<lengths:1 lengths:1 lengths:3 values:"13bbb" > lastpk:<lengths:1 lengths:1 values:"13" > `,
 	}
-	checkStream(t, "select * from t2", nil, wantStream)
+	wantQuery = "select id1, id2, val from t2 order by id1, id2"
+	checkStream(t, "select * from t2", nil, wantQuery, wantStream)
 
 	// t2: lastpk=1,2
 	wantStream = []string{
 		`fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > pkfields:<name:"id2" type:INT32 > `,
 		`rows:<lengths:1 lengths:1 lengths:3 values:"13bbb" > lastpk:<lengths:1 lengths:1 values:"13" > `,
 	}
-	checkStream(t, "select * from t2", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, wantStream)
+	wantQuery = "select id1, id2, val from t2 where (id1,id2) > (1,2) order by id1, id2"
+	checkStream(t, "select * from t2", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, wantQuery, wantStream)
 
 	// t3: all rows
 	wantStream = []string{
 		`fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id" type:INT32 > pkfields:<name:"val" type:VARBINARY > `,
 		`rows:<lengths:1 lengths:3 values:"1aaa" > rows:<lengths:1 lengths:3 values:"2bbb" > lastpk:<lengths:1 lengths:3 values:"2bbb" > `,
 	}
-	checkStream(t, "select * from t3", nil, wantStream)
+	wantQuery = "select id, val from t3 order by id, val"
+	checkStream(t, "select * from t3", nil, wantQuery, wantStream)
 
 	// t3: lastpk: 1,'aaa'
 	wantStream = []string{
 		`fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id" type:INT32 > pkfields:<name:"val" type:VARBINARY > `,
 		`rows:<lengths:1 lengths:3 values:"2bbb" > lastpk:<lengths:1 lengths:3 values:"2bbb" > `,
 	}
-	checkStream(t, "select * from t3", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("aaa")}, wantStream)
+	wantQuery = "select id, val from t3 where (id,val) > (1,'aaa') order by id, val"
+	checkStream(t, "select * from t3", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("aaa")}, wantQuery, wantStream)
 }
 
 func TestStreamRowsKeyRange(t *testing.T) {
@@ -126,7 +133,8 @@ func TestStreamRowsKeyRange(t *testing.T) {
 		`fields:<name:"id1" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > `,
 		`rows:<lengths:1 lengths:3 values:"1aaa" > lastpk:<lengths:1 values:"6" > `,
 	}
-	checkStream(t, "select * from t1 where in_keyrange('-80')", nil, wantStream)
+	wantQuery := "select id1, val from t1 order by id1"
+	checkStream(t, "select * from t1 where in_keyrange('-80')", nil, wantQuery, wantStream)
 }
 
 func TestStreamRowsMultiPacket(t *testing.T) {
@@ -153,7 +161,8 @@ func TestStreamRowsMultiPacket(t *testing.T) {
 		`rows:<lengths:1 lengths:10 values:"42345678901" > lastpk:<lengths:1 values:"4" > `,
 		`rows:<lengths:1 lengths:1 values:"52" > lastpk:<lengths:1 values:"5" > `,
 	}
-	checkStream(t, "select * from t1", nil, wantStream)
+	wantQuery := "select id, val from t1 order by id"
+	checkStream(t, "select * from t1", nil, wantQuery, wantStream)
 }
 
 func TestStreamRowsCancel(t *testing.T) {
@@ -186,11 +195,8 @@ func TestStreamRowsCancel(t *testing.T) {
 	}
 }
 
-func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantStream []string) {
+func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery string, wantStream []string) {
 	t.Helper()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	i := 0
 	ch := make(chan error)
@@ -199,9 +205,14 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantStream
 	go func() {
 		first := true
 		defer close(ch)
-		err := engine.StreamRows(ctx, query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
-			if first && rows.Gtid == "" {
-				ch <- fmt.Errorf("stream gtid is empty")
+		err := engine.StreamRows(context.Background(), query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
+			if first {
+				if rows.Gtid == "" {
+					ch <- fmt.Errorf("stream gtid is empty")
+				}
+				if got := engine.rowStreamers[engine.streamIdx-1].sendQuery; got != wantQuery {
+					ch <- fmt.Errorf("query sent:\n%v, want\n%v", got, wantQuery)
+				}
 			}
 			first = false
 			rows.Gtid = ""

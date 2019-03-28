@@ -37,10 +37,12 @@ var (
 	// idleTimeout is set to slightly above 1s, compared to heartbeatTime
 	// set by VStreamer at slightly below 1s. This minimizes conflicts
 	// between the two timeouts.
-	idleTimeout      = 1100 * time.Millisecond
-	dbLockRetryDelay = 1 * time.Second
-	relayLogMaxSize  = 10000
-	relayLogMaxItems = 1000
+	idleTimeout         = 1100 * time.Millisecond
+	dbLockRetryDelay    = 1 * time.Second
+	relayLogMaxSize     = 30000
+	relayLogMaxItems    = 1000
+	copyTimeout         = 1 * time.Hour
+	replicaLagTolerance = 10 * time.Second
 
 	// CreateCopyState is the list of statements to execute for creating
 	// the _vt.copy_state table
@@ -86,6 +88,10 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 		settings, numTablesToCopy, err := vr.readSettings(ctx)
 		if err != nil {
 			return fmt.Errorf("error reading VReplication settings: %v", err)
+		}
+		// If any of the operations below changed state to Stopped, we should return.
+		if settings.State == binlogplayer.BlpStopped {
+			return nil
 		}
 		switch {
 		case numTablesToCopy != 0:

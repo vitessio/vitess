@@ -207,12 +207,12 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, 
 }
 
 // streamRowsHook allows you to do work just before VStreamRows is dispatched.
-var streamRowsHook func()
+var streamRowsHook func(ctx context.Context)
 
 // VStreamRows directly calls into the pre-initialized engine.
 func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	if streamRowsHook != nil {
-		streamRowsHook()
+		streamRowsHook(ctx)
 	}
 	var row []sqltypes.Value
 	if lastpk != nil {
