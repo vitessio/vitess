@@ -1076,12 +1076,16 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	defer tsv.endRequest(false)
 	defer tsv.handlePanicAndSendLogStats("batch", nil, nil)
 
+	if options == nil {
+		options = &querypb.ExecuteOptions{}
+	}
+
 	// When all these conditions are met, we send the queries directly
 	// to the MySQL without creating a transaction. This optimization
 	// yields better throughput.
 	// Setting ExecuteOptions_AUTOCOMMIT will get a connection out of the
 	// pool without actually begin/commit the transaction.
-	if (options == nil || options.TransactionIsolation == querypb.ExecuteOptions_DEFAULT) &&
+	if (options.TransactionIsolation == querypb.ExecuteOptions_DEFAULT) &&
 		tsv.qe.autoCommit.Get() &&
 		asTransaction &&
 		tsv.qe.passthroughDMLs.Get() {
