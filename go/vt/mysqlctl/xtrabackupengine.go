@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"io"
 	"io/ioutil"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/klauspost/pgzip"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -52,15 +54,14 @@ var (
 	xbstreamRestoreFlags = flag.String("xbstream_restore_flags", "", "flags to pass to xbstream command during restore. these will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
 	// streaming mode
 	xtrabackupStreamMode = flag.String("xtrabackup_stream_mode", "tar", "which mode to use if streaming, valid values are tar and xbstream")
-	xtrabackupUser       = flag.String("xtrabackup_user", "", "User to use for xtrabackup")
+	xtrabackupUser       = flag.String("xtrabackup_user", "", "User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.")
 )
 
 const (
-	streamModeTar      = "tar"
-	xtrabackup         = "xtrabackup"
-	xbstream           = "xbstream"
-	binlogInfoFileName = "xtrabackup_binlog_info"
-	successMsg         = "completed OK!"
+	streamModeTar = "tar"
+	xtrabackup    = "xtrabackup"
+	xbstream      = "xbstream"
+	successMsg    = "completed OK!"
 )
 
 // XtraBackupManifest represents the backup.
@@ -93,6 +94,10 @@ func (be *XtrabackupEngine) backupFileName() string {
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
 func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error) {
+
+	if *xtrabackupUser == "" {
+		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
+	}
 
 	backupProgram := path.Join(*xtrabackupEnginePath, xtrabackup)
 
@@ -237,6 +242,35 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	restoreConcurrency int,
 	hookExtraEnv map[string]string) (mysql.Position, error) {
 
+	var bh backupstorage.BackupHandle
+	var bm XtraBackupManifest
+	var toRestore int
+
+	for toRestore = len(bhs) - 1; toRestore >= 0; toRestore-- {
+		bh = bhs[toRestore]
+		rc, err := bh.ReadFile(ctx, backupManifest)
+		if err != nil {
+			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
+			continue
+		}
+
+		err = json.NewDecoder(rc).Decode(&bm)
+		rc.Close()
+		if err != nil {
+			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
+			continue
+		}
+
+		logger.Infof("Restore: found backup %v %v to restore with %v file", bh.Directory(), bh.Name(), bm.FileName)
+		break
+	}
+	if toRestore < 0 {
+		// There is at least one attempted backup, but none could be read.
+		// This implies there is data we ought to have, so it's not safe to start
+		// up empty.
+		return mysql.Position{}, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
+	}
+
 	// Starting from here we won't be able to recover if we get stopped by a cancelled
 	// context. Thus we use the background context to get through to the finish.
 
@@ -261,12 +295,8 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	logger.Infof("Restore: Extracting all files")
 
 	// first download the file into a tmp dir
-	// use the latest backup
-
-	bh := bhs[len(bhs)-1]
-
 	// extract all the files
-	if err := be.restoreFile(ctx, cnf, logger, bh, *backupStorageHook, *backupStorageCompress, be.backupFileName(), hookExtraEnv); err != nil {
+	if err := be.restoreFile(ctx, cnf, logger, bh, !bm.SkipCompress, be.backupFileName()); err != nil {
 		logger.Errorf("error restoring backup file %v:%v", be.backupFileName(), err)
 		return mysql.Position{}, err
 	}
@@ -314,7 +344,6 @@ func (be *XtrabackupEngine) ExecuteRestore(
 		"--target-dir=" + cnf.TmpDir,
 	}
 	copybackCmd := exec.Command(restoreProgram, flagsToExec...)
-	// TODO: check stdout for OK message
 	copybackErr, _ := copybackCmd.StderrPipe()
 	copybackOut, _ := copybackCmd.StdoutPipe()
 
@@ -343,19 +372,6 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	}
 
 	// now find the slave position and return that
-	var bm BackupManifest
-	rc, err := bh.ReadFile(ctx, backupManifest)
-	if err != nil {
-		logger.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
-		return mysql.Position{}, err
-	}
-
-	err = json.NewDecoder(rc).Decode(&bm)
-	rc.Close()
-	if err != nil {
-		logger.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
-		return mysql.Position{}, err
-	}
 	logger.Infof("Returning replication position %v", bm.Position)
 	// TODO clean up extracted files from TmpDir
 	return bm.Position, nil
@@ -367,10 +383,8 @@ func (be *XtrabackupEngine) restoreFile(
 	cnf *Mycnf,
 	logger logutil.Logger,
 	bh backupstorage.BackupHandle,
-	transformHook string,
 	compress bool,
-	name string,
-	hookExtraEnv map[string]string) (err error) {
+	name string) (err error) {
 
 	streamMode := *xtrabackupStreamMode
 	// Open the source file for reading.
