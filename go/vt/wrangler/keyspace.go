@@ -146,7 +146,7 @@ func (wr *Wrangler) printShards(ctx context.Context, si []*topo.ShardInfo) error
 				wr.Logger().Printf("        %v\n", row)
 			}
 		}
-		wr.Logger().Printf("      Served Types: %v\n", si.IsMasterServing)
+		wr.Logger().Printf("      Is Master Serving: %v\n", si.IsMasterServing)
 		if len(si.TabletControls) != 0 {
 			wr.Logger().Printf("      Tablet Controls: %v\n", si.TabletControls)
 		}
