@@ -3,9 +3,11 @@ package trace
 import (
 	"io"
 
+	"github.com/opentracing-contrib/go-grpc"
 	"github.com/opentracing/opentracing-go"
 	"github.com/uber/jaeger-client-go/config"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 type JaegerSpan struct {
@@ -24,7 +26,23 @@ type OpenTracingFactory struct {
 	Tracer opentracing.Tracer
 }
 
-// newJagerTracerFromEnv will instantiate a SpanFactory implemented by Jaeger,
+func (jf OpenTracingFactory) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
+	addInterceptors(otgrpc.OpenTracingStreamServerInterceptor(jf.Tracer), otgrpc.OpenTracingServerInterceptor(jf.Tracer))
+}
+
+
+func (jf OpenTracingFactory) GetGrpcServerOptions() []grpc.ServerOption {
+	return []grpc.ServerOption{}
+}
+
+func (jf OpenTracingFactory) GetGrpcClientOptions() []grpc.DialOption {
+	return []grpc.DialOption{
+		grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(jf.Tracer)),
+		grpc.WithStreamInterceptor(otgrpc.OpenTracingStreamClientInterceptor(jf.Tracer)),
+	}
+}
+
+// newJagerTracerFromEnv will instantiate a TracingService implemented by Jaeger,
 // taking configuration from environment variables. Available properties are:
 // JAEGER_SERVICE_NAME -- If this is set, the service name used in code will be ignored and this value used instead
 // JAEGER_RPC_METRICS
@@ -42,7 +60,7 @@ type OpenTracingFactory struct {
 // JAEGER_PASSWORD
 // JAEGER_AGENT_HOST
 // JAEGER_AGENT_PORT
-func newJagerTracerFromEnv(serviceName string) (opentracing.Tracer, io.Closer, error) {
+func newJagerTracerFromEnv(serviceName string) (TracingService, io.Closer, error) {
 	cfg, err := config.FromEnv()
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = serviceName
@@ -54,7 +72,15 @@ func newJagerTracerFromEnv(serviceName string) (opentracing.Tracer, io.Closer, e
 		return nil, &nilCloser{}, err
 	}
 
-	return tracer, closer, nil
+	opentracing.SetGlobalTracer(tracer)
+
+	return OpenTracingFactory{tracer}, closer, nil
+}
+
+func (jf OpenTracingFactory) NewClientSpan(parent Span, serviceName, label string) Span {
+	span := jf.New(parent, label)
+	span.Annotate("peer.service", serviceName)
+	return span
 }
 
 func (jf OpenTracingFactory) New(parent Span, label string) Span {

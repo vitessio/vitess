@@ -20,13 +20,13 @@ import (
 	"io"
 	"testing"
 
-	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 func TestFakeSpan(t *testing.T) {
 	ctx := context.Background()
-	RegisterSpanFactory(fakeSpanFactory{})
+	//RegisterSpanFactory(fakeSpanFactory{})
 
 	// It should be safe to call all the usual methods as if a plugin were installed.
 	span1, ctx := NewSpan(ctx, "label")
@@ -43,8 +43,8 @@ func TestFakeSpan(t *testing.T) {
 
 func TestRegisterService(t *testing.T) {
 	fakeName := "test"
-	tracingBackendFactories[fakeName] = func(s string) (opentracing.Tracer, io.Closer, error) {
-		tracer := fakeTracer{name: s}
+	tracingBackendFactories[fakeName] = func(serviceName string) (TracingService, io.Closer, error) {
+		tracer := fakeTracer{name: serviceName}
 		return tracer, tracer, nil
 	}
 
@@ -66,18 +66,34 @@ type fakeTracer struct {
 	name string
 }
 
+func (fakeTracer) NewClientSpan(parent Span, serviceName, label string) Span {
+	panic("implement me")
+}
+
+func (fakeTracer) New(parent Span, label string) Span {
+	panic("implement me")
+}
+
+func (fakeTracer) FromContext(ctx context.Context) (Span, bool) {
+	panic("implement me")
+}
+
+func (fakeTracer) NewContext(parent context.Context, span Span) context.Context {
+	panic("implement me")
+}
+
+func (fakeTracer) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
+	panic("implement me")
+}
+
+func (fakeTracer) GetGrpcServerOptions() []grpc.ServerOption {
+	panic("implement me")
+}
+
+func (fakeTracer) GetGrpcClientOptions() []grpc.DialOption {
+	panic("implement me")
+}
+
 func (fakeTracer) Close() error {
-	panic("implement me")
-}
-
-func (fakeTracer) StartSpan(operationName string, opts ...opentracing.StartSpanOption) opentracing.Span {
-	panic("implement me")
-}
-
-func (fakeTracer) Inject(sm opentracing.SpanContext, format interface{}, carrier interface{}) error {
-	panic("implement me")
-}
-
-func (fakeTracer) Extract(format interface{}, carrier interface{}) (opentracing.SpanContext, error) {
 	panic("implement me")
 }

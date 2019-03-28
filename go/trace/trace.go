@@ -24,8 +24,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/opentracing-contrib/go-grpc"
-	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"vitess.io/vitess/go/vt/log"
@@ -54,12 +52,13 @@ func NewSpan(inCtx context.Context, label string) (Span, context.Context) {
 	return span, outCtx
 }
 
-// NewClientSpan returns a span and a context to register calls to dependent services. It annotates
-// the span with "peer.service" per https://github.com/opentracing/specification/blob/master/semantic_conventions.md
+// NewClientSpan returns a span and a context to register calls to dependent services.
 func NewClientSpan(inCtx context.Context, serviceName, spanLabel string) (Span, context.Context) {
-	span, ctx := NewSpan(inCtx, spanLabel)
-	span.Annotate("peer.service", serviceName)
-	return span, ctx
+	parent, _ := spanFactory.FromContext(inCtx)
+	span := spanFactory.NewClientSpan(parent, serviceName, spanLabel)
+	outCtx := spanFactory.NewContext(inCtx, span)
+
+	return span, outCtx
 }
 
 // FromContext returns the Span from a Context if present. The bool return
@@ -83,55 +82,47 @@ func CopySpan(parentCtx, spanCtx context.Context) context.Context {
 }
 
 func GetGrpcClientOptions() []grpc.DialOption {
-	tracer := opentracing.GlobalTracer()
-	_, isNoopTracer := tracer.(opentracing.NoopTracer)
-	if isNoopTracer {
-		return []grpc.DialOption{}
+	return spanFactory.GetGrpcClientOptions()
+}
 
-	} else {
-		return []grpc.DialOption{
-			grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(tracer)),
-			grpc.WithStreamInterceptor(otgrpc.OpenTracingStreamClientInterceptor(tracer)),
-		}
-	}
+func GetGrpcServerOptions() []grpc.ServerOption {
+	return spanFactory.GetGrpcServerOptions()
 }
 
 func AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
-	tracer := opentracing.GlobalTracer()
-	_, isNoopTracer := tracer.(*opentracing.NoopTracer)
-	if isNoopTracer {
-		return
-	}
-
-	addInterceptors(otgrpc.OpenTracingStreamServerInterceptor(tracer), otgrpc.OpenTracingServerInterceptor(tracer))
+	spanFactory.AddGrpcServerOptions(addInterceptors)
 }
 
-// SpanFactory is an interface for creating spans or extracting them from Contexts.
-type SpanFactory interface {
+// TracingService is an interface for creating spans or extracting them from Contexts.
+type TracingService interface {
 	// New creates a new span from an existing one, if provided. The parent can also be nil
 	New(parent Span, label string) Span
+
+	// NewClientSpan creates a span for a service call
+	NewClientSpan(parent Span, serviceName, label string) Span
 
 	// Extracts a span from a context, making it possible to annotate the span with additional information.
 	FromContext(ctx context.Context) (Span, bool)
 
 	// Creates a new context containing the provided span
 	NewContext(parent context.Context, span Span) context.Context
+
+	// Allows a tracing system to add interceptors to grpc server traffic
+	AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor))
+
+	// Allows a tracing system to add grpc configuration to server traffic
+	GetGrpcServerOptions() []grpc.ServerOption
+
+	// Allows a tracing system to add grpc configuration to client traffic
+	GetGrpcClientOptions() []grpc.DialOption
 }
 
-type TracerFactory func(serviceName string) (opentracing.Tracer, io.Closer, error)
+type TracerFactory func(serviceName string) (TracingService, io.Closer, error)
 
+// tracingBackendFactories should be added to by a plugin during init() to install itself
 var tracingBackendFactories = make(map[string]TracerFactory)
 
-// RegisterSpanFactory should be called by a plugin during init() to install a
-// factory that creates Spans for that plugin's tracing framework. Each call to
-// RegisterSpanFactory will overwrite any previous setting. If no factory is
-// registered, the default fake factory will produce Spans whose methods are all
-// no-ops.
-func RegisterSpanFactory(sf SpanFactory) {
-	spanFactory = sf
-}
-
-var spanFactory SpanFactory = fakeSpanFactory{}
+var spanFactory TracingService = fakeSpanFactory{}
 
 var (
 	tracingServer = flag.String("tracer", "noop", "tracing service to use.")
@@ -157,17 +148,7 @@ func StartTracing(serviceName string) io.Closer {
 		return &nilCloser{}
 	}
 
-	_, isNoopTracer := tracer.(opentracing.NoopTracer)
-	if isNoopTracer {
-		// We don't have a real tracer to work with. Let's leave early
-		return &nilCloser{}
-	}
-
-	// Register it for all openTracing enabled plugins, mainly the grpc connections
-	opentracing.SetGlobalTracer(tracer)
-
-	// Register it for the internal Vitess tracing system
-	RegisterSpanFactory(OpenTracingFactory{Tracer: tracer})
+	spanFactory = tracer
 
 	return closer
 }
