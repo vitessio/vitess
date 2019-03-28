@@ -170,6 +170,7 @@ func createGRPCServer() {
 	}
 
 	opts = append(opts, interceptors()...)
+	opts = append(opts, trace.GetGrpcServerOptions()...)
 
 	GRPCServer = grpc.NewServer(opts...)
 }

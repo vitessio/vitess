@@ -19,15 +19,19 @@ package trace
 import (
 	"io"
 
-	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 type fakeSpanFactory struct{}
 
 func (fakeSpanFactory) New(Span, string) Span                                     { return fakeSpan{} }
+func (fakeSpanFactory) NewClientSpan(parent Span, serviceName, label string) Span { return fakeSpan{} }
 func (fakeSpanFactory) FromContext(context.Context) (Span, bool)                  { return nil, false }
 func (fakeSpanFactory) NewContext(parent context.Context, _ Span) context.Context { return parent }
+func (fakeSpanFactory) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) { }
+func (fakeSpanFactory) GetGrpcServerOptions() []grpc.ServerOption { return []grpc.ServerOption{} }
+func (fakeSpanFactory) GetGrpcClientOptions() []grpc.DialOption { return []grpc.DialOption{} }
 
 // fakeSpan implements Span with no-op methods.
 type fakeSpan struct{}
@@ -36,7 +40,7 @@ func (fakeSpan) Finish()                      {}
 func (fakeSpan) Annotate(string, interface{}) {}
 
 func init() {
-	tracingBackendFactories["noop"] = func(_ string) (opentracing.Tracer, io.Closer, error) {
-		return opentracing.NoopTracer{}, &nilCloser{}, nil
+	tracingBackendFactories["noop"] = func(_ string) (TracingService, io.Closer, error) {
+		return fakeSpanFactory{}, &nilCloser{}, nil
 	}
 }
