@@ -44,6 +44,7 @@ type rowStreamer struct {
 
 	plan      *Plan
 	pkColumns []int
+	sendQuery string
 }
 
 func newRowStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, query string, lastpk []sqltypes.Value, kschema *vindexes.KeyspaceSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
@@ -74,17 +75,13 @@ func (rs *rowStreamer) Stream() error {
 	if err := rs.buildPlan(); err != nil {
 		return err
 	}
-	sendQuery, err := rs.buildSelect()
-	if err != nil {
-		return err
-	}
 
 	conn, err := mysql.Connect(rs.ctx, rs.cp)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	return rs.streamQuery(conn, sendQuery, rs.send)
+	return rs.streamQuery(conn, rs.send)
 }
 
 func (rs *rowStreamer) buildPlan() error {
@@ -107,6 +104,10 @@ func (rs *rowStreamer) buildPlan() error {
 		return err
 	}
 	rs.pkColumns, err = buildPKColumns(st)
+	if err != nil {
+		return err
+	}
+	rs.sendQuery, err = rs.buildSelect()
 	if err != nil {
 		return err
 	}
@@ -166,15 +167,14 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	return buf.String(), nil
 }
 
-// ExecuteStreamFetch overwrites mysql.Conn.ExecuteStreamFetch.
-func (rs *rowStreamer) streamQuery(conn *mysql.Conn, query string, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (rs *rowStreamer) streamQuery(conn *mysql.Conn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	unlock, gtid, err := rs.lockTable()
 	if err != nil {
 		return err
 	}
 	defer unlock()
 
-	if err := conn.ExecuteStreamFetch(query); err != nil {
+	if err := conn.ExecuteStreamFetch(rs.sendQuery); err != nil {
 		return err
 	}
 

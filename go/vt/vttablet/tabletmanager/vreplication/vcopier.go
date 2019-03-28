@@ -115,7 +115,9 @@ func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSetting
 }
 
 func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.Result) error {
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Hour)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	settings, err := binlogplayer.ReadVRSettings(vc.vr.dbClient, vc.vr.id)
 	if err != nil {
 		return err
@@ -127,16 +129,16 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	// Start vreplication.
 	errch := make(chan error, 1)
 	go func() {
-		defer cancel()
 		errch <- newVPlayer(vc.vr, settings, copyState, mysql.Position{}).play(ctx)
 	}()
 
 	// Wait for catchup.
 	tmr := time.NewTimer(1 * time.Second)
+	seconds := int64(replicaLagTolerance / time.Second)
 	defer tmr.Stop()
 	for {
 		sbm := vc.vr.stats.SecondsBehindMaster.Get()
-		if sbm < 10 {
+		if sbm < seconds {
 			cancel()
 			<-errch
 			return nil
@@ -174,7 +176,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return fmt.Errorf("error dialing tablet: %v", err)
 	}
 	defer vsClient.Close(ctx)
-	ctx, cancel := context.WithCancel(ctx)
+
+	ctx, cancel := context.WithTimeout(ctx, copyTimeout)
 	defer cancel()
 
 	target := &querypb.Target{
@@ -191,6 +194,11 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var pkfields []*querypb.Field
 	var updateCopyState *sqlparser.ParsedQuery
 	err = vsClient.VStreamRows(ctx, target, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		select {
+		case <-ctx.Done():
+			return io.EOF
+		default:
+		}
 		if vc.tablePlan == nil {
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
@@ -250,6 +258,12 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		}
 		return nil
 	})
+	// If there was a timeout, return without an error.
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
 	if err != nil {
 		return err
 	}
