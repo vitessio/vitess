@@ -32,7 +32,10 @@ stream_mode = 'tar'
 xtrabackup_args = ['-backup_engine_implementation',
                    'xtrabackup',
                    '-xtrabackup_stream_mode',
-                   stream_mode]
+                   stream_mode,
+                   '-xtrabackup_user=vt_dba',
+                   '-xtrabackup_backup_flags',
+                   '--password=VtDbaPass']
 
 tablet_master = None
 tablet_replica1 = None
