@@ -1,13 +1,21 @@
 package trace
 
 import (
+	"flag"
 	"io"
 
 	"github.com/opentracing-contrib/go-grpc"
 	"github.com/opentracing/opentracing-go"
+	"github.com/uber/jaeger-client-go"
 	"github.com/uber/jaeger-client-go/config"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"vitess.io/vitess/go/vt/log"
+)
+
+var (
+	agentHost    = flag.String("jaeger-agent-host", "", "host and port to send spans to. if empty, no tracing will be done")
+	samplingRate = flag.Float64("tracing-sampling-rate", 0.1, "sampling rate for the probabilistic jaeger sampler")
 )
 
 type JaegerSpan struct {
@@ -29,7 +37,6 @@ type OpenTracingFactory struct {
 func (jf OpenTracingFactory) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
 	addInterceptors(otgrpc.OpenTracingStreamServerInterceptor(jf.Tracer), otgrpc.OpenTracingServerInterceptor(jf.Tracer))
 }
-
 
 func (jf OpenTracingFactory) GetGrpcServerOptions() []grpc.ServerOption {
 	return []grpc.ServerOption{}
@@ -65,6 +72,17 @@ func newJagerTracerFromEnv(serviceName string) (TracingService, io.Closer, error
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = serviceName
 	}
+
+	// Allow command line args to override environment variables.
+	if *agentHost != "" {
+		cfg.Reporter.LocalAgentHostPort = *agentHost
+	}
+	log.Infof("Tracing to: %v as %v", cfg.Reporter.LocalAgentHostPort, cfg.ServiceName)
+	cfg.Sampler = &config.SamplerConfig{
+		Type:  jaeger.SamplerTypeConst,
+		Param: *samplingRate,
+	}
+	log.Infof("Tracing sampling rate: %v", *samplingRate)
 
 	tracer, closer, err := cfg.NewTracer()
 
