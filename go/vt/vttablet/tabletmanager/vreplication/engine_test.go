@@ -412,7 +412,7 @@ func TestCreateDBAndTable(t *testing.T) {
 	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
-
+	dbClient.ExpectRequest("ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 
 	// Non-recoverable error.
@@ -426,6 +426,7 @@ func TestCreateDBAndTable(t *testing.T) {
 	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL", &sqltypes.Result{}, nil)
 
 	dbClient.ExpectRequest("insert into _vt.vreplication values (null)", &sqltypes.Result{InsertID: 1}, nil)
 

@@ -173,7 +173,7 @@ func TestInitTablet(t *testing.T) {
 	}
 	db := fakesqldb.New(t)
 	defer db.Close()
-	db.AddQueryPattern(`(SET|CREATE|BEGIN|INSERT|COMMIT)\b.*`, &sqltypes.Result{})
+	db.AddQueryPattern(`(SET|CREATE|BEGIN|INSERT|COMMIT|ALTER|UPDATE)\b.*`, &sqltypes.Result{})
 	/*
 		db.AddQuery("SET @@session.sql_log_bin = 0", &sqltypes.Result{})
 		db.AddQuery("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{})

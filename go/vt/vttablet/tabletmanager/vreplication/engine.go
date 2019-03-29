@@ -124,6 +124,7 @@ func (vre *Engine) executeFetchMaybeCreateTable(dbClient binlogplayer.DBClient, 
 			log.Warningf("Failed to ensure _vt.vreplication table exists: %v", merr)
 			return nil, err
 		}
+		// TODO: for migration, update db_name column here
 	}
 
 	return dbClient.ExecuteFetch(query, maxrows)
