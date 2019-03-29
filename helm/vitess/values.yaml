@@ -173,6 +173,8 @@ etcd:
     requests:
       cpu: 200m
       memory: 100Mi
+  # If clusterWide is set to true, will add an annotation to EtcdCluster
+  # to make this cluster managed by clusterwide operators
   # clusterWide: true
 
 # Default values for vtctld resources defined in 'topology'
