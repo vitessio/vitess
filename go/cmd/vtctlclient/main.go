@@ -24,7 +24,6 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
@@ -43,9 +42,6 @@ func main() {
 	defer exit.Recover()
 
 	flag.Parse()
-
-	closer := trace.StartTracing("vtctlclient")
-	defer trace.LogErrorsWhenClosing(closer)
 
 	logger := logutil.NewConsoleLogger()
 

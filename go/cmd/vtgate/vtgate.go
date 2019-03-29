@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/discovery"
@@ -60,9 +59,6 @@ func main() {
 
 	servenv.ParseFlags("vtgate")
 	servenv.Init()
-
-	closer := trace.StartTracing("vtgate")
-	defer trace.LogErrorsWhenClosing(closer)
 
 	if initFakeZK != nil {
 		initFakeZK()

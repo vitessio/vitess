@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2018 Google Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,31 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package trace
+package main
 
 import (
-	"io"
+  "vitess.io/vitess/go/trace"
 
-	"vitess.io/vitess/go/vt/log"
+  "vitess.io/vitess/go/vt/servenv"
 )
 
-const extractSize = 10
-
-// ExtractFirstCharacters returns the first few characters of a string.
-// If the string had to be truncated, "..." is added to the end
-func ExtractFirstCharacters(in string) string {
-	if len(in) < extractSize {
-		return in
-	}
-	runes := []rune(in)
-	return string(runes[0:extractSize]) + "..."
-}
-
-func LogErrorsWhenClosing(in io.Closer) func() {
-	return func() {
-		err := in.Close()
-		if err != nil {
-			log.Error(err)
-		}
-	}
+func init() {
+  closer := trace.StartTracing("vtclient")
+  servenv.OnClose(trace.LogErrorsWhenClosing(closer))
 }

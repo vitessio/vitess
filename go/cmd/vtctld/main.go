@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctld"
@@ -36,9 +35,6 @@ func main() {
 	servenv.ParseFlags("vtctld")
 	servenv.Init()
 	defer servenv.Close()
-
-	closer := trace.StartTracing("vtctlclient")
-	defer trace.LogErrorsWhenClosing(closer)
 
 	ts = topo.Open()
 	defer ts.Close()
