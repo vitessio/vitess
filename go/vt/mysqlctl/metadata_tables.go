@@ -18,6 +18,8 @@ package mysqlctl
 
 import (
 	"bytes"
+	"fmt"
+	"regexp"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -25,18 +27,31 @@ import (
 
 // Note that definitions of local_metadata and shard_metadata should be the same
 // as in testing which is defined in config/init_db.sql.
-const sqlCreateLocalMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.local_metadata (
+const (
+	sqlCreateLocalMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.local_metadata (
   name VARCHAR(255) NOT NULL,
   value VARCHAR(255) NOT NULL,
-  db_name VARBINARY(255) NOT NULL,
-  PRIMARY KEY (db_name, name)
+  PRIMARY KEY (name)
   ) ENGINE=InnoDB`
-const sqlCreateShardMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.shard_metadata (
+	sqlCreateShardMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.shard_metadata (
   name VARCHAR(255) NOT NULL,
   value MEDIUMBLOB NOT NULL,
-  db_name VARBINARY(255) NOT NULL,
-  PRIMARY KEY (db_name, name)
+  PRIMARY KEY (name)
   ) ENGINE=InnoDB`
+	sqlUpdateLocalMetadataTable = "UPDATE _vt.local_metadata SET db_name='%s' WHERE db_name=''"
+	sqlUpdateShardMetadataTable = "UPDATE _vt.shard_metadata SET db_name='%s' WHERE db_name=''"
+)
+
+var (
+	sqlAlterLocalMetadataTable = []string{
+		`ALTER TABLE _vt.local_metadata ADD COLUMN db_name VARBINARY(255) NOT NULL`,
+		`ALTER TABLE _vt.local_metadata DROP PRIMARY KEY, ADD PRIMARY KEY(name, db_name)`,
+	}
+	sqlAlterShardMetadataTable = []string{
+		`ALTER TABLE _vt.shard_metadata ADD COLUMN db_name VARBINARY(255) NOT NULL`,
+		`ALTER TABLE _vt.shard_metadata DROP PRIMARY KEY, ADD PRIMARY KEY(name, db_name)`,
+	}
+)
 
 // PopulateMetadataTables creates and fills the _vt.local_metadata table and
 // creates _vt.shard_metadata table. _vt.local_metadata table is
@@ -71,7 +86,33 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string,
 	if _, err := conn.ExecuteFetch(sqlCreateLocalMetadataTable, 0, false); err != nil {
 		return err
 	}
+	for _, sql := range sqlAlterLocalMetadataTable {
+		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+			if checkSQLErrorCode(err, "1060") {
+				log.Errorf("Expected error executing %v: %v", sql, err)
+			} else {
+				log.Errorf("Unexpected error executing %v: %v", sql, err)
+				return err
+			}
+		}
+	}
+	if _, err := conn.ExecuteFetch(fmt.Sprintf(sqlUpdateLocalMetadataTable, dbName), 0, false); err != nil {
+		return err
+	}
 	if _, err := conn.ExecuteFetch(sqlCreateShardMetadataTable, 0, false); err != nil {
+		return err
+	}
+	for _, sql := range sqlAlterShardMetadataTable {
+		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+			if checkSQLErrorCode(err, "1060") {
+				log.Errorf("Expected error executing %v: %v", sql, err)
+			} else {
+				log.Errorf("Unexpected error executing %v: %v", sql, err)
+				return err
+			}
+		}
+	}
+	if _, err := conn.ExecuteFetch(fmt.Sprintf(sqlUpdateShardMetadataTable, dbName), 0, false); err != nil {
 		return err
 	}
 
@@ -100,4 +141,14 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string,
 	}
 	_, err = conn.ExecuteFetch("COMMIT", 0, false)
 	return err
+}
+
+func checkSQLErrorCode(err error, code string) bool {
+	errExtract := regexp.MustCompile(`\(errno (\d+)\)`)
+	match := errExtract.FindStringSubmatch(err.Error())
+	var errNo string
+	if len(match) == 2 {
+		errNo = match[1]
+	}
+	return errNo == code
 }
