@@ -220,7 +220,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			}
 			srvKeyspace, err := agent.TopoServer.GetSrvKeyspace(ctx, newTablet.Alias.Cell, newTablet.Keyspace)
 			if err != nil {
-				log.Error("Fail to get SrvKeyspace")
+				log.Errorf("failed to get SrvKeyspace %v with: %v", newTablet.Keyspace, err)
 			} else {
 
 				for _, partition := range srvKeyspace.GetPartitions() {
