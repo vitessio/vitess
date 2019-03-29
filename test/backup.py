@@ -437,6 +437,24 @@ class TestBackup(unittest.TestCase):
     self._check_data(tablet_replica1, 3,
                      'replica1 getting data from restored master')
 
+    # this is to test that replicationPosition is processed correctly
+    # while doing backup/restore after a reparent
+    # it is written into the MANIFEST and read back from the MANIFEST
+
+    # take another backup on the slave
+    utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
+
+    # insert more data on replica2 (current master)
+    self._insert_data(tablet_replica2, 4)
+
+    # Force replica1 to restore from backup.
+    tablet_replica1.kill_vttablet()
+    self._restore(tablet_replica1)
+
+    # wait for replica1 to catch up.
+    self._check_data(tablet_replica1, 4,
+                     'replica1 getting data from master after reparent+backup+restore')
+
     tablet_replica2.kill_vttablet()
 
   def _restore_old_master_test(self, restore_method):
