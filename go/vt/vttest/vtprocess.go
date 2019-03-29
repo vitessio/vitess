@@ -237,6 +237,9 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	if args.TransactionMode != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-transaction_mode", args.TransactionMode}...)
 	}
+	if args.TransactionTimeout != 0 {
+		vt.ExtraArgs = append(vt.ExtraArgs, "-queryserver-config-transaction-timeout", fmt.Sprintf("%f", args.TransactionTimeout))
+	}
 
 	if socket != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
