@@ -24,7 +24,6 @@ import (
 	"flag"
 	"io"
 	"io/ioutil"
-	"os"
 	"os/exec"
 	"path"
 	"strings"
@@ -98,6 +97,17 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	if *xtrabackupUser == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
 	}
+	conn, err := mysqld.GetDbaConnection()
+	defer conn.Close()
+	if err != nil {
+		return false, vterrors.Wrap(err, "unable to obtain a connection to the database")
+	}
+	pos, err := conn.MasterPosition()
+	if err != nil {
+		return false, vterrors.Wrap(err, "unable to obtain master position")
+	}
+	flavor := pos.GTIDSet.Flavor()
+	logger.Infof("Detected MySQL flavor: %v", flavor)
 
 	backupProgram := path.Join(*xtrabackupEnginePath, xtrabackup)
 
@@ -193,14 +203,10 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 		position = strings.Replace(substrs[index], "\n", " ", -1)
 	}
 	logger.Infof("Found position: %v", position)
-	// elsewhere in the code we default MYSQL_FLAVOR to MySQL56 if not set
-	mysqlFlavor := os.Getenv("MYSQL_FLAVOR")
-	if mysqlFlavor == "" {
-		mysqlFlavor = "MySQL56"
-	}
+
 	// flavor is required to parse a string into a mysql.Position
 	var replicationPosition mysql.Position
-	if replicationPosition, err = mysql.ParsePosition(mysqlFlavor, position); err != nil {
+	if replicationPosition, err = mysql.ParsePosition(flavor, position); err != nil {
 		return false, err
 	}
 
