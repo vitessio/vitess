@@ -16,6 +16,8 @@ apiVersion: "etcd.database.coreos.com/v1beta2"
 kind: "EtcdCluster"
 metadata:
   name: "etcd-{{ $name }}"
+  ## Adding this annotation make this cluster managed by clusterwide operators
+  ## namespaced operators ignore it
   annotations:
   {{ if $clusterWide }}
     etcd.database.coreos.com/scope: clusterwide
