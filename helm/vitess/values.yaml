@@ -173,6 +173,7 @@ etcd:
     requests:
       cpu: 200m
       memory: 100Mi
+  # clusterWide: true
 
 # Default values for vtctld resources defined in 'topology'
 vtctld:
