@@ -28,8 +28,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/trace"
-
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/discovery"
@@ -69,9 +67,6 @@ func main() {
 	dbconfigs.RegisterFlags(dbconfigs.All...)
 	mysqlctl.RegisterFlags()
 	servenv.ParseFlags("vtcombo")
-
-	closer := trace.StartTracing("vtcombo")
-	defer trace.LogErrorsWhenClosing(closer)
 
 	// parse the input topology
 	tpb := &vttestpb.VTTestTopology{}

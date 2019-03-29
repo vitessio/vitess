@@ -21,7 +21,6 @@ import (
 	"flag"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -52,9 +51,6 @@ func main() {
 	mysqlctl.RegisterFlags()
 
 	servenv.ParseFlags("vttablet")
-
-	closer := trace.StartTracing("vttablet")
-	defer trace.LogErrorsWhenClosing(closer)
 
 	if err := tabletenv.VerifyConfig(); err != nil {
 		log.Exitf("invalid config: %v", err)
