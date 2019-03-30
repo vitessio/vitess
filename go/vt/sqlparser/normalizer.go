@@ -83,7 +83,9 @@ func (nz *normalizer) WalkSelect(node SQLNode) (bool, error) {
 	case *SQLVal:
 		nz.convertSQLValDedup(node)
 	case *ComparisonExpr:
-		nz.convertComparison(node)
+		if nz.convertComparison(node) {
+			return false, nil
+		}
 	case *ColName, TableName:
 		// Common node types that never contain SQLVals or ListArgs but create a lot of object
 		// allocations.
@@ -150,23 +152,28 @@ func (nz *normalizer) convertSQLVal(node *SQLVal) {
 // with no change made. The walk function will then continue
 // and iterate on converting each individual value into separate
 // bind vars.
-func (nz *normalizer) convertComparison(node *ComparisonExpr) {
+func (nz *normalizer) convertComparison(node *ComparisonExpr) bool {
 	if node.Operator != InStr && node.Operator != NotInStr {
-		return
+		return false
 	}
 	tupleVals, ok := node.Right.(ValTuple)
 	if !ok {
-		return
+		return false
 	}
-	// The RHS is a tuple of values.
-	// Make a list bindvar.
+	// The RHS is a tuple. But is it a tuple of tuples??
+	expr := tupleVals[0]
+	if expr, ok := expr.(ValTuple); ok {
+		node.Right = nz.pivot(tupleVals, len(expr))
+		return true // flag that means, don't descend?
+	}
+	// It's a tuple of values, so make a list bindvar.
 	bvals := &querypb.BindVariable{
 		Type: querypb.Type_TUPLE,
 	}
 	for _, val := range tupleVals {
 		bval := nz.sqlToBindvar(val)
 		if bval == nil {
-			return
+			return false
 		}
 		bvals.Values = append(bvals.Values, &querypb.Value{
 			Type:  bval.Type,
@@ -177,6 +184,34 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 	nz.bindVars[bvname] = bvals
 	// Modify RHS to be a list bindvar.
 	node.Right = ListArg(append([]byte("::"), bvname...))
+	return false
+}
+
+// ((1,2), (3,4), (5,6)) -> (::bv1, ::bv2) where bv1 = [1,3,5], bv2 = [2,4,6]
+func (nz *normalizer) pivot(node ValTuple, card int) ValTuple {
+	bvars := make([]querypb.BindVariable, card, card)
+	var bv *querypb.BindVariable
+	for _, expr := range node {
+		expr, ok := expr.(ValTuple)
+		if !ok {
+			panic("throw an error")
+		}
+		if len(expr) != card {
+			panic("throw an error")
+		}
+		for jdx, fxpr := range expr { //cast it probably
+			bv = nz.sqlToBindvar(fxpr)
+			bvars[jdx].Values = append(bvars[jdx].Values, &querypb.Value{Type: bv.Type, Value: bv.Value})
+		}
+	}
+	names := make([]Expr, card, card)
+	for idx := range names {
+		name := nz.newName()
+		nz.bindVars[name] = &bvars[idx]
+		bvars[idx].Type = querypb.Type_TUPLE
+		names[idx] = ListArg(append([]byte("::"), name...))
+	}
+	return names
 }
 
 func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {

@@ -2090,6 +2090,9 @@ const (
 
 // Format formats the node.
 func (node *IndexHints) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
 	buf.Myprintf(" %sindex ", node.Type)
 	prefix := "("
 	for _, n := range node.Indexes {

@@ -197,6 +197,73 @@ func TestNormalize(t *testing.T) {
 	}
 }
 
+func SkipTestNormalizeBulkInsertIsolated(t *testing.T) {
+	prefix := "bv"
+	testcases := []struct {
+		in      string
+		outstmt string
+		outbv   map[string]*querypb.BindVariable
+	}{{
+		// instead we want
+		in:      "INSERT INTO t (id, val) VALUES (1, 'alice'), (2, 'bob')",
+		outstmt: "insert into t(id, val) values (::bv1, ::bv2)",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.TestBindVariable([]interface{}{1, 2}),
+			"bv2": sqltypes.TestBindVariable([]interface{}{"alice", "bob"}),
+		},
+	}}
+	for _, tc := range testcases {
+		stmt, err := Parse(tc.in)
+		if err != nil {
+			t.Error(err)
+			continue
+		}
+		bv := make(map[string]*querypb.BindVariable)
+		Normalize(stmt, bv, prefix)
+		outstmt := String(stmt)
+		if outstmt != tc.outstmt {
+			t.Errorf("Query:\n%s:\n%s, want\n%s", tc.in, outstmt, tc.outstmt)
+		}
+		if !reflect.DeepEqual(tc.outbv, bv) {
+			t.Errorf("Query:\n%s:\n%v, want\n%v", tc.in, bv, tc.outbv)
+		}
+	}
+}
+
+func TestNormalizeNestedInListIsolated(t *testing.T) {
+	prefix := "bv"
+	testcases := []struct {
+		in      string
+		outstmt string
+		outbv   map[string]*querypb.BindVariable
+	}{{
+		// IN clause with vals
+		in:      "select * from t where (v1, v2, v3) in ((1,9, 9), (7,2,7))",
+		outstmt: "select * from t where (v1, v2, v3) in (::bv1, ::bv2, ::bv3)",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.TestBindVariable([]interface{}{1, 7}),
+			"bv2": sqltypes.TestBindVariable([]interface{}{9, 2}),
+			"bv3": sqltypes.TestBindVariable([]interface{}{9, 7}),
+		},
+	}}
+	for _, tc := range testcases {
+		stmt, err := Parse(tc.in)
+		if err != nil {
+			t.Error(err)
+			continue
+		}
+		bv := make(map[string]*querypb.BindVariable)
+		Normalize(stmt, bv, prefix)
+		outstmt := String(stmt)
+		if outstmt != tc.outstmt {
+			t.Errorf("Query:\n%s:\n%s, want\n%s", tc.in, outstmt, tc.outstmt)
+		}
+		if !reflect.DeepEqual(tc.outbv, bv) {
+			t.Errorf("Query:\n%s:\n%v, want\n%v", tc.in, bv, tc.outbv)
+		}
+	}
+}
+
 func TestGetBindVars(t *testing.T) {
 	stmt, err := Parse("select * from t where :v1 = :v2 and :v2 = :v3 and :v4 in ::v5")
 	if err != nil {
