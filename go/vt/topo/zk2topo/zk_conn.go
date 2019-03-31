@@ -57,6 +57,7 @@ var (
 	certPath = flag.String("topo_zk_tls_cert", "", "the cert to use to connect to the zk topo server, requires topo_zk_tls_key, enables TLS")
 	keyPath  = flag.String("topo_zk_tls_key", "", "the key to use to connect to the zk topo server, enables TLS")
 	caPath   = flag.String("topo_zk_tls_ca", "", "the server ca to use to validate servers when connecting to the zk topo server")
+	authFile = flag.String("topo_zk_auth_file", "", "auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass")
 )
 
 // Time returns a time.Time from a ZK int64 milliseconds since Epoch time.
@@ -195,6 +196,14 @@ func (c *ZkConn) SetACL(ctx context.Context, path string, aclv []zk.ACL, version
 	})
 }
 
+// AddAuth is part of the Conn interface.
+func (c *ZkConn) AddAuth(ctx context.Context, scheme string, auth []byte) error {
+	return c.withRetry(ctx, func(conn *zk.Conn) error {
+		err := conn.AddAuth(scheme, auth)
+		return err
+	})
+}
+
 // Close is part of the Conn interface.
 func (c *ZkConn) Close() error {
 	c.mu.Lock()
@@ -271,8 +280,32 @@ func (c *ZkConn) getConn(ctx context.Context) (*zk.Conn, error) {
 		}
 		c.conn = conn
 		go c.handleSessionEvents(conn, events)
+		c.maybeAddAuth(ctx)
 	}
 	return c.conn, nil
+}
+
+// maybeAddAuth calls AddAuth if the `-topo_zk_auth_file` flag was specified
+func (c *ZkConn) maybeAddAuth(ctx context.Context) {
+	if *authFile == "" {
+		return
+	}
+	authInfoBytes, err := ioutil.ReadFile(*authFile)
+	if err != nil {
+		log.Errorf("failed to read topo_zk_auth_file: %v", err)
+		return
+	}
+	authInfo := string(authInfoBytes)
+	authInfoParts := strings.SplitN(authInfo, ":", 2)
+	if len(authInfoParts) != 2 {
+		log.Errorf("failed to parse topo_zk_auth_file contents, expected format <scheme>:<auth> but saw: %s", authInfo)
+		return
+	}
+	err = c.conn.AddAuth(authInfoParts[0], []byte(authInfoParts[1]))
+	if err != nil {
+		log.Errorf("failed to add auth from topo_zk_auth_file: %v", err)
+		return
+	}
 }
 
 // handleSessionEvents is processing events from the session channel.
