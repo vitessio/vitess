@@ -21,6 +21,7 @@ package pools
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -80,6 +81,12 @@ type resourceWrapper struct {
 // If a resource is unused beyond idleTimeout, it's discarded.
 // An idleTimeout of 0 means that there is no timeout.
 func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration) *ResourcePool {
+	return NewPrefilledResourcePool(factory, capacity, maxCap, idleTimeout, 0)
+}
+
+// NewPrefilledResourcePool creates a pre-filled resource pool.
+// prefillParallelism specifies how many resources can be opened in parallel.
+func NewPrefilledResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
@@ -92,6 +99,25 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	}
 	for i := 0; i < capacity; i++ {
 		rp.resources <- resourceWrapper{}
+	}
+
+	if prefillParallelism != 0 {
+		sem := sync2.NewSemaphore(prefillParallelism, 0 /* timeout */)
+		var wg sync.WaitGroup
+		for i := 0; i < capacity; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_ = sem.Acquire()
+				defer sem.Release()
+				r, err := rp.Get(context.TODO())
+				if err != nil {
+					return
+				}
+				rp.Put(r)
+			}()
+		}
+		wg.Wait()
 	}
 
 	if idleTimeout != 0 {
@@ -131,14 +157,22 @@ func (rp *ResourcePool) closeIdleResources() {
 			return
 		}
 
-		if wrapper.resource != nil && idleTimeout > 0 && time.Until(wrapper.timeUsed.Add(idleTimeout)) < 0 {
-			wrapper.resource.Close()
-			wrapper.resource = nil
-			rp.idleClosed.Add(1)
-			rp.active.Add(-1)
-		}
+		func() {
+			defer func() { rp.resources <- wrapper }()
 
-		rp.resources <- wrapper
+			if wrapper.resource != nil && idleTimeout > 0 && time.Until(wrapper.timeUsed.Add(idleTimeout)) < 0 {
+				wrapper.resource.Close()
+				// Always good to create a new resource to replace the old one.
+				if r, err := rp.factory(); err != nil {
+					wrapper.resource = nil
+				} else {
+					wrapper.resource = r
+				}
+				rp.idleClosed.Add(1)
+				rp.active.Add(-1)
+			}
+		}()
+
 	}
 }
 
