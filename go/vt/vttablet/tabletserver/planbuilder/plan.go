@@ -137,31 +137,6 @@ func (pt PlanType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(pt.String())
 }
 
-// MinRole is the minimum Role required to execute this PlanType.
-func (pt PlanType) MinRole() tableacl.Role {
-	return tableACLRoles[pt]
-}
-
-var tableACLRoles = map[PlanType]tableacl.Role{
-	PlanPassSelect:       tableacl.READER,
-	PlanSelectLock:       tableacl.READER,
-	PlanSet:              tableacl.READER,
-	PlanPassDML:          tableacl.WRITER,
-	PlanDMLPK:            tableacl.WRITER,
-	PlanDMLSubquery:      tableacl.WRITER,
-	PlanInsertPK:         tableacl.WRITER,
-	PlanInsertSubquery:   tableacl.WRITER,
-	PlanInsertMessage:    tableacl.WRITER,
-	PlanDDL:              tableacl.ADMIN,
-	PlanSelectStream:     tableacl.READER,
-	PlanOtherRead:        tableacl.READER,
-	PlanOtherAdmin:       tableacl.ADMIN,
-	PlanUpsertPK:         tableacl.WRITER,
-	PlanNextval:          tableacl.WRITER,
-	PlanMessageStream:    tableacl.WRITER,
-	PlanSelectImpossible: tableacl.READER,
-}
-
 //_______________________________________________
 
 // ReasonType indicates why a query plan fails to build
