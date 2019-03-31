@@ -179,15 +179,14 @@ function install_zookeeper() {
   zk="zookeeper-$version"
   wget "http://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
   tar -xzf "$zk.tar.gz"
+  ant -f "$zk/build.xml" package
+  ant -f "$zk/src/contrib/fatjar/build.xml" jar
   mkdir -p lib
-  cp "$zk/contrib/fatjar/$zk-fatjar.jar" lib
-  # TODO(sougou): when version changes, see if we can drop the 'zip -d' hack to get the fatjars working.
-  #               If yes, also delete "zip" from the Dockerfile files and the manual build instructions again.
-  # 3.4.13 workaround: Delete META-INF files which should not be in there.
-  zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF'
+  cp "$zk/build/contrib/fatjar/zookeeper-dev-fatjar.jar" "lib/$zk-fatjar.jar"
+  zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF' || true # needed for >=3.4.10 <3.5
   rm -rf "$zk" "$zk.tar.gz"
 }
-zk_ver=3.4.13
+zk_ver=${ZK_VERSION:-3.4.13}
 install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
 
 

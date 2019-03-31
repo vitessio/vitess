@@ -21,7 +21,7 @@ logdir="$1"
 config="$2"
 pidfile="$3"
 
-zk_ver=3.4.13
+zk_ver=${ZK_VERSION:-3.4.13}
 classpath="$VTROOT/dist/vt-zookeeper-$zk_ver/lib/zookeeper-$zk_ver-fatjar.jar:/usr/local/lib/zookeeper-$zk_ver-fatjar.jar:/usr/share/java/zookeeper-$zk_ver.jar"
 
 mkdir -p "$logdir"
