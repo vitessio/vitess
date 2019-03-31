@@ -71,8 +71,6 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 	}
 
 	// This is safe to rebuild as long there are not srvKeyspaces with tablet controls set.
-	// TODO: Add this validation.
-
 	// Build the list of cells to work on: we get the union
 	// of all the Cells of all the Shards, limited to the provided cells.
 	//
