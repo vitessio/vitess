@@ -1,4 +1,4 @@
-FROM vitess/k8s AS k8s
+FROM vitess/base AS base
 
 FROM debian:stretch-slim
 
@@ -9,7 +9,7 @@ ENV VTROOT /vt
 RUN mkdir -p /vt/bin && mkdir -p /vtdataroot
 
 # Copy binaries
-COPY --from=k8s /vt/bin/vtexplain /vt/bin/
+COPY --from=base /vt/bin/vtexplain /vt/bin/
 
 # add vitess user/group and add permissions
 RUN groupadd -r --gid 2000 vitess && \
