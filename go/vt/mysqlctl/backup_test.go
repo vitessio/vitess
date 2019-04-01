@@ -39,7 +39,9 @@ func TestFindFilesToBackup(t *testing.T) {
 	dataDbDir := path.Join(dataDir, "vt_db")
 	extraDir := path.Join(dataDir, "extra_dir")
 	outsideDbDir := path.Join(root, "outside_db")
-	for _, s := range []string{innodbDataDir, innodbLogDir, dataDbDir, extraDir, outsideDbDir} {
+	rocksdbDir := path.Join(dataDir, ".rocksdb")
+	sdiOnlyDir := path.Join(dataDir, "sdi_dir")
+	for _, s := range []string{innodbDataDir, innodbLogDir, dataDbDir, extraDir, outsideDbDir, rocksdbDir, sdiOnlyDir} {
 		if err := os.MkdirAll(s, os.ModePerm); err != nil {
 			t.Fatalf("failed to create directory %v: %v", s, err)
 		}
@@ -62,6 +64,12 @@ func TestFindFilesToBackup(t *testing.T) {
 	if err := os.Symlink(outsideDbDir, path.Join(dataDir, "vt_symlink")); err != nil {
 		t.Fatalf("failed to symlink vt_symlink: %v", err)
 	}
+	if err := ioutil.WriteFile(path.Join(rocksdbDir, "000011.sst"), []byte("rocksdb file"), os.ModePerm); err != nil {
+		t.Fatalf("failed to write file 000011.sst: %v", err)
+	}
+	if err := ioutil.WriteFile(path.Join(sdiOnlyDir, "table1.sdi"), []byte("sdi file"), os.ModePerm); err != nil {
+		t.Fatalf("failed to write file table1.sdi: %v", err)
+	}
 
 	cnf := &Mycnf{
 		InnodbDataHomeDir:     innodbDataDir,
@@ -76,6 +84,14 @@ func TestFindFilesToBackup(t *testing.T) {
 	sort.Sort(forTest(result))
 	t.Logf("findFilesToBackup returned: %v", result)
 	expected := []FileEntry{
+		{
+			Base: "Data",
+			Name: ".rocksdb/000011.sst",
+		},
+		{
+			Base: "Data",
+			Name: "sdi_dir/table1.sdi",
+		},
 		{
 			Base: "Data",
 			Name: "vt_db/db.opt",

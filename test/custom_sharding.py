@@ -151,7 +151,7 @@ class TestCustomSharding(unittest.TestCase):
 
     self._check_shards_count_in_srv_keyspace(1)
     s = utils.run_vtctl_json(['GetShard', 'test_keyspace/0'])
-    self.assertEqual(len(s['served_types']), 3)
+    self.assertEqual(s['is_master_serving'], True)
 
     # create a table on shard 0
     sql = '''create table data(
@@ -191,7 +191,7 @@ primary key (id)
       t.wait_for_vttablet_state('NOT_SERVING')
 
     s = utils.run_vtctl_json(['GetShard', 'test_keyspace/1'])
-    self.assertEqual(len(s['served_types']), 3)
+    self.assertEqual(s['is_master_serving'], True)
 
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/1',
                      shard_1_master.tablet_alias], auto_log=True)

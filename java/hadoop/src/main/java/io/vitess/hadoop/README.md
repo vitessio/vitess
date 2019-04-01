@@ -14,7 +14,7 @@ primary key (id)) Engine=InnoDB;
 
 Let's say we want to write a MapReduce job that imports this table from Vitess to HDFS where each row is turned into a CSV record in HDFS. 
 
-We can use [VitessInputFormat](https://github.com/vitessio/vitess/blob/master/java/hadoop/src/main/java/io/vitess/hadoop/VitessInputFormat.java), an implementation of Hadoop's [InputFormat](http://hadoop.apache.org/docs/stable/api/org/apache/hadoop/mapred/InputFormat.html), for that. With VitessInputFormat, rows from the source table are streamed to the mapper task. Each input record has a [NullWritable](https://hadoop.apache.org/docs/r2.2.0/api/org/apache/hadoop/io/NullWritable.html) key (no key, really), and [RowWritable](https://github.com/vitessio/vitess/blob/master/java/hadoop/src/main/java/io/vitess/hadoop/RowWritable.java) as value, which is a writable implementation for the entire row's contents.
+We can use [VitessInputFormat](https://github.com/vitessio/vitess/blob/master/java/hadoop/src/main/java/io/vitess/hadoop/VitessInputFormat.java), an implementation of Hadoop's [InputFormat](https://hadoop.apache.org/docs/stable/api/org/apache/hadoop/mapred/InputFormat.html), for that. With VitessInputFormat, rows from the source table are streamed to the mapper task. Each input record has a [NullWritable](https://hadoop.apache.org/docs/r2.2.0/api/org/apache/hadoop/io/NullWritable.html) key (no key, really), and [RowWritable](https://github.com/vitessio/vitess/blob/master/java/hadoop/src/main/java/io/vitess/hadoop/RowWritable.java) as value, which is a writable implementation for the entire row's contents.
 
 Here is an example implementation of our mapper, which transforms each row into a CSV Text. 
 

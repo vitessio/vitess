@@ -6,7 +6,7 @@ store small pieces of configuration data about the Vitess cluster, and provide
 cluster-wide locks. It also supports watches, and master election.
 
 Concretely, the Topology Service features are implemented by
-a [Lock Server](http://en.wikipedia.org/wiki/Distributed_lock_manager), referred
+a [Lock Server](https://en.wikipedia.org/wiki/Distributed_lock_manager), referred
 to as Topology Server in the rest of this document. We use a plug-in
 implementation and we support multiple Lock Servers (Zookeeper, etcd, Consul, …)
 as backends for the service.
@@ -294,7 +294,7 @@ the same server address, and very importantly a *different* root directory.
 [Zookeeper
 Observers](https://zookeeper.apache.org/doc/trunk/zookeeperObservers.html) can
 also be used to limit the load on the global Zookeeper.  They are configured by
-specifying the adresses of the observers in the server address, after a `|`,
+specifying the addresses of the observers in the server address, after a `|`,
 for instance:
 `global_server1:p1,global_server2:p2|observer1:po1,observer2:po2`.
 

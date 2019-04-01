@@ -131,8 +131,14 @@ func (ct *controller) run(ctx context.Context) {
 			return
 		default:
 		}
-		log.Warningf("stream %v: %v, retrying after %v", ct.id, err, *retryDelay)
-		time.Sleep(*retryDelay)
+		log.Errorf("stream %v: %v, retrying after %v", ct.id, err, *retryDelay)
+		timer := time.NewTimer(*retryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
 	}
 }
 
@@ -169,7 +175,8 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	}
 	ct.sourceTablet.Set(tablet.Alias.String())
 
-	if len(ct.source.Tables) > 0 {
+	switch {
+	case len(ct.source.Tables) > 0:
 		// Table names can have search patterns. Resolve them against the schema.
 		tables, err := mysqlctl.ResolveTables(ct.mysqld, dbClient.DBName(), ct.source.Tables)
 		if err != nil {
@@ -178,9 +185,18 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 
 		player := binlogplayer.NewBinlogPlayerTables(dbClient, tablet, tables, ct.id, ct.blpStats)
 		return player.ApplyBinlogEvents(ctx)
+	case ct.source.KeyRange != nil:
+		player := binlogplayer.NewBinlogPlayerKeyRange(dbClient, tablet, ct.source.KeyRange, ct.id, ct.blpStats)
+		return player.ApplyBinlogEvents(ctx)
+	case ct.source.Filter != nil:
+		// VPlayer requires the timezone to be UTC.
+		if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", 10000); err != nil {
+			return err
+		}
+		vplayer := newVPlayer(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld)
+		return vplayer.Play(ctx)
 	}
-	player := binlogplayer.NewBinlogPlayerKeyRange(dbClient, tablet, ct.source.KeyRange, ct.id, ct.blpStats)
-	return player.ApplyBinlogEvents(ctx)
+	return fmt.Errorf("missing source")
 }
 
 func (ct *controller) Stop() {

@@ -364,7 +364,13 @@ func TestBindInSelect(t *testing.T) {
 		},
 	}
 	if !qr.Equal(want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
+		// MariaDB 10.3 has different behavior.
+		want2 := want.Copy()
+		want2.Fields[0].Type = sqltypes.Int32
+		want2.Rows[0][0] = sqltypes.NewInt32(1)
+		if !qr.Equal(want2) {
+			t.Errorf("Execute:\n%v, want\n%v or\n%v", prettyPrint(*qr), prettyPrint(*want), prettyPrint(*want2))
+		}
 	}
 
 	// String bind var.
@@ -382,7 +388,6 @@ func TestBindInSelect(t *testing.T) {
 			Type:         sqltypes.VarChar,
 			ColumnLength: 12,
 			Charset:      33,
-			Decimals:     31,
 			Flags:        1,
 		}},
 		RowsAffected: 1,
@@ -392,6 +397,8 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
+	// MariaDB 10.3 has different behavior.
+	qr.Fields[0].Decimals = 0
 	if !qr.Equal(want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
@@ -411,7 +418,6 @@ func TestBindInSelect(t *testing.T) {
 			Type:         sqltypes.VarChar,
 			ColumnLength: 6,
 			Charset:      33,
-			Decimals:     31,
 			Flags:        1,
 		}},
 		RowsAffected: 1,
@@ -421,6 +427,8 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
+	// MariaDB 10.3 has different behavior.
+	qr.Fields[0].Decimals = 0
 	if !qr.Equal(want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
@@ -468,7 +476,7 @@ func TestQueryStats(t *testing.T) {
 		t.Fatal(err)
 	}
 	stat := framework.QueryStats()[query]
-	duration := int(time.Now().Sub(start))
+	duration := int(time.Since(start))
 	if stat.Time <= 0 || stat.Time > duration {
 		t.Errorf("stat.Time: %d, must be between 0 and %d", stat.Time, duration)
 	}
@@ -698,7 +706,7 @@ func TestClientFoundRows(t *testing.T) {
 
 func TestLastInsertId(t *testing.T) {
 	client := framework.NewClient()
-	res, err := client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
+	_, err := client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -709,7 +717,7 @@ func TestLastInsertId(t *testing.T) {
 	}
 	defer client.Rollback()
 
-	res, err = client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
+	res, err := client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

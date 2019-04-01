@@ -33,7 +33,7 @@ func TestAppend(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	var b bytes.Buffer
+	var b strings.Builder
 	Append(&b, tree)
 	got := b.String()
 	want := query
@@ -409,6 +409,35 @@ func TestIsAggregate(t *testing.T) {
 	f = FuncExpr{Name: NewColIdent("foo")}
 	if f.IsAggregate() {
 		t.Error("IsAggregate: true, want false")
+	}
+}
+
+func TestIsImpossible(t *testing.T) {
+	f := ComparisonExpr{
+		Operator: NotEqualStr,
+		Left:     newIntVal("1"),
+		Right:    newIntVal("1"),
+	}
+	if !f.IsImpossible() {
+		t.Error("IsImpossible: false, want true")
+	}
+
+	f = ComparisonExpr{
+		Operator: EqualStr,
+		Left:     newIntVal("1"),
+		Right:    newIntVal("1"),
+	}
+	if f.IsImpossible() {
+		t.Error("IsImpossible: true, want false")
+	}
+
+	f = ComparisonExpr{
+		Operator: NotEqualStr,
+		Left:     newIntVal("1"),
+		Right:    newIntVal("2"),
+	}
+	if f.IsImpossible() {
+		t.Error("IsImpossible: true, want false")
 	}
 }
 

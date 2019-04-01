@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
@@ -217,12 +218,30 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 					disallowQueryReason = "master tablet with filtered replication on"
 				}
 			}
+			srvKeyspace, err := agent.TopoServer.GetSrvKeyspace(ctx, newTablet.Alias.Cell, newTablet.Keyspace)
+			if err != nil {
+				log.Errorf("failed to get SrvKeyspace %v with: %v", newTablet.Keyspace, err)
+			} else {
+
+				for _, partition := range srvKeyspace.GetPartitions() {
+					if partition.GetServedType() != newTablet.Type {
+						continue
+					}
+
+					for _, tabletControl := range partition.GetShardTabletControls() {
+						if key.KeyRangeEqual(tabletControl.GetKeyRange(), newTablet.GetKeyRange()) {
+							if tabletControl.QueryServiceDisabled {
+								allowQuery = false
+								disallowQueryReason = "TabletControl.DisableQueryService set"
+							}
+							break
+						}
+					}
+				}
+			}
 			if tc := shardInfo.GetTabletControl(newTablet.Type); tc != nil {
 				if topo.InCellList(newTablet.Alias.Cell, tc.Cells) {
-					if tc.DisableQueryService {
-						allowQuery = false
-						disallowQueryReason = "TabletControl.DisableQueryService set"
-					}
+
 					blacklistedTables = tc.BlacklistedTables
 				}
 			}

@@ -18,7 +18,6 @@ package worker
 
 import (
 	"flag"
-	"fmt"
 	"html/template"
 	"net/http"
 	"os"
@@ -26,6 +25,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -77,7 +77,7 @@ func AddCommand(groupName string, c Command) {
 			return
 		}
 	}
-	panic(fmt.Errorf("Trying to add to missing group %v", groupName))
+	panic(vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "trying to add to missing group %v", groupName))
 }
 
 func commandWorker(wi *Instance, wr *wrangler.Wrangler, args []string, cell string, runFromCli bool) (Worker, error) {
@@ -110,7 +110,7 @@ func commandWorker(wi *Instance, wr *wrangler.Wrangler, args []string, cell stri
 	} else {
 		PrintAllCommands(wr.Logger())
 	}
-	return nil, fmt.Errorf("unknown command: %v", action)
+	return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown command: %v", action)
 }
 
 // RunCommand executes the vtworker command specified by "args". Use WaitForCommand() to block on the returned done channel.
@@ -145,7 +145,8 @@ func (wi *Instance) RunCommand(ctx context.Context, args []string, wr *wrangler.
 // WaitForCommand blocks until "done" is closed. In the meantime, it logs the status of "wrk".
 func (wi *Instance) WaitForCommand(wrk Worker, done chan struct{}) error {
 	// display the status every second
-	timer := time.Tick(wi.commandDisplayInterval)
+	timer := time.NewTicker(wi.commandDisplayInterval)
+	defer timer.Stop()
 	for {
 		select {
 		case <-done:
@@ -157,7 +158,7 @@ func (wi *Instance) WaitForCommand(wrk Worker, done chan struct{}) error {
 				return err
 			}
 			return nil
-		case <-timer:
+		case <-timer.C:
 			log.Info(wrk.StatusAsText())
 		}
 	}

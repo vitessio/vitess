@@ -30,8 +30,8 @@ type rateChange string
 
 const (
 	increasedRate rateChange = "increased"
-	decreasedRate            = "decreased"
-	unchangedRate            = "not changed"
+	decreasedRate rateChange = "decreased"
+	unchangedRate rateChange = "not changed"
 )
 
 type goodOrBadRate string

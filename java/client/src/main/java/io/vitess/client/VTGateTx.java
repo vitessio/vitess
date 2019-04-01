@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,12 +24,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import java.sql.SQLDataException;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import javax.annotation.Nullable;
 
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.CursorWithError;
@@ -60,6 +54,14 @@ import io.vitess.proto.Vtgate.RollbackRequest;
 import io.vitess.proto.Vtgate.RollbackResponse;
 import io.vitess.proto.Vtgate.Session;
 
+import java.sql.SQLDataException;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import javax.annotation.Nullable;
+
 /**
  * An asynchronous VTGate transaction session.
  *
@@ -82,6 +84,7 @@ import io.vitess.proto.Vtgate.Session;
  */
 @Deprecated
 public class VTGateTx {
+
   private final RpcClient client;
   private final String keyspace;
   private Session session;
@@ -94,7 +97,8 @@ public class VTGateTx {
   }
 
   public synchronized SQLFuture<Cursor> execute(Context ctx, String query, Map<String, ?> bindVars,
-      TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
+      TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields)
+      throws SQLException {
     checkCallIsAllowed("execute");
     ExecuteRequest.Builder requestBuilder =
         ExecuteRequest.newBuilder()
@@ -235,7 +239,8 @@ public class VTGateTx {
 
   public synchronized SQLFuture<Cursor> executeEntityIds(Context ctx, String query, String keyspace,
       String entityColumnName, Map<byte[], ?> entityKeyspaceIds, Map<String, ?> bindVars,
-      TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
+      TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields)
+      throws SQLException {
     checkCallIsAllowed("executeEntityIds");
     ExecuteEntityIdsRequest.Builder requestBuilder = ExecuteEntityIdsRequest.newBuilder()
         .setQuery(Proto.bindQuery(query, bindVars))
@@ -270,34 +275,34 @@ public class VTGateTx {
     return call;
   }
 
-    public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
-        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType,
-        Query.ExecuteOptions.IncludedFields includedFields)
-        throws SQLException {
-        List<Query.BoundQuery> queries = new ArrayList<>();
+  public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
+      @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType,
+      Query.ExecuteOptions.IncludedFields includedFields)
+      throws SQLException {
+    List<Query.BoundQuery> queries = new ArrayList<>();
 
-        if (null != bindVarsList && bindVarsList.size() != queryList.size()) {
-            throw new SQLDataException(
-                "Size of SQL Query list does not match the bind variables list");
-        }
+    if (null != bindVarsList && bindVarsList.size() != queryList.size()) {
+      throw new SQLDataException(
+          "Size of SQL Query list does not match the bind variables list");
+    }
 
-        for (int i = 0; i < queryList.size(); ++i) {
-            queries.add(i, Proto.bindQuery(checkNotNull(queryList.get(i)),
-                bindVarsList == null ? null : bindVarsList.get(i)));
-        }
+    for (int i = 0; i < queryList.size(); ++i) {
+      queries.add(i, Proto.bindQuery(checkNotNull(queryList.get(i)),
+          bindVarsList == null ? null : bindVarsList.get(i)));
+    }
 
-        Vtgate.ExecuteBatchRequest.Builder requestBuilder =
-            Vtgate.ExecuteBatchRequest.newBuilder()
-                .addAllQueries(checkNotNull(queries))
-                .setKeyspaceShard(keyspace)
-                .setTabletType(checkNotNull(tabletType))
-                .setSession(session)
-                .setOptions(Query.ExecuteOptions.newBuilder()
-                    .setIncludedFields(includedFields));
+    Vtgate.ExecuteBatchRequest.Builder requestBuilder =
+        Vtgate.ExecuteBatchRequest.newBuilder()
+            .addAllQueries(checkNotNull(queries))
+            .setKeyspaceShard(keyspace)
+            .setTabletType(checkNotNull(tabletType))
+            .setSession(session)
+            .setOptions(Query.ExecuteOptions.newBuilder()
+                .setIncludedFields(includedFields));
 
-        if (ctx.getCallerId() != null) {
-            requestBuilder.setCallerId(ctx.getCallerId());
-        }
+    if (ctx.getCallerId() != null) {
+      requestBuilder.setCallerId(ctx.getCallerId());
+    }
 
     return new SQLFuture<>(
         transformAsync(
@@ -313,7 +318,7 @@ public class VTGateTx {
               }
             },
             directExecutor()));
-    }
+  }
 
   public synchronized SQLFuture<List<Cursor>> executeBatchShards(Context ctx,
       Iterable<? extends BoundShardQuery> queries, TabletType tabletType,
@@ -384,14 +389,14 @@ public class VTGateTx {
     return call;
   }
 
-    public synchronized SQLFuture<Void> commit(Context ctx) throws SQLException {
-        return commit(ctx, false);
-    }
+  public synchronized SQLFuture<Void> commit(Context ctx) throws SQLException {
+    return commit(ctx, false);
+  }
 
   public synchronized SQLFuture<Void> commit(Context ctx, boolean atomic) throws SQLException {
     checkCallIsAllowed("commit");
     CommitRequest.Builder requestBuilder = CommitRequest.newBuilder().setSession(session)
-                                                        .setAtomic(atomic);
+        .setAtomic(atomic);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }

@@ -238,7 +238,7 @@ func (dg *discoveryGateway) CacheStatus() TabletCacheStatusList {
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
-func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Target, unused queryservice.QueryService, name string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (error, bool)) error {
+func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Target, unused queryservice.QueryService, name string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
 	invalidTablets := make(map[string]bool)
@@ -319,7 +319,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 
 		startTime := time.Now()
 		var canRetry bool
-		err, canRetry = inner(ctx, ts.Target, conn)
+		canRetry, err = inner(ctx, ts.Target, conn)
 		dg.updateStats(target, startTime, err)
 		if canRetry {
 			invalidTablets[ts.Key] = true
@@ -327,7 +327,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		}
 		break
 	}
-	return NewShardError(err, target, tabletLastUsed, inTransaction)
+	return NewShardError(err, target, tabletLastUsed)
 }
 
 func shuffleTablets(cell string, tablets []discovery.TabletStats) {
@@ -378,7 +378,7 @@ func nextTablet(cell string, tablets []discovery.TabletStats, offset, length int
 }
 
 func (dg *discoveryGateway) updateStats(target *querypb.Target, startTime time.Time, err error) {
-	elapsed := time.Now().Sub(startTime)
+	elapsed := time.Since(startTime)
 	aggr := dg.getStatsAggregator(target)
 	aggr.UpdateQueryInfo("", target.TabletType, elapsed, err != nil)
 }

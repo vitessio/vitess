@@ -1,11 +1,11 @@
 # VTExplain Tool
 
-The vtexplain tool provides information about how Vitess will execute a statement (the Vitess version of MySQL "EXPLAIN").
+The vtexplain tool provides information about how Vitess will execute a statement (the Vitess version of MySQL `EXPLAIN`).
 
 ## Prerequisites
 
 You'll need to build the `vtexplain` binary in your environment.
-To find instructions on how to build this binary please refer to this [guide](http://vitess.io/getting-started/local-instance.html#manual-build). 
+To find instructions on how to build this binary please refer to this [guide](https://vitess.io/docs/tutorials/local/). 
 
 ## Explaining a Query
 

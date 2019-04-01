@@ -625,7 +625,7 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 
 		statement := &binlogdatapb.BinlogTransaction_Statement{
 			Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
-			Sql:      sql.Bytes(),
+			Sql:      []byte(sql.String()),
 		}
 		statements = append(statements, FullBinlogStatement{
 			Statement:  statement,
@@ -668,7 +668,7 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 
 		update := &binlogdatapb.BinlogTransaction_Statement{
 			Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
-			Sql:      sql.Bytes(),
+			Sql:      []byte(sql.String()),
 		}
 		statements = append(statements, FullBinlogStatement{
 			Statement:  update,
@@ -704,7 +704,7 @@ func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableC
 
 		statement := &binlogdatapb.BinlogTransaction_Statement{
 			Category: binlogdatapb.BinlogTransaction_Statement_BL_DELETE,
-			Sql:      sql.Bytes(),
+			Sql:      []byte(sql.String()),
 		}
 		statements = append(statements, FullBinlogStatement{
 			Statement:  statement,

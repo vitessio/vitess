@@ -1441,6 +1441,13 @@ func TestSequence(t *testing.T) {
 func TestBadSequence(t *testing.T) {
 	bad := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Tables: map[string]*vschemapb.Table{
+					"valid_seq": {
+						Type: "sequence",
+					},
+				},
+			},
 			"sharded": {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
@@ -1458,7 +1465,19 @@ func TestBadSequence(t *testing.T) {
 						},
 						AutoIncrement: &vschemapb.AutoIncrement{
 							Column:   "c1",
-							Sequence: "seq",
+							Sequence: "invalid_seq",
+						},
+					},
+					"t2": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "stfu1",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "valid_seq",
 						},
 					},
 				},
@@ -1467,9 +1486,24 @@ func TestBadSequence(t *testing.T) {
 	}
 	got, _ := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
-	want := "cannot resolve sequence seq: table seq not found"
+	want := "cannot resolve sequence invalid_seq: table invalid_seq not found"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	}
+
+	t1Seq := got.Keyspaces["sharded"].Tables["t1"].AutoIncrement.Sequence
+	if t1Seq != nil {
+		t.Errorf("BuildVSchema: unexpected sequence for table t1: %v", t1Seq)
+	}
+
+	// Verify that a failure to set up a sequence for t1 doesn't prevent setting up
+	// a sequence for t2.
+	t2Seq := got.Keyspaces["sharded"].Tables["t2"].AutoIncrement.Sequence
+	if t2Seq.Name.String() != "valid_seq" {
+		t.Errorf("BuildVSchema: unexpected t2 sequence name. Got: %v. Want: %v",
+			t2Seq.AutoIncrement.Sequence.Name,
+			"valid_seq",
+		)
 	}
 }
 

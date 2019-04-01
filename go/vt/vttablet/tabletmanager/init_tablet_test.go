@@ -156,7 +156,7 @@ func TestInitTabletDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.
 		t.Fatalf("InitTablet(type) should have failed, got nil")
 	}
 
-	if _, err = ts.FindAllTabletAliasesInShard(ctx, "test_keyspace", "-d0"); err == nil {
+	if tablets, _ := ts.FindAllTabletAliasesInShard(ctx, "test_keyspace", "-d0"); len(tablets) != 0 {
 		t.Fatalf("Tablet shouldn't be added to replication data")
 	}
 }
@@ -214,6 +214,15 @@ func TestInitTablet(t *testing.T) {
 		Cell: "cell1",
 		Uid:  2,
 	}
+
+	_, err := agent.TopoServer.GetSrvKeyspace(ctx, "cell1", "test_keyspace")
+	switch {
+	case topo.IsErrType(err, topo.NoNode):
+		// srvKeyspace should not be when tablets haven't been registered to this cell
+	default:
+		t.Fatalf("GetSrvKeyspace failed: %v", err)
+	}
+
 	agent.TabletAlias = tabletAlias
 	if err := agent.InitTablet(port, gRPCPort); err != nil {
 		t.Fatalf("InitTablet(type) failed: %v", err)
@@ -222,9 +231,15 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if len(si.Cells) != 1 || si.Cells[0] != "cell1" {
-		t.Errorf("shard.Cells not updated properly: %v", si)
+
+	_, err = agent.TopoServer.GetSrvKeyspace(ctx, "cell1", "test_keyspace")
+	switch {
+	case err != nil:
+		// srvKeyspace should not be when tablets haven't been registered to this cell
+	default:
+		t.Errorf("Serving keyspace was not generated for cell: %v", si)
 	}
+
 	ti, err := ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -255,7 +270,7 @@ func TestInitTablet(t *testing.T) {
 	// (This simulates the case where the MasterAlias in the shard record says
 	// that we are the master but the tablet record says otherwise. In that case,
 	// we assume we are not the MASTER.)
-	si, err = agent.TopoServer.UpdateShardFields(ctx, "test_keyspace", "-c0", func(si *topo.ShardInfo) error {
+	_, err = agent.TopoServer.UpdateShardFields(ctx, "test_keyspace", "-c0", func(si *topo.ShardInfo) error {
 		si.MasterAlias = tabletAlias
 		return nil
 	})

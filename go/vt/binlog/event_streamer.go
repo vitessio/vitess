@@ -168,7 +168,7 @@ func (evs *EventStreamer) buildDMLStatement(stmt FullBinlogStatement, insertid i
 	}
 
 	// then parse the PK values, one at a time
-	for typ, val = tokenizer.Scan(); typ != ';'; typ, val = tokenizer.Scan() {
+	for typ, _ = tokenizer.Scan(); typ != ';'; typ, _ = tokenizer.Scan() {
 		switch typ {
 		case '(':
 			// pkTuple is a list of pk values

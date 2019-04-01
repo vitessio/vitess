@@ -20,11 +20,15 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.ImmutableList;
+
 import io.vitess.proto.Query.Field;
+
+import org.apache.commons.collections4.map.CaseInsensitiveMap;
+
 import java.util.List;
 import java.util.Map;
+
 import javax.annotation.Nullable;
-import org.apache.commons.collections4.map.CaseInsensitiveMap;
 
 
 /**
@@ -37,6 +41,7 @@ import org.apache.commons.collections4.map.CaseInsensitiveMap;
  * index is also used to find the value in a separate list.
  */
 public class FieldMap {
+
   private final List<Field> fields;
   private final Map<String, Integer> labelMap;
   private final Map<String, Integer> nameMap;

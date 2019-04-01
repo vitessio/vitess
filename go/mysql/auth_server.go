@@ -21,11 +21,12 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/hex"
-	"fmt"
 	"net"
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // AuthServer is the interface that servers must implement to validate
@@ -185,10 +186,7 @@ func isPassScrambleMysqlNativePassword(reply, salt []byte, mysqlNativePassword s
 	crypt.Write(hashStage1)
 	candidateHash2 := crypt.Sum(nil)
 
-	if bytes.Compare(candidateHash2, hash) != 0 {
-		return false
-	}
-	return true
+	return bytes.Equal(candidateHash2, hash)
 }
 
 // Constants for the dialog plugin.
@@ -226,7 +224,7 @@ func AuthServerReadPacketString(c *Conn) (string, error) {
 		return "", err
 	}
 	if len(data) == 0 || data[len(data)-1] != 0 {
-		return "", fmt.Errorf("received invalid response packet, datalen=%v", len(data))
+		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "received invalid response packet, datalen=%v", len(data))
 	}
 	return string(data[:len(data)-1]), nil
 }
@@ -244,6 +242,6 @@ func AuthServerNegotiateClearOrDialog(c *Conn, method string) (string, error) {
 		return AuthServerReadPacketString(c)
 
 	default:
-		return "", fmt.Errorf("unrecognized method: %v", method)
+		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unrecognized method: %v", method)
 	}
 }

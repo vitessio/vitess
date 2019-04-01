@@ -99,6 +99,8 @@ type Config struct {
 
 	// TransactionMode is SINGLE, MULTI or TWOPC
 	TransactionMode string
+
+	TransactionTimeout float64
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single

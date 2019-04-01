@@ -199,10 +199,10 @@ func TestREKeyrange(t *testing.T) {
 	}
 	ch := startStream(ctx, t, filter)
 
-	if err := setVSchema(shardedVSchema); err != nil {
+	if err := env.SetVSchema(shardedVSchema); err != nil {
 		t.Fatal(err)
 	}
-	defer setVSchema("{}")
+	defer env.SetVSchema("{}")
 
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
@@ -249,7 +249,7 @@ func TestREKeyrange(t *testing.T) {
     }
   }
 }`
-	if err := setVSchema(altVSchema); err != nil {
+	if err := env.SetVSchema(altVSchema); err != nil {
 		t.Fatal(err)
 	}
 
@@ -309,56 +309,6 @@ func TestSelectFilter(t *testing.T) {
 	runCases(t, filter, testcases)
 }
 
-func TestSelectExpressions(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
-	execStatements(t, []string{
-		"create table expr_test(id int, val bigint, primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table expr_test",
-	})
-	engine.se.Reload(context.Background())
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "expr_test",
-			Filter: "select id, val, month(val), day(val), hour(val) from expr_test",
-		}},
-	}
-
-	testcases := []testcase{{
-		input: []string{
-			"begin",
-			"insert into expr_test values (1, 1546392881)",
-			"commit",
-		},
-		// MySQL issues GTID->BEGIN.
-		// MariaDB issues BEGIN->GTID.
-		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
-			`type:FIELD field_event:<table_name:"expr_test" ` +
-				`fields:<name:"id" type:INT32 > ` +
-				`fields:<name:"val" type:INT64 > ` +
-				`fields:<name:"month(val)" type:VARBINARY > ` +
-				`fields:<name:"day(val)" type:VARBINARY > ` +
-				`fields:<name:"hour(val)" type:VARBINARY > > `,
-			`type:ROW row_event:<table_name:"expr_test" row_changes:<after:<lengths:1 lengths:10 lengths:6 lengths:8 lengths:10 values:"` +
-				`1` +
-				`1546392881` +
-				`201901` +
-				`20190102` +
-				`2019010201` +
-				`" > > > `,
-			`commit`,
-		}},
-	}}
-	runCases(t, filter, testcases)
-}
-
 func TestDDLAddColumn(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -374,10 +324,7 @@ func TestDDLAddColumn(t *testing.T) {
 	})
 
 	// Record position before the next few statements.
-	pos, err := mysqld.MasterPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	pos := masterPosition(t)
 	execStatements(t, []string{
 		"begin",
 		"insert into ddl_test1 values(1, 'aaa')",
@@ -450,10 +397,7 @@ func TestDDLDropColumn(t *testing.T) {
 	defer execStatement(t, "drop table ddl_test2")
 
 	// Record position before the next few statements.
-	pos, err := mysqld.MasterPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	pos := masterPosition(t)
 	execStatements(t, []string{
 		"insert into ddl_test2 values(1, 'aaa', 'ccc')",
 		// Adding columns is allowed.
@@ -471,11 +415,38 @@ func TestDDLDropColumn(t *testing.T) {
 		}
 	}()
 	defer close(ch)
-	err = vstream(ctx, t, pos, nil, ch)
+	err := vstream(ctx, t, pos, nil, ch)
 	want := "cannot determine table columns"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
+}
+
+func TestUnsentDDL(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatement(t, "create table unsent(id int, val varbinary(128), primary key(id))")
+
+	testcases := []testcase{{
+		input: []string{
+			"drop table unsent",
+		},
+		// An unsent DDL is sent as an empty transaction.
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`commit`,
+		}},
+	}}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/none/",
+		}},
+	}
+	runCases(t, filter, testcases)
 }
 
 func TestBuffering(t *testing.T) {
@@ -675,8 +646,8 @@ func TestTypes(t *testing.T) {
 				`fields:<name:"tx" type:TEXT > ` +
 				`fields:<name:"en" type:ENUM > ` +
 				`fields:<name:"s" type:SET > > `,
-			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
-				`values:"abcdefgh13" > > > `,
+			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:4 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
+				`values:"abcd\000\000\000efgh13" > > > `,
 			`commit`,
 		}},
 	}, {
@@ -720,12 +691,10 @@ func TestTypes(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+	t.Skip("This test is disabled because every flavor of mysql has a different behavior.")
 
 	// JSON is supported only after mysql57.
-	if err := mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
+	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
 		// If it's a syntax error, MySQL is an older version. Skip this test.
 		if strings.Contains(err.Error(), "syntax") {
 			return
@@ -795,10 +764,7 @@ func TestMinimalMode(t *testing.T) {
 	engine.se.Reload(context.Background())
 
 	// Record position before the next few statements.
-	pos, err := mysqld.MasterPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	pos := masterPosition(t)
 	execStatements(t, []string{
 		"set @@session.binlog_row_image='minimal'",
 		"update t1 set val1='bbb' where id=1",
@@ -815,7 +781,7 @@ func TestMinimalMode(t *testing.T) {
 		}
 	}()
 	defer close(ch)
-	err = vstream(ctx, t, pos, nil, ch)
+	err := vstream(ctx, t, pos, nil, ch)
 	want := "partial row image encountered"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain '%s'", err, want)
@@ -837,10 +803,7 @@ func TestStatementMode(t *testing.T) {
 	engine.se.Reload(context.Background())
 
 	// Record position before the next few statements.
-	pos, err := mysqld.MasterPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	pos := masterPosition(t)
 	execStatements(t, []string{
 		"set @@session.binlog_format='statement'",
 		"update t1 set val1='bbb' where id=1",
@@ -857,7 +820,7 @@ func TestStatementMode(t *testing.T) {
 		}
 	}()
 	defer close(ch)
-	err = vstream(ctx, t, pos, nil, ch)
+	err := vstream(ctx, t, pos, nil, ch)
 	want := "unexpected statement type"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain '%s'", err, want)
@@ -906,6 +869,8 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 			t.Fatalf("%v: evs\n%v, want\n%v", input, evs, wantset)
 		}
 		for i, want := range wantset {
+			// CurrentTime is not testable.
+			evs[i].CurrentTime = 0
 			switch want {
 			case "gtid|begin":
 				if evs[i].Type != binlogdatapb.VEventType_GTID && evs[i].Type != binlogdatapb.VEventType_BEGIN {
@@ -920,6 +885,10 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 					t.Fatalf("%v (%d): event: %v, want commit", input, i, evs[i])
 				}
 			default:
+				if evs[i].Timestamp == 0 {
+					t.Fatalf("evs[%d].Timestamp: 0, want non-zero", i)
+				}
+				evs[i].Timestamp = 0
 				if got := fmt.Sprintf("%v", evs[i]); got != want {
 					t.Fatalf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
 				}
@@ -929,22 +898,19 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 }
 
 func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter) <-chan []*binlogdatapb.VEvent {
-	pos, err := mysqld.MasterPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	pos := masterPosition(t)
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
 		defer close(ch)
 		if err := vstream(ctx, t, pos, filter, ch); err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 	}()
 	return ch
 }
 
-func vstream(ctx context.Context, t *testing.T, pos mysql.Position, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
+func vstream(ctx context.Context, t *testing.T, pos string, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -965,14 +931,23 @@ func vstream(ctx context.Context, t *testing.T, pos mysql.Position, filter *binl
 
 func execStatement(t *testing.T, query string) {
 	t.Helper()
-	if err := mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
+	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
-	if err := mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
+	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func masterPosition(t *testing.T) string {
+	t.Helper()
+	pos, err := env.Mysqld.MasterPosition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mysql.EncodePosition(pos)
 }

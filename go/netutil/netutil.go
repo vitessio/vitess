@@ -174,6 +174,9 @@ func ResolveIPv4Addrs(addr string) ([]string, error) {
 		return nil, err
 	}
 	ipAddrs, err := net.LookupIP(host)
+	if err != nil {
+		return nil, err
+	}
 	result := make([]string, 0, len(ipAddrs))
 	for _, ipAddr := range ipAddrs {
 		ipv4 := ipAddr.To4()

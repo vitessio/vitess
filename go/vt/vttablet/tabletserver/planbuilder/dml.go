@@ -202,6 +202,14 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 		return nil, err
 	}
 
+	if sel.Where != nil {
+		comp, ok := sel.Where.Expr.(*sqlparser.ComparisonExpr)
+		if ok && comp.IsImpossible() {
+			plan.PlanID = PlanSelectImpossible
+			return plan, nil
+		}
+	}
+
 	// Check if it's a NEXT VALUE statement.
 	if nextVal, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
 		if table.Type != schema.Sequence {
@@ -315,13 +323,17 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 	}
 	table, tableErr := plan.setTable(tableName, tables)
 
-	// In passthrough dml mode, allow the operation even if the
-	// table is unknown in the schema.
-	if PassthroughDMLs {
-		return plan, nil
-	}
+	switch {
+	case tableErr == nil && table.Type == schema.Message:
+		// message inserts need to continue being strict, even in passthrough dml mode,
+		// because field defaults are set here
 
-	if tableErr != nil {
+	case PassthroughDMLs:
+		// In passthrough dml mode, allow the operation even if the
+		// table is unknown in the schema.
+		return plan, nil
+
+	case tableErr != nil:
 		return nil, tableErr
 	}
 

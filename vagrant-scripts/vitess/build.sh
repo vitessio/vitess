@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# See http://vitess.io/getting-started/local-instance.html#manual-build
+# See https://vitess.io/docs/tutorials/vagrant/ 
 # for more info
 #
 

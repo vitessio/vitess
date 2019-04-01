@@ -83,7 +83,7 @@ test` from the root of the Git tree.
 If you haven't installed all dependencies for `make test`, you can rely on the Travis CI test results as well.
 These results will be linked on your pull request.
 
-## Commiting your work
+## Committing your work
 
 When running `git commit` use the `-s` option to add a Signed-off-by line.
 This is needed for [the Developer Certificate of Origin](https://github.com/apps/dco).
@@ -116,8 +116,7 @@ After this change, you can run `git push` without arguments:
 
 Then go to the [repository page](https://github.com/vitessio/vitess) and it
 should prompt you to create a Pull Request from a branch you recently pushed.
-You can also [choose a branch manually]
-(https://github.com/vitessio/vitess/compare).
+You can also [choose a branch manually](https://github.com/vitessio/vitess/compare).
 
 ## Addressing Changes
 

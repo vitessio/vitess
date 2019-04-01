@@ -241,7 +241,7 @@ index by_msg (msg)
     _, stderr = utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      shard_master.tablet_alias], auto_log=True, expect_fail=True)
 
-    self.assertIn('Tablet test_nj-0000062345 ResetReplication failed', stderr)
+    self.assertIn('tablet test_nj-0000062345 ResetReplication failed', stderr)
     # start replica
     shard_replica.start_vttablet(wait_for_state=None,
                                  binlog_use_v3_resharding_mode=False)
@@ -631,7 +631,7 @@ index by_msg (msg)
     utils.run_vtctl(['DeleteTablet', '-allow_master',
                      shard_master.tablet_alias], auto_log=True)
 
-    # rebuild the serving graph, all mentions of the old shards shoud be gone
+    # rebuild the serving graph, all mentions of the old shards should be gone
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # delete the original shard

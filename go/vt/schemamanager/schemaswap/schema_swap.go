@@ -459,7 +459,7 @@ func (schemaSwap *Swap) stopAllHealthWatchers() {
 }
 
 // initializeSwap starts the schema swap process. If there is already a schema swap process started
-// the the method just picks up that. Otherwise it starts a new one and writes into the database that
+// the method just picks up that. Otherwise it starts a new one and writes into the database that
 // the process was started.
 func (schemaSwap *Swap) initializeSwap() error {
 	var waitGroup sync.WaitGroup
@@ -1092,7 +1092,7 @@ func (shardSwap *shardSchemaSwap) takeSeedBackup() (err error) {
 	}
 
 	shardSwap.addShardLog(fmt.Sprintf("Taking backup on the seed tablet %v", seedTablet.Alias))
-	eventStream, err := shardSwap.parent.tabletClient.Backup(shardSwap.parent.ctx, seedTablet, *backupConcurrency)
+	eventStream, err := shardSwap.parent.tabletClient.Backup(shardSwap.parent.ctx, seedTablet, *backupConcurrency, false)
 	if err != nil {
 		return err
 	}

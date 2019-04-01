@@ -131,27 +131,27 @@ func (c *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
 
 	if !ok {
 		// Tablet isn't tracked yet so just add it.
-		shards, ok := c.statuses[keyspace]
+		_, ok := c.statuses[keyspace]
 		if !ok {
-			shards = make(map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats)
+			shards := make(map[string]map[string]map[topodatapb.TabletType][]*discovery.TabletStats)
 			c.statuses[keyspace] = shards
 		}
 
-		cells, ok := c.statuses[keyspace][shard]
+		_, ok = c.statuses[keyspace][shard]
 		if !ok {
-			cells = make(map[string]map[topodatapb.TabletType][]*discovery.TabletStats)
+			cells := make(map[string]map[topodatapb.TabletType][]*discovery.TabletStats)
 			c.statuses[keyspace][shard] = cells
 		}
 
-		types, ok := c.statuses[keyspace][shard][cell]
+		_, ok = c.statuses[keyspace][shard][cell]
 		if !ok {
-			types = make(map[topodatapb.TabletType][]*discovery.TabletStats)
+			types := make(map[topodatapb.TabletType][]*discovery.TabletStats)
 			c.statuses[keyspace][shard][cell] = types
 		}
 
-		tablets, ok := c.statuses[keyspace][shard][cell][tabletType]
+		_, ok = c.statuses[keyspace][shard][cell][tabletType]
 		if !ok {
-			tablets = make([]*discovery.TabletStats, 0)
+			tablets := make([]*discovery.TabletStats, 0)
 			c.statuses[keyspace][shard][cell][tabletType] = tablets
 		}
 
@@ -290,7 +290,7 @@ func (c *tabletStatsCache) typesInTopology(keyspace, cell string) []topodatapb.T
 func sortTypes(types map[topodatapb.TabletType]bool) []topodatapb.TabletType {
 	var listOfTypes []topodatapb.TabletType
 	for _, tabType := range availableTabletTypes {
-		if t, _ := types[tabType]; t {
+		if t := types[tabType]; t {
 			listOfTypes = append(listOfTypes, tabType)
 		}
 	}
@@ -490,11 +490,11 @@ func (c *tabletStatsCache) aggregatedData(keyspace, cell, selectedType, selected
 				sum += metricVal
 				count++
 			}
-			if unhealthyFound == true {
+			if unhealthyFound {
 				break
 			}
 		}
-		if hasTablets == true {
+		if hasTablets {
 			dataRow[shardIndex] = (sum / count)
 		} else {
 			dataRow[shardIndex] = tabletMissing

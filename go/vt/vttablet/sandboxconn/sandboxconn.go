@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -152,7 +153,7 @@ func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target
 }
 
 // StreamExecute is part of the QueryService interface.
-func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]*querypb.BindVariable)
 	for k, v := range bindVars {
@@ -354,7 +355,11 @@ func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb
 
 // UpdateStream is part of the QueryService interface.
 func (sbc *SandboxConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
-	// FIXME(alainjobart) implement, use in vtgate tests.
+	return fmt.Errorf("Not implemented in test")
+}
+
+// VStream is part of the QueryService interface.
+func (sbc *SandboxConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	return fmt.Errorf("Not implemented in test")
 }
 

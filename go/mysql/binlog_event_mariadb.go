@@ -18,7 +18,9 @@ package mysql
 
 import (
 	"encoding/binary"
-	"fmt"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // mariadbBinlogEvent wraps a raw packet buffer and provides methods to examine
@@ -60,7 +62,7 @@ func (ev mariadbBinlogEvent) GTID(f BinlogFormat) (GTID, bool, error) {
 
 // PreviousGTIDs implements BinlogEvent.PreviousGTIDs().
 func (ev mariadbBinlogEvent) PreviousGTIDs(f BinlogFormat) (Position, error) {
-	return Position{}, fmt.Errorf("MariaDB should not provide PREVIOUS_GTIDS_EVENT events")
+	return Position{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "MariaDB should not provide PREVIOUS_GTIDS_EVENT events")
 }
 
 // StripChecksum implements BinlogEvent.StripChecksum().

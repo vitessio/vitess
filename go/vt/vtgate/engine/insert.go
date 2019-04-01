@@ -78,6 +78,37 @@ type Insert struct {
 	MultiShardAutocommit bool
 }
 
+// NewQueryInsert creates an Insert with a query string.
+func NewQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query string) *Insert {
+	return &Insert{
+		Opcode:   opcode,
+		Keyspace: keyspace,
+		Query:    query,
+	}
+}
+
+// NewSimpleInsert creates an Insert for a Table.
+func NewSimpleInsert(opcode InsertOpcode, table *vindexes.Table, keyspace *vindexes.Keyspace) *Insert {
+	return &Insert{
+		Opcode:   opcode,
+		Table:    table,
+		Keyspace: keyspace,
+	}
+}
+
+// NewInsert creates a new Insert.
+func NewInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, vindexValues []sqltypes.PlanValue, table *vindexes.Table, prefix string, mid []string, suffix string) *Insert {
+	return &Insert{
+		Opcode:       opcode,
+		Keyspace:     keyspace,
+		VindexValues: vindexValues,
+		Table:        table,
+		Prefix:       prefix,
+		Mid:          mid,
+		Suffix:       suffix,
+	}
+}
+
 // MarshalJSON serializes the Insert into a JSON representation.
 // It's used for testing and diagnostics.
 func (ins *Insert) MarshalJSON() ([]byte, error) {

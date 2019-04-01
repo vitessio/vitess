@@ -114,7 +114,6 @@ import (
 	"vitess.io/vitess/go/sync2"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -250,6 +249,9 @@ var commands = []commandGroup{
 					"To set the DisableQueryServiceFlag, keep 'blacklisted_tables' empty, and set 'disable_query_service' to true or false. Useful to fix horizontal splits gone wrong.\n" +
 					"To change the blacklisted tables list, specify the 'blacklisted_tables' parameter with the new list. Useful to fix tables that are being blocked after a vertical split.\n" +
 					"To just remove the ShardTabletControl entirely, use the 'remove' flag, useful after a vertical split is finished to remove serving restrictions."},
+			{"UpdateSrvKeyspacePartition", commandUpdateSrvKeyspacePartition,
+				"[--cells=c1,c2,...] [--remove] <keyspace/shard> <tablet type>",
+				"Updates KeyspaceGraph partition for a shard and type. Only use this for an emergency fix during an horizontal shard split. The *MigrateServedType* commands set this field appropriately already. Specify the remove flag, if you want the shard to be removed from the desired partition."},
 			{"SourceShardDelete", commandSourceShardDelete,
 				"<keyspace/shard> <uid>",
 				"Deletes the SourceShard record with the provided index. This is meant as an emergency cleanup function. It does not call RefreshState for the shard master."},
@@ -441,7 +443,7 @@ func addCommand(groupName string, c command) {
 			return
 		}
 	}
-	panic(fmt.Errorf("Trying to add to missing group %v", groupName))
+	panic(fmt.Errorf("trying to add to missing group %v", groupName))
 }
 
 func addCommandGroup(groupName string) {
@@ -502,7 +504,7 @@ func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []*to
 	for _, tabletAlias := range tabletAliases {
 		ti, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
 		if !ok {
-			log.Warningf("failed to load tablet %v", tabletAlias)
+			wr.Logger().Warningf("failed to load tablet %v", tabletAlias)
 		} else {
 			wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
 		}
@@ -525,7 +527,7 @@ func getFileParam(flag, flagFile, name string) (string, error) {
 	}
 	data, err := ioutil.ReadFile(flagFile)
 	if err != nil {
-		return "", fmt.Errorf("Cannot read file %v: %v", flagFile, err)
+		return "", fmt.Errorf("cannot read file %v: %v", flagFile, err)
 	}
 	return string(data), nil
 }
@@ -540,15 +542,13 @@ func keyspaceParamsToKeyspaces(ctx context.Context, wr *wrangler.Wrangler, param
 	for _, param := range params {
 		if param[0] == '/' {
 			// this is a topology-specific path
-			for _, path := range params {
-				result = append(result, path)
-			}
+			result = append(result, params...)
 		} else {
 			// this is not a path, so assume a keyspace name,
 			// possibly with wildcards
 			keyspaces, err := wr.TopoServer().ResolveKeyspaceWildcard(ctx, param)
 			if err != nil {
-				return nil, fmt.Errorf("Failed to resolve keyspace wildcard %v: %v", param, err)
+				return nil, fmt.Errorf("failed to resolve keyspace wildcard %v: %v", param, err)
 			}
 			result = append(result, keyspaces...)
 		}
@@ -578,7 +578,7 @@ func shardParamsToKeyspaceShards(ctx context.Context, wr *wrangler.Wrangler, par
 			// name / shard name, each possibly with wildcards
 			keyspaceShards, err := wr.TopoServer().ResolveShardWildcard(ctx, param)
 			if err != nil {
-				return nil, fmt.Errorf("Failed to resolve keyspace/shard wildcard %v: %v", param, err)
+				return nil, fmt.Errorf("failed to resolve keyspace/shard wildcard %v: %v", param, err)
 			}
 			result = append(result, keyspaceShards...)
 		}
@@ -608,7 +608,7 @@ func parseTabletType(param string, types []topodatapb.TabletType) (topodatapb.Ta
 		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("invalid tablet type %v: %v", param, err)
 	}
 	if !topoproto.IsTypeInList(topodatapb.TabletType(tabletType), types) {
-		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("Type %v is not one of: %v", tabletType, strings.Join(topoproto.MakeStringTypeList(types), " "))
+		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("type %v is not one of: %v", tabletType, strings.Join(topoproto.MakeStringTypeList(types), " "))
 	}
 	return tabletType, nil
 }
@@ -1158,7 +1158,7 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 
 	err = wr.TopoServer().CreateShard(ctx, keyspace, shard)
 	if *force && topo.IsErrType(err, topo.NodeExists) {
-		log.Infof("shard %v/%v already exists (ignoring error with -force)", keyspace, shard)
+		wr.Logger().Infof("shard %v/%v already exists (ignoring error with -force)", keyspace, shard)
 		err = nil
 	}
 	return err
@@ -1291,6 +1291,37 @@ func commandSetShardServedTypes(ctx context.Context, wr *wrangler.Wrangler, subF
 	return wr.SetShardServedTypes(ctx, keyspace, shard, cells, servedType, *remove)
 }
 
+func commandUpdateSrvKeyspacePartition(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
+	remove := subFlags.Bool("remove", false, "Removes shard from serving keyspace partition")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("the <keyspace/shard> and <tablet type> arguments are both required for the UpdateSrvKeyspacePartition command")
+	}
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletType, err := parseServingTabletType3(subFlags.Arg(1))
+	if err != nil {
+		return err
+	}
+
+	var cells []string
+	if *cellsStr != "" {
+		cells = strings.Split(*cellsStr, ",")
+	}
+
+	err = wr.UpdateSrvKeyspacePartitions(ctx, keyspace, shard, tabletType, cells, *remove)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	blacklistedTablesStr := subFlags.String("blacklisted_tables", "", "Specifies a comma-separated list of tables to blacklist (used for vertical split). Each is either an exact match, or a regular expression of the form '/regexp/'.")
@@ -1319,7 +1350,14 @@ func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, su
 		cells = strings.Split(*cellsStr, ",")
 	}
 
-	return wr.SetShardTabletControl(ctx, keyspace, shard, tabletType, cells, *remove, *disableQueryService, blacklistedTables)
+	err = wr.SetShardTabletControl(ctx, keyspace, shard, tabletType, cells, *remove, blacklistedTables)
+	if err != nil {
+		return err
+	}
+	if !*remove && len(blacklistedTables) == 0 {
+		return wr.UpdateDisableQueryService(ctx, keyspace, shard, tabletType, cells, *disableQueryService)
+	}
+	return nil
 }
 
 func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1485,7 +1523,7 @@ func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		case err == nil:
 			// keep going
 		case topo.IsErrType(err, topo.NoNode):
-			log.Infof("Shard %v/%v doesn't exist, skipping it", ks.Keyspace, ks.Shard)
+			wr.Logger().Infof("Shard %v/%v doesn't exist, skipping it", ks.Keyspace, ks.Shard)
 		default:
 			return err
 		}
@@ -1790,7 +1828,7 @@ func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	}
 
 	if subFlags.NArg() != 0 {
-		log.Warningf("action Validate doesn't take any parameter any more")
+		wr.Logger().Warningf("action Validate doesn't take any parameter any more")
 	}
 	return wr.Validate(ctx, *pingTablets)
 }
@@ -2065,7 +2103,7 @@ func commandGetPermissions(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 	p, err := wr.GetPermissions(ctx, tabletAlias)
 	if err == nil {
-		log.Infof("%v", p.String()) // they can contain '%'
+		printJSON(wr.Logger(), p)
 	}
 	return err
 }
@@ -2109,7 +2147,7 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(schema, "", "  ")
+	b, err := json2.MarshalIndentPB(schema, "  ")
 	if err != nil {
 		wr.Logger().Printf("%v\n", err)
 		return err

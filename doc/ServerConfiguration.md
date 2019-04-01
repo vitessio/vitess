@@ -24,7 +24,7 @@ config files](https://github.com/vitessio/vitess/blob/312064b96ac0070d9f8990e57a
 To customize the `my.cnf`, you can either add overrides in an additional
 `EXTRA_MY_CNF` file, or modify the files in `$VTROOT/config/mycnf` before
 distributing to your servers. In Kubernetes, you can use a
-[ConfigMap](http://kubernetes.io/docs/user-guide/configmap/) to overwrite
+[ConfigMap](https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/) to overwrite
 the entire `$VTROOT/config/mycnf` directory with your custom versions,
 rather than baking them into a custom container image.
 
@@ -71,7 +71,7 @@ This rule is not strictly enforced. You are allowed to add these things, but at 
 
 Similar guidelines should be used when deciding to bypass Vitess to send statements directly to MySQL.
 
-Vitess also requires you to turn on STRICT_TRANS_TABLES mode. Otherwise, it cannot accurately predict what will be written to the database.
+Vitess also requires you to turn on STRICT_TRANS_TABLES or STRICT_ALL_TABLES mode. Otherwise, it cannot accurately predict what will be written to the database.
 
 It’s safe to apply backward compatible DDLs directly to MySQL. VTTablets can be configured to periodically check the schema for changes.
 
@@ -149,7 +149,7 @@ Vitess servers are written in Go. There are a few Vitess-specific knobs that app
 
 Go, being a young language, tends to add major improvements over each version.
 So, the latest Go version is almost always recommended.
-Note that the latest Go version may be higher than the minimum version we require for compiling the binaries (see ["Prerequisites" section in the Getting Started guide](/getting-started/#prerequisites)).
+Note that the latest Go version may be higher than the minimum version we require for compiling the binaries (see ["Prerequisites" section in the Getting Started guide](https://github.com/vitessio/website/blob/master/content/docs/tutorials/kubernetes.md#prerequisites)).
 
 ### GOMAXPROCS
 
@@ -504,7 +504,7 @@ This URL prints out a simple "ok" or “not ok” string that can be used to che
 
 #### /querylogz, /debug/querylog, /txlogz, /debug/txlog
 
-* /debug/querylog is a never-ending stream of currently executing queries with verbose information about each query. This URL can generate a lot of data because it streams every query processed by VTTablet. The details are as per this function: [https://github.com/vitessio/vitess/blob/master/go/vt/tabletserver/logstats.go#L202](https://github.com/vitessio/vitess/blob/master/go/vt/tabletserver/logstats.go#L202)
+* /debug/querylog is a never-ending stream of currently executing queries with verbose information about each query. This URL can generate a lot of data because it streams every query processed by VTTablet. The details are as per this function: [https://github.com/vitessio/vitess/tree/master/go/vt/vttablet/tabletserver/tabletenv/logstats.go#L202](https://github.com/vitessio/vitess/tree/master/go/vt/vttablet/tabletserver/tabletenv/logstats.go#L202)
 * /querylogz is a limited human readable version of /debug/querylog. It prints the next 300 queries by default. The limit can be specified with a limit=N parameter on the URL.
 * /txlogz is like /querylogz, but for transactions.
 * /debug/txlog is the JSON counterpart to /txlogz.
@@ -621,7 +621,7 @@ pretty much
 [set up Orchestrator](https://github.com/github/orchestrator/wiki/Orchestrator-Manual)
 in the normal way, with just a few additions as described below.
 
-For the [Kubernetes example](/getting-started/), we provide a
+For the [Kubernetes example](https://github.com/vitessio/website/blob/master/content/docs/tutorials/kubernetes.md), we provide a
 [sample script](https://github.com/vitessio/vitess/blob/master/examples/kubernetes/orchestrator-up.sh)
 to launch Orchestrator for you with these settings applied.
 

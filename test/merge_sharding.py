@@ -452,7 +452,7 @@ index by_msg (msg)
     utils.run_vtctl(['DeleteShard', 'test_keyspace/-40'], auto_log=True)
     utils.run_vtctl(['DeleteShard', 'test_keyspace/40-80'], auto_log=True)
 
-    # rebuild the serving graph, all mentions of the old shards shoud be gone
+    # rebuild the serving graph, all mentions of the old shards should be gone
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # kill everything else

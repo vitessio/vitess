@@ -51,6 +51,8 @@ there are some slight differences in flag handling.
 
 zk -h - provide help on overriding cell selection
 
+zk addAuth digest user:pass
+
 zk cat /zk/path
 zk cat -l /zk/path1 /zk/path2 (list filename before file data)
 
@@ -111,18 +113,19 @@ var zconn *zk2topo.ZkConn
 
 func init() {
 	cmdMap = map[string]cmdFunc{
-		"cat":   cmdCat,
-		"chmod": cmdChmod,
-		"cp":    cmdCp,
-		"edit":  cmdEdit,
-		"ls":    cmdLs,
-		"rm":    cmdRm,
-		"stat":  cmdStat,
-		"touch": cmdTouch,
-		"unzip": cmdUnzip,
-		"wait":  cmdWait,
-		"watch": cmdWatch,
-		"zip":   cmdZip,
+		"addAuth": cmdAddAuth,
+		"cat":     cmdCat,
+		"chmod":   cmdChmod,
+		"cp":      cmdCp,
+		"edit":    cmdEdit,
+		"ls":      cmdLs,
+		"rm":      cmdRm,
+		"stat":    cmdStat,
+		"touch":   cmdTouch,
+		"unzip":   cmdUnzip,
+		"wait":    cmdWait,
+		"watch":   cmdWatch,
+		"zip":     cmdZip,
 	}
 }
 
@@ -136,7 +139,7 @@ func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %v:\n", os.Args[0])
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, doc)
+		fmt.Fprint(os.Stderr, doc)
 	}
 	flag.Parse()
 	args := flag.Args()
@@ -206,7 +209,7 @@ func cmdWait(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	}
 	if err != nil {
 		if err == zk.ErrNoNode {
-			_, _, wait, err = zconn.ExistsW(ctx, zkPath)
+			_, _, wait, _ = zconn.ExistsW(ctx, zkPath)
 		} else {
 			return fmt.Errorf("wait: error %v: %v", zkPath, err)
 		}
@@ -500,6 +503,15 @@ func cmdRm(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	return nil
 }
 
+func cmdAddAuth(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
+	subFlags.Parse(args)
+	if subFlags.NArg() < 2 {
+		return fmt.Errorf("addAuth: expected args <scheme> <auth>")
+	}
+	scheme, auth := subFlags.Arg(0), subFlags.Arg(1)
+	return zconn.AddAuth(ctx, scheme, []byte(auth))
+}
+
 func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	var (
 		longListing = subFlags.Bool("l", false, "long listing")
@@ -600,7 +612,7 @@ func cmdEdit(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		return fmt.Errorf("edit: cannot read file %v", err)
 	}
 
-	if bytes.Compare(fileData, data) != 0 {
+	if !bytes.Equal(fileData, data) {
 		// data changed - update if we can
 		_, err = zconn.Set(ctx, zkPath, fileData, stat.Version)
 		if err != nil {
@@ -900,7 +912,7 @@ func cmdZip(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 			continue
 		}
 		fi := &zip.FileHeader{Name: path, Method: zip.Deflate}
-		fi.SetModTime(zk2topo.Time(stat.Mtime))
+		fi.Modified = zk2topo.Time(stat.Mtime)
 		f, err := zipWriter.CreateHeader(fi)
 		if err != nil {
 			return fmt.Errorf("zip: create failed: %v", err)

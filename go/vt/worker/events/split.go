@@ -16,7 +16,9 @@ limitations under the License.
 
 package events
 
-import base "vitess.io/vitess/go/vt/events"
+import (
+	base "vitess.io/vitess/go/vt/events"
+)
 
 // SplitClone is an event that describes a single step in a horizontal
 // split clone.

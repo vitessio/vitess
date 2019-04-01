@@ -488,7 +488,7 @@ Split a query into non-overlapping sub queries
 
 #### Request
 
- SplitQueryRequest is the payload to SplitQuery.  SplitQuery takes a "SELECT" query and generates a list of queries called "query-parts". Each query-part consists of the original query with an added WHERE clause that restricts the query-part to operate only on rows whose values in the the columns listed in the "split_column" field of the request (see below) are in a particular range.  It is guaranteed that the set of rows obtained from executing each query-part on a database snapshot and merging (without deduping) the results is equal to the set of rows obtained from executing the original query on the same snapshot with the rows containing NULL values in any of the split_column's excluded.  This is typically called by the MapReduce master when reading from Vitess. There it's desirable that the sets of rows returned by the query-parts have roughly the same size.
+ SplitQueryRequest is the payload to SplitQuery.  SplitQuery takes a "SELECT" query and generates a list of queries called "query-parts". Each query-part consists of the original query with an added WHERE clause that restricts the query-part to operate only on rows whose values in the columns listed in the "split_column" field of the request (see below) are in a particular range.  It is guaranteed that the set of rows obtained from executing each query-part on a database snapshot and merging (without deduping) the results is equal to the set of rows obtained from executing the original query on the same snapshot with the rows containing NULL values in any of the split_column's excluded.  This is typically called by the MapReduce master when reading from Vitess. There it's desirable that the sets of rows returned by the query-parts have roughly the same size.
 
 ##### Parameters
 
@@ -666,7 +666,7 @@ StreamExecute executes a streaming query based on shards. It depends on the quer
 | <code>BIT</code> | <code>2073</code> | BIT specifies a BIT type. Properties: 25, IsQuoted.  |
 | <code>ENUM</code> | <code>2074</code> | ENUM specifies an ENUM type. Properties: 26, IsQuoted.  |
 | <code>SET</code> | <code>2075</code> | SET specifies a SET type. Properties: 27, IsQuoted.  |
-| <code>TUPLE</code> | <code>28</code> | TUPLE specifies a a tuple. This cannot be returned in a QueryResult, but it can be sent as a bind var. Properties: 28, None.  |
+| <code>TUPLE</code> | <code>28</code> | TUPLE specifies a tuple. This cannot be returned in a QueryResult, but it can be sent as a bind var. Properties: 28, None.  |
 | <code>GEOMETRY</code> | <code>2077</code> | GEOMETRY specifies a GEOMETRY type. Properties: 29, IsQuoted.  |
 | <code>JSON</code> | <code>2078</code> | JSON specified a JSON type. Properties: 30, IsQuoted.  |
 

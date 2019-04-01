@@ -17,7 +17,7 @@ Looking at the vindex interface defined [here](https://github.com/vitessio/vites
 * Verify: `select 1 from my_vdx where id = :id and keyspace_id = :keyspace_id`.
 * ReverseMap: `select id from my_vdx where keyspace_id = :keyspace_id`.
 
-The supported SQL syntax will be limited because of the limited functions that vindexes can perform. However, we can expand this meaningully. For example, we can allow `IN` clauses and multi-value constructs in the above cases. We can also add additional convenience functions like `vt_shard(keyspace_id)` that will map a keyspace_id to a shard.
+The supported SQL syntax will be limited because of the limited functions that vindexes can perform. However, we can expand this meaningfully. For example, we can allow `IN` clauses and multi-value constructs in the above cases. We can also add additional convenience functions like `vt_shard(keyspace_id)` that will map a keyspace_id to a shard.
 
 The advantage of this approach is that we don't need to build new APIs to support these functionalities.
 
@@ -37,7 +37,7 @@ For `select` statements, we can follow the V3 design principles, there will be a
 
 While analyzing the `WHERE` clause, if the primitive is a `vindexFunc`, we look for the three possible combinations listed above. Once they're matched, we can assign the corresponding opcode.
 
-While analyizing the `SELECT` expression list, we verify that that the user has specified expressions as required by each opcode.
+While analyzing the `SELECT` expression list, we verify that the user has specified expressions as required by each opcode.
 
 Joins and subqueries will not be allowed, at least for now.
 

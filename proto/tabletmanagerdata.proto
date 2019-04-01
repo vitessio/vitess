@@ -213,6 +213,18 @@ message ApplySchemaResponse {
   SchemaDefinition after_schema = 2;
 }
 
+message LockTablesRequest {
+}
+
+message LockTablesResponse {
+}
+
+message UnlockTablesRequest {
+}
+
+message UnlockTablesResponse {
+}
+
 message ExecuteFetchAsDbaRequest {
   bytes query = 1;
   string db_name = 2;
@@ -278,6 +290,14 @@ message StartSlaveRequest {
 }
 
 message StartSlaveResponse {
+}
+
+message StartSlaveUntilAfterRequest {
+  string position = 1;
+  int64 wait_timeout = 2;
+}
+
+message StartSlaveUntilAfterResponse {
 }
 
 message TabletExternallyReparentedRequest {
@@ -358,6 +378,12 @@ message DemoteMasterResponse {
   string position = 1;
 }
 
+message UndoDemoteMasterRequest {
+}
+
+message UndoDemoteMasterResponse {
+}
+
 message PromoteSlaveWhenCaughtUpRequest {
   string position = 1;
 }
@@ -407,6 +433,7 @@ message PromoteSlaveResponse {
 
 message BackupRequest {
   int64 concurrency = 1;
+  bool allowMaster = 2;
 }
 
 message BackupResponse {

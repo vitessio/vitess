@@ -173,11 +173,14 @@ etcd:
     requests:
       cpu: 200m
       memory: 100Mi
+  # If clusterWide is set to true, will add an annotation to EtcdCluster
+  # to make this cluster managed by clusterwide operators
+  # clusterWide: true
 
 # Default values for vtctld resources defined in 'topology'
 vtctld:
   serviceType: ClusterIP
-  vitessTag: helm-1.0.5
+  vitessTag: helm-1.0.6
   resources:
     # requests:
     #   cpu: 100m
@@ -188,7 +191,7 @@ vtctld:
 # Default values for vtgate resources defined in 'topology'
 vtgate:
   serviceType: ClusterIP
-  vitessTag: helm-1.0.5
+  vitessTag: helm-1.0.6
   resources:
     # requests:
     #   cpu: 500m
@@ -207,13 +210,13 @@ vtgate:
 
 # Default values for vtctlclient resources defined in 'topology'
 vtctlclient:
-  vitessTag: helm-1.0.5
+  vitessTag: helm-1.0.6
   extraFlags: {}
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 # Default values for vtworker resources defined in 'jobs'
 vtworker:
-  vitessTag: helm-1.0.5
+  vitessTag: helm-1.0.6
   extraFlags: {}
   resources:
     # requests:
@@ -224,7 +227,7 @@ vtworker:
 
 # Default values for vttablet resources defined in 'topology'
 vttablet:
-  vitessTag: helm-1.0.5
+  vitessTag: helm-1.0.6
 
   # valid values are
   # - mysql56 (for MySQL 8.0)
@@ -376,7 +379,7 @@ pmm:
 # Default values for orchestrator resources
 orchestrator:
   enabled: false
-  image: vitess/orchestrator:3.0.13
+  image: vitess/orchestrator:3.0.14
   replicas: 3
   resources:
     requests:

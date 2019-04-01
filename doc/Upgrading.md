@@ -2,11 +2,11 @@
 
 This document highlights things to look after when upgrading a Vitess production installation to a newer Vitess release.
 
-Generally speaking, upgrading Vitess is a safe and and easy process because it is explicitly designed for it. This is because in YouTube we follow the practice of releasing new versions often (usually from the tip of the Git master branch).
+Generally speaking, upgrading Vitess is a safe and easy process because it is explicitly designed for it. This is because in YouTube we follow the practice of releasing new versions often (usually from the tip of the Git master branch).
 
 ## Compatibility
 
-Our versioning strategy is based on [Semantic Versioning](http://semver.org/).
+Our versioning strategy is based on [Semantic Versioning](https://semver.org/).
 
 Vitess version numbers follow the format `MAJOR.MINOR.PATCH`.
 We guarantee compatibility when upgrading to a newer **patch** or **minor** version.
@@ -26,11 +26,11 @@ Please use this upgrade order (unless otherwise noted in the release notes):
 - vtgate
 - application code which links client libraries
 
-*vtctld* is listed first to make sure that you can still adminstrate Vitess - or if not find out as soon as possible.
+*vtctld* is listed first to make sure that you can still administrate Vitess - or if not find out as soon as possible.
 
 ## Canary Testing
 
-Within the vtgate and vttablet components, we recommend to [canary](http://martinfowler.com/bliki/CanaryRelease.html) single instances, keyspaces and cells. Upgraded canary instances can "bake" for several hours or days to verify that the upgrade did not introduce a regression. Eventually, you can upgrade the remaining instances.
+Within the vtgate and vttablet components, we recommend to [canary](https://martinfowler.com/bliki/CanaryRelease.html) single instances, keyspaces and cells. Upgraded canary instances can "bake" for several hours or days to verify that the upgrade did not introduce a regression. Eventually, you can upgrade the remaining instances.
 
 ## Rolling Upgrades
 

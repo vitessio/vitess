@@ -112,7 +112,7 @@ func NewParallelRunner(ctx context.Context, rootUINode *Node, cp *CheckpointWrit
 	return p
 }
 
-// Run is the entry point for controling task executions.
+// Run is the entry point for controlling task executions.
 func (p *ParallelRunner) Run() error {
 	// default value is 0. The task will not run in this case.
 	var parallelNum int
@@ -138,7 +138,7 @@ func (p *ParallelRunner) Run() error {
 		}
 		select {
 		case <-p.ctx.Done():
-			// Break this run and return early. Do not try to to execute any subsequent tasks.
+			// Break this run and return early. Do not try to execute any subsequent tasks.
 			log.Infof("Workflow is cancelled, remaining tasks will be aborted")
 			return nil
 		default:
@@ -233,7 +233,7 @@ func (p *ParallelRunner) Action(ctx context.Context, path, name string) error {
 		}
 		return fmt.Errorf("ignored the approval action %v because no pending approval found: it might be already approved before", actionNameApproveRemainingTasks)
 	default:
-		return fmt.Errorf("Unknown action: %v", name)
+		return fmt.Errorf("unknown action: %v", name)
 	}
 }
 
@@ -244,7 +244,7 @@ func (p *ParallelRunner) triggerRetry(taskID string) error {
 	// Unregister the retry channel.
 	retryChannel, ok := p.retryActionRegistry[taskID]
 	if !ok {
-		return fmt.Errorf("Unregistered action for node: %v", taskID)
+		return fmt.Errorf("unregistered action for node: %v", taskID)
 	}
 	delete(p.retryActionRegistry, taskID)
 
@@ -343,10 +343,7 @@ func isTaskSucceeded(task *workflowpb.Task) bool {
 }
 
 func isTaskRunning(task *workflowpb.Task) bool {
-	if task.State == workflowpb.TaskState_TaskRunning {
-		return true
-	}
-	return false
+	return task.State == workflowpb.TaskState_TaskRunning
 }
 
 func (p *ParallelRunner) waitForApproval(taskIndex int) {

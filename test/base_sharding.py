@@ -17,9 +17,9 @@
 """This module contains a base class and utility functions for sharding tests.
 """
 
-import struct
-
 import logging
+
+import struct
 
 from vtdb import keyrange_constants
 
@@ -383,7 +383,7 @@ class BaseShardingTest(object):
                                 auto_log=True, trap_output=True)
     for name in names:
       # The max should be set and have a non-zero value.
-      # We test only the the first field 'target_replication_lag_sec'.
+      # We test only the first field 'target_replication_lag_sec'.
       self.assertIn('| %s | target_replication_lag_sec:12345 ' % (name), stdout)
       # protobuf omits fields with a zero value in the text output.
       self.assertNotIn('ignore_n_slowest_replicas', stdout)

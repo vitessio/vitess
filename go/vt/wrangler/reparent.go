@@ -21,15 +21,16 @@ This file handles the reparenting operations.
 */
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -217,7 +218,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 			defer wg.Done()
 			wr.logger.Infof("resetting replication on tablet %v", alias)
 			if err := wr.tmc.ResetReplication(resetCtx, tabletInfo.Tablet); err != nil {
-				rec.RecordError(fmt.Errorf("Tablet %v ResetReplication failed (either fix it, or Scrap it): %v", alias, err))
+				rec.RecordError(fmt.Errorf("tablet %v ResetReplication failed (either fix it, or Scrap it): %v", alias, err))
 			}
 		}(alias, tabletInfo)
 	}
@@ -276,7 +277,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 				defer wgSlaves.Done()
 				wr.logger.Infof("initializing slave %v", alias)
 				if err := wr.tmc.InitSlave(replCtx, tabletInfo.Tablet, masterElectTabletAlias, rp, now); err != nil {
-					rec.RecordError(fmt.Errorf("Tablet %v InitSlave failed: %v", alias, err))
+					rec.RecordError(fmt.Errorf("tablet %v InitSlave failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)
 		}
@@ -412,20 +413,34 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	}
 	ev.OldMaster = *oldMasterTabletInfo.Tablet
 
+	// create a new context for the short running remote operations
+	remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer remoteCancel()
+
 	// Demote the current master, get its replication position
 	wr.logger.Infof("demote current master %v", shardInfo.MasterAlias)
 	event.DispatchUpdate(ev, "demoting old master")
-	rp, err := wr.tmc.DemoteMaster(ctx, oldMasterTabletInfo.Tablet)
+	rp, err := wr.tmc.DemoteMaster(remoteCtx, oldMasterTabletInfo.Tablet)
 	if err != nil {
 		return fmt.Errorf("old master tablet %v DemoteMaster failed: %v", topoproto.TabletAliasString(shardInfo.MasterAlias), err)
 	}
+
+	remoteCtx, remoteCancel = context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer remoteCancel()
 
 	// Wait on the master-elect tablet until it reaches that position,
 	// then promote it
 	wr.logger.Infof("promote slave %v", masterElectTabletAliasStr)
 	event.DispatchUpdate(ev, "promoting slave")
-	rp, err = wr.tmc.PromoteSlaveWhenCaughtUp(ctx, masterElectTabletInfo.Tablet, rp)
-	if err != nil {
+	rp, err = wr.tmc.PromoteSlaveWhenCaughtUp(remoteCtx, masterElectTabletInfo.Tablet, rp)
+	if err != nil || (ctx.Err() != nil && ctx.Err() == context.DeadlineExceeded) {
+		remoteCancel()
+		// if this fails it is not enough to return an error. we should rollback all the changes made by DemoteMaster
+		remoteCtx, remoteCancel = context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		defer remoteCancel()
+		if err1 := wr.tmc.UndoDemoteMaster(remoteCtx, oldMasterTabletInfo.Tablet); err1 != nil {
+			log.Warningf("Encountered error %v while trying to undo DemoteMaster", err1)
+		}
 		return fmt.Errorf("master-elect tablet %v failed to catch up with replication or be upgraded to master: %v", masterElectTabletAliasStr, err)
 	}
 
@@ -465,7 +480,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 				// also restart replication on old master
 				forceStartSlave := alias == oldMasterTabletInfoAliasStr
 				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, forceStartSlave); err != nil {
-					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", alias, err))
+					rec.RecordError(fmt.Errorf("tablet %v SetMaster failed: %v", alias, err))
 					return
 				}
 			}(alias, tabletInfo)
@@ -761,7 +776,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 					forceStartSlave = status.SlaveIoRunning || status.SlaveSqlRunning
 				}
 				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, forceStartSlave); err != nil {
-					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", alias, err))
+					rec.RecordError(fmt.Errorf("tablet %v SetMaster failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)
 		}

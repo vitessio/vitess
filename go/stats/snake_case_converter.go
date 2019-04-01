@@ -55,7 +55,7 @@ var snakeConverters = []struct {
 	{regexp.MustCompile("([a-z])([A-Z])"), "${1}_${2}"},
 	// example: CCa -> C_Ca (e.g. CCamel -> C_Camel).
 	{regexp.MustCompile("([A-Z])([A-Z][a-z])"), "${1}_${2}"},
-	{regexp.MustCompile("\\."), "_"},
+	{regexp.MustCompile(`\.`), "_"},
 	{regexp.MustCompile("-"), "_"},
 }
 

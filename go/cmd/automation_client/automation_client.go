@@ -115,7 +115,7 @@ func waitForClusterOp(client automationservicepb.AutomationClient, id string) (*
 
 		resp, err := client.GetClusterOperationDetails(context.Background(), req, grpc.FailFast(false))
 		if err != nil {
-			return nil, fmt.Errorf("Failed to get ClusterOperation Details. Request: %v Error: %v", req, err)
+			return nil, fmt.Errorf("failed to get ClusterOperation Details. Request: %v Error: %v", req, err)
 		}
 
 		switch resp.ClusterOp.State {

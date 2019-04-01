@@ -105,7 +105,7 @@ func TestNoExtrapolatedMySQLReplicationLag(t *testing.T) {
 	// now 20 seconds later, mysqld is down
 	now = now.Add(20 * time.Second)
 	mysqld.SlaveStatusError = errors.New("mysql is down")
-	dur, err = rep.Report(true, true)
+	_, err = rep.Report(true, true)
 	if err != mysqld.SlaveStatusError {
 		t.Fatalf("wrong Report error: %v", err)
 	}

@@ -23,7 +23,7 @@ import (
 )
 
 // WaitForFilteredReplicationTask runs vtctl WaitForFilteredReplication to block until the destination master
-// (i.e. the receiving side of the filtered replication) has caught up up to max_delay with the source shard.
+// (i.e. the receiving side of the filtered replication) has caught up to max_delay with the source shard.
 type WaitForFilteredReplicationTask struct {
 }
 

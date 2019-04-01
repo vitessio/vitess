@@ -26,6 +26,7 @@ import (
 	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/fileutil"
 )
@@ -273,7 +274,7 @@ func DeleteRecursive(ctx context.Context, zconn *ZkConn, zkPath string, version 
 	for _, child := range children {
 		err := DeleteRecursive(ctx, zconn, path.Join(zkPath, child), -1)
 		if err != nil && err != zk.ErrNoNode {
-			return fmt.Errorf("DeleteRecursive: recursive delete failed: %v", err)
+			return vterrors.Wrapf(err, "DeleteRecursive: recursive delete failed")
 		}
 	}
 
@@ -297,7 +298,7 @@ func obtainQueueLock(ctx context.Context, conn *ZkConn, zkPath string) error {
 		// Get our siblings.
 		children, _, err := conn.Children(ctx, queueNode)
 		if err != nil {
-			return fmt.Errorf("obtainQueueLock: trylock failed %v", err)
+			return vterrors.Wrap(err, "obtainQueueLock: trylock failed %v")
 		}
 		sort.Strings(children)
 		if len(children) == 0 {
@@ -325,7 +326,7 @@ func obtainQueueLock(ctx context.Context, conn *ZkConn, zkPath string) error {
 		zkPrevLock := path.Join(queueNode, prevLock)
 		exists, _, watch, err := conn.ExistsW(ctx, zkPrevLock)
 		if err != nil {
-			return fmt.Errorf("obtainQueueLock: unable to watch queued node %v %v", zkPrevLock, err)
+			return vterrors.Wrapf(err, "obtainQueueLock: unable to watch queued node %v", zkPrevLock)
 		}
 		if !exists {
 			// The lock disappeared, try to read again.

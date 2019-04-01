@@ -135,10 +135,10 @@ func TestReplicationConnectionClosing(t *testing.T) {
 			if err != nil {
 				serr, ok := err.(*mysql.SQLError)
 				if !ok {
-					t.Fatalf("Got a non mysql.SQLError error: %v", err)
+					t.Errorf("Got a non mysql.SQLError error: %v", err)
 				}
 				if serr.Num != mysql.CRServerLost {
-					t.Fatalf("Got an unexpected mysql.SQLError error: %v", serr)
+					t.Errorf("Got an unexpected mysql.SQLError error: %v", serr)
 				}
 				// we got the right error, all good.
 				return
@@ -150,10 +150,10 @@ func TestReplicationConnectionClosing(t *testing.T) {
 				// What we expect, keep going.
 			case mysql.ErrPacket:
 				err := mysql.ParseErrorPacket(data)
-				t.Fatalf("ReadPacket returned an error packet: %v", err)
+				t.Errorf("ReadPacket returned an error packet: %v", err)
 			default:
 				// Very unexpected.
-				t.Fatalf("ReadPacket returned a weird packet: %v", data)
+				t.Errorf("ReadPacket returned a weird packet: %v", data)
 			}
 		}
 	}()

@@ -146,6 +146,10 @@ func TestQueryExecutorPassthroughDml(t *testing.T) {
 
 	tsv.SetAllowUnsafeDMLs(true)
 	got, err = qre.Execute()
+
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
@@ -612,7 +616,6 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("qre.Execute() = %v, want %v", err, wantErr)
 	}
-	wantqueries = []string{}
 	if gotqueries = fetchRecordedQueries(qre); gotqueries != nil {
 		t.Errorf("queries: %v, want nil", gotqueries)
 	}
@@ -1242,6 +1245,31 @@ func TestQueryExecutorPlanPassSelect(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorPlanSelectImpossible(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "select * from test_table where 1 != 1"
+	want := &sqltypes.Result{
+		Fields: getTestTableFields(),
+	}
+	db.AddQuery(query, want)
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	defer tsv.StopService()
+	checkPlanID(t, planbuilder.PlanSelectImpossible, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+}
+
 func TestQueryExecutorPlanPassSelectSqlSelectLimit(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
@@ -1732,7 +1760,7 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	query := "select * from test_table where 1 != 1"
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanSelectImpossible, qre.plan.PlanID)
 	// query should fail because nobody has read access to test_table
 	_, err := qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
@@ -1805,7 +1833,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 
 	// table acl should be ignored since this is an exempt user.
 	username = "exempt-acl"
-	f, _ := tableacl.GetCurrentAclFactory()
+	f, _ := tableacl.GetCurrentACLFactory()
 	if tsv.qe.exemptACL, err = f.New([]string{username}); err != nil {
 		t.Fatalf("Cannot load exempt ACL for Table ACL: %v", err)
 	}

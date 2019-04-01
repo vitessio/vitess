@@ -713,7 +713,7 @@ func TestWatchdog(t *testing.T) {
 	if dtid != "aa" {
 		t.Errorf("dtid: %s, want aa", dtid)
 	}
-	diff := time.Now().Sub(start)
+	diff := time.Since(start)
 	if diff < 1*time.Second {
 		t.Errorf("diff: %v, want greater than 1s", diff)
 	}
@@ -797,6 +797,10 @@ func TestManualTwopcz(t *testing.T) {
 		return
 	}
 	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(4, null, null, null)", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(5, null, null, null)", nil)
 	if err != nil {
 		t.Error(err)
@@ -816,6 +820,10 @@ func TestManualTwopcz(t *testing.T) {
 		return
 	}
 	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(6, null, null, null)", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(7, null, null, null)", nil)
 	if err != nil {
 		t.Error(err)
@@ -840,6 +848,10 @@ func TestManualTwopcz(t *testing.T) {
 	}})
 	defer client.ConcludeTransaction("distributed")
 
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	fmt.Printf("%s/twopcz\n", framework.ServerAddress)
 	fmt.Print("Sleeping for 30 seconds\n")
 	time.Sleep(30 * time.Second)

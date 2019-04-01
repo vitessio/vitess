@@ -117,7 +117,7 @@ type ConsolidatorCacheItem struct {
 // Items returns the items in the cache as an array of String, int64 structs
 func (cc *ConsolidatorCache) Items() []ConsolidatorCacheItem {
 	items := cc.LRUCache.Items()
-	ret := make([]ConsolidatorCacheItem, len(items), len(items))
+	ret := make([]ConsolidatorCacheItem, len(items))
 	for i, v := range items {
 		ret[i] = ConsolidatorCacheItem{Query: v.Key, Count: v.Value.(*ccount).get()}
 	}

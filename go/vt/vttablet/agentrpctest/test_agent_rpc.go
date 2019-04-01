@@ -52,6 +52,14 @@ type fakeRPCAgent struct {
 	mu sync.Mutex
 }
 
+func (fra *fakeRPCAgent) LockTables(ctx context.Context) error {
+	panic("implement me")
+}
+
+func (fra *fakeRPCAgent) UnlockTables(ctx context.Context) error {
+	panic("implement me")
+}
+
 func (fra *fakeRPCAgent) setSlow(slow bool) {
 	fra.mu.Lock()
 	fra.slow = slow
@@ -781,9 +789,24 @@ func (fra *fakeRPCAgent) StartSlave(ctx context.Context) error {
 	return nil
 }
 
+var testStartSlaveUntilAfterCalledWith = ""
+
+func (fra *fakeRPCAgent) StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	testStartSlaveUntilAfterCalledWith = position
+	return nil
+}
+
 func agentRPCTestStartSlave(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.StartSlave(ctx, tablet)
 	compareError(t, "StartSlave", err, true, testStartSlaveCalled)
+}
+
+func agentRPCTestStartSlaveUntilAfter(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.StartSlaveUntilAfter(ctx, tablet, "test-position", time.Minute)
+	compareError(t, "StartSlaveUntilAfter", err, "test-position", testStartSlaveUntilAfterCalledWith)
 }
 
 func agentRPCTestStartSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
@@ -985,6 +1008,26 @@ func agentRPCTestDemoteMasterPanic(ctx context.Context, t *testing.T, client tmc
 	expectHandleRPCPanic(t, "DemoteMaster", true /*verbose*/, err)
 }
 
+var testUndoDemoteMasterCalled = false
+
+func (fra *fakeRPCAgent) UndoDemoteMaster(ctx context.Context) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return nil
+}
+
+func agentRPCTestUndoDemoteMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.UndoDemoteMaster(ctx, tablet)
+	testUndoDemoteMasterCalled = true
+	compareError(t, "UndoDemoteMaster", err, true, testUndoDemoteMasterCalled)
+}
+
+func agentRPCTestUndoDemoteMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.UndoDemoteMaster(ctx, tablet)
+	expectHandleRPCPanic(t, "UndoDemoteMaster", true /*verbose*/, err)
+}
+
 var testReplicationPositionReturned = "MariaDB/5-567-3456"
 
 func (fra *fakeRPCAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
@@ -1113,21 +1156,23 @@ func agentRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmc
 //
 
 var testBackupConcurrency = 24
+var testBackupAllowMaster = false
 var testBackupCalled = false
 var testRestoreFromBackupCalled = false
 
-func (fra *fakeRPCAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
+func (fra *fakeRPCAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	compare(fra.t, "Backup args", concurrency, testBackupConcurrency)
+	compare(fra.t, "Backup args", allowMaster, testBackupAllowMaster)
 	logStuff(logger, 10)
 	testBackupCalled = true
 	return nil
 }
 
 func agentRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	stream, err := client.Backup(ctx, tablet, testBackupConcurrency)
+	stream, err := client.Backup(ctx, tablet, testBackupConcurrency, testBackupAllowMaster)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}
@@ -1136,7 +1181,7 @@ func agentRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.Table
 }
 
 func agentRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	stream, err := client.Backup(ctx, tablet, testBackupConcurrency)
+	stream, err := client.Backup(ctx, tablet, testBackupConcurrency, testBackupAllowMaster)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}
@@ -1226,6 +1271,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	agentRPCTestStopSlave(ctx, t, client, tablet)
 	agentRPCTestStopSlaveMinimum(ctx, t, client, tablet)
 	agentRPCTestStartSlave(ctx, t, client, tablet)
+	agentRPCTestStartSlaveUntilAfter(ctx, t, client, tablet)
 	agentRPCTestTabletExternallyReparented(ctx, t, client, tablet)
 	agentRPCTestGetSlaves(ctx, t, client, tablet)
 
@@ -1239,6 +1285,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	agentRPCTestPopulateReparentJournal(ctx, t, client, tablet)
 	agentRPCTestInitSlave(ctx, t, client, tablet)
 	agentRPCTestDemoteMaster(ctx, t, client, tablet)
+	agentRPCTestUndoDemoteMaster(ctx, t, client, tablet)
 	agentRPCTestPromoteSlaveWhenCaughtUp(ctx, t, client, tablet)
 	agentRPCTestSlaveWasPromoted(ctx, t, client, tablet)
 	agentRPCTestSetMaster(ctx, t, client, tablet)
@@ -1292,6 +1339,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	agentRPCTestPopulateReparentJournalPanic(ctx, t, client, tablet)
 	agentRPCTestInitSlavePanic(ctx, t, client, tablet)
 	agentRPCTestDemoteMasterPanic(ctx, t, client, tablet)
+	agentRPCTestUndoDemoteMasterPanic(ctx, t, client, tablet)
 	agentRPCTestPromoteSlaveWhenCaughtUpPanic(ctx, t, client, tablet)
 	agentRPCTestSlaveWasPromotedPanic(ctx, t, client, tablet)
 	agentRPCTestSetMasterPanic(ctx, t, client, tablet)

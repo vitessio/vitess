@@ -66,6 +66,10 @@ type RPCAgent interface {
 
 	ApplySchema(ctx context.Context, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
+	LockTables(ctx context.Context) error
+
+	UnlockTables(ctx context.Context) error
+
 	ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error)
 
 	ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error)
@@ -83,6 +87,8 @@ type RPCAgent interface {
 	StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error)
 
 	StartSlave(ctx context.Context) error
+
+	StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error
 
 	TabletExternallyReparented(ctx context.Context, externalID string) error
 
@@ -104,6 +110,8 @@ type RPCAgent interface {
 
 	DemoteMaster(ctx context.Context) (string, error)
 
+	UndoDemoteMaster(ctx context.Context) error
+
 	PromoteSlaveWhenCaughtUp(ctx context.Context, replicationPosition string) (string, error)
 
 	SlaveWasPromoted(ctx context.Context) error
@@ -118,7 +126,7 @@ type RPCAgent interface {
 
 	// Backup / restore related methods
 
-	Backup(ctx context.Context, concurrency int, logger logutil.Logger) error
+	Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error
 
 	RestoreFromBackup(ctx context.Context, logger logutil.Logger) error
 
