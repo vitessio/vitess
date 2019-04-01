@@ -53,7 +53,7 @@ func NewRateLimiter(maxCount int, interval time.Duration) *RateLimiter {
 func (rl *RateLimiter) Allow() bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
-	if time.Now().Sub(rl.lastTime) < rl.interval {
+	if time.Since(rl.lastTime) < rl.interval {
 		if rl.curCount > 0 {
 			rl.curCount--
 			return true

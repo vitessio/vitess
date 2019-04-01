@@ -36,7 +36,7 @@ Due to its constant nature, this is not an appropriate framework to test cluster
 
 These tests run more complicated setups, and take a lot more resources. They are meant to test end-to-end behaviors of the Vitess ecosystem, and complement the unit tests.
 
-For instance, we test each RPC interaction independently (client to vtgate, vtgate to vttablet, vttablet to MySQL, see previous sections). But is is also good to have an end-to-end test that validates everything works together.
+For instance, we test each RPC interaction independently (client to vtgate, vtgate to vttablet, vttablet to MySQL, see previous sections). But is also good to have an end-to-end test that validates everything works together.
 
 These tests almost always launch a topology service, a few mysqld instances, a few vttablets, a vtctld process, a few vtgates, ... They use the real production processes, and real replication. This setup is mandatory for properly testing re-sharding, cluster operations, ... They all however run on the same machine, so they might be limited by the environment.
 

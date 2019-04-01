@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 )
@@ -75,7 +76,7 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
+	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
@@ -334,8 +335,7 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	splits := []*querypb.QuerySplit{}
-	splits, err = q.server.SplitQuery(
+	splits, err := q.server.SplitQuery(
 		ctx,
 		request.Target,
 		request.Query,
@@ -368,6 +368,23 @@ func (q *query) UpdateStream(request *querypb.UpdateStreamRequest, stream querys
 	if err := q.server.UpdateStream(ctx, request.Target, request.Position, request.Timestamp, func(reply *querypb.StreamEvent) error {
 		return stream.Send(&querypb.UpdateStreamResponse{
 			Event: reply,
+		})
+	}); err != nil {
+		return vterrors.ToGRPC(err)
+	}
+	return nil
+}
+
+// VStream is part of the queryservice.QueryServer interface
+func (q *query) VStream(request *binlogdatapb.VStreamRequest, stream queryservicepb.Query_VStreamServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	if err := q.server.VStream(ctx, request.Target, request.Position, request.Filter, func(events []*binlogdatapb.VEvent) error {
+		return stream.Send(&binlogdatapb.VStreamResponse{
+			Events: events,
 		})
 	}); err != nil {
 		return vterrors.ToGRPC(err)

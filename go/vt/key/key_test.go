@@ -131,7 +131,7 @@ func TestEvenShardsKeyRange(t *testing.T) {
 		// Now verify that ParseKeyRangeParts() produces the same KeyRange object as
 		// we do.
 		parts := strings.Split(tc.wantSpec, "-")
-		kr, err := ParseKeyRangeParts(parts[0], parts[1])
+		kr, _ := ParseKeyRangeParts(parts[0], parts[1])
 		if !proto.Equal(got, kr) {
 			t.Errorf("EvenShardsKeyRange(%v, %v) != ParseKeyRangeParts(%v, %v): (%x, %x) != (%x, %x)", tc.i, tc.n, parts[0], parts[1], got.Start, got.End, kr.Start, kr.End)
 		}

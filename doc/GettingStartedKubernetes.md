@@ -1,9 +1,9 @@
-This page explains how to run Vitess on [Kubernetes](http://kubernetes.io).
+This page explains how to run Vitess on [Kubernetes](https://kubernetes.io).
 It also gives the steps to start a Kubernetes cluster with
 [Google Container Engine](https://cloud.google.com/container-engine/).
 
 If you already have Kubernetes v1.0+ running in one of the other
-[supported platforms](http://kubernetes.io/docs/getting-started-guides/),
+[supported platforms](https://kubernetes.io/docs/setup/pick-right-solution/),
 you can skip the `gcloud` steps.
 The `kubectl` steps will apply to any Kubernetes cluster.
 
@@ -19,7 +19,7 @@ The following sections explain how to set these up in your environment.
 
 ### Install Go 1.11+
 
-You need to install [Go 1.11+](http://golang.org/doc/install) to build the
+You need to install [Go 1.11+](https://golang.org/doc/install) to build the
 `vtctlclient` tool, which issues commands to Vitess.
 
 After installing Go, make sure your `GOPATH` environment
@@ -30,7 +30,7 @@ directory to which your non-root user has write access.
 In addition, make sure that `$GOPATH/bin` is included in
 your `$PATH`. More information about setting up a Go
 workspace can be found at
-[How to Write Go Code](http://golang.org/doc/code.html#Organization).
+[How to Write Go Code](https://golang.org/doc/code.html#Organization).
 
 ### Build and install vtctlclient
 
@@ -58,8 +58,7 @@ you must have a GCE account with billing enabled. The instructions
 below explain how to enable billing and how to associate a billing
 account with a project in the Google Developers Console.
 
-1.  Log in to the Google Developers Console to [enable billing]
-    (https://console.developers.google.com/billing).
+1.  Log in to the Google Developers Console to [enable billing](https://console.developers.google.com/billing).
     1.  Click the **Billing** pane if you are not there already.
     1.  Click **New billing account**.
     1.  Assign a name to the billing account -- e.g. "Vitess on
@@ -80,17 +79,15 @@ account with a project in the Google Developers Console.
         (Both should be listed under "Google Cloud APIs".)
         For each, click on it, then click the **"Enable API"** button.
 
-1.  Follow the [Google Cloud SDK quickstart instructions]
-    (https://cloud.google.com/sdk/#Quick_Start) to set up
-    and test the Google Cloud SDK. You will also set your default project
+1.  Follow the [Google Cloud SDK quickstart instructions](https://cloud.google.com/sdk/#Quick_Start) 
+    to set up and test the Google Cloud SDK. You will also set your default project
     ID while completing the quickstart.
 
     **Note:** If you skip the quickstart guide because you've previously set up
     the Google Cloud SDK, just make sure to set a default project ID by running
     the following command. Replace `PROJECT` with the project ID assigned to
     your [Google Developers Console](https://console.developers.google.com/)
-    project. You can [find the ID]
-    (https://cloud.google.com/compute/docs/projects#projectids)
+    project. You can [find the ID](https://cloud.google.com/compute/docs/projects#projectids)
     by navigating to the **Overview** page for the project in the Console.
 
     ``` sh
@@ -196,8 +193,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     Then provide the mount path to the configure script here.
 
     Direct support for other cloud blob stores like Amazon S3 can be added by
-    implementing the Vitess [BackupStorage plugin interface]
-    (https://github.com/vitessio/vitess/blob/master/go/vt/mysqlctl/backupstorage/interface.go).
+    implementing the Vitess [BackupStorage plugin interface](https://github.com/vitessio/vitess/blob/master/go/vt/mysqlctl/backupstorage/interface.go).
     Let us know on the [discussion forum](https://groups.google.com/forum/#!forum/vitess)
     if you have any specific plugin requests.
 
@@ -230,7 +226,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     and the other is for a
     [local cell]({% link overview/concepts.md %}#cell-data-center)
     called *test*. You can check the status of the
-    [pods](http://kubernetes.io/v1.1/docs/user-guide/pods.html)
+    [pods](https://kubernetes.io/docs/concepts/workloads/pods/)
     in the cluster by running:
 
     ``` sh
@@ -277,8 +273,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 
 1.  **Access vtctld web UI**
 
-    To access vtctld from outside Kubernetes, use [kubectl proxy]
-    (https://kubernetes.io/docs/tasks/access-kubernetes-api/http-proxy-access-api/)
+    To access vtctld from outside Kubernetes, use [kubectl proxy](https://kubernetes.io/docs/tasks/access-kubernetes-api/http-proxy-access-api/)
     to create an authenticated tunnel on your workstation:
 
     **Note:** The proxy command runs in the foreground,
@@ -294,8 +289,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 
     http://localhost:8001/api/v1/namespaces/default/services/vtctld:web/proxy
 
-    You can also use this proxy to access the [Kubernetes Dashboard]
-    (https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/),
+    You can also use this proxy to access the [Kubernetes Dashboard](https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/),
     where you can monitor nodes, pods, and services:
 
     http://localhost:8001/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/.
@@ -307,9 +301,8 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
 
     To enable RPC access into the Kubernetes cluster, we'll again use
     `kubectl` to set up an authenticated tunnel. Unlike the HTTP proxy
-    we used for the web UI, this time we need raw [port forwarding]
-    (http://kubernetes.io/v1.1/docs/user-guide/kubectl/kubectl_port-forward.html)
-    for vtctld's [gRPC](http://grpc.io) port.
+    we used for the web UI, this time we need raw [port forwarding](https://kubernetes.io/docs/tasks/access-application-cluster/port-forward-access-application-cluster/)
+    for vtctld's [gRPC](https://grpc.io) port.
 
     Since the tunnel needs to target a particular vtctld pod name,
     we've provided the `kvtctl.sh` script, which uses `kubectl` to
@@ -357,7 +350,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     `vttablet` and `mysqld` processes, running on the same
     host. We enforce this coupling in Kubernetes by putting the respective
     containers for vttablet and mysqld inside a single
-    [pod](http://kubernetes.io/v1.1/docs/user-guide/pods.html).
+    [pod](https://kubernetes.io/docs/concepts/workloads/pods/).
 
     Run the following script to launch the vttablet pods, which also include
     mysqld:
@@ -387,8 +380,8 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     initialized the databases on them yet.
 
     It can take some time for the tablets to come up for the first time if a pod
-    was scheduled on a node that hasn't downloaded the [Vitess Docker image]
-    (https://hub.docker.com/u/vitess/) yet. You can also check the status of the
+    was scheduled on a node that hasn't downloaded the [Vitess Docker image](https://hub.docker.com/u/vitess/) 
+    yet. You can also check the status of the
     tablets from the command line using `kvtctl.sh`:
 
     ``` sh
@@ -529,8 +522,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     Vitess uses [vtgate]({% link overview/index.md %}#vtgate) to route each client
     query to the correct `vttablet`. In Kubernetes, a `vtgate` service
     distributes connections to a pool of `vtgate` pods. The pods are curated by
-    a [replication controller]
-    (http://kubernetes.io/v1.1/docs/user-guide/replication-controller.html).
+    a [replication controller](https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller/).
 
     ``` sh
     vitess/examples/kubernetes$ ./vtgate-up.sh
@@ -563,11 +555,10 @@ As with the `vtctld` service, by default the GuestBook app is not accessible
 from outside Kubernetes. In this case, since this is a user-facing frontend,
 we set `type: LoadBalancer` in the GuestBook service definition,
 which tells Kubernetes to create a public
-[load balancer](http://kubernetes.io/v1.1/docs/user-guide/services.html#type-loadbalancer)
+[load balancer](https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/)
 using the API for whatever platform your Kubernetes cluster is in.
 
-You also need to [allow access through your platform's firewall]
-(http://kubernetes.io/v1.1/docs/user-guide/services-firewalls.html).
+You also need to [allow access through your platform's firewall](https://kubernetes.io/docs/tasks/access-application-cluster/configure-cloud-provider-firewall/).
 
 ``` sh
 # For example, to open port 80 in the GCE firewall:
@@ -614,8 +605,7 @@ vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000100 "SELEC
 # +------+---------------------+---------+
 ```
 
-The [GuestBook source code]
-(https://github.com/vitessio/vitess/tree/master/examples/kubernetes/guestbook)
+The [GuestBook source code](https://github.com/vitessio/vitess/tree/master/examples/kubernetes/guestbook)
 provides more detail about how the app server interacts with Vitess.
 
 ## Try Vitess resharding
@@ -706,7 +696,7 @@ x509: failed to load system roots and no roots provided
 It usually means that your Kubernetes nodes are running a host OS
 that puts root certificates in a different place than our configuration
 expects by default (for example, Fedora). See the comments in the
-[etcd controller template](https://github.com/vitessio/vitess/blob/master/examples/kubernetes/etcd-controller-template.yaml)
+[etcd controller template](https://github.com/kubernetes/examples/blob/master/staging/storage/vitess/etcd-controller-template.yaml)
 for examples of how to set the right location for your host OS.
 You'll also need to adjust the same certificate path settings in the
 `vtctld` and `vttablet` templates.
@@ -745,8 +735,8 @@ vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000100 "SELEC
 # +------------+
 ```
 
-If you need a truly direct connection to mysqld, you can [launch a shell]
-(#shell-access) inside the mysql container, and then connect with the `mysql`
+If you need a truly direct connection to mysqld, you can [launch a shell](#shell-access) 
+inside the mysql container, and then connect with the `mysql`
 command-line client:
 
 ``` sh

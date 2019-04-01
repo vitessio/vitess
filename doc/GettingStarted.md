@@ -6,8 +6,7 @@ If you run into issues or have questions, please post on our
 
 ## Docker Build
 
-To run Vitess in Docker, you can either use our pre-built images on [Docker Hub]
-(https://hub.docker.com/u/vitess/), or build them yourself.
+To run Vitess in Docker, you can either use our pre-built images on [Docker Hub](https://hub.docker.com/u/vitess/), or build them yourself.
 
 ### Docker Hub Images
 
@@ -73,10 +72,10 @@ OS X 10.11 (El Capitan) should work as well, the installation instructions are b
 
 In addition, Vitess requires the software and libraries listed below.
 
-1.  [Install Go 1.11+](http://golang.org/doc/install).
+1.  [Install Go 1.11+](https://golang.org/doc/install).
 
 2.  Install [MariaDB 10.0](https://downloads.mariadb.org/) or
-    [MySQL 5.6](http://dev.mysql.com/downloads/mysql). You can use any
+    [MySQL 5.6](https://dev.mysql.com/downloads/mysql). You can use any
     installation method (src/bin/rpm/deb), but be sure to include the client
     development headers (`libmariadbclient-dev` or `libmysqlclient-dev`).
  
@@ -155,7 +154,7 @@ In addition, Vitess requires the software and libraries listed below.
     
 #### OS X
 
-1.  [Install Homebrew](http://brew.sh/). If your /usr/local directory is not empty and you never used Homebrew before,
+1.  [Install Homebrew](https://brew.sh/). If your /usr/local directory is not empty and you never used Homebrew before,
     it will be 
     [mandatory](https://github.com/Homebrew/homebrew/blob/master/share/doc/homebrew/El_Capitan_and_Homebrew.md) 
     to run the following command:
@@ -165,10 +164,10 @@ In addition, Vitess requires the software and libraries listed below.
     ```
 
 2.  On OS X, MySQL 5.6 has to be used, MariaDB doesn't work for some reason yet. It should be installed from Homebrew
-    (install steps are below).
+    (`install steps are below`).
     
 3.  If Xcode is installed (with Console tools, which should be bundled automatically since the 7.1 version), all 
-    the dev dependencies should be satisfied in this step. If no Xcode is present, it is necessery to install pkg-config.
+    the dev dependencies should be satisfied in this step. If no Xcode is present, it is necessary to install pkg-config.
      
     ``` sh
     brew install pkg-config
@@ -361,11 +360,11 @@ lock service. ZooKeeper is included in the Vitess distribution.
 
     Some Linux distributions ship with default file descriptor limits
     that are too low for database servers. This issue could show up
-    as the database crashing with the message "too many open files".
+    as the database crashing with the message `too many open files`.
 
     Check the system-wide `file-max` setting as well as user-specific
     `ulimit` values. We recommend setting them above 100K to be safe.
-    The exact [procedure](http://www.cyberciti.biz/faq/linux-increase-the-maximum-number-of-open-files/)
+    The exact [procedure](https://www.cyberciti.biz/faq/linux-increase-the-maximum-number-of-open-files/)
      may vary depending on your Linux distribution.
 
 1.  **Configure environment variables**
@@ -463,9 +462,8 @@ lock service. ZooKeeper is included in the Vitess distribution.
 1.  **Start vttablets**
 
     The `vttablet-up.sh` script brings up three vttablets, and assigns them to
-    a [keyspace]({% link overview/concepts.md %}#keyspace) and [shard]
-    ({% link overview/concepts.md %}#shard) according to the variables
-    set at the top of the script file.
+    a [keyspace]({% link overview/concepts.md %}#keyspace) and [shard]({% link overview/concepts.md %}#shard) 
+    according to the variables set at the top of the script file.
 
     ``` sh
     vitess/examples/local$ ./vttablet-up.sh
@@ -485,9 +483,8 @@ lock service. ZooKeeper is included in the Vitess distribution.
     see a keyspace named `test_keyspace` with a single shard named `0`.
     This is what an unsharded keyspace looks like.
 
-    If you click on the shard box, you'll see a list of [tablets]
-    ({% link overview/concepts.md %}#tablet) in that shard.
-    Note that it's normal for the tablets to be unhealthy at this point, since
+    If you click on the shard box, you'll see a list of [tablets]({% link overview/concepts.md %}#tablet) 
+    in that shard. Note that it's normal for the tablets to be unhealthy at this point, since
     you haven't initialized them yet.
 
     You can also click the **STATUS** link on each tablet to be taken to its

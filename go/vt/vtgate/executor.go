@@ -274,7 +274,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		logStats.SQL = sql
 		logStats.BindVariables = bindVars
 		result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-		logStats.ExecuteTime = time.Now().Sub(execStart)
+		logStats.ExecuteTime = time.Since(execStart)
 		queriesRouted.Add("ShardDirect", int64(logStats.ShardQueries))
 		return result, err
 	}
@@ -394,7 +394,7 @@ func (e *Executor) handleVSchemaDDL(ctx context.Context, safeSession *SafeSessio
 		return errNoKeyspace
 	}
 
-	ks, _ := vschema.Keyspaces[ksName]
+	ks := vschema.Keyspaces[ksName]
 	ks, err := topotools.ApplyVSchemaDDL(ksName, ks, ddl)
 
 	if err != nil {
@@ -621,7 +621,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for wait_timeout: %T", v)
 			}
-		case "net_write_timeout", "net_read_timeout", "lc_messages", "collation_connection":
+		case "sql_mode", "net_write_timeout", "net_read_timeout", "lc_messages", "collation_connection":
 			log.Warningf("Ignored inapplicable SET %v = %v", k, v)
 			warnings.Add("IgnoredSet", 1)
 		case "charset", "names":
@@ -747,6 +747,25 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Rows:         rows,
 			RowsAffected: 2,
 		}, nil
+	case "create table":
+		if destKeyspace == "" && show.HasTable() {
+			// For "show create table", if there isn't a targeted keyspace already
+			// we can either get a keyspace from the statement or potentially from
+			// the vschema.
+
+			if !show.Table.Qualifier.IsEmpty() {
+				// Explicit keyspace was passed. Use that for targeting but remove from the query itself.
+				destKeyspace = show.Table.Qualifier.String()
+				show.Table.Qualifier = sqlparser.NewTableIdent("")
+				sql = sqlparser.String(show)
+			} else {
+				// No keyspace was indicated. Try to find one using the vschema.
+				tbl, err := e.VSchema().FindTable("", show.Table.Name.String())
+				if err == nil {
+					destKeyspace = tbl.Keyspace.Name
+				}
+			}
+		}
 	case sqlparser.KeywordString(sqlparser.TABLES):
 		if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
 			if destKeyspace == "" {
@@ -917,7 +936,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}
 		sort.Strings(ksNames)
 		for _, ksName := range ksNames {
-			ks, _ := vschema.Keyspaces[ksName]
+			ks := vschema.Keyspaces[ksName]
 
 			vindexNames := make([]string, 0, len(ks.Vindexes))
 			for name := range ks.Vindexes {
@@ -925,7 +944,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			}
 			sort.Strings(vindexNames)
 			for _, vindexName := range vindexNames {
-				vindex, _ := ks.Vindexes[vindexName]
+				vindex := ks.Vindexes[vindexName]
 
 				params := make([]string, 0, 4)
 				for k, v := range vindex.GetParams() {
@@ -946,7 +965,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			{Name: "Type", Type: sqltypes.Uint16},
 			{Name: "Message", Type: sqltypes.VarChar},
 		}
-		rows := make([][]sqltypes.Value, 0, 0)
+		rows := make([][]sqltypes.Value, 0)
 
 		if safeSession.Warnings != nil {
 			for _, warning := range safeSession.Warnings {
@@ -1026,7 +1045,7 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 }
 
 func (e *Executor) handleComment(sql string) (*sqltypes.Result, error) {
-	_, sql = sqlparser.ExtractMysqlComment(sql)
+	_, _ = sqlparser.ExtractMysqlComment(sql)
 	// Not sure if this is a good idea.
 	return &sqltypes.Result{}, nil
 }

@@ -449,7 +449,7 @@ func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback
 // AddQuery adds a query and its expected result.
 func (db *DB) AddQuery(query string, expectedResult *sqltypes.Result) *ExpectedResult {
 	if len(expectedResult.Rows) > 0 && len(expectedResult.Fields) == 0 {
-		panic(fmt.Errorf("Please add Fields to this Result so it's valid: %v", query))
+		panic(fmt.Errorf("please add Fields to this Result so it's valid: %v", query))
 	}
 	resultCopy := &sqltypes.Result{}
 	*resultCopy = *expectedResult
@@ -481,7 +481,7 @@ func (db *DB) SetBeforeFunc(query string, f func()) {
 // case-insensitive matching mode.
 func (db *DB) AddQueryPattern(queryPattern string, expectedResult *sqltypes.Result) {
 	if len(expectedResult.Rows) > 0 && len(expectedResult.Fields) == 0 {
-		panic(fmt.Errorf("Please add Fields to this Result so it's valid: %v", queryPattern))
+		panic(fmt.Errorf("please add Fields to this Result so it's valid: %v", queryPattern))
 	}
 	expr := regexp.MustCompile("(?is)^" + queryPattern + "$")
 	result := *expectedResult

@@ -17,8 +17,6 @@ limitations under the License.
 package worker
 
 import (
-	"errors"
-	"fmt"
 	"os"
 	"os/signal"
 	"sync"
@@ -110,7 +108,7 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 		// We return FAILED_PRECONDITION to signal that a manual resolution is required.
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			"The worker job was stopped %.1f minutes ago, but not reset. Run the 'Reset' command to clear it manually. Job: %v",
-			time.Now().Sub(wi.lastRunStopTime).Minutes(),
+			time.Since(wi.lastRunStopTime).Minutes(),
 			wi.currentWorker)
 	}
 
@@ -138,7 +136,7 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 			// The recovery code is a copy of servenv.HandlePanic().
 			if x := recover(); x != nil {
 				log.Errorf("uncaught vtworker panic: %v\n%s", x, tb.Stack(4))
-				err = fmt.Errorf("uncaught vtworker panic: %v", x)
+				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "uncaught vtworker panic: %v", x)
 			}
 
 			wi.currentWorkerMutex.Lock()
@@ -206,7 +204,7 @@ func (wi *Instance) Reset() error {
 		return nil
 	}
 
-	return errors.New("worker still executing")
+	return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "worker still executing")
 }
 
 // Cancel calls the cancel function of the current vtworker job.

@@ -14,8 +14,8 @@
 
 """Kubernetes environment."""
 
-import json
 import getpass
+import json
 import logging
 import os
 import subprocess

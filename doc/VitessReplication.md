@@ -139,7 +139,7 @@ Thus, you can survive sudden master failure without losing any transactions that
 were reported to clients as completed. In MySQL 5.7+, this guarantee is
 strengthened slightly to preventing loss of any transactions that were ever
 **committed** on the original master, eliminating so-called
-[phantom reads](http://bugs.mysql.com/bug.php?id=62174).
+[phantom reads](https://bugs.mysql.com/bug.php?id=62174).
 
 On the other hand these behaviors also give a requirement that each shard must
 have at least 2 tablets with type *replica* (with addition of the master that

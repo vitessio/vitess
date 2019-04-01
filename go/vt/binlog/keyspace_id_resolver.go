@@ -104,7 +104,7 @@ func (r *keyspaceIDResolverFactoryV2) keyspaceID(v sqltypes.Value) ([]byte, erro
 	case topodatapb.KeyspaceIdType_UINT64:
 		i, err := sqltypes.ToUint64(v)
 		if err != nil {
-			return nil, fmt.Errorf("Non numerical value: %v", err)
+			return nil, fmt.Errorf("non numerical value: %v", err)
 		}
 		return key.Uint64Key(i).Bytes(), nil
 	default:

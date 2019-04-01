@@ -16,7 +16,9 @@ limitations under the License.
 
 package topo
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // ErrorCode is the error code for topo errors.
 type ErrorCode int

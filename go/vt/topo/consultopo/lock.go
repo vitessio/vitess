@@ -17,11 +17,12 @@ limitations under the License.
 package consultopo
 
 import (
-	"fmt"
 	"path"
 
 	"github.com/hashicorp/consul/api"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -106,7 +107,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 func (ld *consulLockDescriptor) Check(ctx context.Context) error {
 	select {
 	case <-ld.lost:
-		return fmt.Errorf("lost channel closed")
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "lost channel closed")
 	default:
 	}
 	return nil
@@ -123,7 +124,7 @@ func (s *Server) unlock(ctx context.Context, lockPath string) error {
 	li, ok := s.locks[lockPath]
 	s.mu.Unlock()
 	if !ok {
-		return fmt.Errorf("unlock: lock %v not held", lockPath)
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unlock: lock %v not held", lockPath)
 	}
 
 	// Try to unlock our lock. We will clean up our entry anyway.

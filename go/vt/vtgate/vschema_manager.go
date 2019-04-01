@@ -85,7 +85,7 @@ func (vm *VSchemaManager) watchSrvVSchema(ctx context.Context, cell string) {
 			vschema, err = vindexes.BuildVSchema(v)
 			if err != nil {
 				log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", cell, err)
-				err = fmt.Errorf("Error creating VSchema for cell %v: %v", cell, err)
+				err = fmt.Errorf("error creating VSchema for cell %v: %v", cell, err)
 				if vschemaCounters != nil {
 					vschemaCounters.Add("Parsing", 1)
 				}

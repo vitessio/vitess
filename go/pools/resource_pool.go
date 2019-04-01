@@ -48,19 +48,20 @@ type Resource interface {
 
 // ResourcePool allows you to use a pool of resources.
 type ResourcePool struct {
-	resources   chan resourceWrapper
-	factory     Factory
-	capacity    sync2.AtomicInt64
-	idleTimeout sync2.AtomicDuration
-	idleTimer   *timer.Timer
-
-	// stats
+	// stats. Atomic fields must remain at the top in order to prevent panics on certain architectures.
 	available  sync2.AtomicInt64
 	active     sync2.AtomicInt64
 	inUse      sync2.AtomicInt64
 	waitCount  sync2.AtomicInt64
 	waitTime   sync2.AtomicDuration
 	idleClosed sync2.AtomicInt64
+
+	capacity    sync2.AtomicInt64
+	idleTimeout sync2.AtomicDuration
+
+	resources chan resourceWrapper
+	factory   Factory
+	idleTimer *timer.Timer
 }
 
 type resourceWrapper struct {
@@ -122,13 +123,13 @@ func (rp *ResourcePool) closeIdleResources() {
 	for i := 0; i < available; i++ {
 		var wrapper resourceWrapper
 		select {
-		case wrapper, _ = <-rp.resources:
+		case wrapper = <-rp.resources:
 		default:
 			// stop early if we don't get anything new from the pool
 			return
 		}
 
-		if wrapper.resource != nil && idleTimeout > 0 && wrapper.timeUsed.Add(idleTimeout).Sub(time.Now()) < 0 {
+		if wrapper.resource != nil && idleTimeout > 0 && time.Until(wrapper.timeUsed.Add(idleTimeout)) < 0 {
 			wrapper.resource.Close()
 			wrapper.resource = nil
 			rp.idleClosed.Add(1)
@@ -260,7 +261,7 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 
 func (rp *ResourcePool) recordWait(start time.Time) {
 	rp.waitCount.Add(1)
-	rp.waitTime.Add(time.Now().Sub(start))
+	rp.waitTime.Add(time.Since(start))
 }
 
 // SetIdleTimeout sets the idle timeout. It can only be used if there was an

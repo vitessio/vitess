@@ -527,7 +527,7 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_1_rdonly1, False, True)
 
     # then serve replica from the split shards
-    destination_shards = ['test_keyspace/80-c0', 'test_keyspace/c0-']
+    destination_shards = ['80-c0', 'c0-']
 
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
                     auto_log=True)
@@ -549,7 +549,9 @@ primary key (name)
     # Destination tablets would have query service disabled for other
     # reasons than the migration, so check the shard record instead of
     # the tablets directly.
-    utils.check_shard_query_services(self, destination_shards,
+    utils.check_shard_query_services(self, 'test_nj', 'test_keyspace', destination_shards,
+                                     topodata_pb2.REPLICA, False)
+    utils.check_shard_query_services(self, 'test_ny', 'test_keyspace', destination_shards,
                                      topodata_pb2.REPLICA, False)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n'
@@ -566,7 +568,9 @@ primary key (name)
     # Destination tablets would have query service disabled for other
     # reasons than the migration, so check the shard record instead of
     # the tablets directly
-    utils.check_shard_query_services(self, destination_shards,
+    utils.check_shard_query_services(self, 'test_nj', 'test_keyspace', destination_shards,
+                                     topodata_pb2.REPLICA, True)
+    utils.check_shard_query_services(self, 'test_ny', 'test_keyspace', destination_shards,
                                      topodata_pb2.REPLICA, True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n'
@@ -622,7 +626,7 @@ primary key (name)
     utils.run_vtctl(['DeleteTablet', '-allow_master',
                      shard_1_master.tablet_alias], auto_log=True)
 
-    # rebuild the serving graph, all mentions of the old shards shoud be gone
+    # rebuild the serving graph, all mentions of the old shards should be gone
     utils.run_vtctl(
         ['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 

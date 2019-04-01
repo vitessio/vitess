@@ -357,6 +357,8 @@ var keywords = map[string]int{
 	"then":                THEN,
 	"time":                TIME,
 	"timestamp":           TIMESTAMP,
+	"timestampadd":        TIMESTAMPADD,
+	"timestampdiff":       TIMESTAMPDIFF,
 	"tinyblob":            TINYBLOB,
 	"tinyint":             TINYINT,
 	"tinytext":            TINYTEXT,

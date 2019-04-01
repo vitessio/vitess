@@ -256,7 +256,7 @@ func doTestWarnings(t *testing.T, disableClientDeprecateEOF bool) {
 	}
 
 	// Disable strict mode
-	result, err = conn.ExecuteFetch("set session sql_mode=''", 0, false)
+	_, err = conn.ExecuteFetch("set session sql_mode=''", 0, false)
 	if err != nil {
 		t.Fatalf("disable strict mode failed: %v", err)
 	}
@@ -273,7 +273,7 @@ func doTestWarnings(t *testing.T, disableClientDeprecateEOF bool) {
 		t.Errorf("unexpected result for warnings: %v", warnings)
 	}
 
-	result, err = conn.ExecuteFetch("drop table a", 0, false)
+	_, err = conn.ExecuteFetch("drop table a", 0, false)
 	if err != nil {
 		t.Fatalf("create table failed: %v", err)
 	}

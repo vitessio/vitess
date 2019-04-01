@@ -414,7 +414,7 @@ func main() {
 	flaky := 0
 
 	// Listen for signals.
-	sigchan := make(chan os.Signal)
+	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGINT)
 
 	// Run tests.
@@ -563,7 +563,7 @@ func main() {
 	}
 
 	// Print summary.
-	log.Printf(strings.Repeat("=", 60))
+	log.Print(strings.Repeat("=", 60))
 	for _, t := range tests {
 		tname := t.flavor + "." + t.name
 		switch {
@@ -577,7 +577,7 @@ func main() {
 			log.Printf("%-40s\tSKIPPED", tname)
 		}
 	}
-	log.Printf(strings.Repeat("=", 60))
+	log.Print(strings.Repeat("=", 60))
 	skipped := len(tests) - passed - flaky - failed
 	log.Printf("%v PASSED, %v FLAKY, %v FAILED, %v SKIPPED", passed, flaky, failed, skipped)
 	log.Printf("Total time: %v", round(time.Since(startTime)))
@@ -781,7 +781,7 @@ firstPass:
 			if ct.Tags == nil {
 				ct.Tags = []string{}
 			}
-			log.Printf("% 32v:\t%v\n", t.name, t.PassTime)
+			log.Printf("%v:\t%v\n", t.name, t.PassTime)
 		}
 		log.Printf("Shard %v total: %v\n", i, time.Duration(sums[i]))
 	}
@@ -808,13 +808,13 @@ func getTestsSorted(names []string, testMap map[string]*Test) []*Test {
 
 func selectedTests(args []string, config *Config) []*Test {
 	var tests []*Test
-	excluded_tests := strings.Split(*exclude, ",")
+	excludedTests := strings.Split(*exclude, ",")
 	if *shard >= 0 {
 		// Run the tests in a given shard.
 		// This can be combined with positional args.
 		var names []string
 		for name, t := range config.Tests {
-			if t.Shard == *shard && !t.Manual && (*exclude == "" || !t.hasAnyTag(excluded_tests)) {
+			if t.Shard == *shard && !t.Manual && (*exclude == "" || !t.hasAnyTag(excludedTests)) {
 				t.name = name
 				names = append(names, name)
 			}
@@ -826,7 +826,17 @@ func selectedTests(args []string, config *Config) []*Test {
 		for _, name := range args {
 			t, ok := config.Tests[name]
 			if !ok {
-				log.Fatalf("Unknown test: %v", name)
+				tests := make([]string, len(config.Tests))
+
+				i := 0
+				for k := range config.Tests {
+					tests[i] = k
+					i++
+				}
+
+				sort.Strings(tests)
+
+				log.Fatalf("Unknown test: %v\nAvailable tests are: %v", name, strings.Join(tests, ", "))
 			}
 			t.name = name
 			tests = append(tests, t)
@@ -836,7 +846,7 @@ func selectedTests(args []string, config *Config) []*Test {
 		// Run all tests.
 		var names []string
 		for name, t := range config.Tests {
-			if !t.Manual && (*tag == "" || t.hasTag(*tag)) && (*exclude == "" || !t.hasAnyTag(excluded_tests)) {
+			if !t.Manual && (*tag == "" || t.hasTag(*tag)) && (*exclude == "" || !t.hasAnyTag(excludedTests)) {
 				names = append(names, name)
 			}
 		}

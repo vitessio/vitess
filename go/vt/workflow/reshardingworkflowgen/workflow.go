@@ -167,7 +167,11 @@ func findSourceAndDestinationShards(ts *topo.Server, keyspace string) ([][][]str
 		var sourceShardInfo *topo.ShardInfo
 		var destinationShardInfos []*topo.ShardInfo
 		// Judge which side is source shard by checking the number of servedTypes.
-		if len(os.Left[0].ServedTypes) > 0 {
+		leftServingTypes, err := ts.GetShardServingTypes(context.Background(), os.Left[0])
+		if err != nil {
+			return nil, err
+		}
+		if len(leftServingTypes) > 0 {
 			sourceShardInfo = os.Left[0]
 			destinationShardInfos = os.Right
 		} else {

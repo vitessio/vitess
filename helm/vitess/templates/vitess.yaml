@@ -29,8 +29,9 @@
 {{- $replicas := $.Values.topology.globalCell.replicas | default $.Values.etcd.replicas -}}
 {{- $version := $.Values.topology.globalCell.version | default $.Values.etcd.version -}}
 {{- $resources := $.Values.topology.globalCell.resources | default $.Values.etcd.resources -}}
+{{- $clusterWide := $.Values.topology.globalCell.resources | default $.Values.etcd.clusterWide -}}
 
-{{ include "etcd" (tuple "global" $replicas $version $resources) }}
+{{ include "etcd" (tuple "global" $replicas $version $resources $clusterWide) }}
 
 # Create requested resources in each cell.
 {{ range $cell := $.Values.topology.cells }}
@@ -41,8 +42,9 @@
 {{- $replicas := $cell.etcd.replicas | default $.Values.etcd.replicas -}}
 {{- $version := $cell.etcd.version | default $.Values.etcd.version -}}
 {{- $resources := $cell.etcd.resources | default $.Values.etcd.resources -}}
+{{- $clusterWide := $cell.etcd.clusterWide | default $.Values.etcd.clusterWide -}}
 
-{{ include "etcd" (tuple $cellClean $replicas $version $resources) }}
+{{ include "etcd" (tuple $cellClean $replicas $version $resources $clusterWide) }}
 ---
 # create one controller per cell
 {{ include "vtctld" (tuple $.Values.topology $cell $.Values.vtctld $.Release.Namespace $.Values.config) }}

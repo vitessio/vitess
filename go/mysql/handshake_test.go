@@ -64,14 +64,14 @@ func TestClearTextClientAuth(t *testing.T) {
 
 	// Connection should fail, as server requires SSL for clear text auth.
 	ctx := context.Background()
-	conn, err := Connect(ctx, params)
+	_, err = Connect(ctx, params)
 	if err == nil || !strings.Contains(err.Error(), "Cannot use clear text authentication over non-SSL connections") {
 		t.Fatalf("unexpected connection error: %v", err)
 	}
 
 	// Change server side to allow clear text without auth.
 	l.AllowClearTextWithoutTLS = true
-	conn, err = Connect(ctx, params)
+	conn, err := Connect(ctx, params)
 	if err != nil {
 		t.Fatalf("unexpected connection error: %v", err)
 	}

@@ -458,7 +458,7 @@ func (stc *ScatterConn) StreamExecute(
 	fieldSent := false
 
 	allErrors := stc.multiGo(ctx, "StreamExecute", rss, tabletType, func(rs *srvtopo.ResolvedShard, i int) error {
-		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars, options, func(qr *sqltypes.Result) error {
+		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars, 0, options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
@@ -484,7 +484,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	fieldSent := false
 
 	allErrors := stc.multiGo(ctx, "StreamExecute", rss, tabletType, func(rs *srvtopo.ResolvedShard, i int) error {
-		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars[i], options, func(qr *sqltypes.Result) error {
+		return rs.QueryService.StreamExecute(ctx, rs.Target, query, bindVars[i], 0, options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
@@ -562,7 +562,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 			default:
 			}
 			firstErrorTimeStamp := lastErrors.Record(rs.Target)
-			if time.Now().Sub(firstErrorTimeStamp) >= *messageStreamGracePeriod {
+			if time.Since(firstErrorTimeStamp) >= *messageStreamGracePeriod {
 				// Cancel all streams and return an error.
 				cancel()
 				return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "message stream from %v has repeatedly failed for longer than %v", rs.Target, *messageStreamGracePeriod)
@@ -693,6 +693,7 @@ func init() {
 // as the random generator used by shuffleQueryParts. This function
 // should only be used in tests and should not be called concurrently.
 // It returns the previous shuffleQueryPartsRandomGenerator used.
+// lint:ignore U1000 available for tests to use
 func injectShuffleQueryPartsRandomGenerator(
 	randGen shuffleQueryPartsRandomGeneratorInterface) shuffleQueryPartsRandomGeneratorInterface {
 	oldRandGen := shuffleQueryPartsRandomGenerator
@@ -700,7 +701,7 @@ func injectShuffleQueryPartsRandomGenerator(
 	return oldRandGen
 }
 
-// shuffleQueryParts performs an in-place shuffle of the the given array.
+// shuffleQueryParts performs an in-place shuffle of the given array.
 // The result is a psuedo-random permutation of the array chosen uniformally
 // from the space of all permutations.
 func shuffleQueryParts(splits []*vtgatepb.SplitQueryResponse_Part) {

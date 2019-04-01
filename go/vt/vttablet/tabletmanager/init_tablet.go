@@ -24,16 +24,19 @@ import (
 	"fmt"
 	"time"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -122,22 +125,17 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		}
 	}
 
-	// See if we need to add the tablet's cell to the shard's cell list.
-	if !si.HasCell(agent.TabletAlias.Cell) {
-		if err := agent.withRetry(ctx, "updating Cells list in Shard if necessary", func() error {
-			si, err = agent.TopoServer.UpdateShardFields(ctx, *initKeyspace, shard, func(si *topo.ShardInfo) error {
-				if si.HasCell(agent.TabletAlias.Cell) {
-					// Someone else already did it.
-					return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
-				}
-				si.Cells = append(si.Cells, agent.TabletAlias.Cell)
-				return nil
-			})
-			return err
-		}); err != nil {
-			return vterrors.Wrap(err, "couldn't add tablet's cell to shard record")
-		}
+	// Rebuild keyspace graph if this the first tablet in this keyspace/cell
+	_, err = agent.TopoServer.GetSrvKeyspace(ctx, agent.TabletAlias.Cell, *initKeyspace)
+	switch {
+	case err == nil:
+		// NOOP
+	case topo.IsErrType(err, topo.NoNode):
+		err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), agent.TopoServer, *initKeyspace, []string{agent.TabletAlias.Cell})
+	default:
+		return vterrors.Wrap(err, "InitTablet failed to read srvKeyspace")
 	}
+
 	log.Infof("Initializing the tablet for type %v", tabletType)
 
 	// figure out the hostname

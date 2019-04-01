@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,6 +21,12 @@ import static com.google.common.base.Preconditions.checkArgument;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
+
+import io.vitess.mysql.DateTime;
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.Field;
+import io.vitess.proto.Query.Type;
+
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -33,29 +39,26 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-import javax.annotation.concurrent.NotThreadSafe;
 
-import io.vitess.mysql.DateTime;
-import io.vitess.proto.Query;
-import io.vitess.proto.Query.Field;
-import io.vitess.proto.Query.Type;
+import javax.annotation.concurrent.NotThreadSafe;
 
 /**
  * Type-converting wrapper around raw {@link io.vitess.proto.Query.Row} proto.
  *
  * <p>
- * Usually you get Row objects from a {@link Cursor}, which builds them by combining
- * {@link io.vitess.proto.Query.Row} with the list of {@link Field}s from the corresponding
- * {@link io.vitess.proto.Query.QueryResult}.
+ * Usually you get Row objects from a {@link Cursor}, which builds them by combining {@link
+ * io.vitess.proto.Query.Row} with the list of {@link Field}s from the corresponding {@link
+ * io.vitess.proto.Query.QueryResult}.
  *
  * <p>
  * Methods on {@code Row} are intended to be compatible with those on {@link java.sql.ResultSet}
- * where possible. This means {@code columnIndex} values start at 1 for the first column, and
- * {@code columnLabel} values are case-insensitive. If multiple columns have the same
- * case-insensitive {@code columnLabel}, the earliest one will be returned.
+ * where possible. This means {@code columnIndex} values start at 1 for the first column, and {@code
+ * columnLabel} values are case-insensitive. If multiple columns have the same case-insensitive
+ * {@code columnLabel}, the earliest one will be returned.
  */
 @NotThreadSafe
 public class Row {
+
   private final FieldMap fieldMap;
   private final List<ByteString> values;
   private final Query.Row rawRow;
@@ -70,8 +73,8 @@ public class Row {
   private volatile boolean lastGetWasNull;
 
   /**
-   * Construct a Row from {@link io.vitess.proto.Query.Row} proto with a pre-built
-   * {@link FieldMap}.
+   * Construct a Row from {@link io.vitess.proto.Query.Row} proto with a pre-built {@link
+   * FieldMap}.
    *
    * <p>
    * {@link Cursor} uses this to share a {@link FieldMap} among multiple rows.
@@ -95,9 +98,9 @@ public class Row {
    * Construct a Row manually (not from proto).
    *
    * <p>
-   * The primary purpose of this Row class is to wrap the {@link io.vitess.proto.Query.Row}
-   * proto, which stores values in a packed format. However, when writing tests you may want to
-   * create a Row from unpacked data.
+   * The primary purpose of this Row class is to wrap the {@link io.vitess.proto.Query.Row} proto,
+   * which stores values in a packed format. However, when writing tests you may want to create a
+   * Row from unpacked data.
    *
    * <p>
    * Note that {@link #getRowProto()} will return null in this case, so a Row created in this way
@@ -108,6 +111,102 @@ public class Row {
     this.fieldMap = new FieldMap(fields);
     this.rawRow = null;
     this.values = values;
+  }
+
+  private static Object convertFieldValue(Field field, ByteString value) throws SQLException {
+    // Note: We don't actually know the charset in which the value is encoded.
+    // For dates and numeric values, we just assume UTF-8 because they (hopefully) don't contain
+    // anything outside 7-bit ASCII, which (hopefully) is a subset of the actual charset.
+    // For strings, we return byte[] and the application is responsible for using the right charset.
+    switch (field.getType()) {
+      case DECIMAL:
+        return new BigDecimal(value.toStringUtf8());
+      case INT8: // fall through
+      case UINT8: // fall through
+      case INT16: // fall through
+      case UINT16: // fall through
+      case INT24: // fall through
+      case UINT24: // fall through
+      case INT32:
+        return Integer.valueOf(value.toStringUtf8());
+      case UINT32: // fall through
+      case INT64:
+        return Long.valueOf(value.toStringUtf8());
+      case UINT64:
+        return new BigInteger(value.toStringUtf8());
+      case FLOAT32:
+        return Float.valueOf(value.toStringUtf8());
+      case FLOAT64:
+        return Double.valueOf(value.toStringUtf8());
+      case NULL_TYPE:
+        return null;
+      case DATE:
+        // We don't get time zone information from the server,
+        // so we use the default time zone.
+        try {
+          return DateTime.parseDate(value.toStringUtf8());
+        } catch (ParseException exc) {
+          throw new SQLDataException("Can't parse DATE: " + value.toStringUtf8(), exc);
+        }
+      case TIME:
+        // We don't get time zone information from the server,
+        // so we use the default time zone.
+        try {
+          return DateTime.parseTime(value.toStringUtf8());
+        } catch (ParseException exc) {
+          throw new SQLDataException("Can't parse TIME: " + value.toStringUtf8(), exc);
+        }
+      case DATETIME: // fall through
+      case TIMESTAMP:
+        // We don't get time zone information from the server,
+        // so we use the default time zone.
+        try {
+          return DateTime.parseTimestamp(value.toStringUtf8());
+        } catch (ParseException exc) {
+          throw new SQLDataException("Can't parse TIMESTAMP: " + value.toStringUtf8(), exc);
+        }
+      case YEAR:
+        return Short.valueOf(value.toStringUtf8());
+      case ENUM: // fall through
+      case SET:
+        return value.toStringUtf8();
+      case BIT: // fall through
+      case TEXT: // fall through
+      case BLOB: // fall through
+      case VARCHAR: // fall through
+      case VARBINARY: // fall through
+      case CHAR: // fall through
+      case BINARY:
+      case GEOMETRY:
+      case JSON:
+        return value.toByteArray();
+      default:
+        throw new SQLDataException("unknown field type: " + field.getType());
+    }
+  }
+
+  /**
+   * Extract cell values from the single-buffer wire format.
+   *
+   * <p>
+   * See the docs for the {@code Row} message in {@code query.proto}.
+   */
+  private static List<ByteString> extractValues(List<Long> lengths, ByteString buf) {
+    List<ByteString> list = new ArrayList<ByteString>(lengths.size());
+
+    int start = 0;
+    for (long len : lengths) {
+      if (len < 0) {
+        // This indicates a MySQL NULL value, to distinguish it from a zero-length string.
+        list.add((ByteString) null);
+      } else {
+        // Lengths are returned as long, but ByteString.substring() only supports int.
+        list.add(buf.substring(start, start + (int) len));
+        start += len;
+      }
+    }
+
+    return list;
   }
 
   /**
@@ -212,8 +311,8 @@ public class Row {
    * Returns the column value, or 0 if the value is SQL NULL.
    *
    * <p>
-   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
-   * {@link #getObject(String,Class)}.
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or {@link
+   * #getObject(String, Class)}.
    *
    * @param columnLabel case-insensitive column label
    */
@@ -225,8 +324,8 @@ public class Row {
    * Returns the column value, or 0 if the value is SQL NULL.
    *
    * <p>
-   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
-   * {@link #getObject(int,Class)}.
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or {@link #getObject(int,
+   * Class)}.
    *
    * @param columnIndex 1-based column number (0 is invalid)
    */
@@ -246,8 +345,8 @@ public class Row {
    * @param columnIndex 1-based column number (0 is invalid)
    */
   public UnsignedLong getULong(int columnIndex) throws SQLException {
-    BigInteger l = getObject(columnIndex, BigInteger.class);
-    return l == null ? null : UnsignedLong.fromLongBits(l.longValue());
+    BigInteger longValue = getObject(columnIndex, BigInteger.class);
+    return longValue == null ? null : UnsignedLong.fromLongBits(longValue.longValue());
   }
 
   /**
@@ -268,8 +367,8 @@ public class Row {
    * Returns the column value, or 0 if the value is SQL NULL.
    *
    * <p>
-   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
-   * {@link #getObject(String,Class)}.
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or {@link
+   * #getObject(String, Class)}.
    *
    * @param columnLabel case-insensitive column label
    */
@@ -281,8 +380,8 @@ public class Row {
    * Returns the column value, or 0 if the value is SQL NULL.
    *
    * <p>
-   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
-   * {@link #getObject(int,Class)}.
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or {@link #getObject(int,
+   * Class)}.
    *
    * @param columnIndex 1-based column number (0 is invalid)
    */
@@ -295,8 +394,8 @@ public class Row {
    * Returns the column value, or 0 if the value is SQL NULL.
    *
    * <p>
-   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
-   * {@link #getObject(String,Class)}.
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or {@link
+   * #getObject(String, Class)}.
    *
    * @param columnLabel case-insensitive column label
    */
@@ -308,8 +407,8 @@ public class Row {
    * Returns the column value, or 0 if the value is SQL NULL.
    *
    * <p>
-   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
-   * {@link #getObject(int,Class)}.
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or {@link #getObject(int,
+   * Class)}.
    *
    * @param columnIndex 1-based column number (0 is invalid)
    */
@@ -322,8 +421,8 @@ public class Row {
    * Returns the column value, or 0 if the value is SQL NULL.
    *
    * <p>
-   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
-   * {@link #getObject(String,Class)}.
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or {@link
+   * #getObject(String, Class)}.
    *
    * @param columnLabel case-insensitive column label
    */
@@ -335,8 +434,8 @@ public class Row {
    * Returns the column value, or 0 if the value is SQL NULL.
    *
    * <p>
-   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
-   * {@link #getObject(int,Class)}.
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or {@link #getObject(int,
+   * Class)}.
    *
    * @param columnIndex 1-based column number (0 is invalid)
    */
@@ -389,8 +488,8 @@ public class Row {
     }
     try {
       return DateTime.parseDate(rawValue.toStringUtf8(), cal);
-    } catch (ParseException e) {
-      throw new SQLDataException("Can't parse DATE: " + rawValue.toStringUtf8(), e);
+    } catch (ParseException exc) {
+      throw new SQLDataException("Can't parse DATE: " + rawValue.toStringUtf8(), exc);
     }
   }
 
@@ -438,8 +537,8 @@ public class Row {
     }
     try {
       return DateTime.parseTime(rawValue.toStringUtf8(), cal);
-    } catch (ParseException e) {
-      throw new SQLDataException("Can't parse TIME: " + rawValue.toStringUtf8(), e);
+    } catch (ParseException exc) {
+      throw new SQLDataException("Can't parse TIME: " + rawValue.toStringUtf8(), exc);
     }
   }
 
@@ -487,8 +586,8 @@ public class Row {
     }
     try {
       return DateTime.parseTimestamp(rawValue.toStringUtf8(), cal);
-    } catch (ParseException e) {
-      throw new SQLDataException("Can't parse TIMESTAMP: " + rawValue.toStringUtf8(), e);
+    } catch (ParseException exc) {
+      throw new SQLDataException("Can't parse TIMESTAMP: " + rawValue.toStringUtf8(), exc);
     }
   }
 
@@ -524,8 +623,8 @@ public class Row {
    * Returns the column value, or 0 if the value is SQL NULL.
    *
    * <p>
-   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
-   * {@link #getObject(String,Class)}.
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or {@link
+   * #getObject(String, Class)}.
    *
    * @param columnLabel case-insensitive column label
    */
@@ -537,8 +636,8 @@ public class Row {
    * Returns the column value, or 0 if the value is SQL NULL.
    *
    * <p>
-   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or
-   * {@link #getObject(int,Class)}.
+   * To distinguish between 0 and SQL NULL, use either {@link #wasNull()} or {@link #getObject(int,
+   * Class)}.
    *
    * @param columnIndex 1-based column number (0 is invalid)
    */
@@ -570,12 +669,15 @@ public class Row {
    */
   @SuppressWarnings("unchecked") // by runtime check
   public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
-    Object o = getObject(columnIndex);
-    if (o != null && !type.isInstance(o)) {
+    Object object = getObject(columnIndex);
+    if (object != null && !type.isInstance(object)) {
       throw new SQLDataException(
-          "type mismatch, expected: " + type.getName() + ", actual: " + o.getClass().getName());
+          "type mismatch, expected: "
+              + type.getName()
+              + ", actual: "
+              + object.getClass().getName());
     }
-    return (T) o;
+    return (T) object;
   }
 
   /**
@@ -617,11 +719,9 @@ public class Row {
    * {@code wasNull()}.
    *
    * <p>
-   * As an alternative to {@code wasNull()}, you can use {@link #getObject(int,Class)} (e.g.
-   * {@code getObject(0, Long.class)} instead of {@code getLong(0)}) to get a wrapped {@code Long}
-   * value that will be {@code null} if the column value was SQL NULL.
-   *
-   * @throws SQLException
+   * As an alternative to {@code wasNull()}, you can use {@link #getObject(int, Class)} (e.g. {@code
+   * getObject(0, Long.class)} instead of {@code getLong(0)}) to get a wrapped {@code Long} value
+   * that will be {@code null} if the column value was SQL NULL.
    */
   public boolean wasNull() throws SQLException {
     // Note: lastGetWasNull is currently set only in getRawValue(),
@@ -629,101 +729,5 @@ public class Row {
     // eventually call into that. The unit tests help to ensure this by
     // checking wasNull() after each get*().
     return lastGetWasNull;
-  }
-
-  private static Object convertFieldValue(Field field, ByteString value) throws SQLException {
-    // Note: We don't actually know the charset in which the value is encoded.
-    // For dates and numeric values, we just assume UTF-8 because they (hopefully) don't contain
-    // anything outside 7-bit ASCII, which (hopefully) is a subset of the actual charset.
-    // For strings, we return byte[] and the application is responsible for using the right charset.
-    switch (field.getType()) {
-      case DECIMAL:
-        return new BigDecimal(value.toStringUtf8());
-      case INT8: // fall through
-      case UINT8: // fall through
-      case INT16: // fall through
-      case UINT16: // fall through
-      case INT24: // fall through
-      case UINT24: // fall through
-      case INT32:
-        return Integer.valueOf(value.toStringUtf8());
-      case UINT32: // fall through
-      case INT64:
-        return Long.valueOf(value.toStringUtf8());
-      case UINT64:
-        return new BigInteger(value.toStringUtf8());
-      case FLOAT32:
-        return Float.valueOf(value.toStringUtf8());
-      case FLOAT64:
-        return Double.valueOf(value.toStringUtf8());
-      case NULL_TYPE:
-        return null;
-      case DATE:
-        // We don't get time zone information from the server,
-        // so we use the default time zone.
-        try {
-          return DateTime.parseDate(value.toStringUtf8());
-        } catch (ParseException e) {
-          throw new SQLDataException("Can't parse DATE: " + value.toStringUtf8(), e);
-        }
-      case TIME:
-        // We don't get time zone information from the server,
-        // so we use the default time zone.
-        try {
-          return DateTime.parseTime(value.toStringUtf8());
-        } catch (ParseException e) {
-          throw new SQLDataException("Can't parse TIME: " + value.toStringUtf8(), e);
-        }
-      case DATETIME: // fall through
-      case TIMESTAMP:
-        // We don't get time zone information from the server,
-        // so we use the default time zone.
-        try {
-          return DateTime.parseTimestamp(value.toStringUtf8());
-        } catch (ParseException e) {
-          throw new SQLDataException("Can't parse TIMESTAMP: " + value.toStringUtf8(), e);
-        }
-      case YEAR:
-        return Short.valueOf(value.toStringUtf8());
-      case ENUM: // fall through
-      case SET:
-        return value.toStringUtf8();
-      case BIT: // fall through
-      case TEXT: // fall through
-      case BLOB: // fall through
-      case VARCHAR: // fall through
-      case VARBINARY: // fall through
-      case CHAR: // fall through
-      case BINARY:
-      case GEOMETRY:
-      case JSON:
-        return value.toByteArray();
-      default:
-        throw new SQLDataException("unknown field type: " + field.getType());
-    }
-  }
-
-  /**
-   * Extract cell values from the single-buffer wire format.
-   *
-   * <p>
-   * See the docs for the {@code Row} message in {@code query.proto}.
-   */
-  private static List<ByteString> extractValues(List<Long> lengths, ByteString buf) {
-    List<ByteString> list = new ArrayList<ByteString>(lengths.size());
-
-    int start = 0;
-    for (long len : lengths) {
-      if (len < 0) {
-        // This indicates a MySQL NULL value, to distinguish it from a zero-length string.
-        list.add((ByteString) null);
-      } else {
-        // Lengths are returned as long, but ByteString.substring() only supports int.
-        list.add(buf.substring(start, start + (int) len));
-        start += len;
-      }
-    }
-
-    return list;
   }
 }

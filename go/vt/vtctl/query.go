@@ -190,11 +190,12 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 
 	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("BuildBindVariables failed: %v", err)
 	}
 
 	qr, err := session.Execute(ctx, subFlags.Arg(0), bindVars)
 	if err != nil {
+		//lint:ignore ST1005 function name
 		return fmt.Errorf("Execute failed: %v", err)
 	}
 	if *json {
@@ -244,12 +245,12 @@ func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subF
 
 	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("BuildBindVariables failed: %v", err)
 	}
 
 	qr, err := vtgateConn.ExecuteShards(ctx, subFlags.Arg(0), *keyspace, shards, bindVars, t, executeOptions)
 	if err != nil {
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("ExecuteShards failed: %v", err)
 	}
 	if *json {
 		return printJSON(wr.Logger(), qr)
@@ -305,12 +306,12 @@ func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler,
 
 	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("BuildBindVariables failed: %v", err)
 	}
 
 	qr, err := vtgateConn.ExecuteKeyspaceIds(ctx, subFlags.Arg(0), *keyspace, keyspaceIDs, bindVars, t, executeOptions)
 	if err != nil {
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("ExecuteKeyspaceIds failed: %v", err)
 	}
 	if *json {
 		return printJSON(wr.Logger(), qr)
@@ -343,7 +344,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	}
 	if (*splitCount == 0 && *numRowsPerQueryPart == 0) ||
 		(*splitCount != 0 && *numRowsPerQueryPart != 0) {
-		return fmt.Errorf("Exactly one of split_count or num_rows_per_query_part"+
+		return fmt.Errorf("exactly one of split_count or num_rows_per_query_part"+
 			"must be nonzero. Got: split_count:%v, num_rows_per_query_part:%v",
 			*splitCount, *numRowsPerQueryPart)
 	}
@@ -358,7 +359,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	case "EQUAL_SPLITS":
 		algorithm = querypb.SplitQueryRequest_EQUAL_SPLITS
 	default:
-		return fmt.Errorf("Unknown split-query algorithm: %v", algorithmStr)
+		return fmt.Errorf("unknown split-query algorithm: %v", algorithmStr)
 	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <sql> argument is required for the VtGateSplitQuery command")
@@ -371,7 +372,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 
 	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("BuildBindVariables failed: %v", err)
 	}
 
 	r, err := vtgateConn.SplitQuery(
@@ -434,7 +435,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 
 	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("BuildBindVariables failed: %v", err)
 	}
 
 	qr, err := conn.Execute(ctx, &querypb.Target{
@@ -443,6 +444,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		TabletType: tabletInfo.Tablet.Type,
 	}, subFlags.Arg(1), bindVars, int64(*transactionID), executeOptions)
 	if err != nil {
+		//lint:ignore ST1005 function name
 		return fmt.Errorf("Execute failed: %v", err)
 	}
 	if *json {
@@ -491,7 +493,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		TabletType: tabletInfo.Tablet.Type,
 	}, nil)
 	if err != nil {
-		return fmt.Errorf("Begin failed: %v", err)
+		return fmt.Errorf("begin failed: %v", err)
 	}
 	result := map[string]int64{
 		"transaction_id": transactionID,

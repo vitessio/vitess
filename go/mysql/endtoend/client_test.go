@@ -220,7 +220,7 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	expectFlag(t, "ReadQueryResult(2)", more, false)
 	expectRows(t, "ReadQueryResult(2)", qr, 1)
 
-	result, err = conn.ExecuteFetch("drop table a", 10, true)
+	_, err = conn.ExecuteFetch("drop table a", 10, true)
 	if err != nil {
 		t.Fatalf("drop table failed: %v", err)
 	}

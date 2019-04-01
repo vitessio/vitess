@@ -17,7 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -265,9 +264,9 @@ func String(node SQLNode) string {
 }
 
 // Append appends the SQLNode to the buffer.
-func Append(buf *bytes.Buffer, node SQLNode) {
+func Append(buf *strings.Builder, node SQLNode) {
 	tbuf := &TrackedBuffer{
-		Buffer: buf,
+		Builder: buf,
 	}
 	node.Format(tbuf)
 }
@@ -404,7 +403,6 @@ func (node *Select) AddWhere(expr Expr) {
 		Left:  node.Where.Expr,
 		Right: expr,
 	}
-	return
 }
 
 // AddHaving adds the boolean expression to the
@@ -427,7 +425,6 @@ func (node *Select) AddHaving(expr Expr) {
 		Left:  node.Having.Expr,
 		Right: expr,
 	}
-	return
 }
 
 // ParenSelect is a parenthesized SELECT statement.
@@ -1031,8 +1028,8 @@ type ColumnType struct {
 	// Generic field options.
 	NotNull       BoolVal
 	Autoincrement BoolVal
-	Default       *SQLVal
-	OnUpdate      *SQLVal
+	Default       Expr
+	OnUpdate      Expr
 	Comment       *SQLVal
 
 	// Numeric field options
@@ -1170,6 +1167,8 @@ func (ct *ColumnType) SQLType() querypb.Type {
 			return sqltypes.Uint64
 		}
 		return sqltypes.Int64
+	case keywordStrings[BOOL], keywordStrings[BOOLEAN]:
+		return sqltypes.Uint8
 	case keywordStrings[TEXT]:
 		return sqltypes.Text
 	case keywordStrings[TINYTEXT]:
@@ -1518,6 +1517,7 @@ func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
 type Show struct {
 	Type                   string
 	OnTable                TableName
+	Table                  TableName
 	ShowTablesOpt          *ShowTablesOpt
 	Scope                  string
 	ShowCollationFilterOpt *Expr
@@ -1548,11 +1548,20 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
 		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
 	}
+	if node.HasTable() {
+		buf.Myprintf(" %v", node.Table)
+	}
 }
 
 // HasOnTable returns true if the show statement has an "on" clause
 func (node *Show) HasOnTable() bool {
 	return node.OnTable.Name.v != ""
+}
+
+// HasTable returns true if the show statement has a parsed table name.
+// Not all show statements parse table names.
+func (node *Show) HasTable() bool {
+	return node.Table.Name.v != ""
 }
 
 func (node *Show) walkSubtree(visit Visit) error {
@@ -2151,34 +2160,36 @@ type Expr interface {
 	SQLNode
 }
 
-func (*AndExpr) iExpr()          {}
-func (*OrExpr) iExpr()           {}
-func (*NotExpr) iExpr()          {}
-func (*ParenExpr) iExpr()        {}
-func (*ComparisonExpr) iExpr()   {}
-func (*RangeCond) iExpr()        {}
-func (*IsExpr) iExpr()           {}
-func (*ExistsExpr) iExpr()       {}
-func (*SQLVal) iExpr()           {}
-func (*NullVal) iExpr()          {}
-func (BoolVal) iExpr()           {}
-func (*ColName) iExpr()          {}
-func (ValTuple) iExpr()          {}
-func (*Subquery) iExpr()         {}
-func (ListArg) iExpr()           {}
-func (*BinaryExpr) iExpr()       {}
-func (*UnaryExpr) iExpr()        {}
-func (*IntervalExpr) iExpr()     {}
-func (*CollateExpr) iExpr()      {}
-func (*FuncExpr) iExpr()         {}
-func (*CaseExpr) iExpr()         {}
-func (*ValuesFuncExpr) iExpr()   {}
-func (*ConvertExpr) iExpr()      {}
-func (*SubstrExpr) iExpr()       {}
-func (*ConvertUsingExpr) iExpr() {}
-func (*MatchExpr) iExpr()        {}
-func (*GroupConcatExpr) iExpr()  {}
-func (*Default) iExpr()          {}
+func (*AndExpr) iExpr()           {}
+func (*OrExpr) iExpr()            {}
+func (*NotExpr) iExpr()           {}
+func (*ParenExpr) iExpr()         {}
+func (*ComparisonExpr) iExpr()    {}
+func (*RangeCond) iExpr()         {}
+func (*IsExpr) iExpr()            {}
+func (*ExistsExpr) iExpr()        {}
+func (*SQLVal) iExpr()            {}
+func (*NullVal) iExpr()           {}
+func (BoolVal) iExpr()            {}
+func (*ColName) iExpr()           {}
+func (ValTuple) iExpr()           {}
+func (*Subquery) iExpr()          {}
+func (ListArg) iExpr()            {}
+func (*BinaryExpr) iExpr()        {}
+func (*UnaryExpr) iExpr()         {}
+func (*IntervalExpr) iExpr()      {}
+func (*CollateExpr) iExpr()       {}
+func (*FuncExpr) iExpr()          {}
+func (*TimestampFuncExpr) iExpr() {}
+func (*CurTimeFuncExpr) iExpr()   {}
+func (*CaseExpr) iExpr()          {}
+func (*ValuesFuncExpr) iExpr()    {}
+func (*ConvertExpr) iExpr()       {}
+func (*SubstrExpr) iExpr()        {}
+func (*ConvertUsingExpr) iExpr()  {}
+func (*MatchExpr) iExpr()         {}
+func (*GroupConcatExpr) iExpr()   {}
+func (*Default) iExpr()           {}
 
 // ReplaceExpr finds the from expression from root
 // and replaces it with to. If from matches root,
@@ -2377,6 +2388,32 @@ func (node *ComparisonExpr) walkSubtree(visit Visit) error {
 
 func (node *ComparisonExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Left, &node.Right, &node.Escape)
+}
+
+// IsImpossible returns true if the comparison in the expression can never evaluate to true.
+// Note that this is not currently exhaustive to ALL impossible comparisons.
+func (node *ComparisonExpr) IsImpossible() bool {
+	var left, right *SQLVal
+	var ok bool
+	if left, ok = node.Left.(*SQLVal); !ok {
+		return false
+	}
+	if right, ok = node.Right.(*SQLVal); !ok {
+		return false
+	}
+	if node.Operator == NotEqualStr && left.Type == right.Type {
+		if len(left.Val) != len(right.Val) {
+			return false
+		}
+
+		for i := range left.Val {
+			if left.Val[i] != right.Val[i] {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // RangeCond represents a BETWEEN or a NOT BETWEEN expression.
@@ -2840,6 +2877,66 @@ func (node *IntervalExpr) walkSubtree(visit Visit) error {
 
 func (node *IntervalExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr)
+}
+
+// TimestampFuncExpr represents the function and arguments for TIMESTAMP{ADD,DIFF} functions.
+type TimestampFuncExpr struct {
+	Name  string
+	Expr1 Expr
+	Expr2 Expr
+	Unit  string
+}
+
+// Format formats the node.
+func (node *TimestampFuncExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s(%s, %v, %v)", node.Name, node.Unit, node.Expr1, node.Expr2)
+}
+
+func (node *TimestampFuncExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Expr1,
+		node.Expr2,
+	)
+}
+
+func (node *TimestampFuncExpr) replace(from, to Expr) bool {
+	if replaceExprs(from, to, &node.Expr1) {
+		return true
+	}
+	if replaceExprs(from, to, &node.Expr2) {
+		return true
+	}
+	return false
+}
+
+// CurTimeFuncExpr represents the function and arguments for CURRENT DATE/TIME functions
+// supported functions are documented in the grammar
+type CurTimeFuncExpr struct {
+	Name ColIdent
+	Fsp  Expr // fractional seconds precision, integer from 0 to 6
+}
+
+// Format formats the node.
+func (node *CurTimeFuncExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s(%v)", node.Name.String(), node.Fsp)
+}
+
+func (node *CurTimeFuncExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Fsp,
+	)
+}
+
+func (node *CurTimeFuncExpr) replace(from, to Expr) bool {
+	return replaceExprs(from, to, &node.Fsp)
 }
 
 // CollateExpr represents dynamic collate operator.

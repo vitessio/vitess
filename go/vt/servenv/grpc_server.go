@@ -19,18 +19,18 @@ package servenv
 import (
 	"flag"
 	"fmt"
+	"math"
 	"net"
+	"time"
+
+	"github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/go-grpc-prometheus"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-
-	"math"
-	"time"
-
-	"github.com/grpc-ecosystem/go-grpc-prometheus"
+	"google.golang.org/grpc/keepalive"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/keepalive"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttls"
@@ -86,6 +86,11 @@ var (
 	// EnforcementPolicy MinTime that sets the keepalive enforcement policy on the server.
 	// This is the minimum amount of time a client should wait before sending a keepalive ping.
 	GRPCKeepAliveEnforcementPolicyMinTime = flag.Duration("grpc_server_keepalive_enforcement_policy_min_time", 5*time.Minute, "grpc server minimum keepalive time")
+
+	// EnforcementPolicy PermitWithoutStream - If true, server allows keepalive pings
+	// even when there are no active streams (RPCs). If false, and client sends ping when
+	// there are no active streams, server will send GOAWAY and close the connection.
+	GRPCKeepAliveEnforcementPolicyPermitWithoutStream = flag.Bool("grpc_server_keepalive_enforcement_policy_permit_without_stream", false, "grpc server permit client keepalive pings even when there are no active streams (RPCs)")
 
 	authPlugin Authenticator
 )
@@ -148,7 +153,8 @@ func createGRPCServer() {
 	}
 
 	ep := keepalive.EnforcementPolicy{
-		MinTime: *GRPCKeepAliveEnforcementPolicyMinTime,
+		MinTime:             *GRPCKeepAliveEnforcementPolicyMinTime,
+		PermitWithoutStream: *GRPCKeepAliveEnforcementPolicyPermitWithoutStream,
 	}
 	opts = append(opts, grpc.KeepaliveEnforcementPolicy(ep))
 
@@ -162,6 +168,15 @@ func createGRPCServer() {
 		opts = append(opts, grpc.KeepaliveParams(ka))
 	}
 
+	opts = append(opts, interceptors()...)
+
+	GRPCServer = grpc.NewServer(opts...)
+}
+
+// We can only set a ServerInterceptor once, so we chain multiple interceptors into one
+func interceptors() []grpc.ServerOption {
+	interceptors := &InterceptorBuilder{}
+
 	if *GRPCAuth != "" {
 		log.Infof("enabling auth plugin %v", *GRPCAuth)
 		pluginInitializer := GetAuthenticator(*GRPCAuth)
@@ -170,16 +185,20 @@ func createGRPCServer() {
 			log.Fatalf("Failed to load auth plugin: %v", err)
 		}
 		authPlugin = authPluginImpl
-		opts = append(opts, grpc.StreamInterceptor(streamInterceptor))
-		opts = append(opts, grpc.UnaryInterceptor(unaryInterceptor))
+		interceptors.Add(authenticatingStreamInterceptor, authenticatingUnaryInterceptor)
 	}
 
 	if *grpccommon.EnableGRPCPrometheus {
-		opts = append(opts, grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor))
-		opts = append(opts, grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor))
+		interceptors.Add(grpc_prometheus.StreamServerInterceptor, grpc_prometheus.UnaryServerInterceptor)
 	}
 
-	GRPCServer = grpc.NewServer(opts...)
+	if interceptors.NonEmpty() {
+		return []grpc.ServerOption{
+			grpc.StreamInterceptor(interceptors.StreamServerInterceptor),
+			grpc.UnaryInterceptor(interceptors.UnaryStreamInterceptor)}
+	} else {
+		return []grpc.ServerOption{}
+	}
 }
 
 func serveGRPC() {
@@ -227,7 +246,7 @@ func GRPCCheckServiceMap(name string) bool {
 	return CheckServiceMap("grpc", name)
 }
 
-func streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func authenticatingStreamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	newCtx, err := authPlugin.Authenticate(stream.Context(), info.FullMethod)
 
 	if err != nil {
@@ -239,7 +258,7 @@ func streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.Str
 	return handler(srv, wrapped)
 }
 
-func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func authenticatingUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	newCtx, err := authPlugin.Authenticate(ctx, info.FullMethod)
 	if err != nil {
 		return nil, err
@@ -265,4 +284,24 @@ func WrapServerStream(stream grpc.ServerStream) *WrappedServerStream {
 		return existing
 	}
 	return &WrappedServerStream{ServerStream: stream, WrappedContext: stream.Context()}
+}
+
+// InterceptorBuilder chains together multiple ServerInterceptors
+type InterceptorBuilder struct {
+	StreamServerInterceptor grpc.StreamServerInterceptor
+	UnaryStreamInterceptor  grpc.UnaryServerInterceptor
+}
+
+func (collector *InterceptorBuilder) Add(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor) {
+	if collector.StreamServerInterceptor == nil {
+		collector.StreamServerInterceptor = s
+		collector.UnaryStreamInterceptor = u
+	} else {
+		collector.StreamServerInterceptor = grpc_middleware.ChainStreamServer(collector.StreamServerInterceptor, s)
+		collector.UnaryStreamInterceptor = grpc_middleware.ChainUnaryServer(collector.UnaryStreamInterceptor, u)
+	}
+}
+
+func (collector *InterceptorBuilder) NonEmpty() bool {
+	return collector.StreamServerInterceptor != nil
 }

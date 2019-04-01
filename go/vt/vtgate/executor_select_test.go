@@ -19,9 +19,11 @@ package vtgate
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -596,7 +598,7 @@ func TestSelectKeyRangeUnique(t *testing.T) {
 func TestSelectIN(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
-	// Constant in IN is just a number, not a bind variable.
+	// Constant in IN clause is just a number, not a bind variable.
 	_, err := executorExec(executor, "select id from user where id in (1)", nil)
 	if err != nil {
 		t.Error(err)
@@ -614,7 +616,7 @@ func TestSelectIN(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 
-	// Constant in IN is just a couple numbers, not bind variables.
+	// Constants in IN clause are just numbers, not bind variables.
 	// They result in two different queries on two shards.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
@@ -806,9 +808,12 @@ func TestSelectScatterPartial(t *testing.T) {
 	// Fail 1 of N without the directive fails the whole operation
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	results, err := executorExec(executor, "select id from user", nil)
-	wantErr := "target: TestExecutor.40-60.master, used tablet: aa-0 (40-60), RESOURCE_EXHAUSTED error"
-	if err == nil || err.Error() != wantErr {
+	wantErr := "TestExecutor.40-60.master, used tablet: aa-0 (40-60)"
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("want error %v, got %v", wantErr, err)
+	}
+	if vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED {
+		t.Errorf("want error code Code_RESOURCE_EXHAUSTED, but got %v", vterrors.Code(err))
 	}
 	if results != nil {
 		t.Errorf("want nil results, got %v", results)
@@ -854,10 +859,8 @@ func TestStreamSelectScatter(t *testing.T) {
 	serv := new(sandboxTopo)
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
-	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
-		conns = append(conns, sbc)
+		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 	}
 	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false, testBufferSize, testCacheSize, false)
 
@@ -1619,10 +1622,6 @@ func TestVarJoinStream(t *testing.T) {
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select u2.id from user as u2 where u2.id = :u1_col",
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
 	want := `[sql:"select u2.id from user as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`

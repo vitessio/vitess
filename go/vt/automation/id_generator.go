@@ -16,8 +16,10 @@ limitations under the License.
 
 package automation
 
-import "strconv"
-import "sync/atomic"
+import (
+	"strconv"
+	"sync/atomic"
+)
 
 // IDGenerator generates unique task and cluster operation IDs.
 type IDGenerator struct {

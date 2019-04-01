@@ -172,7 +172,7 @@ class UpdateThread(AbstractVtgateThread):
 
       if self.ignore_error_func and self.ignore_error_func(e):
         logging.debug('UPDATE %d failed during COMMIT. But we cannot buffer'
-                      ' this error and and ignore it. err: %s', attempt, str(e))
+                      ' this error and ignore it. err: %s', attempt, str(e))
       else:
         self._commit_errors += 1
         if self._commit_errors > 1:
@@ -348,7 +348,7 @@ class TestBufferBase(unittest.TestCase):
     # Wait for replica to catch up to master.
     utils.wait_for_replication_pos(master, replica)
 
-    # Wait for at least one second to articially prolong the failover and give
+    # Wait for at least one second to artificially prolong the failover and give
     # the buffer a chance to observe it.
     d = time.time() - start
     min_unavailability_s = 1

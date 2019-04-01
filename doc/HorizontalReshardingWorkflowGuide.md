@@ -132,7 +132,7 @@ on the clicked button. The approval buttons are cleared after the phase has
 finished. The next phase will only starts if its previous phase has finished
 successfully.
 
-If the workflow is restored from a checkpoint, you will still see the the
+If the workflow is restored from a checkpoint, you will still see the
 approval button with approved message when there are running tasks under this
 approval. But you don't need to approve the same tasks again for a restarted
 workflow.
@@ -142,7 +142,7 @@ workflow.
 A "Retry" button will be enabled under the task node if the task failed (click
 the task node if your job get stuck but don't see the Retry button). Click this
 button if you have fixed the bugs and want to retry the failed task. You can
-retry as many times as you want if the task continuelly failed. The workflow
+retry as many times as you want if the task continually failed. The workflow
 can continue from your failure point once it is fixed.
 
 For example, you might forget to bring up a vtworker process. The task which

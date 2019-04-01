@@ -40,7 +40,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-func TestStrictTransTables(t *testing.T) {
+func TestStrictMode(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	for query, result := range schematest.Queries() {
@@ -61,7 +61,7 @@ func TestStrictTransTables(t *testing.T) {
 	}
 	qe.Close()
 
-	// Check that we fail if STRICT_TRANS_TABLES is not set.
+	// Check that we fail if STRICT_TRANS_TABLES or STRICT_ALL_TABLES is not set.
 	db.AddQuery(
 		"select @@global.sql_mode",
 		&sqltypes.Result{
@@ -72,7 +72,7 @@ func TestStrictTransTables(t *testing.T) {
 	qe = NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
 	qe.InitDBConfig(dbcfgs)
 	err := qe.Open()
-	wantErr := "require sql_mode to be STRICT_TRANS_TABLES: got ''"
+	wantErr := "require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got ''"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("Open: %v, want %s", err, wantErr)
 	}

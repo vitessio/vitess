@@ -301,7 +301,7 @@ You’ll see how these operands are used in the description of the operators.
 
 ## The operators
 
-If one were to ask what are the minimal set of primitives needed to serve SQL queries, we can use [relational algebra](http://www.tutorialspoint.com/dbms/relational_algebra.htm) as starting point. But databases have extended beyond those basic operations. They allow duplicate tuples and ordering. So, here’s a more practical set:
+If one were to ask what are the minimal set of primitives needed to serve SQL queries, we can use [relational algebra](https://www.tutorialspoint.com/dbms/relational_algebra.htm) as starting point. But databases have extended beyond those basic operations. They allow duplicate tuples and ordering. So, here’s a more practical set:
 
 1. Scan (FROM).
 2. Join: Join two results as cross-product (JOIN).
@@ -1194,7 +1194,7 @@ The overall strategy is as follows:
 
 In order to align ourselves with our priorities, we’ll start off with a limited set of primitives, and then we can expand from there.
 
-VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](https://github.com/vitessio/vitess/blob/sugudoc/doc/V3HighLevelDesign.md#prioritization) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
+VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](https://github.com/vitessio/vitess/blob/master/doc/V3HighLevelDesign.md#prioritization) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
 
 * `Route`: Sends a query to a single shard or unsharded keyspace.
 * `RouteMerge`: Sends a (mostly) identical query to multiple shards and returns the combined results in no particular order.
@@ -1311,7 +1311,7 @@ When two nodes are grouped, the current join condition becomes the root of the n
 * If it’s a JOIN, the new property is the more restrictive of the two nodes. So, if one of them is a Route, then the new node is also a Route.
 * For a LEFT JOIN, the new property is the same as the LHS node.
 
-If the grouping conditions are not met, then the node remains a join node. In this case, we have to see if the ON clause conditions can be pushed down into the left and/or right nodes. By the fact that the current join is split into two, the ON clause cannot be be pushed as is. Instead, we use associativity rules to our benefit and merge the ON clause conditions into the WHERE clauses of the underlying nodes. The rules are the same as the ones described for a normal WHERE clause.
+If the grouping conditions are not met, then the node remains a join node. In this case, we have to see if the ON clause conditions can be pushed down into the left and/or right nodes. By the fact that the current join is split into two, the ON clause cannot be pushed as is. Instead, we use associativity rules to our benefit and merge the ON clause conditions into the WHERE clauses of the underlying nodes. The rules are the same as the ones described for a normal WHERE clause.
 
 But left joins are slightly different, because the join condition is applied *to the RHS only*. Also, the condition cannot be further pushed into other nested left joins, because they will change the meaning of the statement. For example:
 
@@ -1491,7 +1491,7 @@ If a, b and c where in different groups, the output would be:
 a   b where (b.id=a.id) and (cond1(a.col, b.col))
 ```
 
-The cond2 expression gets pushed into the the where clause for table ‘c’ because it’s the right-most group that’s referenced by the condition. External references will be changed to appropriate bind variables by the rewiring phase.
+The cond2 expression gets pushed into the where clause for table ‘c’ because it’s the right-most group that’s referenced by the condition. External references will be changed to appropriate bind variables by the rewiring phase.
 
 *Once VTGate acquires the ability to perform its own filters, should we stop pushing these conditions into the dependent queries and do it ourselves instead? The answer will usually be no. You almost always want to push down filters. This is because it will let the underlying database scan fewer rows, or choose better indexes. The more restrictive the query is, the better.*
 

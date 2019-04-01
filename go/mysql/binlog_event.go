@@ -70,13 +70,13 @@ type BinlogEvent interface {
 
 	// RBR events.
 
-	// IsTableMapEvent returns true if this is a TABLE_MAP_EVENT.
+	// IsTableMap returns true if this is a TABLE_MAP_EVENT.
 	IsTableMap() bool
-	// IsWriteRowsEvent returns true if this is a WRITE_ROWS_EVENT.
+	// IsWriteRows returns true if this is a WRITE_ROWS_EVENT.
 	IsWriteRows() bool
-	// IsUpdateRowsEvent returns true if this is a UPDATE_ROWS_EVENT.
+	// IsUpdateRows returns true if this is a UPDATE_ROWS_EVENT.
 	IsUpdateRows() bool
-	// IsDeleteRowsEvent returns true if this is a DELETE_ROWS_EVENT.
+	// IsDeleteRows returns true if this is a DELETE_ROWS_EVENT.
 	IsDeleteRows() bool
 
 	// Timestamp returns the timestamp from the event header.

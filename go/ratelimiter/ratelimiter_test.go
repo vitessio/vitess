@@ -23,8 +23,7 @@ import (
 
 func TestLimiter1(t *testing.T) {
 	rl := NewRateLimiter(1, 10*time.Millisecond)
-	var result bool
-	result = rl.Allow()
+	result := rl.Allow()
 	if !result {
 		t.Error("Allow: false, want true")
 	}

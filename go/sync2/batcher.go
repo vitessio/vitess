@@ -32,6 +32,7 @@ type Batcher struct {
 	queue    chan int
 	waiters  AtomicInt32
 	nextID   AtomicInt32
+	after    func(time.Duration) <-chan time.Time
 }
 
 // NewBatcher returns a new Batcher
@@ -41,6 +42,19 @@ func NewBatcher(interval time.Duration) *Batcher {
 		queue:    make(chan int),
 		waiters:  NewAtomicInt32(0),
 		nextID:   NewAtomicInt32(0),
+		after:    time.After,
+	}
+}
+
+// newBatcherForTest returns a Batcher for testing where time.After can
+// be replaced by a fake alternative.
+func newBatcherForTest(interval time.Duration, after func(time.Duration) <-chan time.Time) *Batcher {
+	return &Batcher{
+		interval: interval,
+		queue:    make(chan int),
+		waiters:  NewAtomicInt32(0),
+		nextID:   NewAtomicInt32(0),
+		after:    after,
 	}
 }
 
@@ -56,7 +70,7 @@ func (b *Batcher) Wait() int {
 // newBatch starts a new batch
 func (b *Batcher) newBatch() {
 	go func() {
-		time.Sleep(b.interval)
+		<-b.after(b.interval)
 
 		id := b.nextID.Add(1)
 

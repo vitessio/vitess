@@ -54,7 +54,7 @@ Setting up these components directly -- for example, writing your own topology s
 * *Recommended*.  Vitess has basic support for identifying or changing a master, but it doesn't aim to fully address this feature. As such, we recommend using another program, like [Orchestrator](https://github.com/github/orchestrator), to monitor the health of your servers and to change your master database when necessary. (In a sharded database, each shard has a master.)
 
 
-* *Recommended*. You should have a way to monitor your database topology and set up alerts as needed. Vitess components facilitate this monitoring by exporting a lot of runtime variables, like QPS over the last few minutes, error rates, and query latency. The variables are exported in JSON format, and Vitess also supports an InfluxDB plug-in.
+* *Recommended*. You should have a way to monitor your database topology and set up alerts as needed. Vitess components facilitate this monitoring by exporting a lot of runtime variables, like QPS over the last few minutes, error rates, and query latency. The variables are exported in JSON format, and Vitess also supports a Prometheus plug-in.
 
 
 * *Optional*. Using the Kubernetes scripts as a base, you could run Vitess components with other configuration management systems (like Puppet) or frameworks (like Mesos or AWS images).
@@ -70,7 +70,7 @@ Setting up these components directly -- for example, writing your own topology s
 
 Obviously, your application needs to be able to call your database. So, we'll jump straight to explaining how you'd modify your application to connect to your database through vtgate.
 
-As of Release 2.1, VTGate supports the MySQL protocol. So, the application only needs to change where it connects to. For those using Java or Go, we additionally provide libraries that can communicate to VTGate using [gRPC](http://www.grpc.io/). Using the provided libraries allow you to send queries with bind variables, which is not inherently possible through the MySQL protocol.
+As of Release 2.1, VTGate supports the MySQL protocol. So, the application only needs to change where it connects to. For those using Java or Go, we additionally provide libraries that can communicate to VTGate using [gRPC](https://www.grpc.io/). Using the provided libraries allow you to send queries with bind variables, which is not inherently possible through the MySQL protocol.
 
 #### Unit testing database interactions
 

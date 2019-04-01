@@ -23,6 +23,8 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -146,7 +148,7 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	}
 
 	// Decimals is a byte.
-	decimals, pos, ok := readByte(colDef, pos)
+	decimals, _, ok := readByte(colDef, pos)
 	if !ok {
 		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v decimals failed", index)
 	}
@@ -231,7 +233,7 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 	}
 
 	// flags is 2 bytes
-	flags, pos, ok := readUint16(colDef, pos)
+	flags, _, ok := readUint16(colDef, pos)
 	if !ok {
 		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extracting col %v flags failed", index)
 	}
@@ -394,7 +396,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 			return nil, false, 0, ParseErrorPacket(data)
 		} else {
 			defer c.recycleReadPacket()
-			return nil, false, 0, fmt.Errorf("unexpected packet after fields: %v", data)
+			return nil, false, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet after fields: %v", data)
 		}
 	}
 
@@ -488,7 +490,7 @@ func (c *Conn) readComQueryResponse() (affectedRows uint64, lastInsertID uint64,
 		return 0, 0, 0, false, 0, ParseErrorPacket(data)
 	case 0xfb:
 		// Local infile
-		return 0, 0, 0, false, 0, fmt.Errorf("not implemented")
+		return 0, 0, 0, false, 0, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
 	}
 	n, pos, ok := readLenEncInt(data, 0)
 	if !ok {
@@ -906,7 +908,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 	pos = writeUint16(data, pos, uint16(0x0000))
 
 	if pos != len(data) {
-		return fmt.Errorf("internal error: packing of column definition used %v bytes instead of %v", pos, len(data))
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "packing of column definition used %v bytes instead of %v", pos, len(data))
 	}
 
 	return c.writeEphemeralPacket()
@@ -936,7 +938,7 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 	}
 
 	if pos != length {
-		return fmt.Errorf("internal error packet row: got %v bytes but expected %v", pos, length)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "packet row: got %v bytes but expected %v", pos, length)
 	}
 
 	return c.writeEphemeralPacket()

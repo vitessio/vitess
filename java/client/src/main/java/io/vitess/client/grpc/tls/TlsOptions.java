@@ -1,12 +1,12 @@
 /*
  * Copyright 2017 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,8 +21,8 @@ import java.net.InetSocketAddress;
 
 /**
  * <p>A wrapper type holding TLS-related fields for the
- * {@link io.vitess.client.RpcClientFactory#createTls(InetSocketAddress, TlsOptions)} method, so that
- * this method won't have an unwieldy number of direct parameters.</p>
+ * {@link io.vitess.client.RpcClientFactory#createTls(InetSocketAddress, TlsOptions)} method, so
+ * that this method won't have an unwieldy number of direct parameters.</p>
  *
  * <p>This path uses a builder pattern style:</p>
  *
@@ -39,6 +39,7 @@ import java.net.InetSocketAddress;
  * </blockquote>
  */
 public class TlsOptions {
+
   private File keyStore;
   private String keyStorePassword;
   private String keyAlias;

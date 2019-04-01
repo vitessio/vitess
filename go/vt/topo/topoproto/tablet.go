@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -79,7 +80,7 @@ func ParseTabletAlias(aliasStr string) (*topodatapb.TabletAlias, error) {
 	}
 	uid, err := ParseUID(nameParts[1])
 	if err != nil {
-		return nil, fmt.Errorf("invalid tablet uid in alias '%s': %v", aliasStr, err)
+		return nil, vterrors.Wrapf(err, "invalid tablet uid in alias '%s'", aliasStr)
 	}
 	return &topodatapb.TabletAlias{
 		Cell: nameParts[0],
@@ -91,7 +92,7 @@ func ParseTabletAlias(aliasStr string) (*topodatapb.TabletAlias, error) {
 func ParseUID(value string) (uint32, error) {
 	uid, err := strconv.ParseUint(value, 10, 32)
 	if err != nil {
-		return 0, fmt.Errorf("bad tablet uid %v", err)
+		return 0, vterrors.Wrap(err, "bad tablet uid")
 	}
 	return uint32(uid), nil
 }

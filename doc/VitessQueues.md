@@ -233,7 +233,7 @@ the event to one receiver only, until it is acked, or times out.
 *Hot Spots in the Queue table*: with very high QPS, we will end up having a hot
 spot on the window of events that are coming up. A proposed solution is to use
 an 'event_name' that has a unique value, and use it as a primary key. When the
-Queue Manager gets new events howevers, it will still need to sort them by
+Queue Manager gets new events however, it will still need to sort them by
 timestamp, and therefore will require an index. It is unclear which solution
 will work better, we'd need to experiment. For instance, if most events are only
 present in the table while they are being processed, the entire table will have

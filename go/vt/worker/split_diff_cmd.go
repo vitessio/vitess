@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -83,7 +84,7 @@ var splitDiffTemplate2 = mustParseTemplate("splitDiff2", splitDiffHTML2)
 func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	sourceUID := subFlags.Int("source_uid", 0, "uid of the source shard to run the diff against")
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
-	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyRdonlyTablets, "minimum number of healthy RDONLY tablets before taking out one")
+	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyTablets, "minimum number of healthy RDONLY tablets before taking out one")
 	destTabletTypeStr := subFlags.String("dest_tablet_type", defaultDestTabletType, "destination tablet type (RDONLY or REPLICA) that will be used to compare the shards")
 	parallelDiffsCount := subFlags.Int("parallel_diffs_count", defaultParallelDiffsCount, "number of tables to diff in parallel")
 	if err := subFlags.Parse(args); err != nil {
@@ -91,7 +92,7 @@ func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSe
 	}
 	if subFlags.NArg() != 1 {
 		subFlags.Usage()
-		return nil, fmt.Errorf("command SplitDiff requires <keyspace/shard>")
+		return nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "command SplitDiff requires <keyspace/shard>")
 	}
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
@@ -104,7 +105,7 @@ func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSe
 
 	destTabletType, ok := topodatapb.TabletType_value[*destTabletTypeStr]
 	if !ok {
-		return nil, fmt.Errorf("command SplitDiff invalid dest_tablet_type: %v", destTabletType)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "command SplitDiff invalid dest_tablet_type: %v", destTabletType)
 	}
 
 	return NewSplitDiffWorker(wr, wi.cell, keyspace, shard, uint32(*sourceUID), excludeTableArray, *minHealthyRdonlyTablets, *parallelDiffsCount, topodatapb.TabletType(destTabletType)), nil
@@ -165,7 +166,7 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 		return nil, rec.Error()
 	}
 	if len(result) == 0 {
-		return nil, fmt.Errorf("there are no shards with SourceShards")
+		return nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "there are no shards with SourceShards")
 	}
 	return result, nil
 }
@@ -196,7 +197,7 @@ func interactiveSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangl
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
 		result["DefaultSourceUID"] = "0"
-		result["DefaultMinHealthyRdonlyTablets"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyTablets)
+		result["DefaultMinHealthyRdonlyTablets"] = fmt.Sprintf("%v", defaultMinHealthyTablets)
 		result["DefaultParallelDiffsCount"] = fmt.Sprintf("%v", defaultParallelDiffsCount)
 		return nil, splitDiffTemplate2, result, nil
 	}
@@ -215,9 +216,12 @@ func interactiveSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangl
 	minHealthyRdonlyTabletsStr := r.FormValue("minHealthyRdonlyTablets")
 	parallelDiffsCountStr := r.FormValue("parallelDiffsCount")
 	minHealthyRdonlyTablets, err := strconv.ParseInt(minHealthyRdonlyTabletsStr, 0, 64)
-	parallelDiffsCount, err := strconv.ParseInt(parallelDiffsCountStr, 0, 64)
 	if err != nil {
 		return nil, nil, nil, vterrors.Wrap(err, "cannot parse minHealthyRdonlyTablets")
+	}
+	parallelDiffsCount, err := strconv.ParseInt(parallelDiffsCountStr, 0, 64)
+	if err != nil {
+		return nil, nil, nil, vterrors.Wrap(err, "cannot parse parallelDiffsCount")
 	}
 
 	// start the diff job

@@ -130,6 +130,11 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 // LockDB obtains db locks for all messages that need to
 // be updated and returns the counterpart unlock function.
 func (me *Engine) LockDB(newMessages map[string][]*MessageRow, changedMessages map[string][]string) func() {
+	// Short-circuit to avoid taking any locks if there's nothing to do.
+	if len(newMessages) == 0 && len(changedMessages) == 0 {
+		return func() {}
+	}
+
 	// Build the set of affected messages tables.
 	combined := make(map[string]struct{})
 	for name := range newMessages {
@@ -174,6 +179,11 @@ func (me *Engine) LockDB(newMessages map[string][]*MessageRow, changedMessages m
 
 // UpdateCaches updates the caches for the committed changes.
 func (me *Engine) UpdateCaches(newMessages map[string][]*MessageRow, changedMessages map[string][]string) {
+	// Short-circuit to avoid taking any locks if there's nothing to do.
+	if len(newMessages) == 0 && len(changedMessages) == 0 {
+		return
+	}
+
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	now := time.Now().UnixNano()

@@ -83,11 +83,11 @@ func buildSecondaryList(table *schema.Table, pkList [][]sqltypes.Value, secondar
 func resolveNumber(pv sqltypes.PlanValue, bindVars map[string]*querypb.BindVariable) (int64, error) {
 	v, err := pv.ResolveValue(bindVars)
 	if err != nil {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		return 0, err
 	}
 	ret, err := sqltypes.ToInt64(v)
 	if err != nil {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		return 0, err
 	}
 	return ret, nil
 }
@@ -121,7 +121,7 @@ func validateValue(col *schema.TableColumn, value sqltypes.Value) error {
 	return nil
 }
 
-func buildStreamComment(table *schema.Table, pkValueList [][]sqltypes.Value, secondaryList [][]sqltypes.Value) []byte {
+func buildStreamComment(table *schema.Table, pkValueList [][]sqltypes.Value, secondaryList [][]sqltypes.Value) string {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf(" /* _stream %v (", table.Name)
 	// We assume the first index exists, and is the pk
@@ -132,7 +132,7 @@ func buildStreamComment(table *schema.Table, pkValueList [][]sqltypes.Value, sec
 	buildPKValueList(buf, table, pkValueList)
 	buildPKValueList(buf, table, secondaryList)
 	buf.WriteString("; */")
-	return buf.Bytes()
+	return buf.String()
 }
 
 func buildPKValueList(buf *sqlparser.TrackedBuffer, table *schema.Table, pkValueList [][]sqltypes.Value) {

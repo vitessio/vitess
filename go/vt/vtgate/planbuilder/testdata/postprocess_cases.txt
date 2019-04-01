@@ -1,0 +1,926 @@
+# HAVING implicitly references table col
+"select user.col1 from user having col2 = 2"
+{
+  "Original": "select user.col1 from user having col2 = 2",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col1 from user having col2 = 2",
+    "FieldQuery": "select user.col1 from user where 1 != 1"
+  }
+}
+
+# ambiguous symbol reference
+"select user.col1, user_extra.col1 from user join user_extra having col1 = 2"
+"ambiguous symbol reference: col1"
+
+# non-ambiguous symbol reference
+"select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2"
+{
+  "Original": "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 from user",
+      "FieldQuery": "select user.col1 from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user_extra.col1 from user_extra having user_extra.col1 = 2",
+      "FieldQuery": "select user_extra.col1 from user_extra where 1 != 1"
+    },
+    "Cols": [
+      -1,
+      1
+    ]
+  }
+}
+
+# HAVING multi-route
+"select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1"
+{
+  "Original": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 as a, user.col2 from user having 1 = 1 and a = 1 and a = user.col2",
+      "FieldQuery": "select user.col1 as a, user.col2 from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user_extra.col3 from user_extra having user_extra.col3 = 1",
+      "FieldQuery": "select user_extra.col3 from user_extra where 1 != 1"
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ]
+  }
+}
+
+# HAVING uses subquery
+"select id from user having id in (select col from user)"
+{
+  "Original": "select id from user having id in (select col from user)",
+  "Instructions": {
+    "Opcode": "PulloutIn",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__sq_has_values1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user",
+      "FieldQuery": "select col from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectIN",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select id from user having :__sq_has_values1 = 1 and (id in ::__vals)",
+      "FieldQuery": "select id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [
+        "::__sq1"
+      ]
+    }
+  }
+}
+
+# ORDER BY, reference col from local table.
+"select col from user where id = 5 order by aa"
+{
+  "Original": "select col from user where id = 5 order by aa",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user where id = 5 order by aa asc",
+    "FieldQuery": "select col from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [5]
+  }
+}
+
+# ORDER BY uses column numbers
+"select col from user where id = 1 order by 1"
+{
+  "Original": "select col from user where id = 1 order by 1",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user where id = 1 order by 1 asc",
+    "FieldQuery": "select col from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [1]
+  }
+}
+
+# ORDER BY on scatter
+"select col from user order by col"
+{
+  "Original": "select col from user order by col",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user order by col asc",
+    "FieldQuery": "select col from user where 1 != 1",
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      }
+    ]
+  }
+}
+
+# ORDER BY works for select * from authoritative table
+"select * from authoritative order by user_id"
+{
+  "Original": "select * from authoritative order by user_id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user_id, col1, col2 from authoritative order by user_id asc",
+    "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1",
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      }
+    ]
+  }
+}
+
+# ORDER BY works for select * from authoritative table
+"select * from authoritative order by col1"
+{
+  "Original": "select * from authoritative order by col1",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user_id, col1, col2, weight_string(col1) from authoritative order by col1 asc",
+    "FieldQuery": "select user_id, col1, col2, weight_string(col1) from authoritative where 1 != 1",
+    "OrderBy": [
+      {
+        "Col": 3,
+        "Desc": false
+      }
+    ],
+    "TruncateColumnCount": 3
+  }
+}
+
+# ORDER BY on scatter with text column
+"select a, textcol1, b from user order by a, textcol1, b"
+{
+  "Original": "select a, textcol1, b from user order by a, textcol1, b",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select a, textcol1, b, weight_string(textcol1) from user order by a asc, textcol1 asc, b asc",
+    "FieldQuery": "select a, textcol1, b, weight_string(textcol1) from user where 1 != 1",
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 3,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "TruncateColumnCount": 3
+  }
+}
+
+# ORDER BY on scatter with text column, qualified name
+"select a, user.textcol1, b from user order by a, textcol1, b"
+{
+  "Original": "select a, user.textcol1, b from user order by a, textcol1, b",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select a, user.textcol1, b, weight_string(user.textcol1) from user order by a asc, textcol1 asc, b asc",
+    "FieldQuery": "select a, user.textcol1, b, weight_string(user.textcol1) from user where 1 != 1",
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 3,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "TruncateColumnCount": 3
+  }
+}
+
+# ORDER BY on scatter with multiple text columns
+"select a, textcol1, b, textcol2 from user order by a, textcol1, b, textcol2"
+{
+  "Original": "select a, textcol1, b, textcol2 from user order by a, textcol1, b, textcol2",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select a, textcol1, b, textcol2, weight_string(textcol1), weight_string(textcol2) from user order by a asc, textcol1 asc, b asc, textcol2 asc",
+    "FieldQuery": "select a, textcol1, b, textcol2, weight_string(textcol1), weight_string(textcol2) from user where 1 != 1",
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 4,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      },
+      {
+        "Col": 5,
+        "Desc": false
+      }
+    ],
+    "TruncateColumnCount": 4
+  }
+}
+
+# ORDER BY invalid col number on scatter
+"select col from user order by 2"
+"column number out of range: 2"
+
+# ORDER BY NULL
+"select col from user order by null"
+{
+  "Original": "select col from user order by null",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user order by null",
+    "FieldQuery": "select col from user where 1 != 1"
+  }
+}
+
+# ORDER BY after pull-out subquery
+"select col from user where col in (select col2 from user) order by col"
+{
+  "Original": "select col from user where col in (select col2 from user) order by col",
+  "Instructions": {
+    "Opcode": "PulloutIn",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__sq_has_values1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col2 from user",
+      "FieldQuery": "select col2 from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user where :__sq_has_values1 = 1 and (col in ::__sq1) order by col asc",
+      "FieldQuery": "select col from user where 1 != 1",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
+    }
+  }
+}
+
+# ORDER BY NULL for join
+"select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null"
+{
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by null",
+      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [1]
+    },
+    "Right": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col3 from music where music.id = :user_id order by null",
+      "FieldQuery": "select music.col3 from music where 1 != 1",
+      "Vindex": "music_user_map",
+      "Values": [":user_id"]
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ],
+    "Vars": {
+      "user_id": 2
+    }
+  }
+}
+
+# ORDER BY non-key column for join
+"select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a"
+{
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by a asc",
+      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [1]
+    },
+    "Right": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col3 from music where music.id = :user_id",
+      "FieldQuery": "select music.col3 from music where 1 != 1",
+      "Vindex": "music_user_map",
+      "Values": [":user_id"]
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ],
+    "Vars": {
+      "user_id": 2
+    }
+  }
+}
+
+# ORDER BY non-key column for implicit join
+"select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a"
+{
+  "Original": "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by a asc",
+      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [1]
+    },
+    "Right": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col3 from music where music.id = :user_id",
+      "FieldQuery": "select music.col3 from music where 1 != 1",
+      "Vindex": "music_user_map",
+      "Values": [":user_id"]
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ],
+    "Vars": {
+      "user_id": 2
+    }
+  }
+}
+
+# ORDER BY NULL after pull-out subquery
+"select col from user where col in (select col2 from user) order by null"
+{
+  "Original": "select col from user where col in (select col2 from user) order by null",
+  "Instructions": {
+    "Opcode": "PulloutIn",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__sq_has_values1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col2 from user",
+      "FieldQuery": "select col2 from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user where :__sq_has_values1 = 1 and (col in ::__sq1) order by null",
+      "FieldQuery": "select col from user where 1 != 1"
+    }
+  }
+}
+
+# ORDER BY RAND()
+"select col from user order by RAND()"
+{
+  "Original": "select col from user order by RAND()",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user order by rand()",
+    "FieldQuery": "select col from user where 1 != 1"
+  }
+}
+
+# ORDER BY RAND() for join
+"select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()"
+{
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by rand()",
+      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [1]
+    },
+    "Right": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col3 from music where music.id = :user_id order by rand()",
+      "FieldQuery": "select music.col3 from music where 1 != 1",
+      "Vindex": "music_user_map",
+      "Values": [":user_id"]
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ],
+    "Vars": {
+      "user_id": 2
+    }
+  }
+}
+
+# ORDER BY RAND() after pull-out subquery
+"select col from user where col in (select col2 from user) order by rand()"
+{
+  "Original": "select col from user where col in (select col2 from user) order by rand()",
+  "Instructions": {
+    "Opcode": "PulloutIn",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__sq_has_values1",
+    "Subquery": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col2 from user",
+      "FieldQuery": "select col2 from user where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user where :__sq_has_values1 = 1 and (col in ::__sq1) order by rand()",
+      "FieldQuery": "select col from user where 1 != 1"
+    }
+  }
+}
+
+# Order by, '*' expression
+"select * from user where id = 5 order by col"
+{
+  "Original": "select * from user where id = 5 order by col",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where id = 5 order by col asc",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [5]
+  }
+}
+
+# Order by, qualified '*' expression
+"select user.* from user where id = 5 order by user.col"
+{
+  "Original": "select user.* from user where id = 5 order by user.col",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.* from user where id = 5 order by user.col asc",
+    "FieldQuery": "select user.* from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [5]
+  }
+}
+
+# Order by, '*' expression with qualified reference
+"select * from user where id = 5 order by user.col"
+{
+  "Original": "select * from user where id = 5 order by user.col",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where id = 5 order by user.col asc",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [5]
+  }
+}
+
+# Order by, '*' expression in a subquery
+"select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)"
+{
+  "Original": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select u.id, u.col from user as u where u.col in (select * from user where user.id = u.id order by col asc)",
+      "FieldQuery": "select u.id, u.col from user as u where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select e.id from user_extra as e where e.col = :u_col",
+      "FieldQuery": "select e.id from user_extra as e where 1 != 1"
+    },
+    "Cols": [
+      -1,
+      1
+    ],
+    "Vars": {
+      "u_col": 1
+    }
+  }
+}
+
+# Order by, verify outer symtab is searched according to its own context.
+"select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)"
+"symbol u.col not found in subquery"
+
+# Order by, qualified '*' expression, name mismatched.
+"select user.* from user where id = 5 order by e.col"
+"symbol e.col not found"
+
+# Order by, invalid column number
+"select col from user order by 18446744073709551616"
+"error parsing column number: 18446744073709551616"
+
+# Order by, out of range column number
+"select col from user order by 2"
+"column number out of range: 2"
+
+# Order by, '*' expression with qualified reference and using collate
+"select * from user where id = 5 order by user.col collate utf8_general_ci"
+{
+  "Original": "select * from user where id = 5 order by user.col collate utf8_general_ci",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where id = 5 order by user.col collate utf8_general_ci asc",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [5]
+  }
+}
+
+#Order by with math functions
+"select * from user where id = 5 order by -col1"
+{
+   "Original":"select * from user where id = 5 order by -col1",
+   "Instructions":{
+      "Opcode":"SelectEqualUnique",
+      "Keyspace":{
+         "Name":"user",
+         "Sharded":true
+      },
+      "Query":"select * from user where id = 5 order by -col1 asc",
+      "FieldQuery":"select * from user where 1 != 1",
+      "Vindex":"user_index",
+      "Values":[5]
+   }
+}
+
+#Order by with string operations operations
+"select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc"
+{
+   "Original":"select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc",
+   "Instructions":{
+      "Opcode":"SelectEqualUnique",
+      "Keyspace":{
+         "Name":"user",
+         "Sharded":true
+      },
+      "Query":"select * from user where id = 5 order by concat(col, col1) collate utf8_general_ci desc",
+      "FieldQuery":"select * from user where 1 != 1",
+      "Vindex":"user_index",
+      "Values":[5]
+   }
+}
+
+#Order by with math operations
+"select * from user where id = 5 order by id+col collate utf8_general_ci desc"
+{
+   "Original":"select * from user where id = 5 order by id+col collate utf8_general_ci desc",
+   "Instructions":{
+      "Opcode":"SelectEqualUnique",
+      "Keyspace":{
+         "Name":"user",
+         "Sharded":true
+      },
+      "Query":"select * from user where id = 5 order by id + col collate utf8_general_ci desc",
+      "FieldQuery":"select * from user where 1 != 1",
+      "Vindex":"user_index",
+      "Values":[5]
+   }
+}
+
+#Order by subquery column
+"select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id"
+{
+   "Original":"select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id",
+   "Instructions":{
+      "Opcode":"SelectEqualUnique",
+      "Keyspace":{
+         "Name":"user",
+         "Sharded":true
+      },
+      "Query":"select * from user as u join (select user_id from user_extra where user_id = 5) as eu on u.id = eu.user_id where u.id = 5 order by eu.user_id asc",
+      "FieldQuery":"select * from user as u join (select user_id from user_extra where 1 != 1) as eu on u.id = eu.user_id where 1 != 1",
+      "Vindex":"user_index",
+      "Values":[5]
+   }
+}
+
+# LIMIT
+"select col1 from user where id = 1 limit 1"
+{
+  "Original": "select col1 from user where id = 1 limit 1",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col1 from user where id = 1 limit 1",
+    "FieldQuery": "select col1 from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [1]
+  }
+}
+
+# limit for joins. Can't push down the limit because result
+# counts get multiplied by join operations.
+"select user.col from user join user_extra limit 1"
+{
+  "Original": "select user.col from user join user_extra limit 1",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 1,
+    "Offset": null,
+    "Input": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select user.col from user",
+        "FieldQuery": "select user.col from user where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select 1 from user_extra",
+        "FieldQuery": "select 1 from user_extra where 1 != 1"
+      },
+      "Cols": [
+        -1
+      ]
+    }
+  }
+}
+
+# limit for scatter
+"select col from user limit 1"
+{
+  "Original": "select col from user limit 1",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 1,
+    "Offset": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user limit :__upper_limit",
+      "FieldQuery": "select col from user where 1 != 1"
+    }
+  }
+}
+
+# limit for scatter with bind var
+"select col from user limit :a"
+{
+  "Original": "select col from user limit :a",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": ":a",
+    "Offset": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user limit :__upper_limit",
+      "FieldQuery": "select col from user where 1 != 1"
+    }
+  }
+}
+
+# cross-shard expression in parenthesis with limit
+"select * from user where (id1 = 4 AND name1 ='abc') limit 5"
+{
+  "Original": "select * from user where (id1 = 4 AND name1 ='abc') limit 5",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 5,
+    "Offset": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select * from user where id1 = 4 and name1 = 'abc' limit :__upper_limit",
+      "FieldQuery": "select * from user where 1 != 1"
+    }
+  }
+}
+
+# scatter limit after pullout subquery
+"select col from user where col in (select col1 from user) limit 1"
+{
+  "Original": "select col from user where col in (select col1 from user) limit 1",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 1,
+    "Offset": null,
+    "Input": {
+      "Opcode": "PulloutIn",
+      "SubqueryResult": "__sq1",
+      "HasValues": "__sq_has_values1",
+      "Subquery": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select col1 from user",
+        "FieldQuery": "select col1 from user where 1 != 1"
+      },
+      "Underlying": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select col from user where :__sq_has_values1 = 1 and (col in ::__sq1) limit :__upper_limit",
+        "FieldQuery": "select col from user where 1 != 1"
+      }
+    }
+  }
+}
+
+# invalid limit expression
+"select id from user limit 1+1"
+"unexpected expression in LIMIT:  limit 1 + 1"

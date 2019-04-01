@@ -23,7 +23,7 @@
   <modules>
     <module>client</module>
     <module>example</module>
-    <module>grpc-client</module> 
+    <module>grpc-client</module>
     <module>hadoop</module>
     <module>jdbc</module>
   </modules>
@@ -68,8 +68,14 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- Define versions which are also used by grpc-client/pom.xml. -->
     <grpc.version>1.16.0</grpc.version>
+    <!-- NOTE Netty handler and boring SSL must be kept compatible with grpc
+      https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
+    <netty.handler.version>4.1.30.Final</netty.handler.version>
+    <tcnative.boring.ssl.version>2.0.17.Final</tcnative.boring.ssl.version>
+
     <protobuf.java.version>3.6.1</protobuf.java.version>
     <protobuf.protoc.version>3.6.1</protobuf.protoc.version>
+    <checkstyle.plugin.version>3.0.0</checkstyle.plugin.version>
   </properties>
 
   <!-- Add new dependencies here and then add it below or in your module. -->
@@ -130,14 +136,14 @@
       <dependency>
         <groupId>io.netty</groupId>
         <artifactId>netty-handler</artifactId>
-        <version>4.1.27.Final</version>
+        <version>${netty.handler.version}</version>
       </dependency>
       <!-- TODO(mberlin): When we upgrade grpc, check if we can remove this. Without,
         grpc-client TLS tests fail with error "Jetty ALPN/NPN has not been properly configured.". -->
       <dependency>
         <groupId>io.netty</groupId>
         <artifactId>netty-tcnative-boringssl-static</artifactId>
-        <version>2.0.17.Final</version>
+        <version>${tcnative.boring.ssl.version}</version>
       </dependency>
 
       <dependency>
@@ -250,6 +256,28 @@
               <failOnWarning>true</failOnWarning>
               <outputXML>true</outputXML>
             </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>${checkstyle.plugin.version}</version>
+        <configuration>
+          <configLocation>google_checks.xml</configLocation>
+          <suppressionsLocation>checkstyle-suppression.xml</suppressionsLocation>
+          <consoleOutput>true</consoleOutput>
+          <failsOnError>true</failsOnError>
+          <failOnViolation>true</failOnViolation>
+          <violationSeverity>warning</violationSeverity>
+        </configuration>
+        <executions>
+          <execution>
+            <id>validate</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
           </execution>
         </executions>
       </plugin>

@@ -56,6 +56,8 @@ type TabletStatsCache struct {
 	entries map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry
 	// tsm is a helper to broadcast aggregate stats.
 	tsm srvtopo.TargetStatsMultiplexer
+	// cellRegions is a cache of cell regions
+	cellRegions map[string]string
 }
 
 // tabletStatsCacheEntry is the per keyspace/shard/tabletType
@@ -134,6 +136,7 @@ func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListen
 		aggregatesChan: make(chan []*srvtopo.TargetStatsEntry, 100),
 		entries:        make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
 		tsm:            srvtopo.NewTargetStatsMultiplexer(),
+		cellRegions:    make(map[string]string),
 	}
 
 	if setListener {
@@ -194,12 +197,24 @@ func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStat
 }
 
 func (tc *TabletStatsCache) getRegionByCell(cell string) string {
-	return topo.GetRegionByCell(context.Background(), tc.ts, cell)
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	if region, ok := tc.cellRegions[cell]; ok {
+		return region
+	}
+
+	region := topo.GetRegionByCell(context.Background(), tc.ts, cell)
+	tc.cellRegions[cell] = region
+
+	return region
 }
 
 // StatsUpdate is part of the HealthCheckStatsListener interface.
 func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
-	if ts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Tablet.Alias.Cell != tc.cell && tc.getRegionByCell(ts.Tablet.Alias.Cell) != tc.getRegionByCell(tc.cell) {
+	if ts.Target.TabletType != topodatapb.TabletType_MASTER &&
+		ts.Tablet.Alias.Cell != tc.cell &&
+		tc.getRegionByCell(ts.Tablet.Alias.Cell) != tc.getRegionByCell(tc.cell) {
 		// this is for a non-master tablet in a different cell and a different region, drop it
 		return
 	}

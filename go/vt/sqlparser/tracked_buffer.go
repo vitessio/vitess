@@ -17,8 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
-	"bytes"
 	"fmt"
+	"strings"
 )
 
 // NodeFormatter defines the signature of a custom node formatter
@@ -33,7 +33,7 @@ type NodeFormatter func(buf *TrackedBuffer, node SQLNode)
 // But you can supply a different formatting function if you
 // want to generate a query that's different from the default.
 type TrackedBuffer struct {
-	*bytes.Buffer
+	*strings.Builder
 	bindLocations []bindLocation
 	nodeFormatter NodeFormatter
 }
@@ -41,7 +41,7 @@ type TrackedBuffer struct {
 // NewTrackedBuffer creates a new TrackedBuffer.
 func NewTrackedBuffer(nodeFormatter NodeFormatter) *TrackedBuffer {
 	return &TrackedBuffer{
-		Buffer:        new(bytes.Buffer),
+		Builder:       new(strings.Builder),
 		nodeFormatter: nodeFormatter,
 	}
 }

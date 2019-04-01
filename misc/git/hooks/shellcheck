@@ -1,0 +1,45 @@
+#!/bin/bash
+# This file is based on the Go linter precommit hook
+# "golint". Therefore, both files are very similar.
+
+# This script does not handle file names that contain spaces.
+shfiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.*\.sh$')
+if [ -z "$shfiles" ] ; then
+  # No .sh files modified.
+  exit 0
+fi
+
+# The -e SC1090,SC1091 suppressing warnings about trying to find
+# files imported with "source foo.sh". We only want to lint
+# the files modified as part of this current diff.
+if errors=$(shellcheck -e SC1090,SC1091 "$shfiles" 2>&1); then
+  # No lint errors. Return early.
+  exit 0
+fi
+
+if [ -z "$(command -v shellcheck)" ]; then
+  echo "shellcheck not found, please run: brew or apt-get install shellcheck"
+  exit 0
+fi
+
+# git doesn't give us access to user input, so let's steal it.
+if exec < /dev/tty; then
+  # interactive shell. Prompt the user.
+  echo
+  echo "shellcheck suggestions were found. They're not enforced, but we're pausing"
+  echo "to let you know before they get clobbered in the scrollback buffer."
+  echo
+  read -r -p 'Press enter to cancel, "s" to show all warnings or type "ack" to continue: '
+  if [ "$REPLY" = "ack" ]; then
+    exit 0
+  fi
+  if [ "$REPLY" = "s" ]; then
+    echo
+    echo "$errors"
+  fi
+else
+  # non-interactive shell (e.g. called from Eclipse). Just display the errors.
+  echo "$errors"
+fi
+
+exit 1

@@ -220,7 +220,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		case IntVal:
 			n, err := sqltypes.NewIntegral(string(node.Val))
 			if err != nil {
-				return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+				return sqltypes.PlanValue{}, err
 			}
 			return sqltypes.PlanValue{Value: n}, nil
 		case StrVal:
@@ -228,7 +228,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		case HexVal:
 			v, err := node.HexDecode()
 			if err != nil {
-				return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+				return sqltypes.PlanValue{}, err
 			}
 			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, v)}, nil
 		}

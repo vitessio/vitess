@@ -2,8 +2,6 @@
 
 You want to contribute to Vitess? That's awesome!
 
-In the past we have reviewed and accepted many external contributions. Examples are the Java JDBC driver, the PHP PDO driver or vtgate v3 improvements.
-
 We're looking forward to any contribution! Before you start larger contributions, make sure to reach out first and discuss your plans with us.
 
 This page describes for new contributors how to make yourself familiar with Vitess and the programming language Go.
@@ -27,16 +25,12 @@ It's a lot of fun and demonstrates how simple it is to write Go code.
 
 ### Go Readability
 
-Internally at Google, code reviews are subject to an additional "readability" review.
-
-A readability reviewer ensures that the reviewee is writing idiomatic code and following the programming language's style guide.
-
 While there's no Go style guide, there is a set of recommendations in the Go community which add up to an implicit style guide.
 To make sure you're writing idiomatic Go code, please read the following documents:
 
-* Go Readablity slides: https://talks.golang.org/2014/readability.slide
+* Go Readability slides: https://talks.golang.org/2014/readability.slide
   * Talk about Go readability with many specific examples.
-* "Effective Go": https://golang.org/doc/effective_go.html
+* `Effective Go`: https://golang.org/doc/effective_go.html
   * Recommendations for writing good Go code.
 * Go Code Review Comments: https://github.com/golang/go/wiki/CodeReviewComments 
   * The closest thing to a style guide.
@@ -54,22 +48,6 @@ In our opinion, the song "Write in Go" from ScaleAbility, a Google acapella band
 
 ## Learning Vitess
 
-Before diving into the Vitess codebase, make yourself familiar with the system and run it yourself:
-
-* Read the [What is Vitess](/overview/) page, in particular the architecture section.
-
-* Read the [Vitess concepts]({% link overview/concepts.md %}) and the [Sharding]({% link user-guide/sharding.md %}) page.
-
-  * We also recommend to look at our [latest presentations]({% link resources/presentations.md %}). They contain many illustrations which help understanding how Vitess works in detail.
-
-  * After studying the pages, try to answer the following question (click expand to see the answer):
-    <details> 
-      <summary>
-        Let's assume a keyspace with 256 range-based shards: What is the name of the first, the second and the last shard?
-      </summary>
-      -01, 01-02, ff-
-    </details>
-
-* Go through the [Vitess Kubernetes tutorial](/getting-started/).
-
-  * While going through the tutorial, look back at the [architecture](/overview/#architecture) and match the processes you start in Kubernetes with the boxes in the diagram.
+Vitess is a complex distributed system. There are a few design docs in the `/doc` section. The best way to ramp up on vitess is by starting to use it.
+Then, you can dive into the code to see how the various parts work. For questions, the best place to get them answered is by asking on the slack channel.
+You can sign up to the channel by clicking on the top right link at vitess.io.
