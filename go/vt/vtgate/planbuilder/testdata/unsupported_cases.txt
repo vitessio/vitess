@@ -440,3 +440,8 @@
 
 "select func(keyspace_id) from user_index where id = :id"
 "unsupported: expression on results of a vindex function"
+
+# Multi-table unique vindex constraint on left table of left join, two levels of join, simple aggregation
+# This should work, but doesn't. See https://github.com/vitessio/vitess/issues/4772
+"select user.id, count(*) from user left join user_extra ue1 on user.id = ue1.user_id left join user_extra ue2 on ue1.user_id = ue2.user_id group by user.id"
+"unsupported: cross-shard query with aggregates"
