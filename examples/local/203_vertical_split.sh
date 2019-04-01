@@ -33,6 +33,6 @@ source "$script_root/env.sh"
     -log_dir "$VTDATAROOT"/tmp \
     -alsologtostderr \
     -use_v3_resharding_mode \
-    VerticalSplitClone -min_healthy_rdonly_tablets=1 -tables=customer,corder customer/0
+    VerticalSplitClone -min_healthy_tablets=1 -tables=customer,corder customer/0
 
 disown -a
