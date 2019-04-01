@@ -396,9 +396,6 @@ func (p *FastPool) SetCapacity(capacity int, block bool) error {
 	if err != nil {
 		return err
 	}
-	if !p.State().Draining {
-		return nil
-	}
 
 	if block {
 		p.shrink()
