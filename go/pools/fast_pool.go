@@ -149,15 +149,14 @@ func (p *FastPool) safeCreate(ct createType) (resourceWrapper, error) {
 	if err != nil {
 		return resourceWrapper{}, err
 	}
+
+	var wrapper resourceWrapper
 	defer func() {
-		r := recover()
-		p.safeCreateEnd(ct, err != nil || r != nil)
-		if r != nil {
-			panic(r)
-		}
+		// if wrapper.resource is nil, it means p.create() either had an error, or panicked.
+		p.safeCreateEnd(ct, wrapper.resource == nil)
 	}()
 
-	wrapper, err := p.create()
+	wrapper, err = p.create()
 	return wrapper, err
 }
 
