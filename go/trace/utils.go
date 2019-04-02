@@ -22,18 +22,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-const extractSize = 10
-
-// ExtractFirstCharacters returns the first few characters of a string.
-// If the string had to be truncated, "..." is added to the end
-func ExtractFirstCharacters(in string) string {
-	if len(in) < extractSize {
-		return in
-	}
-	runes := []rune(in)
-	return string(runes[0:extractSize]) + "..."
-}
-
 func LogErrorsWhenClosing(in io.Closer) func() {
 	return func() {
 		err := in.Close()

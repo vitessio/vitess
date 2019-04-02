@@ -161,7 +161,7 @@ func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, want
 // Stream executes the query and streams the results.
 func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
 	span, ctx := trace.NewClientSpan(ctx, "mysql", "DBConn.Stream")
-	span.Annotate("sql", trace.ExtractFirstCharacters(query))
+	trace.AnnotateSQL(span, query)
 	defer span.Finish()
 
 	resultSent := false

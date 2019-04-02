@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -50,6 +51,12 @@ func NewSpan(inCtx context.Context, label string) (Span, context.Context) {
 	outCtx := spanFactory.NewContext(inCtx, span)
 
 	return span, outCtx
+}
+
+// AnnotateSQL annotates information about a sql query in the span. This is done in a way
+// so as to not leak personally identifying information (PII), or sensitive personal information (SPI)
+func AnnotateSQL(span Span, sql string) {
+	span.Annotate("sql-statement-type", sqlparser.StmtType(sqlparser.Preview(sql)))
 }
 
 // NewClientSpan returns a span and a context to register calls to dependent services.

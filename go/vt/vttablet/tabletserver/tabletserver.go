@@ -966,7 +966,7 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 // Execute executes the query and returns the result as response.
 func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.Execute")
-	span.Annotate("sql", trace.ExtractFirstCharacters(sql))
+	trace.AnnotateSQL(span, sql)
 	defer span.Finish()
 
 	allowOnShutdown := (transactionID != 0)
@@ -1435,7 +1435,7 @@ func (tsv *TabletServer) execRequest(
 	if options != nil {
 		span.Annotate("isolation-level", options.TransactionIsolation)
 	}
-	span.Annotate("query", trace.ExtractFirstCharacters(sql))
+	trace.AnnotateSQL(span, sql)
 	if target != nil {
 		span.Annotate("cell", target.Cell)
 		span.Annotate("shard", target.Shard)
