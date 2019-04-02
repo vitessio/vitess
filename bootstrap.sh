@@ -177,7 +177,7 @@ function install_zookeeper() {
   local dist="$2"
 
   zk="zookeeper-$version"
-  wget "http://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
+  wget "https://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
   tar -xzf "$zk.tar.gz"
   ant -f "$zk/build.xml" package
   ant -f "$zk/src/contrib/fatjar/build.xml" jar
@@ -186,7 +186,7 @@ function install_zookeeper() {
   zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF' || true # needed for >=3.4.10 <3.5
   rm -rf "$zk" "$zk.tar.gz"
 }
-zk_ver=${ZK_VERSION:-3.4.13}
+zk_ver=${ZK_VERSION:-3.4.14}
 install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
 
 
@@ -363,7 +363,7 @@ if [ "$BUILD_TESTS" == 1 ] ; then
  echo "bootstrap finished - run 'source dev.env' in your shell before building."
 else
  echo
- echo "bootstrap finished - run 'source build.env' in your shell before building."    
+ echo "bootstrap finished - run 'source build.env' in your shell before building."
 fi
 
 
