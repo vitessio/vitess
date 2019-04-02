@@ -946,7 +946,7 @@ func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
-	span.Annotate("query", trace.ExtractFirstCharacters(sql))
+	trace.AnnotateSQL(span, sql)
 	callBackClosingSpan := func(result *sqltypes.Result) error {
 		defer span.Finish()
 		return callback(result)
