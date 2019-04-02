@@ -180,9 +180,9 @@ function install_zookeeper() {
   wget "https://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
   tar -xzf "$zk.tar.gz"
   ant -f "$zk/build.xml" package
-  ant -f "$zk/src/contrib/fatjar/build.xml" jar
+  ant -f "$zk/zookeeper-contrib/zookeeper-contrib-fatjar/build.xml" jar
   mkdir -p lib
-  cp "$zk/build/contrib/fatjar/zookeeper-dev-fatjar.jar" "lib/$zk-fatjar.jar"
+  cp "$zk/build/zookeeper-contrib/zookeeper-contrib-fatjar/zookeeper-dev-fatjar.jar" "lib/$zk-fatjar.jar"
   zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF' || true # needed for >=3.4.10 <3.5
   rm -rf "$zk" "$zk.tar.gz"
 }
