@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -42,13 +42,13 @@ func init() {
 		"Registers a local topology service in a new cell by creating the CellInfo with the provided parameters. The address will be used to connect to the topology service, and we'll put Vitess data starting at the provided root."})
 
 	addCommand(cellsAliasesGroupName, command{
-		"UpdateCellInfo",
+		"UpdateCellsAlias",
 		commandUpdateCellsAlias,
 		"[-cells <cell,cell2,...>] <alias>",
 		"Updates the content of a CellInfo with the provided parameters. If a value is empty, it is not updated. The CellInfo will be created if it doesn't exist."})
 
 	addCommand(cellsAliasesGroupName, command{
-		"DeleteCellInfo",
+		"DeleteCellsAlias",
 		commandDeleteCellsAlias,
 		"<alias>",
 		"Deletes the CellsAlias for the provided alias."})
