@@ -498,9 +498,15 @@ func (p *FastPool) closeIdleResources() {
 
 		time.Sleep(timeout / 10)
 
+		// We assume InPool can change during the loop below:
+		// If it increases, the new resource(s) can be collected in the next round.
+		// If it decreases, we won't be able to take the removed resource out of the channel
+		// and will gracefully stop scanning until next round.
+		var remaining = p.State().InPool
+
 		var active, minActive int
 		var closed bool
-		for scanning, remaining := true, p.State().InPool; scanning && remaining > 0; remaining-- {
+		for scanning := true; scanning && remaining > 0; remaining-- {
 			p.withLock(func() {
 				active = p.active()
 				minActive = p.state.MinActive
