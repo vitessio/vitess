@@ -30,7 +30,8 @@ apt-get install -y make \
                    pkg-config \
                    bison \
                    curl \
-                   openjdk-7-jre \
+                   openjdk-7-jdk \
+                   ant \
                    zip \
                    unzip
 
