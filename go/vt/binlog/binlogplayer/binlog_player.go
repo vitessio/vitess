@@ -147,7 +147,7 @@ func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRa
 		blplStats:     blplStats,
 		deadlockRetry: 1 * time.Second,
 	}
-	qr, err := blp.exec(fmt.Sprintf("select TABLE_NAME, ORDINAL_POSITION from information_schema.COLUMNS where TABLE_SCHEMA = '%s' and GENERATION_EXPRESSION != ''", tablet.Keyspace))
+	qr, err := blp.dbClient.ExecuteFetch(fmt.Sprintf("select TABLE_NAME, ORDINAL_POSITION from information_schema.COLUMNS where TABLE_SCHEMA = '%s' and GENERATION_EXPRESSION != ''", tablet.Keyspace), 1000) // hack: guess that there will not be more than 1000 generated columns in this keyspace
 	if err != nil {
 		log.Warning("could not determine generated columns (query failure)")
 	}
@@ -162,11 +162,13 @@ func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRa
 		if err != nil {
 			log.Warning("could not determine generated columns (conversion failure)")
 		}
+		log.Infof("DEBUG(acharis): building generatedColumns: %s %v", row[0].ToString(), position)
 		// we subtract 1 here because mysql indexes columns starting at 1
 		// but we want to use this to remove entries from 0-indexed arrays
 		arr = append(arr, position-1)
 	}
 	blp.generatedColumns = generatedColumns
+	log.Infof("DEBUG(acharis): generatedColumns: %v", generatedColumns)
 	return blp
 }
 
@@ -183,7 +185,7 @@ func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables 
 		blplStats:     blplStats,
 		deadlockRetry: 1 * time.Second,
 	}
-	qr, err := blp.exec(fmt.Sprintf("select TABLE_NAME, ORDINAL_POSITION from information_schema.COLUMNS where TABLE_SCHEMA = '%s' and GENERATION_EXPRESSION != ''", tablet.Keyspace))
+	qr, err := blp.dbClient.ExecuteFetch(fmt.Sprintf("select TABLE_NAME, ORDINAL_POSITION from information_schema.COLUMNS where TABLE_SCHEMA = '%s' and GENERATION_EXPRESSION != ''", tablet.Keyspace), 1000) // hack: guess that there will not be more than 1000 generated columns in this keyspace
 	if err != nil {
 		log.Warning("could not determine generated columns (query failure)")
 	}
@@ -198,10 +200,12 @@ func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables 
 		if err != nil {
 			log.Warning("could not determine generated columns (conversion failure)")
 		}
+		log.Infof("DEBUG(acharis): building generatedColumns: %s %v", row[0].ToString(), position)
 		// we subtract 1 here because mysql indexes columns starting at 1
 		// but we want to use this to remove entries from 0-indexed arrays
 		arr = append(arr, position-1)
 	}
+	log.Infof("DEBUG(acharis): generatedColumns: %v", generatedColumns)
 	blp.generatedColumns = generatedColumns
 	return blp
 }
@@ -452,11 +456,14 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				return false, fmt.Errorf("binlog_player encountered a statement of category INSERT for which sqlparser returns other than Insert: %s", stmt.Sql)
 			}
 			indexesToDrop := blp.generatedColumnIndexes(insert.Table.Name.String())
+			log.Infof("DEBUG(acharis): stmt.Sql before: %s", string(stmt.Sql))
+			log.Infof("DEBUG(acharis): insert.Columns before: %s", sqlparser.String(insert.Columns))
 			var idx int64
 			for i := len(indexesToDrop) - 1; i >= 0; i-- {
 				idx = indexesToDrop[i]
 				insert.Columns = append(insert.Columns[:idx], insert.Columns[idx+1:]...)
 			}
+			log.Infof("DEBUG(acharis): insert.Columns after: %s", sqlparser.String(insert.Columns))
 			values, ok := insert.Rows.(sqlparser.Values)
 			if !ok {
 				return false, fmt.Errorf("binlog_player encountered an insert where InsertRows is not of type Values: %s", stmt.Sql)
