@@ -24,25 +24,14 @@ if [ -z "$GOPATH" ]; then
 fi
 
 # This script does not handle file names that contain spaces.
-gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
+packages=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$' | sed 's|/[^/]*$|/...|' | uniq | sed 's|^|./|')
 
 # If any checks are found to be useless, they can be disabled here.
-# See the output of "go tool vet" for a list of flags.
-vetflags="-all=true"
+# See the output of "go tool vet help" for a list of flags.
+vetflags=""
 
-errors=
+if ! go vet $vetflags $packages 2>&1; then
+  echo "\nPlease fix the go vet warnings above. To disable certain checks, change vetflags in misc/git/hooks/govet."
+  exit 1
+fi
 
-# Run on one file at a time because a single invocation of "go tool vet"
-# with multiple files requires the files to all be in one package.
-for gofile in $gofiles
-do
-    if ! go tool vet $vetflags $gofile 2>&1; then
-        errors=YES
-    fi
-done
-
-[ -z  "$errors" ] && exit 0
-
-echo
-echo "Please fix the go vet warnings above. To disable certain checks, change vetflags in misc/git/hooks/govet."
-exit 1
