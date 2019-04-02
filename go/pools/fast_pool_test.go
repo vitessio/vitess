@@ -17,6 +17,7 @@ limitations under the License.
 package pools
 
 import (
+	"fmt"
 	"math/rand"
 	"runtime"
 	"testing"
@@ -907,6 +908,39 @@ func TestFastMinActiveOverCapacity(t *testing.T) {
 			require.True(t, p.state.Capacity >= p.state.InPool+p.state.InUse+p.state.Spawning)
 		})
 	}
+}
+
+func TestFastCloseIdleResourcesInPoolChangingRaceAttempt(t *testing.T) {
+	p := NewFastPool(PoolFactory, 100, 100, time.Millisecond, 0)
+	defer p.Close()
+
+	done := make(chan bool)
+	go func() {
+		var rs []Resource
+		for total := 0; total < 5000; total+=10 {
+			rs = nil
+			for i := 0; i < 100; i++ {
+				time.Sleep(time.Duration(total))
+				r, err := p.Get(context.Background())
+				if err != nil {
+					fmt.Println(err)
+					continue
+				}
+				rs = append(rs, r)
+			}
+			time.Sleep(time.Millisecond)
+
+			for _, r := range rs {
+				time.Sleep(time.Duration(total))
+				p.Put(r)
+			}
+		}
+		done <- true
+	}()
+	<- done
+
+	t.Log(p.StatsJSON())
+	require.NotZero(t, p.State().IdleClosed)
 }
 
 func TestFastMinActiveTooHighAfterSetCapacity(t *testing.T) {
