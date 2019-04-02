@@ -14,12 +14,13 @@ type AuthServerClientCert struct {
 }
 
 // Init is public so it can be called from plugin_auth_clientcert.go (go/cmd/vtgate)
-func Init() {
+func InitAuthServerClientCert() {
+	if flag.CommandLine.Lookup("mysql_server_ssl_ca").Value.String() == "" {
+		log.Info("Not configuring AuthServerClientCert because mysql_server_ssl_ca is empty")
+		return
+	}
 	if *clientcertAuthMethod != MysqlClearPassword && *clientcertAuthMethod != MysqlDialog {
 		log.Exitf("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
-	}
-	if flag.CommandLine.Lookup("mysql_server_ssl_ca").Value.String() == "" {
-		log.Exitf("clientcert auth plugin requires the -mysql_server_ssl_ca flag to be set")
 	}
 	ascc := &AuthServerClientCert{
 		Method: *clientcertAuthMethod,
