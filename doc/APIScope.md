@@ -31,7 +31,7 @@ The conventions Vitess follow is:
 
 ## Execute API
 
-The main entry point of a Vitess cluster is the 'Execute' call (or StreamExecute
+The main entry point of a Vitess cluster is the `Execute` call (or StreamExecute
 for streaming queries). It takes a keyspace, a tablet type, and a query. The
 VSchema helps Vitess route the query to the right shard and tablet type. This is
 the most transparent way of accessing Vitess. Keyspace is the database, and

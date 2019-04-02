@@ -55,7 +55,7 @@ func TestPermissions(t *testing.T) {
 
 	// master will be asked for permissions
 	master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SELECT * FROM mysql.user": {
+		"SELECT * FROM mysql.user ORDER BY host, user": {
 			Fields: []*querypb.Field{
 				{
 					Name: "Host",
@@ -419,7 +419,7 @@ func TestPermissions(t *testing.T) {
 				},
 			},
 		},
-		"SELECT * FROM mysql.db": {
+		"SELECT * FROM mysql.db ORDER BY host, db, user": {
 			Fields: []*querypb.Field{
 				{
 					Name: "Host",
@@ -544,19 +544,19 @@ func TestPermissions(t *testing.T) {
 	defer master.StopActionLoop(t)
 
 	// Make a two-level-deep copy, so we can make them diverge later.
-	user := *master.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.user"]
+	user := *master.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.user ORDER BY host, user"]
 	user.Fields = append([]*querypb.Field{}, user.Fields...)
 
 	// replica will be asked for permissions
 	replica.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		"SELECT * FROM mysql.user": &user,
-		"SELECT * FROM mysql.db":   master.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.db"],
+		"SELECT * FROM mysql.user ORDER BY host, user":   &user,
+		"SELECT * FROM mysql.db ORDER BY host, db, user": master.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.db ORDER BY host, db, user"],
 	}
 	replica.StartActionLoop(t, wr)
 	defer replica.StopActionLoop(t)
 
 	// Overwrite with the correct value to make sure it passes.
-	replica.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.user"].Fields[0] = &querypb.Field{
+	replica.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.user ORDER BY host, user"].Fields[0] = &querypb.Field{
 		Name: "Host",
 		Type: sqltypes.Char,
 	}
@@ -567,7 +567,7 @@ func TestPermissions(t *testing.T) {
 	}
 
 	// modify one field, this should fail
-	replica.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.user"].Fields[0] = &querypb.Field{
+	replica.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.user ORDER BY host, user"].Fields[0] = &querypb.Field{
 		Name: "Wrong",
 		Type: sqltypes.Char,
 	}

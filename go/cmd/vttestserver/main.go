@@ -150,6 +150,7 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 		"A MySQL DB snapshot file")
 
 	flag.StringVar(&config.TransactionMode, "transaction_mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
+	flag.Float64Var(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 0, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
 
 	flag.Parse()
 

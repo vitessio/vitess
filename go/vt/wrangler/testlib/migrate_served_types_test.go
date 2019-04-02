@@ -313,18 +313,6 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	dest4Rdonly := NewFakeTablet(t, wr, "cell1", 72, topodatapb.TabletType_RDONLY, nil,
 		TabletKeyspaceShard(t, "ks", "c0-"))
 
-	if source1Master == nil || source1Replica == nil || source1Rdonly == nil || source2Master == nil || source2Replica == nil || source2Rdonly == nil {
-
-	}
-
-	if dest1Master == nil || dest1Replica == nil || dest1Rdonly == nil || dest2Master == nil || dest2Replica == nil || dest2Rdonly == nil {
-
-	}
-
-	if dest3Master == nil || dest3Replica == nil || dest3Rdonly == nil || dest4Master == nil || dest4Replica == nil || dest4Rdonly == nil {
-
-	}
-
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, "ks", []string{"cell1"})
 	if err != nil {
