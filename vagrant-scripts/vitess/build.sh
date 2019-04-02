@@ -14,6 +14,10 @@ printf "\nBuilding Vitess...\n"
 sudo chown "$(whoami)":"$(whoami)" /vagrant
 sudo chown "$(whoami)":"$(whoami)" /vagrant/src
 cd "$VITESS_WORKSPACE"
+
+# open-jdk version that we are using in the VM needs this flag, otherwise we will fail to build ZK
+export JAVA_TOOL_OPTIONS="-Dhttps.protocols=TLSv1.2"
+
 ./bootstrap.sh
 # shellcheck disable=SC1091
 source dev.env
