@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,7 +21,7 @@ logdir="$1"
 config="$2"
 pidfile="$3"
 
-zk_ver=3.4.13
+zk_ver=${ZK_VERSION:-3.4.14}
 classpath="$VTROOT/dist/vt-zookeeper-$zk_ver/lib/zookeeper-$zk_ver-fatjar.jar:/usr/local/lib/zookeeper-$zk_ver-fatjar.jar:/usr/share/java/zookeeper-$zk_ver.jar"
 
 mkdir -p "$logdir"
@@ -60,7 +60,7 @@ $cmd < /dev/null &> /dev/null &
 pid=$!
 
 log "INFO pid: $pid pidfile: $pidfile"
-if [ "$pidfile" ]; then 
+if [ "$pidfile" ]; then
   if [ -f "$pidfile" ]; then
     rm "$pidfile"
   fi
