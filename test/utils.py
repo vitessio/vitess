@@ -552,7 +552,8 @@ class VtGate(object):
             topo_impl=None, cache_ttl='1s',
             extra_args=None, tablets=None,
             tablet_types_to_wait='MASTER,REPLICA',
-            l2vtgates=None):
+            l2vtgates=None,
+            cells_to_watch=None):
     """Start vtgate. Saves it into the global vtgate variable if not set yet."""
 
     args = environment.binary_args('vtgate') + [
@@ -567,7 +568,12 @@ class VtGate(object):
         '-normalize_queries',
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
     ]
-    args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
+
+    if cells_to_watch:
+      args.extend(vtgate_gateway_flavor().flags(cell=cells_to_watch, tablets=tablets))
+    else:
+      args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
+
     if l2vtgates:
       args.extend(['-l2vtgate_addrs', ','.join(l2vtgates)])
     if tablet_types_to_wait:

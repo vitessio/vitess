@@ -66,6 +66,7 @@ const (
 // Filenames for all object types.
 const (
 	CellInfoFile         = "CellInfo"
+	CellsAliasFile       = "CellsAlias"
 	KeyspaceFile         = "Keyspace"
 	ShardFile            = "Shard"
 	VSchemaFile          = "VSchema"
@@ -77,10 +78,11 @@ const (
 
 // Path for all object types.
 const (
-	CellsPath     = "cells"
-	KeyspacesPath = "keyspaces"
-	ShardsPath    = "shards"
-	TabletsPath   = "tablets"
+	CellsPath        = "cells"
+	CellsAliasesPath = "cells_aliases"
+	KeyspacesPath    = "keyspaces"
+	ShardsPath       = "shards"
+	TabletsPath      = "tablets"
 )
 
 // Factory is a factory interface to create Conn objects.
@@ -134,10 +136,10 @@ type Server struct {
 	cells map[string]Conn
 }
 
-type cellsToRegionsMap struct {
+type cellsToAliasesMap struct {
 	mu sync.Mutex
-	// cellsToRegions contains all cell->region mappings
-	cellsToRegions map[string]string
+	// cellsToAliases contains all cell->alias mappings
+	cellsToAliases map[string]string
 }
 
 var (
@@ -155,8 +157,8 @@ var (
 	// factories has the factories for the Conn objects.
 	factories = make(map[string]Factory)
 
-	regions = cellsToRegionsMap{
-		cellsToRegions: make(map[string]string),
+	cellsAliases = cellsToAliasesMap{
+		cellsToAliases: make(map[string]string),
 	}
 )
 
@@ -271,30 +273,32 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	}
 }
 
-// GetRegionByCell returns the region group this `cell` belongs to, if there's none, it returns the `cell` as region.
-func GetRegionByCell(ctx context.Context, ts *Server, cell string) string {
-	regions.mu.Lock()
-	defer regions.mu.Unlock()
-	if region, ok := regions.cellsToRegions[cell]; ok {
+// GetAliasByCell returns the alias group this `cell` belongs to, if there's none, it returns the `cell` as alias.
+func GetAliasByCell(ctx context.Context, ts *Server, cell string) string {
+	cellsAliases.mu.Lock()
+	defer cellsAliases.mu.Unlock()
+	if region, ok := cellsAliases.cellsToAliases[cell]; ok {
 		return region
 	}
 	if ts != nil {
-		// lazily get the region from cell info if `regions.ts` is available
-		info, err := ts.GetCellInfo(ctx, cell, false)
-		if err == nil && info.Region != "" {
-			regions.cellsToRegions[cell] = info.Region
-			return info.Region
+		// lazily get the region from cell info if `aliases` are available
+		cellAliases, err := ts.GetCellsAliases(ctx, false)
+		if err != nil {
+			// for backward compatibility
+			return cell
+		}
+
+		for alias, cellsAlias := range cellAliases {
+			for _, cellAlias := range cellsAlias.Cells {
+				if cellAlias == cell {
+					cellsAliases.cellsToAliases[cell] = alias
+					return alias
+				}
+			}
 		}
 	}
-	// for backward compatability
+	// for backward compatibility
 	return cell
-}
-
-// UpdateCellsToRegionsForTests overwrites the global map built by topo server init, and is meant for testing purpose only.
-func UpdateCellsToRegionsForTests(cellsToRegions map[string]string) {
-	regions.mu.Lock()
-	defer regions.mu.Unlock()
-	regions.cellsToRegions = cellsToRegions
 }
 
 // Close will close all connections to underlying topo Server.
@@ -312,4 +316,10 @@ func (ts *Server) Close() {
 		conn.Close()
 	}
 	ts.cells = make(map[string]Conn)
+}
+
+func (ts *Server) clearCellAliasesCache() {
+	cellsAliases.mu.Lock()
+	defer cellsAliases.mu.Unlock()
+	cellsAliases.cellsToAliases = make(map[string]string)
 }
