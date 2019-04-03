@@ -56,8 +56,8 @@ type TabletStatsCache struct {
 	entries map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry
 	// tsm is a helper to broadcast aggregate stats.
 	tsm srvtopo.TargetStatsMultiplexer
-	// cellRegions is a cache of cell regions
-	cellRegions map[string]string
+	// cellAliases is a cache of cell aliases
+	cellAliases map[string]string
 }
 
 // tabletStatsCacheEntry is the per keyspace/shard/tabletType
@@ -70,7 +70,7 @@ type tabletStatsCacheEntry struct {
 	all map[string]*TabletStats
 	// healthy only has the healthy ones.
 	healthy []*TabletStats
-	// aggregates has the per-region aggregates.
+	// aggregates has the per-alias aggregates.
 	aggregates map[string]*querypb.AggregateStats
 }
 
@@ -136,7 +136,7 @@ func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListen
 		aggregatesChan: make(chan []*srvtopo.TargetStatsEntry, 100),
 		entries:        make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
 		tsm:            srvtopo.NewTargetStatsMultiplexer(),
-		cellRegions:    make(map[string]string),
+		cellAliases:    make(map[string]string),
 	}
 
 	if setListener {
@@ -196,26 +196,26 @@ func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStat
 	return e
 }
 
-func (tc *TabletStatsCache) getRegionByCell(cell string) string {
+func (tc *TabletStatsCache) getAliasByCell(cell string) string {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
 
-	if region, ok := tc.cellRegions[cell]; ok {
-		return region
+	if alias, ok := tc.cellAliases[cell]; ok {
+		return alias
 	}
 
-	region := topo.GetRegionByCell(context.Background(), tc.ts, cell)
-	tc.cellRegions[cell] = region
+	alias := topo.GetAliasByCell(context.Background(), tc.ts, cell)
+	tc.cellAliases[cell] = alias
 
-	return region
+	return alias
 }
 
 // StatsUpdate is part of the HealthCheckStatsListener interface.
 func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 	if ts.Target.TabletType != topodatapb.TabletType_MASTER &&
 		ts.Tablet.Alias.Cell != tc.cell &&
-		tc.getRegionByCell(ts.Tablet.Alias.Cell) != tc.getRegionByCell(tc.cell) {
-		// this is for a non-master tablet in a different cell and a different region, drop it
+		tc.getAliasByCell(ts.Tablet.Alias.Cell) != tc.getAliasByCell(tc.cell) {
+		// this is for a non-master tablet in a different cell and a different alias, drop it
 		return
 	}
 
@@ -280,18 +280,18 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 	tc.updateAggregateMap(ts.Target.Keyspace, ts.Target.Shard, ts.Target.TabletType, e, allArray)
 }
 
-// makeAggregateMap takes a list of TabletStats and builds a per-region
+// makeAggregateMap takes a list of TabletStats and builds a per-alias
 // AggregateStats map.
 func (tc *TabletStatsCache) makeAggregateMap(stats []*TabletStats) map[string]*querypb.AggregateStats {
 	result := make(map[string]*querypb.AggregateStats)
 	for _, ts := range stats {
-		region := tc.getRegionByCell(ts.Tablet.Alias.Cell)
-		agg, ok := result[region]
+		alias := tc.getAliasByCell(ts.Tablet.Alias.Cell)
+		agg, ok := result[alias]
 		if !ok {
 			agg = &querypb.AggregateStats{
 				SecondsBehindMasterMin: math.MaxUint32,
 			}
-			result[region] = agg
+			result[alias] = agg
 		}
 
 		if ts.Serving && ts.LastError == nil {
@@ -378,8 +378,8 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 			return agg, nil
 		}
 	}
-	targetRegion := tc.getRegionByCell(target.Cell)
-	agg, ok := e.aggregates[targetRegion]
+	targetAlias := tc.getAliasByCell(target.Cell)
+	agg, ok := e.aggregates[targetAlias]
 	if !ok {
 		return nil, topo.NewError(topo.NoNode, topotools.TargetIdent(target))
 	}
