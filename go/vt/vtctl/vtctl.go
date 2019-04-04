@@ -241,7 +241,7 @@ var commands = []commandGroup{
 				"<keyspace/shard>",
 				"Lists all tablets in the specified shard."},
 			{"SetShardIsMasterServing", commandSetShardIsMasterServing,
-				"[--is_master_serving] <keyspace/shard>",
+				"<keyspace/shard> <is_master_serving>",
 				"Add or remove a shard from serving. This is meant as an emergency function. It does not rebuild any serving graph i.e. does not run 'RebuildKeyspaceGraph'."},
 			{"SetShardTabletControl", commandSetShardTabletControl,
 				"[--cells=c1,c2,...] [--blacklisted_tables=t1,t2,...] [--remove] [--disable_query_service] <keyspace/shard> <tablet type>",
