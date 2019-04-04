@@ -130,7 +130,7 @@ var locksKey locksKeyType
 //     as well as the associated horizontal resharding operations.
 //   * vertical resharding: includes changing the keyspace 'ServedFrom'
 //     field, as well as the associated vertical resharding operations.
-//   * 'vtctl SetShardServedTypes' emergency operations
+//   * 'vtctl SetShardIsMasterServing' emergency operations
 //   * 'vtctl SetShardTabletControl' emergency operations
 //   * 'vtctl SourceShardAdd' and 'vtctl SourceShardDelete' emergency operations
 // * keyspace-wide schema changes
