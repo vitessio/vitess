@@ -144,7 +144,7 @@ func ParseKeyRangeParts(start, end string) (*topodatapb.KeyRange, error) {
 // KeyRangeString prints a topodatapb.KeyRange
 func KeyRangeString(k *topodatapb.KeyRange) string {
 	if k == nil {
-		return "<nil>"
+		return "-"
 	}
 	return hex.EncodeToString(k.Start) + "-" + hex.EncodeToString(k.End)
 }

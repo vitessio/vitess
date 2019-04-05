@@ -78,7 +78,10 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 // play is not resumable. If pausePos is set, play returns without updating the vreplication state.
 func (vp *vplayer) play(ctx context.Context) error {
 	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
-		return vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
+		if vp.saveStop {
+			return vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
+		}
+		return nil
 	}
 
 	plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.tableKeys, vp.copyState)
@@ -324,8 +327,10 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 		if !vp.pos.Equal(vp.stopPos) && vp.pos.AtLeast(vp.stopPos) {
 			// Code is unreachable, but bad data can cause this to happen.
-			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("next event position %v exceeds stop pos %v, exiting without applying", vp.pos, vp.stopPos)); err != nil {
-				return err
+			if vp.saveStop {
+				if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("next event position %v exceeds stop pos %v, exiting without applying", vp.pos, vp.stopPos)); err != nil {
+					return err
+				}
 			}
 			return io.EOF
 		}

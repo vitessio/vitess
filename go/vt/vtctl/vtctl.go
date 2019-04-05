@@ -307,6 +307,12 @@ var commands = []commandGroup{
 			{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <keyspace name>",
 				"Validates that all nodes reachable from the specified keyspace are consistent."},
+			{"SplitClone", commandSplitClone,
+				"<keyspace> <from_shards> <to_shards>",
+				"Start the SplitClone process to perform horizontal resharding. Example: SplitClone ks '0' '-80,80-'"},
+			{"VerticalSplitClone", commandVerticalSplitClone,
+				"<from_keyspace> <to_keyspace> <tables>",
+				"Start the VerticalSplitClone process to perform vertical resharding. Example: SplitClone from_ks to_ks 'a,/b.*/'"},
 			{"MigrateServedTypes", commandMigrateServedTypes,
 				"[-cells=c1,c2,...] [-reverse] [-skip-refresh-state] <keyspace/shard> <served tablet type>",
 				"Migrates a serving type from the source shard to the shards that it replicates to. This command also rebuilds the serving graph. The <keyspace/shard> argument can specify any of the shards involved in the migration."},
@@ -1716,6 +1722,32 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 
 	keyspace := subFlags.Arg(0)
 	return wr.ValidateKeyspace(ctx, keyspace, *pingTablets)
+}
+
+func commandSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 3 {
+		return fmt.Errorf("three arguments are required: keyspace, from_shards, to_shards")
+	}
+	keyspace := subFlags.Arg(0)
+	from := strings.Split(subFlags.Arg(1), ",")
+	to := strings.Split(subFlags.Arg(2), ",")
+	return wr.SplitClone(ctx, keyspace, from, to)
+}
+
+func commandVerticalSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 3 {
+		return fmt.Errorf("three arguments are required: from_keyspace, to_keyspace, tables")
+	}
+	fromKeyspace := subFlags.Arg(0)
+	toKeyspace := subFlags.Arg(1)
+	tables := strings.Split(subFlags.Arg(2), ",")
+	return wr.VerticalSplitClone(ctx, fromKeyspace, toKeyspace, tables)
 }
 
 func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
