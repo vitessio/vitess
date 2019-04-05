@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -88,6 +89,107 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 	ki.ShardingColumnName = shardingColumnName
 	ki.ShardingColumnType = shardingColumnType
 	return wr.ts.UpdateKeyspace(ctx, ki)
+}
+
+// SplitClone initiates a SplitClone workflow.
+func (wr *Wrangler) SplitClone(ctx context.Context, keyspace string, from, to []string) error {
+	var fromShards, toShards []*topo.ShardInfo
+	for _, shard := range from {
+		si, err := wr.ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetShard(%s) failed", shard)
+		}
+		fromShards = append(fromShards, si)
+	}
+	for _, shard := range to {
+		si, err := wr.ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetShard(%s) failed", shard)
+		}
+		toShards = append(toShards, si)
+	}
+	// TODO(sougou): validate from and to shards.
+
+	for _, dest := range toShards {
+		master, err := wr.ts.GetTablet(ctx, dest.MasterAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", dest.MasterAlias)
+		}
+		var ids []uint64
+		for _, source := range fromShards {
+			filter := &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "/.*",
+					Filter: key.KeyRangeString(dest.KeyRange),
+				}},
+			}
+			bls := &binlogdatapb.BinlogSource{
+				Keyspace: keyspace,
+				Shard:    source.ShardName(),
+				Filter:   filter,
+			}
+			cmd := binlogplayer.CreateVReplicationState("VSplitClone", bls, "", binlogplayer.BlpStopped, master.DbName())
+			qr, err := wr.TabletManagerClient().VReplicationExec(ctx, master.Tablet, cmd)
+			if err != nil {
+				return vterrors.Wrapf(err, "VReplicationExec(%v, %s) failed", dest.MasterAlias, cmd)
+			}
+			if err := wr.SourceShardAdd(ctx, keyspace, dest.ShardName(), uint32(qr.InsertId), keyspace, source.ShardName(), source.Shard.KeyRange, nil); err != nil {
+				return vterrors.Wrapf(err, "SourceShardAdd(%s, %s) failed", dest.ShardName(), source.ShardName())
+			}
+			ids = append(ids, qr.InsertId)
+		}
+		// Start vreplication only if all metadata was successfully created.
+		for _, id := range ids {
+			cmd := fmt.Sprintf("update _vt.vreplication set state='%s' where id=%d", binlogplayer.VReplicationInit, id)
+			if _, err = wr.TabletManagerClient().VReplicationExec(ctx, master.Tablet, cmd); err != nil {
+				return vterrors.Wrapf(err, "VReplicationExec(%v, %s) failed", dest.MasterAlias, cmd)
+			}
+		}
+	}
+	return nil
+}
+
+// VerticalSplitClone initiates a VerticalSplitClone workflow.
+func (wr *Wrangler) VerticalSplitClone(ctx context.Context, fromKeyspace, toKeyspace string, tables []string) error {
+	source, err := wr.ts.GetOnlyShard(ctx, fromKeyspace)
+	if err != nil {
+		return vterrors.Wrapf(err, "GetOnlyShard(%s) failed", fromKeyspace)
+	}
+	dest, err := wr.ts.GetOnlyShard(ctx, toKeyspace)
+	if err != nil {
+		return vterrors.Wrapf(err, "GetOnlyShard(%s) failed", toKeyspace)
+	}
+	// TODO(sougou): validate from and to shards.
+
+	master, err := wr.ts.GetTablet(ctx, dest.MasterAlias)
+	if err != nil {
+		return vterrors.Wrapf(err, "GetTablet(%v) failed", dest.MasterAlias)
+	}
+	filter := &binlogdatapb.Filter{}
+	for _, table := range tables {
+		filter.Rules = append(filter.Rules, &binlogdatapb.Rule{
+			Match: table,
+		})
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: fromKeyspace,
+		Shard:    source.ShardName(),
+		Filter:   filter,
+	}
+	cmd := binlogplayer.CreateVReplicationState("VSplitClone", bls, "", binlogplayer.BlpStopped, master.DbName())
+	qr, err := wr.TabletManagerClient().VReplicationExec(ctx, master.Tablet, cmd)
+	if err != nil {
+		return vterrors.Wrapf(err, "VReplicationExec(%v, %s) failed", dest.MasterAlias, cmd)
+	}
+	if err := wr.SourceShardAdd(ctx, toKeyspace, dest.ShardName(), uint32(qr.InsertId), fromKeyspace, source.ShardName(), nil, tables); err != nil {
+		return vterrors.Wrapf(err, "SourceShardAdd(%s, %s) failed", dest.ShardName(), source.ShardName())
+	}
+	// Start vreplication only if metadata was successfully created.
+	cmd = fmt.Sprintf("update _vt.vreplication set state='%s' where id=%d", binlogplayer.VReplicationInit, qr.InsertId)
+	if _, err = wr.TabletManagerClient().VReplicationExec(ctx, master.Tablet, cmd); err != nil {
+		return vterrors.Wrapf(err, "VReplicationExec(%v, %s) failed", dest.MasterAlias, cmd)
+	}
+	return nil
 }
 
 // ShowResharding shows all resharding related metadata for the keyspace/shard.
