@@ -20,11 +20,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -44,6 +46,15 @@ var (
 	dbLockRetryDelay = 1 * time.Second
 	relayLogMaxSize  = 10000
 	relayLogMaxItems = 1000
+
+	// CreateCopyState is the list of statements to execute for creating
+	// the _vt.copy_state table
+	CreateCopyState = []string{
+		`create table if not exists _vt.copy_state (
+  vrepl_id int,
+  table_name varbinary(128),
+  last_pk varbinary(2000),
+  primary key (vrepl_id, table_name))`}
 )
 
 type vplayer struct {
@@ -91,45 +102,6 @@ func newVPlayer(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topo
 }
 
 func (vp *vplayer) Play(ctx context.Context) error {
-	if err := vp.setState(binlogplayer.BlpRunning, ""); err != nil {
-		return err
-	}
-	if err := vp.play(ctx); err != nil {
-		msg := err.Error()
-		vp.stats.History.Add(&binlogplayer.StatsHistoryRecord{
-			Time:    time.Now(),
-			Message: msg,
-		})
-		if err := vp.setState(binlogplayer.BlpError, msg); err != nil {
-			return err
-		}
-		return err
-	}
-	return nil
-}
-
-func (vp *vplayer) play(ctx context.Context) error {
-	startPos, stopPos, _, _, err := binlogplayer.ReadVRSettings(vp.dbClient, vp.id)
-	if err != nil {
-		return vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("error reading VReplication settings: %v", err))
-	}
-	vp.pos, err = mysql.DecodePosition(startPos)
-	if err != nil {
-		return vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("error decoding start position %v: %v", startPos, err))
-	}
-	if stopPos != "" {
-		vp.stopPos, err = mysql.DecodePosition(stopPos)
-		if err != nil {
-			return vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("error decoding stop position %v: %v", stopPos, err))
-		}
-	}
-	if !vp.stopPos.IsZero() {
-		if vp.pos.AtLeast(vp.stopPos) {
-			return vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.pos, vp.stopPos))
-		}
-	}
-	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, source: %v, filter: %v", vp.id, startPos, vp.stopPos, vp.sourceTablet, vp.source)
-
 	tableKeys, err := vp.buildTableKeys()
 	if err != nil {
 		return err
@@ -140,6 +112,95 @@ func (vp *vplayer) play(ctx context.Context) error {
 		return err
 	}
 	vp.pplan = plan
+
+	settings, err := binlogplayer.ReadVRSettings(vp.dbClient, vp.id)
+	if err != nil {
+		return fmt.Errorf("error reading VReplication settings: %v", err)
+	}
+	if settings.State == binlogplayer.VReplicationInit {
+		if err := vp.initTablesForCopy(ctx); err != nil {
+			return err
+		}
+		return nil
+	}
+	return vp.replicate(ctx, settings)
+}
+
+func (vp *vplayer) initTablesForCopy(ctx context.Context) error {
+	defer vp.dbClient.Rollback()
+
+	// Check if table exists.
+	if _, err := vp.dbClient.ExecuteFetch("select * from _vt.copy_state limit 1", 10); err != nil {
+		// If it's a not found error, create it.
+		merr, isSQLErr := err.(*mysql.SQLError)
+		if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb) {
+			return err
+		}
+		for _, query := range CreateCopyState {
+			if _, merr := vp.dbClient.ExecuteFetch(query, 0); merr != nil {
+				log.Errorf("Failed to ensure _vt.copy_state table exists: %v", merr)
+				return err
+			}
+		}
+	}
+	if err := vp.dbClient.Begin(); err != nil {
+		return err
+	}
+	// Insert the table list only if at least one table matches.
+	if len(vp.pplan.TargetTables) != 0 {
+		var buf strings.Builder
+		buf.WriteString("insert into _vt.copy_state(vrepl_id, table_name) values ")
+		prefix := ""
+		for name := range vp.pplan.TargetTables {
+			fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vp.id, encodeString(name))
+			prefix = ", "
+		}
+		if _, err := vp.dbClient.ExecuteFetch(buf.String(), 1); err != nil {
+			return err
+		}
+	}
+	if err := vp.setState(binlogplayer.VReplicationCopying, ""); err != nil {
+		return err
+	}
+	return vp.dbClient.Commit()
+}
+
+func (vp *vplayer) replicate(ctx context.Context, settings binlogplayer.VRSettings) error {
+	if err := vp.setState(binlogplayer.BlpRunning, ""); err != nil {
+		return err
+	}
+	if err := vp.play(ctx, settings); err != nil {
+		msg := err.Error()
+		vp.stats.History.Add(&binlogplayer.StatsHistoryRecord{
+			Time:    time.Now(),
+			Message: msg,
+		})
+		if err := vp.setState(binlogplayer.BlpError, msg); err != nil {
+			log.Errorf("Failed to set error state: %v", err)
+		}
+		return err
+	}
+	return nil
+}
+
+func (vp *vplayer) play(ctx context.Context, settings binlogplayer.VRSettings) error {
+	var err error
+	vp.pos, err = mysql.DecodePosition(settings.StartPos)
+	if err != nil {
+		return vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("error decoding start position %v: %v", settings.StartPos, err))
+	}
+	if settings.StopPos != "" {
+		vp.stopPos, err = mysql.DecodePosition(settings.StopPos)
+		if err != nil {
+			return vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("error decoding stop position %v: %v", settings.StopPos, err))
+		}
+	}
+	if !vp.stopPos.IsZero() {
+		if vp.pos.AtLeast(vp.stopPos) {
+			return vp.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.pos, vp.stopPos))
+		}
+	}
+	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, source: %v, filter: %v", vp.id, settings.StartPos, vp.stopPos, vp.sourceTablet, vp.source)
 
 	vsClient, err := tabletconn.GetDialer()(vp.sourceTablet, grpcclient.FailFast(false))
 	if err != nil {
@@ -155,10 +216,10 @@ func (vp *vplayer) play(ctx context.Context) error {
 		Shard:      vp.sourceTablet.Shard,
 		TabletType: vp.sourceTablet.Type,
 	}
-	log.Infof("Sending vstream command: %v", plan.VStreamFilter)
+	log.Infof("Sending vstream command: %v", vp.pplan.VStreamFilter)
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vsClient.VStream(ctx, target, startPos, plan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+		streamErr <- vsClient.VStream(ctx, target, settings.StartPos, vp.pplan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
 	}()
@@ -477,4 +538,10 @@ func (vp *vplayer) exec(ctx context.Context, sql string) error {
 		return err
 	}
 	return nil
+}
+
+func encodeString(in string) string {
+	var buf strings.Builder
+	sqltypes.NewVarChar(in).EncodeSQL(&buf)
+	return buf.String()
 }
