@@ -73,6 +73,11 @@ const (
 	insertIgnore
 )
 
+// buildPlayerPlan builds a PlayerPlan from the input filter.
+// The filter is matched against the target schema. For every table matched,
+// a table-specific rule is built to be sent to the source. We don't send the
+// original rule to the source because it may not match the same tables as the
+// target.
 func buildPlayerPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string) (*PlayerPlan, error) {
 	plan := &PlayerPlan{
 		VStreamFilter: &binlogdatapb.Filter{},

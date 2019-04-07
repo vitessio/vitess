@@ -136,7 +136,6 @@ func (vp *vplayer) initTablesForCopy(ctx context.Context) error {
 		if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb) {
 			return err
 		}
-		log.Info("Looks like _vt.copy_state table may not exist. Trying to create... ")
 		for _, query := range CreateCopyState {
 			if _, merr := vp.dbClient.ExecuteFetch(query, 0); merr != nil {
 				log.Errorf("Failed to ensure _vt.copy_state table exists: %v", merr)
