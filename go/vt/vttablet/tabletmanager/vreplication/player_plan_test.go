@@ -18,18 +18,59 @@ package vreplication
 
 import (
 	"encoding/json"
+	"sort"
 	"testing"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+func (pp *PlayerPlan) MarshalJSON() ([]byte, error) {
+	var targets []string
+	for k := range pp.TargetTables {
+		targets = append(targets, k)
+	}
+	sort.Strings(targets)
+	v := struct {
+		VStreamFilter *binlogdatapb.Filter
+		TargetTables  []string
+		TablePlans    map[string]*TablePlan
+	}{
+		VStreamFilter: pp.VStreamFilter,
+		TargetTables:  targets,
+		TablePlans:    pp.TablePlans,
+	}
+	return json.Marshal(&v)
+}
+
+func (tp *TablePlan) MarshalJSON() ([]byte, error) {
+	v := struct {
+		Name         string
+		SendRule     string
+		PKReferences []string               `json:",omitempty"`
+		Insert       *sqlparser.ParsedQuery `json:",omitempty"`
+		Update       *sqlparser.ParsedQuery `json:",omitempty"`
+		Delete       *sqlparser.ParsedQuery `json:",omitempty"`
+	}{
+		Name:         tp.Name,
+		SendRule:     tp.SendRule.Match,
+		PKReferences: tp.PKReferences,
+		Insert:       tp.Insert,
+		Update:       tp.Update,
+		Delete:       tp.Delete,
+	}
+	return json.Marshal(&v)
+}
 
 type TestPlayerPlan struct {
 	VStreamFilter *binlogdatapb.Filter
+	TargetTables  []string
 	TablePlans    map[string]*TestTablePlan
 }
 
 type TestTablePlan struct {
 	Name         string
+	SendRule     string
 	PKReferences []string `json:",omitempty"`
 	Insert       string   `json:",omitempty"`
 	Update       string   `json:",omitempty"`
@@ -51,10 +92,17 @@ func TestBuildPlayerPlan(t *testing.T) {
 		plan: &TestPlayerPlan{
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
-					Match: "/.*",
+					Match:  "t1",
+					Filter: "select * from t1",
 				}},
 			},
-			TablePlans: map[string]*TestTablePlan{},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					Name:     "t1",
+					SendRule: "t1",
+				},
+			},
 		},
 	}, {
 		// '*' expression
@@ -71,9 +119,11 @@ func TestBuildPlayerPlan(t *testing.T) {
 					Filter: "select * from t2",
 				}},
 			},
+			TargetTables: []string{"t1"},
 			TablePlans: map[string]*TestTablePlan{
 				"t2": {
-					Name: "t1",
+					Name:     "t1",
+					SendRule: "t2",
 				},
 			},
 		},
@@ -92,9 +142,11 @@ func TestBuildPlayerPlan(t *testing.T) {
 					Filter: "select c1, c2 from t2",
 				}},
 			},
+			TargetTables: []string{"t1"},
 			TablePlans: map[string]*TestTablePlan{
 				"t2": {
 					Name:         "t1",
+					SendRule:     "t2",
 					PKReferences: []string{"c1"},
 					Insert:       "insert into t1 set c1=:a_c1, c2=:a_c2",
 					Update:       "update t1 set c2=:a_c2 where c1=:b_c1",
@@ -117,9 +169,11 @@ func TestBuildPlayerPlan(t *testing.T) {
 					Filter: "select c1, c2, c3 from t2",
 				}},
 			},
+			TargetTables: []string{"t1"},
 			TablePlans: map[string]*TestTablePlan{
 				"t2": {
 					Name:         "t1",
+					SendRule:     "t2",
 					PKReferences: []string{"c1"},
 					Insert:       "insert into t1 set c1=:a_c1, c2=:a_c2, c3=:a_c3 on duplicate key update c2=:a_c2",
 					Update:       "update t1 set c2=:a_c2 where c1=:b_c1",
@@ -142,9 +196,11 @@ func TestBuildPlayerPlan(t *testing.T) {
 					Filter: "select c1, c2, c3 from t2",
 				}},
 			},
+			TargetTables: []string{"t1"},
 			TablePlans: map[string]*TestTablePlan{
 				"t2": {
 					Name:         "t1",
+					SendRule:     "t2",
 					PKReferences: []string{"c1"},
 					Insert:       "insert ignore into t1 set c1=:a_c1, c2=:a_c2, c3=:a_c3",
 					Update:       "insert ignore into t1 set c1=:a_c1, c2=:a_c2, c3=:a_c3",
@@ -165,9 +221,11 @@ func TestBuildPlayerPlan(t *testing.T) {
 					Filter: "select a, b from t1",
 				}},
 			},
+			TargetTables: []string{"t1"},
 			TablePlans: map[string]*TestTablePlan{
 				"t1": {
 					Name:         "t1",
+					SendRule:     "t1",
 					PKReferences: []string{"a"},
 					Insert:       "insert into t1 set c1=foo(:a_a), c2=:a_b",
 					Update:       "update t1 set c2=:a_b where c1=(foo(:b_a))",
@@ -189,9 +247,11 @@ func TestBuildPlayerPlan(t *testing.T) {
 					Filter: "select a, b, c from t1",
 				}},
 			},
+			TargetTables: []string{"t1"},
 			TablePlans: map[string]*TestTablePlan{
 				"t1": {
 					Name:         "t1",
+					SendRule:     "t1",
 					PKReferences: []string{"a", "b"},
 					Insert:       "insert into t1 set c1=:a_a + :a_b, c2=:a_c",
 					Update:       "update t1 set c2=:a_c where c1=(:b_a + :b_b)",

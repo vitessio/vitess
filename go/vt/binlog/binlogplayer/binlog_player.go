@@ -52,6 +52,10 @@ var (
 	// BlplTransaction is the key for the stats map.
 	BlplTransaction = "Transaction"
 
+	// VReplicationInit is for the Init state.
+	VReplicationInit = "Init"
+	// VReplicationCopying is for the Copying state.
+	VReplicationCopying = "Copying"
 	// BlpRunning is for the Running state.
 	BlpRunning = "Running"
 	// BlpStopped is for the Stopped state.
@@ -191,18 +195,18 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 // applyEvents returns a recordable status message on termination or an error otherwise.
 func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 	// Read starting values for vreplication.
-	pos, stopPos, maxTPS, maxReplicationLag, err := ReadVRSettings(blp.dbClient, blp.uid)
+	settings, err := ReadVRSettings(blp.dbClient, blp.uid)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
-	blp.position, err = mysql.DecodePosition(pos)
+	blp.position, err = mysql.DecodePosition(settings.StartPos)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
-	if stopPos != "" {
-		blp.stopPosition, err = mysql.DecodePosition(stopPos)
+	if settings.StopPos != "" {
+		blp.stopPosition, err = mysql.DecodePosition(settings.StopPos)
 		if err != nil {
 			log.Error(err)
 			return err
@@ -212,8 +216,8 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		fmt.Sprintf("BinlogPlayer/%d", blp.uid),
 		"transactions",
 		1, /* threadCount */
-		maxTPS,
-		maxReplicationLag,
+		settings.MaxTPS,
+		settings.MaxReplicationLag,
 	)
 	if err != nil {
 		err := fmt.Errorf("failed to instantiate throttler: %v", err)
@@ -512,29 +516,44 @@ func SetVReplicationState(dbClient DBClient, uid uint32, state, message string) 
 	return nil
 }
 
+// VRSettings contains the settings of a vreplication table.
+type VRSettings struct {
+	StartPos          string
+	StopPos           string
+	MaxTPS            int64
+	MaxReplicationLag int64
+	State             string
+}
+
 // ReadVRSettings retrieves the throttler settings for
 // vreplication from the checkpoint table.
-func ReadVRSettings(dbClient DBClient, uid uint32) (pos, stopPos string, maxTPS, maxReplicationLag int64, err error) {
-	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag from _vt.vreplication where id=%v", uid)
+func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
+	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
-		return "", "", throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
+		return VRSettings{}, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
 	}
 
 	if qr.RowsAffected != 1 {
-		return "", "", throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("checkpoint information not available in db for %v", uid)
+		return VRSettings{}, fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
 
-	maxTPS, err = sqltypes.ToInt64(qr.Rows[0][2])
+	maxTPS, err := sqltypes.ToInt64(qr.Rows[0][2])
 	if err != nil {
-		return "", "", throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("failed to parse max_tps column: %v", err)
+		return VRSettings{}, fmt.Errorf("failed to parse max_tps column: %v", err)
 	}
-	maxReplicationLag, err = sqltypes.ToInt64(qr.Rows[0][3])
+	maxReplicationLag, err := sqltypes.ToInt64(qr.Rows[0][3])
 	if err != nil {
-		return "", "", throttler.InvalidMaxRate, throttler.InvalidMaxReplicationLag, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
+		return VRSettings{}, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
 	}
 
-	return qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString(), maxTPS, maxReplicationLag, nil
+	return VRSettings{
+		StartPos:          qr.Rows[0][0].ToString(),
+		StopPos:           qr.Rows[0][1].ToString(),
+		MaxTPS:            maxTPS,
+		MaxReplicationLag: maxReplicationLag,
+		State:             qr.Rows[0][4].ToString(),
+	}, nil
 }
 
 // CreateVReplication returns a statement to populate the first value into
@@ -546,12 +565,12 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag, timeUpdated, BlpRunning)
 }
 
-// CreateVReplicationStopped returns a statement to create a stopped vreplication.
-func CreateVReplicationStopped(workflow string, source *binlogdatapb.BinlogSource, position string) string {
+// CreateVReplicationState returns a statement to create a stopped vreplication.
+func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource, position, state string) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) "+
 		"values (%v, %v, %v, %v, %v, %v, 0, '%v')",
-		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), BlpStopped)
+		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state)
 }
 
 // GenerateUpdatePos returns a statement to update a value in the
