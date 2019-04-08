@@ -28,9 +28,8 @@ import (
 )
 
 var (
-	// BackupEngineImplementation is the implementation to use
-	// for BackupEngine.
-	BackupEngineImplementation = flag.String("backup_engine_implementation", "builtin", "which implementation to use for the backup method, builtin or xtrabackup")
+	// BackupEngineImplementation is the implementation to use for BackupEngine
+	backupEngineImplementation = flag.String("backup_engine_implementation", builtin, "which implementation to use for the backup method, builtin or xtrabackup")
 )
 
 // BackupEngine is the interface to the backup engine
@@ -45,7 +44,7 @@ var BackupEngineMap = make(map[string]BackupEngine)
 // GetBackupEngine returns the current BackupEngine implementation.
 // Should be called after flags have been initialized.
 func GetBackupEngine() (BackupEngine, error) {
-	be, ok := BackupEngineMap[*BackupEngineImplementation]
+	be, ok := BackupEngineMap[*backupEngineImplementation]
 	if !ok {
 		return nil, vterrors.New(vtrpc.Code_NOT_FOUND, "no registered implementation of BackupEngine")
 	}

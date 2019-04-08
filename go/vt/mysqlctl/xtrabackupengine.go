@@ -48,24 +48,27 @@ var (
 	// path where backup engine program is located
 	xtrabackupEnginePath = flag.String("xtrabackup_root_path", "", "directory location of the xtrabackup executable, e.g., /usr/bin")
 	// flags to pass through to backup engine
-	xtrabackupBackupFlags = flag.String("xtrabackup_backup_flags", "", "flags to pass to backup command. these will be added to the end of the command")
+	xtrabackupBackupFlags = flag.String("xtrabackup_backup_flags", "", "flags to pass to backup command. These should be space separated and will be added to the end of the command")
 	// flags to pass through to restore phase
-	xbstreamRestoreFlags = flag.String("xbstream_restore_flags", "", "flags to pass to xbstream command during restore. these will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
+	xbstreamRestoreFlags = flag.String("xbstream_restore_flags", "", "flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
 	// streaming mode
 	xtrabackupStreamMode = flag.String("xtrabackup_stream_mode", "tar", "which mode to use if streaming, valid values are tar and xbstream")
 	xtrabackupUser       = flag.String("xtrabackup_user", "", "User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.")
 )
 
 const (
-	streamModeTar = "tar"
-	xtrabackup    = "xtrabackup"
-	xbstream      = "xbstream"
-	successMsg    = "completed OK!"
+	streamModeTar          = "tar"
+	xtrabackupBinaryName   = "xtrabackup"
+	xtrabackupBackupMethod = "xtrabackup"
+	xbstream               = "xbstream"
 )
 
-// XtraBackupManifest represents the backup.
-type XtraBackupManifest struct {
-	// FileName is the name of the backup file
+// xtraBackupManifest represents a backup.
+// It stores the name of the backup file, the replication position,
+// whether the backup is compressed using gzip, and any extra
+// command line parameters used while invoking it.
+type xtraBackupManifest struct {
+	// Name of the backup file
 	FileName string
 	// BackupMethod, set to xtrabackup
 	BackupMethod string
@@ -97,6 +100,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	if *xtrabackupUser == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
 	}
+	// use a mysql connection to detect flavor at runtime
 	conn, err := mysqld.GetDbaConnection()
 	defer conn.Close()
 	if err != nil {
@@ -109,7 +113,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	flavor := pos.GTIDSet.Flavor()
 	logger.Infof("Detected MySQL flavor: %v", flavor)
 
-	backupProgram := path.Join(*xtrabackupEnginePath, xtrabackup)
+	backupProgram := path.Join(*xtrabackupEnginePath, xtrabackupBinaryName)
 
 	flagsToExec := []string{"--defaults-file=" + cnf.path,
 		"--backup",
@@ -137,7 +141,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 			err = closeErr
 		} else if closeErr != nil {
 			// since we already have an error just log this
-			logger.Errorf("Error closing file %v", fileName)
+			logger.Errorf("Error closing file %v: %v", fileName, err)
 		}
 	}
 	defer closeFile(wc, backupFileName)
@@ -145,7 +149,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	backupCmd := exec.Command(backupProgram, flagsToExec...)
 	backupOut, _ := backupCmd.StdoutPipe()
 	backupErr, _ := backupCmd.StderrPipe()
-	dst := bufio.NewWriterSize(wc, 2*1024*1024)
+	dst := bufio.NewWriterSize(wc, writerBufferSize)
 	writer := io.MultiWriter(dst)
 
 	// Create the gzip compression pipe, if necessary.
@@ -181,46 +185,32 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 		return false, vterrors.Wrapf(err, "cannot flush destination: %v", backupFileName)
 	}
 
-	errOutput, err := ioutil.ReadAll(backupErr)
-	backupCmd.Wait()
-	output := string(errOutput)
-
+	stderrOutput, err := ioutil.ReadAll(backupErr)
+	if err != nil {
+		return false, vterrors.Wrap(err, "backup failed while reading command output")
+	}
+	execErr := backupCmd.Wait()
+	if execErr != nil {
+		return false, vterrors.Wrap(err, "xtrabackup failed with error")
+	}
+	output := string(stderrOutput)
 	logger.Infof("Xtrabackup backup command output: %v", output)
-	// check for success message : xtrabackup: completed OK!
-	usable := (err == nil && strings.Contains(output, successMsg))
-	substrs := strings.Split(output, "'")
-	index := -1
-	for i, str := range substrs {
-		if strings.Contains(str, "GTID of the last change") {
-			index = i + 1
-			break
-		}
-	}
-	position := ""
-	if index != -1 {
-		// since we are extracting this from the log, it contains newlines
-		// replace them with a single space to match the SET GLOBAL gtid_purged command in xtrabackup_slave_info
-		position = strings.Replace(substrs[index], "\n", " ", -1)
-	}
-	logger.Infof("Found position: %v", position)
 
-	// flavor is required to parse a string into a mysql.Position
-	var replicationPosition mysql.Position
-	if replicationPosition, err = mysql.ParsePosition(flavor, position); err != nil {
-		return false, err
+	replicationPosition, rerr := findReplicationPosition(output, flavor, logger)
+	if rerr != nil {
+		return false, vterrors.Wrap(rerr, "backup failed trying to find replication position")
 	}
-
 	// open the MANIFEST
 	mwc, err := bh.AddFile(ctx, backupManifest, 0)
 	if err != nil {
-		return usable, vterrors.Wrapf(err, "cannot add %v to backup", backupManifest)
+		return false, vterrors.Wrapf(err, "cannot add %v to backup", backupManifest)
 	}
 	defer closeFile(mwc, backupManifest)
 
 	// JSON-encode and write the MANIFEST
-	bm := &XtraBackupManifest{
+	bm := &xtraBackupManifest{
 		FileName:     backupFileName,
-		BackupMethod: xtrabackup,
+		BackupMethod: xtrabackupBackupMethod,
 		Position:     replicationPosition,
 		SkipCompress: !*backupStorageCompress,
 		Params:       *xtrabackupBackupFlags,
@@ -228,13 +218,13 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
-		return usable, vterrors.Wrapf(err, "cannot JSON encode %v", backupManifest)
+		return false, vterrors.Wrapf(err, "cannot JSON encode %v", backupManifest)
 	}
 	if _, err := mwc.Write([]byte(data)); err != nil {
-		return usable, vterrors.Wrapf(err, "cannot write %v", backupManifest)
+		return false, vterrors.Wrapf(err, "cannot write %v", backupManifest)
 	}
 
-	return usable, nil
+	return true, nil
 }
 
 // ExecuteRestore restores from a backup. Any error is returned.
@@ -249,11 +239,12 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	hookExtraEnv map[string]string) (mysql.Position, error) {
 
 	var bh backupstorage.BackupHandle
-	var bm XtraBackupManifest
-	var toRestore int
+	var bm xtraBackupManifest
+	var index int
+	zeroPosition := mysql.Position{}
 
-	for toRestore = len(bhs) - 1; toRestore >= 0; toRestore-- {
-		bh = bhs[toRestore]
+	for index = len(bhs) - 1; index >= 0; index-- {
+		bh = bhs[index]
 		rc, err := bh.ReadFile(ctx, backupManifest)
 		if err != nil {
 			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
@@ -270,11 +261,11 @@ func (be *XtrabackupEngine) ExecuteRestore(
 		logger.Infof("Restore: found backup %v %v to restore with %v file", bh.Directory(), bh.Name(), bm.FileName)
 		break
 	}
-	if toRestore < 0 {
+	if index < 0 {
 		// There is at least one attempted backup, but none could be read.
 		// This implies there is data we ought to have, so it's not safe to start
 		// up empty.
-		return mysql.Position{}, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
+		return zeroPosition, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
 	}
 
 	// Starting from here we won't be able to recover if we get stopped by a cancelled
@@ -283,18 +274,18 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	logger.Infof("Restore: shutdown mysqld")
 	err := mysqld.Shutdown(context.Background(), cnf, true)
 	if err != nil {
-		return mysql.Position{}, err
+		return zeroPosition, err
 	}
 
 	logger.Infof("Restore: deleting existing files")
 	if err := removeExistingFiles(cnf); err != nil {
-		return mysql.Position{}, err
+		return zeroPosition, err
 	}
 
 	logger.Infof("Restore: reinit config file")
 	err = mysqld.ReinitConfig(context.Background(), cnf)
 	if err != nil {
-		return mysql.Position{}, err
+		return zeroPosition, err
 	}
 
 	// copy / extract files
@@ -304,13 +295,13 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	// extract all the files
 	if err := be.restoreFile(ctx, cnf, logger, bh, !bm.SkipCompress, be.backupFileName()); err != nil {
 		logger.Errorf("error restoring backup file %v:%v", be.backupFileName(), err)
-		return mysql.Position{}, err
+		return zeroPosition, err
 	}
 
 	// copy / extract files
 	logger.Infof("Restore: Preparing the files")
 	// prepare the backup
-	restoreProgram := path.Join(*xtrabackupEnginePath, xtrabackup)
+	restoreProgram := path.Join(*xtrabackupEnginePath, xtrabackupBinaryName)
 	flagsToExec := []string{"--defaults-file=" + cnf.path,
 		"--prepare",
 		"--target-dir=" + cnf.TmpDir,
@@ -319,27 +310,22 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	prepareOut, _ := prepareCmd.StdoutPipe()
 	prepareErr, _ := prepareCmd.StderrPipe()
 	if err = prepareCmd.Start(); err != nil {
-		return mysql.Position{}, vterrors.Wrap(err, "unable to start prepare")
+		return zeroPosition, vterrors.Wrap(err, "unable to start prepare")
 	}
 
 	errOutput, _ := ioutil.ReadAll(prepareErr)
 	stdOutput, _ := ioutil.ReadAll(prepareOut)
 	err = prepareCmd.Wait()
 	if string(stdOutput) != "" {
-		// TODO remove after testing
 		logger.Infof("Prepare stdout %v", string(stdOutput))
 	}
 	output := string(errOutput)
 	if output != "" {
-		// TODO remove after testing
 		logger.Infof("Prepare stderr %v", output)
 	}
 
 	if err != nil {
-		return mysql.Position{}, err
-	}
-	if !strings.Contains(output, successMsg) {
-		return mysql.Position{}, vterrors.Errorf(vtrpc.Code_UNKNOWN, "prepare step failed: %v", output)
+		return zeroPosition, vterrors.Wrap(err, "prepare step failed")
 	}
 
 	// then copy-back
@@ -354,7 +340,7 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	copybackOut, _ := copybackCmd.StdoutPipe()
 
 	if err = copybackCmd.Start(); err != nil {
-		return mysql.Position{}, vterrors.Wrap(err, "unable to start copy-back")
+		return zeroPosition, vterrors.Wrap(err, "unable to start copy-back")
 	}
 
 	errOutput, _ = ioutil.ReadAll(copybackErr)
@@ -362,24 +348,18 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	err = copybackCmd.Wait()
 	output = string(errOutput)
 	if output != "" {
-		// TODO remove after testing
 		logger.Infof("Copy-back stderr %v", string(output))
 	}
 	if string(stdOutput) != "" {
-		// TODO remove after testing
 		logger.Infof("Copy-back stdout %v", string(stdOutput))
 	}
 
 	if err != nil {
-		return mysql.Position{}, err
-	}
-	if !strings.Contains(output, successMsg) {
-		return mysql.Position{}, vterrors.Errorf(vtrpc.Code_UNKNOWN, "copy-back step failed: %v", output)
+		return zeroPosition, vterrors.Wrap(err, "copy-back step failed")
 	}
 
 	// now find the slave position and return that
 	logger.Infof("Returning replication position %v", bm.Position)
-	// TODO clean up extracted files from TmpDir
 	return bm.Position, nil
 }
 
@@ -475,10 +455,36 @@ func (be *XtrabackupEngine) restoreFile(
 			return vterrors.Wrap(err, "error from xbstream")
 		}
 	default:
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v is not a valid value for xtrabackup_stream_mode, supported modes are tar and xbstream", streamMode)
 	}
 	return nil
 }
 
+func findReplicationPosition(input, flavor string, logger logutil.Logger) (mysql.Position, error) {
+	substrs := strings.Split(input, "'")
+	index := -1
+	for i, str := range substrs {
+		if strings.Contains(str, "GTID of the last change") {
+			index = i + 1
+			break
+		}
+	}
+	position := ""
+	if index != -1 {
+		// since we are extracting this from the log, it contains newlines
+		// replace them with a single space to match the SET GLOBAL gtid_purged command in xtrabackup_slave_info
+		position = strings.Replace(substrs[index], "\n", " ", -1)
+	}
+	logger.Infof("Found position: %v", position)
+
+	// flavor is required to parse a string into a mysql.Position
+	replicationPosition, err := mysql.ParsePosition(flavor, position)
+	if err != nil {
+		return mysql.Position{}, err
+	}
+	return replicationPosition, nil
+}
+
 func init() {
-	BackupEngineMap[xtrabackup] = &XtrabackupEngine{}
+	BackupEngineMap[xtrabackupBackupMethod] = &XtrabackupEngine{}
 }

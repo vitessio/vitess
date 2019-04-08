@@ -224,7 +224,7 @@ func (mysqld *Mysqld) SetSlavePosition(ctx context.Context, pos mysql.Position) 
 	defer conn.Recycle()
 
 	cmds := conn.SetSlavePositionCommands(pos)
-	log.Infof("Executing commands to set slave position %v", cmds)
+	log.Infof("Executing commands to set slave position: %v", cmds)
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 

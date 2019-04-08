@@ -41,6 +41,11 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+const (
+	builtin          = "builtin"
+	writerBufferSize = 2 * 1024 * 1024
+)
+
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
 // it implements the BackupEngine interface and contains all the logic
 // required to implement a backup/restore by copying files from and to
@@ -48,10 +53,10 @@ import (
 type BuiltinBackupEngine struct {
 }
 
-// BackupManifest represents the backup. It lists all the files, the
+// builtinBackupManifest represents the backup. It lists all the files, the
 // Position that the backup was taken at, and the transform hook used,
 // if any.
-type BackupManifest struct {
+type builtinBackupManifest struct {
 	// FileEntries contains all the files in the backup
 	FileEntries []FileEntry
 
@@ -383,7 +388,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 	}()
 
 	// JSON-encode and write the MANIFEST
-	bm := &BackupManifest{
+	bm := &builtinBackupManifest{
 		FileEntries:   fes,
 		Position:      replicationPosition,
 		TransformHook: *backupStorageHook,
@@ -430,7 +435,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 			}
 		}
 	}()
-	dst := bufio.NewWriterSize(wc, 2*1024*1024)
+	dst := bufio.NewWriterSize(wc, writerBufferSize)
 
 	// Create the hasher and the tee on top.
 	hasher := newHasher()
@@ -512,7 +517,7 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	hookExtraEnv map[string]string) (mysql.Position, error) {
 
 	var bh backupstorage.BackupHandle
-	var bm BackupManifest
+	var bm builtinBackupManifest
 	var toRestore int
 
 	for toRestore = len(bhs) - 1; toRestore >= 0; toRestore-- {
