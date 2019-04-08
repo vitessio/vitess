@@ -25,12 +25,9 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-)
-
-const (
-	xtrabackupEngine = "xtrabackup"
 )
 
 // Backup takes a db backup and sends it to the BackupStorage
@@ -62,7 +59,12 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	}
 	originalType := tablet.Type
 
-	if *mysqlctl.BackupEngineImplementation != xtrabackupEngine {
+	engine, err := mysqlctl.GetBackupEngine()
+	if err != nil {
+		return vterrors.Wrap(err, "failed to find backup engine")
+	}
+	builtin, _ := engine.(*mysqlctl.BuiltinBackupEngine)
+	if builtin != nil {
 		// update our type to BACKUP
 		if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP); err != nil {
 			return err
@@ -81,7 +83,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	name := fmt.Sprintf("%v.%v", time.Now().UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tablet.Alias))
 	returnErr := mysqlctl.Backup(ctx, agent.Cnf, agent.MysqlDaemon, l, dir, name, concurrency, agent.hookExtraEnv())
 
-	if *mysqlctl.BackupEngineImplementation != xtrabackupEngine {
+	if builtin != nil {
 		// change our type back to the original value
 		_, err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType)
 		if err != nil {
