@@ -48,6 +48,7 @@ require (
 	github.com/opentracing-contrib/go-grpc v0.0.0-20180928155321-4b5a12d3ff02
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/pborman/uuid v0.0.0-20160824210600-b984ec7fa9ff
+	github.com/platinummonkey/go-concurrency-limits v0.1.7
 	github.com/prometheus/client_golang v0.9.2
 	github.com/satori/go.uuid v0.0.0-20160713180306-0aa62d5ddceb // indirect
 	github.com/stretchr/testify v1.4.0

@@ -39,6 +39,7 @@ var (
 	keepaliveTimeout      = flag.Duration("grpc_keepalive_timeout", 0, "After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
 	initialConnWindowSize = flag.Int("grpc_initial_conn_window_size", 0, "grpc initial connection window size")
 	initialWindowSize     = flag.Int("grpc_initial_window_size", 0, "grpc initial window size")
+	rateLimitGrpcClient   = flag.String("grpc_client_rate_limit", "off", "rate limit grpc client communication. possible values are 'on', 'off' and 'log'")
 )
 
 // FailFast is a self-documenting type for the grpc.FailFast.
@@ -95,6 +96,8 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 	}
 
 	newopts = append(newopts, interceptors()...)
+
+	newopts = append(newopts, rateLimitingOptions()...)
 
 	return grpc.Dial(target, newopts...)
 }

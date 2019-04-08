@@ -157,6 +157,8 @@ github.com/pborman/uuid v0.0.0-20160824210600-b984ec7fa9ff h1:pTiDfW+iOjIxjZeCm8
 github.com/pborman/uuid v0.0.0-20160824210600-b984ec7fa9ff/go.mod h1:VyrYX9gd7irzKovcSS6BIIEwPRkP2Wm2m9ufcdFSJ34=
 github.com/pkg/errors v0.8.1 h1:iURUrRGxPUNPdy5/HRSm+Yj6okJ6UtLINN0Q9M4+h3I=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
+github.com/platinummonkey/go-concurrency-limits v0.1.7 h1:rCgG6hh0fogABCwgUPCWvIz2HgyuFwsuqigm4JauSGw=
+github.com/platinummonkey/go-concurrency-limits v0.1.7/go.mod h1:yYKehtG3TCXYAuuzGIbTMYNoUOBol/L0tUYvl9lrdTo=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/prometheus/client_golang v0.9.2 h1:awm861/B8OKDd2I/6o1dy3ra4BamzKhYOiGItCeZ740=

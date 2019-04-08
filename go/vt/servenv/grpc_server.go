@@ -93,7 +93,8 @@ var (
 	// there are no active streams, server will send GOAWAY and close the connection.
 	GRPCKeepAliveEnforcementPolicyPermitWithoutStream = flag.Bool("grpc_server_keepalive_enforcement_policy_permit_without_stream", false, "grpc server permit client keepalive pings even when there are no active streams (RPCs)")
 
-	authPlugin Authenticator
+	GRPCRateLimitServer = flag.String("grpc_server_rate_limit", "off", "rate limit grpc server communication. possible values are 'off', 'log' and 'on'")
+	authPlugin          Authenticator
 )
 
 // isGRPCEnabled returns true if gRPC server is set
@@ -194,6 +195,7 @@ func interceptors() []grpc.ServerOption {
 	}
 
 	trace.AddGrpcServerOptions(interceptors.Add)
+	addRateLimiting(interceptors)
 
 	return interceptors.Build()
 }
