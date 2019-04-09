@@ -125,6 +125,9 @@ func GetMySQLOptions(flavor string) (string, []string, error) {
 		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
 		mycnf = append(mycnf, "config/mycnf/master_mariadb.cnf")
 
+	case "MySQL80":
+		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
+		mycnf = append(mycnf, "config/mycnf/master_mysql80.cnf")
 	case "MySQL56":
 		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
 		mycnf = append(mycnf, "config/mycnf/master_mysql56.cnf")
