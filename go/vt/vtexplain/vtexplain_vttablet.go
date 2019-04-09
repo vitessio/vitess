@@ -117,6 +117,11 @@ var _ queryservice.QueryService = (*explainTablet)(nil) // compile-time interfac
 func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
+	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
+		Time: t.currentTime,
+		SQL:  "begin",
+	})
+
 	t.mu.Unlock()
 
 	return t.tsv.Begin(ctx, target, options)
@@ -126,7 +131,12 @@ func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, optio
 func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
+	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
+		Time: t.currentTime,
+		SQL:  "commit",
+	})
 	t.mu.Unlock()
+
 	return t.tsv.Commit(ctx, target, transactionID)
 }
 

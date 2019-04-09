@@ -56,3 +56,76 @@ update user set name='alicia' where name='alice'
 9 ks_sharded/c0-: commit
 
 ----------------------------------------------------------------------
+update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname=1 where nickname != ''
+
+1 ks_sharded/-40: begin
+1 ks_sharded/-40: select name from name_info where nickname != '' limit 10001 for update/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/-40: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname = 1 where name in ('name_val_1')/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/-40: commit
+1 ks_sharded/40-80: begin
+1 ks_sharded/40-80: select name from name_info where nickname != '' limit 10001 for update/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/40-80: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname = 1 where name in ('name_val_1')/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/40-80: commit
+1 ks_sharded/80-c0: begin
+1 ks_sharded/80-c0: select name from name_info where nickname != '' limit 10001 for update/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/80-c0: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname = 1 where name in ('name_val_1')/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/80-c0: commit
+1 ks_sharded/c0-: begin
+1 ks_sharded/c0-: select name from name_info where nickname != '' limit 10001 for update/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/c0-: update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname = 1 where name in ('name_val_1')/* vtgate:: filtered_replication_unfriendly */
+1 ks_sharded/c0-: commit
+
+----------------------------------------------------------------------
+update user set pet='rover' where name='alice'
+
+1 ks_sharded/40-80: begin
+1 ks_sharded/40-80: select user_id from name_user_map where name = 'alice' limit 10001
+2 ks_sharded/-40: begin
+2 ks_sharded/-40: select id from user where name = 'alice' limit 10001 for update /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+2 ks_sharded/-40: update user set pet = 'rover' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+3 ks_sharded/40-80: commit
+4 ks_sharded/-40: commit
+
+----------------------------------------------------------------------
+begin
+
+
+----------------------------------------------------------------------
+update user set nickname='alice' where id=1
+
+1 ks_sharded/-40: begin
+1 ks_sharded/-40: update user set nickname = 'alice' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+
+----------------------------------------------------------------------
+update user set nickname='bob' where id=1
+
+2 ks_sharded/-40: update user set nickname = 'bob' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+
+----------------------------------------------------------------------
+commit
+
+3 ks_sharded/-40: commit
+
+----------------------------------------------------------------------
+begin
+
+
+----------------------------------------------------------------------
+update user set nickname='alice' where id=1
+
+1 ks_sharded/-40: begin
+1 ks_sharded/-40: update user set nickname = 'alice' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+
+----------------------------------------------------------------------
+update user set nickname='bob' where id=3
+
+2 ks_sharded/40-80: begin
+2 ks_sharded/40-80: update user set nickname = 'bob' where id in (3) /* vtgate:: keyspace_id:4eb190c9a2fa169c */
+
+----------------------------------------------------------------------
+commit
+
+3 ks_sharded/-40: commit
+4 ks_sharded/40-80: commit
+
+----------------------------------------------------------------------
