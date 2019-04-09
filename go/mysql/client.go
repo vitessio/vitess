@@ -187,7 +187,7 @@ func (c *Conn) Ping() error {
 	case ErrPacket:
 		return ParseErrorPacket(data)
 	}
-	return vterrors.Errorf(vtrpc.Code_INTERNAL,"unexpected packet type: %d", data[0])
+	return vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet type: %d", data[0])
 }
 
 // parseCharacterSet parses the provided character set.
