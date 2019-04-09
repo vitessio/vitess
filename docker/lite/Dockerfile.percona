@@ -22,7 +22,7 @@ FROM debian:stretch-slim
 
 # Install dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg dirmngr ca-certificates \
-    && apt-key adv --no-tty --recv-keys --keyserver keys.gnupg.net 9334A25F8507EFA5 \
+    && for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keys.gnupg.net 9334A25F8507EFA5 && break; done \
     && echo 'deb http://repo.percona.com/apt stretch main' > /etc/apt/sources.list.d/percona.list && \
     { \
         echo debconf debconf/frontend select Noninteractive; \
