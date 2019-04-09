@@ -79,6 +79,12 @@ func RebuildVSchema(ctx context.Context, log logutil.Logger, ts *topo.Server, ce
 		return finalErr
 	}
 
+	rr, err := ts.GetRoutingRules(ctx)
+	if err != nil {
+		return fmt.Errorf("GetRoutingRules failed: %v", err)
+	}
+	srvVSchema.RoutingRules = rr
+
 	// now save the SrvVSchema in all cells in parallel
 	for _, cell := range cells {
 		wg.Add(1)

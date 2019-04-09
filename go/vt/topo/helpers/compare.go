@@ -21,6 +21,7 @@ package helpers
 import (
 	"reflect"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
@@ -176,6 +177,22 @@ func CompareShardReplications(ctx context.Context, fromTS, toTS *topo.Server) er
 				}
 			}
 		}
+	}
+	return nil
+}
+
+// CompareRoutingRules will compare the routing rules in the destination topo.
+func CompareRoutingRules(ctx context.Context, fromTS, toTS *topo.Server) error {
+	rrFrom, err := fromTS.GetRoutingRules(ctx)
+	if err != nil {
+		return vterrors.Wrapf(err, "GetKeyspace(from)")
+	}
+	rrTo, err := toTS.GetRoutingRules(ctx)
+	if err != nil {
+		return vterrors.Wrapf(err, "GetKeyspace(to)")
+	}
+	if !proto.Equal(rrFrom, rrTo) {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "routing rules: %v does not match %v", rrFrom, rrTo)
 	}
 	return nil
 }
