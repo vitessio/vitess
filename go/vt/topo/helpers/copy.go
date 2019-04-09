@@ -175,3 +175,14 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS *topo.Server) {
 		}
 	}
 }
+
+// CopyRoutingRules will create the routing rules in the destination topo.
+func CopyRoutingRules(ctx context.Context, fromTS, toTS *topo.Server) {
+	rr, err := fromTS.GetRoutingRules(ctx)
+	if err != nil {
+		log.Fatalf("GetRoutingRules: %v", err)
+	}
+	if err := toTS.SaveRoutingRules(ctx, rr); err != nil {
+		log.Errorf("SaveRoutingRules(%v): %v", rr, err)
+	}
+}
