@@ -26,7 +26,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"

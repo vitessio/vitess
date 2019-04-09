@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/streamlog"

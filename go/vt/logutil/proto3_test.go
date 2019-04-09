@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
 

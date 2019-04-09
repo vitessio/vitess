@@ -22,7 +22,7 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )

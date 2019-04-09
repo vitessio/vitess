@@ -103,8 +103,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/jsonpb"
+	"github.com/gogo/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/flagutil"

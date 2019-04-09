@@ -19,8 +19,8 @@ package json2
 import (
 	"bytes"
 
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/jsonpb"
+	"github.com/gogo/protobuf/proto"
 )
 
 // MarshalPB marshals a proto.

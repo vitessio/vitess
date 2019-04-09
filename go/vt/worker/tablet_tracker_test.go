@@ -19,7 +19,7 @@ package worker
 import (
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo"
 

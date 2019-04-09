@@ -33,7 +33,7 @@ import (
 	"html/template"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/health"
 	"vitess.io/vitess/go/vt/log"

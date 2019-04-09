@@ -25,7 +25,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"github.com/tchap/go-patricia/patricia"
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/health"

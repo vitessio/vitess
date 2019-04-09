@@ -17,7 +17,7 @@ limitations under the License.
 package automation
 
 import (
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	automationpb "vitess.io/vitess/go/vt/proto/automation"
 )
 

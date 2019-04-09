@@ -29,7 +29,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 )
 
 // HealthChecker is a callback that impements a service-specific health check

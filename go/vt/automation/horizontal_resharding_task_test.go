@@ -19,7 +19,7 @@ package automation
 import (
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 )
 
 func TestHorizontalReshardingTaskEmittedTasks(t *testing.T) {

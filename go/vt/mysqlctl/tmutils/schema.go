@@ -23,7 +23,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"vitess.io/vitess/go/vt/concurrency"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"

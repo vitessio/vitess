@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"golang.org/x/net/context"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"

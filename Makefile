@@ -119,6 +119,7 @@ install_protoc-gen-go:
 	mkdir -p $${GOPATH}/src/github.com/golang/
 	cp -a vendor/github.com/golang/protobuf $${GOPATH}/src/github.com/golang/
 	go install github.com/golang/protobuf/protoc-gen-go
+	go install proto/protoc-gen-gogovitess.go
 
 # Find protoc compiler.
 # NOTE: We are *not* using the "protoc" binary (as suggested by the grpc Go
@@ -134,10 +135,12 @@ endif
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
 PROTO_PY_OUTS = $(foreach name, $(PROTO_SRC_NAMES), py/vtproto/$(name)_pb2.py)
-PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
 
 # This rule rebuilds all the go and python files from the proto definitions for gRPC.
-proto: proto_banner $(PROTO_GO_OUTS) $(PROTO_PY_OUTS)
+proto: proto_banner install_protoc-gen-go $(PROTO_PY_OUTS)
+	for name in $(PROTO_SRC_NAMES); do \
+		protoc -Iproto -Ivendor --gogovitess_out=plugins=grpc,Mproto/automation.proto=vitess.io/vitess/go/vt/gogoproto/automation,Mproto/automationservice.proto=vitess.io/vitess/go/vt/gogoproto/automationservice,Mproto/binlogdata.proto=vitess.io/vitess/go/vt/gogoproto/binlogdata,Mproto/binlogservice.proto=vitess.io/vitess/go/vt/gogoproto/binlogservice,Mproto/logutil.proto=vitess.io/vitess/go/vt/gogoproto/logutil,Mproto/mysqlctl.proto=vitess.io/vitess/go/vt/gogoproto/mysqlctl,Mproto/query.proto=vitess.io/vitess/go/vt/gogoproto/query,Mproto/queryservice.proto=vitess.io/vitess/go/vt/gogoproto/queryservice,Mproto/replicationdata.proto=vitess.io/vitess/go/vt/gogoproto/replicationdata,Mproto/tableacl.proto=vitess.io/vitess/go/vt/gogoproto/tableacl,Mproto/tabletmanagerdata.proto=vitess.io/vitess/go/vt/gogoproto/tabletmanagerdata,Mproto/tabletmanagerservice.proto=vitess.io/vitess/go/vt/gogoproto/tabletmanagerservice,Mproto/throttlerdata.proto=vitess.io/vitess/go/vt/gogoproto/throttlerdata,Mproto/throttlerservice.proto=vitess.io/vitess/go/vt/gogoproto/throttlerservice,Mproto/topodata.proto=vitess.io/vitess/go/vt/gogoproto/topodata,Mproto/vschema.proto=vitess.io/vitess/go/vt/gogoproto/vschema,Mproto/vtctldata.proto=vitess.io/vitess/go/vt/gogoproto/vtctldata,Mproto/vtctlservice.proto=vitess.io/vitess/go/vt/gogoproto/vtctlservice,Mproto/vtgate.proto=vitess.io/vitess/go/vt/gogoproto/vtgate,Mproto/vtgateservice.proto=vitess.io/vitess/go/vt/gogoproto/vtgateservice,Mproto/vtrpc.proto=vitess.io/vitess/go/vt/gogoproto/vtrpc,Mproto/vttest.proto=vitess.io/vitess/go/vt/gogoproto/vttest,Mproto/vtworkerdata.proto=vitess.io/vitess/go/vt/gogoproto/vtworkerdata,Mproto/vtworkerservice.proto=vitess.io/vitess/go/vt/gogoproto/vtworkerservice,Mproto/workflow.proto=vitess.io/vitess/go/vt/gogoproto/workflow:../.. $${name}.proto
+	done
 
 proto_banner:
 ifeq (,$(PROTOC_COMMAND))
@@ -150,11 +153,6 @@ endif
 
 $(PROTO_PY_OUTS): py/vtproto/%_pb2.py: proto/%.proto
 	$(PROTOC_COMMAND) -Iproto $< --python_out=py/vtproto --grpc_python_out=py/vtproto
-
-$(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
-	for name in $(PROTO_SRC_NAMES); do \
-		cd $(VTROOT)/src && PATH=$(VTROOT)/bin:$(PATH) $(VTROOT)/bin/protoc --go_out=plugins=grpc:. -Ivitess.io/vitess/proto vitess.io/vitess/proto/$${name}.proto; \
-	done
 
 # Helper targets for building Docker images.
 # Please read docker/README.md to understand the different available images.

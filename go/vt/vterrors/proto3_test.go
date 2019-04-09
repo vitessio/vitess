@@ -19,7 +19,7 @@ package vterrors
 import (
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )

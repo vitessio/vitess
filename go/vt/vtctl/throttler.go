@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
 	"golang.org/x/net/context"
 
