@@ -36,7 +36,7 @@ Specifically, the absence of a my.cnf file indicates to vttablet that it's conne
 
 Even if a MySQL is remote, you can still make vttablet perform some management functions. They are as follows:
 
-* `-disable_active_reparents`: If this flag is set, then any reparent or slave commands will not be allowed. These are InitShardMaster, PlannedReparent, PlannedReparent, EmergencyReparent, and ReparentTablet. In this mode, you should use the TabletExternallyReparented command to inform vitess of the current master.
+* `-disable_active_reparents`: If this flag is set, then any reparent or slave commands will not be allowed. These are InitShardMaster, PlannedReparent, EmergencyReparent, and ReparentTablet. In this mode, you should use the TabletExternallyReparented command to inform vitess of the current master.
 * `-master_connect_retry`: This value is give to mysql when it connects a slave to the master as the retry duration parameter.
 * `-enable_replication_reporter`: If this flag is set, then vttablet will transmit replica lag related information to the vtgates, which will allow it to balance load better. Additionally, enabling this will also cause vttablet to restart replication if it was stopped. However, it will do this only if -disable_active_reparents was not turned on.
 * `-enable_semi_sync`: This option will automatically enable semi-sync on new replicas as well as on any tablet that transitions into a replica type. This includes the demotion of a master to a replica.
