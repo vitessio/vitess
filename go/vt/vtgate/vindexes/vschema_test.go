@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -131,6 +132,7 @@ func TestUnshardedVSchema(t *testing.T) {
 		Keyspace: ks,
 	}
 	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{},
 		uniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
@@ -193,6 +195,7 @@ func TestVSchemaColumns(t *testing.T) {
 		Keyspace: ks,
 	}
 	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{},
 		uniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
@@ -258,6 +261,7 @@ func TestVSchemaColumnListAuthoritative(t *testing.T) {
 		Keyspace: ks,
 	}
 	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{},
 		uniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
@@ -338,6 +342,7 @@ func TestVSchemaPinned(t *testing.T) {
 		Pinned:   []byte{0},
 	}
 	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{},
 		uniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
@@ -441,6 +446,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		Pinned:   []byte{0},
 	}
 	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{},
 		uniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
@@ -468,7 +474,158 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		wantjson, _ := json.Marshal(want)
 		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
 	}
+}
 
+func TestVSchemaRoutingRules(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{{
+				FromTable: "rt1",
+				ToTables:  []string{"ks1.t1", "ks2.t2"},
+			}, {
+				FromTable: "rt2",
+				ToTables:  []string{"ks2.t2"},
+			}, {
+				FromTable: "dup",
+				ToTables:  []string{"ks1.t1"},
+			}, {
+				FromTable: "dup",
+				ToTables:  []string{"ks1.t1"},
+			}, {
+				FromTable: "unqualified",
+				ToTables:  []string{"t1"},
+			}, {
+				FromTable: "badkeyspace",
+				ToTables:  []string{"ks3.t1"},
+			}, {
+				FromTable: "notfound",
+				ToTables:  []string{"ks1.t2"},
+			}, {
+				FromTable: "doubletable",
+				ToTables:  []string{"ks1.t1", "ks1.t1"},
+			}},
+		},
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks1": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu1": {
+						Type: "stfu",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "stfu1",
+							},
+						},
+					},
+				},
+			},
+			"ks2": {
+				Tables: map[string]*vschemapb.Table{
+					"t2": {},
+				},
+			},
+		},
+	}
+	got, _ := BuildVSchema(&input)
+	ks1 := &Keyspace{
+		Name:    "ks1",
+		Sharded: true,
+	}
+	ks2 := &Keyspace{
+		Name: "ks2",
+	}
+	vindex1 := &stFU{
+		name: "stfu1",
+	}
+	t1 := &Table{
+		Name:     sqlparser.NewTableIdent("t1"),
+		Keyspace: ks1,
+		ColumnVindexes: []*ColumnVindex{{
+			Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+			Type:    "stfu",
+			Name:    "stfu1",
+			Vindex:  vindex1,
+		}},
+	}
+	t1.Ordered = []*ColumnVindex{
+		t1.ColumnVindexes[0],
+	}
+	t2 := &Table{
+		Name:     sqlparser.NewTableIdent("t2"),
+		Keyspace: ks2,
+	}
+	dual1 := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks1,
+		Pinned:   []byte{0},
+	}
+	dual2 := &Table{
+		Name:     sqlparser.NewTableIdent("dual"),
+		Keyspace: ks2,
+	}
+	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{
+			"rt1": {
+				Tables: []*Table{t1, t2},
+			},
+			"rt2": {
+				Tables: []*Table{t2},
+			},
+			"dup": {
+				Error: errors.New("duplicate rule for entry dup"),
+			},
+			"unqualified": {
+				Error: errors.New("table t1 must be qualified"),
+			},
+			"badkeyspace": {
+				Error: errors.New("keyspace ks3 not found in vschema"),
+			},
+			"notfound": {
+				Error: errors.New("table ks1.t2 not found"),
+			},
+			"doubletable": {
+				Error: errors.New("table ks1.t1 specified more than once"),
+			},
+		},
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"t2":   t2,
+			"dual": dual1,
+		},
+		uniqueVindexes: map[string]Vindex{
+			"stfu1": vindex1,
+		},
+		Keyspaces: map[string]*KeyspaceSchema{
+			"ks1": {
+				Keyspace: ks1,
+				Tables: map[string]*Table{
+					"t1":   t1,
+					"dual": dual1,
+				},
+				Vindexes: map[string]Vindex{
+					"stfu1": vindex1,
+				},
+			},
+			"ks2": {
+				Keyspace: ks2,
+				Tables: map[string]*Table{
+					"t2":   t2,
+					"dual": dual2,
+				},
+				Vindexes: map[string]Vindex{},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotb, _ := json.Marshal(got)
+		wantb, _ := json.Marshal(want)
+		t.Errorf("BuildVSchema:\n%s, want\n%s", gotb, wantb)
+	}
 }
 
 func TestFindVindexForSharding(t *testing.T) {
@@ -650,6 +807,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 		Pinned:   []byte{0},
 	}
 	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{},
 		uniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
@@ -749,6 +907,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		Pinned:   []byte{0},
 	}
 	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{},
 		uniqueTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
@@ -878,6 +1037,7 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 		Keyspace: ksb,
 	}
 	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{},
 		uniqueTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
@@ -948,6 +1108,7 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 		Keyspace: ksb,
 	}
 	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{},
 		uniqueTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
@@ -1083,6 +1244,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 		Pinned:   []byte{0},
 	}
 	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{},
 		uniqueTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
@@ -1400,6 +1562,7 @@ func TestSequence(t *testing.T) {
 		Pinned:   []byte{0},
 	}
 	want := &VSchema{
+		RoutingRules: map[string]*RoutingRule{},
 		uniqueTables: map[string]*Table{
 			"seq":  seq,
 			"t1":   t1,
@@ -1607,7 +1770,7 @@ func TestFindTable(t *testing.T) {
 	if !reflect.DeepEqual(got, ta) {
 		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, ta)
 	}
-	got, err = vschema.FindTable("ksa", "ta")
+	got, _ = vschema.FindTable("ksa", "ta")
 	if !reflect.DeepEqual(got, ta) {
 		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, ta)
 	}
@@ -1617,7 +1780,7 @@ func TestFindTable(t *testing.T) {
 			Name: "ksa",
 		},
 	}
-	got, err = vschema.FindTable("ksa", "none")
+	got, _ = vschema.FindTable("ksa", "none")
 	if !reflect.DeepEqual(got, none) {
 		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, none)
 	}

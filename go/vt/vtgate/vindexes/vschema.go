@@ -34,9 +34,28 @@ import (
 // VSchema represents the denormalized version of SrvVSchema,
 // used for building routing plans.
 type VSchema struct {
+	RoutingRules   map[string]*RoutingRule `json:"routing_rules"`
 	uniqueTables   map[string]*Table
 	uniqueVindexes map[string]Vindex
 	Keyspaces      map[string]*KeyspaceSchema `json:"keyspaces"`
+}
+
+// RoutingRule represents one routing rule.
+type RoutingRule struct {
+	Tables []*Table
+	Error  error
+}
+
+// MarshalJSON returns a JSON representation of Column.
+func (rr *RoutingRule) MarshalJSON() ([]byte, error) {
+	if rr.Error != nil {
+		return json.Marshal(rr.Error.Error())
+	}
+	tables := make([]string, 0, len(rr.Tables))
+	for _, t := range rr.Tables {
+		tables = append(tables, t.Keyspace.Name+"."+t.Name.String())
+	}
+	return json.Marshal(tables)
 }
 
 // Table represents a table in VSchema.
@@ -122,6 +141,7 @@ type AutoIncrement struct {
 // BuildVSchema builds a VSchema from a SrvVSchema.
 func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema, err error) {
 	vschema = &VSchema{
+		RoutingRules:   make(map[string]*RoutingRule),
 		uniqueTables:   make(map[string]*Table),
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
@@ -130,6 +150,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema, err error) {
 	buildTables(source, vschema)
 	resolveAutoIncrement(source, vschema)
 	addDual(vschema)
+	buildRoutingRule(source, vschema)
 	return vschema, nil
 }
 
@@ -200,12 +221,6 @@ outer:
 				Keyspace:                keyspace,
 				ColumnListAuthoritative: table.ColumnListAuthoritative,
 			}
-			if _, ok := vschema.uniqueTables[tname]; ok {
-				vschema.uniqueTables[tname] = nil
-			} else {
-				vschema.uniqueTables[tname] = t
-			}
-			vschema.Keyspaces[ksname].Tables[tname] = t
 			if table.Type == "sequence" {
 				t.IsSequence = true
 			}
@@ -285,6 +300,14 @@ outer:
 				}
 			}
 			t.Ordered = colVindexSorted(t.ColumnVindexes)
+
+			// Add the table to the map entries.
+			if _, ok := vschema.uniqueTables[tname]; ok {
+				vschema.uniqueTables[tname] = nil
+			} else {
+				vschema.uniqueTables[tname] = t
+			}
+			vschema.Keyspaces[ksname].Tables[tname] = t
 		}
 	}
 }
@@ -294,7 +317,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 		ksvschema := vschema.Keyspaces[ksname]
 		for tname, table := range ks.Tables {
 			t := ksvschema.Tables[tname]
-			if table.AutoIncrement == nil {
+			if t == nil || table.AutoIncrement == nil {
 				continue
 			}
 			t.AutoIncrement = &AutoIncrement{Column: sqlparser.NewColIdent(table.AutoIncrement.Column)}
@@ -329,6 +352,54 @@ func addDual(vschema *VSchema) {
 			first = ksname
 			vschema.uniqueTables["dual"] = t
 		}
+	}
+}
+
+func buildRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	if source.RoutingRules == nil {
+		return
+	}
+outer:
+	for _, rule := range source.RoutingRules.Rules {
+		rr := &RoutingRule{}
+		for _, toTable := range rule.ToTables {
+			if _, ok := vschema.RoutingRules[rule.FromTable]; ok {
+				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
+					Error: fmt.Errorf("duplicate rule for entry %s", rule.FromTable),
+				}
+				continue outer
+			}
+			parts := strings.Split(toTable, ".")
+			if len(parts) != 2 {
+				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
+					Error: fmt.Errorf("table %s must be qualified", toTable),
+				}
+				continue outer
+			}
+			t, err := vschema.findTable(parts[0], parts[1])
+			if err != nil {
+				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
+					Error: err,
+				}
+				continue outer
+			}
+			if t == nil {
+				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
+					Error: fmt.Errorf("table %s not found", toTable),
+				}
+				continue outer
+			}
+			for _, existing := range rr.Tables {
+				if existing == t {
+					vschema.RoutingRules[rule.FromTable] = &RoutingRule{
+						Error: fmt.Errorf("table %s specified more than once", toTable),
+					}
+					continue outer
+				}
+			}
+			rr.Tables = append(rr.Tables, t)
+		}
+		vschema.RoutingRules[rule.FromTable] = rr
 	}
 }
 
@@ -444,9 +515,7 @@ func (bc ByCost) Swap(i, j int)      { bc[i], bc[j] = bc[j], bc[i] }
 func (bc ByCost) Less(i, j int) bool { return bc[i].Vindex.Cost() < bc[j].Vindex.Cost() }
 
 func colVindexSorted(cvs []*ColumnVindex) (sorted []*ColumnVindex) {
-	for _, cv := range cvs {
-		sorted = append(sorted, cv)
-	}
+	sorted = append(sorted, cvs...)
 	sort.Sort(ByCost(sorted))
 	return sorted
 }
