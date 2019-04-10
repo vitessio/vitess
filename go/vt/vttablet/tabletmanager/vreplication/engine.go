@@ -17,7 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -392,10 +391,4 @@ func rowToMap(qr *sqltypes.Result, rownum int) (map[string]string, error) {
 		m[fld.Name] = row[i].ToString()
 	}
 	return m, nil
-}
-
-func encodeString(in string) string {
-	buf := bytes.NewBuffer(nil)
-	sqltypes.NewVarChar(in).EncodeSQL(buf)
-	return buf.String()
 }
