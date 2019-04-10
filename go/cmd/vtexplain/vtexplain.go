@@ -55,6 +55,7 @@ var (
 		"vschema",
 		"vschema-file",
 		"dbname",
+		"queryserver-config-passthrough-dmls",
 	}
 )
 
