@@ -30,7 +30,11 @@ import (
 )
 
 // ReplicatorPlan is the execution plan for the replicator.
-// The constructor for this is in table_plan_builder.go
+// The constructor for this is buildReplicatorPlan in table_plan_builder.go
+// The initial build identifies the tables that need to be replicated,
+// and builds partial TablePlan objects for them. The partial plan is used
+// to send streaming requests. As the responses return field info, this
+// information is used to build the final execution plan (buildExecutionPlan).
 type ReplicatorPlan struct {
 	VStreamFilter *binlogdatapb.Filter
 	TargetTables  map[string]*TablePlan
@@ -38,6 +42,8 @@ type ReplicatorPlan struct {
 	tableKeys     map[string][]string
 }
 
+// buildExecution plan uses the field info as input and the partially built
+// TablePlan for that table to build a full plan.
 func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent) (*TablePlan, error) {
 	prelim := rp.TablePlans[fieldEvent.TableName]
 	if prelim == nil {
@@ -49,6 +55,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 		tplanv.Fields = fieldEvent.Fields
 		return &tplanv, nil
 	}
+	// select * construct was used. We need to use the field names.
 	tplan, err := rp.buildFromFields(prelim.TargetName, fieldEvent.Fields)
 	if err != nil {
 		return nil, err
@@ -57,6 +64,9 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 	return tplan, nil
 }
 
+// buildFromFiedls builds a full TablePlan, but uses the field info as the
+// full column list. This happens when the query used was a 'select *', which
+// requires us to wait for the field info sent by the source.
 func (rp *ReplicatorPlan) buildFromFields(tableName string, fields []*querypb.Field) (*TablePlan, error) {
 	tpb := &tablePlanBuilder{
 		name: sqlparser.NewTableIdent(tableName),
@@ -100,17 +110,27 @@ func (rp *ReplicatorPlan) MarshalJSON() ([]byte, error) {
 }
 
 // TablePlan is the execution plan for a table within a player stream.
+// The ParsedQuery objects assume that a map of before and after values
+// will be built based on the streaming rows. Before image values will
+// be prefixed with a "b_", and after image values will be prefixed
+// with a "a_".
 type TablePlan struct {
 	TargetName   string
 	SendRule     *binlogdatapb.Rule
 	PKReferences []string
-	InsertFront  *sqlparser.ParsedQuery
-	InsertValues *sqlparser.ParsedQuery
-	InsertOnDup  *sqlparser.ParsedQuery
-	Insert       *sqlparser.ParsedQuery
-	Update       *sqlparser.ParsedQuery
-	Delete       *sqlparser.ParsedQuery
-	Fields       []*querypb.Field
+	// BulkInsertFront, BulkInsertValues and BulkInsertOnDup are used
+	// by vcopier.
+	BulkInsertFront  *sqlparser.ParsedQuery
+	BulkInsertValues *sqlparser.ParsedQuery
+	BulkInsertOnDup  *sqlparser.ParsedQuery
+	// Insert, Update and Delete are used by vplayer.
+	// If the plan is an insertIgnore type, then Insert
+	// and Update contain 'insert ignore' statements and
+	// Delete is nil.
+	Insert *sqlparser.ParsedQuery
+	Update *sqlparser.ParsedQuery
+	Delete *sqlparser.ParsedQuery
+	Fields []*querypb.Field
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -129,9 +149,9 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 		TargetName:   tp.TargetName,
 		SendRule:     tp.SendRule.Match,
 		PKReferences: tp.PKReferences,
-		InsertFront:  tp.InsertFront,
-		InsertValues: tp.InsertValues,
-		InsertOnDup:  tp.InsertOnDup,
+		InsertFront:  tp.BulkInsertFront,
+		InsertValues: tp.BulkInsertValues,
+		InsertOnDup:  tp.BulkInsertOnDup,
 		Insert:       tp.Insert,
 		Update:       tp.Update,
 		Delete:       tp.Delete,
@@ -142,7 +162,7 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 func (tp *TablePlan) generateBulkInsert(rows *binlogdatapb.VStreamRowsResponse) (string, error) {
 	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 	var buf strings.Builder
-	if err := tp.InsertFront.Append(&buf, nil, nil); err != nil {
+	if err := tp.BulkInsertFront.Append(&buf, nil, nil); err != nil {
 		return "", err
 	}
 	buf.WriteString(" values ")
@@ -154,10 +174,10 @@ func (tp *TablePlan) generateBulkInsert(rows *binlogdatapb.VStreamRowsResponse) 
 		}
 		buf.WriteString(separator)
 		separator = ", "
-		tp.InsertValues.Append(&buf, bindvars, nil)
+		tp.BulkInsertValues.Append(&buf, bindvars, nil)
 	}
-	if tp.InsertOnDup != nil {
-		tp.InsertOnDup.Append(&buf, nil, nil)
+	if tp.BulkInsertOnDup != nil {
+		tp.BulkInsertOnDup.Append(&buf, nil, nil)
 	}
 	return buf.String(), nil
 }

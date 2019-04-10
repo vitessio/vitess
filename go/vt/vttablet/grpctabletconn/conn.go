@@ -746,13 +746,10 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Ta
 		}
 		select {
 		case <-ctx.Done():
-			return nil
+			return ctx.Err()
 		default:
 		}
 		if err := send(r); err != nil {
-			if err == io.EOF {
-				return nil
-			}
 			return err
 		}
 	}

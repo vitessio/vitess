@@ -74,11 +74,14 @@ const (
 	insertIgnore
 )
 
-// buildPlayerPlan builds a ReplicatorPlan from the input filter.
+// buildReplicatorPlan builds a ReplicatorPlan for the tables that match the filter.
 // The filter is matched against the target schema. For every table matched,
 // a table-specific rule is built to be sent to the source. We don't send the
 // original rule to the source because it may not match the same tables as the
 // target.
+// The TablePlan built is a partial plan. The full plan for a table is built
+// when we receive field information from events or rows sent by the source.
+// buildExecutionPlan is the function that builds the full plan.
 func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string, copyState map[string]*sqltypes.Result) (*ReplicatorPlan, error) {
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{},
@@ -219,14 +222,14 @@ func (tpb *tablePlanBuilder) generate(tableKeys map[string][]string) *TablePlan 
 	bvf := &bindvarFormatter{}
 
 	return &TablePlan{
-		TargetName:   tpb.name.String(),
-		PKReferences: pkrefs,
-		InsertFront:  tpb.generateInsertPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
-		InsertValues: tpb.generateValuesPart(sqlparser.NewTrackedBuffer(bvf.formatter), bvf),
-		InsertOnDup:  tpb.generateOnDupPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
-		Insert:       tpb.generateInsertStatement(),
-		Update:       tpb.generateUpdateStatement(),
-		Delete:       tpb.generateDeleteStatement(),
+		TargetName:       tpb.name.String(),
+		PKReferences:     pkrefs,
+		BulkInsertFront:  tpb.generateInsertPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
+		BulkInsertValues: tpb.generateValuesPart(sqlparser.NewTrackedBuffer(bvf.formatter), bvf),
+		BulkInsertOnDup:  tpb.generateOnDupPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
+		Insert:           tpb.generateInsertStatement(),
+		Update:           tpb.generateUpdateStatement(),
+		Delete:           tpb.generateDeleteStatement(),
 	}
 }
 
