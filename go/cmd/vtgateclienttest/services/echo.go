@@ -63,7 +63,7 @@ func printSortedMap(val reflect.Value) []byte {
 		if i > 0 {
 			buf.WriteRune(' ')
 		}
-		fmt.Fprintf(buf, "%s:%v", key, val.MapIndex(reflect.ValueOf(key)).Interface())
+		fmt.Fprintf(buf, "%s:%v\n", key, val.MapIndex(reflect.ValueOf(key)).Interface())
 	}
 	buf.WriteRune(']')
 	return buf.Bytes()

@@ -143,7 +143,7 @@ func TestMain(m *testing.M) {
 		// Create the certs.
 		root, err := ioutil.TempDir("", "TestTLSServer")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "TempDir failed: %v", err)
+			fmt.Fprintf(os.Stderr, "TempDir failed: %v\n", err)
 			return 1
 		}
 		defer os.RemoveAll(root)
@@ -159,7 +159,7 @@ ssl-key=%v/server-key.pem
 `, root, root, root)
 		extraMyCnf := path.Join(root, "ssl_my.cnf")
 		if err := ioutil.WriteFile(extraMyCnf, []byte(cnf), os.ModePerm); err != nil {
-			fmt.Fprintf(os.Stderr, "ioutil.WriteFile(%v) failed: %v", extraMyCnf, err)
+			fmt.Fprintf(os.Stderr, "ioutil.WriteFile(%v) failed: %v\n", extraMyCnf, err)
 			return 1
 		}
 
@@ -167,7 +167,7 @@ ssl-key=%v/server-key.pem
 		cnf = "max_allowed_packet=100M\n"
 		maxPacketMyCnf := path.Join(root, "max_packet.cnf")
 		if err := ioutil.WriteFile(maxPacketMyCnf, []byte(cnf), os.ModePerm); err != nil {
-			fmt.Fprintf(os.Stderr, "ioutil.WriteFile(%v) failed: %v", maxPacketMyCnf, err)
+			fmt.Fprintf(os.Stderr, "ioutil.WriteFile(%v) failed: %v\n", maxPacketMyCnf, err)
 			return 1
 		}
 

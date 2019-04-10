@@ -51,7 +51,7 @@ func main() {
 	grpcServer := grpc.NewServer()
 	scheduler, err := automation.NewScheduler()
 	if err != nil {
-		fmt.Printf("Failed to create scheduler: %v", err)
+		fmt.Printf("Failed to create scheduler: %v\n", err)
 		os.Exit(3)
 	}
 	scheduler.Run()

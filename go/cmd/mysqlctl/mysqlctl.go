@@ -226,9 +226,9 @@ func main() {
 
 		fmt.Fprintf(os.Stderr, "\nThe commands are listed below. Use '%s <command> -h' for more help.\n\n", os.Args[0])
 		for _, cmd := range commands {
-			fmt.Fprintf(os.Stderr, "  %s", cmd.name)
+			fmt.Fprintf(os.Stderr, "  %s\n", cmd.name)
 			if cmd.params != "" {
-				fmt.Fprintf(os.Stderr, " %s", cmd.params)
+				fmt.Fprintf(os.Stderr, " %s\n", cmd.params)
 			}
 			fmt.Fprintf(os.Stderr, "\n")
 		}
