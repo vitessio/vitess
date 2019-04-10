@@ -410,7 +410,7 @@ func TestLookupUnicodeLooseMD5HashDelete(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashDeleteAutocommit(t *testing.T) {
-	lookupNonUnique, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	lookupNonUnique, _ := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -418,7 +418,7 @@ func TestLookupUnicodeLooseMD5HashDeleteAutocommit(t *testing.T) {
 	})
 	vc := &vcursor{}
 
-	err = lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}

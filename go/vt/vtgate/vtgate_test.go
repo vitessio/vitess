@@ -63,18 +63,18 @@ func init() {
 }
 `
 	getSandbox(KsTestBadVSchema).VSchema = `
-	{
+{
 	"sharded": true,
 	"tables": {
 		"t2": {
-                  "auto_increment": {
-                    "column": "id",
-                    "sequence": "id_seq"
-                  }
+			"auto_increment": {
+				"column": "id",
+				"sequence": "id_seq"
+			}
 		}
-              }
 	}
-	`
+}
+`
 	hcVTGateTest = discovery.NewFakeHealthCheck()
 	*transactionMode = "MULTI"
 	// The topo.Server is used to start watching the cells described

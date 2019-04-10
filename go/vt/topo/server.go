@@ -74,7 +74,7 @@ const (
 	TabletFile           = "Tablet"
 	SrvVSchemaFile       = "SrvVSchema"
 	SrvKeyspaceFile      = "SrvKeyspace"
-	RoutingRulesFile     = "routing_rules"
+	RoutingRulesFile     = "RoutingRules"
 )
 
 // Path for all object types.
