@@ -533,23 +533,24 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 		return VRSettings{}, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
 	}
 
-	if qr.RowsAffected != 1 {
+	if len(qr.Rows) != 1 {
 		return VRSettings{}, fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
+	vrRow := qr.Rows[0]
 
-	maxTPS, err := sqltypes.ToInt64(qr.Rows[0][2])
+	maxTPS, err := sqltypes.ToInt64(vrRow[2])
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_tps column: %v", err)
 	}
-	maxReplicationLag, err := sqltypes.ToInt64(qr.Rows[0][3])
+	maxReplicationLag, err := sqltypes.ToInt64(vrRow[3])
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
 	}
-	startPos, err := mysql.DecodePosition(qr.Rows[0][0].ToString())
+	startPos, err := mysql.DecodePosition(vrRow[0].ToString())
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse pos column: %v", err)
 	}
-	stopPos, err := mysql.DecodePosition(qr.Rows[0][1].ToString())
+	stopPos, err := mysql.DecodePosition(vrRow[1].ToString())
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse stop_pos column: %v", err)
 	}
@@ -559,7 +560,7 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 		StopPos:           stopPos,
 		MaxTPS:            maxTPS,
 		MaxReplicationLag: maxReplicationLag,
-		State:             qr.Rows[0][4].ToString(),
+		State:             vrRow[4].ToString(),
 	}, nil
 }
 
