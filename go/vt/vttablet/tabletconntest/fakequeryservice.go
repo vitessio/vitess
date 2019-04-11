@@ -782,11 +782,13 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 	return nil
 }
 
-// UpdateStreamPosition is a test update stream position.
-const UpdateStreamPosition = "update stream position"
+const (
+	// UpdateStreamPosition is a test update stream position.
+	UpdateStreamPosition = "update stream position"
 
-// UpdateStreamTimestamp is a test update stream timestamp.
-const UpdateStreamTimestamp = 123654
+	// UpdateStreamTimestamp is a test update stream timestamp.
+	UpdateStreamTimestamp = 123654
+)
 
 // UpdateStreamStreamEvent1 is a test update stream event.
 var UpdateStreamStreamEvent1 = querypb.StreamEvent{

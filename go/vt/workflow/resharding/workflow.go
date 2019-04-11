@@ -42,12 +42,8 @@ import (
 )
 
 const (
-	codeVersion = 2
-
-	horizontalReshardingFactoryName = "horizontal_resharding"
-)
-
-const (
+	codeVersion                                        = 2
+	horizontalReshardingFactoryName                    = "horizontal_resharding"
 	phaseCopySchema                 workflow.PhaseType = "copy_schema"
 	phaseClone                      workflow.PhaseType = "clone"
 	phaseWaitForFilteredReplication workflow.PhaseType = "wait_for_filtered_replication"
