@@ -48,6 +48,9 @@ var (
 	// constants for this module
 	historyLength = 16
 
+	// Query rules from blacklist
+	blacklistQueryRules string = "BlacklistQueryRules"
+
 	// gracePeriod is the amount of time we pause after broadcasting to vtgate
 	// that we're going to stop serving a particular target type (e.g. when going
 	// spare, or when being promoted to master). During this period, we expect
@@ -55,9 +58,6 @@ var (
 	// rejecting queries for that target type.
 	gracePeriod = flag.Duration("serving_state_grace_period", 0, "how long to pause after broadcasting health to vtgate, before enforcing a new serving state")
 )
-
-// Query rules from blacklist
-const blacklistQueryRules string = "BlacklistQueryRules"
 
 // loadBlacklistRules loads and builds the blacklist query rules
 func (agent *ActionAgent) loadBlacklistRules(tablet *topodatapb.Tablet, blacklistedTables []string) (err error) {

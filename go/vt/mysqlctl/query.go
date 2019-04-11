@@ -29,6 +29,11 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+const (
+	masterPasswordStart = "  MASTER_PASSWORD = '"
+	masterPasswordEnd   = "',\n"
+)
+
 // getPoolReconnect gets a connection from a pool, tests it, and reconnects if
 // the connection is lost.
 func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*dbconnpool.PooledDBConnection, error) {
@@ -198,9 +203,6 @@ func (mysqld *Mysqld) fetchVariables(ctx context.Context, pattern string) (map[s
 	}
 	return varMap, nil
 }
-
-const masterPasswordStart = "  MASTER_PASSWORD = '"
-const masterPasswordEnd = "',\n"
 
 func redactMasterPassword(input string) string {
 	i := strings.Index(input, masterPasswordStart)

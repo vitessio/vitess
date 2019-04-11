@@ -36,14 +36,12 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+// Constants for how ephemeral buffers were used for reading / writing.
 const (
 	// connBufferSize is how much we buffer for reading and
 	// writing. It is also how much we allocate for ephemeral buffers.
 	connBufferSize = 16 * 1024
-)
 
-// Constants for how ephemeral buffers were used for reading / writing.
-const (
 	// ephemeralUnused means the ephemeral buffer is not in use at this
 	// moment. This is the default value, and is checked so we don't
 	// read or write a packet while one is already used.

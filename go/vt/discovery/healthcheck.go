@@ -73,13 +73,11 @@ var (
 	tabletURLTemplate        *template.Template
 )
 
-// See the documentation for NewHealthCheck below for an explanation of these parameters.
 const (
+	// See the documentation for NewHealthCheck below for an explanation of these parameters.
 	DefaultHealthCheckRetryDelay = 5 * time.Second
 	DefaultHealthCheckTimeout    = 1 * time.Minute
-)
 
-const (
 	// DefaultTopoReadConcurrency can be used as default value for the topoReadConcurrency parameter of a TopologyWatcher.
 	DefaultTopoReadConcurrency int = 5
 	// DefaultTopologyWatcherRefreshInterval can be used as the default value for
