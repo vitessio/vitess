@@ -29,11 +29,12 @@ var (
 	otherRules     *Rules
 )
 
-// mimic query rules from blacklist
-const blacklistQueryRules string = "BLACKLIST_QUERY_RULES"
-
-// mimic query rules from custom source
-const customQueryRules string = "CUSTOM_QUERY_RULES"
+const (
+	// mimic query rules from blacklist
+	blacklistQueryRules string = "BLACKLIST_QUERY_RULES"
+	// mimic query rules from custom source
+	customQueryRules string = "CUSTOM_QUERY_RULES"
+)
 
 func setupRules() {
 	var qr *Rule
