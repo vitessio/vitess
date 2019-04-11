@@ -42,6 +42,15 @@ import (
 type NodeDisplay int
 
 const (
+	// ActionStateUnknown is an unknown value and should never be set.
+	ActionStateUnknown ActionState = 0
+
+	// ActionStateEnabled is for when the action is enabled.
+	ActionStateEnabled ActionState = 1
+
+	// ActionStateDisabled is for when the action is disabled.
+	ActionStateDisabled ActionState = 2
+
 	// NodeDisplayUnknown is an unknown value and should never be set.
 	NodeDisplayUnknown NodeDisplay = 0
 
@@ -59,17 +68,6 @@ const (
 
 // ActionState constants need to match node.ts.ActionState.
 type ActionState int
-
-const (
-	// ActionStateUnknown is an unknown value and should never be set.
-	ActionStateUnknown ActionState = 0
-
-	// ActionStateEnabled is for when the action is enabled.
-	ActionStateEnabled ActionState = 1
-
-	// ActionStateDisabled is for when the action is disabled.
-	ActionStateDisabled ActionState = 2
-)
 
 // ActionStyle constants need to match node.ts.ActionStyle.
 type ActionStyle int

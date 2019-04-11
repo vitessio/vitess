@@ -34,6 +34,37 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+const (
+	// SplitQueryNumRowsPerQueryPart is a test num rows for split.
+	SplitQueryNumRowsPerQueryPart = 123
+	// SplitQuerySplitCount is a test split count.
+	SplitQuerySplitCount = 372
+	// ExecuteTransactionID is a test transaction id.
+	ExecuteTransactionID int64 = 678
+	// ExecuteBatchTransactionID is a test transaction id for batch.
+	ExecuteBatchTransactionID int64 = 678
+	// BeginTransactionID is a test transaction id for Begin.
+	BeginTransactionID int64 = 9990
+	// CommitTransactionID is a test transaction id for Commit.
+	CommitTransactionID int64 = 999044
+	// RollbackTransactionID is a test transactin id for Rollback.
+	RollbackTransactionID int64 = 999044
+	// UpdateStreamTimestamp is a test update stream timestamp.
+	UpdateStreamTimestamp = 123654
+	// Dtid is a test dtid
+	Dtid string = "aa"
+	// ExecuteQuery is a fake test query.
+	ExecuteQuery = "executeQuery"
+	// StreamExecuteQuery is a fake test query for streaming.
+	StreamExecuteQuery = "streamExecuteQuery"
+	// TestAsTransaction is a test 'asTransaction' flag.
+	TestAsTransaction bool = true
+	// UpdateStreamPosition is a test update stream position.
+	UpdateStreamPosition = "update stream position"
+	// SplitQueryAlgorithm is a test algorithm for splits.
+	SplitQueryAlgorithm = querypb.SplitQueryRequest_FULL_SCAN
+)
+
 // FakeQueryService implements a programmable fake for the query service
 // server side.
 type FakeQueryService struct {
@@ -103,9 +134,6 @@ var TestExecuteOptions = &querypb.ExecuteOptions{
 	ClientFoundRows: true,
 }
 
-// TestAsTransaction is a test 'asTransaction' flag.
-const TestAsTransaction bool = true
-
 func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string, target *querypb.Target) {
 	if !proto.Equal(target, TestTarget) {
 		f.t.Errorf("invalid Target for %v: got %#v expected %#v", name, target, TestTarget)
@@ -130,9 +158,6 @@ func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string,
 	}
 }
 
-// BeginTransactionID is a test transaction id for Begin.
-const BeginTransactionID int64 = 9990
-
 // Begin is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
 	if f.HasBeginError {
@@ -147,9 +172,6 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, op
 	}
 	return BeginTransactionID, nil
 }
-
-// CommitTransactionID is a test transaction id for Commit.
-const CommitTransactionID int64 = 999044
 
 // Commit is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
@@ -166,9 +188,6 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, t
 	return nil
 }
 
-// RollbackTransactionID is a test transactin id for Rollback.
-const RollbackTransactionID int64 = 999044
-
 // Rollback is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	if f.HasError {
@@ -183,9 +202,6 @@ func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target,
 	}
 	return nil
 }
-
-// Dtid is a test dtid
-const Dtid string = "aa"
 
 // Prepare is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
@@ -352,16 +368,10 @@ func (f *FakeQueryService) ReadTransaction(ctx context.Context, target *querypb.
 	return Metadata, nil
 }
 
-// ExecuteQuery is a fake test query.
-const ExecuteQuery = "executeQuery"
-
 // ExecuteBindVars is a test bind var.
 var ExecuteBindVars = map[string]*querypb.BindVariable{
 	"bind1": sqltypes.Int64BindVariable(1114444),
 }
-
-// ExecuteTransactionID is a test transaction id.
-const ExecuteTransactionID int64 = 678
 
 // ExecuteQueryResult is a test query result.
 var ExecuteQueryResult = sqltypes.Result{
@@ -420,9 +430,6 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, 
 	}
 	return &ExecuteQueryResult, nil
 }
-
-// StreamExecuteQuery is a fake test query for streaming.
-const StreamExecuteQuery = "streamExecuteQuery"
 
 // StreamExecuteBindVars is a test bind var for streaming.
 var StreamExecuteBindVars = map[string]*querypb.BindVariable{
@@ -509,9 +516,6 @@ var ExecuteBatchQueries = []*querypb.BoundQuery{
 	},
 }
 
-// ExecuteBatchTransactionID is a test transaction id for batch.
-const ExecuteBatchTransactionID int64 = 678
-
 // ExecuteBatchQueryResultList is a list of test query results.
 var ExecuteBatchQueryResultList = []sqltypes.Result{
 	{
@@ -590,9 +594,6 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 // SplitQuerySplitColumns is a test list for column splits.
 var SplitQuerySplitColumns = []string{"nice_column_to_split"}
 
-// SplitQuerySplitCount is a test split count.
-const SplitQuerySplitCount = 372
-
 // SplitQueryBoundQuery is a test query for splits.
 var SplitQueryBoundQuery = &querypb.BoundQuery{
 	Sql: "splitQuery",
@@ -600,12 +601,6 @@ var SplitQueryBoundQuery = &querypb.BoundQuery{
 		"bind1": sqltypes.Int64BindVariable(43),
 	},
 }
-
-// SplitQueryNumRowsPerQueryPart is a test num rows for split.
-const SplitQueryNumRowsPerQueryPart = 123
-
-// SplitQueryAlgorithm is a test algorithm for splits.
-const SplitQueryAlgorithm = querypb.SplitQueryRequest_FULL_SCAN
 
 // SplitQueryQuerySplitList is a test result for splits.
 var SplitQueryQuerySplitList = []*querypb.QuerySplit{
@@ -781,12 +776,6 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 	callback(shr)
 	return nil
 }
-
-// UpdateStreamPosition is a test update stream position.
-const UpdateStreamPosition = "update stream position"
-
-// UpdateStreamTimestamp is a test update stream timestamp.
-const UpdateStreamTimestamp = 123654
 
 // UpdateStreamStreamEvent1 is a test update stream event.
 var UpdateStreamStreamEvent1 = querypb.StreamEvent{

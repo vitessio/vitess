@@ -28,6 +28,21 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+const (
+	bvNone = bindvarMode(iota)
+	bvBefore
+	bvAfter
+
+	// The following values are the various colExpr opcodes.
+	opExpr = operation(iota)
+	opCount
+	opSum
+	// The following values are the various insert types.
+	insertNormal = insertType(iota)
+	insertOndup
+	insertIgnore
+)
+
 type tablePlanBuilder struct {
 	name       sqlparser.TableIdent
 	sendSelect *sqlparser.Select
@@ -56,22 +71,8 @@ type colExpr struct {
 // operation is the opcode for the colExpr.
 type operation int
 
-// The following values are the various colExpr opcodes.
-const (
-	opExpr = operation(iota)
-	opCount
-	opSum
-)
-
 // insertType describes the type of insert statement to generate.
 type insertType int
-
-// The following values are the various insert types.
-const (
-	insertNormal = insertType(iota)
-	insertOndup
-	insertIgnore
-)
 
 // buildPlayerPlan builds a PlayerPlan from the input filter.
 // The filter is matched against the target schema. For every table matched,
@@ -520,12 +521,6 @@ type bindvarFormatter struct {
 }
 
 type bindvarMode int
-
-const (
-	bvNone = bindvarMode(iota)
-	bvBefore
-	bvAfter
-)
 
 func (bvf *bindvarFormatter) formatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 	if node, ok := node.(*sqlparser.ColName); ok {
