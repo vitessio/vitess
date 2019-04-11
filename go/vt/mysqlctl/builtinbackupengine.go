@@ -42,8 +42,9 @@ import (
 )
 
 const (
-	builtin          = "builtin"
-	writerBufferSize = 2 * 1024 * 1024
+	builtin            = "builtin"
+	writerBufferSize   = 2 * 1024 * 1024
+	dataDictionaryFile = "mysql.ibd"
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -180,7 +181,6 @@ func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) (
 // and adds it to the backup manifest if it does
 // https://dev.mysql.com/doc/refman/8.0/en/data-dictionary-transactional-storage.html
 func addMySQL8DataDictionary(fes []FileEntry, base string, baseDir string) ([]FileEntry, error) {
-	const dataDictionaryFile = "mysql.ibd"
 	filePath := path.Join(baseDir, dataDictionaryFile)
 
 	// no-op if this file doesn't exist

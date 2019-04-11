@@ -29,13 +29,14 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// SeqVarName is a reserved bind var name for sequence values.
-const SeqVarName = "__seq"
-
-// ListVarName is a reserved bind var name for list vars.
-// This is used for sending different IN clause values
-// to different shards.
-const ListVarName = "__vals"
+const (
+	// SeqVarName is a reserved bind var name for sequence values.
+	SeqVarName = "__seq"
+	// ListVarName is a reserved bind var name for list vars.
+	// This is used for sending different IN clause values
+	// to different shards.
+	ListVarName = "__vals"
+)
 
 // VCursor defines the interface the engine will use
 // to execute routes.
