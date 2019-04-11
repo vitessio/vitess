@@ -53,8 +53,10 @@ type fakeVTGateService struct {
 	errorWait         chan struct{}
 }
 
-const expectedErrMatch string = "test vtgate error"
-const expectedCode vtrpcpb.Code = vtrpcpb.Code_INVALID_ARGUMENT
+const (
+	expectedErrMatch string       = "test vtgate error"
+	expectedCode     vtrpcpb.Code = vtrpcpb.Code_INVALID_ARGUMENT
+)
 
 var errTestVtGateError = vterrors.New(expectedCode, expectedErrMatch)
 
