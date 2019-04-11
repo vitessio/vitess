@@ -19,17 +19,17 @@ package mysqlctl
 import (
 	"context"
 	"flag"
-	"fmt"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
-	// BackupEngineImplementation is the implementation to use
-	// for BackupEngine. Exported for test purposes.
-	BackupEngineImplementation = flag.String("backup_engine_implementation", "builtin", "which implementation to use for the backup storage engine")
+	// BackupEngineImplementation is the implementation to use for BackupEngine
+	backupEngineImplementation = flag.String("backup_engine_implementation", builtin, "which implementation to use for the backup method, builtin or xtrabackup")
 )
 
 // BackupEngine is the interface to the backup engine
@@ -44,9 +44,9 @@ var BackupEngineMap = make(map[string]BackupEngine)
 // GetBackupEngine returns the current BackupEngine implementation.
 // Should be called after flags have been initialized.
 func GetBackupEngine() (BackupEngine, error) {
-	be, ok := BackupEngineMap[*BackupEngineImplementation]
+	be, ok := BackupEngineMap[*backupEngineImplementation]
 	if !ok {
-		return nil, fmt.Errorf("no registered implementation of BackupEngine")
+		return nil, vterrors.New(vtrpc.Code_NOT_FOUND, "no registered implementation of BackupEngine")
 	}
 	return be, nil
 }
