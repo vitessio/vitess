@@ -331,7 +331,7 @@ if [ "$BUILD_TESTS" == 1 ] ; then
       echo "Found MySQL 5.6+ installation in $VT_MYSQL_ROOT."
       ;;
 
-    "MariaDB" | "MariaDB103" )
+    "MariaDB" | "MariaDB103")
       myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
       [[ "$myversion" =~ MariaDB ]] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
       echo "Found MariaDB installation in $VT_MYSQL_ROOT."

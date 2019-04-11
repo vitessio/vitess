@@ -37,6 +37,13 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+)
+
+const (
+	builtin          = "builtin"
+	writerBufferSize = 2 * 1024 * 1024
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -46,10 +53,10 @@ import (
 type BuiltinBackupEngine struct {
 }
 
-// BackupManifest represents the backup. It lists all the files, the
+// builtinBackupManifest represents the backup. It lists all the files, the
 // Position that the backup was taken at, and the transform hook used,
 // if any.
-type BackupManifest struct {
+type builtinBackupManifest struct {
 	// FileEntries contains all the files in the backup
 	FileEntries []FileEntry
 
@@ -93,7 +100,7 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	case backupData:
 		root = cnf.DataDir
 	default:
-		return nil, fmt.Errorf("unknown base: %v", fe.Base)
+		return nil, vterrors.Errorf(vtrpc.Code_UNKNOWN, "unknown base: %v", fe.Base)
 	}
 
 	// and open the file
@@ -102,15 +109,15 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	var err error
 	if readOnly {
 		if fd, err = os.Open(name); err != nil {
-			return nil, fmt.Errorf("cannot open source file %v: %v", name, err)
+			return nil, vterrors.Wrapf(err, "cannot open source file %v", name)
 		}
 	} else {
 		dir := path.Dir(name)
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-			return nil, fmt.Errorf("cannot create destination directory %v: %v", dir, err)
+			return nil, vterrors.Wrapf(err, "cannot create destination directory %v", dir)
 		}
 		if fd, err = os.Create(name); err != nil {
-			return nil, fmt.Errorf("cannot create destination file %v: %v", name, err)
+			return nil, vterrors.Wrapf(err, "cannot create destination file %v", name)
 		}
 	}
 	return fd, nil
@@ -250,13 +257,13 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, my
 		// keep going if we're the master, might be a degenerate case
 		sourceIsMaster = true
 	default:
-		return false, fmt.Errorf("can't get slave status: %v", err)
+		return false, vterrors.Wrap(err, "can't get slave status")
 	}
 
 	// get the read-only flag
 	readOnly, err = mysqld.IsReadOnly()
 	if err != nil {
-		return false, fmt.Errorf("can't get read-only status: %v", err)
+		return false, vterrors.Wrap(err, "can't get read-only status")
 	}
 
 	// get the replication position
@@ -264,21 +271,21 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, my
 		if !readOnly {
 			logger.Infof("turning master read-only before backup")
 			if err = mysqld.SetReadOnly(true); err != nil {
-				return false, fmt.Errorf("can't set read-only status: %v", err)
+				return false, vterrors.Wrap(err, "can't set read-only status")
 			}
 		}
 		replicationPosition, err = mysqld.MasterPosition()
 		if err != nil {
-			return false, fmt.Errorf("can't get master position: %v", err)
+			return false, vterrors.Wrap(err, "can't get master position")
 		}
 	} else {
 		if err = mysqld.StopSlave(hookExtraEnv); err != nil {
-			return false, fmt.Errorf("can't stop slave: %v", err)
+			return false, vterrors.Wrapf(err, "can't stop slave")
 		}
 		var slaveStatus mysql.SlaveStatus
 		slaveStatus, err = mysqld.SlaveStatus()
 		if err != nil {
-			return false, fmt.Errorf("can't get slave status: %v", err)
+			return false, vterrors.Wrap(err, "can't get slave status")
 		}
 		replicationPosition = slaveStatus.Position
 	}
@@ -287,7 +294,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, my
 	// shutdown mysqld
 	err = mysqld.Shutdown(ctx, cnf, true)
 	if err != nil {
-		return false, fmt.Errorf("can't shutdown mysqld: %v", err)
+		return false, vterrors.Wrap(err, "can't shutdown mysqld")
 	}
 
 	// Backup everything, capture the error.
@@ -297,7 +304,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, my
 	// Try to restart mysqld
 	err = mysqld.Start(ctx, cnf)
 	if err != nil {
-		return usable, fmt.Errorf("can't restart mysqld: %v", err)
+		return usable, vterrors.Wrap(err, "can't restart mysqld")
 	}
 
 	// Restore original mysqld state that we saved above.
@@ -314,12 +321,12 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, my
 	if slaveStartRequired {
 		logger.Infof("restarting mysql replication")
 		if err := mysqld.StartSlave(hookExtraEnv); err != nil {
-			return usable, fmt.Errorf("cannot restart slave: %v", err)
+			return usable, vterrors.Wrap(err, "cannot restart slave")
 		}
 
 		// this should be quick, but we might as well just wait
 		if err := WaitForSlaveStart(mysqld, slaveStartDeadline); err != nil {
-			return usable, fmt.Errorf("slave is not restarting: %v", err)
+			return usable, vterrors.Wrap(err, "slave is not restarting")
 		}
 	}
 
@@ -337,7 +344,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 	// Get the files to backup.
 	fes, err := findFilesToBackup(cnf)
 	if err != nil {
-		return fmt.Errorf("can't find files to backup: %v", err)
+		return vterrors.Wrap(err, "can't find files to backup")
 	}
 	logger.Infof("found %v files to backup", len(fes))
 
@@ -372,7 +379,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 	// open the MANIFEST
 	wc, err := bh.AddFile(ctx, backupManifest, 0)
 	if err != nil {
-		return fmt.Errorf("cannot add %v to backup: %v", backupManifest, err)
+		return vterrors.Wrapf(err, "cannot add %v to backup", backupManifest)
 	}
 	defer func() {
 		if closeErr := wc.Close(); err == nil {
@@ -381,7 +388,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 	}()
 
 	// JSON-encode and write the MANIFEST
-	bm := &BackupManifest{
+	bm := &builtinBackupManifest{
 		FileEntries:   fes,
 		Position:      replicationPosition,
 		TransformHook: *backupStorageHook,
@@ -389,10 +396,10 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
-		return fmt.Errorf("cannot JSON encode %v: %v", backupManifest, err)
+		return vterrors.Wrapf(err, "cannot JSON encode %v", backupManifest)
 	}
 	if _, err := wc.Write([]byte(data)); err != nil {
-		return fmt.Errorf("cannot write %v: %v", backupManifest, err)
+		return vterrors.Wrapf(err, "cannot write %v", backupManifest)
 	}
 
 	return nil
@@ -416,7 +423,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 	// Open the destination file for writing, and a buffer.
 	wc, err := bh.AddFile(ctx, name, fi.Size())
 	if err != nil {
-		return fmt.Errorf("cannot add file: %v", err)
+		return vterrors.Wrapf(err, "cannot add file: %v", name)
 	}
 	defer func() {
 		if rerr := wc.Close(); rerr != nil {
@@ -428,7 +435,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 			}
 		}
 	}()
-	dst := bufio.NewWriterSize(wc, 2*1024*1024)
+	dst := bufio.NewWriterSize(wc, writerBufferSize)
 
 	// Create the hasher and the tee on top.
 	hasher := newHasher()
@@ -442,7 +449,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 		h.ExtraEnv = hookExtraEnv
 		pipe, wait, _, err = h.ExecuteAsWritePipe(writer)
 		if err != nil {
-			return fmt.Errorf("'%v' hook returned error: %v", *backupStorageHook, err)
+			return vterrors.Wrapf(err, "'%v' hook returned error", *backupStorageHook)
 		}
 		writer = pipe
 	}
@@ -452,7 +459,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 	if *backupStorageCompress {
 		gzip, err = pgzip.NewWriterLevel(writer, pgzip.BestSpeed)
 		if err != nil {
-			return fmt.Errorf("cannot create gziper: %v", err)
+			return vterrors.Wrap(err, "cannot create gziper")
 		}
 		gzip.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
 		writer = gzip
@@ -462,33 +469,33 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 	// optional pipe, tee, output file and hasher).
 	_, err = io.Copy(writer, source)
 	if err != nil {
-		return fmt.Errorf("cannot copy data: %v", err)
+		return vterrors.Wrap(err, "cannot copy data")
 	}
 
 	// Close gzip to flush it, after that all data is sent to writer.
 	if gzip != nil {
 		if err = gzip.Close(); err != nil {
-			return fmt.Errorf("cannot close gzip: %v", err)
+			return vterrors.Wrap(err, "cannot close gzip")
 		}
 	}
 
 	// Close the hook pipe if necessary.
 	if pipe != nil {
 		if err := pipe.Close(); err != nil {
-			return fmt.Errorf("cannot close hook pipe: %v", err)
+			return vterrors.Wrap(err, "cannot close hook pipe")
 		}
 		stderr, err := wait()
 		if stderr != "" {
 			logger.Infof("'%v' hook returned stderr: %v", *backupStorageHook, stderr)
 		}
 		if err != nil {
-			return fmt.Errorf("'%v' returned error: %v", *backupStorageHook, err)
+			return vterrors.Wrapf(err, "'%v' returned error", *backupStorageHook)
 		}
 	}
 
 	// Flush the buffer to finish writing on destination.
 	if err = dst.Flush(); err != nil {
-		return fmt.Errorf("cannot flush dst: %v", err)
+		return vterrors.Wrapf(err, "cannot flush destination: %v", name)
 	}
 
 	// Save the hash.
@@ -510,7 +517,7 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	hookExtraEnv map[string]string) (mysql.Position, error) {
 
 	var bh backupstorage.BackupHandle
-	var bm BackupManifest
+	var bm builtinBackupManifest
 	var toRestore int
 
 	for toRestore = len(bhs) - 1; toRestore >= 0; toRestore-- {
@@ -637,7 +644,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 		h.ExtraEnv = hookExtraEnv
 		reader, wait, _, err = h.ExecuteAsReadPipe(reader)
 		if err != nil {
-			return fmt.Errorf("'%v' hook returned error: %v", transformHook, err)
+			return vterrors.Wrapf(err, "'%v' hook returned error", transformHook)
 		}
 	}
 
@@ -672,14 +679,14 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 			log.Infof("'%v' hook returned stderr: %v", transformHook, stderr)
 		}
 		if err != nil {
-			return fmt.Errorf("'%v' returned error: %v", transformHook, err)
+			return vterrors.Wrapf(err, "'%v' returned error", transformHook)
 		}
 	}
 
 	// Check the hash.
 	hash := hasher.HashString()
 	if hash != fe.Hash {
-		return fmt.Errorf("hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
 	}
 
 	// Flush the buffer.
