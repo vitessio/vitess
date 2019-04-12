@@ -131,7 +131,7 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 	go func() {
 		log.Infof("Starting worker...")
 		span, ctx := trace.NewSpan(wi.currentContext, "work")
-		span.Annotate("extra", wrk.StatusAsText())
+		span.Annotate("extra", wrk.State().String())
 		defer span.Finish()
 		var err error
 

@@ -128,6 +128,7 @@ func (f *fakeTracer) Close() error {
 }
 
 func (f *fakeTracer) assertNoSpanWith(t *testing.T, substr string) {
+	t.Helper()
 	for _, logLine := range f.log {
 		if strings.Contains(logLine, substr) {
 			t.Fatalf("expected to not find [%v] but found it in [%v]", substr, logLine)
@@ -146,5 +147,3 @@ func (m *mockSpan) Finish() {
 func (m *mockSpan) Annotate(key string, value interface{}) {
 	m.tracer.log = append(m.tracer.log, fmt.Sprintf("key: %v values:%v", key, value))
 }
-
-
