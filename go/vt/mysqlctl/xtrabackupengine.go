@@ -189,12 +189,12 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	if err != nil {
 		return false, vterrors.Wrap(err, "backup failed while reading command output")
 	}
-	execErr := backupCmd.Wait()
-	if execErr != nil {
-		return false, vterrors.Wrap(err, "xtrabackup failed with error")
-	}
+	err = backupCmd.Wait()
 	output := string(stderrOutput)
 	logger.Infof("Xtrabackup backup command output: %v", output)
+	if err != nil {
+		return false, vterrors.Wrap(err, "xtrabackup failed with error")
+	}
 
 	replicationPosition, rerr := findReplicationPosition(output, flavor, logger)
 	if rerr != nil {
@@ -470,7 +470,8 @@ func findReplicationPosition(input, flavor string, logger logutil.Logger) (mysql
 		}
 	}
 	position := ""
-	if index != -1 {
+	// asserts that xtrabackup output comes with GTIDs in the format we expect
+	if index != -1 && index < len(substrs) {
 		// since we are extracting this from the log, it contains newlines
 		// replace them with a single space to match the SET GLOBAL gtid_purged command in xtrabackup_slave_info
 		position = strings.Replace(substrs[index], "\n", " ", -1)
