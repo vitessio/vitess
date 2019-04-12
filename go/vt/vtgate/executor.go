@@ -123,7 +123,7 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell, statsName strin
 
 // Execute executes a non-streaming query.
 func (e *Executor) Execute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (result *sqltypes.Result, err error) {
-	span, ctx := trace.NewClientSpan(ctx, "mysql", "executor.Execute")
+	span, ctx := trace.NewSpan(ctx, "executor.Execute")
 	span.Annotate("method", method)
 	trace.AnnotateSQL(span, sql)
 	defer span.Finish()
