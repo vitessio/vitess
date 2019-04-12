@@ -347,7 +347,12 @@ message CellInfo {
   // to server_address.
   string root = 2;
 
-  // Region is a group this cell belongs to. Used by vtgate to route traffic to
-  // other cells (in same region) when there is no available tablet in the current cell.
-  string region = 3;
+  // OBSOLETE: region 3
+  reserved 3;
+}
+
+// CellsAlias 
+message CellsAlias {
+  // Cells that map to this alias
+  repeated string cells = 2;
 }

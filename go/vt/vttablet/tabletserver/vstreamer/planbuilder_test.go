@@ -276,6 +276,21 @@ func TestPlanbuilder(t *testing.T) {
 			VindexColumn: 1,
 		},
 	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select val, id from t1 where in_keyrange('-80')"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 1,
+				Alias:  sqlparser.NewColIdent("val"),
+				Type:   sqltypes.VarBinary,
+			}, {
+				ColNum: 0,
+				Alias:  sqlparser.NewColIdent("id"),
+				Type:   sqltypes.Int64,
+			}},
+			VindexColumn: 1,
+		},
+	}, {
 		inTable: t2,
 		inRule:  &binlogdatapb.Rule{Match: "/t1/"},
 	}, {
@@ -325,7 +340,7 @@ func TestPlanbuilder(t *testing.T) {
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select *, id from t1"},
-		outErr:  `unsupported: select *, id from t1`,
+		outErr:  `unsupported: *, id`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where id=1"},
@@ -337,15 +352,15 @@ func TestPlanbuilder(t *testing.T) {
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id)"},
-		outErr:  `unexpected where clause:  where in_keyrange(id)`,
+		outErr:  `unsupported: id`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(*, 'hash', '-80')"},
-		outErr:  `unexpected: in_keyrange(*, 'hash', '-80')`,
+		outErr:  `unexpected: *`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(1, 'hash', '-80')"},
-		outErr:  `unexpected: in_keyrange(1, 'hash', '-80')`,
+		outErr:  `unexpected: 1`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(none, 'hash', '-80')"},
@@ -361,7 +376,7 @@ func TestPlanbuilder(t *testing.T) {
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, 'hash', '-80-')"},
-		outErr:  `unexpected where clause:  where in_keyrange(id, 'hash', '-80-')`,
+		outErr:  `unexpected in_keyrange parameter: '-80-'`,
 	}, {
 		// analyzeExpr tests.
 		inTable: t1,

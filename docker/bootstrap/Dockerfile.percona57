@@ -10,7 +10,8 @@ RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --r
     } | debconf-set-selections && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        percona-server-server-5.7 libperconaserverclient18.1-dev && \
+        percona-server-server-5.7 \
+	libperconaserverclient18.1-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Bootstrap Vitess

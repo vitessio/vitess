@@ -420,7 +420,7 @@ msg varchar(64)
                         '--tables', '/moving/,view1',
                         '--chunk_count', '10',
                         '--min_rows_per_chunk', '1',
-                        '--min_healthy_rdonly_tablets', '1',
+                        '--min_healthy_tablets', '1',
                         'destination_keyspace/0'],
                        auto_log=True)
 
@@ -438,7 +438,7 @@ msg varchar(64)
                         '--tables', '/moving/,view1',
                         '--chunk_count', '10',
                         '--min_rows_per_chunk', '1',
-                        '--min_healthy_rdonly_tablets', '1',
+                        '--min_healthy_tablets', '1',
                         'destination_keyspace/0'],
                        auto_log=True)
 

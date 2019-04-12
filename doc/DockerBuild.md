@@ -12,7 +12,7 @@ Another alternative is to customize our Docker images and build them yourselves.
 This is described below and involves building the `base` image first.
 Then you can run our build script for the `lite` image which extracts the Vitess binaries from the built `base` image.
 
-1.  Install [Docker](https://www.docker.com/) on your workstation.
+1.  Install [Docker](https://docs.docker.com/v17.12/install/) on your workstation.
 
     Our scripts also assume you can run the `docker` command without `sudo`,
     which you can do by [setting up a docker group](https://docs.docker.com/engine/installation/linux/ubuntulinux/#create-a-docker-group).
@@ -22,8 +22,7 @@ Then you can run our build script for the `lite` image which extracts the Vitess
 
 1.  Go to your `src/vitess.io/vitess` directory.
 
-1.  Usually, you won't need to [build your own bootstrap image]
-    (https://github.com/vitessio/vitess/blob/master/docker/bootstrap/README.md)
+1.  Usually, you won't need to [build your own bootstrap image](https://github.com/vitessio/vitess/blob/master/docker/bootstrap/README.md)
     unless you edit [bootstrap.sh](https://github.com/vitessio/vitess/blob/master/bootstrap.sh)
     or [vendor.json](https://github.com/vitessio/vitess/blob/master/vendor/vendor.json),
     for example to add new dependencies. If you do need it then build the

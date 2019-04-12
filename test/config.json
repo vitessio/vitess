@@ -19,6 +19,33 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"xtrabackup": {
+			"File": "xtrabackup.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"xtrabackup_xbstream": {
+			"File": "xtrabackup_xbstream.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"xtrabackup_xtra": {
+			"File": "xtrabackup_xtra.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"binlog": {
 			"File": "binlog.py",
 			"Args": [],
@@ -169,6 +196,28 @@
 			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
+		},
+		"cell_no_aliases": {
+			"File": "cell_no_aliases.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"cell_aliases": {
+			"File": "cell_aliases.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
 		},
 		"mysql_server": {
 			"File": "mysql_server_test.py",
