@@ -58,15 +58,6 @@ func AnnotateSQL(span Span, sql string) {
 	span.Annotate("sql-statement-type", sqlparser.StmtType(sqlparser.Preview(sql)))
 }
 
-// NewClientSpan returns a span and a context to register calls to dependent services.
-func NewClientSpan(inCtx context.Context, serviceName, spanLabel string) (Span, context.Context) {
-	parent, _ := spanFactory.FromContext(inCtx)
-	span := spanFactory.NewClientSpan(parent, serviceName, spanLabel)
-	outCtx := spanFactory.NewContext(inCtx, span)
-
-	return span, outCtx
-}
-
 // FromContext returns the Span from a Context if present. The bool return
 // value indicates whether a Span was present in the Context.
 func FromContext(ctx context.Context) (Span, bool) {
@@ -103,9 +94,6 @@ func AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u
 type TracingService interface {
 	// New creates a new span from an existing one, if provided. The parent can also be nil
 	New(parent Span, label string) Span
-
-	// NewClientSpan creates a span for a service call
-	NewClientSpan(parent Span, serviceName, label string) Span
 
 	// Extracts a span from a context, making it possible to annotate the span with additional information.
 	FromContext(ctx context.Context) (Span, bool)

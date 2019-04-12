@@ -94,7 +94,7 @@ func NewDBConnNoPool(params *mysql.ConnParams, dbaPool *dbconnpool.ConnectionPoo
 // Exec executes the specified query. If there is a connection error, it will reconnect
 // and retry. A failed reconnect will trigger a CheckMySQL.
 func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	span, ctx := trace.NewClientSpan(ctx,"tabletserver", "DBConn.Exec")
+	span, ctx := trace.NewSpan(ctx,"DBConn.Exec")
 	defer span.Finish()
 
 	for attempt := 1; attempt <= 2; attempt++ {
@@ -160,7 +160,7 @@ func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, want
 
 // Stream executes the query and streams the results.
 func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
-	span, ctx := trace.NewClientSpan(ctx, "mysql", "DBConn.Stream")
+	span, ctx := trace.NewSpan(ctx, "DBConn.Stream")
 	trace.AnnotateSQL(span, query)
 	defer span.Finish()
 
