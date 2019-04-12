@@ -27,7 +27,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -132,21 +131,14 @@ var tracingBackendFactories = make(map[string]TracerFactory)
 var spanFactory TracingService = fakeSpanFactory{}
 
 var (
-	tracingServer = flag.String("tracer", "noop", "tracing service to use.")
+	tracingServer = flag.String("tracer", "noop", "tracing service to use")
 )
 
 // StartTracing enables tracing for a named service
 func StartTracing(serviceName string) io.Closer {
 	factory, ok := tracingBackendFactories[*tracingServer]
 	if !ok {
-		options := make([]string, len(tracingBackendFactories))
-		for k := range tracingBackendFactories {
-			options = append(options, k)
-		}
-
-		altStr := strings.Join(options, ", ")
-		log.Error(vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no such tracing service found. alternatives are: %v", altStr))
-		return &nilCloser{}
+		return fail(serviceName)
 	}
 
 	tracer, closer, err := factory(serviceName)
@@ -158,4 +150,14 @@ func StartTracing(serviceName string) io.Closer {
 	spanFactory = tracer
 
 	return closer
+}
+
+func fail(serviceName string) io.Closer {
+	options := make([]string, len(tracingBackendFactories))
+	for k := range tracingBackendFactories {
+		options = append(options, k)
+	}
+	altStr := strings.Join(options, ", ")
+	log.Errorf("no such [%s] tracing service found. alternatives are: %v", serviceName, altStr)
+	return &nilCloser{}
 }
