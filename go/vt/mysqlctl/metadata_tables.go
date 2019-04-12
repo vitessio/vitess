@@ -19,8 +19,8 @@ package mysqlctl
 import (
 	"bytes"
 	"fmt"
-	"regexp"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -88,7 +88,7 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string,
 	}
 	for _, sql := range sqlAlterLocalMetadataTable {
 		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
-			if checkSQLErrorCode(err, "1060") {
+			if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERDupFieldName {
 				log.Errorf("Expected error executing %v: %v", sql, err)
 			} else {
 				log.Errorf("Unexpected error executing %v: %v", sql, err)
@@ -104,7 +104,7 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string,
 	}
 	for _, sql := range sqlAlterShardMetadataTable {
 		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
-			if checkSQLErrorCode(err, "1060") {
+			if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERDupFieldName {
 				log.Errorf("Expected error executing %v: %v", sql, err)
 			} else {
 				log.Errorf("Unexpected error executing %v: %v", sql, err)
@@ -141,14 +141,4 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string,
 	}
 	_, err = conn.ExecuteFetch("COMMIT", 0, false)
 	return err
-}
-
-func checkSQLErrorCode(err error, code string) bool {
-	errExtract := regexp.MustCompile(`\(errno (\d+)\)`)
-	match := errExtract.FindStringSubmatch(err.Error())
-	var errNo string
-	if len(match) == 2 {
-		errNo = match[1]
-	}
-	return errNo == code
 }
