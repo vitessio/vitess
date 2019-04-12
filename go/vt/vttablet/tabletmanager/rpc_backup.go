@@ -84,8 +84,14 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	returnErr := mysqlctl.Backup(ctx, agent.Cnf, agent.MysqlDaemon, l, dir, name, concurrency, agent.hookExtraEnv())
 
 	if builtin != nil {
+
+		bgCtx := context.Background()
+		// Starting from here we won't be able to recover if we get stopped by a cancelled
+		// context. It is also possible that the context already timed out during the
+		// above call to Backup. Thus we use the background context to get through to the finish.
+
 		// change our type back to the original value
-		_, err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType)
+		_, err = topotools.ChangeType(bgCtx, agent.TopoServer, tablet.Alias, originalType)
 		if err != nil {
 			// failure in changing the topology type is probably worse,
 			// so returning that (we logged the snapshot error anyway)
@@ -96,7 +102,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		}
 
 		// let's update our internal state (start query service and other things)
-		if err := agent.refreshTablet(ctx, "after backup"); err != nil {
+		if err := agent.refreshTablet(bgCtx, "after backup"); err != nil {
 			return err
 		}
 	}
