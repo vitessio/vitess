@@ -503,10 +503,15 @@ func CreateVReplicationTable() []string {
   transaction_timestamp BIGINT(20) NOT NULL,
   state VARBINARY(100) NOT NULL,
   message VARBINARY(1000) DEFAULT NULL,
+  db_name VARBINARY(255) NOT NULL,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB`,
-		"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL",
 	}
+}
+
+// AlterVReplicationTable adds new columns to vreplication table
+func AlterVReplicationTable() []string {
+	return []string{"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL"}
 }
 
 // SetVReplicationState updates the state in the _vt.vreplication table.

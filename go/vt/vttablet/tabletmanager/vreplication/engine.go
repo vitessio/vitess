@@ -113,19 +113,31 @@ func (vre *Engine) executeFetchMaybeCreateTable(dbClient binlogplayer.DBClient, 
 	// If it's a bad table or db, it could be because _vt.vreplication wasn't created.
 	// In that case we can try creating it again.
 	merr, isSQLErr := err.(*mysql.SQLError)
-	if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb) {
+	if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb || merr.Num == mysql.ERBadFieldError) {
 		return qr, err
 	}
 
 	log.Info("Looks like _vt.vreplication table may not exist. Trying to recreate... ")
-	for _, query := range binlogplayer.CreateVReplicationTable() {
-		if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
-			log.Warningf("Failed to ensure _vt.vreplication table exists: %v", merr)
-			return nil, err
+	if merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb {
+		for _, query := range binlogplayer.CreateVReplicationTable() {
+			if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
+				log.Warningf("Failed to ensure _vt.vreplication table exists: %v", merr)
+				return nil, err
+			}
 		}
-		// TODO: for migration, update db_name column here
 	}
-
+	if merr.Num == mysql.ERBadFieldError {
+		log.Info("Adding column to table _vt.vreplication")
+		for _, query := range binlogplayer.AlterVReplicationTable() {
+			if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
+				merr, isSQLErr := err.(*mysql.SQLError)
+				if !isSQLErr || !(merr.Num == mysql.ERDupFieldName) {
+					log.Warningf("Failed to alter _vt.vreplication table: %v", merr)
+					return nil, err
+				}
+			}
+		}
+	}
 	return dbClient.ExecuteFetch(query, maxrows)
 }
 
@@ -141,6 +153,11 @@ func (vre *Engine) initAll() error {
 		// Handle Table not found.
 		if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERNoSuchTable {
 			log.Info("_vt.vreplication table not found. Will create it later if needed")
+			return nil
+		}
+		// Handle missing field
+		if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERBadFieldError {
+			log.Info("_vt.vreplication table found but is missing field db_name. Will add it later if needed")
 			return nil
 		}
 		return err
