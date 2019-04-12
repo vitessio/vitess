@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -72,26 +73,64 @@ const (
 	insertIgnore
 )
 
+// buildPlayerPlan builds a PlayerPlan from the input filter.
+// The filter is matched against the target schema. For every table matched,
+// a table-specific rule is built to be sent to the source. We don't send the
+// original rule to the source because it may not match the same tables as the
+// target.
 func buildPlayerPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string) (*PlayerPlan, error) {
 	plan := &PlayerPlan{
-		VStreamFilter: &binlogdatapb.Filter{
-			Rules: make([]*binlogdatapb.Rule, len(filter.Rules)),
-		},
-		TablePlans: make(map[string]*TablePlan),
+		VStreamFilter: &binlogdatapb.Filter{},
+		TargetTables:  make(map[string]*TablePlan),
+		TablePlans:    make(map[string]*TablePlan),
 	}
-	for i, rule := range filter.Rules {
-		if strings.HasPrefix(rule.Match, "/") {
-			plan.VStreamFilter.Rules[i] = rule
-			continue
+	for tableName := range tableKeys {
+		for _, rule := range filter.Rules {
+			switch {
+			case strings.HasPrefix(rule.Match, "/"):
+				expr := strings.Trim(rule.Match, "/")
+				result, err := regexp.MatchString(expr, tableName)
+				if err != nil {
+					return nil, err
+				}
+				if !result {
+					continue
+				}
+				sendRule := &binlogdatapb.Rule{
+					Match:  tableName,
+					Filter: buildQuery(tableName, rule.Filter),
+				}
+				plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, sendRule)
+				tablePlan := &TablePlan{
+					Name:     tableName,
+					SendRule: sendRule,
+				}
+				plan.TargetTables[tableName] = tablePlan
+				plan.TablePlans[tableName] = tablePlan
+			case rule.Match == tableName:
+				sendRule, tablePlan, err := buildTablePlan(rule, tableKeys)
+				if err != nil {
+					return nil, err
+				}
+				if _, ok := plan.TablePlans[sendRule.Match]; ok {
+					continue
+				}
+				plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, sendRule)
+				plan.TargetTables[tableName] = tablePlan
+				plan.TablePlans[sendRule.Match] = tablePlan
+			}
 		}
-		sendRule, tablePlan, err := buildTablePlan(rule, tableKeys)
-		if err != nil {
-			return nil, err
-		}
-		plan.VStreamFilter.Rules[i] = sendRule
-		plan.TablePlans[sendRule.Match] = tablePlan
 	}
 	return plan, nil
+}
+
+func buildQuery(tableName, filter string) string {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("select * from %v", sqlparser.NewTableIdent(tableName))
+	if filter != "" {
+		buf.Myprintf(" where in_keyrange(%v)", sqlparser.NewStrVal([]byte(filter)))
+	}
+	return buf.String()
 }
 
 func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string) (*binlogdatapb.Rule, *TablePlan, error) {
@@ -111,7 +150,11 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string) (*bi
 			return nil, nil, fmt.Errorf("unsupported qualifier for '*' expression: %v", sqlparser.String(expr))
 		}
 		sendRule.Filter = rule.Filter
-		return sendRule, &TablePlan{Name: rule.Match}, nil
+		tablePlan := &TablePlan{
+			Name:     rule.Match,
+			SendRule: sendRule,
+		}
+		return sendRule, tablePlan, nil
 	}
 
 	tpb := &tablePlanBuilder{
@@ -135,6 +178,7 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string) (*bi
 
 	sendRule.Filter = sqlparser.String(tpb.sendSelect)
 	tablePlan := tpb.generate(tableKeys)
+	tablePlan.SendRule = sendRule
 	return sendRule, tablePlan, nil
 }
 

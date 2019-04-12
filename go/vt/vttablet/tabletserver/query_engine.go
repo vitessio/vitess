@@ -58,10 +58,9 @@ import (
 // and track stats.
 type TabletPlan struct {
 	*planbuilder.Plan
-	Fields           []*querypb.Field
-	Rules            *rules.Rules
-	LegacyAuthorized *tableacl.ACLResult
-	Authorized       []*tableacl.ACLResult
+	Fields     []*querypb.Field
+	Rules      *rules.Rules
+	Authorized []*tableacl.ACLResult
 
 	mu         sync.Mutex
 	QueryCount int64
@@ -343,7 +342,6 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
-	plan.LegacyAuthorized = tableacl.Authorized(plan.TableName().String(), plan.PlanID.MinRole())
 	plan.buildAuthorized()
 	if plan.PlanID.IsSelect() {
 		if plan.FieldQuery != nil {
@@ -405,7 +403,6 @@ func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
-	plan.LegacyAuthorized = tableacl.Authorized(plan.TableName().String(), plan.PlanID.MinRole())
 	plan.buildAuthorized()
 	return plan, nil
 }
@@ -420,7 +417,6 @@ func (qe *QueryEngine) GetMessageStreamPlan(name string) (*TabletPlan, error) {
 	}
 	plan := &TabletPlan{Plan: splan}
 	plan.Rules = qe.queryRuleSources.FilterByPlan("stream from "+name, plan.PlanID, plan.TableName().String())
-	plan.LegacyAuthorized = tableacl.Authorized(plan.TableName().String(), plan.PlanID.MinRole())
 	plan.buildAuthorized()
 	return plan, nil
 }

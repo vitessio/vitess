@@ -560,12 +560,12 @@ func TestPlayerTypes(t *testing.T) {
 func TestPlayerDDL(t *testing.T) {
 	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
 	execStatements(t, []string{
-		"create table dummy(id int, primary key(id))",
-		fmt.Sprintf("create table %s.dummy(id int, primary key(id))", vrepldb),
+		"create table t1(id int, primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
-		"drop table dummy",
-		fmt.Sprintf("drop table %s.dummy", vrepldb),
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
 	env.SchemaEngine.Reload(context.Background())
 
@@ -580,23 +580,23 @@ func TestPlayerDDL(t *testing.T) {
 	// is a race between the DDLs and the schema loader of vstreamer.
 	// Root cause seems to be with MySQL where t1 shows up in information_schema before
 	// the actual table is created.
-	execStatements(t, []string{"insert into dummy values(1)"})
+	execStatements(t, []string{"insert into t1 values(1)"})
 	expectDBClientQueries(t, []string{
 		"begin",
-		"insert into dummy set id=1",
+		"insert into t1 set id=1",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
 
-	execStatements(t, []string{"create table t1(id int, primary key(id))"})
-	execStatements(t, []string{"drop table t1"})
+	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
+	execStatements(t, []string{"alter table t1 drop column val"})
 	expectDBClientQueries(t, []string{})
 	cancel()
 
 	cancel, id := startVReplication(t, filter, binlogdatapb.OnDDLAction_STOP, "")
-	execStatements(t, []string{"create table t1(id int, primary key(id))"})
+	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
 	pos1 := masterPosition(t)
-	execStatements(t, []string{"drop table t1"})
+	execStatements(t, []string{"alter table t1 drop column val"})
 	pos2 := masterPosition(t)
 	// The stop position must be the GTID of the first DDL
 	expectDBClientQueries(t, []string{
@@ -620,49 +620,39 @@ func TestPlayerDDL(t *testing.T) {
 	})
 	cancel()
 
-	execStatements(t, []string{fmt.Sprintf("create table %s.t2(id int, primary key(id))", vrepldb)})
+	execStatements(t, []string{fmt.Sprintf("alter table %s.t1 add column val2 varchar(128)", vrepldb)})
 	cancel, _ = startVReplication(t, filter, binlogdatapb.OnDDLAction_EXEC, "")
-	execStatements(t, []string{"create table t1(id int, primary key(id))"})
+	execStatements(t, []string{"alter table t1 add column val1 varchar(128)"})
 	expectDBClientQueries(t, []string{
-		"create table t1(id int, primary key(id))",
+		"alter table t1 add column val1 varchar(128)",
 		"/update _vt.vreplication set pos=",
 	})
-	execStatements(t, []string{"create table t2(id int, primary key(id))"})
+	execStatements(t, []string{"alter table t1 add column val2 varchar(128)"})
 	expectDBClientQueries(t, []string{
-		"create table t2(id int, primary key(id))",
+		"alter table t1 add column val2 varchar(128)",
 		"/update _vt.vreplication set state='Error'",
 	})
 	cancel()
 
-	// Don't test drop.
-	// MySQL rewrites them by uppercasing, which may be version specific.
 	execStatements(t, []string{
-		"drop table t1",
-		fmt.Sprintf("drop table %s.t1", vrepldb),
-		"drop table t2",
-		fmt.Sprintf("drop table %s.t2", vrepldb),
+		"alter table t1 drop column val1",
+		"alter table t1 drop column val2",
+		fmt.Sprintf("alter table %s.t1 drop column val1", vrepldb),
 	})
 
 	execStatements(t, []string{fmt.Sprintf("create table %s.t2(id int, primary key(id))", vrepldb)})
 	cancel, _ = startVReplication(t, filter, binlogdatapb.OnDDLAction_EXEC_IGNORE, "")
-	execStatements(t, []string{"create table t1(id int, primary key(id))"})
+	execStatements(t, []string{"alter table t1 add column val1 varchar(128)"})
 	expectDBClientQueries(t, []string{
-		"create table t1(id int, primary key(id))",
+		"alter table t1 add column val1 varchar(128)",
 		"/update _vt.vreplication set pos=",
 	})
-	execStatements(t, []string{"create table t2(id int, primary key(id))"})
+	execStatements(t, []string{"alter table t1 add column val2 varchar(128)"})
 	expectDBClientQueries(t, []string{
-		"create table t2(id int, primary key(id))",
+		"alter table t1 add column val2 varchar(128)",
 		"/update _vt.vreplication set pos=",
 	})
 	cancel()
-
-	execStatements(t, []string{
-		"drop table t1",
-		fmt.Sprintf("drop table %s.t1", vrepldb),
-		"drop table t2",
-		fmt.Sprintf("drop table %s.t2", vrepldb),
-	})
 }
 
 func TestPlayerStopPos(t *testing.T) {
@@ -692,7 +682,7 @@ func TestPlayerStopPos(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
 	startPos := masterPosition(t)
-	query := binlogplayer.CreateVReplicationStopped("test", bls, startPos)
+	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogplayer.BlpStopped)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -1051,8 +1041,8 @@ func TestPlayerBatching(t *testing.T) {
 	execStatements(t, []string{
 		"insert into t1 values(2, 'aaa')",
 		"insert into t1 values(3, 'aaa')",
-		"create table t2(id int, val varbinary(128), primary key(id))",
-		"drop table t2",
+		"alter table t1 add column val2 varbinary(128)",
+		"alter table t1 drop column val2",
 	})
 
 	// Release the lock.
@@ -1069,9 +1059,9 @@ func TestPlayerBatching(t *testing.T) {
 		"insert into t1 set id=3, val='aaa'",
 		"/update _vt.vreplication set pos=",
 		"commit",
-		"create table t2(id int, val varbinary(128), primary key(id))",
+		"alter table t1 add column val2 varbinary(128)",
 		"/update _vt.vreplication set pos=",
-		"/", // drop table is rewritten by mysql. Don't check.
+		"alter table t1 drop column val2",
 		"/update _vt.vreplication set pos=",
 	})
 }

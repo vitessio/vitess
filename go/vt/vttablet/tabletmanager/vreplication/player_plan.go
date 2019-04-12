@@ -27,12 +27,14 @@ import (
 // PlayerPlan is the execution plan for a player stream.
 type PlayerPlan struct {
 	VStreamFilter *binlogdatapb.Filter
+	TargetTables  map[string]*TablePlan
 	TablePlans    map[string]*TablePlan
 }
 
 // TablePlan is the execution plan for a table within a player stream.
 type TablePlan struct {
 	Name         string
+	SendRule     *binlogdatapb.Rule
 	PKReferences []string               `json:",omitempty"`
 	Insert       *sqlparser.ParsedQuery `json:",omitempty"`
 	Update       *sqlparser.ParsedQuery `json:",omitempty"`

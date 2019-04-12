@@ -177,17 +177,16 @@ function install_zookeeper() {
   local dist="$2"
 
   zk="zookeeper-$version"
-  wget "http://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
+  wget "https://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
   tar -xzf "$zk.tar.gz"
+  ant -f "$zk/build.xml" package
+  ant -f "$zk/zookeeper-contrib/zookeeper-contrib-fatjar/build.xml" jar
   mkdir -p lib
-  cp "$zk/contrib/fatjar/$zk-fatjar.jar" lib
-  # TODO(sougou): when version changes, see if we can drop the 'zip -d' hack to get the fatjars working.
-  #               If yes, also delete "zip" from the Dockerfile files and the manual build instructions again.
-  # 3.4.13 workaround: Delete META-INF files which should not be in there.
-  zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF'
+  cp "$zk/build/zookeeper-contrib/zookeeper-contrib-fatjar/zookeeper-dev-fatjar.jar" "lib/$zk-fatjar.jar"
+  zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF' || true # needed for >=3.4.10 <3.5
   rm -rf "$zk" "$zk.tar.gz"
 }
-zk_ver=3.4.13
+zk_ver=${ZK_VERSION:-3.4.14}
 install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
 
 
@@ -326,13 +325,13 @@ if [ "$BUILD_TESTS" == 1 ] ; then
     echo "MYSQL_FLAVOR environment variable not set. Using default: $MYSQL_FLAVOR"
   fi
   case "$MYSQL_FLAVOR" in
-    "MySQL56")
+    "MySQL56" | "MySQL80")
       myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
       [[ "$myversion" =~ Distrib\ 5\.[67] || "$myversion" =~ Ver\ 8\. ]] || fail "Couldn't find MySQL 5.6+ in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
       echo "Found MySQL 5.6+ installation in $VT_MYSQL_ROOT."
       ;;
 
-    "MariaDB")
+    "MariaDB" | "MariaDB103")
       myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
       [[ "$myversion" =~ MariaDB ]] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
       echo "Found MariaDB installation in $VT_MYSQL_ROOT."
@@ -364,7 +363,7 @@ if [ "$BUILD_TESTS" == 1 ] ; then
  echo "bootstrap finished - run 'source dev.env' in your shell before building."
 else
  echo
- echo "bootstrap finished - run 'source build.env' in your shell before building."    
+ echo "bootstrap finished - run 'source build.env' in your shell before building."
 fi
 
 

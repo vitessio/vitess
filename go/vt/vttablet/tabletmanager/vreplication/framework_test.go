@@ -70,10 +70,6 @@ func init() {
 func TestMain(m *testing.M) {
 	flag.Parse() // Do not remove this comment, import into google3 depends on it
 
-	if testing.Short() {
-		os.Exit(m.Run())
-	}
-
 	exitCode := func() int {
 		var err error
 		env, err = testenv.Init()

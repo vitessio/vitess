@@ -4,8 +4,8 @@ feature is turned on, each VTTablet master monitors the replication lag from
 the replicas, and based on the observed replication lag tries to rate-limit the
 received transactions to keep the replication lag under a configured limit.
 
-The decision of whether to throttle a transaction is done in the "BEGIN"
-statement rather than in the "COMMIT" statement to avoid having a transaction
+The decision of whether to throttle a transaction is done in the `BEGIN`
+statement rather than in the `COMMIT` statement to avoid having a transaction
 perform a lot of work just to eventually be throttled and potentially 
 rolled-back if the open-transaction timeout is exceeded.
 
@@ -38,5 +38,5 @@ the replication lag under the desired limit; as such the desired replication
 lag limit may occasionally be slightly violated.
 
 * Transactions are considered homogenous. There is currently no support
-for specifying how "expensive" a transaction is.
+for specifying how `expensive` a transaction is.
 

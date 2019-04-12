@@ -25,7 +25,7 @@ We usually check these kinds of things while skimming through `git diff --cached
     *   Look for files that shouldn't be checked in (temporary/generated files).
     *   Googlers only: Remove Google confidential info (e.g. internal URLs).
     *   Look for temporary code/comments you added while debugging.
-        *   Example: fmt.Println("AAAAAAAAAAAAAAAAAA")
+        *   Example: fmt.Println(`AAAAAAAAAAAAAAAAAA`)
     *   Look for inconsistencies in indentation.
         *   Use 2 spaces in everything except Go.
         *   In Go, just use goimports.

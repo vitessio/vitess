@@ -2103,7 +2103,7 @@ func commandGetPermissions(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 	p, err := wr.GetPermissions(ctx, tabletAlias)
 	if err == nil {
-		wr.Logger().Infof("%v", p.String()) // they can contain '%'
+		printJSON(wr.Logger(), p)
 	}
 	return err
 }
