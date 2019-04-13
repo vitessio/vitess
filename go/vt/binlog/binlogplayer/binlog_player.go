@@ -156,7 +156,6 @@ func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRa
 		arr, ok := generatedColumns[row[0].ToString()]
 		if !ok {
 			arr = make([]int64, 0, len(qr.Rows))
-			generatedColumns[row[0].ToString()] = arr
 		}
 		position, err := sqltypes.ToInt64(row[1])
 		if err != nil {
@@ -165,7 +164,7 @@ func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRa
 		log.Infof("DEBUG(acharis): building generatedColumns: %s %v", row[0].ToString(), position)
 		// we subtract 1 here because mysql indexes columns starting at 1
 		// but we want to use this to remove entries from 0-indexed arrays
-		arr = append(arr, position-1)
+		generatedColumns[row[0].ToString()] = append(arr, position-1)
 	}
 	blp.generatedColumns = generatedColumns
 	log.Infof("DEBUG(acharis): generatedColumns: %v", generatedColumns)
