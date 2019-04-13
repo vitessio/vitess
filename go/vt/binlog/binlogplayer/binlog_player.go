@@ -193,7 +193,6 @@ func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables 
 		arr, ok := generatedColumns[row[0].ToString()]
 		if !ok {
 			arr = make([]int64, 0, len(qr.Rows))
-			generatedColumns[row[0].ToString()] = arr
 		}
 		position, err := sqltypes.ToInt64(row[1])
 		if err != nil {
@@ -202,7 +201,7 @@ func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables 
 		log.Infof("DEBUG(acharis): building generatedColumns: %s %v", row[0].ToString(), position)
 		// we subtract 1 here because mysql indexes columns starting at 1
 		// but we want to use this to remove entries from 0-indexed arrays
-		arr = append(arr, position-1)
+		generatedColumns[row[0].ToString()] = append(arr, position-1)
 	}
 	log.Infof("DEBUG(acharis): generatedColumns: %v", generatedColumns)
 	blp.generatedColumns = generatedColumns
@@ -468,11 +467,12 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				return false, fmt.Errorf("binlog_player encountered an insert where InsertRows is not of type Values: %s", stmt.Sql)
 			}
 			// i think there will only ever be one row here in the binlog
-			for _, row := range values {
+			for j, row := range values {
 				for i := len(indexesToDrop) - 1; i >= 0; i-- {
 					idx = indexesToDrop[i]
 					row = append(row[:idx], row[idx+1:]...)
 				}
+				values[j] = row
 			}
 			sql = sqlparser.String(insert)
 		case binlogdatapb.BinlogTransaction_Statement_BL_UPDATE:
