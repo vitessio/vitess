@@ -87,7 +87,7 @@ Let's start by looking at the MySQL auto-increment feature:
 
 An early design was to use a single unsharded database and a table with an
 auto-increment value to generate new values. However, this has serious
-limitations, in particular throughtput, and storing one entry for each value in
+limitations, in particular throughput, and storing one entry for each value in
 that table, for no reason.
 
 So we decided instead to base sequences on a MySQL table, and use a single value
