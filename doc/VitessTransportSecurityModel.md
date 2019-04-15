@@ -55,7 +55,7 @@ When using gRPC transport, Vitess can use the usual TLS security features
   * grpc\_cert, grpc\_key: server cert and key to use.
   * grpc\_ca (optional): client cert chains to trust. If specified, the client
     must use a certificate signed by one ca in the provided file.
-* A Vitess go client can be configured with symetrical parameters to enable TLS:
+* A Vitess go client can be configured with symmetrical parameters to enable TLS:
   * ...\_grpc\_ca: list of server cert signers to trust.
   * ...\_grpc\_server\_name: name of the server cert to trust, instead of the
     hostname used to connect.
