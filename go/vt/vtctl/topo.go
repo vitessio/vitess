@@ -120,11 +120,12 @@ func commandTopoCat(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	}
 
 	var topologyDecoder TopologyDecoder
-	if *decodeProtoJson {
+	switch {
+	case *decodeProtoJson:
 		topologyDecoder = JsonTopologyDecoder{}
-	} else if *decodeProto {
+	case *decodeProto:
 		topologyDecoder = ProtoTopologyDecoder{}
-	} else {
+	default:
 		topologyDecoder = PlainTopologyDecoder{}
 	}
 
