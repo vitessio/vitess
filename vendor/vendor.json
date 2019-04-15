@@ -937,112 +937,148 @@
 			"revisionTime": "2016-07-29T07:16:56Z"
 		},
 		{
-			"checksumSHA1": "H81V2Jfwte/WYslbaG9ykrD1+Q8=",
+			"checksumSHA1": "DPkZT4nujrbAaKzqiWe+nmsNw2M=",
 			"path": "github.com/uber/jaeger-client-go",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
-			"checksumSHA1": "VGtI2lhUBiBj3XcEqL9oQfQMsz0=",
+			"checksumSHA1": "/PA9bYu1glNCL5ucsKj8s+NkkHc=",
 			"path": "github.com/uber/jaeger-client-go/config",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "KM5UXTWkHULmw0dDRNuk8ogWyGs=",
 			"path": "github.com/uber/jaeger-client-go/internal/baggage",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "tZqlcHV1XoLdZp9jfnydzsZAvYo=",
 			"path": "github.com/uber/jaeger-client-go/internal/baggage/remote",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "QB0L0GrzyMGQp6ivkkxp7a1DPsE=",
 			"path": "github.com/uber/jaeger-client-go/internal/spanlog",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "79HRO/+ekkpwqDB/OMiW+AHJtlE=",
 			"path": "github.com/uber/jaeger-client-go/internal/throttler",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "OVQDWFtFMs+NODe0F/S5kYViQco=",
 			"path": "github.com/uber/jaeger-client-go/internal/throttler/remote",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "tMP/vxbHwNAbOEaUhic5/meKfac=",
 			"path": "github.com/uber/jaeger-client-go/log",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "empqDwPkKUkGNeGHCu/EWoGI21o=",
 			"path": "github.com/uber/jaeger-client-go/rpcmetrics",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "+ffspyTBQLql2UiU6muvfWR/m1o=",
 			"path": "github.com/uber/jaeger-client-go/thrift",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "fMIQ4sJFCkqFYhXvvLKIlofqxvY=",
 			"path": "github.com/uber/jaeger-client-go/thrift-gen/agent",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "fRR2p+JAp7paApf32YuQuWU7yzY=",
 			"path": "github.com/uber/jaeger-client-go/thrift-gen/baggage",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "JZkMEOmiOFFEuGCsDOVLK5RzvMM=",
 			"path": "github.com/uber/jaeger-client-go/thrift-gen/jaeger",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "0teQUhTqTE1fLs+vbnTTzWOqdEQ=",
 			"path": "github.com/uber/jaeger-client-go/thrift-gen/sampling",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
-			"checksumSHA1": "Nx5witfz05BSO2YlFzh2Gno6bA0=",
+			"checksumSHA1": "jB+fvt3/iJYRDDp6+twGm5gGIXQ=",
 			"path": "github.com/uber/jaeger-client-go/thrift-gen/zipkincore",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "UlW+AcyeItWM0x1W4vT9hbUiOJs=",
 			"path": "github.com/uber/jaeger-client-go/transport",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "DKwwIk9vq53IKO7RKccat9cnqeo=",
 			"path": "github.com/uber/jaeger-client-go/utils",
-			"revision": "3231c1a9c59534e968cd021da5e283cbd0171397",
-			"revisionTime": "2019-02-03T04:16:52Z"
+			"revision": "2f47546e3facd43297739439600bcf43f44cce5d",
+			"revisionTime": "2019-03-24T18:29:16Z",
+			"version": "v2.16.0",
+			"versionExact": "v2.16.0"
 		},
 		{
 			"checksumSHA1": "gF1WPb3/R8RoZw/wqEQmkwntrQc=",
 			"path": "github.com/uber/jaeger-lib/metrics",
-			"revision": "d036253de8f5b698150d81b922486f1e8e7628ec",
-			"revisionTime": "2019-01-22T22:26:57Z"
+			"revision": "0e30338a695636fe5bcf7301e8030ce8dd2a8530",
+			"revisionTime": "2018-12-17T19:14:06Z",
+			"version": "v2.0.0",
+			"versionExact": "v2.0.0"
 		},
 		{
 			"checksumSHA1": "8Kj0VH496b0exuyv4wAF4CXa7Y4=",
@@ -1333,52 +1369,68 @@
 			"revisionTime": "2016-12-12T20:09:13Z"
 		},
 		{
-			"checksumSHA1": "IO1eKBGX7mKwOE+t1fzdYAHCZmQ=",
+			"checksumSHA1": "buWXkeU6VNtym88sZ7lKJvsCVXk=",
 			"path": "google.golang.org/appengine",
-			"revision": "2d2298565d5a399bdfec98dbc259d6393e3cf8ba",
-			"revisionTime": "2019-02-01T18:56:05Z"
+			"revision": "54a98f90d1c46b7731eb8fb305d2a321c30ef610",
+			"revisionTime": "2019-02-15T20:43:44Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
 			"checksumSHA1": "61EFkyXUswt3Su1R/C8JHJWF+jw=",
 			"path": "google.golang.org/appengine/internal",
-			"revision": "2d2298565d5a399bdfec98dbc259d6393e3cf8ba",
-			"revisionTime": "2019-02-01T18:56:05Z"
+			"revision": "54a98f90d1c46b7731eb8fb305d2a321c30ef610",
+			"revisionTime": "2019-02-15T20:43:44Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
 			"checksumSHA1": "GyzSDzUj78G9nyNhmlFGg5IufHc=",
 			"path": "google.golang.org/appengine/internal/app_identity",
-			"revision": "2d2298565d5a399bdfec98dbc259d6393e3cf8ba",
-			"revisionTime": "2019-02-01T18:56:05Z"
+			"revision": "54a98f90d1c46b7731eb8fb305d2a321c30ef610",
+			"revisionTime": "2019-02-15T20:43:44Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
 			"checksumSHA1": "5PakGXEgSbyFptkhGO8MnGf7uH0=",
 			"path": "google.golang.org/appengine/internal/base",
-			"revision": "2d2298565d5a399bdfec98dbc259d6393e3cf8ba",
-			"revisionTime": "2019-02-01T18:56:05Z"
+			"revision": "54a98f90d1c46b7731eb8fb305d2a321c30ef610",
+			"revisionTime": "2019-02-15T20:43:44Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
 			"checksumSHA1": "3DZ+Ah5hFQb1/nh1+li2VE+kkfk=",
 			"path": "google.golang.org/appengine/internal/datastore",
-			"revision": "2d2298565d5a399bdfec98dbc259d6393e3cf8ba",
-			"revisionTime": "2019-02-01T18:56:05Z"
+			"revision": "54a98f90d1c46b7731eb8fb305d2a321c30ef610",
+			"revisionTime": "2019-02-15T20:43:44Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
 			"checksumSHA1": "HJQ4JM9YWfwIe4vmAgXC7J/1T3E=",
 			"path": "google.golang.org/appengine/internal/log",
-			"revision": "2d2298565d5a399bdfec98dbc259d6393e3cf8ba",
-			"revisionTime": "2019-02-01T18:56:05Z"
+			"revision": "54a98f90d1c46b7731eb8fb305d2a321c30ef610",
+			"revisionTime": "2019-02-15T20:43:44Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
 			"checksumSHA1": "rPcVt7Td1StpB6Z9DiShhu753PM=",
 			"path": "google.golang.org/appengine/internal/modules",
-			"revision": "2d2298565d5a399bdfec98dbc259d6393e3cf8ba",
-			"revisionTime": "2019-02-01T18:56:05Z"
+			"revision": "54a98f90d1c46b7731eb8fb305d2a321c30ef610",
+			"revisionTime": "2019-02-15T20:43:44Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
 			"checksumSHA1": "hApgRLSl7w9XG2waJxdH/o0A398=",
 			"path": "google.golang.org/appengine/internal/remote_api",
-			"revision": "2d2298565d5a399bdfec98dbc259d6393e3cf8ba",
-			"revisionTime": "2019-02-01T18:56:05Z"
+			"revision": "54a98f90d1c46b7731eb8fb305d2a321c30ef610",
+			"revisionTime": "2019-02-15T20:43:44Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
 			"checksumSHA1": "MgYFT27I9gfAtSVBpGVqkCYOj3U=",
