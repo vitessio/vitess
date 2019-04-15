@@ -17,6 +17,7 @@
 package io.vitess.client.grpc;
 
 import io.grpc.CallCredentials;
+import io.grpc.ClientInterceptor;
 import io.grpc.LoadBalancer;
 import io.grpc.NameResolver;
 import io.grpc.netty.GrpcSslContexts;
@@ -52,16 +53,18 @@ import javax.net.ssl.SSLException;
 public class GrpcClientFactory implements RpcClientFactory {
 
   private RetryingInterceptorConfig config;
+  private final boolean useTracing;
   private CallCredentials callCredentials;
   private LoadBalancer.Factory loadBalancerFactory;
   private NameResolver.Factory nameResolverFactory;
 
   public GrpcClientFactory() {
-    this(RetryingInterceptorConfig.noOpConfig());
+    this(RetryingInterceptorConfig.noOpConfig(), true);
   }
 
-  public GrpcClientFactory(RetryingInterceptorConfig config) {
+  public GrpcClientFactory(RetryingInterceptorConfig config, boolean useTracing) {
     this.config = config;
+    this.useTracing = useTracing;
   }
 
   public GrpcClientFactory setCallCredentials(CallCredentials value) {
@@ -89,11 +92,10 @@ public class GrpcClientFactory implements RpcClientFactory {
    */
   @Override
   public RpcClient create(Context ctx, String target) {
-    ClientTracingInterceptor tracingInterceptor = new ClientTracingInterceptor();
-
+    ClientInterceptor[] interceptors = getClientInterceptors();
     NettyChannelBuilder channel = channelBuilder(target)
         .negotiationType(NegotiationType.PLAINTEXT)
-        .intercept(new RetryingInterceptor(config), tracingInterceptor);
+        .intercept(interceptors);
     if (loadBalancerFactory != null) {
       channel.loadBalancerFactory(loadBalancerFactory);
     }
@@ -103,6 +105,18 @@ public class GrpcClientFactory implements RpcClientFactory {
     return callCredentials != null
         ? new GrpcClient(channel.build(), callCredentials, ctx)
         : new GrpcClient(channel.build(), ctx);
+  }
+
+  private ClientInterceptor[] getClientInterceptors() {
+    RetryingInterceptor retryingInterceptor = new RetryingInterceptor(config);
+    ClientInterceptor[] interceptors;
+    if (useTracing) {
+      ClientTracingInterceptor tracingInterceptor = new ClientTracingInterceptor();
+      interceptors = new ClientInterceptor[]{retryingInterceptor, tracingInterceptor};
+    } else {
+      interceptors = new ClientInterceptor[]{retryingInterceptor};
+    }
+    return interceptors;
   }
 
   /**
@@ -183,11 +197,11 @@ public class GrpcClientFactory implements RpcClientFactory {
       throw new RuntimeException(exc);
     }
 
-    ClientTracingInterceptor tracingInterceptor = new ClientTracingInterceptor();
+    ClientInterceptor[] interceptors = getClientInterceptors();
 
     return new GrpcClient(
         channelBuilder(target).negotiationType(NegotiationType.TLS).sslContext(sslContext)
-            .intercept(new RetryingInterceptor(config), tracingInterceptor).build(), ctx);
+            .intercept(interceptors).build(), ctx);
   }
 
   /**

@@ -192,15 +192,17 @@ public class VitessVTGateManager {
                                                 VitessConnection connection) {
     final Context context = connection.createContext(connection.getTimeout());
     RetryingInterceptorConfig retryingConfig = getRetryingInterceptorConfig(connection);
+    GrpcClientFactory grpcClientFactory =
+        new GrpcClientFactory(retryingConfig, connection.getUseTracing());
     if (connection.getUseSSL()) {
       TlsOptions tlsOptions = getTlsOptions(connection);
-      RpcClient rpcClient = new GrpcClientFactory(retryingConfig)
+      RpcClient rpcClient = grpcClientFactory
           .createTls(context, hostInfo.toString(), tlsOptions);
       return new RefreshableVTGateConnection(rpcClient,
           tlsOptions.getKeyStore().getPath(),
           tlsOptions.getTrustStore().getPath());
     } else {
-      RpcClient client = new GrpcClientFactory(retryingConfig).create(context, hostInfo.toString());
+      RpcClient client = grpcClientFactory.create(context, hostInfo.toString());
       return new VTGateConnection(client);
     }
   }

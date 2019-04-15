@@ -43,7 +43,7 @@ import org.mockito.Mockito;
 
 public class ConnectionPropertiesTest {
 
-  private static final int NUM_PROPS = 39;
+  private static final int NUM_PROPS = 40;
 
   @Test
   public void testReflection() throws Exception {
@@ -85,6 +85,7 @@ public class ConnectionPropertiesTest {
     assertEquals("useAffectedRows", true, props.getUseAffectedRows());
     assertEquals("refreshConnection", false, props.getRefreshConnection());
     assertEquals("refreshSeconds", 60, props.getRefreshSeconds());
+    assertEquals("useTracing", true, props.getUseTracing());
   }
 
   @Test
@@ -104,6 +105,7 @@ public class ConnectionPropertiesTest {
     info.setProperty("executeType", Constants.QueryExecuteType.STREAM.name());
     info.setProperty("twopcEnabled", "yes");
     info.setProperty("includedFields", Query.ExecuteOptions.IncludedFields.TYPE_ONLY.name());
+    info.setProperty("useTracing", "false");
     info.setProperty(Constants.Property.TABLET_TYPE, Topodata.TabletType.BACKUP.name());
 
     props.initializeProperties(info);
@@ -126,6 +128,7 @@ public class ConnectionPropertiesTest {
         props.getIncludedFields());
     assertEquals("includedFieldsCache", false, props.isIncludeAllFields());
     assertEquals("tabletType", Topodata.TabletType.BACKUP, props.getTabletType());
+    assertEquals("useTracing", false, props.getUseTracing());
   }
 
   @Test

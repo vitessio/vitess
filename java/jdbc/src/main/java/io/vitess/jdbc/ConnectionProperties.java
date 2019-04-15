@@ -247,6 +247,11 @@ public class ConnectionProperties {
           + "setQueryTimeout",
       Constants.DEFAULT_TIMEOUT);
 
+  private BooleanConnectionProperty useTracing = new BooleanConnectionProperty(
+      "useTracing",
+      "Pass on OpenTracing span ids when communicating with Vitess",
+      true);
+
   // Caching of some hot properties to avoid casting over and over
   private Topodata.TabletType tabletTypeCache;
   private Query.ExecuteOptions.IncludedFields includedFieldsCache;
@@ -582,6 +587,14 @@ public class ConnectionProperties {
 
   public void setTimeout(long timeout) {
     this.timeout.setValue(timeout);
+  }
+
+  public boolean getUseTracing() {
+    return useTracing.getValueAsBoolean();
+  }
+
+  public void setUseTracing(boolean useTracing) {
+    this.useTracing.setValue(useTracing);
   }
 
   public String getTarget() {
