@@ -56,9 +56,9 @@ type CacheService interface {
 	// for using with CAS. Gets returns a CAS identifier with the item. If
 	// the item's CAS value has changed since you Gets'ed it, it will not be stored.
 	Gets(keys ...string) (results []Result, err error)
-	// Set set the value with specified cache key.
+	// Set sets the value with specified cache key.
 	Set(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error)
-	// Add store the value only if it does not already exist.
+	// Add stores the value only if it does not already exist.
 	Add(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error)
 	// Replace replaces the value, only if the value already exists,
 	// for the specified cache key.
@@ -69,7 +69,7 @@ type CacheService interface {
 	Prepend(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error)
 	// Cas stores the value only if no one else has updated the data since you read it last.
 	Cas(key string, flags uint16, timeout uint64, value []byte, cas uint64) (stored bool, err error)
-	// Delete delete the value for the specified cache key.
+	// Delete deletes the value for the specified cache key.
 	Delete(key string) (deleted bool, err error)
 	// FlushAll purges the entire cache.
 	FlushAll() (err error)
