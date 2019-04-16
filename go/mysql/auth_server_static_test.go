@@ -184,7 +184,7 @@ func hupTestWithRotation(t *testing.T, tmpFile *os.File, oldStr, newStr string) 
 		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
 	}
 
-	time.Sleep(20 * time.Millisecond) // wait for signal handler
+	time.Sleep(100 * time.Millisecond) // wait for signal handler
 
 	if aStatic.Entries[oldStr] != nil {
 		t.Fatalf("Should not have old %s after config reload", oldStr)
