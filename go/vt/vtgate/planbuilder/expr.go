@@ -154,7 +154,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			switch {
 			// If it's last_insert_id, ensure it's a single unsharded route.
 			case node.Name.EqualString("last_insert_id"):
-				if rb, isRoute := pb.bldr.(*route); !isRoute || rb.ERoute.Keyspace.Sharded {
+				if rb, isRoute := pb.bldr.(*route); !isRoute || !rb.removeShardedOptions() {
 					return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
 				}
 			}
@@ -169,8 +169,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 	highestRoute, _ := highestOrigin.(*route)
 	for _, sqi := range subqueries {
 		subroute, _ := sqi.bldr.(*route)
-		if highestRoute != nil && subroute != nil && highestRoute.SubqueryCanMerge(pb, subroute) {
-			subroute.Redirect = highestRoute
+		if highestRoute != nil && subroute != nil && highestRoute.MergeSubquery(pb, subroute) {
 			continue
 		}
 		if sqi.origin != nil {
@@ -241,14 +240,17 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func (pb *primitiveBuilder) validateSubquerySamePlan(nodes ...sqlparser.SQLNode) bool {
+func (pb *primitiveBuilder) validateUnshardedRoute(nodes ...sqlparser.SQLNode) bool {
 	var keyspace string
 	if rb, ok := pb.bldr.(*route); ok {
-		keyspace = rb.ERoute.Keyspace.Name
+		keyspace = rb.routeOptions[0].ERoute.Keyspace.Name
+	} else {
+		// This code is unreachable because the caller checks.
+		return false
 	}
-	samePlan := true
 
 	for _, node := range nodes {
+		samePlan := true
 		inSubQuery := false
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch nodeType := node.(type) {
@@ -269,7 +271,7 @@ func (pb *primitiveBuilder) validateSubquerySamePlan(nodes ...sqlparser.SQLNode)
 					samePlan = false
 					return false, errors.New("dummy")
 				}
-				if innerRoute.ERoute.Keyspace.Name != keyspace {
+				if !innerRoute.removeOptionsWithUnmatchedKeyspace(keyspace) {
 					samePlan = false
 					return false, errors.New("dummy")
 				}
@@ -287,7 +289,7 @@ func (pb *primitiveBuilder) validateSubquerySamePlan(nodes ...sqlparser.SQLNode)
 					samePlan = false
 					return false, errors.New("dummy")
 				}
-				if innerRoute.ERoute.Keyspace.Name != keyspace {
+				if !innerRoute.removeOptionsWithUnmatchedKeyspace(keyspace) {
 					samePlan = false
 					return false, errors.New("dummy")
 				}

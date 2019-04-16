@@ -59,12 +59,6 @@ type symtab struct {
 
 	// singleRoute is set only if all the symbols in
 	// the symbol table are part of the same route.
-	// The route is set at creation time to be the
-	// the same as the route it was built for. As
-	// symbols are added through Merge, the route
-	// is validated against the newer symbols. If any
-	// of them have a different route, the value is
-	// set to nil.
 	singleRoute *route
 
 	ResultColumns []*resultColumn
@@ -90,54 +84,64 @@ func newSymtabWithRoute(rb *route) *symtab {
 	}
 }
 
-// AddVindexTable creates a table from a vindex table
-// and adds it to symtab.
-func (st *symtab) AddVindexTable(alias sqlparser.TableName, vindexTable *vindexes.Table, rb *route) error {
+// AddVSchemaTable takes a list of vschema tables as input and
+// creates a table with multiple route options. It returns a
+// list of vindex maps, one for each input.
+func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vindexes.Table, rb *route) (vindexMaps []map[*column]vindexes.Vindex, err error) {
 	t := &table{
-		alias:           alias,
-		origin:          rb,
-		vindexTable:     vindexTable,
-		isAuthoritative: vindexTable.ColumnListAuthoritative,
+		alias:  alias,
+		origin: rb,
 	}
 
-	for _, col := range vindexTable.Columns {
-		t.addColumn(col.Name, &column{
-			origin: rb,
-			st:     st,
-			typ:    col.Type,
-		})
-	}
+	for _, vst := range vschemaTables {
+		// If any input is authoritative, we make the table
+		// authoritative.
+		// TODO(sougou): vschema builder should validate that authoritative columns match.
+		if vst.ColumnListAuthoritative {
+			t.isAuthoritative = true
+		}
+		vindexMap := make(map[*column]vindexes.Vindex)
+		vindexMaps = append(vindexMaps, vindexMap)
 
-	for _, cv := range vindexTable.ColumnVindexes {
-		for i, cvcol := range cv.Columns {
-			var vindex vindexes.Vindex
-			if i == 0 {
-				// For now, only the first column is used for vindex Map functions.
-				vindex = cv.Vindex
-			}
-			lowered := cvcol.Lowered()
-			if col, ok := t.columns[lowered]; ok {
-				col.Vindex = vindex
-				continue
-			}
-			t.addColumn(cvcol, &column{
+		for _, col := range vst.Columns {
+			t.addColumn(col.Name, &column{
 				origin: rb,
 				st:     st,
-				Vindex: vindex,
+				typ:    col.Type,
 			})
 		}
-	}
 
-	if ai := vindexTable.AutoIncrement; ai != nil {
-		lowered := ai.Column.Lowered()
-		if _, ok := t.columns[lowered]; !ok {
-			t.addColumn(ai.Column, &column{
-				origin: rb,
-				st:     st,
-			})
+		for _, cv := range vst.ColumnVindexes {
+			for i, cvcol := range cv.Columns {
+				col, ok := t.columns[cvcol.Lowered()]
+				if !ok {
+					col = &column{
+						origin: rb,
+						st:     st,
+					}
+					t.addColumn(cvcol, col)
+				}
+				if i == 0 {
+					// For now, only the first column is used for vindex Map functions.
+					vindexMap[col] = cv.Vindex
+				}
+			}
 		}
+
+		if ai := vst.AutoIncrement; ai != nil {
+			if _, ok := t.columns[ai.Column.Lowered()]; !ok {
+				t.addColumn(ai.Column, &column{
+					origin: rb,
+					st:     st,
+				})
+			}
+		}
+
 	}
-	return st.AddTable(t)
+	if err := st.AddTable(t); err != nil {
+		return nil, err
+	}
+	return vindexMaps, nil
 }
 
 // Merge merges the new symtab into the current one.
@@ -216,17 +220,6 @@ func (st *symtab) FindTable(tname sqlparser.TableName) (*table, error) {
 		return nil, fmt.Errorf("table %v not found", sqlparser.String(tname))
 	}
 	return t, nil
-}
-
-// ClearVindexes removes the Column Vindexes from the aliases signifying
-// that they cannot be used to make routing improvements. This is
-// called if a primitive is in the RHS of a LEFT JOIN.
-func (st *symtab) ClearVindexes() {
-	for _, t := range st.tables {
-		for _, c := range t.columns {
-			c.Vindex = nil
-		}
-	}
 }
 
 // SetResultColumns sets the result columns.
@@ -398,26 +391,6 @@ func ResultFromNumber(rcs []*resultColumn, val *sqlparser.SQLVal) (int, error) {
 	return int(num - 1), nil
 }
 
-// Vindex returns the vindex if the expression is a plain column reference
-// that is part of the specified route, and has an associated vindex.
-func (st *symtab) Vindex(expr sqlparser.Expr, scope *route) vindexes.Vindex {
-	col, ok := expr.(*sqlparser.ColName)
-	if !ok {
-		return nil
-	}
-	if col.Metadata == nil {
-		// Find will set the Metadata.
-		if _, _, err := st.Find(col); err != nil {
-			return nil
-		}
-	}
-	c := col.Metadata.(*column)
-	if c.Origin() != scope {
-		return nil
-	}
-	return c.Vindex
-}
-
 // ResolveSymbols resolves all column references against symtab.
 // This makes sure that they all have their Metadata initialized.
 // If a symbol cannot be resolved or if the expression contains
@@ -445,7 +418,6 @@ type table struct {
 	columnNames     []sqlparser.ColIdent
 	isAuthoritative bool
 	origin          builder
-	vindexTable     *vindexes.Table
 }
 
 func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
@@ -474,7 +446,6 @@ func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
 type column struct {
 	origin builder
 	st     *symtab
-	Vindex vindexes.Vindex
 	typ    querypb.Type
 	colnum int
 }

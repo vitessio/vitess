@@ -102,32 +102,48 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// build a route primitive that has the subquery in its
 		// FROM clause. This allows for other constructs to be
 		// later pushed into it.
-		table := &vindexes.Table{
-			Keyspace: subroute.ERoute.Keyspace,
-		}
-		for _, rc := range subroute.ResultColumns() {
-			if rc.column.Vindex == nil {
-				continue
+		rb, st := newRoute(&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})})
+
+		// The subquery needs to be represented as a new logical table in the symtab.
+		// The new route will inherit the routeOptions of the underlying subquery.
+		// For this, we first build new vschema tables based on the columns returned
+		// by the subquery, and re-expose possible vindexes. When added to the symtab,
+		// a new set of column references will be generated against the new tables,
+		// and those vindex maps will be returned. They have to replace the old vindex
+		// maps of the inherited route options.
+		vschemaTables := make([]*vindexes.Table, 0, len(subroute.routeOptions))
+		for _, ro := range subroute.routeOptions {
+			vst := &vindexes.Table{
+				Keyspace: ro.ERoute.Keyspace,
 			}
-			// Check if a colvindex of the same name already exists.
-			// Dups are not allowed in subqueries in this situation.
-			for _, colVindex := range table.ColumnVindexes {
-				if colVindex.Columns[0].Equal(rc.alias) {
-					return fmt.Errorf("duplicate column aliases: %v", rc.alias)
+			vschemaTables = append(vschemaTables, vst)
+			for _, rc := range subroute.ResultColumns() {
+				vindex, ok := ro.vindexes[rc.column]
+				if !ok {
+					continue
 				}
+				// Check if a colvindex of the same name already exists.
+				// Dups are not allowed in subqueries in this situation.
+				for _, colVindex := range vst.ColumnVindexes {
+					if colVindex.Columns[0].Equal(rc.alias) {
+						return fmt.Errorf("duplicate column aliases: %v", rc.alias)
+					}
+				}
+				vst.ColumnVindexes = append(vst.ColumnVindexes, &vindexes.ColumnVindex{
+					Columns: []sqlparser.ColIdent{rc.alias},
+					Vindex:  vindex,
+				})
 			}
-			table.ColumnVindexes = append(table.ColumnVindexes, &vindexes.ColumnVindex{
-				Columns: []sqlparser.ColIdent{rc.alias},
-				Vindex:  rc.column.Vindex,
-			})
 		}
-		rb, st := newRoute(
-			&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
-			subroute.ERoute,
-			subroute.condition,
-		)
-		// AddVindexTable can never fail because symtab is empty.
-		_ = st.AddVindexTable(sqlparser.TableName{Name: tableExpr.As}, table, rb)
+		vindexMaps, err := st.AddVSchemaTable(sqlparser.TableName{Name: tableExpr.As}, vschemaTables, rb)
+		if err != nil {
+			return err
+		}
+		for i, ro := range subroute.routeOptions {
+			ro.rb = rb
+			ro.vindexes = vindexMaps[i]
+		}
+		rb.routeOptions = subroute.routeOptions
 		subroute.Redirect = rb
 		pb.bldr, pb.st = rb, st
 		return nil
@@ -148,13 +164,16 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		if err != nil {
 			return err
 		}
-		rb, st := newRoute(sel, nil, nil)
-		rb.ERoute = engine.NewSimpleRoute(engine.SelectDBA, ks)
+		rb, st := newRoute(sel)
+		rb.routeOptions = []*routeOption{{
+			rb:     rb,
+			ERoute: engine.NewSimpleRoute(engine.SelectDBA, ks),
+		}}
 		pb.bldr, pb.st = rb, st
 		return nil
 	}
 
-	table, vindex, _, destTableType, destTarget, err := pb.vschema.FindTableOrVindex(tableName)
+	vschemaTables, vindex, _, destTableType, destTarget, err := pb.vschema.FindTablesOrVindex(tableName)
 	if err != nil {
 		return err
 	}
@@ -163,29 +182,36 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		return nil
 	}
 
-	rb, st := newRoute(sel, nil, nil)
+	rb, st := newRoute(sel)
 	pb.bldr, pb.st = rb, st
-	// AddVindexTable can never fail because symtab is empty.
-	_ = st.AddVindexTable(alias, table, rb)
-
-	if !table.Keyspace.Sharded {
-		rb.ERoute = engine.NewSimpleRoute(engine.SelectUnsharded, table.Keyspace)
-		return nil
+	vindexMaps, err := st.AddVSchemaTable(alias, vschemaTables, rb)
+	if err != nil {
+		return err
 	}
-	if table.Pinned == nil {
-		rb.ERoute = engine.NewSimpleRoute(engine.SelectScatter, table.Keyspace)
-		rb.ERoute.TargetDestination = destTarget
-		rb.ERoute.TargetTabletType = destTableType
-
-		return nil
+	for i, vst := range vschemaTables {
+		var eroute *engine.Route
+		switch {
+		case !vst.Keyspace.Sharded:
+			eroute = engine.NewSimpleRoute(engine.SelectUnsharded, vst.Keyspace)
+		case vst.Pinned == nil:
+			eroute = engine.NewSimpleRoute(engine.SelectScatter, vst.Keyspace)
+			eroute.TargetDestination = destTarget
+			eroute.TargetTabletType = destTableType
+		default:
+			// Pinned tables have their keyspace ids already assigned.
+			// Use the Binary vindex, which is the identity function
+			// for keyspace id. Currently only dual tables are pinned.
+			eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vst.Keyspace)
+			eroute.Vindex, _ = vindexes.NewBinary("binary", nil)
+			eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vst.Pinned)}}
+		}
+		rb.routeOptions = append(rb.routeOptions, &routeOption{
+			rb:           rb,
+			vschemaTable: vst,
+			vindexes:     vindexMaps[i],
+			ERoute:       eroute,
+		})
 	}
-	// Pinned tables have their keyspace ids already assigned.
-	// Use the Binary vindex, which is the identity function
-	// for keyspace id. Currently only dual tables are pinned.
-	eRoute := engine.NewSimpleRoute(engine.SelectEqualUnique, table.Keyspace)
-	eRoute.Vindex, _ = vindexes.NewBinary("binary", nil)
-	eRoute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, table.Pinned)}}
-	rb.ERoute = eRoute
 	return nil
 }
 
@@ -225,49 +251,44 @@ func convertToLeftJoin(ajoin *sqlparser.JoinTableExpr) {
 }
 
 func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
-	lRoute, leftIsRoute := pb.bldr.(*route)
-	rRoute, rightIsRoute := rpb.bldr.(*route)
-	if leftIsRoute && rightIsRoute {
-		// If both are routes, they have an opportunity
-		// to merge into one.
-		if lRoute.ERoute.Keyspace.Name != rRoute.ERoute.Keyspace.Name {
-			goto nomerge
-		}
-		// We don't have to check on SelectNext because the syntax
-		// doesn't allow joins.
-		switch lRoute.ERoute.Opcode {
-		case engine.SelectUnsharded:
-			if rRoute.ERoute.Opcode == engine.SelectUnsharded {
-				return pb.mergeRoutes(rpb, ajoin)
-			}
-			return errIntermixingUnsupported
-		case engine.SelectDBA:
-			if rRoute.ERoute.Opcode == engine.SelectDBA {
-				return pb.mergeRoutes(rpb, ajoin)
-			}
-			return errIntermixingUnsupported
-		}
-
-		// Both route are sharded routes. For ',' joins (ajoin==nil), don't
-		// analyze mergeability.
-		if ajoin == nil {
-			goto nomerge
-		}
-
-		// Both route are sharded routes. Analyze join condition for merging.
-		for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
-			if pb.isSameRoute(rpb, filter) {
-				return pb.mergeRoutes(rpb, ajoin)
-			}
-		}
-
-		// Both l & r routes point to the same shard.
-		if lRoute.isSameShardedRoute(rRoute) == nil {
-			return pb.mergeRoutes(rpb, ajoin)
-		}
+	// Merge the symbol tables. In the case of a left join, we have to
+	// ideally create new symbols that originate from the join primitive.
+	// However, this is not worth it for now, because the Push functions
+	// verify that only valid constructs are passed through in case of left join.
+	err := pb.st.Merge(rpb.st)
+	if err != nil {
+		return err
 	}
 
-nomerge:
+	lRoute, leftIsRoute := pb.bldr.(*route)
+	rRoute, rightIsRoute := rpb.bldr.(*route)
+	if !leftIsRoute || !rightIsRoute {
+		return newJoin(pb, rpb, ajoin)
+	}
+
+	// Try merging the routes.
+	var mergedRouteOptions []*routeOption
+outer:
+	for _, lro := range lRoute.routeOptions {
+		for _, rro := range rRoute.routeOptions {
+			if lro.JoinCanMerge(pb, rro, ajoin) {
+				lro.vschemaTable = nil
+				lro.substitutions = append(lro.substitutions, rro.substitutions...)
+				// Add RHS vindexes only if it's not a left join.
+				if ajoin == nil || ajoin.Join != sqlparser.LeftJoinStr {
+					for c, v := range rro.vindexes {
+						lro.vindexes[c] = v
+					}
+				}
+				mergedRouteOptions = append(mergedRouteOptions, lro)
+				continue outer
+			}
+		}
+	}
+	if len(mergedRouteOptions) != 0 {
+		return pb.mergeRoutes(rpb, mergedRouteOptions, ajoin)
+	}
+
 	return newJoin(pb, rpb, ajoin)
 }
 
@@ -275,7 +296,7 @@ nomerge:
 // see if the primitive can be improved. The operation can fail if
 // the expression contains a non-pushable subquery. ajoin can be nil
 // if the join is on a ',' operator.
-func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
+func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, routeOptions []*routeOption, ajoin *sqlparser.JoinTableExpr) error {
 	lRoute := pb.bldr.(*route)
 	rRoute := rpb.bldr.(*route)
 	sel := lRoute.Select.(*sqlparser.Select)
@@ -285,17 +306,14 @@ func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, ajoin *sqlparser.
 		sel.From = append(sel.From, rhsSel.From...)
 	} else {
 		sel.From = sqlparser.TableExprs{ajoin}
-		if ajoin.Join == sqlparser.LeftJoinStr {
-			rpb.st.ClearVindexes()
-		}
 	}
 	// Redirect before merging the symtabs. Merge will use Redirect
 	// to check if rRoute matches lRoute.
 	rRoute.Redirect = lRoute
-	err := pb.st.Merge(rpb.st)
-	if err != nil {
-		return err
-	}
+	// Since the routes have merged, set st.singleRoute to point at
+	// the merged route.
+	pb.st.singleRoute = lRoute
+	lRoute.routeOptions = routeOptions
 	if ajoin == nil {
 		return nil
 	}
@@ -306,42 +324,7 @@ func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, ajoin *sqlparser.
 	ajoin.Condition.On = expr
 	pb.addPullouts(pullouts)
 	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
-		lRoute.UpdatePlan(pb, filter)
+		lRoute.UpdatePlans(pb, filter)
 	}
 	return nil
-}
-
-// isSameRoute returns true if the join constraint makes the routes
-// mergeable by unique vindex. The constraint has to be an equality
-// like a.id = b.id where both columns have the same unique vindex.
-func (pb *primitiveBuilder) isSameRoute(rpb *primitiveBuilder, filter sqlparser.Expr) bool {
-	lRoute := pb.bldr.(*route)
-	rRoute := rpb.bldr.(*route)
-
-	filter = skipParenthesis(filter)
-	comparison, ok := filter.(*sqlparser.ComparisonExpr)
-	if !ok {
-		return false
-	}
-	if comparison.Operator != sqlparser.EqualStr {
-		return false
-	}
-	left := comparison.Left
-	right := comparison.Right
-	lVindex := pb.st.Vindex(left, lRoute)
-	if lVindex == nil {
-		left, right = right, left
-		lVindex = pb.st.Vindex(left, lRoute)
-	}
-	if lVindex == nil || !lVindex.IsUnique() {
-		return false
-	}
-	rVindex := rpb.st.Vindex(right, rRoute)
-	if rVindex == nil {
-		return false
-	}
-	if rVindex != lVindex {
-		return false
-	}
-	return true
 }

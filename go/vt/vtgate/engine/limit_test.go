@@ -90,12 +90,6 @@ func TestLimitExecute(t *testing.T) {
 	}
 
 	// Test with limit higher than input.
-	wantResult = sqltypes.MakeTestResult(
-		fields,
-		"a|1",
-		"b|2",
-		"c|3",
-	)
 	inputResult = sqltypes.MakeTestResult(
 		fields,
 		"a|1",

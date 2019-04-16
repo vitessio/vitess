@@ -41,30 +41,23 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 	if !ok {
 		return nil, errors.New("unsupported: multi-table/vindex delete statement in sharded keyspace")
 	}
-	edel.Keyspace = rb.ERoute.Keyspace
+	ro := rb.routeOptions[0]
+	edel.Keyspace = ro.ERoute.Keyspace
 	if !edel.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
-		if !pb.validateSubquerySamePlan(del.Targets, del.Where, del.OrderBy, del.Limit) {
+		if !pb.validateUnshardedRoute(del.Targets, del.Where, del.OrderBy, del.Limit) {
 			return nil, errors.New("unsupported: sharded subqueries in DML")
 		}
 		edel.Opcode = engine.DeleteUnsharded
 		return edel, nil
 	}
-	if del.Targets != nil || len(pb.st.tables) != 1 {
+	if del.Targets != nil || ro.vschemaTable == nil {
 		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
 	}
 	if hasSubquery(del) {
 		return nil, errors.New("unsupported: subqueries in sharded DML")
 	}
-	var vindexTable *vindexes.Table
-	for _, tval := range pb.st.tables {
-		vindexTable = tval.vindexTable
-	}
-	edel.Table = vindexTable
-	if edel.Table == nil {
-		return nil, errors.New("internal error: table.vindexTable is mysteriously nil")
-	}
-	var err error
+	edel.Table = ro.vschemaTable
 
 	directives := sqlparser.ExtractCommentDirectives(del.Comments)
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
@@ -72,15 +65,15 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 	}
 
 	edel.QueryTimeout = queryTimeout(directives)
-
-	if rb.ERoute.TargetDestination != nil {
-		if rb.ERoute.TargetTabletType != topodatapb.TabletType_MASTER {
+	if rb.routeOptions[0].ERoute.TargetDestination != nil {
+		if rb.routeOptions[0].ERoute.TargetTabletType != topodatapb.TabletType_MASTER {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: DELETE statement with a replica target")
 		}
 		edel.Opcode = engine.DeleteByDestination
-		edel.TargetDestination = rb.ERoute.TargetDestination
+		edel.TargetDestination = rb.routeOptions[0].ERoute.TargetDestination
 		return edel, nil
 	}
+	var err error
 	edel.Vindex, edel.Values, err = getDMLRouting(del.Where, edel.Table)
 	// We couldn't generate a route for a single shard
 	// Execute a delete sharded
