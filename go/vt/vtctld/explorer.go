@@ -89,7 +89,7 @@ func (ex *backendExplorer) HandlePath(nodePath string, r *http.Request) *Result 
 	case nil:
 		if len(data) > 0 {
 			// It has contents, we just use it if possible.
-			decoded, err := vtctl.DecodeContent(relativePath, data)
+			decoded, err := vtctl.DecodeContent(relativePath, data, false)
 			if err != nil {
 				result.Error = err.Error()
 			} else {
