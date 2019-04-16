@@ -92,7 +92,11 @@ func (cp *ConnectionPool) pool() (p *pools.ResourcePool) {
 }
 
 func (cp *ConnectionPool) refreshdns() {
-	addrs, err := net.LookupHost(cp.info.Host)
+	cp.mu.Lock()
+	host := cp.info.Host
+	cp.mu.Unlock()
+
+	addrs, err := net.LookupHost(host)
 	if err != nil {
 		log.Errorf("Error refreshing connection dns name: (%v)", err)
 		return
@@ -207,6 +211,7 @@ func (cp *ConnectionPool) Get(ctx context.Context) (*PooledDBConnection, error) 
 		!cp.validAddress(net.ParseIP(r.(*PooledDBConnection).RemoteAddr().String())) {
 		err := r.(*PooledDBConnection).Reconnect()
 		if err != nil {
+			p.Put(r)
 			return nil, err
 		}
 	}
