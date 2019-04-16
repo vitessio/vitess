@@ -28,12 +28,14 @@ CREATE DATABASE IF NOT EXISTS _vt;
 CREATE TABLE IF NOT EXISTS _vt.local_metadata (
   name VARCHAR(255) NOT NULL,
   value VARCHAR(255) NOT NULL,
-  PRIMARY KEY (name)
+  db_name VARBINARY(255) NOT NULL,
+  PRIMARY KEY (db_name, name)
   ) ENGINE=InnoDB;
 CREATE TABLE IF NOT EXISTS _vt.shard_metadata (
   name VARCHAR(255) NOT NULL,
   value MEDIUMBLOB NOT NULL,
-  PRIMARY KEY (name)
+  db_name VARBINARY(255) NOT NULL,
+  PRIMARY KEY (db_name, name)
   ) ENGINE=InnoDB;
 
 # Admin user with all privileges.

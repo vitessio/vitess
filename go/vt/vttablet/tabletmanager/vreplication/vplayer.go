@@ -305,7 +305,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		// 1. Fetch was idle for idleTimeout.
 		// 2. We've been receiving empty events for longer than idleTimeout.
 		// In both cases, now > timeLastSaved. If so, any unsaved GTID should be saved.
-		if time.Now().Sub(vp.timeLastSaved) >= idleTimeout && vp.unsavedGTID != nil {
+		if time.Since(vp.timeLastSaved) >= idleTimeout && vp.unsavedGTID != nil {
 			// Although unlikely, we should not save if a transaction is still open.
 			// This can happen if a large transaction is split as multiple events.
 			if !vp.dbClient.InTransaction {

@@ -54,7 +54,7 @@ class BaseShardingTest(object):
   def _insert_value(self, tablet_obj, table, mid, msg, keyspace_id):
     k = utils.uint64_to_hex(keyspace_id)
     tablet_obj.mquery(
-        'vt_test_keyspace',
+         tablet_obj.dbname,
         ['begin',
          'insert into %s(parent_id, id, msg, custom_ksid_col) '
          'values(%d, %d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
@@ -84,7 +84,7 @@ class BaseShardingTest(object):
 
     querystr += values_str
     tablet_obj.mquery(
-        'vt_test_keyspace',
+        tablet_obj.dbname,
         ['begin',
          querystr,
          'commit'],
@@ -119,7 +119,7 @@ class BaseShardingTest(object):
       A tuple of results.
     """
     return tablet_obj.mquery(
-        'vt_test_keyspace',
+         tablet_obj.dbname,
         'select parent_id, id, msg, custom_ksid_col from %s '
         'where parent_id=%d and id=%d' %
         (table, fixed_parent_id, mid))

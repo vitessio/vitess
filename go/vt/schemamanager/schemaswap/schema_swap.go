@@ -39,6 +39,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/workflow"
@@ -603,8 +604,8 @@ func (shardSwap *shardSchemaSwap) readShardMetadata(metadata *shardSwapMetadata,
 		return
 	}
 	query := fmt.Sprintf(
-		"SELECT name, value FROM _vt.shard_metadata WHERE name in ('%s', '%s', '%s')",
-		lastStartedMetadataName, lastFinishedMetadataName, currentSQLMetadataName)
+		"SELECT name, value FROM _vt.shard_metadata WHERE db_name = '%s' and name in ('%s', '%s', '%s')",
+		topoproto.TabletDbName(tablet), lastStartedMetadataName, lastFinishedMetadataName, currentSQLMetadataName)
 	queryResult, err := shardSwap.executeAdminQuery(tablet, query, 3 /* maxRows */)
 	if err != nil {
 		metadata.err = err
@@ -640,7 +641,9 @@ func (shardSwap *shardSchemaSwap) writeStartedSwap() error {
 		return err
 	}
 	queryBuf := bytes.Buffer{}
-	queryBuf.WriteString("INSERT INTO _vt.shard_metadata (name, value) VALUES ('")
+	queryBuf.WriteString("INSERT INTO _vt.shard_metadata (db_name, name, value) VALUES ('")
+	queryBuf.WriteString(topoproto.TabletDbName(tablet))
+	queryBuf.WriteString("',")
 	queryBuf.WriteString(currentSQLMetadataName)
 	queryBuf.WriteString("',")
 	sqlValue := sqltypes.NewVarChar(shardSwap.parent.sql)
@@ -666,13 +669,13 @@ func (shardSwap *shardSchemaSwap) writeFinishedSwap() error {
 		return err
 	}
 	query := fmt.Sprintf(
-		"INSERT INTO _vt.shard_metadata (name, value) VALUES ('%s', '%d') ON DUPLICATE KEY UPDATE value = '%d'",
-		lastFinishedMetadataName, shardSwap.parent.swapID, shardSwap.parent.swapID)
+		"INSERT INTO _vt.shard_metadata (db_name, name, value) VALUES ('%s', '%s', '%d') ON DUPLICATE KEY UPDATE value = '%d'",
+		topoproto.TabletDbName(tablet), lastFinishedMetadataName, shardSwap.parent.swapID, shardSwap.parent.swapID)
 	_, err = shardSwap.executeAdminQuery(tablet, query, 0 /* maxRows */)
 	if err != nil {
 		return err
 	}
-	query = fmt.Sprintf("DELETE FROM _vt.shard_metadata WHERE name = '%s'", currentSQLMetadataName)
+	query = fmt.Sprintf("DELETE FROM _vt.shard_metadata WHERE db_name = '%s' AND name = '%s'", topoproto.TabletDbName(tablet), currentSQLMetadataName)
 	_, err = shardSwap.executeAdminQuery(tablet, query, 0 /* maxRows */)
 	return err
 }
@@ -896,7 +899,7 @@ func (shardSwap *shardSchemaSwap) executeAdminQuery(tablet *topodatapb.Tablet, q
 func (shardSwap *shardSchemaSwap) isSwapApplied(tablet *topodatapb.Tablet) (bool, error) {
 	swapIDResult, err := shardSwap.executeAdminQuery(
 		tablet,
-		fmt.Sprintf("SELECT value FROM _vt.local_metadata WHERE name = '%s'", lastAppliedMetadataName),
+		fmt.Sprintf("SELECT value FROM _vt.local_metadata WHERE db_name = '%s' AND name = '%s'", topoproto.TabletDbName(tablet), lastAppliedMetadataName),
 		1 /* maxRows */)
 	if err != nil {
 		return false, err
@@ -1036,8 +1039,8 @@ func (shardSwap *shardSchemaSwap) applySeedSchemaChange() (err error) {
 		return err
 	}
 	updateAppliedSwapQuery := fmt.Sprintf(
-		"INSERT INTO _vt.local_metadata (name, value) VALUES ('%s', '%d') ON DUPLICATE KEY UPDATE value = '%d'",
-		lastAppliedMetadataName, shardSwap.parent.swapID, shardSwap.parent.swapID)
+		"INSERT INTO _vt.local_metadata (db_name, name, value) VALUES ('%s', '%s', '%d') ON DUPLICATE KEY UPDATE value = '%d'",
+		topoproto.TabletDbName(seedTablet), lastAppliedMetadataName, shardSwap.parent.swapID, shardSwap.parent.swapID)
 	_, err = shardSwap.parent.tabletClient.ExecuteFetchAsDba(
 		shardSwap.parent.ctx,
 		seedTablet,

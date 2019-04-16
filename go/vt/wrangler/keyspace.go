@@ -17,6 +17,7 @@ limitations under the License.
 package wrangler
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"strings"
@@ -135,7 +136,7 @@ func (wr *Wrangler) printShards(ctx context.Context, si []*topo.ShardInfo) error
 		if err != nil {
 			return err
 		}
-		qr, err := wr.tmc.VReplicationExec(ctx, ti.Tablet, "select * from _vt.vreplication")
+		qr, err := wr.tmc.VReplicationExec(ctx, ti.Tablet, fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(ti.DbName())))
 		if err != nil {
 			return err
 		}
@@ -681,6 +682,11 @@ func (wr *Wrangler) setupReverseReplication(ctx context.Context, sourceShards, d
 
 	// Create reverse replication for each source.
 	for i, sourceShard := range sourceShards {
+		ti, err := wr.ts.GetTablet(ctx, sourceShard.MasterAlias)
+		if err != nil {
+			return err
+		}
+		dbName := ti.DbName()
 		if len(sourceShard.SourceShards) != 0 {
 			continue
 		}
@@ -697,16 +703,15 @@ func (wr *Wrangler) setupReverseReplication(ctx context.Context, sourceShards, d
 				Shard:    dest.ShardName(),
 				KeyRange: kr,
 			}
-			qr, err := wr.VReplicationExec(ctx, sourceShard.MasterAlias, binlogplayer.CreateVReplicationState("ReversedResharding", bls, masterPositions[j], binlogplayer.BlpStopped))
+			qr, err := wr.VReplicationExec(ctx, sourceShard.MasterAlias, binlogplayer.CreateVReplicationState("ReversedResharding", bls, masterPositions[j], binlogplayer.BlpStopped, dbName))
 			if err != nil {
 				return err
 			}
 			uids[j] = uint32(qr.InsertId)
-			wr.Logger().Infof("Created reverse replication for tablet %v/%v: %v, pos: %v, uid: %v", sourceShard.Keyspace(), sourceShard.ShardName(), bls, masterPositions[j], uids[j])
+			wr.Logger().Infof("Created reverse replication for tablet %v/%v: %v, db: %v, pos: %v, uid: %v", sourceShard.Keyspace(), sourceShard.ShardName(), bls, dbName, masterPositions[j], uids[j])
 		}
 		// Source shards have to be atomically added to ensure idempotence.
 		// If this fails, there's no harm because the unstarted vreplication streams will just be abandoned.
-		var err error
 		sourceShards[i], err = wr.ts.UpdateShardFields(ctx, sourceShard.Keyspace(), sourceShard.ShardName(), func(si *topo.ShardInfo) error {
 			for j, dest := range destinationShards {
 				si.SourceShards = append(si.SourceShards, &topodatapb.Shard_SourceShard{
@@ -1321,4 +1326,10 @@ func (wr *Wrangler) RemoveKeyspaceCell(ctx context.Context, keyspace, cell strin
 	// Now remove the SrvKeyspace object.
 	wr.Logger().Infof("Removing cell %v keyspace %v SrvKeyspace object", cell, keyspace)
 	return wr.ts.DeleteSrvKeyspace(ctx, cell, keyspace)
+}
+
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
 }
