@@ -548,7 +548,7 @@ func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		}
 		decoded := ""
 		if *decodeProto {
-			decoded, err = vtctl.DecodeContent(zkPath, data)
+			decoded, err = vtctl.DecodeContent(zkPath, data, false)
 			if err != nil {
 				log.Warningf("cat: cannot proto decode %v: %v", zkPath, err)
 				decoded = string(data)
