@@ -34,6 +34,14 @@ var (
 	ErrNotSlave = errors.New("no slave status")
 )
 
+const (
+	// mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
+	// versions, to work around replication bugs.
+	mariaDBReplicationHackPrefix = "5.5.5-"
+	// mariaDBVersionString is present in
+	mariaDBVersionString = "MariaDB"
+)
+
 // flavor is the abstract interface for a flavor.
 // Flavors are auto-detected upon connection using the server version.
 // We have two major implementations (the main difference is the GTID
@@ -90,13 +98,6 @@ type flavor interface {
 	enableBinlogPlaybackCommand() string
 	disableBinlogPlaybackCommand() string
 }
-
-// mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
-// versions, to work around replication bugs.
-const mariaDBReplicationHackPrefix = "5.5.5-"
-
-// mariaDBVersionString is present in
-const mariaDBVersionString = "MariaDB"
 
 // fillFlavor fills in c.Flavor based on c.ServerVersion.
 // This is the same logic as the ConnectorJ java client. We try to recognize
