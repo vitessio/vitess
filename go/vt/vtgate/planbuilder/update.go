@@ -43,10 +43,11 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	if !ok {
 		return nil, errors.New("unsupported: multi-table/vindex update statement in sharded keyspace")
 	}
-	eupd.Keyspace = rb.ERoute.Keyspace
+	ro := rb.routeOptions[0]
+	eupd.Keyspace = ro.ERoute.Keyspace
 	if !eupd.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
-		if !pb.validateSubquerySamePlan(upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
+		if !pb.validateUnshardedRoute(upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
 			return nil, errors.New("unsupported: sharded subqueries in DML")
 		}
 		eupd.Opcode = engine.UpdateUnsharded
@@ -66,23 +67,18 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	}
 
 	eupd.QueryTimeout = queryTimeout(directives)
-
-	var vindexTable *vindexes.Table
-	for _, tval := range pb.st.tables {
-		vindexTable = tval.vindexTable
-	}
-	eupd.Table = vindexTable
+	eupd.Table = ro.vschemaTable
 	if eupd.Table == nil {
 		return nil, errors.New("internal error: table.vindexTable is mysteriously nil")
 	}
 	var err error
 
-	if rb.ERoute.TargetDestination != nil {
-		if rb.ERoute.TargetTabletType != topodatapb.TabletType_MASTER {
+	if ro.ERoute.TargetDestination != nil {
+		if ro.ERoute.TargetTabletType != topodatapb.TabletType_MASTER {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: UPDATE statement with a replica target")
 		}
 		eupd.Opcode = engine.UpdateByDestination
-		eupd.TargetDestination = rb.ERoute.TargetDestination
+		eupd.TargetDestination = ro.ERoute.TargetDestination
 		return eupd, nil
 	}
 

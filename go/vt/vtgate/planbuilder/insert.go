@@ -40,23 +40,20 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (*engine.Ins
 		// This can happen only for vindexes right now.
 		return nil, fmt.Errorf("inserting into a vindex not allowed: %s", sqlparser.String(ins.Table))
 	}
-	if rb.ERoute.TargetDestination != nil {
+	ro := rb.routeOptions[0]
+	if ro.ERoute.TargetDestination != nil {
 		return nil, errors.New("unsupported: INSERT with a target destination")
 	}
-	var table *vindexes.Table
-	for _, tval := range pb.st.tables {
-		table = tval.vindexTable
-	}
-	if !table.Keyspace.Sharded {
-		if !pb.validateSubquerySamePlan(ins) {
+	if !ro.vschemaTable.Keyspace.Sharded {
+		if !pb.validateUnshardedRoute(ins) {
 			return nil, errors.New("unsupported: sharded subquery in insert values")
 		}
-		return buildInsertUnshardedPlan(ins, table, vschema)
+		return buildInsertUnshardedPlan(ins, ro.vschemaTable, vschema)
 	}
 	if ins.Action == sqlparser.ReplaceStr {
 		return nil, errors.New("unsupported: REPLACE INTO with sharded schema")
 	}
-	return buildInsertShardedPlan(ins, table)
+	return buildInsertShardedPlan(ins, ro.vschemaTable)
 }
 
 func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vschema ContextVSchema) (*engine.Insert, error) {

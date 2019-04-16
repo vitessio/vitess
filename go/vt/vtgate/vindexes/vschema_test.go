@@ -586,7 +586,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("keyspace ks3 not found in vschema"),
 			},
 			"notfound": {
-				Error: errors.New("table ks1.t2 not found"),
+				Error: errors.New("table t2 not found"),
 			},
 			"doubletable": {
 				Error: errors.New("table ks1.t1 specified more than once"),
@@ -1796,7 +1796,7 @@ func TestFindTable(t *testing.T) {
 	}
 }
 
-func TestFindTableOrVindex(t *testing.T) {
+func TestFindTablesOrVindex(t *testing.T) {
 	input := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"ksa": {
@@ -1842,19 +1842,19 @@ func TestFindTableOrVindex(t *testing.T) {
 	}
 	vschema, _ := BuildVSchema(&input)
 
-	_, _, err := vschema.FindTableOrVindex("", "t1")
+	_, _, err := vschema.FindTablesOrVindex("", "t1")
 	wantErr := "ambiguous table reference: t1"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
+		t.Errorf("FindTablesOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 
-	_, _, err = vschema.FindTableOrVindex("", "none")
+	_, _, err = vschema.FindTablesOrVindex("", "none")
 	wantErr = "table none not found"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
+		t.Errorf("FindTablesOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 
-	got, _, err := vschema.FindTableOrVindex("", "ta")
+	got, _, err := vschema.FindTablesOrVindex("", "ta")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1864,11 +1864,11 @@ func TestFindTableOrVindex(t *testing.T) {
 			Name: "ksa",
 		},
 	}
-	if !reflect.DeepEqual(got, ta) {
-		t.Errorf("FindTableOrVindex(\"t1a\"): %+v, want %+v", got, ta)
+	if !reflect.DeepEqual(got, []*Table{ta}) {
+		t.Errorf("FindTablesOrVindex(\"t1a\"): %+v, want %+v", got, ta)
 	}
 
-	_, vindex, err := vschema.FindTableOrVindex("", "stfu1")
+	_, vindex, err := vschema.FindTablesOrVindex("", "stfu1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1876,10 +1876,10 @@ func TestFindTableOrVindex(t *testing.T) {
 		name: "stfu1",
 	}
 	if !reflect.DeepEqual(vindex, wantVindex) {
-		t.Errorf("FindTableOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
+		t.Errorf("FindTablesOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
 	}
 
-	_, vindex, err = vschema.FindTableOrVindex("ksc", "ta")
+	_, vindex, err = vschema.FindTablesOrVindex("ksc", "ta")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1887,13 +1887,13 @@ func TestFindTableOrVindex(t *testing.T) {
 		name: "ta",
 	}
 	if !reflect.DeepEqual(vindex, wantVindex) {
-		t.Errorf("FindTableOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
+		t.Errorf("FindTablesOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
 	}
 
-	_, _, err = vschema.FindTableOrVindex("", "dup")
+	_, _, err = vschema.FindTablesOrVindex("", "dup")
 	wantErr = "ambiguous vindex reference: dup"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
+		t.Errorf("FindTablesOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 }
 

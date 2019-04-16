@@ -852,6 +852,66 @@
   }
 }
 
+# join of information_schema with normal table
+"select foo from information_schema.a join unsharded"
+{
+  "Original": "select foo from information_schema.a join unsharded",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectDBA",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select foo from information_schema.a",
+      "FieldQuery": "select foo from information_schema.a where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select 1 from unsharded",
+      "FieldQuery": "select 1 from unsharded where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}
+
+# join of normal table with information_schema
+"select foo from unsharded join information_schema.a"
+{
+  "Original": "select foo from unsharded join information_schema.a",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select foo from unsharded",
+      "FieldQuery": "select foo from unsharded where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectDBA",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select 1 from information_schema.a",
+      "FieldQuery": "select 1 from information_schema.a where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}
+
 # wire-up on join with cross-shard subquery
 "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id"
 {

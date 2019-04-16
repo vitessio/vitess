@@ -376,16 +376,10 @@ outer:
 				}
 				continue outer
 			}
-			t, err := vschema.findTable(parts[0], parts[1])
+			t, err := vschema.FindTable(parts[0], parts[1])
 			if err != nil {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
 					Error: err,
-				}
-				continue outer
-			}
-			if t == nil {
-				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
-					Error: fmt.Errorf("table %s not found", toTable),
 				}
 				continue outer
 			}
@@ -422,6 +416,7 @@ func (vschema *VSchema) findQualified(name string) (*Table, error) {
 // only if its name is unique across all keyspaces. If there is only one
 // keyspace in the vschema, and it's unsharded, then all table requests are considered
 // valid and belonging to that keyspace.
+// FindTable bypasses routing rules and returns at most one table.
 func (vschema *VSchema) FindTable(keyspace, tablename string) (*Table, error) {
 	t, err := vschema.findTable(keyspace, tablename)
 	if err != nil {
@@ -468,14 +463,36 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	return table, nil
 }
 
-// FindTableOrVindex finds a table or a Vindex by name using Find and FindVindex.
-func (vschema *VSchema) FindTableOrVindex(keyspace, name string) (*Table, Vindex, error) {
-	t, err := vschema.findTable(keyspace, name)
+func (vschema *VSchema) findTables(keyspace, tablename string) ([]*Table, error) {
+	qualified := tablename
+	if keyspace != "" {
+		qualified = keyspace + "." + tablename
+	}
+	rr, ok := vschema.RoutingRules[qualified]
+	if ok {
+		if len(rr.Tables) == 0 {
+			return nil, fmt.Errorf("table %s has been disabled", tablename)
+		}
+		return rr.Tables, nil
+	}
+	t, err := vschema.findTable(keyspace, tablename)
+	if err != nil {
+		return nil, err
+	}
+	if t == nil {
+		return nil, nil
+	}
+	return []*Table{t}, nil
+}
+
+// FindTablesOrVindex finds a table or a Vindex by name using Find and FindVindex.
+func (vschema *VSchema) FindTablesOrVindex(keyspace, name string) ([]*Table, Vindex, error) {
+	tables, err := vschema.findTables(keyspace, name)
 	if err != nil {
 		return nil, nil, err
 	}
-	if t != nil {
-		return t, nil, nil
+	if tables != nil {
+		return tables, nil, nil
 	}
 	v, err := vschema.FindVindex(keyspace, name)
 	if err != nil {

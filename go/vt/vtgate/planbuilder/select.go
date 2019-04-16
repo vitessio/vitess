@@ -77,14 +77,17 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	}
 
 	if rb, ok := pb.bldr.(*route); ok {
-		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
-		rb.ERoute.QueryTimeout = queryTimeout(directives)
-		if rb.ERoute.TargetDestination != nil {
-			return errors.New("unsupported: SELECT with a target destination")
-		}
+		// TODO(sougou): this can probably be improved.
+		for _, ro := range rb.routeOptions {
+			directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+			ro.ERoute.QueryTimeout = queryTimeout(directives)
+			if ro.ERoute.TargetDestination != nil {
+				return errors.New("unsupported: SELECT with a target destination")
+			}
 
-		if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
-			rb.ERoute.ScatterErrorsAsWarnings = true
+			if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
+				ro.ERoute.ScatterErrorsAsWarnings = true
+			}
 		}
 	}
 
@@ -214,10 +217,8 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 			}
 			// Validate keyspace reference if any.
 			if !node.TableName.IsEmpty() {
-				if qual := node.TableName.Qualifier; !qual.IsEmpty() {
-					if qual.String() != rb.ERoute.Keyspace.Name {
-						return nil, fmt.Errorf("cannot resolve %s to keyspace %s", sqlparser.String(node), rb.ERoute.Keyspace.Name)
-					}
+				if _, err := pb.st.FindTable(node.TableName); err != nil {
+					return nil, err
 				}
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
@@ -227,8 +228,11 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
 				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
 			}
-			if err := rb.SetOpcode(engine.SelectNext); err != nil {
-				return nil, err
+			for _, ro := range rb.routeOptions {
+				if ro.ERoute.Opcode != engine.SelectUnsharded {
+					return nil, errors.New("NEXT used on a sharded table")
+				}
+				ro.ERoute.Opcode = engine.SelectNext
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		default:

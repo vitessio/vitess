@@ -16,14 +16,7 @@ limitations under the License.
 
 package planbuilder
 
-import (
-	"testing"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-)
-
+/*
 func TestSymtabAddVindexTable(t *testing.T) {
 	tname := sqlparser.TableName{Name: sqlparser.NewTableIdent("t")}
 	rb := &route{}
@@ -132,3 +125,4 @@ func TestSymtabAddVindexTable(t *testing.T) {
 		}
 	}
 }
+*/
