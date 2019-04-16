@@ -27,10 +27,12 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-const hashed10 uint64 = 17563797831108199066
-const hashed20 uint64 = 8729390916138266389
-const hashed30 uint64 = 1472608112194674795
-const hashed40 uint64 = 16576388050845489136
+const (
+	hashed10 uint64 = 17563797831108199066
+	hashed20 uint64 = 8729390916138266389
+	hashed30 uint64 = 1472608112194674795
+	hashed40 uint64 = 16576388050845489136
+)
 
 func TestLookupUnicodeLooseMD5HashMap(t *testing.T) {
 	lookup := createLookup(t, "lookup_unicodeloosemd5_hash", false)

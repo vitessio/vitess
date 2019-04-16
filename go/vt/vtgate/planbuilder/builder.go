@@ -48,7 +48,7 @@ type builder interface {
 	// execute before this one.
 	Reorder(int)
 
-	// Primitve returns the underlying primitive.
+	// Primitive returns the underlying primitive.
 	Primitive() engine.Primitive
 
 	// First returns the first builder of the tree,
