@@ -93,15 +93,14 @@ func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vi
 		origin: rb,
 	}
 
-	for _, vst := range vschemaTables {
+	vindexMaps = make([]map[*column]vindexes.Vindex, len(vschemaTables))
+	for i, vst := range vschemaTables {
 		// If any input is authoritative, we make the table
 		// authoritative.
 		// TODO(sougou): vschema builder should validate that authoritative columns match.
 		if vst.ColumnListAuthoritative {
 			t.isAuthoritative = true
 		}
-		vindexMap := make(map[*column]vindexes.Vindex)
-		vindexMaps = append(vindexMaps, vindexMap)
 
 		for _, col := range vst.Columns {
 			t.addColumn(col.Name, &column{
@@ -111,6 +110,7 @@ func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vi
 			})
 		}
 
+		var vindexMap map[*column]vindexes.Vindex
 		for _, cv := range vst.ColumnVindexes {
 			for i, cvcol := range cv.Columns {
 				col, ok := t.columns[cvcol.Lowered()]
@@ -123,10 +123,14 @@ func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vi
 				}
 				if i == 0 {
 					// For now, only the first column is used for vindex Map functions.
+					if vindexMap == nil {
+						vindexMap = make(map[*column]vindexes.Vindex)
+					}
 					vindexMap[col] = cv.Vindex
 				}
 			}
 		}
+		vindexMaps[i] = vindexMap
 
 		if ai := vst.AutoIncrement; ai != nil {
 			if _, ok := t.columns[ai.Column.Lowered()]; !ok {
@@ -367,7 +371,7 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 			return nil, fmt.Errorf("symbol %s not found in table or subquery", sqlparser.String(col))
 		}
 		c = &column{
-			origin: t.origin,
+			origin: t.Origin(),
 			st:     st,
 		}
 		t.addColumn(col.Name, c)
@@ -433,10 +437,17 @@ func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
 	t.columnNames = append(t.columnNames, alias)
 }
 
+// Origin returns the route that originates the table.
+func (t *table) Origin() builder {
+	// If it's a route, we have to resolve it.
+	if rb, ok := t.origin.(*route); ok {
+		return rb.Resolve()
+	}
+	return t.origin
+}
+
 // column represents a unique symbol in the query that other
-// parts can refer to. If a column originates from a sharded
-// table, and is tied to a vindex, then its Vindex field is
-// set, which can be used to improve a route's plan.
+// parts can refer to.
 // Every column contains the builder it originates from.
 //
 // Two columns are equal if their pointer values match.

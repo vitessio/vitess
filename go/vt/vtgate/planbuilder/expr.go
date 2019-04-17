@@ -243,7 +243,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 func (pb *primitiveBuilder) validateUnshardedRoute(nodes ...sqlparser.SQLNode) bool {
 	var keyspace string
 	if rb, ok := pb.bldr.(*route); ok {
-		keyspace = rb.routeOptions[0].ERoute.Keyspace.Name
+		keyspace = rb.routeOptions[0].eroute.Keyspace.Name
 	} else {
 		// This code is unreachable because the caller checks.
 		return false

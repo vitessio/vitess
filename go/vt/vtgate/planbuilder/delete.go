@@ -42,7 +42,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 		return nil, errors.New("unsupported: multi-table/vindex delete statement in sharded keyspace")
 	}
 	ro := rb.routeOptions[0]
-	edel.Keyspace = ro.ERoute.Keyspace
+	edel.Keyspace = ro.eroute.Keyspace
 	if !edel.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
 		if !pb.validateUnshardedRoute(del.Targets, del.Where, del.OrderBy, del.Limit) {
@@ -65,12 +65,12 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 	}
 
 	edel.QueryTimeout = queryTimeout(directives)
-	if rb.routeOptions[0].ERoute.TargetDestination != nil {
-		if rb.routeOptions[0].ERoute.TargetTabletType != topodatapb.TabletType_MASTER {
+	if rb.routeOptions[0].eroute.TargetDestination != nil {
+		if rb.routeOptions[0].eroute.TargetTabletType != topodatapb.TabletType_MASTER {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: DELETE statement with a replica target")
 		}
 		edel.Opcode = engine.DeleteByDestination
-		edel.TargetDestination = rb.routeOptions[0].ERoute.TargetDestination
+		edel.TargetDestination = rb.routeOptions[0].eroute.TargetDestination
 		return edel, nil
 	}
 	var err error

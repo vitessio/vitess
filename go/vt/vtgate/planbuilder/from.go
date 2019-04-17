@@ -114,11 +114,11 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		vschemaTables := make([]*vindexes.Table, 0, len(subroute.routeOptions))
 		for _, ro := range subroute.routeOptions {
 			vst := &vindexes.Table{
-				Keyspace: ro.ERoute.Keyspace,
+				Keyspace: ro.eroute.Keyspace,
 			}
 			vschemaTables = append(vschemaTables, vst)
 			for _, rc := range subroute.ResultColumns() {
-				vindex, ok := ro.vindexes[rc.column]
+				vindex, ok := ro.vindexMap[rc.column]
 				if !ok {
 					continue
 				}
@@ -140,8 +140,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 			return err
 		}
 		for i, ro := range subroute.routeOptions {
-			ro.rb = rb
-			ro.vindexes = vindexMaps[i]
+			ro.SubqueryToTable(rb, vindexMaps[i])
 		}
 		rb.routeOptions = subroute.routeOptions
 		subroute.Redirect = rb
@@ -165,10 +164,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			return err
 		}
 		rb, st := newRoute(sel)
-		rb.routeOptions = []*routeOption{{
-			rb:     rb,
-			ERoute: engine.NewSimpleRoute(engine.SelectDBA, ks),
-		}}
+		rb.routeOptions = []*routeOption{newSimpleRouteOption(rb, engine.NewSimpleRoute(engine.SelectDBA, ks))}
 		pb.bldr, pb.st = rb, st
 		return nil
 	}
@@ -189,6 +185,27 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		return err
 	}
 	for i, vst := range vschemaTables {
+		sub := &tableSubstitution{
+			oldExpr: tableExpr,
+		}
+		if tableExpr.As.IsEmpty() {
+			if tableName.Name != vst.Name {
+				// Table name does not match. Change and alias it to old name.
+				sub.newExpr = &sqlparser.AliasedTableExpr{
+					Expr: &sqlparser.TableName{Name: vst.Name},
+					As:   tableName.Name,
+				}
+			}
+		} else {
+			// Table is already aliased.
+			if tableName.Name != vst.Name {
+				// Table name does not match. Change it and reuse existing alias.
+				sub.newExpr = &sqlparser.AliasedTableExpr{
+					Expr: &sqlparser.TableName{Name: vst.Name},
+					As:   tableExpr.As,
+				}
+			}
+		}
 		var eroute *engine.Route
 		switch {
 		case !vst.Keyspace.Sharded:
@@ -205,12 +222,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			eroute.Vindex, _ = vindexes.NewBinary("binary", nil)
 			eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vst.Pinned)}}
 		}
-		rb.routeOptions = append(rb.routeOptions, &routeOption{
-			rb:           rb,
-			vschemaTable: vst,
-			vindexes:     vindexMaps[i],
-			ERoute:       eroute,
-		})
+		rb.routeOptions = append(rb.routeOptions, newRouteOption(rb, vst, sub, vindexMaps[i], eroute))
 	}
 	return nil
 }
@@ -267,19 +279,13 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	}
 
 	// Try merging the routes.
+	isLeftJoin := ajoin != nil && ajoin.Join == sqlparser.LeftJoinStr
 	var mergedRouteOptions []*routeOption
 outer:
 	for _, lro := range lRoute.routeOptions {
 		for _, rro := range rRoute.routeOptions {
 			if lro.JoinCanMerge(pb, rro, ajoin) {
-				lro.vschemaTable = nil
-				lro.substitutions = append(lro.substitutions, rro.substitutions...)
-				// Add RHS vindexes only if it's not a left join.
-				if ajoin == nil || ajoin.Join != sqlparser.LeftJoinStr {
-					for c, v := range rro.vindexes {
-						lro.vindexes[c] = v
-					}
-				}
+				lro.MergeJoin(rro, isLeftJoin)
 				mergedRouteOptions = append(mergedRouteOptions, lro)
 				continue outer
 			}
@@ -307,8 +313,6 @@ func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, routeOptions []*r
 	} else {
 		sel.From = sqlparser.TableExprs{ajoin}
 	}
-	// Redirect before merging the symtabs. Merge will use Redirect
-	// to check if rRoute matches lRoute.
 	rRoute.Redirect = lRoute
 	// Since the routes have merged, set st.singleRoute to point at
 	// the merged route.
