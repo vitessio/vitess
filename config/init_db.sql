@@ -1,9 +1,15 @@
 # This file is executed immediately after mysql_install_db,
 # to initialize a fresh data directory.
 
-##########################################
+###############################################################################
+# WARNING: This sql is *NOT* safe for production use,
+#          as it contains default users and passwords
+#          with more privileges than necessary.
+###############################################################################
+
+###############################################################################
 # Equivalent of mysql_secure_installation
-##########################################
+###############################################################################
 
 # Changes during the init db should not make it to the binlog.
 # They could potentially create errant transactions on replicas.
@@ -17,9 +23,9 @@ DELETE FROM mysql.user WHERE User = 'root' AND Host != 'localhost';
 # Remove test database.
 DROP DATABASE IF EXISTS test;
 
-##########################################
+###############################################################################
 # Vitess defaults
-##########################################
+###############################################################################
 
 # Vitess-internal database.
 CREATE DATABASE IF NOT EXISTS _vt;
