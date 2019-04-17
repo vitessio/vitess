@@ -33,6 +33,10 @@ var _ builder = (*route)(nil)
 // SelectScatter, etc. Portions of the original Select AST
 // are moved into this node, which will be used to build
 // the final SQL for this route.
+// A route can have multiple routeOptions. They are kept
+// up-to-date as the route improves. Those that don't
+// qualify are continuously removed from the options.
+// A single best route is chosen before the Wireup phase.
 type route struct {
 	order int
 
@@ -86,7 +90,7 @@ func (rb *route) Reorder(order int) {
 
 // Primitive satisfies the builder interface.
 func (rb *route) Primitive() engine.Primitive {
-	return rb.routeOptions[0].ERoute
+	return rb.routeOptions[0].eroute
 }
 
 // First satisfies the builder interface.
@@ -193,7 +197,7 @@ func (rb *route) PushOrderBy(order *sqlparser.Order) error {
 		Desc: order.Direction == sqlparser.DescScr,
 	}
 	for _, ro := range rb.routeOptions {
-		ro.ERoute.OrderBy = append(ro.ERoute.OrderBy, ob)
+		ro.eroute.OrderBy = append(ro.eroute.OrderBy, ob)
 	}
 
 	rb.Select.AddOrder(order)
@@ -236,7 +240,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 
 	// Precaution: update ERoute.Values only if it's not set already.
 	ro := rb.routeOptions[0]
-	if ro.ERoute.Values == nil {
+	if ro.eroute.Values == nil {
 		// Resolve values stored in the builder.
 		switch vals := ro.condition.(type) {
 		case *sqlparser.ComparisonExpr:
@@ -244,7 +248,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			ro.ERoute.Values = []sqltypes.PlanValue{pv}
+			ro.eroute.Values = []sqltypes.PlanValue{pv}
 			vals.Right = sqlparser.ListArg("::" + engine.ListVarName)
 		case nil:
 			// no-op.
@@ -253,7 +257,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			ro.ERoute.Values = []sqltypes.PlanValue{pv}
+			ro.eroute.Values = []sqltypes.PlanValue{pv}
 		}
 	}
 
@@ -261,18 +265,18 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 	// we have to request the corresponding weight_string from mysql
 	// and use that value instead. This is because we cannot mimic
 	// mysql's collation behavior yet.
-	for i, orderby := range ro.ERoute.OrderBy {
+	for i, orderby := range ro.eroute.OrderBy {
 		rc := rb.resultColumns[orderby.Col]
 		if sqltypes.IsText(rc.column.typ) {
 			// If a weight string was previously requested (by OrderedAggregator),
 			// reuse it.
 			if colnum, ok := rb.weightStrings[rc]; ok {
-				ro.ERoute.OrderBy[i].Col = colnum
+				ro.eroute.OrderBy[i].Col = colnum
 				continue
 			}
 
 			// len(rb.resultColumns) does not change. No harm using the value multiple times.
-			ro.ERoute.TruncateColumnCount = len(rb.resultColumns)
+			ro.eroute.TruncateColumnCount = len(rb.resultColumns)
 
 			// This code is partially duplicated from SupplyWeightString and PushSelect.
 			// We should not update resultColumns because it's not returned in the result.
@@ -287,7 +291,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			}
 			sel := rb.Select.(*sqlparser.Select)
 			sel.SelectExprs = append(sel.SelectExprs, expr)
-			ro.ERoute.OrderBy[i].Col = len(sel.SelectExprs) - 1
+			ro.eroute.OrderBy[i].Col = len(sel.SelectExprs) - 1
 			// We don't really have to update weightStrings, but we're doing it
 			// for good measure.
 			rb.weightStrings[rc] = len(sel.SelectExprs) - 1
@@ -315,6 +319,11 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		return true, nil
 	}, rb.Select)
 
+	// Substitute table names
+	for _, sub := range ro.substitutions {
+		*sub.oldExpr = *sub.newExpr
+	}
+
 	// Generate query while simultaneously resolving values.
 	varFormatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		switch node := node.(type) {
@@ -336,8 +345,8 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 	}
 	buf := sqlparser.NewTrackedBuffer(varFormatter)
 	varFormatter(buf, rb.Select)
-	ro.ERoute.Query = buf.ParsedQuery().Query
-	ro.ERoute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
+	ro.eroute.Query = buf.ParsedQuery().Query
+	ro.eroute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
 	return nil
 }
 
@@ -482,7 +491,7 @@ outer:
 	for _, lro := range rb.routeOptions {
 		for _, rro := range inner.routeOptions {
 			if lro.SubqueryCanMerge(pb, rro) {
-				lro.substitutions = append(lro.substitutions, rro.substitutions...)
+				lro.MergeSubquery(rro)
 				mergedRouteOptions = append(mergedRouteOptions, lro)
 				continue outer
 			}
@@ -504,8 +513,7 @@ outer:
 	for _, lro := range rb.routeOptions {
 		for _, rro := range right.routeOptions {
 			if lro.UnionCanMerge(rro) {
-				lro.vschemaTable = nil
-				lro.substitutions = append(lro.substitutions, rro.substitutions...)
+				lro.MergeUnion(rro)
 				mergedRouteOptions = append(mergedRouteOptions, lro)
 				continue outer
 			}
@@ -523,7 +531,7 @@ outer:
 // route. It returns false if no such options exist.
 func (rb *route) removeMultishardOptions() bool {
 	return rb.removeOptions(func(ro *routeOption) bool {
-		switch ro.ERoute.Opcode {
+		switch ro.eroute.Opcode {
 		case engine.SelectUnsharded, engine.SelectDBA, engine.SelectNext, engine.SelectEqualUnique:
 			return true
 		}
@@ -537,7 +545,7 @@ func (rb *route) removeMultishardOptions() bool {
 // keyspaces like last_insert_id.
 func (rb *route) removeShardedOptions() bool {
 	return rb.removeOptions(func(ro *routeOption) bool {
-		return ro.ERoute.Opcode == engine.SelectUnsharded
+		return ro.eroute.Opcode == engine.SelectUnsharded
 	})
 }
 
@@ -545,7 +553,7 @@ func (rb *route) removeShardedOptions() bool {
 // the specified keyspace. It returns false if no such options exist.
 func (rb *route) removeOptionsWithUnmatchedKeyspace(keyspace string) bool {
 	return rb.removeOptions(func(ro *routeOption) bool {
-		return ro.ERoute.Keyspace.Name == keyspace
+		return ro.eroute.Keyspace.Name == keyspace
 	})
 }
 

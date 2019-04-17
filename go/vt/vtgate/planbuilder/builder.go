@@ -48,9 +48,6 @@ type builder interface {
 	// execute before this one.
 	Reorder(int)
 
-	// Primitive returns the underlying primitive.
-	Primitive() engine.Primitive
-
 	// First returns the first builder of the tree,
 	// which is usually the left most.
 	First() builder
@@ -103,6 +100,10 @@ type builder interface {
 	// resultColumn, whereas PushSelect guarantees the addition of a new
 	// result column and returns a distinct symbol for it.
 	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int)
+
+	// Primitve returns the underlying primitive.
+	// This function should only be called after Wireup is finished.
+	Primitive() engine.Primitive
 }
 
 // ContextVSchema defines the interface for this package to fetch

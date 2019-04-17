@@ -80,13 +80,13 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 		// TODO(sougou): this can probably be improved.
 		for _, ro := range rb.routeOptions {
 			directives := sqlparser.ExtractCommentDirectives(sel.Comments)
-			ro.ERoute.QueryTimeout = queryTimeout(directives)
-			if ro.ERoute.TargetDestination != nil {
+			ro.eroute.QueryTimeout = queryTimeout(directives)
+			if ro.eroute.TargetDestination != nil {
 				return errors.New("unsupported: SELECT with a target destination")
 			}
 
 			if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
-				ro.ERoute.ScatterErrorsAsWarnings = true
+				ro.eroute.ScatterErrorsAsWarnings = true
 			}
 		}
 	}
@@ -229,10 +229,10 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
 			}
 			for _, ro := range rb.routeOptions {
-				if ro.ERoute.Opcode != engine.SelectUnsharded {
+				if ro.eroute.Opcode != engine.SelectUnsharded {
 					return nil, errors.New("NEXT used on a sharded table")
 				}
-				ro.ERoute.Opcode = engine.SelectNext
+				ro.eroute.Opcode = engine.SelectNext
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		default:
@@ -289,7 +289,7 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 						As: col,
 					}
 				}
-				rc, _, err := pb.bldr.PushSelect(expr, t.origin)
+				rc, _, err := pb.bldr.PushSelect(expr, t.Origin())
 				if err != nil {
 					// Unreachable because PushSelect won't fail on ColName.
 					return inrcs, false, err
@@ -316,7 +316,7 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 				Qualifier: expr.TableName,
 			},
 		}
-		rc, _, err := pb.bldr.PushSelect(expr, t.origin)
+		rc, _, err := pb.bldr.PushSelect(expr, t.Origin())
 		if err != nil {
 			// Unreachable because PushSelect won't fail on ColName.
 			return inrcs, false, err

@@ -22,31 +22,54 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+// routeOption contains all the information for one route option.
+// A route can have multiple options.
 type routeOption struct {
 	rb *route
 
-	// vschemaTable is set for DMLs, only if a single table
-	// is referenced in the from clause.
+	// vschemaTable is set only if a single table is referenced
+	// in the from clause. It's used only for DMLs.
 	vschemaTable *vindexes.Table
 
-	// substitutions contains the list of table expressions that
+	// substitutions contain the list of table expressions that
 	// have to be substituted in the route's query.
 	substitutions []*tableSubstitution
 
-	// vindexes is a map of all vindexes that can be used
+	// vindexMap is a map of all vindexMap that can be used
 	// for the routeOption.
-	vindexes map[*column]vindexes.Vindex
+	vindexMap map[*column]vindexes.Vindex
 
 	// condition stores the AST condition that will be used
 	// to resolve the ERoute Values field.
 	condition sqlparser.Expr
 
-	// ERoute is the primitive being built.
-	ERoute *engine.Route
+	// eroute is the primitive being built.
+	eroute *engine.Route
 }
 
 type tableSubstitution struct {
 	newExpr, oldExpr *sqlparser.AliasedTableExpr
+}
+
+func newSimpleRouteOption(rb *route, eroute *engine.Route) *routeOption {
+	return &routeOption{
+		rb:     rb,
+		eroute: eroute,
+	}
+}
+
+func newRouteOption(rb *route, vst *vindexes.Table, sub *tableSubstitution, vindexMap map[*column]vindexes.Vindex, eroute *engine.Route) *routeOption {
+	var subs []*tableSubstitution
+	if sub != nil && sub.newExpr != nil {
+		subs = []*tableSubstitution{sub}
+	}
+	return &routeOption{
+		rb:            rb,
+		vschemaTable:  vst,
+		substitutions: subs,
+		vindexMap:     vindexMap,
+		eroute:        eroute,
+	}
 }
 
 func (ro *routeOption) JoinCanMerge(pb *primitiveBuilder, rro *routeOption, ajoin *sqlparser.JoinTableExpr) bool {
@@ -63,11 +86,26 @@ func (ro *routeOption) JoinCanMerge(pb *primitiveBuilder, rro *routeOption, ajoi
 	})
 }
 
+func (ro *routeOption) MergeJoin(rro *routeOption, isLeftJoin bool) {
+	ro.vschemaTable = nil
+	ro.substitutions = append(ro.substitutions, rro.substitutions...)
+	if isLeftJoin {
+		return
+	}
+	// Add RHS vindexes only if it's not a left join.
+	for c, v := range rro.vindexMap {
+		if ro.vindexMap == nil {
+			ro.vindexMap = make(map[*column]vindexes.Vindex)
+		}
+		ro.vindexMap[c] = v
+	}
+}
+
 func (ro *routeOption) SubqueryCanMerge(pb *primitiveBuilder, inner *routeOption) bool {
 	return ro.canMerge(inner, func() bool {
 		switch vals := inner.condition.(type) {
 		case *sqlparser.ColName:
-			if ro.FindVindex(pb, vals) == inner.ERoute.Vindex {
+			if ro.FindVindex(pb, vals) == inner.eroute.Vindex {
 				return true
 			}
 		}
@@ -75,28 +113,42 @@ func (ro *routeOption) SubqueryCanMerge(pb *primitiveBuilder, inner *routeOption
 	})
 }
 
+func (ro *routeOption) MergeSubquery(subqueryOption *routeOption) {
+	ro.substitutions = append(ro.substitutions, subqueryOption.substitutions...)
+}
+
 func (ro *routeOption) UnionCanMerge(rro *routeOption) bool {
 	return ro.canMerge(rro, func() bool { return false })
 }
 
+func (ro *routeOption) MergeUnion(rro *routeOption) {
+	ro.vschemaTable = nil
+	ro.substitutions = append(ro.substitutions, rro.substitutions...)
+}
+
+func (ro *routeOption) SubqueryToTable(rb *route, vindexMap map[*column]vindexes.Vindex) {
+	ro.rb = rb
+	ro.vindexMap = vindexMap
+}
+
 func (ro *routeOption) canMerge(rro *routeOption, customCheck func() bool) bool {
-	if ro.ERoute.Keyspace.Name != rro.ERoute.Keyspace.Name {
+	if ro.eroute.Keyspace.Name != rro.eroute.Keyspace.Name {
 		return false
 	}
-	switch ro.ERoute.Opcode {
+	switch ro.eroute.Opcode {
 	case engine.SelectUnsharded:
-		if rro.ERoute.Opcode == engine.SelectUnsharded {
+		if rro.eroute.Opcode == engine.SelectUnsharded {
 			return true
 		}
 		return false
 	case engine.SelectDBA:
-		if rro.ERoute.Opcode == engine.SelectDBA {
+		if rro.eroute.Opcode == engine.SelectDBA {
 			return true
 		}
 		return false
 	case engine.SelectEqualUnique:
 		// Check if they target the same shard.
-		if rro.ERoute.Opcode == engine.SelectEqualUnique && ro.ERoute.Vindex == rro.ERoute.Vindex && valEqual(ro.condition, rro.condition) {
+		if rro.eroute.Opcode == engine.SelectEqualUnique && ro.eroute.Vindex == rro.eroute.Vindex && valEqual(ro.condition, rro.condition) {
 			return true
 		}
 	case engine.SelectNext:
@@ -142,7 +194,7 @@ func (ro *routeOption) canMergeOnFilter(pb *primitiveBuilder, rro *routeOption, 
 // We assume that the filter has already been pushed into
 // the route.
 func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
-	switch ro.ERoute.Opcode {
+	switch ro.eroute.Opcode {
 	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA:
 		return
 	}
@@ -150,9 +202,9 @@ func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 	if opcode == engine.SelectScatter {
 		return
 	}
-	switch ro.ERoute.Opcode {
+	switch ro.eroute.Opcode {
 	case engine.SelectEqualUnique:
-		if opcode == engine.SelectEqualUnique && vindex.Cost() < ro.ERoute.Vindex.Cost() {
+		if opcode == engine.SelectEqualUnique && vindex.Cost() < ro.eroute.Vindex.Cost() {
 			ro.updateRoute(opcode, vindex, values)
 		}
 	case engine.SelectEqual:
@@ -160,7 +212,7 @@ func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 		case engine.SelectEqualUnique:
 			ro.updateRoute(opcode, vindex, values)
 		case engine.SelectEqual:
-			if vindex.Cost() < ro.ERoute.Vindex.Cost() {
+			if vindex.Cost() < ro.eroute.Vindex.Cost() {
 				ro.updateRoute(opcode, vindex, values)
 			}
 		}
@@ -169,7 +221,7 @@ func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 		case engine.SelectEqualUnique, engine.SelectEqual:
 			ro.updateRoute(opcode, vindex, values)
 		case engine.SelectIN:
-			if vindex.Cost() < ro.ERoute.Vindex.Cost() {
+			if vindex.Cost() < ro.eroute.Vindex.Cost() {
 				ro.updateRoute(opcode, vindex, values)
 			}
 		}
@@ -182,8 +234,8 @@ func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 }
 
 func (ro *routeOption) updateRoute(opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
-	ro.ERoute.Opcode = opcode
-	ro.ERoute.Vindex = vindex
+	ro.eroute.Opcode = opcode
+	ro.eroute.Vindex = vindex
 	ro.condition = condition
 }
 
@@ -245,35 +297,35 @@ func (ro *routeOption) computeINPlan(pb *primitiveBuilder, comparison *sqlparser
 }
 
 func (ro *routeOption) isBetterThan(other *routeOption) bool {
-	switch other.ERoute.Opcode {
+	switch other.eroute.Opcode {
 	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA:
 		return false
 	case engine.SelectEqualUnique:
-		switch ro.ERoute.Opcode {
+		switch ro.eroute.Opcode {
 		case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA:
 			return true
 		case engine.SelectEqualUnique:
-			if ro.ERoute.Vindex.Cost() < other.ERoute.Vindex.Cost() {
+			if ro.eroute.Vindex.Cost() < other.eroute.Vindex.Cost() {
 				return true
 			}
 		}
 		return false
 	case engine.SelectIN:
-		switch ro.ERoute.Opcode {
+		switch ro.eroute.Opcode {
 		case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectEqualUnique:
 			return true
 		case engine.SelectIN:
-			if ro.ERoute.Vindex.Cost() < other.ERoute.Vindex.Cost() {
+			if ro.eroute.Vindex.Cost() < other.eroute.Vindex.Cost() {
 				return true
 			}
 		}
 		return false
 	case engine.SelectEqual:
-		switch ro.ERoute.Opcode {
+		switch ro.eroute.Opcode {
 		case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectEqualUnique, engine.SelectIN:
 			return true
 		case engine.SelectEqual:
-			if ro.ERoute.Vindex.Cost() < other.ERoute.Vindex.Cost() {
+			if ro.eroute.Vindex.Cost() < other.eroute.Vindex.Cost() {
 				return true
 			}
 		}
@@ -300,7 +352,7 @@ func (ro *routeOption) FindVindex(pb *primitiveBuilder, expr sqlparser.Expr) vin
 	if c.Origin() != ro.rb {
 		return nil
 	}
-	return ro.vindexes[c]
+	return ro.vindexMap[c]
 }
 
 // exprIsValue returns true if the expression can be treated as a value

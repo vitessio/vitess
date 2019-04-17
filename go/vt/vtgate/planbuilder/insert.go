@@ -41,7 +41,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (*engine.Ins
 		return nil, fmt.Errorf("inserting into a vindex not allowed: %s", sqlparser.String(ins.Table))
 	}
 	ro := rb.routeOptions[0]
-	if ro.ERoute.TargetDestination != nil {
+	if ro.eroute.TargetDestination != nil {
 		return nil, errors.New("unsupported: INSERT with a target destination")
 	}
 	if !ro.vschemaTable.Keyspace.Sharded {

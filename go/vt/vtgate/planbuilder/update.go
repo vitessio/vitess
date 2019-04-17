@@ -44,7 +44,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 		return nil, errors.New("unsupported: multi-table/vindex update statement in sharded keyspace")
 	}
 	ro := rb.routeOptions[0]
-	eupd.Keyspace = ro.ERoute.Keyspace
+	eupd.Keyspace = ro.eroute.Keyspace
 	if !eupd.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
 		if !pb.validateUnshardedRoute(upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
@@ -73,12 +73,12 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	}
 	var err error
 
-	if ro.ERoute.TargetDestination != nil {
-		if ro.ERoute.TargetTabletType != topodatapb.TabletType_MASTER {
+	if ro.eroute.TargetDestination != nil {
+		if ro.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: UPDATE statement with a replica target")
 		}
 		eupd.Opcode = engine.UpdateByDestination
-		eupd.TargetDestination = ro.ERoute.TargetDestination
+		eupd.TargetDestination = ro.eroute.TargetDestination
 		return eupd, nil
 	}
 
