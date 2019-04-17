@@ -3,8 +3,9 @@
 
 ###############################################################################
 # WARNING: This sql is *NOT* safe for production use,
-#          as it contains default users and passwords
-#          with more privileges than necessary.
+#          as it contains default well-known users and passwords.
+#          Care should be taken to change these users and passwords
+#          for production.
 ###############################################################################
 
 ###############################################################################
