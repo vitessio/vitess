@@ -79,11 +79,11 @@ The following table lists the methods in each group and links to more detail abo
 <tr><td class="api-method-summary-group" colspan="2">v3 API (alpha)</td></tr>
 <tr>
 <td><code><a href="#execute">Execute</a></code></td>
-<td>Execute tries to route the query to the right shard. It depends on the query and bind variables to provide enough information in conjonction with the vindexes to route the query.</td>
+<td>Execute tries to route the query to the right shard. It depends on the query and bind variables to provide enough information in conjunction with the vindexes to route the query.</td>
 </tr>
 <tr>
 <td><code><a href="#streamexecute">StreamExecute</a></code></td>
-<td>StreamExecute executes a streaming query based on shards. It depends on the query and bind variables to provide enough information in conjonction with the vindexes to route the query. Use this method if the query returns a large number of rows.</td>
+<td>StreamExecute executes a streaming query based on shards. It depends on the query and bind variables to provide enough information in conjunction with the vindexes to route the query. Use this method if the query returns a large number of rows.</td>
 </tr>
 </table>
 ##Range-based Sharding
@@ -572,7 +572,7 @@ GetSrvKeyspace returns a SrvKeyspace object (as seen by this vtgate). This metho
 ##v3 API (alpha)
 ### Execute
 
-Execute tries to route the query to the right shard. It depends on the query and bind variables to provide enough information in conjonction with the vindexes to route the query.
+Execute tries to route the query to the right shard. It depends on the query and bind variables to provide enough information in conjunction with the vindexes to route the query.
 
 #### Request
 
@@ -604,7 +604,7 @@ Execute tries to route the query to the right shard. It depends on the query and
 
 ### StreamExecute
 
-StreamExecute executes a streaming query based on shards. It depends on the query and bind variables to provide enough information in conjonction with the vindexes to route the query. Use this method if the query returns a large number of rows.
+StreamExecute executes a streaming query based on shards. It depends on the query and bind variables to provide enough information in conjunction with the vindexes to route the query. Use this method if the query returns a large number of rows.
 
 #### Request
 

@@ -136,7 +136,7 @@ class VitessServicer(object):
   def Execute(self, request, context):
     """Execute tries to route the query to the right shard.
     It depends on the query and bind variables to provide enough
-    information in conjonction with the vindexes to route the query.
+    information in conjunction with the vindexes to route the query.
     API group: v3
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -146,7 +146,7 @@ class VitessServicer(object):
   def ExecuteBatch(self, request, context):
     """ExecuteBatch tries to route the list of queries on the right shards.
     It depends on the query and bind variables to provide enough
-    information in conjonction with the vindexes to route the query.
+    information in conjunction with the vindexes to route the query.
     API group: v3
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -156,7 +156,7 @@ class VitessServicer(object):
   def StreamExecute(self, request, context):
     """StreamExecute executes a streaming query based on shards.
     It depends on the query and bind variables to provide enough
-    information in conjonction with the vindexes to route the query.
+    information in conjunction with the vindexes to route the query.
     Use this method if the query returns a large number of rows.
     API group: v3
     """
