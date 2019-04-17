@@ -53,6 +53,7 @@ type MysqlDaemon interface {
 	MasterPosition() (mysql.Position, error)
 	IsReadOnly() (bool, error)
 	SetReadOnly(on bool) error
+	SetSuperReadOnly(on bool) error
 	SetSlavePosition(ctx context.Context, pos mysql.Position) error
 	SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
