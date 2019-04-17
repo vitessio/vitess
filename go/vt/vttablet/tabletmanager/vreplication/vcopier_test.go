@@ -295,7 +295,7 @@ func TestPlayerCopyTablesNone(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
@@ -358,7 +358,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit)
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)
