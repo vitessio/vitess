@@ -140,6 +140,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 		sbm := vc.vr.stats.SecondsBehindMaster.Get()
 		if sbm < seconds {
 			cancel()
+			// Make sure vplayer returns before returning.
 			<-errch
 			return nil
 		}
@@ -150,6 +151,8 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 			}
 			return io.EOF
 		case <-ctx.Done():
+			// Make sure vplayer returns before returning.
+			<-errch
 			return io.EOF
 		case <-tmr.C:
 		}
@@ -222,6 +225,11 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		if len(rows.Rows) == 0 {
 			return nil
 		}
+		// The number of rows we receive depends on the packet size set
+		// for the row streamer. Since the packet size is roughly equivalent
+		// to data size, this should map to a uniform amount of pages affected
+		// per statement. A packet size of 30K will roughly translate to 8
+		// mysql pages of 4K each.
 		query, err := vc.tablePlan.generateBulkInsert(rows)
 		if err != nil {
 			return err
