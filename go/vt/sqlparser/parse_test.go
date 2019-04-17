@@ -1121,6 +1121,9 @@ var (
 		input:  "show databases",
 		output: "show databases",
 	}, {
+		input:  "show schemas",
+		output: "show schemas",
+	}, {
 		input:  "show engine INNODB",
 		output: "show engine",
 	}, {
