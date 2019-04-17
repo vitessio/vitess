@@ -242,7 +242,7 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 			uc.param.Host = baseConfig.Host
 			uc.param.Port = baseConfig.Port
 			uc.param.UnixSocket = baseConfig.UnixSocket
-		} else {
+		} else if uc.param.UnixSocket == "" && uc.param.Host == "" {
 			uc.param.UnixSocket = defaultSocketFile
 		}
 
