@@ -127,7 +127,11 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 	*mysqlAuthServerStaticFile = tmpFile.Name()
-	*mysqlAuthServerStaticReloadInterval = time.Millisecond * 10
+
+	savedReloadInterval := *mysqlAuthServerStaticReloadInterval
+	defer func() { *mysqlAuthServerStaticReloadInterval = savedReloadInterval }()
+	*mysqlAuthServerStaticReloadInterval = 10 * time.Millisecond
+
 	oldStr := "str1"
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
 	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
