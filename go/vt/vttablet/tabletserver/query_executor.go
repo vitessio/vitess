@@ -301,7 +301,12 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltype
 		return nil, err
 	}
 	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
-	qre.logStats.AddRewrittenSQL("begin", time.Now())
+	//
+	// A better future improvement would be for LocalBegin to return the set of
+	// executed statements to capture the isolation level setting as well.
+	if qre.options.GetTransactionIsolation() != querypb.ExecuteOptions_AUTOCOMMIT {
+		qre.logStats.AddRewrittenSQL("begin", time.Now())
+	}
 
 	reply, err = f(conn)
 
@@ -312,7 +317,12 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltype
 		return nil, err
 	}
 	err = qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
-	qre.logStats.AddRewrittenSQL("commit", start)
+
+	// As above LocalCommit is a no-op for autocommmit so don't log anything.
+	if qre.options.GetTransactionIsolation() != querypb.ExecuteOptions_AUTOCOMMIT {
+		qre.logStats.AddRewrittenSQL("commit", start)
+	}
+
 	if err != nil {
 		return nil, err
 	}
