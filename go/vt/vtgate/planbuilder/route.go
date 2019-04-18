@@ -680,3 +680,21 @@ func (rb *route) SetOpcode(code engine.RouteOpcode) error {
 	rb.ERoute.Opcode = code
 	return nil
 }
+
+// queryTimeout returns DirectiveQueryTimeout value if set, otherwise returns 0.
+func queryTimeout(d sqlparser.CommentDirectives) int {
+	if d == nil {
+		return 0
+	}
+
+	val, ok := d[sqlparser.DirectiveQueryTimeout]
+	if !ok {
+		return 0
+	}
+
+	intVal, ok := val.(int)
+	if ok {
+		return intVal
+	}
+	return 0
+}
