@@ -145,7 +145,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
     checkOpen();
     if (this.vtSession.isAutoCommit() != autoCommit) { //If same then no-op
       //Old Transaction Needs to be committed as per JDBC 4.1 Spec.
-      if (isInTransaction()) {
+      if (isInTransaction() && !getAutoCommit()) {
         this.commit();
       }
       this.vtSession.setAutoCommit(autoCommit);
