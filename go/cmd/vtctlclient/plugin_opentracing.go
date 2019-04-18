@@ -23,6 +23,8 @@ import (
 )
 
 func init() {
-  closer := trace.StartTracing("vtctlclient")
-  servenv.OnClose(trace.LogErrorsWhenClosing(closer))
+  servenv.OnRun(func() {
+    closer := trace.StartTracing("vtctlclient")
+    servenv.OnClose(trace.LogErrorsWhenClosing(closer))
+  })
 }
