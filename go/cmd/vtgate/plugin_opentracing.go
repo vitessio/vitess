@@ -18,11 +18,12 @@ package main
 
 import (
   "vitess.io/vitess/go/trace"
-
   "vitess.io/vitess/go/vt/servenv"
 )
 
 func init() {
-  closer := trace.StartTracing("vtgate")
-  servenv.OnClose(trace.LogErrorsWhenClosing(closer))
+  servenv.OnRun(func() {
+    closer := trace.StartTracing("vtgate")
+    servenv.OnClose(trace.LogErrorsWhenClosing(closer))
+  })
 }
