@@ -235,8 +235,8 @@ func newMessageManager(tsv TabletService, table *schema.Table, conns *connpool.P
 		"update %v set time_next = %a+(%a<<epoch), epoch = epoch+1 where id in %a and time_acked is null",
 		mm.name, ":time_now", ":wait_time", "::ids")
 	mm.purgeQuery = sqlparser.BuildParsedQuery(
-		"delete from %v where time_scheduled < %a and time_acked is not null limit 500",
-		mm.name, ":time_scheduled")
+		"delete from %v where time_acked < %a and time_acked is not null limit 500",
+		mm.name, ":time_acked")
 	return mm
 }
 
@@ -672,7 +672,7 @@ func (mm *messageManager) GeneratePostponeQuery(ids []string) (string, map[strin
 // GeneratePurgeQuery returns the query and bind vars for purging messages.
 func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[string]*querypb.BindVariable) {
 	return mm.purgeQuery.Query, map[string]*querypb.BindVariable{
-		"time_scheduled": sqltypes.Int64BindVariable(timeCutoff),
+		"time_acked": sqltypes.Int64BindVariable(timeCutoff),
 	}
 }
 
