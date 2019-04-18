@@ -249,7 +249,7 @@
 
 # multi delete multi table
 "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'"
-"unsupported: multi-table/vindex delete statement in sharded keyspace"
+"unsupported: multi-shard or vindex write statement"
 
 # scatter delete with owned lookup vindex
 "delete from user"
@@ -285,11 +285,11 @@
 
 # join in update tables
 "update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
-"unsupported: multi-table/vindex update statement in sharded keyspace"
+"unsupported: multi-shard or vindex write statement"
 
 # multiple tables in update
 "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
-"unsupported: multi-table/vindex update statement in sharded keyspace"
+"unsupported: multi-shard or vindex write statement"
 
 # unsharded insert with cross-shard join"
 "insert into unsharded select u.col from user u join user u1"

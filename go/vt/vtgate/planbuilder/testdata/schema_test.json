@@ -1,4 +1,10 @@
 {
+  "routing_rules": {
+    "rules": [{
+      "from_table": "route1",
+      "to_tables": ["user.user", "user.user_metadata"]
+    }]
+  },
   "keyspaces": {
     "user": {
       "sharded": true,
