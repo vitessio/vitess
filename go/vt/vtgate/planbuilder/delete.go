@@ -71,6 +71,8 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 		edel.MultiShardAutocommit = true
 	}
 
+	edel.QueryTimeout = queryTimeout(directives)
+
 	if rb.ERoute.TargetDestination != nil {
 		if rb.ERoute.TargetTabletType != topodatapb.TabletType_MASTER {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: DELETE statement with a replica target")

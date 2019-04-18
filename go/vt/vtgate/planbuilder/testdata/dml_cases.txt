@@ -988,6 +988,33 @@
   }
 }
 
+# insert with query timeout
+"insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id) values (1), (2)"
+{
+  "Original": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id) values (1), (2)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
+    "Values": [[[":__seq0",":__seq1"]],[[null,null]],[[null,null]]],
+    "Table": "user",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [1,2]
+    },
+    "Prefix": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, Name, Costly) values ",
+    "Mid": ["(:_Id0, :_Name0, :_Costly0)","(:_Id1, :_Name1, :_Costly1)"],
+    "QueryTimeout": 1
+  }
+}
+
 # insert with multiple rows - multi-shard autocommit
 "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id) values (1), (2)"
 {
@@ -1337,6 +1364,22 @@
   }
 }
 
+# update with no primary vindex on where clause (scatter update)   - query timeout
+"update /*vt+ QUERY_TIMEOUT_MS=1 */  user_extra set val = 1"
+{
+  "Original": "update /*vt+ QUERY_TIMEOUT_MS=1 */  user_extra set val = 1",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ user_extra set val = 1",
+    "Table": "user_extra",
+    "QueryTimeout": 1
+  }
+}
+
 # update with non-comparison expr
 "update user_extra set val = 1 where id between 1 and 2"
 {
@@ -1486,6 +1529,22 @@
     "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'",
     "Table": "user_extra",
     "MultiShardAutocommit": true
+  }
+}
+
+# delete from with no index match - query timeout
+"delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'"
+{
+  "Original": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'",
+  "Instructions": {
+    "Opcode": "DeleteScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'",
+    "Table": "user_extra",
+    "QueryTimeout": 1
   }
 }
 
