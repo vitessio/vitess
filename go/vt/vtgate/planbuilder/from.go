@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -26,6 +27,22 @@ import (
 )
 
 // This file has functions to analyze the FROM clause.
+
+// processDMLTable analyzes the FROM clause for DMLs and returns a routeOption.
+func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*routeOption, error) {
+	if err := pb.processTableExprs(tableExprs); err != nil {
+		return nil, err
+	}
+	rb, ok := pb.bldr.(*route)
+	if !ok {
+		return nil, errors.New("unsupported: multi-shard or vindex write statement")
+	}
+	ro := rb.routeOptions[0]
+	for _, sub := range ro.substitutions {
+		*sub.oldExpr = *sub.newExpr
+	}
+	return ro, nil
+}
 
 // processTableExprs analyzes the FROM clause. It produces a builder
 // with all the routes identified.
@@ -192,7 +209,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			if tableName.Name != vst.Name {
 				// Table name does not match. Change and alias it to old name.
 				sub.newExpr = &sqlparser.AliasedTableExpr{
-					Expr: &sqlparser.TableName{Name: vst.Name},
+					Expr: sqlparser.TableName{Name: vst.Name},
 					As:   tableName.Name,
 				}
 			}
@@ -201,7 +218,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			if tableName.Name != vst.Name {
 				// Table name does not match. Change it and reuse existing alias.
 				sub.newExpr = &sqlparser.AliasedTableExpr{
-					Expr: &sqlparser.TableName{Name: vst.Name},
+					Expr: sqlparser.TableName{Name: vst.Name},
 					As:   tableExpr.As,
 				}
 			}

@@ -1798,6 +1798,18 @@ func TestFindTable(t *testing.T) {
 
 func TestFindTablesOrVindex(t *testing.T) {
 	input := vschemapb.SrvVSchema{
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{{
+				FromTable: "unqualified",
+				ToTables:  []string{"ksa.ta", "ksb.t1"},
+			}, {
+				FromTable: "newks.qualified",
+				ToTables:  []string{"ksa.ta"},
+			}, {
+				FromTable: "notarget",
+				ToTables:  []string{},
+			}},
+		},
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"ksa": {
 				Tables: map[string]*vschemapb.Table{
@@ -1841,6 +1853,8 @@ func TestFindTablesOrVindex(t *testing.T) {
 		},
 	}
 	vschema, _ := BuildVSchema(&input)
+	ta := vschema.Keyspaces["ksa"].Tables["ta"]
+	t1 := vschema.Keyspaces["ksb"].Tables["t1"]
 
 	_, _, err := vschema.FindTablesOrVindex("", "t1")
 	wantErr := "ambiguous table reference: t1"
@@ -1857,12 +1871,6 @@ func TestFindTablesOrVindex(t *testing.T) {
 	got, _, err := vschema.FindTablesOrVindex("", "ta")
 	if err != nil {
 		t.Fatal(err)
-	}
-	ta := &Table{
-		Name: sqlparser.NewTableIdent("ta"),
-		Keyspace: &Keyspace{
-			Name: "ksa",
-		},
 	}
 	if !reflect.DeepEqual(got, []*Table{ta}) {
 		t.Errorf("FindTablesOrVindex(\"t1a\"): %+v, want %+v", got, ta)
@@ -1892,6 +1900,28 @@ func TestFindTablesOrVindex(t *testing.T) {
 
 	_, _, err = vschema.FindTablesOrVindex("", "dup")
 	wantErr = "ambiguous vindex reference: dup"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("FindTablesOrVindex(\"\"): %v, want %s", err, wantErr)
+	}
+
+	got, _, err = vschema.FindTablesOrVindex("", "unqualified")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []*Table{ta, t1}; !reflect.DeepEqual(got, want) {
+		t.Errorf("FindTablesOrVindex(unqualified): %+v, want %+v", got, want)
+	}
+
+	got, _, err = vschema.FindTablesOrVindex("newks", "qualified")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []*Table{ta}; !reflect.DeepEqual(got, want) {
+		t.Errorf("FindTablesOrVindex(unqualified): %+v, want %+v", got, want)
+	}
+
+	_, _, err = vschema.FindTablesOrVindex("", "notarget")
+	wantErr = "table notarget has been disabled"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("FindTablesOrVindex(\"\"): %v, want %s", err, wantErr)
 	}

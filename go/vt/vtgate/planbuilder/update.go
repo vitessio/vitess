@@ -32,18 +32,14 @@ import (
 // buildUpdatePlan builds the instructions for an UPDATE statement.
 func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Update, error) {
 	eupd := &engine.Update{
-		Query:               generateQuery(upd),
 		ChangedVindexValues: make(map[string][]sqltypes.PlanValue),
 	}
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(upd)))
-	if err := pb.processTableExprs(upd.TableExprs); err != nil {
+	ro, err := pb.processDMLTable(upd.TableExprs)
+	if err != nil {
 		return nil, err
 	}
-	rb, ok := pb.bldr.(*route)
-	if !ok {
-		return nil, errors.New("unsupported: multi-table/vindex update statement in sharded keyspace")
-	}
-	ro := rb.routeOptions[0]
+	eupd.Query = generateQuery(upd)
 	eupd.Keyspace = ro.eroute.Keyspace
 	if !eupd.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
@@ -71,7 +67,6 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	if eupd.Table == nil {
 		return nil, errors.New("internal error: table.vindexTable is mysteriously nil")
 	}
-	var err error
 
 	if ro.eroute.TargetDestination != nil {
 		if ro.eroute.TargetTabletType != topodatapb.TabletType_MASTER {

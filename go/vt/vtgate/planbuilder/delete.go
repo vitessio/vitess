@@ -30,18 +30,13 @@ import (
 
 // buildDeletePlan builds the instructions for a DELETE statement.
 func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Delete, error) {
-	edel := &engine.Delete{
-		Query: generateQuery(del),
-	}
+	edel := &engine.Delete{}
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(del)))
-	if err := pb.processTableExprs(del.TableExprs); err != nil {
+	ro, err := pb.processDMLTable(del.TableExprs)
+	if err != nil {
 		return nil, err
 	}
-	rb, ok := pb.bldr.(*route)
-	if !ok {
-		return nil, errors.New("unsupported: multi-table/vindex delete statement in sharded keyspace")
-	}
-	ro := rb.routeOptions[0]
+	edel.Query = generateQuery(del)
 	edel.Keyspace = ro.eroute.Keyspace
 	if !edel.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
@@ -65,15 +60,14 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 	}
 
 	edel.QueryTimeout = queryTimeout(directives)
-	if rb.routeOptions[0].eroute.TargetDestination != nil {
-		if rb.routeOptions[0].eroute.TargetTabletType != topodatapb.TabletType_MASTER {
+	if ro.eroute.TargetDestination != nil {
+		if ro.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: DELETE statement with a replica target")
 		}
 		edel.Opcode = engine.DeleteByDestination
-		edel.TargetDestination = rb.routeOptions[0].eroute.TargetDestination
+		edel.TargetDestination = ro.eroute.TargetDestination
 		return edel, nil
 	}
-	var err error
 	edel.Vindex, edel.Values, err = getDMLRouting(del.Where, edel.Table)
 	// We couldn't generate a route for a single shard
 	// Execute a delete sharded
