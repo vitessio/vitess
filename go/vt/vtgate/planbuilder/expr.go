@@ -240,7 +240,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func (pb *primitiveBuilder) validateUnshardedRoute(nodes ...sqlparser.SQLNode) bool {
+func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQLNode) bool {
 	var keyspace string
 	if rb, ok := pb.bldr.(*route); ok {
 		keyspace = rb.routeOptions[0].eroute.Keyspace.Name
@@ -274,6 +274,9 @@ func (pb *primitiveBuilder) validateUnshardedRoute(nodes ...sqlparser.SQLNode) b
 				if !innerRoute.removeOptionsWithUnmatchedKeyspace(keyspace) {
 					samePlan = false
 					return false, errors.New("dummy")
+				}
+				for _, sub := range innerRoute.routeOptions[0].substitutions {
+					*sub.oldExpr = *sub.newExpr
 				}
 			case *sqlparser.Union:
 				if !inSubQuery {

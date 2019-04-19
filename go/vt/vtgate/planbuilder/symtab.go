@@ -95,8 +95,7 @@ func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vi
 
 	vindexMaps = make([]map[*column]vindexes.Vindex, len(vschemaTables))
 	for i, vst := range vschemaTables {
-		// If any input is authoritative, we make the table
-		// authoritative.
+		// If any input is authoritative, we make the table authoritative.
 		// TODO(sougou): vschema builder should validate that authoritative columns match.
 		if vst.ColumnListAuthoritative {
 			t.isAuthoritative = true

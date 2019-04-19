@@ -39,14 +39,16 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	if err != nil {
 		return nil, err
 	}
-	eupd.Query = generateQuery(upd)
 	eupd.Keyspace = ro.eroute.Keyspace
 	if !eupd.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
-		if !pb.validateUnshardedRoute(upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
+		if !pb.finalizeUnshardedDMLSubqueries(upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
 			return nil, errors.New("unsupported: sharded subqueries in DML")
 		}
 		eupd.Opcode = engine.UpdateUnsharded
+		// Generate query after all the analysis. Otherwise table name substitutions for
+		// routed tables won't happen.
+		eupd.Query = generateQuery(upd)
 		return eupd, nil
 	}
 
@@ -56,6 +58,10 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	if len(pb.st.tables) != 1 {
 		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 	}
+
+	// Generate query after all the analysis. Otherwise table name substitutions for
+	// routed tables won't happen.
+	eupd.Query = generateQuery(upd)
 
 	directives := sqlparser.ExtractCommentDirectives(upd.Comments)
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {

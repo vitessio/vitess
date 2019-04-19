@@ -128,6 +128,7 @@ func (ro *routeOption) MergeUnion(rro *routeOption) {
 
 func (ro *routeOption) SubqueryToTable(rb *route, vindexMap map[*column]vindexes.Vindex) {
 	ro.rb = rb
+	ro.vschemaTable = nil
 	ro.vindexMap = vindexMap
 }
 
@@ -136,16 +137,8 @@ func (ro *routeOption) canMerge(rro *routeOption, customCheck func() bool) bool 
 		return false
 	}
 	switch ro.eroute.Opcode {
-	case engine.SelectUnsharded:
-		if rro.eroute.Opcode == engine.SelectUnsharded {
-			return true
-		}
-		return false
-	case engine.SelectDBA:
-		if rro.eroute.Opcode == engine.SelectDBA {
-			return true
-		}
-		return false
+	case engine.SelectUnsharded, engine.SelectDBA:
+		return ro.eroute.Opcode == rro.eroute.Opcode
 	case engine.SelectEqualUnique:
 		// Check if they target the same shard.
 		if rro.eroute.Opcode == engine.SelectEqualUnique && ro.eroute.Vindex == rro.eroute.Vindex && valEqual(ro.condition, rro.condition) {
@@ -296,44 +289,28 @@ func (ro *routeOption) computeINPlan(pb *primitiveBuilder, comparison *sqlparser
 	return engine.SelectScatter, nil, nil
 }
 
+var planCost = map[engine.RouteOpcode]int{
+	engine.SelectUnsharded:   0,
+	engine.SelectNext:        0,
+	engine.SelectDBA:         0,
+	engine.SelectEqualUnique: 1,
+	engine.SelectIN:          2,
+	engine.SelectEqual:       3,
+	engine.SelectScatter:     4,
+}
+
 func (ro *routeOption) isBetterThan(other *routeOption) bool {
-	switch other.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA:
-		return false
-	case engine.SelectEqualUnique:
-		switch ro.eroute.Opcode {
-		case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA:
-			return true
-		case engine.SelectEqualUnique:
-			if ro.eroute.Vindex.Cost() < other.eroute.Vindex.Cost() {
-				return true
-			}
-		}
-		return false
-	case engine.SelectIN:
-		switch ro.eroute.Opcode {
-		case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectEqualUnique:
-			return true
-		case engine.SelectIN:
-			if ro.eroute.Vindex.Cost() < other.eroute.Vindex.Cost() {
-				return true
-			}
-		}
-		return false
-	case engine.SelectEqual:
-		switch ro.eroute.Opcode {
-		case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectEqualUnique, engine.SelectIN:
-			return true
-		case engine.SelectEqual:
-			if ro.eroute.Vindex.Cost() < other.eroute.Vindex.Cost() {
-				return true
-			}
-		}
-		return false
-	case engine.SelectScatter:
-		return false
+	ropc := planCost[ro.eroute.Opcode]
+	otherpc := planCost[other.eroute.Opcode]
+	if ropc < otherpc {
+		return true
 	}
-	// Unreachable.
+	if ropc == otherpc {
+		switch other.eroute.Opcode {
+		case engine.SelectEqualUnique, engine.SelectIN, engine.SelectEqual:
+			return ro.eroute.Vindex.Cost() < other.eroute.Vindex.Cost()
+		}
+	}
 	return false
 }
 

@@ -40,10 +40,13 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 	edel.Keyspace = ro.eroute.Keyspace
 	if !edel.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
-		if !pb.validateUnshardedRoute(del.Targets, del.Where, del.OrderBy, del.Limit) {
+		if !pb.finalizeUnshardedDMLSubqueries(del.Targets, del.Where, del.OrderBy, del.Limit) {
 			return nil, errors.New("unsupported: sharded subqueries in DML")
 		}
 		edel.Opcode = engine.DeleteUnsharded
+		// Generate query after all the analysis. Otherwise table name substitutions for
+		// routed tables won't happen.
+		edel.Query = generateQuery(del)
 		return edel, nil
 	}
 	if del.Targets != nil || ro.vschemaTable == nil {
@@ -53,6 +56,9 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 		return nil, errors.New("unsupported: subqueries in sharded DML")
 	}
 	edel.Table = ro.vschemaTable
+	// Generate query after all the analysis. Otherwise table name substitutions for
+	// routed tables won't happen.
+	edel.Query = generateQuery(del)
 
 	directives := sqlparser.ExtractCommentDirectives(del.Comments)
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
