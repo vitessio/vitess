@@ -122,6 +122,8 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	if err != nil {
 		return err
 	}
+	// If there's no start position, it means we're copying the
+	// first table. So, there's nothing to catch up to.
 	if settings.StartPos.IsZero() {
 		return nil
 	}

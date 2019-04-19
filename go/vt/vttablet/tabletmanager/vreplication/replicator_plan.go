@@ -64,7 +64,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 	return tplan, nil
 }
 
-// buildFromFiedls builds a full TablePlan, but uses the field info as the
+// buildFromFields builds a full TablePlan, but uses the field info as the
 // full column list. This happens when the query used was a 'select *', which
 // requires us to wait for the field info sent by the source.
 func (rp *ReplicatorPlan) buildFromFields(tableName string, fields []*querypb.Field) (*TablePlan, error) {

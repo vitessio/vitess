@@ -70,7 +70,7 @@ type insertType int
 // The following values are the various insert types.
 const (
 	insertNormal = insertType(iota)
-	insertOndup
+	insertOnDup
 	insertIgnore
 )
 
@@ -371,7 +371,7 @@ func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
 	tpb.onInsert = insertIgnore
 	for _, cExpr := range tpb.colExprs {
 		if !cExpr.isGrouped {
-			tpb.onInsert = insertOndup
+			tpb.onInsert = insertOnDup
 			break
 		}
 	}
@@ -478,7 +478,7 @@ func (tpb *tablePlanBuilder) generateSelectPart(buf *sqlparser.TrackedBuffer, bv
 }
 
 func (tpb *tablePlanBuilder) generateOnDupPart(buf *sqlparser.TrackedBuffer) *sqlparser.ParsedQuery {
-	if tpb.onInsert != insertOndup {
+	if tpb.onInsert != insertOnDup {
 		return nil
 	}
 	buf.Myprintf(" on duplicate key update ")
@@ -541,7 +541,7 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 	case insertNormal:
 		buf.Myprintf("delete from %v", tpb.name)
 		tpb.generateWhere(buf, bvf)
-	case insertOndup:
+	case insertOnDup:
 		bvf.mode = bvBefore
 		buf.Myprintf("update %v set ", tpb.name)
 		separator := ""
@@ -601,6 +601,13 @@ func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, 
 	buf.WriteString(")")
 }
 
+// bindvarFormatter is a dual mode formatter. Its behavior
+// can be changed dynamically changed to generate bind vars
+// for the 'before' row or 'after' row by setting its mode
+// to 'bvBefore' or 'bvAfter'. For example, inserts will always
+// use bvAfter, whereas deletes will always use bvBefore.
+// For updates, values being set will use bvAfter, whereas
+// the where clause will use bvBefore.
 type bindvarFormatter struct {
 	mode bindvarMode
 }
