@@ -137,7 +137,7 @@ func TestNormalization(t *testing.T) {
 		in:  "T",
 		out: "\x18\x16",
 	}}
-	collator := newPooledCollator().(pooledCollator)
+	collator := newPooledCollator().(*pooledCollator)
 	for _, tcase := range tcases {
 		norm, err := normalize(collator.col, collator.buf, []byte(tcase.in))
 		if err != nil {
@@ -158,7 +158,7 @@ func TestInvalidUnicodeNormalization(t *testing.T) {
 		"\x8a[\xdf,\u007fĄE\x92\xd2W+\xcd\x06h\xd2",
 	}
 	wantErr := "invalid UTF-8"
-	collator := newPooledCollator().(pooledCollator)
+	collator := newPooledCollator().(*pooledCollator)
 
 	for _, in := range inputs {
 		// We've observed that infinite looping is a possible failure mode for the
@@ -190,7 +190,7 @@ func BenchmarkNormalizeSafe(b *testing.B) {
 	input := []byte("testing")
 
 	for i := 0; i < b.N; i++ {
-		collator := newPooledCollator().(pooledCollator)
+		collator := newPooledCollator().(*pooledCollator)
 		normalize(collator.col, collator.buf, input)
 	}
 }
@@ -199,7 +199,7 @@ func BenchmarkNormalizeSafe(b *testing.B) {
 // are shared between iterations, assuming no concurrency.
 func BenchmarkNormalizeShared(b *testing.B) {
 	input := []byte("testing")
-	collator := newPooledCollator().(pooledCollator)
+	collator := newPooledCollator().(*pooledCollator)
 
 	for i := 0; i < b.N; i++ {
 		normalize(collator.col, collator.buf, input)
@@ -212,7 +212,7 @@ func BenchmarkNormalizePooled(b *testing.B) {
 	input := []byte("testing")
 
 	for i := 0; i < b.N; i++ {
-		collator := collatorPool.Get().(pooledCollator)
+		collator := collatorPool.Get().(*pooledCollator)
 		normalize(collator.col, collator.buf, input)
 		collatorPool.Put(collator)
 	}

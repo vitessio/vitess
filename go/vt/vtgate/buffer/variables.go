@@ -109,8 +109,8 @@ var stopReasons = []stopReason{stopFailoverEndDetected, stopMaxFailoverDurationE
 
 const (
 	stopFailoverEndDetected         stopReason = "NewMasterSeen"
-	stopMaxFailoverDurationExceeded            = "MaxDurationExceeded"
-	stopShutdown                               = "Shutdown"
+	stopMaxFailoverDurationExceeded stopReason = "MaxDurationExceeded"
+	stopShutdown                    stopReason = "Shutdown"
 )
 
 // evictedReason is used in "requestsEvicted" as "Reason" label.
@@ -119,9 +119,10 @@ type evictedReason string
 var evictReasons = []evictedReason{evictedContextDone, evictedBufferFull, evictedWindowExceeded}
 
 const (
-	evictedContextDone    evictedReason = "ContextDone"
-	evictedBufferFull                   = "BufferFull"
-	evictedWindowExceeded               = "WindowExceeded"
+	evictedContextDone evictedReason = "ContextDone"
+	//lint: ignore SA9004 ok not to use explicit type here because implicit type string is correct
+	evictedBufferFull     = "BufferFull"
+	evictedWindowExceeded = "WindowExceeded"
 )
 
 // skippedReason is used in "requestsSkipped" as "Reason" label.

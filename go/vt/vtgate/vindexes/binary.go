@@ -63,7 +63,7 @@ func (vind *Binary) IsFunctional() bool {
 func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
-		out[i] = (bytes.Compare(ids[i].ToBytes(), ksids[i]) == 0)
+		out[i] = bytes.Equal(ids[i].ToBytes(), ksids[i])
 	}
 	return out, nil
 }

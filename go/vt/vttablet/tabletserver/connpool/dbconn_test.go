@@ -65,7 +65,9 @@ func TestDBConnExec(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
 	dbConn, err := NewDBConn(connPool, db.ConnParams())
-	defer dbConn.Close()
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
 	}
@@ -142,7 +144,9 @@ func TestDBConnDeadline(t *testing.T) {
 	defer cancel()
 
 	dbConn, err := NewDBConn(connPool, db.ConnParams())
-	defer dbConn.Close()
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
 	}
@@ -200,7 +204,12 @@ func TestDBConnKill(t *testing.T) {
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	dbConn, err := NewDBConn(connPool, db.ConnParams())
-	defer dbConn.Close()
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
+	if err != nil {
+		t.Fatalf("should not get an error, err: %v", err)
+	}
 	query := fmt.Sprintf("kill %d", dbConn.ID())
 	db.AddQuery(query, &sqltypes.Result{})
 	// Kill failed because we are not able to connect to the database
@@ -237,9 +246,13 @@ func TestDBNoPoolConnKill(t *testing.T) {
 	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
-	defer db.Close()
 	dbConn, err := NewDBConnNoPool(db.ConnParams(), connPool.dbaPool)
-	defer dbConn.Close()
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
+	if err != nil {
+		t.Fatalf("should not get an error, err: %v", err)
+	}
 	query := fmt.Sprintf("kill %d", dbConn.ID())
 	db.AddQuery(query, &sqltypes.Result{})
 	// Kill failed because we are not able to connect to the database
@@ -290,7 +303,12 @@ func TestDBConnStream(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
 	dbConn, err := NewDBConn(connPool, db.ConnParams())
-	defer dbConn.Close()
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
+	if err != nil {
+		t.Fatalf("should not get an error, err: %v", err)
+	}
 	var result sqltypes.Result
 	err = dbConn.Stream(
 		ctx, sql, func(r *sqltypes.Result) error {

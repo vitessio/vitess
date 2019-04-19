@@ -87,7 +87,7 @@ func commandSucceeds(t *testing.T, client vtworkerclient.Client) {
 	if logutil.EventString(got) != expected {
 		t.Errorf("Got unexpected log line '%v' expected '%v'", got.String(), expected)
 	}
-	got, err = stream.Recv()
+	_, err = stream.Recv()
 	if err != io.EOF {
 		t.Fatalf("Didn't get EOF as expected: %v", err)
 	}

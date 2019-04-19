@@ -44,7 +44,7 @@ func (zs *Server) Create(ctx context.Context, filePath string, contents []byte) 
 	if err != nil {
 		return nil, convertError(err, zkPath)
 	}
-	if bytes.Compare(data, contents) != 0 {
+	if !bytes.Equal(data, contents) {
 		return nil, fmt.Errorf("file contents changed between zk.Create and zk.Get")
 	}
 

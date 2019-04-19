@@ -258,7 +258,7 @@ func Run(sql string) ([]*Explain, error) {
 		if sql != "" {
 			// Reset the global time simulator unless there's an open transaction
 			// in the session from the previous staement.
-			if vtgateSession == nil || vtgateSession.GetInTransaction() == false {
+			if vtgateSession == nil || !vtgateSession.GetInTransaction() {
 				batchTime = sync2.NewBatcher(*batchInterval)
 			}
 			log.V(100).Infof("explain %s", sql)

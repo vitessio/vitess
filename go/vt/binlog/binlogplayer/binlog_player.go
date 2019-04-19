@@ -421,7 +421,7 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 	queryStartTime := time.Now()
 	qr, err := blp.dbClient.ExecuteFetch(sql, 0)
 	blp.blplStats.Timings.Record(BlplQuery, queryStartTime)
-	if d := time.Now().Sub(queryStartTime); d > SlowQueryThreshold {
+	if d := time.Since(queryStartTime); d > SlowQueryThreshold {
 		log.Infof("SLOW QUERY (took %.2fs) '%s'", d.Seconds(), sql)
 	}
 	return qr, err

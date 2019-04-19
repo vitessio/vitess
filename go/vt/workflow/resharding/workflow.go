@@ -84,7 +84,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 		return err
 	}
 	if *keyspace == "" || *vtworkersStr == "" || *minHealthyRdonlyTablets == "" || *splitCmd == "" {
-		return fmt.Errorf("Keyspace name, min healthy rdonly tablets, split command, and vtworkers information must be provided for horizontal resharding")
+		return fmt.Errorf("keyspace name, min healthy rdonly tablets, split command, and vtworkers information must be provided for horizontal resharding")
 	}
 
 	vtworkers := strings.Split(*vtworkersStr, ",")
@@ -99,7 +99,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 			}
 		}
 		if !validPhase {
-			return fmt.Errorf("Invalid phase in phase_enable_approvals: %v", phase)
+			return fmt.Errorf("invalid phase in phase_enable_approvals: %v", phase)
 		}
 	}
 
@@ -427,18 +427,6 @@ func (hw *horizontalReshardingWorkflow) setUIMessage(message string) {
 	hw.rootUINode.Log = hw.logger.String()
 	hw.rootUINode.Message = message
 	hw.rootUINode.BroadcastChanges(false /* updateChildren */)
-}
-
-func defaultPhaseDisableApprovals() map[workflow.PhaseType]bool {
-	return map[workflow.PhaseType]bool{
-		phaseCopySchema:                 false,
-		phaseClone:                      false,
-		phaseWaitForFilteredReplication: false,
-		phaseDiff:                       false,
-		phaseMigrateRdonly:              false,
-		phaseMigrateReplica:             false,
-		phaseMigrateMaster:              false,
-	}
 }
 
 // WorkflowPhases returns phases for resharding workflow

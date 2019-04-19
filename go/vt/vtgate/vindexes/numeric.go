@@ -72,7 +72,7 @@ func (*Numeric) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool,
 			return nil, vterrors.Wrap(err, "Numeric.Verify")
 		}
 		binary.BigEndian.PutUint64(keybytes[:], num)
-		out[i] = bytes.Compare(keybytes[:], ksids[i]) == 0
+		out[i] = bytes.Equal(keybytes[:], ksids[i])
 	}
 	return out, nil
 }

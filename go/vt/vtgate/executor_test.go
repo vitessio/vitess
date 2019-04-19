@@ -674,7 +674,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown_table", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown_table", nil)
 	if err != errNoKeyspace {
 		t.Errorf("Got: %v. Want: %v", err, errNoKeyspace)
 	}

@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"golang.org/x/net/context"
 
@@ -115,10 +116,13 @@ func (c *client) withRetry(ctx context.Context, f func() error) error {
 		default:
 		}
 		if err := f(); err != nil {
-			if grpc.Code(err) == codes.Unavailable {
-				lastError = err
-				time.Sleep(100 * time.Millisecond)
-				continue
+			if st, ok := status.FromError(err); ok {
+				code := st.Code()
+				if code == codes.Unavailable {
+					lastError = err
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
 			}
 			return err
 		}

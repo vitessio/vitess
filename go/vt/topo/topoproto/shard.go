@@ -37,7 +37,7 @@ func KeyspaceShardString(keyspace, shard string) string {
 func ParseKeyspaceShard(param string) (string, string, error) {
 	keySpaceShard := strings.Split(param, "/")
 	if len(keySpaceShard) != 2 {
-		return "", "", fmt.Errorf("Invalid shard path: %v", param)
+		return "", "", fmt.Errorf("invalid shard path: %v", param)
 	}
 	return keySpaceShard[0], keySpaceShard[1], nil
 }
