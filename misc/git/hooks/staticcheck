@@ -19,7 +19,7 @@ if [ "$gofiles" = "" ]; then
   exit 0
 fi
 # xargs -n1 because dirname on MacOS does not support multiple arguments.
-gopackages=$(echo $gofiles | xargs -n1 dirname | sort -u)
+gopackages=$(echo $gofiles | xargs -I{} -n1 dirname {} | sort -u)
 
 warnings=
 
