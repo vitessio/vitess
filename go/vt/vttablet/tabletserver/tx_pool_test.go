@@ -40,6 +40,42 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 )
 
+func TestTxPoolExecuteCommit(t *testing.T) {
+	sql := "update test_column set x=1 where 1!=1"
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery(sql, &sqltypes.Result{})
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+
+	txPool := newTxPool()
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer txPool.Close()
+	ctx := context.Background()
+	transactionID, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if beginSQL != "begin" {
+		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
+	}
+	txConn, err := txPool.Get(transactionID, "for query")
+	if err != nil {
+		t.Fatal(err)
+	}
+	txConn.RecordQuery(sql)
+	_, err = txConn.Exec(ctx, sql, 1, true)
+	txConn.Recycle()
+
+	commitSQL, err := txPool.Commit(ctx, transactionID, &fakeMessageCommitter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if commitSQL != "commit" {
+		t.Errorf("commitSQL got %q want 'commit'", commitSQL)
+	}
+}
+
 func TestTxPoolExecuteRollback(t *testing.T) {
 	sql := "alter table test_table add test_column int"
 	db := fakesqldb.New(t)
@@ -52,9 +88,12 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
-	transactionID, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	transactionID, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if beginSQL != "begin" {
+		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
 	}
 	txConn, err := txPool.Get(transactionID, "for query")
 	if err != nil {
@@ -79,11 +118,11 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
-	txid1, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	txid1, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	_, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +212,7 @@ func TestTxPoolTransactionKillerEnforceTimeoutEnabled(t *testing.T) {
 
 }
 func addQuery(ctx context.Context, sql string, txPool *TxPool, workload querypb.ExecuteOptions_Workload) (int64, error) {
-	transactionID, err := txPool.Begin(ctx, &querypb.ExecuteOptions{Workload: workload})
+	transactionID, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{Workload: workload})
 	if err != nil {
 		return 0, err
 	}
@@ -199,9 +238,12 @@ func TestTxPoolClientRowsFound(t *testing.T) {
 
 	// Start a 'normal' transaction. It should take a connection
 	// for the normal 'conns' pool.
-	id1, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id1, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if beginSQL != "begin" {
+		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
 	}
 	if got, want := txPool.conns.Available(), startNormalSize-1; got != want {
 		t.Errorf("Normal pool size: %d, want %d", got, want)
@@ -212,9 +254,12 @@ func TestTxPoolClientRowsFound(t *testing.T) {
 
 	// Start a 'foundRows' transaction. It should take a connection
 	// from the foundRows pool.
-	id2, err := txPool.Begin(ctx, &querypb.ExecuteOptions{ClientFoundRows: true})
+	id2, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{ClientFoundRows: true})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if beginSQL != "begin" {
+		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
 	}
 	if got, want := txPool.conns.Available(), startNormalSize-1; got != want {
 		t.Errorf("Normal pool size: %d, want %d", got, want)
@@ -253,15 +298,22 @@ func TestTxPoolTransactionIsolation(t *testing.T) {
 	ctx := context.Background()
 
 	// Start a transaction with default. It should not change isolation.
-	_, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	_, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if beginSQL != "begin" {
+		t.Errorf("beginSQL got %q want 'begin'", beginSQL)
+	}
 
 	db.AddQuery("set transaction isolation level READ COMMITTED", &sqltypes.Result{})
-	_, err = txPool.Begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED})
+	_, beginSQL, err = txPool.Begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED})
 	if err != nil {
 		t.Fatal(err)
+	}
+	wantBeginSQL := "READ COMMITTED; begin"
+	if beginSQL != wantBeginSQL {
+		t.Errorf("beginSQL got %q want %q", beginSQL, wantBeginSQL)
 	}
 }
 
@@ -276,13 +328,19 @@ func TestTxPoolAutocommit(t *testing.T) {
 	// to mysql.
 	// This test is meaningful because if txPool.Begin were to send a BEGIN statement to the connection, it will fatal
 	// because is not in the list of expected queries (i.e db.AddQuery hasn't been called).
-	txid, err := txPool.Begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_AUTOCOMMIT})
+	txid, beginSQL, err := txPool.Begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_AUTOCOMMIT})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = txPool.Commit(ctx, txid, &fakeMessageCommitter{})
+	if beginSQL != "" {
+		t.Errorf("beginSQL got %q want ''", beginSQL)
+	}
+	commitSQL, err := txPool.Commit(ctx, txid, &fakeMessageCommitter{})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if commitSQL != "" {
+		t.Errorf("commitSQL got %q want ''", commitSQL)
 	}
 }
 
@@ -305,7 +363,7 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Transient(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	txConn, err := txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	txConn, _, err := txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatalf("Begin should have succeeded after the retry in DBConn.Exec(): %v", err)
 	}
@@ -336,7 +394,7 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent(t *testing.T) {
 	// After that, vttablet will automatically try to reconnect and this fail.
 	// DBConn.Exec() will return the reconnect error as final error and not the
 	// initial connection error.
-	_, err = txPool.LocalBegin(context.Background(), &querypb.ExecuteOptions{})
+	_, _, err = txPool.LocalBegin(context.Background(), &querypb.ExecuteOptions{})
 	if err == nil || !strings.Contains(err.Error(), "(errno 2013)") {
 		t.Fatalf("Begin did not return the reconnect error: %v", err)
 	}
@@ -362,7 +420,7 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2013(t *testing.T) {
 	db.EnableShouldClose()
 
 	// 2013 is not retryable. DBConn.Exec() fails after the first attempt.
-	_, err = txPool.Begin(context.Background(), &querypb.ExecuteOptions{})
+	_, _, err = txPool.Begin(context.Background(), &querypb.ExecuteOptions{})
 	if err == nil || !strings.Contains(err.Error(), "(errno 2013)") {
 		t.Fatalf("Begin must return connection error with MySQL errno 2013: %v", err)
 	}
@@ -385,7 +443,7 @@ func primeTxPoolWithConnection(t *testing.T) (*fakesqldb.DB, *TxPool, error) {
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddQuery("rollback", &sqltypes.Result{})
 	ctx := context.Background()
-	txConn, err := txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	txConn, _, err := txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -402,7 +460,7 @@ func TestTxPoolBeginWithError(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
-	_, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	_, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	want := "error: rejected"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Begin: %v, want %s", err, want)
@@ -424,7 +482,7 @@ func TestTxPoolRollbackFail(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
-	transactionID, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	transactionID, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -467,7 +525,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	db.AddQuery("rollback", &sqltypes.Result{})
 	txPool := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
-	id, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	txPool.Close()
 
 	assertErrorMatch := func(id int64, reason string) {
@@ -486,14 +544,14 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool = newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
-	id, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
-	if err := txPool.Commit(ctx, id, &fakeMessageCommitter{}); err != nil {
+	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	if _, err := txPool.Commit(ctx, id, &fakeMessageCommitter{}); err != nil {
 		t.Fatalf("got error: %v", err)
 	}
 
 	assertErrorMatch(id, "transaction committed")
 
-	id, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	if err := txPool.Rollback(ctx, id); err != nil {
 		t.Fatalf("got error: %v", err)
 	}
@@ -506,13 +564,13 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 
-	id, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	time.Sleep(5 * time.Millisecond)
 
 	assertErrorMatch(id, "exceeded timeout: 1ms")
 
 	txPool.SetTimeout(1 * time.Hour)
-	id, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
 	txc, err := txPool.Get(id, "for close")
 	if err != nil {
 		t.Fatalf("got error: %v", err)
@@ -545,7 +603,7 @@ func TestTxPoolExecFailDueToConnFail_Errno2006(t *testing.T) {
 	ctx := context.Background()
 
 	// Start the transaction.
-	txConn, err := txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	txConn, _, err := txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -583,7 +641,7 @@ func TestTxPoolExecFailDueToConnFail_Errno2013(t *testing.T) {
 	ctx := context.Background()
 
 	// Start the transaction.
-	txConn, err := txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	txConn, _, err := txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -615,7 +673,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
 	// Start stray transaction.
-	_, err := txPool.Begin(context.Background(), &querypb.ExecuteOptions{})
+	_, _, err := txPool.Begin(context.Background(), &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
