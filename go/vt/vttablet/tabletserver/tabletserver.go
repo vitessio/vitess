@@ -776,7 +776,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 		"Begin", "begin", nil,
 		target, options, true /* isBegin */, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			defer tabletenv.QueryStats.Record("BEGIN", time.Now())
+			startTime := time.Now()
 			if tsv.txThrottler.Throttle() {
 				// TODO(erez): I think this should be RESOURCE_EXHAUSTED.
 				return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "Transaction throttled")
@@ -786,10 +786,13 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 			logStats.TransactionID = transactionID
 
 			// Record the actual statements that were executed in the logStats.
-			// If nothing was actually executed, clear out the Method so that
+			// If nothing was actually executed, don't count the operation in
+			// the tablet metrics, and clear out the logStats Method so that
 			// handlePanicAndSendLogStats doesn't log the no-op.
 			logStats.OriginalSQL = beginSQL
-			if beginSQL == "" {
+			if beginSQL != "" {
+				tabletenv.QueryStats.Record("BEGIN", startTime)
+			} else {
 				logStats.Method = ""
 			}
 			return err
@@ -805,18 +808,20 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 		"Commit", "commit", nil,
 		target, nil, false /* isBegin */, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			defer tabletenv.QueryStats.Record("COMMIT", time.Now())
+			startTime := time.Now()
 			logStats.TransactionID = transactionID
 
 			var commitSQL string
 			commitSQL, err = tsv.teCtrl.Commit(ctx, transactionID, tsv.messager)
 
-			// If nothing was actually executed, clear out the Method so that
+			// If nothing was actually executed, don't count the operation in
+			// the tablet metrics, and clear out the logStats Method so that
 			// handlePanicAndSendLogStats doesn't log the no-op.
-			if commitSQL == "" {
+			if commitSQL != "" {
+				tabletenv.QueryStats.Record("COMMIT", startTime)
+			} else {
 				logStats.Method = ""
 			}
-
 			return err
 		},
 	)
