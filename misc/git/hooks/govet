@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright 2017 Google Inc.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,14 +25,17 @@ fi
 
 # This script does not handle file names that contain spaces.
 gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
-gopackages=$(echo $gofiles | xargs -I{} -n1 dirname {} | sort -u)
+if [ "$gofiles" = "" ]; then
+  exit 0
+fi
 
 # If any checks are found to be useless, they can be disabled here.
 # See the output of "go doc cmd/vet" for a list of flags.
 vetflags=""
 
-if ! go vet $vetflags $gopackages 2>&1; then
-  echo "\nPlease fix the go vet warnings above. To disable certain checks, change vetflags in misc/git/hooks/govet."
+if ! go vet $vetflags $(echo $gofiles) 2>&1; then
+  echo ""
+  echo "Please fix the go vet warnings above. To disable certain checks, change vetflags in misc/git/hooks/govet."
   exit 1
 fi
 
