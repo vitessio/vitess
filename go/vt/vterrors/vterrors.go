@@ -78,10 +78,12 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var logErrStacks bool
+// LogErrStacks controls whether or not printing errors includes the
+// embedded stack trace in the output.
+var LogErrStacks bool
 
 func init() {
-	flag.BoolVar(&logErrStacks, "logerrstacks", false, "log stack traces in errors")
+	flag.BoolVar(&LogErrStacks, "LogErrStacks", false, "log stack traces in errors")
 }
 
 // New returns an error with the supplied message.
@@ -129,7 +131,7 @@ func (f *fundamental) Format(s fmt.State, verb rune) {
 	case 'v':
 		panicIfError(io.WriteString(s, "Code: "+f.code.String()+"\n"))
 		panicIfError(io.WriteString(s, f.msg+"\n"))
-		if logErrStacks {
+		if LogErrStacks {
 			f.stack.Format(s, verb)
 		}
 		return
@@ -207,7 +209,7 @@ func (w *wrapping) Format(s fmt.State, verb rune) {
 	if rune('v') == verb {
 		panicIfError(fmt.Fprintf(s, "%v\n", w.Cause()))
 		panicIfError(io.WriteString(s, w.msg))
-		if logErrStacks {
+		if LogErrStacks {
 			w.stack.Format(s, verb)
 		}
 		return
