@@ -102,7 +102,10 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	}
 	// use a mysql connection to detect flavor at runtime
 	conn, err := mysqld.GetDbaConnection()
-	defer conn.Close()
+	if conn != nil && err == nil {
+		defer conn.Close()
+	}
+
 	if err != nil {
 		return false, vterrors.Wrap(err, "unable to obtain a connection to the database")
 	}
@@ -141,7 +144,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 			err = closeErr
 		} else if closeErr != nil {
 			// since we already have an error just log this
-			logger.Errorf("Error closing file %v: %v", fileName, err)
+			logger.Errorf("error closing file %v: %v", fileName, err)
 		}
 	}
 	defer closeFile(wc, backupFileName)

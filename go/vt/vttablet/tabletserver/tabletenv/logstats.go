@@ -103,7 +103,7 @@ func (stats *LogStats) AddRewrittenSQL(sql string, start time.Time) {
 	stats.QuerySources |= QuerySourceMySQL
 	stats.NumberOfQueries++
 	stats.rewrittenSqls = append(stats.rewrittenSqls, sql)
-	stats.MysqlResponseTime += time.Now().Sub(start)
+	stats.MysqlResponseTime += time.Since(start)
 }
 
 // TotalTime returns how long this query has been running

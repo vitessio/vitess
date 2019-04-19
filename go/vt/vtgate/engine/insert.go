@@ -456,9 +456,7 @@ func (ins *Insert) processPrimary(vcursor VCursor, vindexKeys [][]sqltypes.Value
 	var flattenedVindexKeys []sqltypes.Value
 	// TODO: @rafael - this will change once vindex Primary keys also support multicolumns
 	for _, val := range vindexKeys {
-		for _, internalVal := range val {
-			flattenedVindexKeys = append(flattenedVindexKeys, internalVal)
-		}
+		flattenedVindexKeys = append(flattenedVindexKeys, val...)
 	}
 
 	destinations, err := colVindex.Vindex.Map(vcursor, flattenedVindexKeys)

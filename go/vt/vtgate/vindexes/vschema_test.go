@@ -1607,7 +1607,7 @@ func TestFindTable(t *testing.T) {
 	if !reflect.DeepEqual(got, ta) {
 		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, ta)
 	}
-	got, err = vschema.FindTable("ksa", "ta")
+	got, _ = vschema.FindTable("ksa", "ta")
 	if !reflect.DeepEqual(got, ta) {
 		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, ta)
 	}
@@ -1617,7 +1617,7 @@ func TestFindTable(t *testing.T) {
 			Name: "ksa",
 		},
 	}
-	got, err = vschema.FindTable("ksa", "none")
+	got, _ = vschema.FindTable("ksa", "none")
 	if !reflect.DeepEqual(got, none) {
 		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, none)
 	}

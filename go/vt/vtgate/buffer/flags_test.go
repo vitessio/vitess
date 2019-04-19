@@ -41,7 +41,7 @@ func TestVerifyFlags(t *testing.T) {
 	resetFlagsForTesting()
 	flag.Set("enable_buffer", "true")
 	flag.Set("buffer_keyspace_shards", "ks1//0")
-	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "Invalid shard path") {
+	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "invalid shard path") {
 		t.Fatalf("Invalid shard names are not allowed. err: %v", err)
 	}
 

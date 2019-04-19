@@ -444,9 +444,7 @@ func (bc ByCost) Swap(i, j int)      { bc[i], bc[j] = bc[j], bc[i] }
 func (bc ByCost) Less(i, j int) bool { return bc[i].Vindex.Cost() < bc[j].Vindex.Cost() }
 
 func colVindexSorted(cvs []*ColumnVindex) (sorted []*ColumnVindex) {
-	for _, cv := range cvs {
-		sorted = append(sorted, cv)
-	}
+	sorted = append(sorted, cvs...)
 	sort.Sort(ByCost(sorted))
 	return sorted
 }

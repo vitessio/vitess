@@ -86,7 +86,7 @@ func (vind *ReverseBits) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "reverseBits.Verify")
 		}
-		out[i] = bytes.Compare(reverse(num), ksids[i]) == 0
+		out[i] = bytes.Equal(reverse(num), ksids[i])
 	}
 	return out, nil
 }

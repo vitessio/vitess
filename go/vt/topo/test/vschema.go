@@ -38,8 +38,7 @@ func checkVSchema(t *testing.T, ts *topo.Server) {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
-	got, err := ts.GetVSchema(ctx, "test_keyspace")
-	want := &vschemapb.Keyspace{}
+	_, err := ts.GetVSchema(ctx, "test_keyspace")
 	if !topo.IsErrType(err, topo.NoNode) {
 		t.Error(err)
 	}
@@ -53,11 +52,11 @@ func checkVSchema(t *testing.T, ts *topo.Server) {
 		t.Fatal(err)
 	}
 
-	got, err = ts.GetVSchema(ctx, "test_keyspace")
+	got, err := ts.GetVSchema(ctx, "test_keyspace")
 	if err != nil {
 		t.Error(err)
 	}
-	want = &vschemapb.Keyspace{
+	want := &vschemapb.Keyspace{
 		Tables: map[string]*vschemapb.Table{
 			"unsharded": {},
 		},

@@ -131,7 +131,8 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	case err == nil:
 		// NOOP
 	case topo.IsErrType(err, topo.NoNode):
-		err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), agent.TopoServer, *initKeyspace, []string{agent.TabletAlias.Cell})
+		// try to RebuildKeyspace here but ignore errors if it fails
+		topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), agent.TopoServer, *initKeyspace, []string{agent.TabletAlias.Cell})
 	default:
 		return vterrors.Wrap(err, "InitTablet failed to read srvKeyspace")
 	}

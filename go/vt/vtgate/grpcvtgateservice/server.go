@@ -125,7 +125,6 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBatchRequest) (response *vtgatepb.ExecuteBatchResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	results := make([]sqltypes.QueryResponse, len(request.Queries))
 	sqlQueries := make([]string, len(request.Queries))
 	bindVars := make([]map[string]*querypb.BindVariable, len(request.Queries))
 	for queryNum, query := range request.Queries {
@@ -143,7 +142,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 	if session.Options == nil {
 		session.Options = request.Options
 	}
-	session, results, err = vtg.server.ExecuteBatch(ctx, session, sqlQueries, bindVars)
+	session, results, err := vtg.server.ExecuteBatch(ctx, session, sqlQueries, bindVars)
 	return &vtgatepb.ExecuteBatchResponse{
 		Results: sqltypes.QueryResponsesToProto3(results),
 		Session: session,

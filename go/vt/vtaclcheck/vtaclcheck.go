@@ -45,7 +45,7 @@ func Init(opts *Options) error {
 	}
 	// Verify options
 	if opts.ACLFile == "" && opts.StaticAuthFile == "" {
-		return fmt.Errorf("No options specified")
+		return fmt.Errorf("no options specified")
 	}
 
 	options = opts

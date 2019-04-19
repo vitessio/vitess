@@ -104,7 +104,7 @@ func TestSuite(t *testing.T, ts *topo.Server, client vtctlclient.VtctlClient) {
 		t.Fatalf("Remote error: %v", err)
 	}
 
-	got, err = stream.Recv()
+	_, err = stream.Recv()
 	expected = "node doesn't exist"
 	if err == nil || !strings.Contains(err.Error(), expected) {
 		t.Fatalf("Unexpected remote error, got: '%v' was expecting to find '%v'", err, expected)
@@ -116,7 +116,7 @@ func TestSuite(t *testing.T, ts *topo.Server, client vtctlclient.VtctlClient) {
 		t.Fatalf("Remote error: %v", err)
 	}
 
-	got, err = stream.Recv()
+	_, err = stream.Recv()
 	expected1 := "this command panics on purpose"
 	expected2 := "uncaught vtctl panic"
 	if err == nil || !strings.Contains(err.Error(), expected1) || !strings.Contains(err.Error(), expected2) {
