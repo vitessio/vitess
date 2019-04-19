@@ -70,12 +70,21 @@
 package vterrors
 
 import (
+	"flag"
 	"fmt"
 	"io"
 
 	"golang.org/x/net/context"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// LogErrStacks controls whether or not printing errors includes the
+// embedded stack trace in the output.
+var LogErrStacks bool
+
+func init() {
+	flag.BoolVar(&LogErrStacks, "LogErrStacks", false, "log stack traces in errors")
+}
 
 // New returns an error with the supplied message.
 // New also records the stack trace at the point it was called.
@@ -122,7 +131,9 @@ func (f *fundamental) Format(s fmt.State, verb rune) {
 	case 'v':
 		panicIfError(io.WriteString(s, "Code: "+f.code.String()+"\n"))
 		panicIfError(io.WriteString(s, f.msg+"\n"))
-		f.stack.Format(s, verb)
+		if LogErrStacks {
+			f.stack.Format(s, verb)
+		}
 		return
 	case 's':
 		panicIfError(io.WriteString(s, f.msg))
@@ -198,7 +209,9 @@ func (w *wrapping) Format(s fmt.State, verb rune) {
 	if rune('v') == verb {
 		panicIfError(fmt.Fprintf(s, "%v\n", w.Cause()))
 		panicIfError(io.WriteString(s, w.msg))
-		w.stack.Format(s, verb)
+		if LogErrStacks {
+			w.stack.Format(s, verb)
+		}
 		return
 	}
 
