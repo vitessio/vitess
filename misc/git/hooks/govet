@@ -24,13 +24,14 @@ if [ -z "$GOPATH" ]; then
 fi
 
 # This script does not handle file names that contain spaces.
-packages=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$' | sed 's|/[^/]*$|/...|' | uniq | sed 's|^|./|')
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
+gopackages=$(echo $gofiles | xargs -n1 dirname | sort -u)
 
 # If any checks are found to be useless, they can be disabled here.
-# See the output of "go tool vet help" for a list of flags.
+# See the output of "go doc cmd/vet" for a list of flags.
 vetflags=""
 
-if ! go vet $vetflags $packages 2>&1; then
+if ! go vet $vetflags $gopackages 2>&1; then
   echo "\nPlease fix the go vet warnings above. To disable certain checks, change vetflags in misc/git/hooks/govet."
   exit 1
 fi
