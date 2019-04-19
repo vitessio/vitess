@@ -524,6 +524,44 @@
   }
 }
 
+# routing rules: choose first table due to better plan
+"select col from route1 where id = 1"
+{
+  "Original": "select col from route1 where id = 1",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user as route1 where id = 1",
+    "FieldQuery": "select col from user as route1 where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [
+      1
+    ]
+  }
+}
+
+# routing rules: choose second table due to better plan
+"select col from route1 where email = 'aaa'"
+{
+  "Original": "select col from route1 where email = 'aaa'",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user_metadata as route1 where email = 'aaa'",
+    "FieldQuery": "select col from user_metadata as route1 where 1 != 1",
+    "Vindex": "email_user_map",
+    "Values": [
+      "aaa"
+    ]
+  }
+}
+
 # subquery of information_schema with itself
 "select * from information_schema.a where id in (select * from information_schema.b)"
 {
@@ -897,6 +935,54 @@
       "Vindex": "user_index",
       "Values": [
         ":__sq2"
+      ]
+    }
+  }
+}
+
+# routing rules subquery merge
+"select col from user where id = (select id from route2 where route2.id = user.id)"
+{
+  "Original": "select col from user where id = (select id from route2 where route2.id = user.id)",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user where id = (select id from user as route2 where route2.id = user.id)",
+    "FieldQuery": "select col from user where 1 != 1"
+  }
+}
+
+# routing rules subquery pullout
+"select col from user where id = (select id from route2)"
+{
+  "Original": "select col from user where id = (select id from route2)",
+  "Instructions": {
+    "Opcode": "PulloutValue",
+    "SubqueryResult": "__sq1",
+    "HasValues": "__sq_has_values1",
+    "Subquery": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select id from unsharded as route2",
+      "FieldQuery": "select id from unsharded as route2 where 1 != 1"
+    },
+    "Underlying": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col from user where id = :__sq1",
+      "FieldQuery": "select col from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": [
+        ":__sq1"
       ]
     }
   }

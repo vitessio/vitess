@@ -90,7 +90,7 @@
   }
 }
 
-# update of a routed table
+# routing rules: updated of a routed table
 "update route1 set a=1 where id=1"
 {
   "Original": "update route1 set a=1 where id=1",
@@ -106,6 +106,20 @@
       1
     ],
     "Table": "user"
+  }
+}
+
+# routing rules: subquery chooses unsharded route for update
+"update unsharded_a set a=(select a from route2)"
+{
+  "Original": "update unsharded_a set a=(select a from route2)",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "update unsharded_a set a = (select a from unsharded as route2)"
   }
 }
 
@@ -358,7 +372,7 @@
   }
 }
 
-# delete from a routed table
+# routing rules: deleted from a routed table
 "delete from route1 where id = 1"
 {
   "Original": "delete from route1 where id = 1",
@@ -375,6 +389,20 @@
     ],
     "Table": "user",
     "OwnedVindexQuery": "select Name, Costly from user where id = 1 for update"
+  }
+}
+
+# routing rules: subquery chooses unsharded route for delete
+"delete from  unsharded_a where a=(select a from route2)"
+{
+  "Original": "delete from  unsharded_a where a=(select a from route2)",
+  "Instructions": {
+    "Opcode": "DeleteUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "delete from unsharded_a where a = (select a from unsharded as route2)"
   }
 }
 

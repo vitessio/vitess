@@ -42,7 +42,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (*engine.Ins
 		return nil, errors.New("unsupported: INSERT with a target destination")
 	}
 	if !ro.vschemaTable.Keyspace.Sharded {
-		if !pb.validateUnshardedRoute(ins) {
+		if !pb.finalizeUnshardedDMLSubqueries(ins) {
 			return nil, errors.New("unsupported: sharded subquery in insert values")
 		}
 		return buildInsertUnshardedPlan(ins, ro.vschemaTable, vschema)
