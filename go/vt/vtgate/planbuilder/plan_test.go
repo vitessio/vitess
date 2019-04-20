@@ -173,6 +173,11 @@ func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, ks := range vschema.Keyspaces {
+		if ks.Error != nil {
+			t.Fatal(ks.Error)
+		}
+	}
 	return vschema
 }
 

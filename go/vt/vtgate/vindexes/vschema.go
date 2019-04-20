@@ -240,7 +240,10 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				return fmt.Errorf("could not decode the keyspace id for pin: %v", err)
 			}
 			t.Pinned = decoded
-		} else if keyspace.Sharded && len(table.ColumnVindexes) == 0 {
+		}
+
+		// If keyspace is sharded, then any table that's not a reference or pinned must have vindexes.
+		if keyspace.Sharded && t.Type != TypeReference && table.Pinned == "" && len(table.ColumnVindexes) == 0 {
 			return fmt.Errorf("missing primary col vindex for table: %s", tname)
 		}
 

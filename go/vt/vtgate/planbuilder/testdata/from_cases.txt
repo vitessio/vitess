@@ -28,6 +28,36 @@
   }
 }
 
+# Select from sequence
+"select next 2 values from seq"
+{
+  "Original": "select next 2 values from seq",
+  "Instructions": {
+    "Opcode": "SelectNext",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select next 2 values from seq",
+    "FieldQuery": "select next 2 values from seq where 1 != 1"
+  }
+}
+
+# Select from reference
+"select * from ref"
+{
+  "Original": "select * from ref",
+  "Instructions": {
+    "Opcode": "SelectReference",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from ref",
+    "FieldQuery": "select * from ref where 1 != 1"
+  }
+}
+
 # Single information_schema query
 "select col from information_schema.foo"
 {
@@ -787,6 +817,66 @@
     "Vars": {
       "user_extra_user_id": 0
     }
+  }
+}
+
+# join with reference table
+"select user.col from user join ref"
+{
+  "Original": "select user.col from user join ref",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col from user join ref",
+    "FieldQuery": "select user.col from user join ref where 1 != 1"
+  }
+}
+
+# reference table self-join
+"select r1.col from ref r1 join ref"
+{
+  "Original": "select r1.col from ref r1 join ref",
+  "Instructions": {
+    "Opcode": "SelectReference",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select r1.col from ref as r1 join ref",
+    "FieldQuery": "select r1.col from ref as r1 join ref where 1 != 1"
+  }
+}
+
+# reference table doesn't merge with other opcodes yet.
+"select ref.col from ref join user"
+{
+  "Original": "select ref.col from ref join user",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectReference",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select ref.col from ref",
+      "FieldQuery": "select ref.col from ref where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user",
+      "FieldQuery": "select 1 from user where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
   }
 }
 
