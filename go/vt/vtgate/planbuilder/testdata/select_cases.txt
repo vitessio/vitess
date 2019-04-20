@@ -344,7 +344,7 @@
 
 # nextval for simple route
 "select next value from user"
-"NEXT used on a sharded table"
+"NEXT used on a non-sequence table"
 
 # next n values for simple route
 "select next 2 values from seq"

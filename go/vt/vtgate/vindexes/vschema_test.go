@@ -1705,6 +1705,27 @@ func TestBadSequenceName(t *testing.T) {
 	}
 }
 
+func TestBadShardedSequence(t *testing.T) {
+	bad := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: "sequence",
+					},
+				},
+			},
+		},
+	}
+	got, _ := BuildVSchema(&bad)
+	err := got.Keyspaces["sharded"].Error
+	want := "sequence table has to be in an unsharded keyspace or must be pinned: t1"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	}
+}
+
 func TestFindTable(t *testing.T) {
 	input := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
