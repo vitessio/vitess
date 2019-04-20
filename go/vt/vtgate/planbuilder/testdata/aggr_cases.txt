@@ -1008,6 +1008,21 @@
   }
 }
 
+# oreder by on a reference table
+"select col from ref order by col"
+{
+  "Original": "select col from ref order by col",
+  "Instructions": {
+    "Opcode": "SelectReference",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from ref order by col asc",
+    "FieldQuery": "select col from ref where 1 != 1"
+  }
+}
+
 # Group by invalid column number (code is duplicated from symab).
 "select id from user group by 1.1"
 "column number is not an int"

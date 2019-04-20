@@ -227,16 +227,12 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		switch {
 		case vst.Type == vindexes.TypeSequence:
 			eroute = engine.NewSimpleRoute(engine.SelectNext, vst.Keyspace)
+		case vst.Type == vindexes.TypeReference:
+			eroute = engine.NewSimpleRoute(engine.SelectReference, vst.Keyspace)
 		case !vst.Keyspace.Sharded:
 			eroute = engine.NewSimpleRoute(engine.SelectUnsharded, vst.Keyspace)
-		case vst.Type == vindexes.TypeSequence:
-			eroute = engine.NewSimpleRoute(engine.SelectNext, vst.Keyspace)
 		case vst.Pinned == nil:
-			if vst.Type == vindexes.TypeReference {
-				eroute = engine.NewSimpleRoute(engine.SelectReference, vst.Keyspace)
-			} else {
-				eroute = engine.NewSimpleRoute(engine.SelectScatter, vst.Keyspace)
-			}
+			eroute = engine.NewSimpleRoute(engine.SelectScatter, vst.Keyspace)
 			eroute.TargetDestination = destTarget
 			eroute.TargetTabletType = destTableType
 		default:

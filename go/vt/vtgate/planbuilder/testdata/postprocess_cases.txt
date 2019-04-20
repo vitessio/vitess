@@ -959,6 +959,21 @@
   }
 }
 
+# limit on reference table
+"select col from ref limit 1"
+{
+  "Original": "select col from ref limit 1",
+  "Instructions": {
+    "Opcode": "SelectReference",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from ref limit 1",
+    "FieldQuery": "select col from ref where 1 != 1"
+  }
+}
+
 # invalid limit expression
 "select id from user limit 1+1"
 "unexpected expression in LIMIT:  limit 1 + 1"
