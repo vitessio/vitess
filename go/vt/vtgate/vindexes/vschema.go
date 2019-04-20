@@ -224,7 +224,12 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 			ColumnListAuthoritative: table.ColumnListAuthoritative,
 		}
 		switch table.Type {
-		case "", TypeSequence, TypeReference:
+		case "", TypeReference:
+			t.Type = table.Type
+		case TypeSequence:
+			if keyspace.Sharded && table.Pinned == "" {
+				return fmt.Errorf("sequence table has to be in an unsharded keyspace or must be pinned: %s", tname)
+			}
 			t.Type = table.Type
 		default:
 			return fmt.Errorf("unidentified table type %s", table.Type)
