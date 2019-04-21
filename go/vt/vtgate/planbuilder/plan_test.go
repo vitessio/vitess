@@ -202,7 +202,7 @@ func (vw *vschemaWrapper) FindTablesOrVindex(tab sqlparser.TableName) ([]*vindex
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}
-	tables, vindex, err := vw.v.FindTablesOrVindex(destKeyspace, tab.Name.String())
+	tables, vindex, err := vw.v.FindTablesOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}
