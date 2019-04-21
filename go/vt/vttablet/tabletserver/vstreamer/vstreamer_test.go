@@ -175,7 +175,7 @@ func TestRegexp(t *testing.T) {
 	runCases(t, filter, testcases)
 }
 
-func TestREKeyrange(t *testing.T) {
+func TestREKeyRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
@@ -357,7 +357,7 @@ func TestDDLAddColumn(t *testing.T) {
 	go func() {
 		defer close(ch)
 		if err := vstream(ctx, t, pos, filter, ch); err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 	}()
 	expectLog(ctx, t, "ddls", ch, [][]string{{

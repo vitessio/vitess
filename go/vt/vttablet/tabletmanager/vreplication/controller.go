@@ -189,12 +189,13 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		player := binlogplayer.NewBinlogPlayerKeyRange(dbClient, tablet, ct.source.KeyRange, ct.id, ct.blpStats)
 		return player.ApplyBinlogEvents(ctx)
 	case ct.source.Filter != nil:
-		// VPlayer requires the timezone to be UTC.
+		// Timestamp fields from binlogs are always sent as UTC.
+		// So, we should set the timezone to be UTC for those values to be correctly inserted.
 		if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", 10000); err != nil {
 			return err
 		}
-		vplayer := newVPlayer(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld)
-		return vplayer.Play(ctx)
+		vreplicator := newVReplicator(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld)
+		return vreplicator.Replicate(ctx)
 	}
 	return fmt.Errorf("missing source")
 }

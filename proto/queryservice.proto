@@ -98,4 +98,7 @@ service Query {
 
   // VStream streams vreplication events.
   rpc VStream(binlogdata.VStreamRequest) returns (stream binlogdata.VStreamResponse) {};
+
+  // VStreamRows streams rows from the specified starting point.
+  rpc VStreamRows(binlogdata.VStreamRowsRequest) returns (stream binlogdata.VStreamRowsResponse) {};
 }

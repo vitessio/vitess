@@ -363,6 +363,11 @@ func (sbc *SandboxConn) VStream(ctx context.Context, target *querypb.Target, sta
 	return fmt.Errorf("Not implemented in test")
 }
 
+// VStreamRows is part of the QueryService interface.
+func (sbc *SandboxConn) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	return fmt.Errorf("Not implemented in test")
+}
+
 // HandlePanic is part of the QueryService interface.
 func (sbc *SandboxConn) HandlePanic(err *error) {
 }

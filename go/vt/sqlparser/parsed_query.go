@@ -53,23 +53,31 @@ func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]*querypb.BindVaria
 	}
 	var buf strings.Builder
 	buf.Grow(len(pq.Query))
+	if err := pq.Append(&buf, bindVariables, extras); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+// Append appends the generated query to the provided buffer.
+func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*querypb.BindVariable, extras map[string]Encodable) error {
 	current := 0
 	for _, loc := range pq.bindLocations {
 		buf.WriteString(pq.Query[current:loc.offset])
 		name := pq.Query[loc.offset : loc.offset+loc.length]
 		if encodable, ok := extras[name[1:]]; ok {
-			encodable.EncodeSQL(&buf)
+			encodable.EncodeSQL(buf)
 		} else {
 			supplied, _, err := FetchBindVar(name, bindVariables)
 			if err != nil {
-				return "", err
+				return err
 			}
-			EncodeValue(&buf, supplied)
+			EncodeValue(buf, supplied)
 		}
 		current = loc.offset + loc.length
 	}
 	buf.WriteString(pq.Query[current:])
-	return buf.String(), nil
+	return nil
 }
 
 // MarshalJSON is a custom JSON marshaler for ParsedQuery.
