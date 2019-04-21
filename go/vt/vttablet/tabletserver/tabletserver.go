@@ -1325,36 +1325,26 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 
 // VStream streams VReplication events.
 func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	// This code is partially duplicated from startRequest. This is because
-	// is allowed even if the tablet is in non-serving state.
-	err := func() error {
-		tsv.mu.Lock()
-		defer tsv.mu.Unlock()
-
-		if target != nil {
-			// a valid target needs to be used
-			switch {
-			case target.Keyspace != tsv.target.Keyspace:
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
-			case target.Shard != tsv.target.Shard:
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
-			case target.TabletType != tsv.target.TabletType:
-				for _, otherType := range tsv.alsoAllow {
-					if target.TabletType == otherType {
-						return nil
-					}
-				}
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
-			}
-		} else if !tabletenv.IsLocalContext(ctx) {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
-		}
-		return nil
-	}()
-	if err != nil {
+	if err := tsv.verifyTarget(ctx, target); err != nil {
 		return err
 	}
 	return tsv.vstreamer.Stream(ctx, startPos, filter, send)
+}
+
+// VStreamRows streams rows from the specified starting point.
+func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	if err := tsv.verifyTarget(ctx, target); err != nil {
+		return err
+	}
+	var row []sqltypes.Value
+	if lastpk != nil {
+		r := sqltypes.Proto3ToResult(lastpk)
+		if len(r.Rows) != 1 {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", lastpk)
+		}
+		row = r.Rows[0]
+	}
+	return tsv.vstreamer.StreamRows(ctx, query, row, send)
 }
 
 // SplitQuery splits a query + bind variables into smaller queries that return a
@@ -1446,6 +1436,32 @@ func (tsv *TabletServer) execRequest(
 	err = exec(ctx, logStats)
 	if err != nil {
 		return tsv.convertAndLogError(ctx, sql, bindVariables, err, logStats)
+	}
+	return nil
+}
+
+// verifyTarget allows requests to be executed even in non-serving state.
+func (tsv *TabletServer) verifyTarget(ctx context.Context, target *querypb.Target) error {
+	tsv.mu.Lock()
+	defer tsv.mu.Unlock()
+
+	if target != nil {
+		// a valid target needs to be used
+		switch {
+		case target.Keyspace != tsv.target.Keyspace:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
+		case target.Shard != tsv.target.Shard:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
+		case target.TabletType != tsv.target.TabletType:
+			for _, otherType := range tsv.alsoAllow {
+				if target.TabletType == otherType {
+					return nil
+				}
+			}
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
+		}
+	} else if !tabletenv.IsLocalContext(ctx) {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
 	}
 	return nil
 }
