@@ -187,7 +187,7 @@ func (tqsc *Controller) SchemaEngine() *schema.Engine {
 }
 
 // BroadcastHealth is part of the tabletserver.Controller interface
-func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats) {
+func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats, maxCache time.Duration) {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 
