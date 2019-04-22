@@ -146,7 +146,7 @@ func (wr *Wrangler) SplitClone(ctx context.Context, keyspace string, from, to []
 			}
 		}
 	}
-	return nil
+	return wr.refreshMasters(ctx, toShards)
 }
 
 // VerticalSplitClone initiates a VerticalSplitClone workflow.
@@ -189,7 +189,7 @@ func (wr *Wrangler) VerticalSplitClone(ctx context.Context, fromKeyspace, toKeys
 	if _, err = wr.TabletManagerClient().VReplicationExec(ctx, master.Tablet, cmd); err != nil {
 		return vterrors.Wrapf(err, "VReplicationExec(%v, %s) failed", dest.MasterAlias, cmd)
 	}
-	return nil
+	return wr.refreshMasters(ctx, []*topo.ShardInfo{dest})
 }
 
 // ShowResharding shows all resharding related metadata for the keyspace/shard.
