@@ -163,6 +163,9 @@ func (a *AuthServerStatic) installSignalHandlers() {
 			for {
 				select {
 				case <-ticker.C:
+					if *mysqlAuthServerStaticReloadInterval <= 0 {
+						ticker.Stop()
+					}
 					sigChan <- syscall.SIGHUP
 				}
 			}
