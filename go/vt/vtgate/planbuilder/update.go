@@ -65,6 +65,8 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 		eupd.MultiShardAutocommit = true
 	}
 
+	eupd.QueryTimeout = queryTimeout(directives)
+
 	var vindexTable *vindexes.Table
 	for _, tval := range pb.st.tables {
 		vindexTable = tval.vindexTable
