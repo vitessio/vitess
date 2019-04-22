@@ -19,6 +19,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -63,6 +64,9 @@ type Delete struct {
 	// Option to override the standard behavior and allow a multi-shard delete
 	// to use single round trip autocommit.
 	MultiShardAutocommit bool
+
+	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
+	QueryTimeout int
 }
 
 // MarshalJSON serializes the Delete into a JSON representation.
@@ -84,6 +88,7 @@ func (del *Delete) MarshalJSON() ([]byte, error) {
 		Table                string               `json:",omitempty"`
 		OwnedVindexQuery     string               `json:",omitempty"`
 		MultiShardAutocommit bool                 `json:",omitempty"`
+		QueryTimeout         int                  `json:",omitempty"`
 	}{
 		Opcode:               del.Opcode,
 		Keyspace:             del.Keyspace,
@@ -93,6 +98,7 @@ func (del *Delete) MarshalJSON() ([]byte, error) {
 		Table:                tname,
 		OwnedVindexQuery:     del.OwnedVindexQuery,
 		MultiShardAutocommit: del.MultiShardAutocommit,
+		QueryTimeout:         del.QueryTimeout,
 	}
 	return jsonutil.MarshalNoEscape(marshalDelete)
 }
@@ -141,6 +147,11 @@ func (del *Delete) RouteType() string {
 
 // Execute performs a non-streaming exec.
 func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	if del.QueryTimeout != 0 {
+		cancel := vcursor.SetContextTimeout(time.Duration(del.QueryTimeout) * time.Millisecond)
+		defer cancel()
+	}
+
 	switch del.Opcode {
 	case DeleteUnsharded:
 		return del.execDeleteUnsharded(vcursor, bindVars)
