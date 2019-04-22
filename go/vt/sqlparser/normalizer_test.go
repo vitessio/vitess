@@ -128,6 +128,16 @@ func TestNormalize(t *testing.T) {
 		outstmt: "update a set v1 = B'11'",
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
+		// ORDER BY column_position
+		in:      "select a, b from t order by 1 asc",
+		outstmt: "select a, b from t order by 1 asc",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
+		// ORDER BY variable
+		in:      "select a, b from t order by c asc",
+		outstmt: "select a, b from t order by c asc",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
 		// Values up to len 256 will reuse.
 		in:      fmt.Sprintf("select * from t where v1 = '%256s' and v2 = '%256s'", "a", "a"),
 		outstmt: "select * from t where v1 = :bv1 and v2 = :bv1",
