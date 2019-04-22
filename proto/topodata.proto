@@ -101,6 +101,11 @@ enum TabletType {
   // to route queries from Vitess users. In this state,
   // this tablet is dedicated to the process that uses it.
   DRAINED = 8;
+
+  // RECOVERY is the type a server uses when recovering from an older backup, at
+  // startup time.  No queries can be served in RESTORE mode. TODO(deepthi):
+  // fix so that queries can be served and then remove this comment
+  RECOVERY = 9;
 }
 
 // Tablet represents information about a running instance of vttablet.

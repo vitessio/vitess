@@ -250,7 +250,21 @@ func NewActionAgent(
 	if agent.Cnf == nil && *restoreFromBackup {
 		return nil, fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
 	}
-
+	if *restoreForRecovery {
+		if agent.Cnf == nil {
+			return nil, fmt.Errorf("you cannot enable -restore_for_recovery without a my.cnf file")
+		}
+		tabletType, err := topoproto.ParseTabletType(*initTabletType)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "invalid init_tablet_type %v", *initTabletType)
+		}
+		if tabletType != topodatapb.TabletType_RECOVERY {
+			return nil, fmt.Errorf("you cannot start -restore_for_recovery with -init_tablet_type:%v, it must be of type RECOVERY", *initTabletType)
+		}
+		if *restoreFromBackup {
+			return nil, fmt.Errorf("you cannot specify both -restore_from_backup and -restore_for_recovery")
+		}
+	}
 	agent.registerQueryRuleSources()
 
 	// try to initialize the tablet if we have to
@@ -308,6 +322,17 @@ func NewActionAgent(
 			if err := agent.RestoreData(batchCtx, logutil.NewConsoleLogger(), false /* deleteBeforeRestore */); err != nil {
 				println(fmt.Sprintf("RestoreFromBackup failed: %v", err))
 				log.Exitf("RestoreFromBackup failed: %v", err)
+			}
+
+			// after the restore is done, start health check
+			agent.initHealthCheck()
+		}()
+	} else if *restoreForRecovery {
+		go func() {
+			// restoreForRecovery wil just be a regular action
+			if err := agent.RecoverData(batchCtx, logutil.NewConsoleLogger()); err != nil {
+				println(fmt.Sprintf("RestoreForRecovery failed: %v", err))
+				log.Exitf("RestoreForRecovery failed: %v", err)
 			}
 
 			// after the restore is done, start health check

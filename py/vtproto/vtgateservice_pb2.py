@@ -7,7 +7,6 @@ from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from google.protobuf import reflection as _reflection
 from google.protobuf import symbol_database as _symbol_database
-from google.protobuf import descriptor_pb2
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
@@ -21,6 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtgateservice.proto',
   package='vtgateservice',
   syntax='proto3',
+  serialized_options=_b('\n\024io.vitess.proto.grpcZ*vitess.io/vitess/go/vt/proto/vtgateservice'),
   serialized_pb=_b('\n\x13vtgateservice.proto\x12\rvtgateservice\x1a\x0cvtgate.proto\x1a\x0bquery.proto2\xc6\x0e\n\x06Vitess\x12<\n\x07\x45xecute\x12\x16.vtgate.ExecuteRequest\x1a\x17.vtgate.ExecuteResponse\"\x00\x12K\n\x0c\x45xecuteBatch\x12\x1b.vtgate.ExecuteBatchRequest\x1a\x1c.vtgate.ExecuteBatchResponse\"\x00\x12P\n\rStreamExecute\x12\x1c.vtgate.StreamExecuteRequest\x1a\x1d.vtgate.StreamExecuteResponse\"\x00\x30\x01\x12N\n\rExecuteShards\x12\x1c.vtgate.ExecuteShardsRequest\x1a\x1d.vtgate.ExecuteShardsResponse\"\x00\x12]\n\x12\x45xecuteKeyspaceIds\x12!.vtgate.ExecuteKeyspaceIdsRequest\x1a\".vtgate.ExecuteKeyspaceIdsResponse\"\x00\x12W\n\x10\x45xecuteKeyRanges\x12\x1f.vtgate.ExecuteKeyRangesRequest\x1a .vtgate.ExecuteKeyRangesResponse\"\x00\x12W\n\x10\x45xecuteEntityIds\x12\x1f.vtgate.ExecuteEntityIdsRequest\x1a .vtgate.ExecuteEntityIdsResponse\"\x00\x12]\n\x12\x45xecuteBatchShards\x12!.vtgate.ExecuteBatchShardsRequest\x1a\".vtgate.ExecuteBatchShardsResponse\"\x00\x12l\n\x17\x45xecuteBatchKeyspaceIds\x12&.vtgate.ExecuteBatchKeyspaceIdsRequest\x1a\'.vtgate.ExecuteBatchKeyspaceIdsResponse\"\x00\x12\x62\n\x13StreamExecuteShards\x12\".vtgate.StreamExecuteShardsRequest\x1a#.vtgate.StreamExecuteShardsResponse\"\x00\x30\x01\x12q\n\x18StreamExecuteKeyspaceIds\x12\'.vtgate.StreamExecuteKeyspaceIdsRequest\x1a(.vtgate.StreamExecuteKeyspaceIdsResponse\"\x00\x30\x01\x12k\n\x16StreamExecuteKeyRanges\x12%.vtgate.StreamExecuteKeyRangesRequest\x1a&.vtgate.StreamExecuteKeyRangesResponse\"\x00\x30\x01\x12\x36\n\x05\x42\x65gin\x12\x14.vtgate.BeginRequest\x1a\x15.vtgate.BeginResponse\"\x00\x12\x39\n\x06\x43ommit\x12\x15.vtgate.CommitRequest\x1a\x16.vtgate.CommitResponse\"\x00\x12?\n\x08Rollback\x12\x17.vtgate.RollbackRequest\x1a\x18.vtgate.RollbackResponse\"\x00\x12]\n\x12ResolveTransaction\x12!.vtgate.ResolveTransactionRequest\x1a\".vtgate.ResolveTransactionResponse\"\x00\x12O\n\rMessageStream\x12\x1c.vtgate.MessageStreamRequest\x1a\x1c.query.MessageStreamResponse\"\x00\x30\x01\x12\x44\n\nMessageAck\x12\x19.vtgate.MessageAckRequest\x1a\x19.query.MessageAckResponse\"\x00\x12Z\n\x15MessageAckKeyspaceIds\x12$.vtgate.MessageAckKeyspaceIdsRequest\x1a\x19.query.MessageAckResponse\"\x00\x12\x45\n\nSplitQuery\x12\x19.vtgate.SplitQueryRequest\x1a\x1a.vtgate.SplitQueryResponse\"\x00\x12Q\n\x0eGetSrvKeyspace\x12\x1d.vtgate.GetSrvKeyspaceRequest\x1a\x1e.vtgate.GetSrvKeyspaceResponse\"\x00\x12M\n\x0cUpdateStream\x12\x1b.vtgate.UpdateStreamRequest\x1a\x1c.vtgate.UpdateStreamResponse\"\x00\x30\x01\x42\x42\n\x14io.vitess.proto.grpcZ*vitess.io/vitess/go/vt/proto/vtgateserviceb\x06proto3')
   ,
   dependencies=[vtgate__pb2.DESCRIPTOR,query__pb2.DESCRIPTOR,])
@@ -30,15 +30,14 @@ DESCRIPTOR = _descriptor.FileDescriptor(
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
-DESCRIPTOR.has_options = True
-DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('\n\024io.vitess.proto.grpcZ*vitess.io/vitess/go/vt/proto/vtgateservice'))
+DESCRIPTOR._options = None
 
 _VITESS = _descriptor.ServiceDescriptor(
   name='Vitess',
   full_name='vtgateservice.Vitess',
   file=DESCRIPTOR,
   index=0,
-  options=None,
+  serialized_options=None,
   serialized_start=66,
   serialized_end=1928,
   methods=[
@@ -49,7 +48,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._EXECUTEREQUEST,
     output_type=vtgate__pb2._EXECUTERESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='ExecuteBatch',
@@ -58,7 +57,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._EXECUTEBATCHREQUEST,
     output_type=vtgate__pb2._EXECUTEBATCHRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='StreamExecute',
@@ -67,7 +66,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._STREAMEXECUTEREQUEST,
     output_type=vtgate__pb2._STREAMEXECUTERESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='ExecuteShards',
@@ -76,7 +75,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._EXECUTESHARDSREQUEST,
     output_type=vtgate__pb2._EXECUTESHARDSRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='ExecuteKeyspaceIds',
@@ -85,7 +84,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._EXECUTEKEYSPACEIDSREQUEST,
     output_type=vtgate__pb2._EXECUTEKEYSPACEIDSRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='ExecuteKeyRanges',
@@ -94,7 +93,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._EXECUTEKEYRANGESREQUEST,
     output_type=vtgate__pb2._EXECUTEKEYRANGESRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='ExecuteEntityIds',
@@ -103,7 +102,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._EXECUTEENTITYIDSREQUEST,
     output_type=vtgate__pb2._EXECUTEENTITYIDSRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='ExecuteBatchShards',
@@ -112,7 +111,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._EXECUTEBATCHSHARDSREQUEST,
     output_type=vtgate__pb2._EXECUTEBATCHSHARDSRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='ExecuteBatchKeyspaceIds',
@@ -121,7 +120,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._EXECUTEBATCHKEYSPACEIDSREQUEST,
     output_type=vtgate__pb2._EXECUTEBATCHKEYSPACEIDSRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='StreamExecuteShards',
@@ -130,7 +129,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._STREAMEXECUTESHARDSREQUEST,
     output_type=vtgate__pb2._STREAMEXECUTESHARDSRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='StreamExecuteKeyspaceIds',
@@ -139,7 +138,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._STREAMEXECUTEKEYSPACEIDSREQUEST,
     output_type=vtgate__pb2._STREAMEXECUTEKEYSPACEIDSRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='StreamExecuteKeyRanges',
@@ -148,7 +147,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._STREAMEXECUTEKEYRANGESREQUEST,
     output_type=vtgate__pb2._STREAMEXECUTEKEYRANGESRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='Begin',
@@ -157,7 +156,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._BEGINREQUEST,
     output_type=vtgate__pb2._BEGINRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='Commit',
@@ -166,7 +165,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._COMMITREQUEST,
     output_type=vtgate__pb2._COMMITRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='Rollback',
@@ -175,7 +174,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._ROLLBACKREQUEST,
     output_type=vtgate__pb2._ROLLBACKRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='ResolveTransaction',
@@ -184,7 +183,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._RESOLVETRANSACTIONREQUEST,
     output_type=vtgate__pb2._RESOLVETRANSACTIONRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='MessageStream',
@@ -193,7 +192,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._MESSAGESTREAMREQUEST,
     output_type=query__pb2._MESSAGESTREAMRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='MessageAck',
@@ -202,7 +201,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._MESSAGEACKREQUEST,
     output_type=query__pb2._MESSAGEACKRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='MessageAckKeyspaceIds',
@@ -211,7 +210,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._MESSAGEACKKEYSPACEIDSREQUEST,
     output_type=query__pb2._MESSAGEACKRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='SplitQuery',
@@ -220,7 +219,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._SPLITQUERYREQUEST,
     output_type=vtgate__pb2._SPLITQUERYRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='GetSrvKeyspace',
@@ -229,7 +228,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._GETSRVKEYSPACEREQUEST,
     output_type=vtgate__pb2._GETSRVKEYSPACERESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='UpdateStream',
@@ -238,7 +237,7 @@ _VITESS = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=vtgate__pb2._UPDATESTREAMREQUEST,
     output_type=vtgate__pb2._UPDATESTREAMRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
 ])
 _sym_db.RegisterServiceDescriptor(_VITESS)
