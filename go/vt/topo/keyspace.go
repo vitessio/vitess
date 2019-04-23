@@ -255,6 +255,20 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 	return result, nil
 }
 
+// GetOnlyShard returns the single ShardInfo of an unsharded keyspace.
+func (ts *Server) GetOnlyShard(ctx context.Context, keyspace string) (*ShardInfo, error) {
+	allShards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	if err != nil {
+		return nil, err
+	}
+	if len(allShards) == 1 {
+		for _, s := range allShards {
+			return s, nil
+		}
+	}
+	return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %s must have one and only one shard: %v", keyspace, allShards)
+}
+
 // DeleteKeyspace wraps the underlying Conn.Delete
 // and dispatches the event.
 func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {

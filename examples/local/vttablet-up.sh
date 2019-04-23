@@ -38,7 +38,7 @@ source $script_root/env.sh
 
 init_db_sql_file="$VTROOT/config/init_db.sql"
 
-export  EXTRA_MY_CNF=$VTROOT/config/mycnf/default-fast.cnf
+export EXTRA_MY_CNF=$VTROOT/config/mycnf/default-fast.cnf:$VTROOT/config/mycnf/rbr.cnf
 
 case "$MYSQL_FLAVOR" in
   "MySQL56")
