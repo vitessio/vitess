@@ -147,7 +147,13 @@ func buildQuery(tableName, filter string) string {
 }
 
 func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string, lastpk *sqltypes.Result) (*TablePlan, error) {
-	sel, fromTable, err := analyzeSelectFrom(rule.Filter)
+	query := rule.Filter
+	if query == "" {
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(rule.Match))
+		query = buf.String()
+	}
+	sel, fromTable, err := analyzeSelectFrom(query)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +168,7 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string, last
 		if !expr.TableName.IsEmpty() {
 			return nil, fmt.Errorf("unsupported qualifier for '*' expression: %v", sqlparser.String(expr))
 		}
-		sendRule.Filter = rule.Filter
+		sendRule.Filter = query
 		tablePlan := &TablePlan{
 			TargetName: rule.Match,
 			SendRule:   sendRule,
