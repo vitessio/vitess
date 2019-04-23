@@ -85,7 +85,7 @@ public class ConnectionPropertiesTest {
     assertEquals("useAffectedRows", true, props.getUseAffectedRows());
     assertEquals("refreshConnection", false, props.getRefreshConnection());
     assertEquals("refreshSeconds", 60, props.getRefreshSeconds());
-    assertEquals("useTracing", true, props.getUseTracing());
+    assertEquals("useTracing", false, props.getUseTracing());
   }
 
   @Test

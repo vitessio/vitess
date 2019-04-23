@@ -137,5 +137,5 @@ type nilCloser struct {
 func (c *nilCloser) Close() error { return nil }
 
 func init() {
-	tracingBackendFactories["jaeger"] = newJagerTracerFromEnv
+	tracingBackendFactories["opentracing-jaeger"] = newJagerTracerFromEnv
 }
