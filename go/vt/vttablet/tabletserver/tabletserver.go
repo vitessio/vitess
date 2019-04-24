@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
@@ -44,6 +43,10 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -61,11 +64,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -184,10 +182,11 @@ type TabletServer struct {
 	topoServer  *topo.Server
 
 	// streamHealthMutex protects all the following fields
-	streamHealthMutex        sync.Mutex
-	streamHealthIndex        int
-	streamHealthMap          map[int]chan<- *querypb.StreamHealthResponse
-	lastStreamHealthResponse *querypb.StreamHealthResponse
+	streamHealthMutex          sync.Mutex
+	streamHealthIndex          int
+	streamHealthMap            map[int]chan<- *querypb.StreamHealthResponse
+	lastStreamHealthResponse   *querypb.StreamHealthResponse
+	lastStreamHealthExpiration time.Time
 
 	// history records changes in state for display on the status page.
 	// It has its own internal mutex.
@@ -1823,9 +1822,10 @@ func createSplitQueryAlgorithmObject(
 func (tsv *TabletServer) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	tsv.streamHealthMutex.Lock()
 	shr := tsv.lastStreamHealthResponse
+	shrExpiration := tsv.lastStreamHealthExpiration
 	tsv.streamHealthMutex.Unlock()
 	// Send current state immediately.
-	if shr != nil {
+	if shr != nil && time.Now().Before(shrExpiration) {
 		if err := callback(shr); err != nil {
 			if err == io.EOF {
 				return nil
@@ -1871,14 +1871,14 @@ func (tsv *TabletServer) streamHealthUnregister(id int) {
 }
 
 // BroadcastHealth will broadcast the current health to all listeners
-func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats) {
+func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats, maxCache time.Duration) {
 	tsv.mu.Lock()
 	target := tsv.target
 	tsv.mu.Unlock()
 	shr := &querypb.StreamHealthResponse{
-		Target:      &target,
-		TabletAlias: &tsv.alias,
-		Serving:     tsv.IsServing(),
+		Target:                              &target,
+		TabletAlias:                         &tsv.alias,
+		Serving:                             tsv.IsServing(),
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
 	}
@@ -1893,6 +1893,7 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 		}
 	}
 	tsv.lastStreamHealthResponse = shr
+	tsv.lastStreamHealthExpiration = time.Now().Add(maxCache)
 }
 
 // HeartbeatLag returns the current lag as calculated by the heartbeat
