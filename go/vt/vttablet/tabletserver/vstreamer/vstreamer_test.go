@@ -188,6 +188,11 @@ func TestREKeyRange(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
+	if err := env.SetVSchema(shardedVSchema); err != nil {
+		t.Fatal(err)
+	}
+	defer env.SetVSchema("{}")
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -198,11 +203,6 @@ func TestREKeyRange(t *testing.T) {
 		}},
 	}
 	ch := startStream(ctx, t, filter)
-
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
-	defer env.SetVSchema("{}")
 
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
