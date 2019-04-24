@@ -44,6 +44,8 @@ var (
 type ExecutorMode string
 
 const (
+	vtexplainCell = "explainCell"
+
 	// ModeMulti is the default mode with autocommit implemented at vtgate
 	ModeMulti = "multi"
 
@@ -140,10 +142,6 @@ type Explain struct {
 	// list of queries / bind vars sent to each tablet
 	TabletActions map[string]*TabletActions
 }
-
-const (
-	vtexplainCell = "explainCell"
-)
 
 // Init sets up the fake execution environment
 func Init(vSchemaStr, sqlSchema string, opts *Options) error {
