@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -99,14 +100,15 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
-	var ctx context.Context
+	ctx := context.Background()
 	var cancel context.CancelFunc
 	if *mysqlQueryTimeout != 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		ctx, cancel = context.WithTimeout(ctx, *mysqlQueryTimeout)
 		defer cancel()
-	} else {
-		ctx = context.Background()
 	}
+	span, ctx := trace.NewSpan(ctx, "vtgateHandler.ComQuery")
+	trace.AnnotateSQL(span, query)
+	defer span.Finish()
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 

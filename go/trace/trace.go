@@ -78,16 +78,12 @@ func CopySpan(parentCtx, spanCtx context.Context) context.Context {
 	return parentCtx
 }
 
-func GetGrpcClientOptions() []grpc.DialOption {
-	return spanFactory.GetGrpcClientOptions()
-}
-
-func GetGrpcServerOptions() []grpc.ServerOption {
-	return spanFactory.GetGrpcServerOptions()
-}
-
 func AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
 	spanFactory.AddGrpcServerOptions(addInterceptors)
+}
+
+func AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {
+	spanFactory.AddGrpcClientOptions(addInterceptors)
 }
 
 // TracingService is an interface for creating spans or extracting them from Contexts.
@@ -104,11 +100,8 @@ type TracingService interface {
 	// Allows a tracing system to add interceptors to grpc server traffic
 	AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor))
 
-	// Allows a tracing system to add grpc configuration to server traffic
-	GetGrpcServerOptions() []grpc.ServerOption
-
-	// Allows a tracing system to add grpc configuration to client traffic
-	GetGrpcClientOptions() []grpc.DialOption
+	// Allows a tracing system to add interceptors to grpc server traffic
+	AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor))
 }
 
 type TracerFactory func(serviceName string) (TracingService, io.Closer, error)
@@ -136,6 +129,8 @@ func StartTracing(serviceName string) io.Closer {
 	}
 
 	spanFactory = tracer
+
+	log.Infof("successfully started tracing with [%s]", *tracingServer)
 
 	return closer
 }

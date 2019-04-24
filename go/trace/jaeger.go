@@ -38,15 +38,8 @@ func (jf OpenTracingFactory) AddGrpcServerOptions(addInterceptors func(s grpc.St
 	addInterceptors(otgrpc.OpenTracingStreamServerInterceptor(jf.Tracer), otgrpc.OpenTracingServerInterceptor(jf.Tracer))
 }
 
-func (jf OpenTracingFactory) GetGrpcServerOptions() []grpc.ServerOption {
-	return []grpc.ServerOption{}
-}
-
-func (jf OpenTracingFactory) GetGrpcClientOptions() []grpc.DialOption {
-	return []grpc.DialOption{
-		grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(jf.Tracer)),
-		grpc.WithStreamInterceptor(otgrpc.OpenTracingStreamClientInterceptor(jf.Tracer)),
-	}
+func (jf OpenTracingFactory) AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {
+	addInterceptors(otgrpc.OpenTracingStreamClientInterceptor(jf.Tracer), otgrpc.OpenTracingClientInterceptor(jf.Tracer))
 }
 
 // newJagerTracerFromEnv will instantiate a TracingService implemented by Jaeger,

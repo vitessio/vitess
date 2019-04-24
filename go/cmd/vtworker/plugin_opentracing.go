@@ -23,7 +23,7 @@ import (
 )
 
 func init() {
-  servenv.OnRun(func() {
+  servenv.OnInit(func() {
     closer := trace.StartTracing("vtworker")
     servenv.OnClose(trace.LogErrorsWhenClosing(closer))
   })

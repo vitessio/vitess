@@ -115,11 +115,7 @@ func (f *fakeTracer) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServ
 	panic("implement me")
 }
 
-func (f *fakeTracer) GetGrpcServerOptions() []grpc.ServerOption {
-	panic("implement me")
-}
-
-func (f *fakeTracer) GetGrpcClientOptions() []grpc.DialOption {
+func (f *fakeTracer) AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {
 	panic("implement me")
 }
 

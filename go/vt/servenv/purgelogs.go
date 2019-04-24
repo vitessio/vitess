@@ -21,7 +21,7 @@ import (
 )
 
 func init() {
-	onInit(func() {
+	OnInit(func() {
 		go logutil.PurgeLogs()
 	})
 

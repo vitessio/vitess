@@ -21,12 +21,12 @@ package grpcclient
 import (
 	"flag"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/go-grpc-prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	"vitess.io/vitess/go/trace"
-
-	"github.com/grpc-ecosystem/go-grpc-prometheus"
 
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/vttls"
@@ -94,14 +94,18 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 		}
 	}
 
-	if *grpccommon.EnableGRPCPrometheus {
-		newopts = append(newopts, grpc.WithUnaryInterceptor(grpc_prometheus.UnaryClientInterceptor))
-		newopts = append(newopts, grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor))
-	}
-
-	newopts = append(newopts, trace.GetGrpcClientOptions()...)
+	newopts = append(newopts, interceptors()...)
 
 	return grpc.Dial(target, newopts...)
+}
+
+func interceptors() []grpc.DialOption {
+	builder := &ClientInterceptorBuilder{}
+	if *grpccommon.EnableGRPCPrometheus {
+		builder.Add(grpc_prometheus.StreamClientInterceptor, grpc_prometheus.UnaryClientInterceptor)
+	}
+	trace.AddGrpcClientOptions(builder.Add)
+	return builder.Build()
 }
 
 // SecureDialOption returns the gRPC dial option to use for the
@@ -122,4 +126,29 @@ func SecureDialOption(cert, key, ca, name string) (grpc.DialOption, error) {
 	// Create the creds server options.
 	creds := credentials.NewTLS(config)
 	return grpc.WithTransportCredentials(creds), nil
+}
+
+// Allows for building a chain of interceptors without knowing the total size up front
+type ClientInterceptorBuilder struct {
+	unaryInterceptors  []grpc.UnaryClientInterceptor
+	streamInterceptors []grpc.StreamClientInterceptor
+}
+
+// Add adds interceptors to the chain of interceptors
+func (collector *ClientInterceptorBuilder) Add(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor) {
+	collector.unaryInterceptors = append(collector.unaryInterceptors, u)
+	collector.streamInterceptors = append(collector.streamInterceptors, s)
+}
+
+// Build returns DialOptions to add to the grpc.Dial call
+func (collector *ClientInterceptorBuilder) Build() []grpc.DialOption {
+	switch len(collector.unaryInterceptors) + len(collector.streamInterceptors) {
+	case 0:
+		return []grpc.DialOption{}
+	default:
+		return []grpc.DialOption{
+			grpc.WithUnaryInterceptor(grpc_middleware.ChainUnaryClient(collector.unaryInterceptors...)),
+			grpc.WithStreamInterceptor(grpc_middleware.ChainStreamClient(collector.streamInterceptors...)),
+		}
+	}
 }

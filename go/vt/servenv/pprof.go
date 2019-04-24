@@ -29,7 +29,7 @@ var (
 )
 
 func init() {
-	onInit(func() {
+	OnInit(func() {
 		if *cpuProfile != "" {
 			f, err := os.Create(*cpuProfile)
 			if err != nil {
