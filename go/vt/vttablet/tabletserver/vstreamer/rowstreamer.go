@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -76,7 +77,7 @@ func (rs *rowStreamer) Stream() error {
 		return err
 	}
 
-	conn, err := mysql.Connect(rs.ctx, rs.cp)
+	conn, err := rs.mysqlConnect()
 	if err != nil {
 		return err
 	}
@@ -259,7 +260,7 @@ func (rs *rowStreamer) streamQuery(conn *mysql.Conn, send func(*binlogdatapb.VSt
 }
 
 func (rs *rowStreamer) lockTable() (unlock func() error, gtid string, err error) {
-	conn, err := mysql.Connect(rs.ctx, rs.cp)
+	conn, err := rs.mysqlConnect()
 	if err != nil {
 		return nil, "", err
 	}
@@ -285,4 +286,12 @@ func (rs *rowStreamer) lockTable() (unlock func() error, gtid string, err error)
 		return nil, "", err
 	}
 	return unlock, mysql.EncodePosition(pos), nil
+}
+
+func (rs *rowStreamer) mysqlConnect() (*mysql.Conn, error) {
+	cp, err := dbconfigs.WithCredentials(rs.cp)
+	if err != nil {
+		return nil, err
+	}
+	return mysql.Connect(rs.ctx, cp)
 }
