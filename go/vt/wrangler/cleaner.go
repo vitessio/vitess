@@ -29,6 +29,30 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+const (
+	//
+	// ChangeSlaveTypeAction CleanerFunction
+	//
+	// ChangeSlaveTypeActionName is the name of the action to change a slave type
+	// (can be used to find such an action by name)
+	ChangeSlaveTypeActionName = "ChangeSlaveTypeAction"
+	//
+	// TabletTagAction CleanerFunction
+	//
+	// TabletTagActionName is the name of the Tag action
+	TabletTagActionName = "TabletTagAction"
+	//
+	// StartSlaveAction CleanerAction
+	//
+	// StartSlaveActionName is the name of the slave start action
+	StartSlaveActionName = "StartSlaveAction"
+	//
+	// VReplication CleanerAction
+	//
+	// VReplicationActionName is the name of the action to execute VReplication commands
+	VReplicationActionName = "VReplicationAction"
+)
+
 // Cleaner remembers a list of cleanup steps to perform.  Just record
 // action cleanup steps, and execute them at the end in reverse
 // order, with various guarantees.
@@ -103,14 +127,6 @@ func (cleaner *Cleaner) CleanUp(wr *Wrangler) error {
 	return rec.Error()
 }
 
-//
-// ChangeSlaveTypeAction CleanerFunction
-//
-
-// ChangeSlaveTypeActionName is the name of the action to change a slave type
-// (can be used to find such an action by name)
-const ChangeSlaveTypeActionName = "ChangeSlaveTypeAction"
-
 // RecordChangeSlaveTypeAction records a new ChangeSlaveTypeAction
 // into the specified Cleaner
 func RecordChangeSlaveTypeAction(cleaner *Cleaner, tabletAlias *topodatapb.TabletAlias, from topodatapb.TabletType, to topodatapb.TabletType) {
@@ -131,13 +147,6 @@ func RecordChangeSlaveTypeAction(cleaner *Cleaner, tabletAlias *topodatapb.Table
 	})
 }
 
-//
-// TabletTagAction CleanerFunction
-//
-
-// TabletTagActionName is the name of the Tag action
-const TabletTagActionName = "TabletTagAction"
-
 // RecordTabletTagAction records a new action to set / remove a tag
 // into the specified Cleaner
 func RecordTabletTagAction(cleaner *Cleaner, tabletAlias *topodatapb.TabletAlias, name, value string) {
@@ -157,13 +166,6 @@ func RecordTabletTagAction(cleaner *Cleaner, tabletAlias *topodatapb.TabletAlias
 	})
 }
 
-//
-// StartSlaveAction CleanerAction
-//
-
-// StartSlaveActionName is the name of the slave start action
-const StartSlaveActionName = "StartSlaveAction"
-
 // RecordStartSlaveAction records a new action to restart binlog replication on a server
 // into the specified Cleaner
 func RecordStartSlaveAction(cleaner *Cleaner, tablet *topodatapb.Tablet) {
@@ -171,13 +173,6 @@ func RecordStartSlaveAction(cleaner *Cleaner, tablet *topodatapb.Tablet) {
 		return wr.TabletManagerClient().StartSlave(ctx, tablet)
 	})
 }
-
-//
-// VReplication CleanerAction
-//
-
-// VReplicationActionName is the name of the action to execute VReplication commands
-const VReplicationActionName = "VReplicationAction"
 
 // RecordVReplicationAction records an action to restart binlog replication on a server
 // into the specified Cleaner
