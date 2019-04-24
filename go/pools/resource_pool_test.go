@@ -566,3 +566,30 @@ func TestExpired(t *testing.T) {
 		t.Errorf("got %v, want %s", err, want)
 	}
 }
+
+func TestOnCloseFunc(t *testing.T) {
+	lastID.Set(0)
+	count.Set(0)
+
+	p := NewResourcePool(PoolFactory, 3, 3, 0)
+
+	ctx := context.Background()
+
+	r1, err := p.Get(ctx)
+	if err != nil {
+		t.Errorf("Unexpected error %v", err)
+	}
+
+	p.OnPoolClosed(func() {
+		if count.Get() != 0 {
+			t.Error("OnClose called before pool fully closed")
+		}
+	})
+
+	// Close in another go routine, so we don't block
+	go p.Close()
+
+	// Simulate a long running task
+	time.Sleep(2 * time.Second)
+	p.Put(r1)
+}

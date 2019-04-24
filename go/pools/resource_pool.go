@@ -62,6 +62,7 @@ type ResourcePool struct {
 	resources chan resourceWrapper
 	factory   Factory
 	idleTimer *timer.Timer
+	onPoolClose func()
 }
 
 type resourceWrapper struct {
@@ -255,6 +256,10 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 	}
 	if capacity == 0 {
 		close(rp.resources)
+
+		if rp.onPoolClose != nil {
+			rp.onPoolClose()
+		}
 	}
 	return nil
 }
@@ -334,4 +339,10 @@ func (rp *ResourcePool) IdleTimeout() time.Duration {
 // IdleClosed returns the count of resources closed due to idle timeout.
 func (rp *ResourcePool) IdleClosed() int64 {
 	return rp.idleClosed.Get()
+}
+
+// OnPoolClosed defines a function to execute when the pool is closed and all resources
+// have been closed. Passing nil will remove the existing function.
+func (rp *ResourcePool) OnPoolClosed(f func()) {
+	rp.onPoolClose = f
 }
