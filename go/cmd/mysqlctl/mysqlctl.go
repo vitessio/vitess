@@ -197,11 +197,11 @@ type command struct {
 
 var commands = []command{
 	{"init", initCmd, "[-wait_time=5m] [-init_db_sql_file=]",
-		"Initalizes the directory structure and starts mysqld"},
+		"Initializes the directory structure and starts mysqld"},
 	{"init_config", initConfigCmd, "",
-		"Initalizes the directory structure, creates my.cnf file, but does not start mysqld"},
+		"Initializes the directory structure, creates my.cnf file, but does not start mysqld"},
 	{"reinit_config", reinitConfigCmd, "",
-		"Reinitalizes my.cnf file with new server_id"},
+		"Reinitializes my.cnf file with new server_id"},
 	{"teardown", teardownCmd, "[-wait_time=5m] [-force]",
 		"Shuts mysqld down, and removes the directory"},
 	{"start", startCmd, "[-wait_time=5m]",
