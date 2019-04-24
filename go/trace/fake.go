@@ -29,9 +29,8 @@ func (fakeSpanFactory) New(Span, string) Span                                   
 func (fakeSpanFactory) NewClientSpan(parent Span, serviceName, label string) Span { return fakeSpan{} }
 func (fakeSpanFactory) FromContext(context.Context) (Span, bool)                  { return nil, false }
 func (fakeSpanFactory) NewContext(parent context.Context, _ Span) context.Context { return parent }
-func (fakeSpanFactory) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) { }
-func (fakeSpanFactory) GetGrpcServerOptions() []grpc.ServerOption { return []grpc.ServerOption{} }
-func (fakeSpanFactory) GetGrpcClientOptions() []grpc.DialOption { return []grpc.DialOption{} }
+func (fakeSpanFactory) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {}
+func (fakeSpanFactory) AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {}
 
 // fakeSpan implements Span with no-op methods.
 type fakeSpan struct{}
