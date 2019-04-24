@@ -267,6 +267,11 @@ var unshardedVSchema = `
 }
 `
 
+const (
+	testBufferSize = 10
+	testCacheSize  = int64(10)
+)
+
 type DestinationAnyShardPickerFirstShard struct{}
 
 func (dp DestinationAnyShardPickerFirstShard) PickShard(shardCount int) int {
@@ -327,9 +332,6 @@ func init() {
 	vindexes.Register("keyrange_lookuper", newKeyRangeLookuper)
 	vindexes.Register("keyrange_lookuper_unique", newKeyRangeLookuperUnique)
 }
-
-const testBufferSize = 10
-const testCacheSize = int64(10)
 
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"

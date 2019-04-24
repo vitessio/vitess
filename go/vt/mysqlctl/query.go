@@ -199,8 +199,10 @@ func (mysqld *Mysqld) fetchVariables(ctx context.Context, pattern string) (map[s
 	return varMap, nil
 }
 
-const masterPasswordStart = "  MASTER_PASSWORD = '"
-const masterPasswordEnd = "',\n"
+const (
+	masterPasswordStart = "  MASTER_PASSWORD = '"
+	masterPasswordEnd   = "',\n"
+)
 
 func redactMasterPassword(input string) string {
 	i := strings.Index(input, masterPasswordStart)
