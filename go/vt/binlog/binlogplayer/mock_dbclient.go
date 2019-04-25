@@ -123,7 +123,6 @@ func (dc *MockDBClient) Rollback() error {
 
 // Close is part of the DBClient interface
 func (dc *MockDBClient) Close() {
-	return
 }
 
 // ExecuteFetch is part of the DBClient interface

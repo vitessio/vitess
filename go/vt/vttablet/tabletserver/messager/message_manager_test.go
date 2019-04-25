@@ -614,7 +614,7 @@ func TestMessagesPending1(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		<-r1.ch
 	}
-	if d := time.Now().Sub(start); d > 15*time.Second {
+	if d := time.Since(start); d > 15*time.Second {
 		t.Errorf("pending work trigger did not happen. Duration: %v", d)
 	}
 }
@@ -663,7 +663,7 @@ func TestMessagesPending2(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		<-r1.ch
 	}
-	if d := time.Now().Sub(start); d > 15*time.Second {
+	if d := time.Since(start); d > 15*time.Second {
 		t.Errorf("pending work trigger did not happen. Duration: %v", d)
 	}
 }

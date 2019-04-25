@@ -94,7 +94,7 @@ func (vind *UnicodeLooseMD5) Map(cursor VCursor, ids []sqltypes.Value) ([]key.De
 }
 
 func unicodeHash(key sqltypes.Value) ([]byte, error) {
-	collator := collatorPool.Get().(pooledCollator)
+	collator := collatorPool.Get().(*pooledCollator)
 	defer collatorPool.Put(collator)
 
 	norm, err := normalize(collator.col, collator.buf, key.ToBytes())
@@ -144,7 +144,7 @@ func newPooledCollator() interface{} {
 	// way to verify this.
 	// Also, the locale differences are not an issue for level 1,
 	// because the conservative comparison makes them all equal.
-	return pooledCollator{
+	return &pooledCollator{
 		col: collate.New(language.English, collate.Loose),
 		buf: new(collate.Buffer),
 	}

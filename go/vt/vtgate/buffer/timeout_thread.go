@@ -95,7 +95,7 @@ func (tt *timeoutThread) run() {
 // waitForEntry blocks until "e" exceeds its buffering window or buffering stops
 // in general. It returns true if the timeout thread should stop.
 func (tt *timeoutThread) waitForEntry(e *entry) bool {
-	windowExceeded := time.NewTimer(e.deadline.Sub(time.Now()))
+	windowExceeded := time.NewTimer(time.Until(e.deadline))
 	defer windowExceeded.Stop()
 
 	select {

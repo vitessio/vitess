@@ -268,7 +268,7 @@ func (bs *CephBackupStorage) client() (*minio.Client, error) {
 		defer configFile.Close()
 		jsonParser := json.NewDecoder(configFile)
 		if err = jsonParser.Decode(&storageConfig); err != nil {
-			return nil, fmt.Errorf("Error parsing the json file : %v", err)
+			return nil, fmt.Errorf("error parsing the json file : %v", err)
 		}
 
 		accessKey := storageConfig.AccessKey
