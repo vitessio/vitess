@@ -403,7 +403,7 @@ var commands = []commandGroup{
 				"Applies the VTGate routing schema to the provided keyspace. Shows the result after application."},
 			{"GetRoutingRules", commandGetRoutingRules,
 				"",
-				"Displays the VSchema routing rules"},
+				"Displays the VSchema routing rules."},
 			{"ApplyRoutingRules", commandApplyRoutingRules,
 				"{-rules=<rules> || -rules_file=<rules_file=<sql file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry-run]",
 				"Applies the VSchema routing rules."},
