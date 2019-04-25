@@ -142,10 +142,10 @@ func checkLockUnblocks(ctx context.Context, t *testing.T, conn topo.Conn) {
 		<-unblock
 		lockDescriptor, err := conn.Lock(ctx, keyspacePath, "unblocks")
 		if err != nil {
-			t.Fatalf("Lock(test_keyspace) failed: %v", err)
+			t.Errorf("Lock(test_keyspace) failed: %v", err)
 		}
 		if err = lockDescriptor.Unlock(ctx); err != nil {
-			t.Fatalf("Unlock(test_keyspace): %v", err)
+			t.Errorf("Unlock(test_keyspace): %v", err)
 		}
 		close(finished)
 	}()

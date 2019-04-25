@@ -87,6 +87,8 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 			// we mark the LHS symtab as outer scope to the RHS, just like
 			// a subquery. This make the RHS treat the LHS symbols as external.
 			// This will prevent constructs from escaping out of the rpb scope.
+			// At this point, the LHS symtab also contains symbols of the RHS.
+			// But the RHS will hide those, as intended.
 			rpb.st.Outer = lpb.st
 			if err := rpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr); err != nil {
 				return err
@@ -95,20 +97,11 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 			return errors.New("unsupported: join with USING(column_list) clause")
 		}
 	}
-	// Merge the symbol tables. In the case of a left join, we have to
-	// ideally create new symbols that originate from the join primitive.
-	// However, this is not worth it for now, because the Push functions
-	// verify that only valid constructs are passed through in case of left join.
-	if err := lpb.st.Merge(rpb.st); err != nil {
-		return err
-	}
 	lpb.bldr = &join{
 		Left:  lpb.bldr,
 		Right: rpb.bldr,
 		ejoin: &engine.Join{
 			Opcode: opcode,
-			Left:   lpb.bldr.Primitive(),
-			Right:  rpb.bldr.Primitive(),
 			Vars:   make(map[string]int),
 		},
 	}
@@ -134,6 +127,8 @@ func (jb *join) Reorder(order int) {
 
 // Primitive satisfies the builder interface.
 func (jb *join) Primitive() engine.Primitive {
+	jb.ejoin.Left = jb.Left.Primitive()
+	jb.ejoin.Right = jb.Right.Primitive()
 	return jb.ejoin
 }
 

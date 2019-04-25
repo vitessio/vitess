@@ -103,8 +103,8 @@ func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, str
 	return table, destKeyspace, destTabletType, dest, err
 }
 
-// FindTableOrVindex finds the specified table or vindex.
-func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+// FindTablesOrVindex finds the specified table or vindex.
+func (vc *vcursorImpl) FindTablesOrVindex(name sqlparser.TableName) ([]*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
@@ -112,11 +112,11 @@ func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 	if destKeyspace == "" {
 		destKeyspace = vc.keyspace
 	}
-	table, vindex, err := vc.executor.VSchema().FindTableOrVindex(destKeyspace, name.Name.String())
+	tables, vindex, err := vc.executor.VSchema().FindTablesOrVindex(destKeyspace, name.Name.String())
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
 	}
-	return table, vindex, destKeyspace, destTabletType, dest, nil
+	return tables, vindex, destKeyspace, destTabletType, dest, nil
 }
 
 // DefaultKeyspace returns the default keyspace of the current request

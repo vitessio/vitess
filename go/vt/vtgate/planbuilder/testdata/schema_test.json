@@ -1,4 +1,16 @@
 {
+  "routing_rules": {
+    "rules": [{
+      "from_table": "route1",
+      "to_tables": ["user.user", "user.user_metadata"]
+    }, {
+      "from_table": "route2",
+      "to_tables": ["user.user", "main.unsharded"]
+    }, {
+      "from_table": "second_user.user",
+      "to_tables": ["user.user"]
+    }]
+  },
   "keyspaces": {
     "user": {
       "sharded": true,

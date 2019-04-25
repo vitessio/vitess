@@ -75,7 +75,7 @@ func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]b
 		if err != nil {
 			return nil, fmt.Errorf("UnicodeLooseMD5.Verify: %v", err)
 		}
-		out[i] = (bytes.Compare(data, ksids[i]) == 0)
+		out[i] = bytes.Equal(data, ksids[i])
 	}
 	return out, nil
 }

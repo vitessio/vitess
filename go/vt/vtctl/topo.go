@@ -77,6 +77,8 @@ func DecodeContent(filename string, data []byte, json bool) (string, error) {
 		p = new(vschemapb.SrvVSchema)
 	case topo.SrvKeyspaceFile:
 		p = new(topodatapb.SrvKeyspace)
+	case topo.RoutingRulesFile:
+		p = new(vschemapb.RoutingRules)
 	default:
 		if json {
 			return "", fmt.Errorf("unknown topo protobuf type for %v", name)

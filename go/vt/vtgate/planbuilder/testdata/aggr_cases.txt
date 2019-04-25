@@ -978,6 +978,36 @@
    }
 }
 
+# routing rules for aggregates where sharded and unsharded match. Unsharded always wins.
+"select id, count(*) from route2 group by id"
+{
+  "Original": "select id, count(*) from route2 group by id",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select id, count(*) from unsharded as route2 group by id",
+    "FieldQuery": "select id, count(*) from unsharded as route2 where 1 != 1 group by id"
+  }
+}
+
+# routing rules for select distinct where sharded and unsharded match. Unsharded always wins.
+"select distinct id, a from route2"
+{
+  "Original": "select distinct id, a from route2",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select distinct id, a from unsharded as route2",
+    "FieldQuery": "select id, a from unsharded as route2 where 1 != 1"
+  }
+}
+
 # Group by invalid column number (code is duplicated from symab).
 "select id from user group by 1.1"
 "column number is not an int"

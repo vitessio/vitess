@@ -62,7 +62,7 @@ func (vind *BinaryMD5) IsFunctional() bool {
 func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
-		out[i] = (bytes.Compare(binHash(ids[i].ToBytes()), ksids[i]) == 0)
+		out[i] = bytes.Equal(binHash(ids[i].ToBytes()), ksids[i])
 	}
 	return out, nil
 }
