@@ -350,22 +350,22 @@ func (sbc *SandboxConn) SplitQuery(
 
 // StreamHealth is not implemented.
 func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	return fmt.Errorf("Not implemented in test")
+	return fmt.Errorf("not implemented in test")
 }
 
 // UpdateStream is part of the QueryService interface.
 func (sbc *SandboxConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
-	return fmt.Errorf("Not implemented in test")
+	return fmt.Errorf("not implemented in test")
 }
 
 // VStream is part of the QueryService interface.
 func (sbc *SandboxConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return fmt.Errorf("Not implemented in test")
+	return fmt.Errorf("not implemented in test")
 }
 
 // VStreamRows is part of the QueryService interface.
 func (sbc *SandboxConn) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	return fmt.Errorf("Not implemented in test")
+	return fmt.Errorf("not implemented in test")
 }
 
 // HandlePanic is part of the QueryService interface.

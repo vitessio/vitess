@@ -336,7 +336,11 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 		httpTransport := &http.Transport{TLSClientConfig: tlsClientConf}
 		httpClient := &http.Client{Transport: httpTransport}
 
-		bs._client = s3.New(session.New(),
+		session, err := session.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		bs._client = s3.New(session,
 			&aws.Config{
 				HTTPClient:       httpClient,
 				LogLevel:         logLevel,

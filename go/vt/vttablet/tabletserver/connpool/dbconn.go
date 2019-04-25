@@ -371,7 +371,7 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		case <-done:
 			return
 		}
-		elapsed := time.Now().Sub(startTime)
+		elapsed := time.Since(startTime)
 
 		// Give 2x the elapsed time and some buffer as grace period
 		// for the query to get killed.

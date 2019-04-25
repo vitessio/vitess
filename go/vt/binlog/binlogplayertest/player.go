@@ -217,7 +217,7 @@ func testStreamTablesPanics(t *testing.T, bpc binlogplayer.Client) {
 // HandlePanic is part of the UpdateStream interface
 func (fake *FakeBinlogStreamer) HandlePanic(err *error) {
 	if x := recover(); x != nil {
-		*err = fmt.Errorf("Caught panic: %v", x)
+		*err = fmt.Errorf("caught panic: %v", x)
 	}
 }
 

@@ -75,16 +75,14 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 	// we just cancel that context.
 	lockCtx, lockCancel := context.WithCancel(context.Background())
 	go func() {
-		select {
-		case <-mp.stop:
-			if ld != nil {
-				if err := ld.Unlock(context.Background()); err != nil {
-					log.Errorf("failed to unlock electionPath %v: %v", electionPath, err)
-				}
+		<-mp.stop
+		if ld != nil {
+			if err := ld.Unlock(context.Background()); err != nil {
+				log.Errorf("failed to unlock electionPath %v: %v", electionPath, err)
 			}
-			lockCancel()
-			close(mp.done)
 		}
+		lockCancel()
+		close(mp.done)
 	}()
 
 	// Try to get the mastership, by getting a lock.
