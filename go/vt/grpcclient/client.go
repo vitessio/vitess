@@ -100,7 +100,7 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 }
 
 func interceptors() []grpc.DialOption {
-	builder := &ClientInterceptorBuilder{}
+	builder := &clientInterceptorBuilder{}
 	if *grpccommon.EnableGRPCPrometheus {
 		builder.Add(grpc_prometheus.StreamClientInterceptor, grpc_prometheus.UnaryClientInterceptor)
 	}
@@ -129,19 +129,19 @@ func SecureDialOption(cert, key, ca, name string) (grpc.DialOption, error) {
 }
 
 // Allows for building a chain of interceptors without knowing the total size up front
-type ClientInterceptorBuilder struct {
+type clientInterceptorBuilder struct {
 	unaryInterceptors  []grpc.UnaryClientInterceptor
 	streamInterceptors []grpc.StreamClientInterceptor
 }
 
 // Add adds interceptors to the chain of interceptors
-func (collector *ClientInterceptorBuilder) Add(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor) {
+func (collector *clientInterceptorBuilder) Add(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor) {
 	collector.unaryInterceptors = append(collector.unaryInterceptors, u)
 	collector.streamInterceptors = append(collector.streamInterceptors, s)
 }
 
 // Build returns DialOptions to add to the grpc.Dial call
-func (collector *ClientInterceptorBuilder) Build() []grpc.DialOption {
+func (collector *clientInterceptorBuilder) Build() []grpc.DialOption {
 	switch len(collector.unaryInterceptors) + len(collector.streamInterceptors) {
 	case 0:
 		return []grpc.DialOption{}

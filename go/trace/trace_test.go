@@ -44,7 +44,7 @@ func TestFakeSpan(t *testing.T) {
 
 func TestRegisterService(t *testing.T) {
 	fakeName := "test"
-	tracingBackendFactories[fakeName] = func(serviceName string) (TracingService, io.Closer, error) {
+	tracingBackendFactories[fakeName] = func(serviceName string) (tracingService, io.Closer, error) {
 		tracer := &fakeTracer{name: serviceName}
 		return tracer, tracer, nil
 	}
@@ -67,7 +67,7 @@ func TestProtectPII(t *testing.T) {
 	// set up fake tracer that we can assert on
 	fakeName := "test"
 	var tracer *fakeTracer
-	tracingBackendFactories[fakeName] = func(serviceName string) (TracingService, io.Closer, error) {
+	tracingBackendFactories[fakeName] = func(serviceName string) (tracingService, io.Closer, error) {
 		tracer = &fakeTracer{name: serviceName}
 		return tracer, tracer, nil
 	}

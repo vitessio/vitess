@@ -1,15 +1,27 @@
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package trace
 
 import (
 	"flag"
 	"io"
 
-	"github.com/opentracing-contrib/go-grpc"
 	"github.com/opentracing/opentracing-go"
 	"github.com/uber/jaeger-client-go"
 	"github.com/uber/jaeger-client-go/config"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -18,31 +30,7 @@ var (
 	samplingRate = flag.Float64("tracing-sampling-rate", 0.1, "sampling rate for the probabilistic jaeger sampler")
 )
 
-type JaegerSpan struct {
-	otSpan opentracing.Span
-}
-
-func (js JaegerSpan) Finish() {
-	js.otSpan.Finish()
-}
-
-func (js JaegerSpan) Annotate(key string, value interface{}) {
-	js.otSpan.SetTag(key, value)
-}
-
-type OpenTracingFactory struct {
-	Tracer opentracing.Tracer
-}
-
-func (jf OpenTracingFactory) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
-	addInterceptors(otgrpc.OpenTracingStreamServerInterceptor(jf.Tracer), otgrpc.OpenTracingServerInterceptor(jf.Tracer))
-}
-
-func (jf OpenTracingFactory) AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {
-	addInterceptors(otgrpc.OpenTracingStreamClientInterceptor(jf.Tracer), otgrpc.OpenTracingClientInterceptor(jf.Tracer))
-}
-
-// newJagerTracerFromEnv will instantiate a TracingService implemented by Jaeger,
+// newJagerTracerFromEnv will instantiate a tracingService implemented by Jaeger,
 // taking configuration from environment variables. Available properties are:
 // JAEGER_SERVICE_NAME -- If this is set, the service name used in code will be ignored and this value used instead
 // JAEGER_RPC_METRICS
@@ -60,7 +48,7 @@ func (jf OpenTracingFactory) AddGrpcClientOptions(addInterceptors func(s grpc.St
 // JAEGER_PASSWORD
 // JAEGER_AGENT_HOST
 // JAEGER_AGENT_PORT
-func newJagerTracerFromEnv(serviceName string) (TracingService, io.Closer, error) {
+func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error) {
 	cfg, err := config.FromEnv()
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = serviceName
@@ -85,49 +73,8 @@ func newJagerTracerFromEnv(serviceName string) (TracingService, io.Closer, error
 
 	opentracing.SetGlobalTracer(tracer)
 
-	return OpenTracingFactory{tracer}, closer, nil
+	return openTracingService{tracer}, closer, nil
 }
-
-func (jf OpenTracingFactory) NewClientSpan(parent Span, serviceName, label string) Span {
-	span := jf.New(parent, label)
-	span.Annotate("peer.service", serviceName)
-	return span
-}
-
-func (jf OpenTracingFactory) New(parent Span, label string) Span {
-	var innerSpan opentracing.Span
-	if parent == nil {
-		innerSpan = jf.Tracer.StartSpan(label)
-	} else {
-		jaegerParent := parent.(JaegerSpan)
-		span := jaegerParent.otSpan
-		innerSpan = jf.Tracer.StartSpan(label, opentracing.ChildOf(span.Context()))
-	}
-	return JaegerSpan{otSpan: innerSpan}
-}
-
-func (jf OpenTracingFactory) FromContext(ctx context.Context) (Span, bool) {
-	innerSpan := opentracing.SpanFromContext(ctx)
-
-	if innerSpan != nil {
-		return JaegerSpan{otSpan: innerSpan}, true
-	} else {
-		return nil, false
-	}
-}
-
-func (jf OpenTracingFactory) NewContext(parent context.Context, s Span) context.Context {
-	span, ok := s.(JaegerSpan)
-	if !ok {
-		return nil
-	}
-	return opentracing.ContextWithSpan(parent, span.otSpan)
-}
-
-type nilCloser struct {
-}
-
-func (c *nilCloser) Close() error { return nil }
 
 func init() {
 	tracingBackendFactories["opentracing-jaeger"] = newJagerTracerFromEnv

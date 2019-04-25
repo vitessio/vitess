@@ -86,30 +86,30 @@ func AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u
 	spanFactory.AddGrpcClientOptions(addInterceptors)
 }
 
-// TracingService is an interface for creating spans or extracting them from Contexts.
-type TracingService interface {
+// tracingService is an interface for creating spans or extracting them from Contexts.
+type tracingService interface {
 	// New creates a new span from an existing one, if provided. The parent can also be nil
 	New(parent Span, label string) Span
 
-	// Extracts a span from a context, making it possible to annotate the span with additional information.
+	// FromContext extracts a span from a context, making it possible to annotate the span with additional information.
 	FromContext(ctx context.Context) (Span, bool)
 
-	// Creates a new context containing the provided span
+	// NewContext creates a new context containing the provided span
 	NewContext(parent context.Context, span Span) context.Context
 
-	// Allows a tracing system to add interceptors to grpc server traffic
+	// AddGrpcServerOptions allows a tracing system to add interceptors to grpc server traffic
 	AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor))
 
-	// Allows a tracing system to add interceptors to grpc server traffic
+	// AddGrpcClientOptions allows a tracing system to add interceptors to grpc server traffic
 	AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor))
 }
 
-type TracerFactory func(serviceName string) (TracingService, io.Closer, error)
+type TracerFactory func(serviceName string) (tracingService, io.Closer, error)
 
 // tracingBackendFactories should be added to by a plugin during init() to install itself
 var tracingBackendFactories = make(map[string]TracerFactory)
 
-var spanFactory TracingService = fakeSpanFactory{}
+var spanFactory tracingService = fakeSpanFactory{}
 
 var (
 	tracingServer = flag.String("tracer", "noop", "tracing service to use")
@@ -144,3 +144,8 @@ func fail(serviceName string) io.Closer {
 	log.Errorf("no such [%s] tracing service found. alternatives are: %v", serviceName, altStr)
 	return &nilCloser{}
 }
+
+type nilCloser struct {
+}
+
+func (c *nilCloser) Close() error { return nil }
