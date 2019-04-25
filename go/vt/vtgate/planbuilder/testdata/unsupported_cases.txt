@@ -1,6 +1,6 @@
 # Unions
 "select * from user union select * from user_extra"
-"unsupported: UNION or subquery containing multi-shard queries"
+"unsupported: UNION cannot be executed as a single route"
 
 # SET
 "set a=1"
@@ -29,11 +29,11 @@
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
-"unsupported: UNION or subquery containing multi-shard queries"
+"unsupported: UNION cannot be executed as a single route"
 
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
-"unsupported: UNION or subquery containing multi-shard queries"
+"unsupported: UNION cannot be executed as a single route"
 
 # TODO: Implement support for select with a target destination
 "select * from `user[-]`.user_metadata"
@@ -74,14 +74,6 @@
 # last_insert_id for sharded keyspace
 "select last_insert_id() from user"
 "unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces"
-
-# join of information_schema with normal table
-"select foo from information_schema.a join unsharded"
-"unsupported: intermixing of information_schema and regular tables"
-
-# join of normal table with information_schema
-"select foo from unsharded join information_schema.a"
-"unsupported: intermixing of information_schema and regular tables"
 
 # natural join
 "select * from user natural join user_extra"
@@ -257,7 +249,7 @@
 
 # multi delete multi table
 "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'"
-"unsupported: multi-table/vindex delete statement in sharded keyspace"
+"unsupported: multi-shard or vindex write statement"
 
 # scatter delete with owned lookup vindex
 "delete from user"
@@ -293,11 +285,11 @@
 
 # join in update tables
 "update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
-"unsupported: multi-table/vindex update statement in sharded keyspace"
+"unsupported: multi-shard or vindex write statement"
 
 # multiple tables in update
 "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
-"unsupported: multi-table/vindex update statement in sharded keyspace"
+"unsupported: multi-shard or vindex write statement"
 
 # unsharded insert with cross-shard join"
 "insert into unsharded select u.col from user u join user u1"
@@ -377,45 +369,45 @@
 
 # union of information_schema with normal table
 "select * from information_schema.a union select * from unsharded"
-"unsupported: intermixing of information_schema and regular tables"
+"unsupported: UNION cannot be executed as a single route"
 
 # union of information_schema with normal table
 "select * from unsharded union select * from information_schema.a"
-"unsupported: intermixing of information_schema and regular tables"
+"unsupported: UNION cannot be executed as a single route"
 
 # multi-shard union
 "(select id from user union select id from music) union select 1 from dual"
-"unsupported: UNION or subquery containing multi-shard queries"
+"unsupported: UNION cannot be executed as a single route"
 
 # multi-shard union
 "select 1 from music union (select id from user union all select name from unsharded)"
-"unsupported: UNION on different keyspaces"
+"unsupported: UNION cannot be executed as a single route"
 
 # multi-shard union
 "select 1 from music union (select id from user union select name from unsharded)"
-"unsupported: UNION on different keyspaces"
+"unsupported: UNION cannot be executed as a single route"
 
 # multi-shard union
 "select id from user union all select id from music"
-"unsupported: UNION or subquery containing multi-shard queries"
+"unsupported: UNION cannot be executed as a single route"
 
 # union with the same target shard because of vindex
 "select * from music where id = 1 union select * from user where id = 1"
-"unsupported: UNION or subquery on different shards: vindexes are different"
+"unsupported: UNION cannot be executed as a single route"
 
 # union with different target shards
 "select 1 from music where id = 1 union select 1 from music where id = 2"
-"unsupported: UNION or subquery on different shards: vindex values are different"
+"unsupported: UNION cannot be executed as a single route"
 
 # Union all
 "select col1, col2 from user union all select col1, col2 from user_extra"
-"unsupported: UNION or subquery containing multi-shard queries"
+"unsupported: UNION cannot be executed as a single route"
 
 "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user"
-"unsupported construct: SELECT of UNION is non-trivial"
+"unsupported: SELECT of UNION is non-trivial"
 
 "select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')"
-"unsupported construct: SELECT of UNION is non-trivial"
+"unsupported: SELECT of UNION is non-trivial"
 
 "select keyspace_id from user_index where id = 1 and id = 2"
 "unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)"

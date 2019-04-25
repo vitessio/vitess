@@ -31,32 +31,26 @@ import (
 // buildInsertPlan builds the route for an INSERT statement.
 func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (*engine.Insert, error) {
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
-	aliased := &sqlparser.AliasedTableExpr{Expr: ins.Table}
-	if err := pb.processAliasedTable(aliased); err != nil {
+	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
+	ro, err := pb.processDMLTable(exprs)
+	if err != nil {
 		return nil, err
 	}
-	rb, ok := pb.bldr.(*route)
-	if !ok {
-		// This can happen only for vindexes right now.
-		return nil, fmt.Errorf("inserting into a vindex not allowed: %s", sqlparser.String(ins.Table))
-	}
-	if rb.ERoute.TargetDestination != nil {
+	// The table might have been routed to a different one.
+	ins.Table = exprs[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName)
+	if ro.eroute.TargetDestination != nil {
 		return nil, errors.New("unsupported: INSERT with a target destination")
 	}
-	var table *vindexes.Table
-	for _, tval := range pb.st.tables {
-		table = tval.vindexTable
-	}
-	if !table.Keyspace.Sharded {
-		if !pb.validateSubquerySamePlan(ins) {
+	if !ro.vschemaTable.Keyspace.Sharded {
+		if !pb.finalizeUnshardedDMLSubqueries(ins) {
 			return nil, errors.New("unsupported: sharded subquery in insert values")
 		}
-		return buildInsertUnshardedPlan(ins, table, vschema)
+		return buildInsertUnshardedPlan(ins, ro.vschemaTable, vschema)
 	}
 	if ins.Action == sqlparser.ReplaceStr {
 		return nil, errors.New("unsupported: REPLACE INTO with sharded schema")
 	}
-	return buildInsertShardedPlan(ins, table)
+	return buildInsertShardedPlan(ins, ro.vschemaTable)
 }
 
 func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vschema ContextVSchema) (*engine.Insert, error) {

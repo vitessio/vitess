@@ -401,6 +401,12 @@ var commands = []commandGroup{
 			{"ApplyVSchema", commandApplyVSchema,
 				"{-vschema=<vschema> || -vschema_file=<vschema file> || -sql=<sql> || -sql_file=<sql file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry-run] <keyspace>",
 				"Applies the VTGate routing schema to the provided keyspace. Shows the result after application."},
+			{"GetRoutingRules", commandGetRoutingRules,
+				"",
+				"Displays the VSchema routing rules."},
+			{"ApplyRoutingRules", commandApplyRoutingRules,
+				"{-rules=<rules> || -rules_file=<rules_file=<sql file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry-run]",
+				"Applies the VSchema routing rules."},
 			{"RebuildVSchemaGraph", commandRebuildVSchemaGraph,
 				"[-cells=c1,c2,...]",
 				"Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided)."},
@@ -2188,6 +2194,20 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	return nil
 }
 
+func commandGetRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	rr, err := wr.TopoServer().GetRoutingRules(ctx)
+	if err != nil {
+		return err
+	}
+	b, err := json2.MarshalIndentPB(rr, "  ")
+	if err != nil {
+		wr.Logger().Printf("%v\n", err)
+		return err
+	}
+	wr.Logger().Printf("%s\n", b)
+	return nil
+}
+
 func commandRebuildVSchemaGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	var cells flagutil.StringListValue
 	subFlags.Var(&cells, "cells", "Specifies a comma-separated list of cells to look for tablets")
@@ -2299,6 +2319,54 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	}
 
 	if err := wr.TopoServer().SaveVSchema(ctx, keyspace, vs); err != nil {
+		return err
+	}
+
+	if *skipRebuild {
+		wr.Logger().Warningf("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
+		return nil
+	}
+	return topotools.RebuildVSchema(ctx, wr.Logger(), wr.TopoServer(), cells)
+}
+
+func commandApplyRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	routingRules := subFlags.String("rules", "", "Specify rules as a string")
+	routingRulesFile := subFlags.String("vschema_file", "", "Specify rules in a file")
+	skipRebuild := subFlags.Bool("skip_rebuild", false, "If set, do no rebuild the SrvSchema objects.")
+	var cells flagutil.StringListValue
+	subFlags.Var(&cells, "cells", "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 0 {
+		return fmt.Errorf("ApplyRoutingRules doesn't take any arguments")
+	}
+
+	var rulesBytes []byte
+	if *routingRulesFile != "" {
+		var err error
+		rulesBytes, err = ioutil.ReadFile(*routingRulesFile)
+		if err != nil {
+			return err
+		}
+	} else {
+		rulesBytes = []byte(*routingRules)
+	}
+
+	rr := &vschemapb.RoutingRules{}
+	if err := json2.Unmarshal(rulesBytes, rr); err != nil {
+		return err
+	}
+
+	b, err := json2.MarshalIndentPB(rr, "  ")
+	if err != nil {
+		wr.Logger().Errorf2(err, "Failed to marshal RoutingRules for display")
+	} else {
+		wr.Logger().Printf("New RoutingRules object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", b)
+	}
+
+	if err := wr.TopoServer().SaveRoutingRules(ctx, rr); err != nil {
 		return err
 	}
 

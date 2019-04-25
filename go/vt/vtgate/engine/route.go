@@ -143,7 +143,8 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 
 // RouteOpcode is a number representing the opcode
 // for the Route primitve. Adding new opcodes here
-// will require review of the join code in planbuilder.
+// will require review of the join code and
+// the finalizeOptions code in planbuilder.
 type RouteOpcode int
 
 // This is the list of RouteOpcode values.
@@ -321,7 +322,7 @@ func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 	}
 	if len(rss) != 1 {
 		// This code is unreachable. It's just a sanity check.
-		return nil, fmt.Errorf("No shards for keyspace: %s", route.Keyspace.Name)
+		return nil, fmt.Errorf("no shards for keyspace: %s", route.Keyspace.Name)
 	}
 	qr, err := execShard(vcursor, route.FieldQuery, bindVars, rss[0], false /* isDML */, false /* canAutocommit */)
 	if err != nil {
@@ -461,7 +462,7 @@ func execAnyShard(vcursor VCursor, query string, bindVars map[string]*querypb.Bi
 	}
 	if len(rss) != 1 {
 		// This code is unreachable. It's just a sanity check.
-		return nil, fmt.Errorf("No shards for keyspace: %s", keyspace.Name)
+		return nil, fmt.Errorf("no shards for keyspace: %s", keyspace.Name)
 	}
 	return vcursor.ExecuteStandalone(query, bindVars, rss[0])
 }
