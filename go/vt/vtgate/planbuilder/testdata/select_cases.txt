@@ -344,22 +344,7 @@
 
 # nextval for simple route
 "select next value from user"
-"NEXT used on a sharded table"
-
-# next n values for simple route
-"select next 2 values from seq"
-{
-  "Original": "select next 2 values from seq",
-  "Instructions": {
-    "Opcode": "SelectNext",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "Query": "select next 2 values from seq",
-    "FieldQuery": "select next 2 values from seq where 1 != 1"
-  }
-}
+"NEXT used on a non-sequence table"
 
 # last_insert_id for unsharded route
 "select last_insert_id() from main.dual"

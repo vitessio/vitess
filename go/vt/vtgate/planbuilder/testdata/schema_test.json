@@ -189,6 +189,9 @@
             }
           ]
         },
+        "ref": {
+          "type": "reference"
+        },
         "pin_test": {
           "pinned": "80"
         },

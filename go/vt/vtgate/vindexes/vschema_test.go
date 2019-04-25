@@ -1019,14 +1019,14 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 	}
 	got, _ := BuildVSchema(&good)
 	t1a := &Table{
-		Name:       sqlparser.NewTableIdent("t1"),
-		Keyspace:   ksa,
-		IsSequence: true,
+		Name:     sqlparser.NewTableIdent("t1"),
+		Keyspace: ksa,
+		Type:     "sequence",
 	}
 	t1b := &Table{
-		Name:       sqlparser.NewTableIdent("t1"),
-		Keyspace:   ksb,
-		IsSequence: true,
+		Name:     sqlparser.NewTableIdent("t1"),
+		Keyspace: ksb,
+		Type:     "sequence",
 	}
 	duala := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
@@ -1504,9 +1504,9 @@ func TestSequence(t *testing.T) {
 		Sharded: true,
 	}
 	seq := &Table{
-		Name:       sqlparser.NewTableIdent("seq"),
-		Keyspace:   ksu,
-		IsSequence: true,
+		Name:     sqlparser.NewTableIdent("seq"),
+		Keyspace: ksu,
+		Type:     "sequence",
 	}
 	vindex1 := &stFU{
 		name: "stfu1",
@@ -1700,6 +1700,27 @@ func TestBadSequenceName(t *testing.T) {
 	got, _ := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
 	want := "cannot resolve sequence a.b.seq: table a.b.seq not found"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	}
+}
+
+func TestBadShardedSequence(t *testing.T) {
+	bad := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type: "sequence",
+					},
+				},
+			},
+		},
+	}
+	got, _ := BuildVSchema(&bad)
+	err := got.Keyspaces["sharded"].Error
+	want := "sequence table has to be in an unsharded keyspace or must be pinned: t1"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
@@ -2090,8 +2111,8 @@ func TestVSchemaJSON(t *testing.T) {
 					}},
 				},
 				"t2": {
-					IsSequence: true,
-					Name:       sqlparser.NewTableIdent("n2"),
+					Type: "sequence",
+					Name: sqlparser.NewTableIdent("n2"),
 				},
 			},
 		},
@@ -2161,7 +2182,7 @@ func TestVSchemaJSON(t *testing.T) {
         ]
       },
       "t2": {
-        "is_sequence": true,
+        "type": "sequence",
         "name": "n2"
       }
     }

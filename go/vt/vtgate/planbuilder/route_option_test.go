@@ -43,6 +43,10 @@ func TestIsBetterThan(t *testing.T) {
 		out:   false,
 	}, {
 		left:  engine.SelectUnsharded,
+		right: engine.SelectReference,
+		out:   false,
+	}, {
+		left:  engine.SelectUnsharded,
 		right: engine.SelectEqualUnique,
 		out:   true,
 	}, {
@@ -63,6 +67,10 @@ func TestIsBetterThan(t *testing.T) {
 		out:   false,
 	}, {
 		left:  engine.SelectDBA,
+		right: engine.SelectUnsharded,
+		out:   false,
+	}, {
+		left:  engine.SelectReference,
 		right: engine.SelectUnsharded,
 		out:   false,
 	}, {

@@ -163,6 +163,9 @@ func (rb *route) SetGroupBy(groupBy sqlparser.GroupBy) error {
 
 // PushOrderBy sets the order by for the route.
 func (rb *route) PushOrderBy(order *sqlparser.Order) error {
+	// By this time, if any single shard options were already present,
+	// multi-sharded options would have already been removed. So, this
+	// call is only for checking if the route has single shard options.
 	if rb.removeMultishardOptions() {
 		rb.Select.AddOrder(order)
 		return nil
@@ -532,7 +535,7 @@ outer:
 func (rb *route) removeMultishardOptions() bool {
 	return rb.removeOptions(func(ro *routeOption) bool {
 		switch ro.eroute.Opcode {
-		case engine.SelectUnsharded, engine.SelectDBA, engine.SelectNext, engine.SelectEqualUnique:
+		case engine.SelectUnsharded, engine.SelectDBA, engine.SelectNext, engine.SelectEqualUnique, engine.SelectReference:
 			return true
 		}
 		return false

@@ -104,7 +104,6 @@ func TestRebuildVSchema(t *testing.T) {
 		},
 		Tables: map[string]*vschemapb.Table{
 			"table1": {
-				Type: "sequence",
 				ColumnVindexes: []*vschemapb.ColumnVindex{
 					{
 						Column: "column1",
