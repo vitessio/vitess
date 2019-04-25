@@ -25,14 +25,14 @@ import (
 )
 
 func TestEmpty(t *testing.T) {
-  interceptors := &InterceptorBuilder{}
+  interceptors := &serverInterceptorBuilder{}
   if len(interceptors.Build()) > 0 {
     t.Fatalf("expected empty builder to report as empty")
   }
 }
 
 func TestSingleInterceptor(t *testing.T) {
-  interceptors := &InterceptorBuilder{}
+  interceptors := &serverInterceptorBuilder{}
   fake := &FakeInterceptor{}
 
   interceptors.Add(fake.StreamServerInterceptor, fake.UnaryServerInterceptor)
@@ -46,7 +46,7 @@ func TestSingleInterceptor(t *testing.T) {
 }
 
 func TestDoubleInterceptor(t *testing.T) {
-  interceptors := &InterceptorBuilder{}
+  interceptors := &serverInterceptorBuilder{}
   fake1 := &FakeInterceptor{name: "ettan"}
   fake2 := &FakeInterceptor{name: "tvaon"}
 

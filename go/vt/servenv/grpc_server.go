@@ -176,7 +176,7 @@ func createGRPCServer() {
 
 // We can only set a ServerInterceptor once, so we chain multiple interceptors into one
 func interceptors() []grpc.ServerOption {
-	interceptors := &InterceptorBuilder{}
+	interceptors := &serverInterceptorBuilder{}
 
 	if *GRPCAuth != "" {
 		log.Infof("enabling auth plugin %v", *GRPCAuth)
@@ -283,23 +283,25 @@ func WrapServerStream(stream grpc.ServerStream) *WrappedServerStream {
 	return &WrappedServerStream{ServerStream: stream, WrappedContext: stream.Context()}
 }
 
-// InterceptorBuilder chains together multiple ServerInterceptors
-type InterceptorBuilder struct {
+// serverInterceptorBuilder chains together multiple ServerInterceptors
+type serverInterceptorBuilder struct {
 	streamInterceptors []grpc.StreamServerInterceptor
 	unaryInterceptors  []grpc.UnaryServerInterceptor
 }
 
-func (collector *InterceptorBuilder) Add(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor) {
+// Add adds interceptors to the builder
+func (collector *serverInterceptorBuilder) Add(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor) {
 	collector.streamInterceptors = append(collector.streamInterceptors, s)
 	collector.unaryInterceptors = append(collector.unaryInterceptors, u)
 }
 
-func (collector *InterceptorBuilder) AddUnary(u grpc.UnaryServerInterceptor) {
+// AddUnary adds a single unary interceptor to the builder
+func (collector *serverInterceptorBuilder) AddUnary(u grpc.UnaryServerInterceptor) {
 	collector.unaryInterceptors = append(collector.unaryInterceptors, u)
 }
 
 // Build returns DialOptions to add to the grpc.Dial call
-func (collector *InterceptorBuilder) Build() []grpc.ServerOption {
+func (collector *serverInterceptorBuilder) Build() []grpc.ServerOption {
 	log.Infof("Building interceptors with %d unary interceptors and %d stream interceptors", len(collector.unaryInterceptors), len(collector.streamInterceptors))
 	switch len(collector.unaryInterceptors) + len(collector.streamInterceptors) {
 	case 0:
