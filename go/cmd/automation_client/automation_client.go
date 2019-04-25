@@ -106,7 +106,7 @@ func main() {
 	fmt.Printf("SUCCESS: ClusterOperation finished.\n\nDetails:\n%v", proto.MarshalTextString(resp))
 }
 
-// waitForClusterOp polls and blocks until the ClusterOperation invocation specified by "id" has finished. If an error occured, it will be returned.
+// waitForClusterOp polls and blocks until the ClusterOperation invocation specified by "id" has finished. If an error occurred, it will be returned.
 func waitForClusterOp(client automationservicepb.AutomationClient, id string) (*automationpb.GetClusterOperationDetailsResponse, error) {
 	for {
 		req := &automationpb.GetClusterOperationDetailsRequest{

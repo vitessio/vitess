@@ -839,7 +839,7 @@ Field describes a single column returned by a query
 | <code>org_name</code> <br>string| |
 | <code>column_length</code> <br>uint32| column_length is really a uint32. All 32 bits can be used. |
 | <code>charset</code> <br>uint32| charset is actually a uint16. Only the lower 16 bits are used. |
-| <code>decimals</code> <br>uint32| decimals is actualy a uint8. Only the lower 8 bits are used. |
+| <code>decimals</code> <br>uint32| decimals is actually a uint8. Only the lower 8 bits are used. |
 | <code>flags</code> <br>uint32| flags is actually a uint16. Only the lower 16 bits are used. |
 
 ### query.QueryResult
