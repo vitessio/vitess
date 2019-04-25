@@ -206,7 +206,7 @@ docker_base_percona57:
 
 docker_base_percona80:
 	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.percona57 -t vitess/base:percona80 .
+	docker build -f docker/base/Dockerfile.percona80 -t vitess/base:percona80 .
 
 # Run "make docker_lite PROMPT_NOTICE=false" to avoid that the script
 # prompts you to press ENTER and confirm that the vitess/base image is not
