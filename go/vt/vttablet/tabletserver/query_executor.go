@@ -296,16 +296,13 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
-	conn, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
+	conn, beginSQL, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
 	if err != nil {
 		return nil, err
 	}
 	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
-	//
-	// A better future improvement would be for LocalBegin to return the set of
-	// executed statements to capture the isolation level setting as well.
-	if qre.options.GetTransactionIsolation() != querypb.ExecuteOptions_AUTOCOMMIT {
-		qre.logStats.AddRewrittenSQL("begin", time.Now())
+	if beginSQL != "" {
+		qre.logStats.AddRewrittenSQL(beginSQL, time.Now())
 	}
 
 	reply, err = f(conn)
@@ -316,11 +313,11 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltype
 		qre.logStats.AddRewrittenSQL("rollback", start)
 		return nil, err
 	}
-	err = qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
+	commitSQL, err := qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
 
 	// As above LocalCommit is a no-op for autocommmit so don't log anything.
-	if qre.options.GetTransactionIsolation() != querypb.ExecuteOptions_AUTOCOMMIT {
-		qre.logStats.AddRewrittenSQL("commit", start)
+	if commitSQL != "" {
+		qre.logStats.AddRewrittenSQL(commitSQL, start)
 	}
 
 	if err != nil {
