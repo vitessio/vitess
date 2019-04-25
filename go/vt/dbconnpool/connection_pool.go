@@ -59,8 +59,11 @@ type ConnectionPool struct {
 	info      *mysql.ConnParams
 	addresses []net.IP
 
-	ticker     *time.Ticker
-	stop       chan bool
+	ticker   *time.Ticker
+	stop     chan struct{}
+	wg       sync.WaitGroup
+	hostIsIP bool
+
 	mysqlStats *stats.Timings
 }
 
@@ -143,11 +146,14 @@ func (cp *ConnectionPool) Open(info *mysql.ConnParams, mysqlStats *stats.Timings
 	cp.info = info
 	cp.mysqlStats = mysqlStats
 	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout)
-	// Check if we have a valid IP Address for the hostname
+	// Check if we need to resolve a hostname (The Host is not just an IP  address).
 	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host) == nil {
+		cp.hostIsIP = true
 		cp.ticker = time.NewTicker(cp.resolutionFrequency)
-		cp.stop = make(chan bool, 1)
+		cp.stop = make(chan struct{})
+		cp.wg.Add(1)
 		go func() {
+			defer cp.wg.Done()
 			for {
 				select {
 				case _ = <-cp.ticker.C:
@@ -186,11 +192,13 @@ func (cp *ConnectionPool) Close() {
 	cp.mu.Lock()
 	cp.connections = nil
 	cp.addresses = nil
+	cp.hostIsIP = false
 	if cp.ticker != nil {
 		cp.ticker.Stop()
-		cp.stop <- true
+		close(cp.stop)
 	}
 	cp.mu.Unlock()
+	cp.wg.Wait()
 }
 
 // Get returns a connection.
@@ -207,7 +215,7 @@ func (cp *ConnectionPool) Get(ctx context.Context) (*PooledDBConnection, error) 
 
 	// Check that the RemoteAddr is still a valid Address
 	if cp.resolutionFrequency > 0 &&
-		net.ParseIP(cp.info.Host) == nil &&
+		cp.hostIsIP &&
 		!cp.validAddress(net.ParseIP(r.(*PooledDBConnection).RemoteAddr().String())) {
 		err := r.(*PooledDBConnection).Reconnect()
 		if err != nil {

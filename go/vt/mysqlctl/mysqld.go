@@ -67,7 +67,7 @@ var (
 	appPoolSize    = flag.Int("app_pool_size", 40, "Size of the connection pool for app connections")
 	appIdleTimeout = flag.Duration("app_idle_timeout", time.Minute, "Idle timeout for app connections")
 
-	poolDynamicHostnameResolution = flag.Duration("pool_hostname_update_rate", 0, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
+	poolDynamicHostnameResolution = flag.Duration("pool_hostname_resolve_interval", 0, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
 
 	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
 	mycnfTemplateFile = flag.String("mysqlctl_mycnf_template", "", "template file to use for generating the my.cnf file during server init")
