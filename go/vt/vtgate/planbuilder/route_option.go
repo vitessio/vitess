@@ -136,6 +136,10 @@ func (ro *routeOption) canMerge(rro *routeOption, customCheck func() bool) bool 
 	if ro.eroute.Keyspace.Name != rro.eroute.Keyspace.Name {
 		return false
 	}
+	if rro.eroute.Opcode == engine.SelectReference {
+		// Any opcode can join with a reference table.
+		return true
+	}
 	switch ro.eroute.Opcode {
 	case engine.SelectUnsharded, engine.SelectDBA:
 		return ro.eroute.Opcode == rro.eroute.Opcode
@@ -144,6 +148,10 @@ func (ro *routeOption) canMerge(rro *routeOption, customCheck func() bool) bool 
 		if rro.eroute.Opcode == engine.SelectEqualUnique && ro.eroute.Vindex == rro.eroute.Vindex && valEqual(ro.condition, rro.condition) {
 			return true
 		}
+	case engine.SelectReference:
+		// TODO(sougou): this can be changed to true, but we'll have
+		// to merge against rro insteal of ro.
+		return false
 	case engine.SelectNext:
 		return false
 	}
@@ -188,7 +196,7 @@ func (ro *routeOption) canMergeOnFilter(pb *primitiveBuilder, rro *routeOption, 
 // the route.
 func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 	switch ro.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA:
+	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectReference:
 		return
 	}
 	opcode, vindex, values := ro.computePlan(pb, filter)
@@ -293,6 +301,7 @@ var planCost = map[engine.RouteOpcode]int{
 	engine.SelectUnsharded:   0,
 	engine.SelectNext:        0,
 	engine.SelectDBA:         0,
+	engine.SelectReference:   0,
 	engine.SelectEqualUnique: 1,
 	engine.SelectIN:          2,
 	engine.SelectEqual:       3,

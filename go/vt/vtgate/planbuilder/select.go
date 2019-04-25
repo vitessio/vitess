@@ -229,8 +229,8 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
 			}
 			for _, ro := range rb.routeOptions {
-				if ro.eroute.Opcode != engine.SelectUnsharded {
-					return nil, errors.New("NEXT used on a sharded table")
+				if ro.eroute.Opcode != engine.SelectNext {
+					return nil, errors.New("NEXT used on a non-sequence table")
 				}
 				ro.eroute.Opcode = engine.SelectNext
 			}
