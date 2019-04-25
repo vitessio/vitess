@@ -84,4 +84,9 @@ func TestBasicCompare(t *testing.T) {
 	}
 
 	CopyRoutingRules(ctx, fromTS, toTS)
+
+	err = CompareRoutingRules(ctx, fromTS, toTS)
+	if err != nil {
+		t.Fatalf("Compare routing rules failed: %v", err)
+	}
 }

@@ -31,7 +31,7 @@ import (
 // builder defines the interface that a primitive must
 // satisfy.
 type builder interface {
-	// Order is the execution order of the primitve. If there are subprimitves,
+	// Order is the execution order of the primitive. If there are subprimitives,
 	// the order is one above the order of the subprimitives.
 	// This is because the primitive executes its subprimitives first and
 	// processes their results to generate its own values.
@@ -101,7 +101,7 @@ type builder interface {
 	// result column and returns a distinct symbol for it.
 	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int)
 
-	// Primitve returns the underlying primitive.
+	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
 }
