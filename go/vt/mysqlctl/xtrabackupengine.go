@@ -102,7 +102,10 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	}
 	// use a mysql connection to detect flavor at runtime
 	conn, err := mysqld.GetDbaConnection()
-	defer conn.Close()
+	if conn != nil && err == nil {
+		defer conn.Close()
+	}
+
 	if err != nil {
 		return false, vterrors.Wrap(err, "unable to obtain a connection to the database")
 	}
@@ -141,7 +144,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 			err = closeErr
 		} else if closeErr != nil {
 			// since we already have an error just log this
-			logger.Errorf("Error closing file %v: %v", fileName, err)
+			logger.Errorf("error closing file %v: %v", fileName, err)
 		}
 	}
 	defer closeFile(wc, backupFileName)
@@ -189,12 +192,12 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	if err != nil {
 		return false, vterrors.Wrap(err, "backup failed while reading command output")
 	}
-	execErr := backupCmd.Wait()
-	if execErr != nil {
-		return false, vterrors.Wrap(err, "xtrabackup failed with error")
-	}
+	err = backupCmd.Wait()
 	output := string(stderrOutput)
 	logger.Infof("Xtrabackup backup command output: %v", output)
+	if err != nil {
+		return false, vterrors.Wrap(err, "xtrabackup failed with error")
+	}
 
 	replicationPosition, rerr := findReplicationPosition(output, flavor, logger)
 	if rerr != nil {
@@ -470,7 +473,8 @@ func findReplicationPosition(input, flavor string, logger logutil.Logger) (mysql
 		}
 	}
 	position := ""
-	if index != -1 {
+	// asserts that xtrabackup output comes with GTIDs in the format we expect
+	if index != -1 && index < len(substrs) {
 		// since we are extracting this from the log, it contains newlines
 		// replace them with a single space to match the SET GLOBAL gtid_purged command in xtrabackup_slave_info
 		position = strings.Replace(substrs[index], "\n", " ", -1)

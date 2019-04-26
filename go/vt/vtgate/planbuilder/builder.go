@@ -31,7 +31,7 @@ import (
 // builder defines the interface that a primitive must
 // satisfy.
 type builder interface {
-	// Order is the execution order of the primitve. If there are subprimitves,
+	// Order is the execution order of the primitive. If there are subprimitives,
 	// the order is one above the order of the subprimitives.
 	// This is because the primitive executes its subprimitives first and
 	// processes their results to generate its own values.
@@ -47,9 +47,6 @@ type builder interface {
 	// The input is the order of the previous primitive that should
 	// execute before this one.
 	Reorder(int)
-
-	// Primitve returns the underlying primitive.
-	Primitive() engine.Primitive
 
 	// First returns the first builder of the tree,
 	// which is usually the left most.
@@ -103,13 +100,17 @@ type builder interface {
 	// resultColumn, whereas PushSelect guarantees the addition of a new
 	// result column and returns a distinct symbol for it.
 	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int)
+
+	// Primitive returns the underlying primitive.
+	// This function should only be called after Wireup is finished.
+	Primitive() engine.Primitive
 }
 
 // ContextVSchema defines the interface for this package to fetch
 // info about tables.
 type ContextVSchema interface {
 	FindTable(tablename sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error)
-	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
+	FindTablesOrVindex(tablename sqlparser.TableName) ([]*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	DefaultKeyspace() (*vindexes.Keyspace, error)
 	TargetString() string
 }

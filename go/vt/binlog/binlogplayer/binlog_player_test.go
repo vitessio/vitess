@@ -320,8 +320,8 @@ func applyEvents(blp *BinlogPlayer) func() error {
 
 func TestCreateVReplicationKeyRange(t *testing.T) {
 	want := "insert into _vt.vreplication " +
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) " +
-		`values ('Resharding', 'keyspace:\"ks\" shard:\"0\" key_range:<end:\"\\200\" > ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running')`
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) " +
+		`values ('Resharding', 'keyspace:\"ks\" shard:\"0\" key_range:<end:\"\\200\" > ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running', 'db')`
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",
@@ -331,7 +331,7 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 		},
 	}
 
-	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823)
+	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db")
 	if got != want {
 		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
 	}
@@ -339,8 +339,8 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 
 func TestCreateVReplicationTables(t *testing.T) {
 	want := "insert into _vt.vreplication " +
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) " +
-		`values ('Resharding', 'keyspace:\"ks\" shard:\"0\" tables:\"a\" tables:\"b\" ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running')`
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) " +
+		`values ('Resharding', 'keyspace:\"ks\" shard:\"0\" tables:\"a\" tables:\"b\" ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running', 'db')`
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",
@@ -348,7 +348,7 @@ func TestCreateVReplicationTables(t *testing.T) {
 		Tables:   []string{"a", "b"},
 	}
 
-	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823)
+	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db")
 	if got != want {
 		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
 	}
@@ -357,7 +357,7 @@ func TestCreateVReplicationTables(t *testing.T) {
 func TestUpdateVReplicationPos(t *testing.T) {
 	gtid := mysql.MustParseGTID("MariaDB", "0-1-8283")
 	want := "update _vt.vreplication " +
-		"set pos='MariaDB/0-1-8283', time_updated=88822 " +
+		"set pos='MariaDB/0-1-8283', time_updated=88822, message='' " +
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0)
@@ -369,7 +369,7 @@ func TestUpdateVReplicationPos(t *testing.T) {
 func TestUpdateVReplicationTimestamp(t *testing.T) {
 	gtid := mysql.MustParseGTID("MariaDB", "0-2-582")
 	want := "update _vt.vreplication " +
-		"set pos='MariaDB/0-2-582', time_updated=88822, transaction_timestamp=481828 " +
+		"set pos='MariaDB/0-2-582', time_updated=88822, transaction_timestamp=481828, message='' " +
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828)

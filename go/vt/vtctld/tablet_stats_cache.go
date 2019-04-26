@@ -27,6 +27,18 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+const (
+	// tabletMissing represents a missing/non-existent tablet for any metric.
+	tabletMissing = -1
+	// These values represent the threshold for replication lag.
+	lagThresholdDegraded  = 60
+	lagThresholdUnhealthy = 120
+	// These values represent the health of the tablet - 1 is healthy, 2 is degraded, 3 is unhealthy
+	tabletHealthy   = 0
+	tabletDegraded  = 1
+	tabletUnhealthy = 2
+)
+
 // yLabel is used to keep track of the cell and type labels of the heatmap.
 type yLabel struct {
 	CellLabel  label
@@ -59,18 +71,6 @@ type byTabletUID []*discovery.TabletStats
 func (a byTabletUID) Len() int           { return len(a) }
 func (a byTabletUID) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byTabletUID) Less(i, j int) bool { return a[i].Tablet.Alias.Uid < a[j].Tablet.Alias.Uid }
-
-// tabletMissing represents a missing/non-existent tablet for any metric.
-const tabletMissing = -1
-
-// These values represent the threshold for replication lag.
-const lagThresholdDegraded = 60
-const lagThresholdUnhealthy = 120
-
-// These values represent the health of the tablet - 1 is healthy, 2 is degraded, 3 is unhealthy
-const tabletHealthy = 0
-const tabletDegraded = 1
-const tabletUnhealthy = 2
 
 // availableTabletTypes is an array of tabletTypes that are being considered to display on the heatmap.
 // Note: this list must always be sorted by the order they should appear (i.e. MASTER first, then REPLICA, then RDONLY)

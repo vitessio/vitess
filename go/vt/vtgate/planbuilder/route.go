@@ -24,18 +24,19 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 var _ builder = (*route)(nil)
-
-var errIntermixingUnsupported = errors.New("unsupported: intermixing of information_schema and regular tables")
 
 // route is used to build a Route primitive.
 // It's used to build one of the Select routes like
 // SelectScatter, etc. Portions of the original Select AST
 // are moved into this node, which will be used to build
 // the final SQL for this route.
+// A route can have multiple routeOptions. They are kept
+// up-to-date as the route improves. Those that don't
+// qualify are continuously removed from the options.
+// A single best route is chosen before the Wireup phase.
 type route struct {
 	order int
 
@@ -51,26 +52,19 @@ type route struct {
 	// resultColumns represent the columns returned by this route.
 	resultColumns []*resultColumn
 
-	// condition stores the AST condition that will be used
-	// to resolve the ERoute Values field.
-	condition sqlparser.Expr
-
 	// weight_string keeps track of the weight_string expressions
 	// that were added additionally for each column. These expressions
 	// are added to be used for collation of text columns.
 	weightStrings map[*resultColumn]int
 
-	// ERoute is the primitive being built.
-	ERoute *engine.Route
+	routeOptions []*routeOption
 }
 
-func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, condition sqlparser.Expr) (*route, *symtab) {
+func newRoute(stmt sqlparser.SelectStatement) (*route, *symtab) {
 	rb := &route{
 		Select:        stmt,
 		order:         1,
-		condition:     condition,
 		weightStrings: make(map[*resultColumn]int),
-		ERoute:        eroute,
 	}
 	return rb, newSymtabWithRoute(rb)
 }
@@ -96,7 +90,7 @@ func (rb *route) Reorder(order int) {
 
 // Primitive satisfies the builder interface.
 func (rb *route) Primitive() engine.Primitive {
-	return rb.ERoute
+	return rb.routeOptions[0].eroute
 }
 
 // First satisfies the builder interface.
@@ -119,122 +113,14 @@ func (rb *route) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereTy
 	case sqlparser.HavingStr:
 		sel.AddHaving(filter)
 	}
-	rb.UpdatePlan(pb, filter)
+	rb.UpdatePlans(pb, filter)
 	return nil
 }
 
-// UpdatePlan evaluates the primitive against the specified
-// filter. If it's an improvement, the primitive is updated.
-// We assume that the filter has already been pushed into
-// the route. This function should only be used when merging
-// routes, where the ON clause gets implicitly pushed into
-// the merged route.
-func (rb *route) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
-	opcode, vindex, values := rb.computePlan(pb, filter)
-	if opcode == engine.SelectScatter {
-		return
+func (rb *route) UpdatePlans(pb *primitiveBuilder, filter sqlparser.Expr) {
+	for _, ro := range rb.routeOptions {
+		ro.UpdatePlan(pb, filter)
 	}
-	switch rb.ERoute.Opcode {
-	case engine.SelectEqualUnique:
-		if opcode == engine.SelectEqualUnique && vindex.Cost() < rb.ERoute.Vindex.Cost() {
-			rb.updateRoute(opcode, vindex, values)
-		}
-	case engine.SelectEqual:
-		switch opcode {
-		case engine.SelectEqualUnique:
-			rb.updateRoute(opcode, vindex, values)
-		case engine.SelectEqual:
-			if vindex.Cost() < rb.ERoute.Vindex.Cost() {
-				rb.updateRoute(opcode, vindex, values)
-			}
-		}
-	case engine.SelectIN:
-		switch opcode {
-		case engine.SelectEqualUnique, engine.SelectEqual:
-			rb.updateRoute(opcode, vindex, values)
-		case engine.SelectIN:
-			if vindex.Cost() < rb.ERoute.Vindex.Cost() {
-				rb.updateRoute(opcode, vindex, values)
-			}
-		}
-	case engine.SelectScatter:
-		switch opcode {
-		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN:
-			rb.updateRoute(opcode, vindex, values)
-		}
-	}
-}
-
-func (rb *route) updateRoute(opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
-	rb.ERoute.Opcode = opcode
-	rb.ERoute.Vindex = vindex
-	rb.condition = condition
-}
-
-// computePlan computes the plan for the specified filter.
-func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
-	switch node := filter.(type) {
-	case *sqlparser.ComparisonExpr:
-		switch node.Operator {
-		case sqlparser.EqualStr:
-			return rb.computeEqualPlan(pb, node)
-		case sqlparser.InStr:
-			return rb.computeINPlan(pb, node)
-		}
-	case *sqlparser.ParenExpr:
-		return rb.computePlan(pb, node.Expr)
-	}
-	return engine.SelectScatter, nil, nil
-}
-
-// computeEqualPlan computes the plan for an equality constraint.
-func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
-	left := comparison.Left
-	right := comparison.Right
-	vindex = pb.st.Vindex(left, rb)
-	if vindex == nil {
-		left, right = right, left
-		vindex = pb.st.Vindex(left, rb)
-		if vindex == nil {
-			return engine.SelectScatter, nil, nil
-		}
-	}
-	if !rb.exprIsValue(right) {
-		return engine.SelectScatter, nil, nil
-	}
-	if vindex.IsUnique() {
-		return engine.SelectEqualUnique, vindex, right
-	}
-	return engine.SelectEqual, vindex, right
-}
-
-// computeINPlan computes the plan for an IN constraint.
-func (rb *route) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
-	vindex = pb.st.Vindex(comparison.Left, rb)
-	if vindex == nil {
-		return engine.SelectScatter, nil, nil
-	}
-	switch node := comparison.Right.(type) {
-	case sqlparser.ValTuple:
-		for _, n := range node {
-			if !rb.exprIsValue(n) {
-				return engine.SelectScatter, nil, nil
-			}
-		}
-		return engine.SelectIN, vindex, comparison
-	case sqlparser.ListArg:
-		return engine.SelectIN, vindex, comparison
-	}
-	return engine.SelectScatter, nil, nil
-}
-
-// exprIsValue returns true if the expression can be treated as a value
-// for the route. External references are treated as value.
-func (rb *route) exprIsValue(expr sqlparser.Expr) bool {
-	if node, ok := expr.(*sqlparser.ColName); ok {
-		return node.Metadata.(*column).Origin() != rb
-	}
-	return sqlparser.IsValue(expr)
 }
 
 // PushSelect satisfies the builder interface.
@@ -277,7 +163,10 @@ func (rb *route) SetGroupBy(groupBy sqlparser.GroupBy) error {
 
 // PushOrderBy sets the order by for the route.
 func (rb *route) PushOrderBy(order *sqlparser.Order) error {
-	if rb.IsSingle() {
+	// By this time, if any single shard options were already present,
+	// multi-sharded options would have already been removed. So, this
+	// call is only for checking if the route has single shard options.
+	if rb.removeMultishardOptions() {
 		rb.Select.AddOrder(order)
 		return nil
 	}
@@ -306,10 +195,13 @@ func (rb *route) PushOrderBy(order *sqlparser.Order) error {
 	if colnum == -1 {
 		return fmt.Errorf("unsupported: in scatter query: order by must reference a column in the select list: %s", sqlparser.String(order))
 	}
-	rb.ERoute.OrderBy = append(rb.ERoute.OrderBy, engine.OrderbyParams{
+	ob := engine.OrderbyParams{
 		Col:  colnum,
 		Desc: order.Direction == sqlparser.DescScr,
-	})
+	}
+	for _, ro := range rb.routeOptions {
+		ro.eroute.OrderBy = append(ro.eroute.OrderBy, ob)
+	}
 
 	rb.Select.AddOrder(order)
 	return nil
@@ -347,16 +239,19 @@ func (rb *route) PushMisc(sel *sqlparser.Select) {
 
 // Wireup satisfies the builder interface.
 func (rb *route) Wireup(bldr builder, jt *jointab) error {
+	rb.finalizeOptions()
+
 	// Precaution: update ERoute.Values only if it's not set already.
-	if rb.ERoute.Values == nil {
+	ro := rb.routeOptions[0]
+	if ro.eroute.Values == nil {
 		// Resolve values stored in the builder.
-		switch vals := rb.condition.(type) {
+		switch vals := ro.condition.(type) {
 		case *sqlparser.ComparisonExpr:
 			pv, err := rb.procureValues(bldr, jt, vals.Right)
 			if err != nil {
 				return err
 			}
-			rb.ERoute.Values = []sqltypes.PlanValue{pv}
+			ro.eroute.Values = []sqltypes.PlanValue{pv}
 			vals.Right = sqlparser.ListArg("::" + engine.ListVarName)
 		case nil:
 			// no-op.
@@ -365,7 +260,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			rb.ERoute.Values = []sqltypes.PlanValue{pv}
+			ro.eroute.Values = []sqltypes.PlanValue{pv}
 		}
 	}
 
@@ -373,18 +268,18 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 	// we have to request the corresponding weight_string from mysql
 	// and use that value instead. This is because we cannot mimic
 	// mysql's collation behavior yet.
-	for i, orderby := range rb.ERoute.OrderBy {
+	for i, orderby := range ro.eroute.OrderBy {
 		rc := rb.resultColumns[orderby.Col]
 		if sqltypes.IsText(rc.column.typ) {
 			// If a weight string was previously requested (by OrderedAggregator),
 			// reuse it.
 			if colnum, ok := rb.weightStrings[rc]; ok {
-				rb.ERoute.OrderBy[i].Col = colnum
+				ro.eroute.OrderBy[i].Col = colnum
 				continue
 			}
 
 			// len(rb.resultColumns) does not change. No harm using the value multiple times.
-			rb.ERoute.TruncateColumnCount = len(rb.resultColumns)
+			ro.eroute.TruncateColumnCount = len(rb.resultColumns)
 
 			// This code is partially duplicated from SupplyWeightString and PushSelect.
 			// We should not update resultColumns because it's not returned in the result.
@@ -399,7 +294,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			}
 			sel := rb.Select.(*sqlparser.Select)
 			sel.SelectExprs = append(sel.SelectExprs, expr)
-			rb.ERoute.OrderBy[i].Col = len(sel.SelectExprs) - 1
+			ro.eroute.OrderBy[i].Col = len(sel.SelectExprs) - 1
 			// We don't really have to update weightStrings, but we're doing it
 			// for good measure.
 			rb.weightStrings[rc] = len(sel.SelectExprs) - 1
@@ -419,13 +314,18 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			}
 		case *sqlparser.ComparisonExpr:
 			if node.Operator == sqlparser.EqualStr {
-				if rb.exprIsValue(node.Left) && !rb.exprIsValue(node.Right) {
+				if ro.exprIsValue(node.Left) && !ro.exprIsValue(node.Right) {
 					node.Left, node.Right = node.Right, node.Left
 				}
 			}
 		}
 		return true, nil
 	}, rb.Select)
+
+	// Substitute table names
+	for _, sub := range ro.substitutions {
+		*sub.oldExpr = *sub.newExpr
+	}
 
 	// Generate query while simultaneously resolving values.
 	varFormatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
@@ -448,8 +348,8 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 	}
 	buf := sqlparser.NewTrackedBuffer(varFormatter)
 	varFormatter(buf, rb.Select)
-	rb.ERoute.Query = buf.ParsedQuery().Query
-	rb.ERoute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
+	ro.eroute.Query = buf.ParsedQuery().Query
+	ro.eroute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
 	return nil
 }
 
@@ -458,6 +358,16 @@ func systemTable(qualifier string) bool {
 		strings.EqualFold(qualifier, "performance_schema") ||
 		strings.EqualFold(qualifier, "sys") ||
 		strings.EqualFold(qualifier, "mysql")
+}
+
+func (rb *route) finalizeOptions() {
+	bestOption := rb.routeOptions[0]
+	for i := 1; i < len(rb.routeOptions); i++ {
+		if cur := rb.routeOptions[i]; cur.isBetterThan(bestOption) {
+			bestOption = cur
+		}
+	}
+	rb.routeOptions = []*routeOption{bestOption}
 }
 
 // procureValues procures and converts the input into
@@ -576,107 +486,110 @@ func (rb *route) BuildColName(index int) (*sqlparser.ColName, error) {
 	}, nil
 }
 
-// IsSingle returns true if the route targets only one database.
-func (rb *route) IsSingle() bool {
-	switch rb.ERoute.Opcode {
-	// Even thought SelectNext is a single-shard query, we don't
-	// include it here because it can't be combined with any other construct.
-	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectEqualUnique:
+// MergeSubquery returns true if the subquery route could successfully be merged
+// with the outer route.
+func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
+	var mergedRouteOptions []*routeOption
+outer:
+	for _, lro := range rb.routeOptions {
+		for _, rro := range inner.routeOptions {
+			if lro.SubqueryCanMerge(pb, rro) {
+				lro.MergeSubquery(rro)
+				mergedRouteOptions = append(mergedRouteOptions, lro)
+				continue outer
+			}
+		}
+	}
+	if len(mergedRouteOptions) != 0 {
+		rb.routeOptions = mergedRouteOptions
+		inner.Redirect = rb
 		return true
 	}
 	return false
 }
 
-// SubqueryCanMerge returns nil if the supplied route that represents
-// a subquery can be merged with the outer route. If not, it
-// returns an appropriate error.
-func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) bool {
-	if rb.ERoute.Keyspace.Name != inner.ERoute.Keyspace.Name {
-		return false
-	}
-	switch inner.ERoute.Opcode {
-	case engine.SelectUnsharded:
-		if rb.ERoute.Opcode == engine.SelectUnsharded {
-			return true
-		}
-		return false
-	case engine.SelectDBA:
-		if rb.ERoute.Opcode == engine.SelectDBA {
-			return true
-		}
-		return false
-	case engine.SelectNext:
-		return false
-	case engine.SelectEqualUnique:
-		// This checks for the case where the subquery is dependent
-		// on the vindex column of the outer query:
-		// select ... from a where a.id = 5 ... (select ... from b where b.id = a.id).
-		// If b.id and a.id have the same vindex, it becomes a single-shard
-		// query: the subquery can merge with the outer query.
-		switch vals := inner.condition.(type) {
-		case *sqlparser.ColName:
-			if pb.st.Vindex(vals, rb) == inner.ERoute.Vindex {
-				return true
+// MergeUnion returns true if the rhs route could successfully be merged
+// with the rb route.
+func (rb *route) MergeUnion(right *route) bool {
+	var mergedRouteOptions []*routeOption
+outer:
+	for _, lro := range rb.routeOptions {
+		for _, rro := range right.routeOptions {
+			if lro.UnionCanMerge(rro) {
+				lro.MergeUnion(rro)
+				mergedRouteOptions = append(mergedRouteOptions, lro)
+				continue outer
 			}
 		}
-	default:
+	}
+	if len(mergedRouteOptions) != 0 {
+		rb.routeOptions = mergedRouteOptions
+		right.Redirect = rb
+		return true
+	}
+	return false
+}
+
+// removeMultishardOptions removes all multi-shard options from the
+// route. It returns false if no such options exist.
+func (rb *route) removeMultishardOptions() bool {
+	return rb.removeOptions(func(ro *routeOption) bool {
+		switch ro.eroute.Opcode {
+		case engine.SelectUnsharded, engine.SelectDBA, engine.SelectNext, engine.SelectEqualUnique, engine.SelectReference:
+			return true
+		}
+		return false
+	})
+}
+
+// removeShardedOptions removes all sharded options from the
+// route. It returns false if no such options exist.
+// This is used for constructs that are only supported for unsharded
+// keyspaces like last_insert_id.
+func (rb *route) removeShardedOptions() bool {
+	return rb.removeOptions(func(ro *routeOption) bool {
+		return ro.eroute.Opcode == engine.SelectUnsharded
+	})
+}
+
+// removeOptionsWithUnmatchedKeyspace removes all options that don't match
+// the specified keyspace. It returns false if no such options exist.
+func (rb *route) removeOptionsWithUnmatchedKeyspace(keyspace string) bool {
+	return rb.removeOptions(func(ro *routeOption) bool {
+		return ro.eroute.Keyspace.Name == keyspace
+	})
+}
+
+// removeOptions removes all options that don't match on
+// the criteria function. It returns false if no such options exist.
+func (rb *route) removeOptions(match func(*routeOption) bool) bool {
+	var newOptions []*routeOption
+	for _, ro := range rb.routeOptions {
+		if match(ro) {
+			newOptions = append(newOptions, ro)
+		}
+	}
+	if len(newOptions) == 0 {
 		return false
 	}
-	return rb.isSameShardedRoute(inner) == nil
+	rb.routeOptions = newOptions
+	return true
 }
 
-// UnionCanMerge returns nil if the supplied route that represents
-// the RHS of a union can be merged with the current route. If not, it
-// returns an appropriate error.
-func (rb *route) UnionCanMerge(right *route) error {
-	if rb.ERoute.Opcode == engine.SelectNext || right.ERoute.Opcode == engine.SelectNext {
-		return errors.New("unsupported: UNION on sequence tables")
+// queryTimeout returns DirectiveQueryTimeout value if set, otherwise returns 0.
+func queryTimeout(d sqlparser.CommentDirectives) int {
+	if d == nil {
+		return 0
 	}
-	if rb.ERoute.Keyspace.Name != right.ERoute.Keyspace.Name {
-		return errors.New("unsupported: UNION on different keyspaces")
-	}
-	switch rb.ERoute.Opcode {
-	case engine.SelectUnsharded:
-		if right.ERoute.Opcode == engine.SelectUnsharded {
-			return nil
-		}
-		return errIntermixingUnsupported
-	case engine.SelectDBA:
-		if right.ERoute.Opcode == engine.SelectDBA {
-			return nil
-		}
-		return errIntermixingUnsupported
-	}
-	return rb.isSameShardedRoute(right)
-}
 
-// isSameShardedRoute returns nil if the supplied route has
-// the same single shard target as the current route. If not, it
-// returns an appropriate error.
-func (rb *route) isSameShardedRoute(right *route) error {
-	if rb.ERoute.Opcode != engine.SelectEqualUnique || right.ERoute.Opcode != engine.SelectEqualUnique {
-		return errors.New("unsupported: UNION or subquery containing multi-shard queries")
+	val, ok := d[sqlparser.DirectiveQueryTimeout]
+	if !ok {
+		return 0
 	}
-	if rb.ERoute.Vindex != right.ERoute.Vindex {
-		return errors.New("unsupported: UNION or subquery on different shards: vindexes are different")
-	}
-	if !valEqual(rb.condition, right.condition) {
-		return errors.New("unsupported: UNION or subquery on different shards: vindex values are different")
-	}
-	return nil
-}
 
-// SetOpcode changes the opcode to the specified value.
-// If the change is not allowed, it returns an error.
-func (rb *route) SetOpcode(code engine.RouteOpcode) error {
-	switch code {
-	case engine.SelectNext:
-		if rb.ERoute.Opcode != engine.SelectUnsharded {
-			return errors.New("NEXT used on a sharded table")
-		}
-	default:
-		panic(fmt.Sprintf("BUG: unrecognized transition: %v", code))
+	intVal, ok := val.(int)
+	if ok {
+		return intVal
 	}
-	rb.ERoute.Opcode = code
-	return nil
+	return 0
 }

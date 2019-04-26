@@ -252,9 +252,16 @@ func (ws *wrappedService) UpdateStream(ctx context.Context, target *querypb.Targ
 }
 
 func (ws *wrappedService) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return ws.wrapper(ctx, target, ws.impl, "UpdateStream", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+	return ws.wrapper(ctx, target, ws.impl, "VStream", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.VStream(ctx, target, startPos, filter, send)
-		return canRetry(ctx, innerErr), innerErr
+		return false, innerErr
+	})
+}
+
+func (ws *wrappedService) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	return ws.wrapper(ctx, target, ws.impl, "VStreamRows", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		innerErr := conn.VStreamRows(ctx, target, query, lastpk, send)
+		return false, innerErr
 	})
 }
 

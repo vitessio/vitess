@@ -20,7 +20,7 @@
 logdir="$1"
 config="$2"
 pidfile="$3"
-
+zk_java_opts=${ZK_JAVA_OPTS:-}
 zk_ver=${ZK_VERSION:-3.4.14}
 classpath="$VTROOT/dist/vt-zookeeper-$zk_ver/lib/zookeeper-$zk_ver-fatjar.jar:/usr/local/lib/zookeeper-$zk_ver-fatjar.jar:/usr/share/java/zookeeper-$zk_ver.jar"
 
@@ -53,7 +53,7 @@ else
 fi
 
 
-cmd="$java -DZOO_LOG_DIR=$logdir -cp $classpath org.apache.zookeeper.server.quorum.QuorumPeerMain $config"
+cmd="$java -DZOO_LOG_DIR=$logdir $zk_java_opts -cp $classpath org.apache.zookeeper.server.quorum.QuorumPeerMain $config"
 
 log "INFO starting $cmd"
 $cmd < /dev/null &> /dev/null &

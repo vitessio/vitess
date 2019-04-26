@@ -344,22 +344,7 @@
 
 # nextval for simple route
 "select next value from user"
-"NEXT used on a sharded table"
-
-# next n values for simple route
-"select next 2 values from seq"
-{
-  "Original": "select next 2 values from seq",
-  "Instructions": {
-    "Opcode": "SelectNext",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "Query": "select next 2 values from seq",
-    "FieldQuery": "select next 2 values from seq where 1 != 1"
-  }
-}
+"NEXT used on a non-sequence table"
 
 # last_insert_id for unsharded route
 "select last_insert_id() from main.dual"
@@ -1076,5 +1061,40 @@
     },
     "Query": "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1",
     "FieldQuery": "(select id from unsharded where 1 != 1) union (select id from unsharded where 1 != 1)"
+  }
+}
+
+# routing rules: union finds the correct option to merge, and renames the table
+"select a from route1 where email = 'aaa' union select b from route1 where email = 'aaa'"
+{
+  "Original": "select a from route1 where email = 'aaa' union select b from route1 where email = 'aaa'",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select a from user_metadata as route1 where email = 'aaa' union select b from user_metadata as route1 where email = 'aaa'",
+    "FieldQuery": "select a from user_metadata as route1 where 1 != 1 union select b from user_metadata as route1 where 1 != 1",
+    "Vindex": "email_user_map",
+    "Values": [
+      "aaa"
+    ]
+  }
+}
+
+# routing rules: ensure directives are not lost
+"select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2"
+{
+  "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded as route2",
+    "FieldQuery": "select * from unsharded as route2 where 1 != 1",
+    "QueryTimeout": 1000
   }
 }

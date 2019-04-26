@@ -76,6 +76,9 @@ type FakeMysqlDaemon struct {
 	// ReadOnly is the current value of the flag
 	ReadOnly bool
 
+	// SuperReadOnly is the current value of the flag
+	SuperReadOnly bool
+
 	// SetSlavePositionPos is matched against the input of SetSlavePosition.
 	// If it doesn't match, SetSlavePosition will return an error.
 	SetSlavePositionPos mysql.Position
@@ -236,6 +239,13 @@ func (fmd *FakeMysqlDaemon) IsReadOnly() (bool, error) {
 
 // SetReadOnly is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
+	fmd.ReadOnly = on
+	return nil
+}
+
+// SetSuperReadOnly is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) SetSuperReadOnly(on bool) error {
+	fmd.SuperReadOnly = on
 	fmd.ReadOnly = on
 	return nil
 }

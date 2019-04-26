@@ -24,24 +24,21 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/events"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -105,6 +102,7 @@ func (agent *ActionAgent) broadcastHealth() {
 	replicationDelay := agent._replicationDelay
 	healthError := agent._healthy
 	terTime := agent._tabletExternallyReparentedTime
+	healthyTime := agent._healthyTime
 	agent.mutex.Unlock()
 
 	// send it to our observers
@@ -116,12 +114,17 @@ func (agent *ActionAgent) broadcastHealth() {
 	stats.Qps = tabletenv.QPSRates.TotalRate()
 	if healthError != nil {
 		stats.HealthError = healthError.Error()
+	} else {
+		timeSinceLastCheck := time.Since(healthyTime)
+		if timeSinceLastCheck > *healthCheckInterval*3 {
+			stats.HealthError = fmt.Sprintf("last health check is too old: %s > %s", timeSinceLastCheck, *healthCheckInterval*3)
+		}
 	}
 	var ts int64
 	if !terTime.IsZero() {
 		ts = terTime.Unix()
 	}
-	go agent.QueryServiceControl.BroadcastHealth(ts, stats)
+	go agent.QueryServiceControl.BroadcastHealth(ts, stats, *healthCheckInterval*3)
 }
 
 // refreshTablet needs to be run after an action may have changed the current

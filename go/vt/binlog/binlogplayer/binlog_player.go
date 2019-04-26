@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -112,6 +113,7 @@ func NewStats() *Stats {
 	bps.Timings = stats.NewTimings("", "", "")
 	bps.Rates = stats.NewRates("", bps.Timings, 15, 60e9)
 	bps.History = history.New(3)
+	bps.SecondsBehindMaster.Set(math.MaxInt64)
 	return bps
 }
 
@@ -200,18 +202,8 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		log.Error(err)
 		return err
 	}
-	blp.position, err = mysql.DecodePosition(settings.StartPos)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	if settings.StopPos != "" {
-		blp.stopPosition, err = mysql.DecodePosition(settings.StopPos)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-	}
+	blp.position = settings.StartPos
+	blp.stopPosition = settings.StopPos
 	t, err := throttler.NewThrottler(
 		fmt.Sprintf("BinlogPlayer/%d", blp.uid),
 		"transactions",
@@ -429,7 +421,7 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 	queryStartTime := time.Now()
 	qr, err := blp.dbClient.ExecuteFetch(sql, 0)
 	blp.blplStats.Timings.Record(BlplQuery, queryStartTime)
-	if d := time.Now().Sub(queryStartTime); d > SlowQueryThreshold {
+	if d := time.Since(queryStartTime); d > SlowQueryThreshold {
 		log.Infof("SLOW QUERY (took %.2fs) '%s'", d.Seconds(), sql)
 	}
 	return qr, err
@@ -503,8 +495,15 @@ func CreateVReplicationTable() []string {
   transaction_timestamp BIGINT(20) NOT NULL,
   state VARBINARY(100) NOT NULL,
   message VARBINARY(1000) DEFAULT NULL,
+  db_name VARBINARY(255) NOT NULL,
   PRIMARY KEY (id)
-) ENGINE=InnoDB`}
+) ENGINE=InnoDB`,
+	}
+}
+
+// AlterVReplicationTable adds new columns to vreplication table
+func AlterVReplicationTable() []string {
+	return []string{"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL"}
 }
 
 // SetVReplicationState updates the state in the _vt.vreplication table.
@@ -518,8 +517,8 @@ func SetVReplicationState(dbClient DBClient, uid uint32, state, message string) 
 
 // VRSettings contains the settings of a vreplication table.
 type VRSettings struct {
-	StartPos          string
-	StopPos           string
+	StartPos          mysql.Position
+	StopPos           mysql.Position
 	MaxTPS            int64
 	MaxReplicationLag int64
 	State             string
@@ -534,43 +533,52 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 		return VRSettings{}, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
 	}
 
-	if qr.RowsAffected != 1 {
+	if len(qr.Rows) != 1 {
 		return VRSettings{}, fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
+	vrRow := qr.Rows[0]
 
-	maxTPS, err := sqltypes.ToInt64(qr.Rows[0][2])
+	maxTPS, err := sqltypes.ToInt64(vrRow[2])
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_tps column: %v", err)
 	}
-	maxReplicationLag, err := sqltypes.ToInt64(qr.Rows[0][3])
+	maxReplicationLag, err := sqltypes.ToInt64(vrRow[3])
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
 	}
+	startPos, err := mysql.DecodePosition(vrRow[0].ToString())
+	if err != nil {
+		return VRSettings{}, fmt.Errorf("failed to parse pos column: %v", err)
+	}
+	stopPos, err := mysql.DecodePosition(vrRow[1].ToString())
+	if err != nil {
+		return VRSettings{}, fmt.Errorf("failed to parse stop_pos column: %v", err)
+	}
 
 	return VRSettings{
-		StartPos:          qr.Rows[0][0].ToString(),
-		StopPos:           qr.Rows[0][1].ToString(),
+		StartPos:          startPos,
+		StopPos:           stopPos,
 		MaxTPS:            maxTPS,
 		MaxReplicationLag: maxReplicationLag,
-		State:             qr.Rows[0][4].ToString(),
+		State:             vrRow[4].ToString(),
 	}, nil
 }
 
 // CreateVReplication returns a statement to populate the first value into
 // the _vt.vreplication table.
-func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64) string {
+func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64, dbName string) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v')",
-		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag, timeUpdated, BlpRunning)
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v)",
+		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag, timeUpdated, BlpRunning, encodeString(dbName))
 }
 
 // CreateVReplicationState returns a statement to create a stopped vreplication.
-func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource, position, state string) string {
+func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource, position, state string, dbName string) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v')",
-		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state)
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v)",
+		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state, encodeString(dbName))
 }
 
 // GenerateUpdatePos returns a statement to update a value in the
@@ -578,12 +586,12 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64) string {
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
-			"update _vt.vreplication set pos=%v, time_updated=%v, transaction_timestamp=%v where id=%v",
+			"update _vt.vreplication set pos=%v, time_updated=%v, transaction_timestamp=%v, message='' where id=%v",
 			encodeString(mysql.EncodePosition(pos)), timeUpdated, txTimestamp, uid)
 	}
 
 	return fmt.Sprintf(
-		"update _vt.vreplication set pos=%v, time_updated=%v where id=%v",
+		"update _vt.vreplication set pos=%v, time_updated=%v, message='' where id=%v",
 		encodeString(mysql.EncodePosition(pos)), timeUpdated, uid)
 }
 

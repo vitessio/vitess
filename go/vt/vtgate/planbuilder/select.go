@@ -77,14 +77,17 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	}
 
 	if rb, ok := pb.bldr.(*route); ok {
-		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
-		rb.ERoute.QueryTimeout = queryTimeout(directives)
-		if rb.ERoute.TargetDestination != nil {
-			return errors.New("unsupported: SELECT with a target destination")
-		}
+		// TODO(sougou): this can probably be improved.
+		for _, ro := range rb.routeOptions {
+			directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+			ro.eroute.QueryTimeout = queryTimeout(directives)
+			if ro.eroute.TargetDestination != nil {
+				return errors.New("unsupported: SELECT with a target destination")
+			}
 
-		if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
-			rb.ERoute.ScatterErrorsAsWarnings = true
+			if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
+				ro.eroute.ScatterErrorsAsWarnings = true
+			}
 		}
 	}
 
@@ -214,10 +217,8 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 			}
 			// Validate keyspace reference if any.
 			if !node.TableName.IsEmpty() {
-				if qual := node.TableName.Qualifier; !qual.IsEmpty() {
-					if qual.String() != rb.ERoute.Keyspace.Name {
-						return nil, fmt.Errorf("cannot resolve %s to keyspace %s", sqlparser.String(node), rb.ERoute.Keyspace.Name)
-					}
+				if _, err := pb.st.FindTable(node.TableName); err != nil {
+					return nil, err
 				}
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
@@ -227,8 +228,11 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
 				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
 			}
-			if err := rb.SetOpcode(engine.SelectNext); err != nil {
-				return nil, err
+			for _, ro := range rb.routeOptions {
+				if ro.eroute.Opcode != engine.SelectNext {
+					return nil, errors.New("NEXT used on a non-sequence table")
+				}
+				ro.eroute.Opcode = engine.SelectNext
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		default:
@@ -285,7 +289,7 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 						As: col,
 					}
 				}
-				rc, _, err := pb.bldr.PushSelect(expr, t.origin)
+				rc, _, err := pb.bldr.PushSelect(expr, t.Origin())
 				if err != nil {
 					// Unreachable because PushSelect won't fail on ColName.
 					return inrcs, false, err
@@ -312,7 +316,7 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 				Qualifier: expr.TableName,
 			},
 		}
-		rc, _, err := pb.bldr.PushSelect(expr, t.origin)
+		rc, _, err := pb.bldr.PushSelect(expr, t.Origin())
 		if err != nil {
 			// Unreachable because PushSelect won't fail on ColName.
 			return inrcs, false, err
@@ -320,22 +324,4 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 		inrcs = append(inrcs, rc)
 	}
 	return inrcs, true, nil
-}
-
-// queryTimeout returns DirectiveQueryTimeout value if set, otherwise returns 0.
-func queryTimeout(d sqlparser.CommentDirectives) int {
-	if d == nil {
-		return 0
-	}
-
-	val, ok := d[sqlparser.DirectiveQueryTimeout]
-	if !ok {
-		return 0
-	}
-
-	intVal, ok := val.(int)
-	if ok {
-		return intVal
-	}
-	return 0
 }

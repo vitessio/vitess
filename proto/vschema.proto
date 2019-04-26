@@ -23,6 +23,20 @@ package vschema;
 
 import "query.proto";
 
+// RoutingRules specify the high level routing rules for the VSchema.
+message RoutingRules {
+  // rules should ideally be a map. However protos dont't allow
+  // repeated fields as elements of a map. So, we use a list
+  // instead.
+  repeated RoutingRule rules = 1;
+}
+
+// RoutingRule specifies a routing rule.
+message RoutingRule {
+  string from_table = 1;
+  repeated string to_tables = 2;
+}
+
 // Keyspace is the vschema for a keyspace.
 message Keyspace {
   // If sharded is false, vindexes and tables are ignored.
@@ -62,7 +76,7 @@ message Table {
   repeated Column columns = 4;
   // pinned pins an unsharded table to a specific
   // shard, as dictated by the keyspace id.
-  // The keyspace id is represened in hex form
+  // The keyspace id is represented in hex form
   // like in keyranges.
   string pinned = 5;
   // column_list_authoritative is set to true if columns is
@@ -98,4 +112,5 @@ message Column {
 message SrvVSchema {
   // keyspaces is a map of keyspace name -> Keyspace object.
   map<string, Keyspace> keyspaces = 1;
+  RoutingRules routing_rules = 2;
 }

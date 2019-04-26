@@ -27,10 +27,12 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-const hashed10 uint64 = 17563797831108199066
-const hashed20 uint64 = 8729390916138266389
-const hashed30 uint64 = 1472608112194674795
-const hashed40 uint64 = 16576388050845489136
+const (
+	hashed10 uint64 = 17563797831108199066
+	hashed20 uint64 = 8729390916138266389
+	hashed30 uint64 = 1472608112194674795
+	hashed40 uint64 = 16576388050845489136
+)
 
 func TestLookupUnicodeLooseMD5HashMap(t *testing.T) {
 	lookup := createLookup(t, "lookup_unicodeloosemd5_hash", false)
@@ -408,7 +410,7 @@ func TestLookupUnicodeLooseMD5HashDelete(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashDeleteAutocommit(t *testing.T) {
-	lookupNonUnique, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	lookupNonUnique, _ := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -416,7 +418,7 @@ func TestLookupUnicodeLooseMD5HashDeleteAutocommit(t *testing.T) {
 	})
 	vc := &vcursor{}
 
-	err = lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NewInt64(20)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}

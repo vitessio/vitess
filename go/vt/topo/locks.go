@@ -45,7 +45,7 @@ var (
 	// Deprecated
 	// LockTimeout is the command line flag that introduces a shorter
 	// timeout for locking topology structures.
-	deprecatedLockTimeout = flag.Duration("lock_timeout", defaultLockTimeout, "deprecated: timeout for acquiring topology locks, use remote_operation_timeout")
+	_ = flag.Duration("lock_timeout", defaultLockTimeout, "deprecated: timeout for acquiring topology locks, use remote_operation_timeout")
 
 	// RemoteOperationTimeout is used for operations where we have to
 	// call out to another process.

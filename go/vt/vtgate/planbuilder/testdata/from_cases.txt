@@ -28,6 +28,36 @@
   }
 }
 
+# Select from sequence
+"select next 2 values from seq"
+{
+  "Original": "select next 2 values from seq",
+  "Instructions": {
+    "Opcode": "SelectNext",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select next 2 values from seq",
+    "FieldQuery": "select next 2 values from seq where 1 != 1"
+  }
+}
+
+# Select from reference
+"select * from ref"
+{
+  "Original": "select * from ref",
+  "Instructions": {
+    "Opcode": "SelectReference",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from ref",
+    "FieldQuery": "select * from ref where 1 != 1"
+  }
+}
+
 # Single information_schema query
 "select col from information_schema.foo"
 {
@@ -85,6 +115,66 @@
     "Cols": [
       1
     ]
+  }
+}
+
+# routing rules where table name matches, and there's no alias.
+"select * from second_user.user"
+{
+  "Original": "select * from second_user.user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user",
+    "FieldQuery": "select * from user where 1 != 1"
+  }
+}
+
+# routing rules where table name matches, and there's an alias.
+"select * from second_user.user as a"
+{
+  "Original": "select * from second_user.user as a",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user as a",
+    "FieldQuery": "select * from user as a where 1 != 1"
+  }
+}
+
+# routing rules where table name does not match, and there's no alias.
+"select * from route1"
+{
+  "Original": "select * from route1",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user as route1",
+    "FieldQuery": "select * from user as route1 where 1 != 1"
+  }
+}
+
+# routing rules where table name does not match, and there's an alias.
+"select * from route1 as a"
+{
+  "Original": "select * from route1 as a",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user as a",
+    "FieldQuery": "select * from user as a where 1 != 1"
   }
 }
 
@@ -730,6 +820,111 @@
   }
 }
 
+# join with reference table
+"select user.col from user join ref"
+{
+  "Original": "select user.col from user join ref",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col from user join ref",
+    "FieldQuery": "select user.col from user join ref where 1 != 1"
+  }
+}
+
+# reference table self-join
+"select r1.col from ref r1 join ref"
+{
+  "Original": "select r1.col from ref r1 join ref",
+  "Instructions": {
+    "Opcode": "SelectReference",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select r1.col from ref as r1 join ref",
+    "FieldQuery": "select r1.col from ref as r1 join ref where 1 != 1"
+  }
+}
+
+# reference table doesn't merge with other opcodes yet.
+"select ref.col from ref join user"
+{
+  "Original": "select ref.col from ref join user",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectReference",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select ref.col from ref",
+      "FieldQuery": "select ref.col from ref where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user",
+      "FieldQuery": "select 1 from user where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}
+
+# routing rules for join, merged route wins
+"select route2.col from route2 join user_extra on route2.id = user_extra.user_id"
+{
+  "Original": "select route2.col from route2 join user_extra on route2.id = user_extra.user_id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select route2.col from user as route2 join user_extra on route2.id = user_extra.user_id",
+    "FieldQuery": "select route2.col from user as route2 join user_extra on route2.id = user_extra.user_id where 1 != 1"
+  }
+}
+
+# routing rules for join, unsharded route wins if we can't find a merged route
+"select route2.col from route2 join user_extra"
+{
+  "Original": "select route2.col from route2 join user_extra",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select route2.col from unsharded as route2",
+      "FieldQuery": "select route2.col from unsharded as route2 where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user_extra",
+      "FieldQuery": "select 1 from user_extra where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}
+
 # subquery
 "select id from (select id, col from user where id = 5) as t"
 {
@@ -835,6 +1030,61 @@
   }
 }
 
+# routing rules for subquery where the first route wins
+"select id from (select id, col from route1 where id = 5) as t"
+{
+  "Original": "select id from (select id, col from route1 where id = 5) as t",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from (select id, col from user as route1 where id = 5) as t",
+    "FieldQuery": "select id from (select id, col from user as route1 where 1 != 1) as t where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [5]
+  }
+}
+
+# routing rules for subquery where the second route wins
+"select id from (select id, col from route1 where email = 'aaa') as t"
+{
+  "Original": "select id from (select id, col from route1 where email = 'aaa') as t",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from (select id, col from user_metadata as route1 where email = 'aaa') as t",
+    "FieldQuery": "select id from (select id, col from user_metadata as route1 where 1 != 1) as t where 1 != 1",
+    "Vindex": "email_user_map",
+    "Values": [
+      "aaa"
+    ]
+  }
+}
+
+# routing rules for subquery where the constraint is in the outer query
+"select id from (select id, col from route1) as t where id = 5"
+{
+  "Original": "select id from (select id, col from route1) as t where id = 5",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from (select id, col from user as route1) as t where id = 5",
+    "FieldQuery": "select id from (select id, col from user as route1 where 1 != 1) as t where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [
+      5
+    ]
+  }
+}
+
 # merge subqueries with single-shard routes
 "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e"
 {
@@ -849,6 +1099,66 @@
     "FieldQuery": "select u.col, e.col from (select col from user where 1 != 1) as u join (select col from user_extra where 1 != 1) as e where 1 != 1",
     "Vindex": "user_index",
     "Values": [5]
+  }
+}
+
+# join of information_schema with normal table
+"select foo from information_schema.a join unsharded"
+{
+  "Original": "select foo from information_schema.a join unsharded",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectDBA",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select foo from information_schema.a",
+      "FieldQuery": "select foo from information_schema.a where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select 1 from unsharded",
+      "FieldQuery": "select 1 from unsharded where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
+  }
+}
+
+# join of normal table with information_schema
+"select foo from unsharded join information_schema.a"
+{
+  "Original": "select foo from unsharded join information_schema.a",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select foo from unsharded",
+      "FieldQuery": "select foo from unsharded where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectDBA",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select 1 from information_schema.a",
+      "FieldQuery": "select 1 from information_schema.a where 1 != 1"
+    },
+    "Cols": [
+      -1
+    ]
   }
 }
 

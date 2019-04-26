@@ -39,17 +39,17 @@ const _ = grpc.SupportPackageIsVersion4
 type VitessClient interface {
 	// Execute tries to route the query to the right shard.
 	// It depends on the query and bind variables to provide enough
-	// information in conjonction with the vindexes to route the query.
+	// information in conjunction with the vindexes to route the query.
 	// API group: v3
 	Execute(ctx context.Context, in *vtgate.ExecuteRequest, opts ...grpc.CallOption) (*vtgate.ExecuteResponse, error)
 	// ExecuteBatch tries to route the list of queries on the right shards.
 	// It depends on the query and bind variables to provide enough
-	// information in conjonction with the vindexes to route the query.
+	// information in conjunction with the vindexes to route the query.
 	// API group: v3
 	ExecuteBatch(ctx context.Context, in *vtgate.ExecuteBatchRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchResponse, error)
 	// StreamExecute executes a streaming query based on shards.
 	// It depends on the query and bind variables to provide enough
-	// information in conjonction with the vindexes to route the query.
+	// information in conjunction with the vindexes to route the query.
 	// Use this method if the query returns a large number of rows.
 	// API group: v3
 	StreamExecute(ctx context.Context, in *vtgate.StreamExecuteRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteClient, error)
@@ -467,17 +467,17 @@ func (x *vitessUpdateStreamClient) Recv() (*vtgate.UpdateStreamResponse, error) 
 type VitessServer interface {
 	// Execute tries to route the query to the right shard.
 	// It depends on the query and bind variables to provide enough
-	// information in conjonction with the vindexes to route the query.
+	// information in conjunction with the vindexes to route the query.
 	// API group: v3
 	Execute(context.Context, *vtgate.ExecuteRequest) (*vtgate.ExecuteResponse, error)
 	// ExecuteBatch tries to route the list of queries on the right shards.
 	// It depends on the query and bind variables to provide enough
-	// information in conjonction with the vindexes to route the query.
+	// information in conjunction with the vindexes to route the query.
 	// API group: v3
 	ExecuteBatch(context.Context, *vtgate.ExecuteBatchRequest) (*vtgate.ExecuteBatchResponse, error)
 	// StreamExecute executes a streaming query based on shards.
 	// It depends on the query and bind variables to provide enough
-	// information in conjonction with the vindexes to route the query.
+	// information in conjunction with the vindexes to route the query.
 	// Use this method if the query returns a large number of rows.
 	// API group: v3
 	StreamExecute(*vtgate.StreamExecuteRequest, Vitess_StreamExecuteServer) error

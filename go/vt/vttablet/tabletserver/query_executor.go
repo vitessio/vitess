@@ -296,12 +296,14 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
-	conn, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
+	conn, beginSQL, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
 	if err != nil {
 		return nil, err
 	}
 	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
-	qre.logStats.AddRewrittenSQL("begin", time.Now())
+	if beginSQL != "" {
+		qre.logStats.AddRewrittenSQL(beginSQL, time.Now())
+	}
 
 	reply, err = f(conn)
 
@@ -311,8 +313,13 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltype
 		qre.logStats.AddRewrittenSQL("rollback", start)
 		return nil, err
 	}
-	err = qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
-	qre.logStats.AddRewrittenSQL("commit", start)
+	commitSQL, err := qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
+
+	// As above LocalCommit is a no-op for autocommmit so don't log anything.
+	if commitSQL != "" {
+		qre.logStats.AddRewrittenSQL(commitSQL, start)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -951,4 +958,3 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callb
 	}
 	return nil
 }
-
