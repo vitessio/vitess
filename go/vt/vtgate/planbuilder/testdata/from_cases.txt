@@ -193,6 +193,14 @@
   }
 }
 
+# routing rules bad table
+"select * from bad_table"
+"keyspace none not found in vschema"
+
+# routing rules disabled table
+"select * from disabled"
+"table disabled has been disabled"
+
 # ',' join
 "select music.col from user, music"
 {
