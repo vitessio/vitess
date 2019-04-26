@@ -24,8 +24,10 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/trace"
 )
 
 var (
@@ -145,6 +147,12 @@ func (rp *ResourcePool) closeIdleResources() {
 // it will wait till the next resource becomes available or a timeout.
 // A timeout of 0 is an indefinite wait.
 func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) {
+	span, ctx := trace.NewSpan(ctx, "ResourcePool.Get")
+	span.Annotate("capacity", rp.capacity.Get())
+	span.Annotate("in_use", rp.inUse.Get())
+	span.Annotate("available", rp.available.Get())
+	span.Annotate("active", rp.active.Get())
+	defer span.Finish()
 	return rp.get(ctx, true)
 }
 
@@ -179,7 +187,9 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 
 	// Unwrap
 	if wrapper.resource == nil {
+		span, _ := trace.NewSpan(ctx, "ResourcePool.factory")
 		wrapper.resource, err = rp.factory()
+		span.Finish()
 		if err != nil {
 			rp.resources <- resourceWrapper{}
 			return nil, err

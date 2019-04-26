@@ -99,7 +99,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	if v, ok := params["tablet_types"]; ok {
 		tabletTypesStr = v
 	}
-	tp, err := newTabletPicker(ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
+	tp, err := newTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
 	if err != nil {
 		return nil, err
 	}

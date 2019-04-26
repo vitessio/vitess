@@ -28,6 +28,7 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
@@ -79,6 +80,9 @@ func main() {
 	} else {
 		log.Warningf("cannot connect to syslog: %v", err)
 	}
+
+	closer := trace.StartTracing("vtctl")
+	defer trace.LogErrorsWhenClosing(closer)
 
 	servenv.FireRunHooks()
 

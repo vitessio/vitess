@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -991,6 +992,10 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 
 // Execute executes the query and returns the result as response.
 func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+	span, ctx := trace.NewSpan(ctx, "TabletServer.Execute")
+	trace.AnnotateSQL(span, sql)
+	defer span.Finish()
+
 	allowOnShutdown := (transactionID != 0)
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
@@ -1067,6 +1072,9 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 // the AsTransaction flag which will execute all statements inside an independent
 // transaction. If AsTransaction is true, TransactionId must be 0.
 func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (results []sqltypes.Result, err error) {
+	span, ctx := trace.NewSpan(ctx, "TabletServer.ExecuteBatch")
+	defer span.Finish()
+
 	if len(queries) == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Empty query list")
 	}
@@ -1444,6 +1452,18 @@ func (tsv *TabletServer) execRequest(
 	target *querypb.Target, options *querypb.ExecuteOptions, isBegin, allowOnShutdown bool,
 	exec func(ctx context.Context, logStats *tabletenv.LogStats) error,
 ) (err error) {
+	span, ctx := trace.NewSpan(ctx, "TabletServer."+requestName)
+	if options != nil {
+		span.Annotate("isolation-level", options.TransactionIsolation)
+	}
+	trace.AnnotateSQL(span, sql)
+	if target != nil {
+		span.Annotate("cell", target.Cell)
+		span.Annotate("shard", target.Shard)
+		span.Annotate("keyspace", target.Keyspace)
+	}
+	defer span.Finish()
+
 	logStats := tabletenv.NewLogStats(ctx, requestName)
 	logStats.Target = target
 	logStats.OriginalSQL = sql

@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -198,6 +199,8 @@ func (axp *TxPool) WaitForEmpty() {
 //
 // Subsequent statements can access the connection through the transaction id.
 func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, string, error) {
+	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
+	defer span.Finish()
 	var conn *connpool.DBConn
 	var err error
 	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
@@ -282,6 +285,8 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 
 // Commit commits the specified transaction.
 func (axp *TxPool) Commit(ctx context.Context, transactionID int64, mc messageCommitter) (string, error) {
+	span, ctx := trace.NewSpan(ctx, "TxPool.Commit")
+	defer span.Finish()
 	conn, err := axp.Get(transactionID, "for commit")
 	if err != nil {
 		return "", err
@@ -291,6 +296,9 @@ func (axp *TxPool) Commit(ctx context.Context, transactionID int64, mc messageCo
 
 // Rollback rolls back the specified transaction.
 func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) error {
+	span, ctx := trace.NewSpan(ctx, "TxPool.Rollback")
+	defer span.Finish()
+
 	conn, err := axp.Get(transactionID, "for rollback")
 	if err != nil {
 		return err
@@ -312,6 +320,9 @@ func (axp *TxPool) Get(transactionID int64, reason string) (*TxConnection, error
 // It's used for executing transactions within a request. It's safe
 // to always call LocalConclude at the end.
 func (axp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOptions) (*TxConnection, string, error) {
+	span, ctx := trace.NewSpan(ctx, "TxPool.LocalBegin")
+	defer span.Finish()
+
 	transactionID, beginSQL, err := axp.Begin(ctx, options)
 	if err != nil {
 		return nil, "", err
@@ -322,6 +333,8 @@ func (axp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOptio
 
 // LocalCommit is the commit function for LocalBegin.
 func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, mc messageCommitter) (string, error) {
+	span, ctx := trace.NewSpan(ctx, "TxPool.LocalCommit")
+	defer span.Finish()
 	defer conn.conclude(TxCommit, "transaction committed")
 	defer mc.LockDB(conn.NewMessages, conn.ChangedMessages)()
 
@@ -341,6 +354,8 @@ func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, mc messa
 // LocalConclude concludes a transaction started by LocalBegin.
 // If the transaction was not previously concluded, it's rolled back.
 func (axp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
+	span, ctx := trace.NewSpan(ctx, "TxPool.LocalConclude")
+	defer span.Finish()
 	if conn.DBConn != nil {
 		_ = axp.localRollback(ctx, conn)
 	}

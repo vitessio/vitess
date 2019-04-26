@@ -25,61 +25,39 @@ import (
 )
 
 func TestEmpty(t *testing.T) {
-  interceptors := &InterceptorBuilder{}
-  if interceptors.NonEmpty() {
+  interceptors := &serverInterceptorBuilder{}
+  if len(interceptors.Build()) > 0 {
     t.Fatalf("expected empty builder to report as empty")
   }
 }
 
 func TestSingleInterceptor(t *testing.T) {
-  interceptors := &InterceptorBuilder{}
+  interceptors := &serverInterceptorBuilder{}
   fake := &FakeInterceptor{}
 
   interceptors.Add(fake.StreamServerInterceptor, fake.UnaryServerInterceptor)
 
-  if !interceptors.NonEmpty() {
-    t.Fatalf("non-empty collector claims to have stuff")
+  if len(interceptors.streamInterceptors) != 1 {
+    t.Fatalf("expected 1 server options to be available")
   }
-
-  _ = interceptors.StreamServerInterceptor(42, nil, nil, nullSHandler)
-  _, _ = interceptors.UnaryStreamInterceptor(context.Background(), 666, nil, nullUHandler)
-
-  assertEquals(t, fake.streamSeen, 42)
-  assertEquals(t, fake.unarySeen, 666)
+  if len(interceptors.unaryInterceptors) != 1 {
+    t.Fatalf("expected 1 server options to be available")
+  }
 }
 
 func TestDoubleInterceptor(t *testing.T) {
-  interceptors := &InterceptorBuilder{}
+  interceptors := &serverInterceptorBuilder{}
   fake1 := &FakeInterceptor{name: "ettan"}
   fake2 := &FakeInterceptor{name: "tvaon"}
 
   interceptors.Add(fake1.StreamServerInterceptor, fake1.UnaryServerInterceptor)
   interceptors.Add(fake2.StreamServerInterceptor, fake2.UnaryServerInterceptor)
 
-  if !interceptors.NonEmpty() {
-    t.Fatalf("non-empty collector claims to have stuff")
+  if len(interceptors.streamInterceptors) != 2 {
+    t.Fatalf("expected 1 server options to be available")
   }
-
-  _ = interceptors.StreamServerInterceptor(42, nil, nil, nullSHandler)
-  _, _ = interceptors.UnaryStreamInterceptor(context.Background(), 666, nil, nullUHandler)
-
-  assertEquals(t, fake1.streamSeen, 42)
-  assertEquals(t, fake1.unarySeen, 666)
-  assertEquals(t, fake2.streamSeen, 42)
-  assertEquals(t, fake2.unarySeen, 666)
-}
-
-func nullSHandler(_ interface{}, _ grpc.ServerStream) error {
-  return nil
-}
-
-func nullUHandler(_ context.Context, req interface{}) (interface{}, error) {
-  return req, nil
-}
-
-func assertEquals(t *testing.T, a, b interface{}) {
-  if a != b {
-    t.Errorf("expected %v but got %v", a, b)
+  if len(interceptors.unaryInterceptors) != 2 {
+    t.Fatalf("expected 1 server options to be available")
   }
 }
 

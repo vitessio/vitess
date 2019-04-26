@@ -21,16 +21,16 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -269,6 +269,8 @@ func (te *TxEngine) AcceptReadOnly() error {
 //
 // Subsequent statements can access the connection through the transaction id.
 func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, string, error) {
+	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
+	defer span.Finish()
 	te.stateLock.Lock()
 
 	canOpenTransactions := te.state == AcceptingReadOnly || te.state == AcceptingReadAndWrite
@@ -295,11 +297,16 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 
 // Commit commits the specified transaction.
 func (te *TxEngine) Commit(ctx context.Context, transactionID int64, mc messageCommitter) (string, error) {
+	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
+	defer span.Finish()
 	return te.txPool.Commit(ctx, transactionID, mc)
 }
 
 // Rollback rolls back the specified transaction.
 func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) error {
+	span, ctx := trace.NewSpan(ctx, "TxEngine.Rollback")
+	defer span.Finish()
+
 	return te.txPool.Rollback(ctx, transactionID)
 }
 

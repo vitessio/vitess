@@ -68,6 +68,12 @@
       <artifactId>joda-time</artifactId>
     </dependency>
 
+    <dependency>
+      <groupId>io.opentracing.contrib</groupId>
+      <artifactId>opentracing-grpc</artifactId>
+      <version>0.0.12</version>
+    </dependency>
+
     <!-- Dependencies with limited scope. -->
     <dependency>
       <groupId>junit</groupId>

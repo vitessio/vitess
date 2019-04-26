@@ -73,8 +73,9 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 }
 
 func newFakeResolver(opts *Options, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
-	gw := gateway.GetCreator()(hc, serv, cell, 3)
-	gw.WaitForTablets(context.Background(), []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
+	ctx := context.Background()
+	gw := gateway.GetCreator()(ctx, hc, serv, cell, 3)
+	gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 
 	txMode := vtgatepb.TransactionMode_MULTI
 	if opts.ExecutionMode == ModeTwoPC {
