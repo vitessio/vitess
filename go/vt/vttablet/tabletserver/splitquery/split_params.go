@@ -174,7 +174,7 @@ func newSplitParams(
 			" (must be a simple table expression): %v", query.Sql)
 	}
 	tableSchema, ok := schemaMap[tableName.String()]
-	if tableSchema == nil {
+	if !ok || tableSchema == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "can't find table in schema")
 	}
 

@@ -61,7 +61,7 @@ func TestBinaryMap(t *testing.T) {
 			t.Error(err)
 		}
 		out := []byte(got[0].(key.DestinationKeyspaceID))
-		if bytes.Compare(tcase.out, out) != 0 {
+		if !bytes.Equal(tcase.out, out) {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
 	}

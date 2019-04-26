@@ -676,7 +676,7 @@ func OrderAndCheckPartitions(cell string, srvKeyspace *topodatapb.SrvKeyspace) e
 				// this is the custom sharding case, all KeyRanges must be nil
 				continue
 			}
-			if bytes.Compare(currShard.KeyRange.End, nextShard.KeyRange.Start) != 0 {
+			if !bytes.Equal(currShard.KeyRange.End, nextShard.KeyRange.Start) {
 				return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, hex.EncodeToString(currShard.KeyRange.End), hex.EncodeToString(nextShard.KeyRange.Start))
 			}
 		}

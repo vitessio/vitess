@@ -77,4 +77,16 @@ func TestBasicCompare(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compare tablets failed: %v", err)
 	}
+
+	err = CompareRoutingRules(ctx, fromTS, toTS)
+	if err == nil {
+		t.Fatalf("Compare routing rules is not failing when topos are not in sync")
+	}
+
+	CopyRoutingRules(ctx, fromTS, toTS)
+
+	err = CompareRoutingRules(ctx, fromTS, toTS)
+	if err != nil {
+		t.Fatalf("Compare routing rules failed: %v", err)
+	}
 }

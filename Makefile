@@ -1,11 +1,11 @@
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -186,7 +186,7 @@ docker_base_mysql56:
 
 docker_base_mysql80:
 	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.mysql56 -t vitess/base:mysql80 .
+	docker build -f docker/base/Dockerfile.mysql80 -t vitess/base:mysql80 .
 
 docker_base_mariadb:
 	chmod -R o=g *
@@ -206,7 +206,7 @@ docker_base_percona57:
 
 docker_base_percona80:
 	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.percona57 -t vitess/base:percona80 .
+	docker build -f docker/base/Dockerfile.percona80 -t vitess/base:percona80 .
 
 # Run "make docker_lite PROMPT_NOTICE=false" to avoid that the script
 # prompts you to press ENTER and confirm that the vitess/base image is not

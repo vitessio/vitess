@@ -7,7 +7,6 @@ from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from google.protobuf import reflection as _reflection
 from google.protobuf import symbol_database as _symbol_database
-from google.protobuf import descriptor_pb2
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
@@ -20,11 +19,81 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vschema.proto',
   package='vschema',
   syntax='proto3',
-  serialized_pb=_b('\n\rvschema.proto\x12\x07vschema\x1a\x0bquery.proto\"\xfe\x01\n\x08Keyspace\x12\x0f\n\x07sharded\x18\x01 \x01(\x08\x12\x31\n\x08vindexes\x18\x02 \x03(\x0b\x32\x1f.vschema.Keyspace.VindexesEntry\x12-\n\x06tables\x18\x03 \x03(\x0b\x32\x1d.vschema.Keyspace.TablesEntry\x1a@\n\rVindexesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1e\n\x05value\x18\x02 \x01(\x0b\x32\x0f.vschema.Vindex:\x02\x38\x01\x1a=\n\x0bTablesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1d\n\x05value\x18\x02 \x01(\x0b\x32\x0e.vschema.Table:\x02\x38\x01\"\x81\x01\n\x06Vindex\x12\x0c\n\x04type\x18\x01 \x01(\t\x12+\n\x06params\x18\x02 \x03(\x0b\x32\x1b.vschema.Vindex.ParamsEntry\x12\r\n\x05owner\x18\x03 \x01(\t\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xca\x01\n\x05Table\x12\x0c\n\x04type\x18\x01 \x01(\t\x12.\n\x0f\x63olumn_vindexes\x18\x02 \x03(\x0b\x32\x15.vschema.ColumnVindex\x12.\n\x0e\x61uto_increment\x18\x03 \x01(\x0b\x32\x16.vschema.AutoIncrement\x12 \n\x07\x63olumns\x18\x04 \x03(\x0b\x32\x0f.vschema.Column\x12\x0e\n\x06pinned\x18\x05 \x01(\t\x12!\n\x19\x63olumn_list_authoritative\x18\x06 \x01(\x08\"=\n\x0c\x43olumnVindex\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0f\n\x07\x63olumns\x18\x03 \x03(\t\"1\n\rAutoIncrement\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x10\n\x08sequence\x18\x02 \x01(\t\"1\n\x06\x43olumn\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x19\n\x04type\x18\x02 \x01(\x0e\x32\x0b.query.Type\"\x88\x01\n\nSrvVSchema\x12\x35\n\tkeyspaces\x18\x01 \x03(\x0b\x32\".vschema.SrvVSchema.KeyspacesEntry\x1a\x43\n\x0eKeyspacesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12 \n\x05value\x18\x02 \x01(\x0b\x32\x11.vschema.Keyspace:\x02\x38\x01\x42&Z$vitess.io/vitess/go/vt/proto/vschemab\x06proto3')
+  serialized_options=_b('Z$vitess.io/vitess/go/vt/proto/vschema'),
+  serialized_pb=_b('\n\rvschema.proto\x12\x07vschema\x1a\x0bquery.proto\"3\n\x0cRoutingRules\x12#\n\x05rules\x18\x01 \x03(\x0b\x32\x14.vschema.RoutingRule\"4\n\x0bRoutingRule\x12\x12\n\nfrom_table\x18\x01 \x01(\t\x12\x11\n\tto_tables\x18\x02 \x03(\t\"\xfe\x01\n\x08Keyspace\x12\x0f\n\x07sharded\x18\x01 \x01(\x08\x12\x31\n\x08vindexes\x18\x02 \x03(\x0b\x32\x1f.vschema.Keyspace.VindexesEntry\x12-\n\x06tables\x18\x03 \x03(\x0b\x32\x1d.vschema.Keyspace.TablesEntry\x1a@\n\rVindexesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1e\n\x05value\x18\x02 \x01(\x0b\x32\x0f.vschema.Vindex:\x02\x38\x01\x1a=\n\x0bTablesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1d\n\x05value\x18\x02 \x01(\x0b\x32\x0e.vschema.Table:\x02\x38\x01\"\x81\x01\n\x06Vindex\x12\x0c\n\x04type\x18\x01 \x01(\t\x12+\n\x06params\x18\x02 \x03(\x0b\x32\x1b.vschema.Vindex.ParamsEntry\x12\r\n\x05owner\x18\x03 \x01(\t\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xca\x01\n\x05Table\x12\x0c\n\x04type\x18\x01 \x01(\t\x12.\n\x0f\x63olumn_vindexes\x18\x02 \x03(\x0b\x32\x15.vschema.ColumnVindex\x12.\n\x0e\x61uto_increment\x18\x03 \x01(\x0b\x32\x16.vschema.AutoIncrement\x12 \n\x07\x63olumns\x18\x04 \x03(\x0b\x32\x0f.vschema.Column\x12\x0e\n\x06pinned\x18\x05 \x01(\t\x12!\n\x19\x63olumn_list_authoritative\x18\x06 \x01(\x08\"=\n\x0c\x43olumnVindex\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0f\n\x07\x63olumns\x18\x03 \x03(\t\"1\n\rAutoIncrement\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x10\n\x08sequence\x18\x02 \x01(\t\"1\n\x06\x43olumn\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x19\n\x04type\x18\x02 \x01(\x0e\x32\x0b.query.Type\"\xb6\x01\n\nSrvVSchema\x12\x35\n\tkeyspaces\x18\x01 \x03(\x0b\x32\".vschema.SrvVSchema.KeyspacesEntry\x12,\n\rrouting_rules\x18\x02 \x01(\x0b\x32\x15.vschema.RoutingRules\x1a\x43\n\x0eKeyspacesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12 \n\x05value\x18\x02 \x01(\x0b\x32\x11.vschema.Keyspace:\x02\x38\x01\x42&Z$vitess.io/vitess/go/vt/proto/vschemab\x06proto3')
   ,
   dependencies=[query__pb2.DESCRIPTOR,])
 
 
+
+
+_ROUTINGRULES = _descriptor.Descriptor(
+  name='RoutingRules',
+  full_name='vschema.RoutingRules',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='rules', full_name='vschema.RoutingRules.rules', index=0,
+      number=1, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=39,
+  serialized_end=90,
+)
+
+
+_ROUTINGRULE = _descriptor.Descriptor(
+  name='RoutingRule',
+  full_name='vschema.RoutingRule',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='from_table', full_name='vschema.RoutingRule.from_table', index=0,
+      number=1, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='to_tables', full_name='vschema.RoutingRule.to_tables', index=1,
+      number=2, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=92,
+  serialized_end=144,
+)
 
 
 _KEYSPACE_VINDEXESENTRY = _descriptor.Descriptor(
@@ -40,28 +109,28 @@ _KEYSPACE_VINDEXESENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='value', full_name='vschema.Keyspace.VindexesEntry.value', index=1,
       number=2, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
+  serialized_options=_b('8\001'),
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=167,
-  serialized_end=231,
+  serialized_start=274,
+  serialized_end=338,
 )
 
 _KEYSPACE_TABLESENTRY = _descriptor.Descriptor(
@@ -77,28 +146,28 @@ _KEYSPACE_TABLESENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='value', full_name='vschema.Keyspace.TablesEntry.value', index=1,
       number=2, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
+  serialized_options=_b('8\001'),
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=233,
-  serialized_end=294,
+  serialized_start=340,
+  serialized_end=401,
 )
 
 _KEYSPACE = _descriptor.Descriptor(
@@ -114,35 +183,35 @@ _KEYSPACE = _descriptor.Descriptor(
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='vindexes', full_name='vschema.Keyspace.vindexes', index=1,
       number=2, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='tables', full_name='vschema.Keyspace.tables', index=2,
       number=3, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[_KEYSPACE_VINDEXESENTRY, _KEYSPACE_TABLESENTRY, ],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=40,
-  serialized_end=294,
+  serialized_start=147,
+  serialized_end=401,
 )
 
 
@@ -159,28 +228,28 @@ _VINDEX_PARAMSENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='value', full_name='vschema.Vindex.ParamsEntry.value', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
+  serialized_options=_b('8\001'),
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=381,
-  serialized_end=426,
+  serialized_start=488,
+  serialized_end=533,
 )
 
 _VINDEX = _descriptor.Descriptor(
@@ -196,35 +265,35 @@ _VINDEX = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='params', full_name='vschema.Vindex.params', index=1,
       number=2, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='owner', full_name='vschema.Vindex.owner', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[_VINDEX_PARAMSENTRY, ],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=297,
-  serialized_end=426,
+  serialized_start=404,
+  serialized_end=533,
 )
 
 
@@ -241,56 +310,56 @@ _TABLE = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='column_vindexes', full_name='vschema.Table.column_vindexes', index=1,
       number=2, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='auto_increment', full_name='vschema.Table.auto_increment', index=2,
       number=3, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='columns', full_name='vschema.Table.columns', index=3,
       number=4, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='pinned', full_name='vschema.Table.pinned', index=4,
       number=5, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='column_list_authoritative', full_name='vschema.Table.column_list_authoritative', index=5,
       number=6, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=429,
-  serialized_end=631,
+  serialized_start=536,
+  serialized_end=738,
 )
 
 
@@ -307,35 +376,35 @@ _COLUMNVINDEX = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='name', full_name='vschema.ColumnVindex.name', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='columns', full_name='vschema.ColumnVindex.columns', index=2,
       number=3, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=633,
-  serialized_end=694,
+  serialized_start=740,
+  serialized_end=801,
 )
 
 
@@ -352,28 +421,28 @@ _AUTOINCREMENT = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='sequence', full_name='vschema.AutoIncrement.sequence', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=696,
-  serialized_end=745,
+  serialized_start=803,
+  serialized_end=852,
 )
 
 
@@ -390,28 +459,28 @@ _COLUMN = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='type', full_name='vschema.Column.type', index=1,
       number=2, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=747,
-  serialized_end=796,
+  serialized_start=854,
+  serialized_end=903,
 )
 
 
@@ -428,28 +497,28 @@ _SRVVSCHEMA_KEYSPACESENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='value', full_name='vschema.SrvVSchema.KeyspacesEntry.value', index=1,
       number=2, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
+  serialized_options=_b('8\001'),
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=868,
-  serialized_end=935,
+  serialized_start=1021,
+  serialized_end=1088,
 )
 
 _SRVVSCHEMA = _descriptor.Descriptor(
@@ -465,23 +534,31 @@ _SRVVSCHEMA = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='routing_rules', full_name='vschema.SrvVSchema.routing_rules', index=1,
+      number=2, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[_SRVVSCHEMA_KEYSPACESENTRY, ],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=799,
-  serialized_end=935,
+  serialized_start=906,
+  serialized_end=1088,
 )
 
+_ROUTINGRULES.fields_by_name['rules'].message_type = _ROUTINGRULE
 _KEYSPACE_VINDEXESENTRY.fields_by_name['value'].message_type = _VINDEX
 _KEYSPACE_VINDEXESENTRY.containing_type = _KEYSPACE
 _KEYSPACE_TABLESENTRY.fields_by_name['value'].message_type = _TABLE
@@ -497,6 +574,9 @@ _COLUMN.fields_by_name['type'].enum_type = query__pb2._TYPE
 _SRVVSCHEMA_KEYSPACESENTRY.fields_by_name['value'].message_type = _KEYSPACE
 _SRVVSCHEMA_KEYSPACESENTRY.containing_type = _SRVVSCHEMA
 _SRVVSCHEMA.fields_by_name['keyspaces'].message_type = _SRVVSCHEMA_KEYSPACESENTRY
+_SRVVSCHEMA.fields_by_name['routing_rules'].message_type = _ROUTINGRULES
+DESCRIPTOR.message_types_by_name['RoutingRules'] = _ROUTINGRULES
+DESCRIPTOR.message_types_by_name['RoutingRule'] = _ROUTINGRULE
 DESCRIPTOR.message_types_by_name['Keyspace'] = _KEYSPACE
 DESCRIPTOR.message_types_by_name['Vindex'] = _VINDEX
 DESCRIPTOR.message_types_by_name['Table'] = _TABLE
@@ -505,6 +585,20 @@ DESCRIPTOR.message_types_by_name['AutoIncrement'] = _AUTOINCREMENT
 DESCRIPTOR.message_types_by_name['Column'] = _COLUMN
 DESCRIPTOR.message_types_by_name['SrvVSchema'] = _SRVVSCHEMA
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
+
+RoutingRules = _reflection.GeneratedProtocolMessageType('RoutingRules', (_message.Message,), dict(
+  DESCRIPTOR = _ROUTINGRULES,
+  __module__ = 'vschema_pb2'
+  # @@protoc_insertion_point(class_scope:vschema.RoutingRules)
+  ))
+_sym_db.RegisterMessage(RoutingRules)
+
+RoutingRule = _reflection.GeneratedProtocolMessageType('RoutingRule', (_message.Message,), dict(
+  DESCRIPTOR = _ROUTINGRULE,
+  __module__ = 'vschema_pb2'
+  # @@protoc_insertion_point(class_scope:vschema.RoutingRule)
+  ))
+_sym_db.RegisterMessage(RoutingRule)
 
 Keyspace = _reflection.GeneratedProtocolMessageType('Keyspace', (_message.Message,), dict(
 
@@ -588,14 +682,9 @@ _sym_db.RegisterMessage(SrvVSchema)
 _sym_db.RegisterMessage(SrvVSchema.KeyspacesEntry)
 
 
-DESCRIPTOR.has_options = True
-DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('Z$vitess.io/vitess/go/vt/proto/vschema'))
-_KEYSPACE_VINDEXESENTRY.has_options = True
-_KEYSPACE_VINDEXESENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
-_KEYSPACE_TABLESENTRY.has_options = True
-_KEYSPACE_TABLESENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
-_VINDEX_PARAMSENTRY.has_options = True
-_VINDEX_PARAMSENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
-_SRVVSCHEMA_KEYSPACESENTRY.has_options = True
-_SRVVSCHEMA_KEYSPACESENTRY._options = _descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001'))
+DESCRIPTOR._options = None
+_KEYSPACE_VINDEXESENTRY._options = None
+_KEYSPACE_TABLESENTRY._options = None
+_VINDEX_PARAMSENTRY._options = None
+_SRVVSCHEMA_KEYSPACESENTRY._options = None
 # @@protoc_insertion_point(module_scope)

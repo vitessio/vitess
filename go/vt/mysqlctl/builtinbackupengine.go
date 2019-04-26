@@ -42,8 +42,9 @@ import (
 )
 
 const (
-	builtin          = "builtin"
-	writerBufferSize = 2 * 1024 * 1024
+	builtin            = "builtin"
+	writerBufferSize   = 2 * 1024 * 1024
+	dataDictionaryFile = "mysql.ibd"
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -180,7 +181,6 @@ func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) (
 // and adds it to the backup manifest if it does
 // https://dev.mysql.com/doc/refman/8.0/en/data-dictionary-transactional-storage.html
 func addMySQL8DataDictionary(fes []FileEntry, base string, baseDir string) ([]FileEntry, error) {
-	const dataDictionaryFile = "mysql.ibd"
 	filePath := path.Join(baseDir, dataDictionaryFile)
 
 	// no-op if this file doesn't exist
@@ -301,8 +301,8 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, my
 	backupErr := be.backupFiles(ctx, cnf, mysqld, logger, bh, replicationPosition, backupConcurrency, hookExtraEnv)
 	usable := backupErr == nil
 
-	// Try to restart mysqld
-	err = mysqld.Start(ctx, cnf)
+	// Try to restart mysqld, use background context in case we timed out the original context
+	err = mysqld.Start(context.Background(), cnf)
 	if err != nil {
 		return usable, vterrors.Wrap(err, "can't restart mysqld")
 	}
@@ -420,21 +420,22 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 		return err
 	}
 
+	logger.Infof("Backing up file: %v", fe.Name)
 	// Open the destination file for writing, and a buffer.
 	wc, err := bh.AddFile(ctx, name, fi.Size())
 	if err != nil {
-		return vterrors.Wrapf(err, "cannot add file: %v", name)
+		return vterrors.Wrapf(err, "cannot add file: %v,%v", name, fe.Name)
 	}
-	defer func() {
+	defer func(name, fileName string) {
 		if rerr := wc.Close(); rerr != nil {
 			if err != nil {
 				// We already have an error, just log this one.
-				logger.Errorf2(rerr, "failed to close file %v", name)
+				logger.Errorf2(rerr, "failed to close file %v,%v", name, fe.Name)
 			} else {
 				err = rerr
 			}
 		}
-	}()
+	}(name, fe.Name)
 	dst := bufio.NewWriterSize(wc, writerBufferSize)
 
 	// Create the hasher and the tee on top.

@@ -774,6 +774,44 @@
    }
 }
 
+# routing rules: order by test pushed to all options. table 1 is chosen.
+"select col from route1 where id = 1 order by col"
+{
+  "Original": "select col from route1 where id = 1 order by col",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user as route1 where id = 1 order by col asc",
+    "FieldQuery": "select col from user as route1 where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [
+      1
+    ]
+  }
+}
+
+# routing rules: order by test pushed to all options. table 2 is chosen.
+"select col from route1 where email = 'aaa' order by col"
+{
+  "Original": "select col from route1 where email = 'aaa' order by col",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user_metadata as route1 where email = 'aaa' order by col asc",
+    "FieldQuery": "select col from user_metadata as route1 where 1 != 1",
+    "Vindex": "email_user_map",
+    "Values": [
+      "aaa"
+    ]
+  }
+}
+
 # LIMIT
 "select col1 from user where id = 1 limit 1"
 {
@@ -918,6 +956,21 @@
         "FieldQuery": "select col from user where 1 != 1"
       }
     }
+  }
+}
+
+# limit on reference table
+"select col from ref limit 1"
+{
+  "Original": "select col from ref limit 1",
+  "Instructions": {
+    "Opcode": "SelectReference",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from ref limit 1",
+    "FieldQuery": "select col from ref where 1 != 1"
   }
 }
 

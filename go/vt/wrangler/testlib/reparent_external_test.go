@@ -80,7 +80,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 	}
 
 	// Make sure the master is not exported in other cells
-	tabletMap, err = ts.GetTabletMapForShardByCell(ctx, "test_keyspace", "0", []string{"cell2"})
+	tabletMap, _ = ts.GetTabletMapForShardByCell(ctx, "test_keyspace", "0", []string{"cell2"})
 	master, err = topotools.FindTabletByHostAndPort(tabletMap, oldMaster.Tablet.Hostname, "vt", oldMaster.Tablet.PortMap["vt"])
 	if !topo.IsErrType(err, topo.NoNode) {
 		t.Fatalf("FindTabletByHostAndPort(master) worked in cell2: %v %v", err, master)
@@ -123,7 +123,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 	// First test: reparent to the same master, make sure it works
 	// as expected.
 	tmc := tmclient.NewTabletManagerClient()
-	ti, err := ts.GetTablet(ctx, oldMaster.Tablet.Alias)
+	_, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 
 	// This tests a bad case: the new designated master is a slave,
 	// but we should do what we're told anyway.
-	ti, err = ts.GetTablet(ctx, goodSlave1.Tablet.Alias)
+	ti, err := ts.GetTablet(ctx, goodSlave1.Tablet.Alias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}

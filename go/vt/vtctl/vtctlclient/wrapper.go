@@ -36,12 +36,12 @@ var (
 // have to be consumed by the caller who has to specify a "recv" function.
 func RunCommandAndWait(ctx context.Context, server string, args []string, recv func(*logutilpb.Event)) error {
 	if recv == nil {
-		return errors.New("No function closure for Event stream specified")
+		return errors.New("no function closure for Event stream specified")
 	}
 	// create the client
 	client, err := New(server)
 	if err != nil {
-		return fmt.Errorf("Cannot dial to server %v: %v", server, err)
+		return fmt.Errorf("cannot dial to server %v: %v", server, err)
 	}
 	defer client.Close()
 
@@ -53,7 +53,7 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, recv f
 	}
 	stream, err := client.ExecuteVtctlCommand(ctx, args, timeout)
 	if err != nil {
-		return fmt.Errorf("Cannot execute remote command: %v", err)
+		return fmt.Errorf("cannot execute remote command: %v", err)
 	}
 
 	// stream the result
@@ -65,7 +65,7 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, recv f
 		case io.EOF:
 			return nil
 		default:
-			return fmt.Errorf("Remote error: %v", err)
+			return fmt.Errorf("remote error: %v", err)
 		}
 	}
 }

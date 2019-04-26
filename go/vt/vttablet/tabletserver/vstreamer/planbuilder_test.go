@@ -150,9 +150,7 @@ func TestMustSendDDL(t *testing.T) {
 
 func TestPlanbuilder(t *testing.T) {
 	t1 := &Table{
-		TableMap: &mysql.TableMap{
-			Name: "t1",
-		},
+		Name: "t1",
 		Columns: []schema.TableColumn{{
 			Name: sqlparser.NewColIdent("id"),
 			Type: sqltypes.Int64,
@@ -163,18 +161,14 @@ func TestPlanbuilder(t *testing.T) {
 	}
 	// t1alt has no id column
 	t1alt := &Table{
-		TableMap: &mysql.TableMap{
-			Name: "t1",
-		},
+		Name: "t1",
 		Columns: []schema.TableColumn{{
 			Name: sqlparser.NewColIdent("val"),
 			Type: sqltypes.VarBinary,
 		}},
 	}
 	t2 := &Table{
-		TableMap: &mysql.TableMap{
-			Name: "t2",
-		},
+		Name: "t2",
 		Columns: []schema.TableColumn{{
 			Name: sqlparser.NewColIdent("id"),
 			Type: sqltypes.Int64,
@@ -420,6 +414,8 @@ func TestPlanbuilder(t *testing.T) {
 			if !reflect.DeepEqual(tcase.outPlan, plan) {
 				t.Errorf("Plan(%v, %v):\n%v, want\n%v", tcase.inTable, tcase.inRule, plan, tcase.outPlan)
 			}
+		} else if tcase.outPlan != nil {
+			t.Errorf("Plan(%v, %v):\nnil, want\n%v", tcase.inTable, tcase.inRule, tcase.outPlan)
 		}
 		gotErr := ""
 		if err != nil {

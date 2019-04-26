@@ -43,6 +43,7 @@ var (
 	doShards            = flag.Bool("do-shards", false, "copies the shard information")
 	doShardReplications = flag.Bool("do-shard-replications", false, "copies the shard replication information")
 	doTablets           = flag.Bool("do-tablets", false, "copies the tablet information")
+	doRoutingRules      = flag.Bool("do-routing-rules", false, "copies the routing rules")
 )
 
 func main() {
@@ -87,7 +88,9 @@ func copyTopos(ctx context.Context, fromTS, toTS *topo.Server) {
 	if *doTablets {
 		helpers.CopyTablets(ctx, fromTS, toTS)
 	}
-
+	if *doRoutingRules {
+		helpers.CopyRoutingRules(ctx, fromTS, toTS)
+	}
 }
 
 func compareTopos(ctx context.Context, fromTS, toTS *topo.Server) {

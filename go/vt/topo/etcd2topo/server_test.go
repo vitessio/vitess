@@ -80,7 +80,7 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 		if _, err := cli.Get(ctx, "/"); err == nil {
 			break
 		}
-		if time.Now().Sub(start) > 10*time.Second {
+		if time.Since(start) > 10*time.Second {
 			t.Fatalf("Failed to start etcd daemon in time")
 		}
 		time.Sleep(10 * time.Millisecond)

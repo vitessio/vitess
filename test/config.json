@@ -106,6 +106,15 @@
 				"worker_test"
 			]
 		},
+		"initial_sharding_multi": {
+			"File": "initial_sharding_multi.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"initial_sharding_bytes": {
 			"File": "initial_sharding_bytes.py",
 			"Args": [],

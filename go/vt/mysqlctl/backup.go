@@ -235,7 +235,7 @@ func Restore(
 		}
 		if !ok {
 			logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
-			if err = PopulateMetadataTables(mysqld, localMetadata); err == nil {
+			if err = PopulateMetadataTables(mysqld, localMetadata, dbName); err == nil {
 				err = ErrExistingDB
 			}
 			return mysql.Position{}, err
@@ -264,7 +264,7 @@ func Restore(
 			err = ErrNoBackup
 		}
 
-		if err2 := PopulateMetadataTables(mysqld, localMetadata); err2 == nil {
+		if err2 := PopulateMetadataTables(mysqld, localMetadata, dbName); err2 == nil {
 			err = ErrNoBackup
 		}
 		return mysql.Position{}, err
@@ -300,7 +300,7 @@ func Restore(
 	// Populate local_metadata before starting without --skip-networking,
 	// so it's there before we start announcing ourselves.
 	logger.Infof("Restore: populating local_metadata")
-	err = PopulateMetadataTables(mysqld, localMetadata)
+	err = PopulateMetadataTables(mysqld, localMetadata, dbName)
 	if err != nil {
 		return mysql.Position{}, err
 	}

@@ -76,7 +76,7 @@ type Controller interface {
 	SchemaEngine() *schema.Engine
 
 	// BroadcastHealth sends the current health to all listeners
-	BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats)
+	BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats, maxCache time.Duration)
 
 	// HeartbeatLag returns the current lag as calculated by the heartbeat
 	// package, if heartbeat is enabled. Otherwise returns 0.

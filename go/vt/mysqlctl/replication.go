@@ -161,6 +161,17 @@ var (
 	ErrNotMaster = errors.New("no master status")
 )
 
+// SetSuperReadOnly set/unset the super_read_only flag
+func (mysqld *Mysqld) SetSuperReadOnly(on bool) error {
+	query := "SET GLOBAL super_read_only = "
+	if on {
+		query += "ON"
+	} else {
+		query += "OFF"
+	}
+	return mysqld.ExecuteSuperQuery(context.TODO(), query)
+}
+
 // WaitMasterPos lets slaves wait to given replication position
 func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Position) error {
 	// Get a connection.
@@ -274,10 +285,12 @@ func (mysqld *Mysqld) ResetReplication(ctx context.Context) error {
 //
 // Array indices for the results of SHOW PROCESSLIST.
 const (
-	//lint:ignore U1000 unused fields are needed for correct indexing of result columns
+	//lint:ignore U1000 needed for correct indexing of result columns
 	colConnectionID = iota
+	//lint:ignore U1000 needed for correct indexing of result columns
 	colUsername
 	colClientAddr
+	//lint:ignore U1000 needed for correct indexing of result columns
 	colDbName
 	colCommand
 )

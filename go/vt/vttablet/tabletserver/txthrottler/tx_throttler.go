@@ -201,7 +201,7 @@ func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
 			return nil, err
 		}
 		if len(config.healthCheckCells) == 0 {
-			return nil, fmt.Errorf("Empty healthCheckCells given. %+v", config)
+			return nil, fmt.Errorf("empty healthCheckCells given. %+v", config)
 		}
 	}
 	return &TxThrottler{
@@ -215,7 +215,7 @@ func (t *TxThrottler) Open(keyspace, shard string) error {
 		return nil
 	}
 	if t.state != nil {
-		return fmt.Errorf("Transaction throttler already opened")
+		return fmt.Errorf("transaction throttler already opened")
 	}
 	var err error
 	t.state, err = newTxThrottlerState(t.config, keyspace, shard)

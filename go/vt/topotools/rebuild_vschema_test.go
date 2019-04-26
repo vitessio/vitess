@@ -32,7 +32,9 @@ import (
 func TestRebuildVSchema(t *testing.T) {
 	ctx := context.Background()
 	logger := logutil.NewConsoleLogger()
-	emptySrvVSchema := &vschemapb.SrvVSchema{}
+	emptySrvVSchema := &vschemapb.SrvVSchema{
+		RoutingRules: &vschemapb.RoutingRules{},
+	}
 
 	// Set up topology.
 	cells := []string{"cell1", "cell2"}
@@ -50,6 +52,7 @@ func TestRebuildVSchema(t *testing.T) {
 
 	// create a keyspace, rebuild, should see an empty entry
 	emptyKs1SrvVSchema := &vschemapb.SrvVSchema{
+		RoutingRules: &vschemapb.RoutingRules{},
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"ks1": {},
 		},
@@ -77,6 +80,7 @@ func TestRebuildVSchema(t *testing.T) {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	wanted1 := &vschemapb.SrvVSchema{
+		RoutingRules: &vschemapb.RoutingRules{},
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"ks1": keyspace1,
 		},
@@ -100,7 +104,6 @@ func TestRebuildVSchema(t *testing.T) {
 		},
 		Tables: map[string]*vschemapb.Table{
 			"table1": {
-				Type: "sequence",
 				ColumnVindexes: []*vschemapb.ColumnVindex{
 					{
 						Column: "column1",
@@ -117,6 +120,7 @@ func TestRebuildVSchema(t *testing.T) {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	wanted2 := &vschemapb.SrvVSchema{
+		RoutingRules: &vschemapb.RoutingRules{},
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"ks1": keyspace1,
 			"ks2": keyspace2,
@@ -139,6 +143,35 @@ func TestRebuildVSchema(t *testing.T) {
 		}
 	}
 
+	rr := &vschemapb.RoutingRules{
+		Rules: []*vschemapb.RoutingRule{{
+			FromTable: "t1",
+			ToTables:  []string{"t2", "t3"},
+		}},
+	}
+
+	if err := ts.SaveRoutingRules(ctx, rr); err != nil {
+		t.Fatalf("SaveRoutingRules() failed: %v", err)
+	}
+	if err := RebuildVSchema(ctx, logger, ts, nil); err != nil {
+		t.Errorf("RebuildVSchema failed: %v", err)
+	}
+	wanted3 := &vschemapb.SrvVSchema{
+		RoutingRules: rr,
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks1": keyspace1,
+			"ks2": keyspace2,
+		},
+	}
+	for _, cell := range cells {
+		if v, err := ts.GetSrvVSchema(ctx, cell); err != nil || !proto.Equal(v, wanted3) {
+			t.Errorf("unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
+		}
+	}
+
+	wanted4 := wanted1
+	wanted4.RoutingRules = rr
+
 	// Delete a keyspace, checks vschema entry in map goes away.
 	if err := ts.SaveVSchema(ctx, "ks2", &vschemapb.Keyspace{}); err != nil {
 		t.Fatalf("SaveVSchema(ks1) failed: %v", err)
@@ -150,7 +183,7 @@ func TestRebuildVSchema(t *testing.T) {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	for _, cell := range cells {
-		if v, err := ts.GetSrvVSchema(ctx, cell); err != nil || !proto.Equal(v, wanted1) {
+		if v, err := ts.GetSrvVSchema(ctx, cell); err != nil || !proto.Equal(v, wanted4) {
 			t.Errorf("unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
 		}
 	}

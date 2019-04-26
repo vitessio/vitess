@@ -184,8 +184,7 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, session *vtgatepb.Sessi
 		return nil, nil, fmt.Errorf(
 			"Execute: %+v, want %+v", query, response.execQuery)
 	}
-	var reply sqltypes.Result
-	reply = *response.reply
+	reply := *response.reply
 	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_MASTER)
 	return s, &reply, nil
 }
@@ -254,8 +253,7 @@ func (conn *FakeVTGateConn) ExecuteShards(ctx context.Context, sql string, keysp
 		return nil, nil, fmt.Errorf(
 			"ExecuteShards: %+v, want %+v", query, response.shardQuery)
 	}
-	var reply sqltypes.Result
-	reply = *response.reply
+	reply := *response.reply
 	if s != nil {
 		s = newSession(true, keyspace, shards, tabletType)
 	}

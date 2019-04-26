@@ -21,7 +21,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='queryservice',
   syntax='proto3',
   serialized_options=_b('Z)vitess.io/vitess/go/vt/proto/queryservice'),
-  serialized_pb=_b('\n\x12queryservice.proto\x12\x0cqueryservice\x1a\x0bquery.proto\x1a\x10\x62inlogdata.proto2\xef\x0c\n\x05Query\x12:\n\x07\x45xecute\x12\x15.query.ExecuteRequest\x1a\x16.query.ExecuteResponse\"\x00\x12I\n\x0c\x45xecuteBatch\x12\x1a.query.ExecuteBatchRequest\x1a\x1b.query.ExecuteBatchResponse\"\x00\x12N\n\rStreamExecute\x12\x1b.query.StreamExecuteRequest\x1a\x1c.query.StreamExecuteResponse\"\x00\x30\x01\x12\x34\n\x05\x42\x65gin\x12\x13.query.BeginRequest\x1a\x14.query.BeginResponse\"\x00\x12\x37\n\x06\x43ommit\x12\x14.query.CommitRequest\x1a\x15.query.CommitResponse\"\x00\x12=\n\x08Rollback\x12\x16.query.RollbackRequest\x1a\x17.query.RollbackResponse\"\x00\x12:\n\x07Prepare\x12\x15.query.PrepareRequest\x1a\x16.query.PrepareResponse\"\x00\x12O\n\x0e\x43ommitPrepared\x12\x1c.query.CommitPreparedRequest\x1a\x1d.query.CommitPreparedResponse\"\x00\x12U\n\x10RollbackPrepared\x12\x1e.query.RollbackPreparedRequest\x1a\x1f.query.RollbackPreparedResponse\"\x00\x12X\n\x11\x43reateTransaction\x12\x1f.query.CreateTransactionRequest\x1a .query.CreateTransactionResponse\"\x00\x12\x46\n\x0bStartCommit\x12\x19.query.StartCommitRequest\x1a\x1a.query.StartCommitResponse\"\x00\x12\x46\n\x0bSetRollback\x12\x19.query.SetRollbackRequest\x1a\x1a.query.SetRollbackResponse\"\x00\x12^\n\x13\x43oncludeTransaction\x12!.query.ConcludeTransactionRequest\x1a\".query.ConcludeTransactionResponse\"\x00\x12R\n\x0fReadTransaction\x12\x1d.query.ReadTransactionRequest\x1a\x1e.query.ReadTransactionResponse\"\x00\x12I\n\x0c\x42\x65ginExecute\x12\x1a.query.BeginExecuteRequest\x1a\x1b.query.BeginExecuteResponse\"\x00\x12X\n\x11\x42\x65ginExecuteBatch\x12\x1f.query.BeginExecuteBatchRequest\x1a .query.BeginExecuteBatchResponse\"\x00\x12N\n\rMessageStream\x12\x1b.query.MessageStreamRequest\x1a\x1c.query.MessageStreamResponse\"\x00\x30\x01\x12\x43\n\nMessageAck\x12\x18.query.MessageAckRequest\x1a\x19.query.MessageAckResponse\"\x00\x12\x43\n\nSplitQuery\x12\x18.query.SplitQueryRequest\x1a\x19.query.SplitQueryResponse\"\x00\x12K\n\x0cStreamHealth\x12\x1a.query.StreamHealthRequest\x1a\x1b.query.StreamHealthResponse\"\x00\x30\x01\x12K\n\x0cUpdateStream\x12\x1a.query.UpdateStreamRequest\x1a\x1b.query.UpdateStreamResponse\"\x00\x30\x01\x12\x46\n\x07VStream\x12\x1a.binlogdata.VStreamRequest\x1a\x1b.binlogdata.VStreamResponse\"\x00\x30\x01\x42+Z)vitess.io/vitess/go/vt/proto/queryserviceb\x06proto3')
+  serialized_pb=_b('\n\x12queryservice.proto\x12\x0cqueryservice\x1a\x0bquery.proto\x1a\x10\x62inlogdata.proto2\xc3\r\n\x05Query\x12:\n\x07\x45xecute\x12\x15.query.ExecuteRequest\x1a\x16.query.ExecuteResponse\"\x00\x12I\n\x0c\x45xecuteBatch\x12\x1a.query.ExecuteBatchRequest\x1a\x1b.query.ExecuteBatchResponse\"\x00\x12N\n\rStreamExecute\x12\x1b.query.StreamExecuteRequest\x1a\x1c.query.StreamExecuteResponse\"\x00\x30\x01\x12\x34\n\x05\x42\x65gin\x12\x13.query.BeginRequest\x1a\x14.query.BeginResponse\"\x00\x12\x37\n\x06\x43ommit\x12\x14.query.CommitRequest\x1a\x15.query.CommitResponse\"\x00\x12=\n\x08Rollback\x12\x16.query.RollbackRequest\x1a\x17.query.RollbackResponse\"\x00\x12:\n\x07Prepare\x12\x15.query.PrepareRequest\x1a\x16.query.PrepareResponse\"\x00\x12O\n\x0e\x43ommitPrepared\x12\x1c.query.CommitPreparedRequest\x1a\x1d.query.CommitPreparedResponse\"\x00\x12U\n\x10RollbackPrepared\x12\x1e.query.RollbackPreparedRequest\x1a\x1f.query.RollbackPreparedResponse\"\x00\x12X\n\x11\x43reateTransaction\x12\x1f.query.CreateTransactionRequest\x1a .query.CreateTransactionResponse\"\x00\x12\x46\n\x0bStartCommit\x12\x19.query.StartCommitRequest\x1a\x1a.query.StartCommitResponse\"\x00\x12\x46\n\x0bSetRollback\x12\x19.query.SetRollbackRequest\x1a\x1a.query.SetRollbackResponse\"\x00\x12^\n\x13\x43oncludeTransaction\x12!.query.ConcludeTransactionRequest\x1a\".query.ConcludeTransactionResponse\"\x00\x12R\n\x0fReadTransaction\x12\x1d.query.ReadTransactionRequest\x1a\x1e.query.ReadTransactionResponse\"\x00\x12I\n\x0c\x42\x65ginExecute\x12\x1a.query.BeginExecuteRequest\x1a\x1b.query.BeginExecuteResponse\"\x00\x12X\n\x11\x42\x65ginExecuteBatch\x12\x1f.query.BeginExecuteBatchRequest\x1a .query.BeginExecuteBatchResponse\"\x00\x12N\n\rMessageStream\x12\x1b.query.MessageStreamRequest\x1a\x1c.query.MessageStreamResponse\"\x00\x30\x01\x12\x43\n\nMessageAck\x12\x18.query.MessageAckRequest\x1a\x19.query.MessageAckResponse\"\x00\x12\x43\n\nSplitQuery\x12\x18.query.SplitQueryRequest\x1a\x19.query.SplitQueryResponse\"\x00\x12K\n\x0cStreamHealth\x12\x1a.query.StreamHealthRequest\x1a\x1b.query.StreamHealthResponse\"\x00\x30\x01\x12K\n\x0cUpdateStream\x12\x1a.query.UpdateStreamRequest\x1a\x1b.query.UpdateStreamResponse\"\x00\x30\x01\x12\x46\n\x07VStream\x12\x1a.binlogdata.VStreamRequest\x1a\x1b.binlogdata.VStreamResponse\"\x00\x30\x01\x12R\n\x0bVStreamRows\x12\x1e.binlogdata.VStreamRowsRequest\x1a\x1f.binlogdata.VStreamRowsResponse\"\x00\x30\x01\x42+Z)vitess.io/vitess/go/vt/proto/queryserviceb\x06proto3')
   ,
   dependencies=[query__pb2.DESCRIPTOR,binlogdata__pb2.DESCRIPTOR,])
 
@@ -39,7 +39,7 @@ _QUERY = _descriptor.ServiceDescriptor(
   index=0,
   serialized_options=None,
   serialized_start=68,
-  serialized_end=1715,
+  serialized_end=1799,
   methods=[
   _descriptor.MethodDescriptor(
     name='Execute',
@@ -237,6 +237,15 @@ _QUERY = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=binlogdata__pb2._VSTREAMREQUEST,
     output_type=binlogdata__pb2._VSTREAMRESPONSE,
+    serialized_options=None,
+  ),
+  _descriptor.MethodDescriptor(
+    name='VStreamRows',
+    full_name='queryservice.Query.VStreamRows',
+    index=22,
+    containing_service=None,
+    input_type=binlogdata__pb2._VSTREAMROWSREQUEST,
+    output_type=binlogdata__pb2._VSTREAMROWSRESPONSE,
     serialized_options=None,
   ),
 ])

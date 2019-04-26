@@ -42,6 +42,7 @@ COPY --from=base $VTTOP/config/init_db.sql /vt/config/
 
 # mysql flavor files for db specific .cnf settings
 COPY --from=base $VTTOP/config/mycnf/master_mysql56.cnf /vt/config/mycnf/
+COPY --from=base $VTTOP/config/mycnf/master_mysql80.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/master_mariadb.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/master_mariadb103.cnf /vt/config/mycnf/
 

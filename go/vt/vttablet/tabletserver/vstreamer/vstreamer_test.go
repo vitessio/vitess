@@ -175,7 +175,7 @@ func TestRegexp(t *testing.T) {
 	runCases(t, filter, testcases)
 }
 
-func TestREKeyrange(t *testing.T) {
+func TestREKeyRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
@@ -188,6 +188,11 @@ func TestREKeyrange(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
+	if err := env.SetVSchema(shardedVSchema); err != nil {
+		t.Fatal(err)
+	}
+	defer env.SetVSchema("{}")
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -198,11 +203,6 @@ func TestREKeyrange(t *testing.T) {
 		}},
 	}
 	ch := startStream(ctx, t, filter)
-
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
-	defer env.SetVSchema("{}")
 
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
@@ -357,7 +357,7 @@ func TestDDLAddColumn(t *testing.T) {
 	go func() {
 		defer close(ch)
 		if err := vstream(ctx, t, pos, filter, ch); err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 	}()
 	expectLog(ctx, t, "ddls", ch, [][]string{{

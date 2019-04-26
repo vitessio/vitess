@@ -195,13 +195,22 @@ function install_etcd() {
   local version="$1"
   local dist="$2"
 
-  download_url=https://github.com/coreos/etcd/releases/download
-  tar_file="etcd-${version}-linux-amd64.tar.gz"
+  case $(uname) in
+    Linux)  local platform=linux; local ext=tar.gz;;
+    Darwin) local platform=darwin; local ext=zip;;
+  esac
 
-  wget "$download_url/$version/$tar_file"
-  tar xzf "$tar_file"
-  rm "$tar_file"
-  ln -snf "$dist/etcd-${version}-linux-amd64/etcd" "$VTROOT/bin/etcd"
+  download_url=https://github.com/coreos/etcd/releases/download
+  file="etcd-${version}-${platform}-amd64.${ext}"
+
+  wget "$download_url/$version/$file"
+  if [ "$ext" = "tar.gz" ]; then
+    tar xzf "$file"
+  else
+    unzip "$file"
+  fi
+  rm "$file"
+  ln -snf "$dist/etcd-${version}-${platform}-amd64/etcd" "$VTROOT/bin/etcd"
 }
 install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
@@ -211,9 +220,14 @@ function install_consul() {
   local version="$1"
   local dist="$2"
 
+  case $(uname) in
+    Linux)  local platform=linux;;
+    Darwin) local platform=darwin;;
+  esac
+
   download_url=https://releases.hashicorp.com/consul
-  wget "${download_url}/${version}/consul_${version}_linux_amd64.zip"
-  unzip "consul_${version}_linux_amd64.zip"
+  wget "${download_url}/${version}/consul_${version}_${platform}_amd64.zip"
+  unzip "consul_${version}_${platform}_amd64.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
