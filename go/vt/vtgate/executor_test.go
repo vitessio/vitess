@@ -1996,7 +1996,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 		t.Errorf("getPlan(query1): plans must be equal: %p %p", plan1, plan2)
 	}
 	want := []string{
-		query1,
+		"@unknown:" + query1,
 	}
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
@@ -2024,8 +2024,8 @@ func TestGetPlanUnnormalized(t *testing.T) {
 		t.Errorf("getPlan(query1, ks): plans must be equal: %p %p", plan3, plan4)
 	}
 	want = []string{
-		KsTestUnsharded + ":" + query1,
-		query1,
+		KsTestUnsharded + "@unknown:" + query1,
+		"@unknown:" + query1,
 	}
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
@@ -2165,7 +2165,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("getPlan(query1): plans must be equal: %p %p", plan1, plan2)
 	}
 	want := []string{
-		normalized,
+		"@unknown:" + normalized,
 	}
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
@@ -2228,8 +2228,8 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("getPlan(query1, ks): plans must be equal: %p %p", plan3, plan4)
 	}
 	want = []string{
-		KsTestUnsharded + ":" + normalized,
-		normalized,
+		KsTestUnsharded + "@unknown:" + normalized,
+		"@unknown:" + normalized,
 	}
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)

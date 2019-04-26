@@ -112,7 +112,7 @@ func (vc *vcursorImpl) FindTablesOrVindex(name sqlparser.TableName) ([]*vindexes
 	if destKeyspace == "" {
 		destKeyspace = vc.keyspace
 	}
-	tables, vindex, err := vc.executor.VSchema().FindTablesOrVindex(destKeyspace, name.Name.String())
+	tables, vindex, err := vc.executor.VSchema().FindTablesOrVindex(destKeyspace, name.Name.String(), vc.tabletType)
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
 	}

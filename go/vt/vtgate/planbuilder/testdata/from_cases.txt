@@ -178,6 +178,21 @@
   }
 }
 
+# routing rules with master targeting
+"select * from master_redirect"
+{
+  "Original": "select * from master_redirect",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user as master_redirect",
+    "FieldQuery": "select * from user as master_redirect where 1 != 1"
+  }
+}
+
 # ',' join
 "select music.col from user, music"
 {

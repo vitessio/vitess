@@ -28,8 +28,22 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
+
+// TabletTypeSuffix maps the tablet type to its suffix string.
+var TabletTypeSuffix = map[topodatapb.TabletType]string{
+	0: "@unknown",
+	1: "@master",
+	2: "@replica",
+	3: "@rdonly",
+	4: "@spare",
+	5: "@experimental",
+	6: "@backup",
+	7: "@restore",
+	8: "@drained",
+}
 
 // The following constants represent table types.
 const (
@@ -468,17 +482,22 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	return table, nil
 }
 
-func (vschema *VSchema) findTables(keyspace, tablename string) ([]*Table, error) {
+func (vschema *VSchema) findTables(keyspace, tablename string, tabletType topodatapb.TabletType) ([]*Table, error) {
 	qualified := tablename
 	if keyspace != "" {
 		qualified = keyspace + "." + tablename
 	}
-	rr, ok := vschema.RoutingRules[qualified]
-	if ok {
-		if len(rr.Tables) == 0 {
-			return nil, fmt.Errorf("table %s has been disabled", tablename)
+	fqtn := qualified + TabletTypeSuffix[tabletType]
+	// First look for a fully qualified table name: ks.t@master.
+	// Then look for one without tablet type: ks.t.
+	for _, name := range []string{fqtn, qualified} {
+		rr, ok := vschema.RoutingRules[name]
+		if ok {
+			if len(rr.Tables) == 0 {
+				return nil, fmt.Errorf("table %s has been disabled", tablename)
+			}
+			return rr.Tables, nil
 		}
-		return rr.Tables, nil
 	}
 	t, err := vschema.findTable(keyspace, tablename)
 	if err != nil {
@@ -491,8 +510,8 @@ func (vschema *VSchema) findTables(keyspace, tablename string) ([]*Table, error)
 }
 
 // FindTablesOrVindex finds a table or a Vindex by name using Find and FindVindex.
-func (vschema *VSchema) FindTablesOrVindex(keyspace, name string) ([]*Table, Vindex, error) {
-	tables, err := vschema.findTables(keyspace, name)
+func (vschema *VSchema) FindTablesOrVindex(keyspace, name string, tabletType topodatapb.TabletType) ([]*Table, Vindex, error) {
+	tables, err := vschema.findTables(keyspace, name, tabletType)
 	if err != nil {
 		return nil, nil, err
 	}
