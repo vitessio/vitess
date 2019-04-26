@@ -1292,11 +1292,8 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return nil, errors.New("vschema not initialized")
 	}
 	keyspace := vcursor.keyspace
-	key := sql
-	if keyspace != "" {
-		key = keyspace + ":" + sql
-	}
-	if result, ok := e.plans.Get(key); ok {
+	planKey := keyspace + vindexes.TabletTypeSuffix[vcursor.tabletType] + ":" + sql
+	if result, ok := e.plans.Get(planKey); ok {
 		return result.(*engine.Plan), nil
 	}
 	stmt, err := sqlparser.Parse(sql)
@@ -1309,7 +1306,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 			return nil, err
 		}
 		if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(stmt) {
-			e.plans.Set(key, plan)
+			e.plans.Set(planKey, plan)
 		}
 		return plan, nil
 	}
@@ -1323,11 +1320,8 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		logStats.BindVariables = bindVars
 	}
 
-	normkey := normalized
-	if keyspace != "" {
-		normkey = keyspace + ":" + normalized
-	}
-	if result, ok := e.plans.Get(normkey); ok {
+	planKey = keyspace + vindexes.TabletTypeSuffix[vcursor.tabletType] + ":" + normalized
+	if result, ok := e.plans.Get(planKey); ok {
 		return result.(*engine.Plan), nil
 	}
 	plan, err := planbuilder.BuildFromStmt(normalized, stmt, vcursor)
@@ -1335,7 +1329,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return nil, err
 	}
 	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(stmt) {
-		e.plans.Set(normkey, plan)
+		e.plans.Set(planKey, plan)
 	}
 	return plan, nil
 }

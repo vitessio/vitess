@@ -43,7 +43,7 @@ func TestQueryzHandler(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	result, ok := executor.plans.Get(sql)
+	result, ok := executor.plans.Get("@master:" + sql)
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
@@ -56,7 +56,7 @@ func TestQueryzHandler(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	result, ok = executor.plans.Get(sql)
+	result, ok = executor.plans.Get("@master:" + sql)
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
@@ -71,14 +71,14 @@ func TestQueryzHandler(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	result, ok = executor.plans.Get(sql)
+	result, ok = executor.plans.Get("@master:" + sql)
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
 	plan3 := result.(*engine.Plan)
 
 	// vindex insert from above execution
-	result, ok = executor.plans.Get("insert into name_user_map(name, user_id) values(:name0, :user_id0)")
+	result, ok = executor.plans.Get("@master:" + "insert into name_user_map(name, user_id) values(:name0, :user_id0)")
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
