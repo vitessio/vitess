@@ -25,6 +25,12 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+/*
+This file makes it easy to build Vitess without including the Jaeger binaries.
+All that is needed is to delete this file. OpenTracing binaries will still be
+included but nothing Jaeger specific.
+*/
+
 var (
 	agentHost    = flag.String("jaeger-agent-host", "", "host and port to send spans to. if empty, no tracing will be done")
 	samplingRate = flag.Float64("tracing-sampling-rate", 0.1, "sampling rate for the probabilistic jaeger sampler")
