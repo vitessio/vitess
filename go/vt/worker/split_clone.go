@@ -566,7 +566,7 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	// Start watchers to get tablets added automatically to healthCheck.
 	allShards := append(scw.sourceShards, scw.destinationShards...)
 	for _, si := range allShards {
-		watcher := discovery.NewShardReplicationWatcher(scw.wr.TopoServer(), scw.healthCheck,
+		watcher := discovery.NewShardReplicationWatcher(ctx, scw.wr.TopoServer(), scw.healthCheck,
 			scw.cell, si.Keyspace(), si.ShardName(),
 			*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 		scw.shardWatchers = append(scw.shardWatchers, watcher)

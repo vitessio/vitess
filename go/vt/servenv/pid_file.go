@@ -30,7 +30,7 @@ func init() {
 	pidFileCreated := false
 
 	// Create pid file after flags are parsed.
-	onInit(func() {
+	OnInit(func() {
 		if *pidFile == "" {
 			return
 		}

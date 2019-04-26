@@ -467,7 +467,7 @@ func TestStreamHealth_Expired(t *testing.T) {
 	var health *querypb.StreamHealthResponse
 	framework.Server.BroadcastHealth(0, nil, time.Millisecond)
 	time.Sleep(5 * time.Millisecond)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond * 100)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer cancel()
 	if err := framework.Server.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 		health = shr

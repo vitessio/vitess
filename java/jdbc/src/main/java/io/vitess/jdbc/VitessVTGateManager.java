@@ -16,13 +16,16 @@
 
 package io.vitess.jdbc;
 
+import static java.lang.System.getProperty;
+
 import io.vitess.client.Context;
 import io.vitess.client.RefreshableVTGateConnection;
+import io.vitess.client.RpcClient;
 import io.vitess.client.VTGateConnection;
 import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.client.grpc.RetryingInterceptorConfig;
 import io.vitess.client.grpc.tls.TlsOptions;
-import io.vitess.util.Constants;
+import io.vitess.util.Constants.Property;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -174,43 +177,56 @@ public class VitessVTGateManager {
     }
   }
 
+  private static String nullIf(String ifNull, String returnThis) {
+    if (ifNull == null) {
+      return returnThis;
+    } else {
+      return ifNull;
+    }
+  }
+
   /**
    * Create vtGateConn object with given identifier.
    */
   private static VTGateConnection getVtGateConn(VitessJDBCUrl.HostInfo hostInfo,
-      VitessConnection connection) {
+                                                VitessConnection connection) {
     final Context context = connection.createContext(connection.getTimeout());
     RetryingInterceptorConfig retryingConfig = getRetryingInterceptorConfig(connection);
+    GrpcClientFactory grpcClientFactory =
+        new GrpcClientFactory(retryingConfig, connection.getUseTracing());
     if (connection.getUseSSL()) {
-      final String keyStorePath = connection.getKeyStore() != null ? connection.getKeyStore()
-          : System.getProperty(Constants.Property.KEYSTORE_FULL);
-      final String keyStorePassword =
-          connection.getKeyStorePassword() != null ? connection.getKeyStorePassword()
-              : System.getProperty(Constants.Property.KEYSTORE_PASSWORD_FULL);
-      final String keyAlias = connection.getKeyAlias() != null ? connection.getKeyAlias()
-          : System.getProperty(Constants.Property.KEY_ALIAS_FULL);
-      final String keyPassword = connection.getKeyPassword() != null ? connection.getKeyPassword()
-          : System.getProperty(Constants.Property.KEY_PASSWORD_FULL);
-      final String trustStorePath = connection.getTrustStore() != null ? connection.getTrustStore()
-          : System.getProperty(Constants.Property.TRUSTSTORE_FULL);
-      final String trustStorePassword =
-          connection.getTrustStorePassword() != null ? connection.getTrustStorePassword()
-              : System.getProperty(Constants.Property.TRUSTSTORE_PASSWORD_FULL);
-      final String trustAlias = connection.getTrustAlias() != null ? connection.getTrustAlias()
-          : System.getProperty(Constants.Property.TRUST_ALIAS_FULL);
-
-      final TlsOptions tlsOptions = new TlsOptions().keyStorePath(keyStorePath)
-          .keyStorePassword(keyStorePassword).keyAlias(keyAlias).keyPassword(keyPassword)
-          .trustStorePath(trustStorePath).trustStorePassword(trustStorePassword)
-          .trustAlias(trustAlias);
-
-      return new RefreshableVTGateConnection(
-          new GrpcClientFactory(retryingConfig).createTls(context, hostInfo.toString(), tlsOptions),
-          keyStorePath, trustStorePath);
+      TlsOptions tlsOptions = getTlsOptions(connection);
+      RpcClient rpcClient = grpcClientFactory
+          .createTls(context, hostInfo.toString(), tlsOptions);
+      return new RefreshableVTGateConnection(rpcClient,
+          tlsOptions.getKeyStore().getPath(),
+          tlsOptions.getTrustStore().getPath());
     } else {
-      return new VTGateConnection(
-          new GrpcClientFactory(retryingConfig).create(context, hostInfo.toString()));
+      RpcClient client = grpcClientFactory.create(context, hostInfo.toString());
+      return new VTGateConnection(client);
     }
+  }
+
+  private static TlsOptions getTlsOptions(VitessConnection con) {
+    String keyStorePath = nullIf(con.getKeyStore(), getProperty(Property.KEYSTORE_FULL));
+    String keyStorePassword = nullIf(con.getKeyStorePassword(),
+        getProperty(Property.KEYSTORE_PASSWORD_FULL));
+    String keyAlias = nullIf(con.getKeyAlias(), getProperty(Property.KEY_ALIAS_FULL));
+    String keyPassword = nullIf(con.getKeyPassword(), getProperty(Property.KEY_PASSWORD_FULL));
+    String trustStorePath = nullIf(con.getTrustStore(), getProperty(Property.TRUSTSTORE_FULL));
+    String trustStorePassword = nullIf(
+        con.getTrustStorePassword(),
+        getProperty(Property.TRUSTSTORE_PASSWORD_FULL));
+    String trustAlias = nullIf(con.getTrustAlias(), getProperty(Property.TRUST_ALIAS_FULL));
+
+    return new TlsOptions()
+        .keyStorePath(keyStorePath)
+        .keyStorePassword(keyStorePassword)
+        .keyAlias(keyAlias)
+        .keyPassword(keyPassword)
+        .trustStorePath(trustStorePath)
+        .trustStorePassword(trustStorePassword)
+        .trustAlias(trustAlias);
   }
 
   private static RetryingInterceptorConfig getRetryingInterceptorConfig(VitessConnection conn) {

@@ -20,9 +20,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/golang/protobuf/jsonpb"
 	"io/ioutil"
 	"path"
+
+	"github.com/golang/protobuf/jsonpb"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"

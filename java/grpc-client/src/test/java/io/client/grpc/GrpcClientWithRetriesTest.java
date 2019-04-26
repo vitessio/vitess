@@ -42,7 +42,7 @@ public class GrpcClientWithRetriesTest extends RpcClientTest {
             .start();
 
     client =
-        new GrpcClientFactory(RetryingInterceptorConfig.exponentialConfig(5, 60, 2))
+        new GrpcClientFactory(RetryingInterceptorConfig.exponentialConfig(5, 60, 2), false)
             .create(
                 Context.getDefault().withDeadlineAfter(Duration.millis(5000)),
                 "localhost:" + port);

@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2017 Google Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,18 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
-
-// This plugin imports Prometheus to allow for instrumentation
-// with the Prometheus client library
+package trace
 
 import (
-	"vitess.io/vitess/go/stats/prometheusbackend"
-	"vitess.io/vitess/go/vt/servenv"
+	"io"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
-func init() {
-	servenv.OnRun(func() {
-		prometheusbackend.Init("vtworker")
-	})
+// LogErrorsWhenClosing will close the provided Closer, and log any errors it generates
+func LogErrorsWhenClosing(in io.Closer) func() {
+	return func() {
+		err := in.Close()
+		if err != nil {
+			log.Error(err)
+		}
+	}
 }
