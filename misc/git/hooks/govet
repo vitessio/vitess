@@ -32,65 +32,23 @@ fi
 # xargs -n1 because dirname on MacOS does not support multiple arguments.
 gopackages=$(echo $gofiles | xargs -n1 dirname | sort -u)
 
-warnings=
+errors=
 
 # If any checks are found to be useless, they can be disabled here.
 # See the output of "go doc cmd/vet" for a list of flags.
 vetflags=""
 
 # Run on one package at a time
-gopackages_with_warnings=()
 for gopackage in $gopackages
 do
-  warningcount="$(go vet $vetflags "vitess.io/vitess/$gopackage" 2>&1 | grep -v ^# | wc -l)"
-  if [ "$warningcount" -gt "0" ]; then
-    warnings=YES
-    echo "$warningcount reports for:"
-    echo "go vet $vetflags vitess.io/vitess/$gopackage"
-    gopackages_with_warnings+=($gopackage)
-  fi
+    if ! go vet $vetflags "vitess.io/vitess/$gopackage" 2>&1; then
+        errors=YES
+    fi
 done
 
-[ -z "$warnings" ] && exit 0
+[ -z "$errors" ] && exit 0
 
-# git doesn't give us access to user input, so let's steal it.
-exec < /dev/tty
-if [[ $? -eq 0 ]]; then
-  # interactive shell. Prompt the user.
-  echo
-  echo "Suggestions from the go vet program were found."
-  echo "They're not enforced, but we're pausing to let you know"
-  echo "before they get clobbered in the scrollback buffer."
-  echo
-  read -r -p 'Press enter to cancel, "s" to step through the warnings or type "ack" to continue: '
-  if [ "$REPLY" = "ack" ]; then
-    exit 0
-  fi
-  if [ "$REPLY" = "s" ]; then
-    first_file="true"
-    for gopackage in "${gopackages_with_warnings[@]}"
-    do
-      echo
-      if [ "$first_file" != "true" ]; then
-        echo "Press enter to show the warnings for the next file."
-        read
-      fi
-      go vet $vetflags "vitess.io/vitess/$gopackage"
-      first_file="false"
-    done
-  fi
-else
-  # non-interactive shell (e.g. called from Eclipse). Just display the warnings.
-  for gopackage in "${gopackages_with_warnings[@]}"
-  do
-    go vet $vetflags "vitess.io/vitess/$gopackage"
-  done
-fi
+echo
+echo "Please fix the go vet warnings above. To disable certain checks, change vetflags in misc/git/hooks/govet."
 exit 1
-
-if ! go vet $vetflags $(echo $gofiles) 2>&1; then
-  echo ""
-  echo "Please fix the go vet warnings above. To disable certain checks, change vetflags in misc/git/hooks/govet."
-  exit 1
-fi
 
