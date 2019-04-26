@@ -493,6 +493,9 @@ func (vschema *VSchema) findTables(keyspace, tablename string, tabletType topoda
 	for _, name := range []string{fqtn, qualified} {
 		rr, ok := vschema.RoutingRules[name]
 		if ok {
+			if rr.Error != nil {
+				return nil, rr.Error
+			}
 			if len(rr.Tables) == 0 {
 				return nil, fmt.Errorf("table %s has been disabled", tablename)
 			}
