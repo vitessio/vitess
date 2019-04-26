@@ -57,6 +57,11 @@ func BuildBindVariables(in map[string]interface{}) (map[string]*querypb.BindVari
 	return out, nil
 }
 
+// Int8BindVariable converts an int8 to a bind var.
+func Int8BindVariable(v int8) *querypb.BindVariable {
+	return ValueBindVariable(NewInt8(v))
+}
+
 // Int32BindVariable converts an int32 to a bind var.
 func Int32BindVariable(v int32) *querypb.BindVariable {
 	return ValueBindVariable(NewInt32(v))
@@ -99,6 +104,11 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 		return StringBindVariable(v), nil
 	case []byte:
 		return BytesBindVariable(v), nil
+	case bool:
+		if v {
+			return Int8BindVariable(1), nil
+		}
+		return Int8BindVariable(0), nil
 	case int:
 		return &querypb.BindVariable{
 			Type:  querypb.Type_INT64,
