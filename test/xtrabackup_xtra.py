@@ -39,6 +39,7 @@ db_credentials_file = ''
 
 
 def setUpModule():
+  global xtrabackup_args
   xtrabackup_args = ['-backup_engine_implementation',
                    'xtrabackup',
                    '-xtrabackup_stream_mode',
