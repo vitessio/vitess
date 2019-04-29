@@ -33,6 +33,30 @@
 			"revisionTime": "2016-12-16T21:27:53Z"
 		},
 		{
+			"checksumSHA1": "PAK/CHeINbTQeDTyC8SJGT3QfY8=",
+			"path": "github.com/DataDog/dd-trace-go",
+			"revision": "347da576ace9e3bc224810924db2f70c9f47dd24",
+			"revisionTime": "2018-06-04T10:55:29Z"
+		},
+		{
+			"checksumSHA1": "8Z3abF0Gub+MZEHQe+ghtFkwBzQ=",
+			"path": "github.com/DataDog/dd-trace-go/opentracing",
+			"revision": "347da576ace9e3bc224810924db2f70c9f47dd24",
+			"revisionTime": "2018-06-04T10:55:29Z"
+		},
+		{
+			"checksumSHA1": "GJJAs2TOkMLAjck5FnvliwNM+20=",
+			"path": "github.com/DataDog/dd-trace-go/tracer",
+			"revision": "347da576ace9e3bc224810924db2f70c9f47dd24",
+			"revisionTime": "2018-06-04T10:55:29Z"
+		},
+		{
+			"checksumSHA1": "8aaB6Vu3Zi7fodGStuWBn4GeNCI=",
+			"path": "github.com/DataDog/dd-trace-go/tracer/ext",
+			"revision": "347da576ace9e3bc224810924db2f70c9f47dd24",
+			"revisionTime": "2018-06-04T10:55:29Z"
+		},
+		{
 			"checksumSHA1": "t5pzf8AGtuCmECrPlJM9oAky+dk=",
 			"path": "github.com/aws/aws-sdk-go/aws",
 			"revision": "f07b33eb84960583bbb72889ae0f98d300e107fe",
@@ -1081,6 +1105,12 @@
 			"versionExact": "v2.0.0"
 		},
 		{
+			"checksumSHA1": "csplo594qomjp2IZj82y7mTueOw=",
+			"path": "github.com/ugorji/go/codec",
+			"revision": "2adff0894ba3bc2eeb9f9aea45fefd49802e1a13",
+			"revisionTime": "2019-04-08T19:08:48Z"
+		},
+		{
 			"checksumSHA1": "8Kj0VH496b0exuyv4wAF4CXa7Y4=",
 			"path": "github.com/yudai/gojsondiff",
 			"revision": "081cda2ee95045a2c26da52c2ba80860838549de",
@@ -1217,6 +1247,12 @@
 			"path": "golang.org/x/sys/unix",
 			"revision": "62eef0e2fa9b2c385f7b2778e763486da6880d37",
 			"revisionTime": "2018-11-22T14:36:24Z"
+		},
+		{
+			"checksumSHA1": "aSRB7hpfVTSX2fx/Xo8+wr9WMNI=",
+			"path": "golang.org/x/sys/windows",
+			"revision": "b44545bcd369ef9ff9bebcfebf5f3370ef9b1932",
+			"revisionTime": "2019-04-11T18:45:43Z"
 		},
 		{
 			"checksumSHA1": "Gwx30TD3lMSgskBCmXTDXbICPRQ=",
