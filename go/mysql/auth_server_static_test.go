@@ -91,12 +91,12 @@ func TestValidateHashGetter(t *testing.T) {
 		t.Fatalf("error validating password: %v", err)
 	}
 
-	callerId := getter.Get()
-	if callerId.Username != "user.name" {
-		t.Fatalf("getter username incorrect, expected \"user.name\", got %v", callerId.Username)
+	callerID := getter.Get()
+	if callerID.Username != "user.name" {
+		t.Fatalf("getter username incorrect, expected \"user.name\", got %v", callerID.Username)
 	}
-	if len(callerId.Groups) != 1 || callerId.Groups[0] != "user_group" {
-		t.Fatalf("getter groups incorrect, expected [\"user_group\"], got %v", callerId.Groups)
+	if len(callerID.Groups) != 1 || callerID.Groups[0] != "user_group" {
+		t.Fatalf("getter groups incorrect, expected [\"user_group\"], got %v", callerID.Groups)
 	}
 }
 
@@ -121,14 +121,14 @@ func TestHostMatcher(t *testing.T) {
 }
 
 func TestStaticConfigHUP(t *testing.T) {
+
 	tmpFile, err := ioutil.TempFile("", "mysql_auth_server_static_file.json")
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
 	*mysqlAuthServerStaticFile = tmpFile.Name()
-
-	oldStr := "str1"
+	oldStr := "str5"
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
 	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
@@ -143,6 +143,40 @@ func TestStaticConfigHUP(t *testing.T) {
 
 	hupTest(t, tmpFile, oldStr, "str2")
 	hupTest(t, tmpFile, "str2", "str3") // still handling the signal
+
+	// delete registered Auth server
+	for auth := range authServers {
+		delete(authServers, auth)
+	}
+}
+
+func TestStaticConfigHUPWithRotation(t *testing.T) {
+	tmpFile, err := ioutil.TempFile("", "mysql_auth_server_static_file.json")
+	if err != nil {
+		t.Fatalf("couldn't create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	*mysqlAuthServerStaticFile = tmpFile.Name()
+
+	savedReloadInterval := *mysqlAuthServerStaticReloadInterval
+	defer func() { *mysqlAuthServerStaticReloadInterval = savedReloadInterval }()
+	*mysqlAuthServerStaticReloadInterval = 10 * time.Millisecond
+
+	oldStr := "str1"
+	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
+	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		t.Fatalf("couldn't write temp file: %v", err)
+	}
+
+	InitAuthServerStatic()
+	aStatic := GetAuthServer("static").(*AuthServerStatic)
+
+	if aStatic.Entries[oldStr][0].Password != oldStr {
+		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
+	}
+
+	hupTestWithRotation(t, tmpFile, oldStr, "str4")
+	hupTestWithRotation(t, tmpFile, "str4", "str5")
 }
 
 func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
@@ -159,6 +193,28 @@ func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
 
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 	time.Sleep(100 * time.Millisecond) // wait for signal handler
+
+	if aStatic.Entries[oldStr] != nil {
+		t.Fatalf("Should not have old %s after config reload", oldStr)
+	}
+	if aStatic.Entries[newStr][0].Password != newStr {
+		t.Fatalf("%s's Password should be '%s'", newStr, newStr)
+	}
+}
+
+func hupTestWithRotation(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
+	aStatic := GetAuthServer("static").(*AuthServerStatic)
+
+	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", newStr, newStr)
+	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+		t.Fatalf("couldn't overwrite temp file: %v", err)
+	}
+
+	if aStatic.Entries[oldStr][0].Password != oldStr {
+		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
+	}
+
+	time.Sleep(20 * time.Millisecond) // wait for signal handler
 
 	if aStatic.Entries[oldStr] != nil {
 		t.Fatalf("Should not have old %s after config reload", oldStr)
