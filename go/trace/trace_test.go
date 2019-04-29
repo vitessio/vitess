@@ -37,7 +37,7 @@ func TestFakeSpan(t *testing.T) {
 	span2.Annotate("key", 42)
 	span2.Finish()
 
-	span3, ctx := NewSpan(ctx, "label")
+	span3, _ := NewSpan(ctx, "label")
 	span3.Annotate("key", 42)
 	span3.Finish()
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/uber/jaeger-client-go"
 	"github.com/uber/jaeger-client-go/config"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 /*
@@ -56,7 +57,10 @@ var (
 // JAEGER_AGENT_PORT
 func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error) {
 	cfg, err := config.FromEnv()
-	if cfg.ServiceName == "" {
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "failed to get config from environment")
+	}
+	if cfg != nil && cfg.ServiceName == "" {
 		cfg.ServiceName = serviceName
 	}
 
