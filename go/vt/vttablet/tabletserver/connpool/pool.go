@@ -76,7 +76,7 @@ func New(
 	cp := &Pool{
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
-		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout),
+		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout, 0),
 		checker:     checker,
 	}
 	if name == "" || usedNames[name] {
