@@ -425,7 +425,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		return fmt.Errorf("old master tablet %v DemoteMaster failed: %v", topoproto.TabletAliasString(shardInfo.MasterAlias), err)
 	}
 
-	remoteCtx, remoteCancel = context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	remoteCtx, remoteCancel = context.WithTimeout(ctx, waitSlaveTimeout)
 	defer remoteCancel()
 
 	// Wait on the master-elect tablet until it reaches that position,
