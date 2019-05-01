@@ -23,9 +23,8 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type tablePlanBuilder struct {
@@ -478,7 +477,7 @@ func (tpb *tablePlanBuilder) generateSelectPart(buf *sqlparser.TrackedBuffer, bv
 			buf.Myprintf("ifnull(%v, 0)", cexpr.expr)
 		}
 	}
-	buf.WriteString(" where ")
+	buf.WriteString(" from dual where ")
 	tpb.generatePKConstraint(buf, bvf)
 	return buf.ParsedQuery()
 }

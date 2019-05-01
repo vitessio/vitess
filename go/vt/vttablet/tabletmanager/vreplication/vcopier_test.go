@@ -23,10 +23,8 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -234,18 +232,18 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 
 	expectNontxQueries(t, []string{
 		// Catchup
-		"insert into dst1(id,val) select 1, 'insert in' where (1,1) <= (6,6)",
-		"insert into dst1(id,val) select 7, 'insert out' where (7,7) <= (6,6)",
+		"insert into dst1(id,val) select 1, 'insert in' from dual where (1,1) <= (6,6)",
+		"insert into dst1(id,val) select 7, 'insert out' from dual where (7,7) <= (6,6)",
 		"update dst1 set val='updated' where id=3 and (3,3) <= (6,6)",
 		"update dst1 set val='updated' where id=10 and (10,10) <= (6,6)",
 		"delete from dst1 where id=4 and (4,4) <= (6,6)",
 		"delete from dst1 where id=9 and (9,9) <= (6,6)",
 		"delete from dst1 where id=5 and (5,5) <= (6,6)",
-		"insert into dst1(id,val) select 5, 'move within' where (5,10) <= (6,6)",
+		"insert into dst1(id,val) select 5, 'move within' from dual where (5,10) <= (6,6)",
 		"delete from dst1 where id=6 and (6,6) <= (6,6)",
-		"insert into dst1(id,val) select 12, 'move out' where (12,6) <= (6,6)",
+		"insert into dst1(id,val) select 12, 'move out' from dual where (12,6) <= (6,6)",
 		"delete from dst1 where id=11 and (11,11) <= (6,6)",
-		"insert into dst1(id,val) select 4, 'move in' where (4,11) <= (6,6)",
+		"insert into dst1(id,val) select 4, 'move in' from dual where (4,11) <= (6,6)",
 		"update copied set val='bbb' where id=1",
 		// Fast-forward
 		"update dst1 set val='updated again' where id=3 and (3,3) <= (6,6)",
