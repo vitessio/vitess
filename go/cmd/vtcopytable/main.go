@@ -130,11 +130,11 @@ func insertRowsInShards(ctx context.Context, topoServer *topo.Server, tableName 
 			continue
 		}
 
-		fmt.Printf("Inserting row %s:%s %s:%s to shard %s/%s", result.Fields[0].Name, values[0],
-			result.Fields[1].Name, values[1], destTablet.Keyspace, destTablet.Shard)
-		_, err := tabletManager.ExecuteFetchAsDba(ctx, destTablet.Tablet, true, []byte(insertSql), MaxRows, true, false)
+		_, err := tabletManager.ExecuteFetchAsDba(ctx, destTablet.Tablet, true, []byte(insertSql), MaxRows, false, false)
 		logAndExitIfError(err)
 	}
+
+	fmt.Printf("Inserted %d rows to %s keyspace", len(result.Rows), targetKeyspace.KeyspaceName())
 }
 
 func getDestinationTablet(ctx context.Context, topoServer *topo.Server, value sqltypes.Value, targetShards []*topodata.ShardReference, targetKeyspace *topo.KeyspaceInfo, vschema *vindexes.KeyspaceSchema) (*topo.TabletInfo, error) {
@@ -194,7 +194,7 @@ func selectRows(ctx context.Context, topoServer *topo.Server, tableName string, 
 	logAndExitIfError(err)
 
 	selectSql := fmt.Sprintf("SELECT * FROM %s", tableName)
-	result, err := tabletManager.ExecuteFetchAsDba(ctx, sourceTablet.Tablet, true, []byte(selectSql), MaxRows, true, false)
+	result, err := tabletManager.ExecuteFetchAsDba(ctx, sourceTablet.Tablet, true, []byte(selectSql), MaxRows, false, false)
 	logAndExitIfError(err)
 
 	return result
