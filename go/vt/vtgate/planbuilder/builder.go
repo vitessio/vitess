@@ -63,6 +63,11 @@ type builder interface {
 	// after analysis.
 	PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error)
 
+	// MakeDistinct makes the primitive handle the distinct clause.
+	MakeDistinct() error
+	// PushGroupBy makes the primitive handle the group by clause.
+	PushGroupBy(sqlparser.GroupBy) error
+
 	// PushOrderByNull pushes the special case ORDER By NULL to
 	// all primitives. It's safe to push down this clause because it's
 	// just on optimization hint.

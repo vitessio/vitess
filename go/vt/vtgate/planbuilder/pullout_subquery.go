@@ -91,6 +91,16 @@ func (ps *pulloutSubquery) PushSelect(expr *sqlparser.AliasedExpr, origin builde
 	return ps.underlying.PushSelect(expr, origin)
 }
 
+// MakeDistinct satisfies the builder interface.
+func (ps *pulloutSubquery) MakeDistinct() error {
+	return ps.underlying.MakeDistinct()
+}
+
+// PushGroupBy satisfies the builder interface.
+func (ps *pulloutSubquery) PushGroupBy(groupBy sqlparser.GroupBy) error {
+	return ps.underlying.PushGroupBy(groupBy)
+}
+
 // PushOrderByNull satisfies the builder interface.
 func (ps *pulloutSubquery) PushOrderByNull() {
 	ps.underlying.PushOrderByNull()

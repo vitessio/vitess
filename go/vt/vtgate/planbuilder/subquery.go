@@ -45,7 +45,6 @@ type subquery struct {
 // newSubquery builds a new subquery.
 func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab, error) {
 	sq := &subquery{
-		order:     bldr.Order() + 1,
 		input:     bldr,
 		esubquery: &engine.Subquery{},
 	}
@@ -118,6 +117,16 @@ func (sq *subquery) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *resu
 	sq.resultColumns = append(sq.resultColumns, rc)
 
 	return rc, len(sq.resultColumns) - 1, nil
+}
+
+// MakeDistinct satisfies the builder interface.
+func (sq *subquery) MakeDistinct() error {
+	return errors.New("subquery.MakeDistinct: unreachable")
+}
+
+// PushGroupBy satisfies the builder interface.
+func (sq *subquery) PushGroupBy(_ sqlparser.GroupBy) error {
+	return errors.New("subquery.PushGroupBy: unreachable")
 }
 
 // PushOrderByNull satisfies the builder interface.
