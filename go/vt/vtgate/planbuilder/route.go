@@ -223,7 +223,7 @@ func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 
 		rb.Select.AddOrder(order)
 	}
-	return rb, nil
+	return newMergeSort(rb), nil
 }
 
 // SetLimit adds a LIMIT clause to the route.

@@ -175,6 +175,10 @@
 "select user.id from user, user_extra group by id"
 "unsupported: cross-shard query with aggregates"
 
+# if subquery scatter and ordering, then we don't allow outer constructs to be pushed down.
+"select count(*) from (select col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
+"unsupported: cross-shard query with aggregates"
+
 # subqueries not supported in group by
 "select id from user group by id, (select id from user_extra)"
 "unsupported: subqueries disallowed in GROUP or ORDER BY"
