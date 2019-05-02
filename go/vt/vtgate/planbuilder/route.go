@@ -155,8 +155,8 @@ func (rb *route) MakeDistinct() error {
 	return nil
 }
 
-// SetGroupBy sets the GROUP BY clause for the route.
-func (rb *route) SetGroupBy(groupBy sqlparser.GroupBy) error {
+// PushGroupBy sets the GROUP BY clause for the route.
+func (rb *route) PushGroupBy(groupBy sqlparser.GroupBy) error {
 	rb.Select.(*sqlparser.Select).GroupBy = groupBy
 	return nil
 }

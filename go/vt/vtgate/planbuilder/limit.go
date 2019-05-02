@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -74,32 +75,32 @@ func (l *limit) ResultColumns() []*resultColumn {
 
 // PushFilter satisfies the builder interface.
 func (l *limit) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
-	panic("BUG: unreachable")
+	return errors.New("limit.PushFilter: unreachable")
 }
 
 // PushSelect satisfies the builder interface.
 func (l *limit) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
-	panic("BUG: unreachable")
+	return nil, 0, errors.New("limit.PushSelect: unreachable")
 }
 
 // MakeDistinct satisfies the builder interface.
 func (l *limit) MakeDistinct() error {
-	panic("BUG: unreachable")
+	return errors.New("limit.MakeDistinct: unreachable")
 }
 
-// SetGroupBy satisfies the builder interface.
-func (l *limit) SetGroupBy(groupBy sqlparser.GroupBy) (builder, error) {
-	panic("BUG: unreachable")
+// PushGroupBy satisfies the builder interface.
+func (l *limit) PushGroupBy(_ sqlparser.GroupBy) error {
+	return errors.New("limit.PushGroupBy: unreachable")
 }
 
 // PushOrderByNull satisfies the builder interface.
 func (l *limit) PushOrderByNull() {
-	panic("BUG: unreachable")
+	// Unreachable.
 }
 
 // PushOrderByRand satisfies the builder interface.
 func (l *limit) PushOrderByRand() {
-	panic("BUG: unreachable")
+	// Unreachable.
 }
 
 // SetLimit sets the limit for the primitive. It calls the underlying

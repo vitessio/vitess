@@ -177,6 +177,16 @@ func (jb *join) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *res
 	return rc, len(jb.resultColumns) - 1, nil
 }
 
+// MakeDistinct satisfies the builder interface.
+func (jb *join) MakeDistinct() error {
+	return errors.New("join.MakeDistinct: unreachable")
+}
+
+// PushGroupBy satisfies the builder interface.
+func (jb *join) PushGroupBy(_ sqlparser.GroupBy) error {
+	return errors.New("join.PushGroupBy: unreachable")
+}
+
 // PushOrderByNull satisfies the builder interface.
 func (jb *join) PushOrderByNull() {
 	jb.Left.PushOrderByNull()

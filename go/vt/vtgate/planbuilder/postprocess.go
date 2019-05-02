@@ -26,23 +26,12 @@ import (
 // This file has functions to analyze postprocessing
 // clauses like ORDER BY, etc.
 
-// groupByHandler is a primitive that can handle a group by expression.
-type groupByHandler interface {
-	builder
-	// SetGroupBy makes the primitive handle the group by clause.
-	// The primitive may outsource some of its work to an underlying
-	// primitive that is also a groupByHandler (like a route).
-	SetGroupBy(sqlparser.GroupBy) error
-	// MakeDistinct makes the primitive handle the distinct clause.
-	MakeDistinct() error
-}
-
 // pushGroupBy processes the group by clause. It resolves all symbols,
 // and ensures that there are no subqueries.
-func (pb *primitiveBuilder) pushGroupBy(sel *sqlparser.Select, grouper groupByHandler) error {
+func (pb *primitiveBuilder) pushGroupBy(sel *sqlparser.Select) error {
 	if sel.Distinct != "" {
 		// We can be here only if the builder could handle a group by.
-		if err := grouper.MakeDistinct(); err != nil {
+		if err := pb.bldr.MakeDistinct(); err != nil {
 			return err
 		}
 	}
@@ -55,7 +44,7 @@ func (pb *primitiveBuilder) pushGroupBy(sel *sqlparser.Select, grouper groupByHa
 	}
 
 	// We can be here only if the builder could handle a group by.
-	return grouper.SetGroupBy(sel.GroupBy)
+	return pb.bldr.PushGroupBy(sel.GroupBy)
 }
 
 // pushOrderBy pushes the order by clause to the appropriate route.
@@ -144,5 +133,6 @@ func (pb *primitiveBuilder) pushLimit(limit *sqlparser.Limit) error {
 		return err
 	}
 	pb.bldr = lb
+	pb.bldr.Reorder(0)
 	return nil
 }

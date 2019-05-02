@@ -112,7 +112,11 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		if !ok {
 			var err error
 			pb.bldr, pb.st, err = newSubquery(tableExpr.As, spb.bldr)
-			return err
+			if err != nil {
+				return err
+			}
+			pb.bldr.Reorder(0)
+			return nil
 		}
 
 		// Since a route is more versatile than a subquery, we

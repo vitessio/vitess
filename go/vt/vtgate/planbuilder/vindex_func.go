@@ -150,6 +150,16 @@ func (vf *vindexFunc) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *re
 	return rc, len(vf.resultColumns) - 1, nil
 }
 
+// MakeDistinct satisfies the builder interface.
+func (vf *vindexFunc) MakeDistinct() error {
+	return errors.New("vindexFunc.MakeDistinct: unreachable")
+}
+
+// PushGroupBy satisfies the builder interface.
+func (vf *vindexFunc) PushGroupBy(_ sqlparser.GroupBy) error {
+	return errors.New("vindexFunc.PushGroupBy: unreachable")
+}
+
 // PushOrderByNull satisfies the builder interface.
 func (vf *vindexFunc) PushOrderByNull() {
 }
@@ -175,7 +185,7 @@ func (vf *vindexFunc) Wireup(bldr builder, jt *jointab) error {
 func (vf *vindexFunc) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	// vindexFunc is an atomic primitive. So, SupplyVar cannot be
 	// called on it.
-	panic("BUG: route is an atomic node.")
+	panic("BUG: vindexFunc is an atomic node.")
 }
 
 // SupplyCol satisfies the builder interface.
