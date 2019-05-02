@@ -152,20 +152,20 @@ func (vf *vindexFunc) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *re
 
 // MakeDistinct satisfies the builder interface.
 func (vf *vindexFunc) MakeDistinct() error {
-	return errors.New("vindexFunc.MakeDistinct: unreachable")
+	return errors.New("unsupported: distinct on vindex function")
 }
 
 // PushGroupBy satisfies the builder interface.
 func (vf *vindexFunc) PushGroupBy(_ sqlparser.GroupBy) error {
-	return errors.New("vindexFunc.PushGroupBy: unreachable")
+	return errors.New("unupported: group by on vindex function")
 }
 
-// PushOrderByNull satisfies the builder interface.
-func (vf *vindexFunc) PushOrderByNull() {
-}
-
-// PushOrderByRand satisfies the builder interface.
-func (vf *vindexFunc) PushOrderByRand() {
+// PushOrderBy satisfies the builder interface.
+func (vf *vindexFunc) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
+	if len(orderBy) == 0 {
+		return vf, nil
+	}
+	return nil, errors.New("unsupported: order by on vindex function")
 }
 
 // SetUpperLimit satisfies the builder interface.

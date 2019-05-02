@@ -101,14 +101,14 @@ func (ps *pulloutSubquery) PushGroupBy(groupBy sqlparser.GroupBy) error {
 	return ps.underlying.PushGroupBy(groupBy)
 }
 
-// PushOrderByNull satisfies the builder interface.
-func (ps *pulloutSubquery) PushOrderByNull() {
-	ps.underlying.PushOrderByNull()
-}
-
-// PushOrderByRand satisfies the builder interface.
-func (ps *pulloutSubquery) PushOrderByRand() {
-	ps.underlying.PushOrderByRand()
+// PushOrderBy satisfies the builder interface.
+func (ps *pulloutSubquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
+	bldr, err := ps.underlying.PushOrderBy(orderBy)
+	if err != nil {
+		return nil, err
+	}
+	ps.underlying = bldr
+	return ps, nil
 }
 
 // SetUpperLimit satisfies the builder interface.
