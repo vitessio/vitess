@@ -24,6 +24,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
+var _ builder = (*limit)(nil)
+
 // limit is the builder for engine.Limit.
 // This gets built if a limit needs to be applied
 // after rows are returned from an underlying
@@ -39,7 +41,6 @@ type limit struct {
 // newLimit builds a new limit.
 func newLimit(bldr builder) *limit {
 	return &limit{
-		order:         bldr.Order() + 1,
 		resultColumns: bldr.ResultColumns(),
 		input:         bldr,
 		elimit:        &engine.Limit{},
@@ -93,14 +94,12 @@ func (l *limit) PushGroupBy(_ sqlparser.GroupBy) error {
 	return errors.New("limit.PushGroupBy: unreachable")
 }
 
-// PushOrderByNull satisfies the builder interface.
-func (l *limit) PushOrderByNull() {
-	// Unreachable.
-}
-
-// PushOrderByRand satisfies the builder interface.
-func (l *limit) PushOrderByRand() {
-	// Unreachable.
+// PushGroupBy satisfies the builder interface.
+func (l *limit) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
+	if len(orderBy) == 0 {
+		return l, nil
+	}
+	return nil, errors.New("limit.PushOrderBy: unreachable")
 }
 
 // SetLimit sets the limit for the primitive. It calls the underlying

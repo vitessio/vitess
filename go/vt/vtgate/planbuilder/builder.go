@@ -65,17 +65,13 @@ type builder interface {
 
 	// MakeDistinct makes the primitive handle the distinct clause.
 	MakeDistinct() error
-	// PushGroupBy makes the primitive handle the group by clause.
+	// PushGroupBy makes the primitive handle the GROUP BY clause.
 	PushGroupBy(sqlparser.GroupBy) error
 
-	// PushOrderByNull pushes the special case ORDER By NULL to
-	// all primitives. It's safe to push down this clause because it's
-	// just on optimization hint.
-	PushOrderByNull()
-
-	// PushOrderByRand pushes the special case ORDER BY RAND() to
-	// all primitives.
-	PushOrderByRand()
+	// PushOrderBy pushes the ORDER BY clause. It returns the
+	// the current primitive or a replacement if a new one was
+	// created.
+	PushOrderBy(sqlparser.OrderBy) (builder, error)
 
 	// SetUpperLimit is an optimization hint that tells that primitive
 	// that it does not need to return more than the specified number of rows.

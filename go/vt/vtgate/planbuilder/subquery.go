@@ -121,20 +121,20 @@ func (sq *subquery) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *resu
 
 // MakeDistinct satisfies the builder interface.
 func (sq *subquery) MakeDistinct() error {
-	return errors.New("subquery.MakeDistinct: unreachable")
+	return errors.New("unsupported: distinct on cross-shard subquery")
 }
 
 // PushGroupBy satisfies the builder interface.
 func (sq *subquery) PushGroupBy(_ sqlparser.GroupBy) error {
-	return errors.New("subquery.PushGroupBy: unreachable")
+	return errors.New("unupported: group by on cross-shard subquery")
 }
 
-// PushOrderByNull satisfies the builder interface.
-func (sq *subquery) PushOrderByNull() {
-}
-
-// PushOrderByRand satisfies the builder interface.
-func (sq *subquery) PushOrderByRand() {
+// PushOrderBy satisfies the builder interface.
+func (sq *subquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
+	if len(orderBy) == 0 {
+		return sq, nil
+	}
+	return nil, errors.New("unsupported: order by on cross-shard subquery")
 }
 
 // SetUpperLimit satisfies the builder interface.

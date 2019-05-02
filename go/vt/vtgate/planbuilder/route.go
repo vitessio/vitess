@@ -149,72 +149,81 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 	return rc
 }
 
-// MakeDistinct sets the DISTINCT property to the select.
+// MakeDistinct satisfies the builder interface.
 func (rb *route) MakeDistinct() error {
 	rb.Select.(*sqlparser.Select).Distinct = sqlparser.DistinctStr
 	return nil
 }
 
-// PushGroupBy sets the GROUP BY clause for the route.
+// PushGroupBy satisfies the builder interface.
 func (rb *route) PushGroupBy(groupBy sqlparser.GroupBy) error {
 	rb.Select.(*sqlparser.Select).GroupBy = groupBy
 	return nil
 }
 
-// PushOrderBy sets the order by for the route.
-func (rb *route) PushOrderBy(order *sqlparser.Order) error {
-	// By this time, if any single shard options were already present,
-	// multi-sharded options would have already been removed. So, this
-	// call is only for checking if the route has single shard options.
+// PushOrderBy satisfies the builder interface.
+func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
+	switch len(orderBy) {
+	case 0:
+		return rb, nil
+	case 1:
+		isSpecial := false
+		if _, ok := orderBy[0].Expr.(*sqlparser.NullVal); ok {
+			isSpecial = true
+		} else if f, ok := orderBy[0].Expr.(*sqlparser.FuncExpr); ok {
+			if f.Name.Lowered() == "rand" {
+				isSpecial = true
+			}
+		}
+		if isSpecial {
+			rb.Select.AddOrder(orderBy[0])
+			return rb, nil
+		}
+	}
+
 	if rb.removeMultishardOptions() {
-		rb.Select.AddOrder(order)
-		return nil
+		for _, order := range orderBy {
+			rb.Select.AddOrder(order)
+		}
+		return rb, nil
 	}
 
 	// If it's a scatter, we have to populate the OrderBy field.
-	colnum := -1
-	switch expr := order.Expr.(type) {
-	case *sqlparser.SQLVal:
-		var err error
-		if colnum, err = ResultFromNumber(rb.resultColumns, expr); err != nil {
-			return fmt.Errorf("invalid order by: %v", err)
-		}
-	case *sqlparser.ColName:
-		c := expr.Metadata.(*column)
-		for i, rc := range rb.resultColumns {
-			if rc.column == c {
-				colnum = i
-				break
+	for _, order := range orderBy {
+		colnum := -1
+		switch expr := order.Expr.(type) {
+		case *sqlparser.SQLVal:
+			var err error
+			if colnum, err = ResultFromNumber(rb.resultColumns, expr); err != nil {
+				return nil, err
 			}
+		case *sqlparser.ColName:
+			c := expr.Metadata.(*column)
+			for i, rc := range rb.resultColumns {
+				if rc.column == c {
+					colnum = i
+					break
+				}
+			}
+		default:
+			return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
 		}
-	default:
-		return fmt.Errorf("unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
-	}
-	// If column is not found, then the order by is referencing
-	// a column that's not on the select list.
-	if colnum == -1 {
-		return fmt.Errorf("unsupported: in scatter query: order by must reference a column in the select list: %s", sqlparser.String(order))
-	}
-	ob := engine.OrderbyParams{
-		Col:  colnum,
-		Desc: order.Direction == sqlparser.DescScr,
-	}
-	for _, ro := range rb.routeOptions {
-		ro.eroute.OrderBy = append(ro.eroute.OrderBy, ob)
-	}
+		// If column is not found, then the order by is referencing
+		// a column that's not on the select list.
+		if colnum == -1 {
+			return nil, fmt.Errorf("unsupported: in scatter query: order by must reference a column in the select list: %s", sqlparser.String(order))
+		}
+		ob := engine.OrderbyParams{
+			Col:  colnum,
+			Desc: order.Direction == sqlparser.DescScr,
+		}
+		for _, ro := range rb.routeOptions {
+			ro.eroute.OrderBy = append(ro.eroute.OrderBy, ob)
+		}
 
-	rb.Select.AddOrder(order)
-	return nil
-}
-
-// PushOrderByNull satisfies the builder interface.
-func (rb *route) PushOrderByNull() {
-	rb.Select.(*sqlparser.Select).OrderBy = sqlparser.OrderBy{&sqlparser.Order{Expr: &sqlparser.NullVal{}}}
-}
-
-// PushOrderByRand satisfies the builder interface.
-func (rb *route) PushOrderByRand() {
-	rb.Select.(*sqlparser.Select).OrderBy = sqlparser.OrderBy{&sqlparser.Order{Expr: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("rand")}}}
+		rb.Select.AddOrder(order)
+	}
+	return rb, nil
 }
 
 // SetLimit adds a LIMIT clause to the route.

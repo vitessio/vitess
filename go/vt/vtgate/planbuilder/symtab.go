@@ -406,7 +406,7 @@ func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
 				return false, err
 			}
 		case *sqlparser.Subquery:
-			return false, errors.New("subqueries disallowed")
+			return false, errors.New("unsupported: subqueries disallowed in GROUP or ORDER BY")
 		}
 		return true, nil
 	}, node)

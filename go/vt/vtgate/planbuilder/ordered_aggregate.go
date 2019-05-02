@@ -371,7 +371,7 @@ func (oa *orderedAggregate) PushGroupBy(groupBy sqlparser.GroupBy) error {
 // 'select a, b, count(*) from t group by a, b order by b'
 // The following construct is not allowed:
 // 'select a, count(*) from t group by a order by count(*)'
-func (oa *orderedAggregate) PushOrderBy(pb *primitiveBuilder, orderBy sqlparser.OrderBy) error {
+func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	// Treat order by null as nil order by.
 	if len(orderBy) == 1 {
 		if _, ok := orderBy[0].Expr.(*sqlparser.NullVal); ok {
@@ -388,17 +388,13 @@ func (oa *orderedAggregate) PushOrderBy(pb *primitiveBuilder, orderBy sqlparser.
 		case *sqlparser.SQLVal:
 			num, err := ResultFromNumber(oa.resultColumns, expr)
 			if err != nil {
-				return fmt.Errorf("invalid order by: %v", err)
+				return nil, err
 			}
 			orderByCol = oa.input.ResultColumns()[num].column
 		case *sqlparser.ColName:
-			_, _, err := pb.st.Find(expr)
-			if err != nil {
-				return fmt.Errorf("invalid order by: %v", err)
-			}
 			orderByCol = expr.Metadata.(*column)
 		default:
-			return fmt.Errorf("unsupported: in scatter query: complex order by expression: %v", sqlparser.String(expr))
+			return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %v", sqlparser.String(expr))
 		}
 
 		// Match orderByCol against the group by columns.
@@ -414,14 +410,8 @@ func (oa *orderedAggregate) PushOrderBy(pb *primitiveBuilder, orderBy sqlparser.
 			break
 		}
 		if !found {
-			return fmt.Errorf("unsupported: in scatter query: order by column must reference group by expression: %v", sqlparser.String(order))
+			return nil, fmt.Errorf("unsupported: in scatter query: order by column must reference group by expression: %v", sqlparser.String(order))
 		}
-
-		// Push down the order by.
-		// It's ok to push the original AST down because all references
-		// should point to the route. Only aggregate functions are originated
-		// by oa, and we currently don't allow the ORDER BY to reference them.
-		oa.input.PushOrderBy(order)
 	}
 
 	// Append any unreferenced keys at the end of the order by.
@@ -432,22 +422,20 @@ func (oa *orderedAggregate) PushOrderBy(pb *primitiveBuilder, orderBy sqlparser.
 		// Build a brand new reference for the key.
 		col, err := oa.input.BuildColName(key)
 		if err != nil {
-			return fmt.Errorf("generating order by clause: %v", err)
+			return nil, fmt.Errorf("generating order by clause: %v", err)
 		}
-		order := &sqlparser.Order{Expr: col, Direction: sqlparser.AscScr}
-		oa.input.PushOrderBy(order)
+		orderBy = append(orderBy, &sqlparser.Order{Expr: col, Direction: sqlparser.AscScr})
 	}
-	return nil
-}
 
-// PushOrderByNull satisfies the builder interface.
-func (oa *orderedAggregate) PushOrderByNull() {
-	panic("BUG: unreachable")
-}
-
-// PushOrderByRand satisfies the builder interface.
-func (oa *orderedAggregate) PushOrderByRand() {
-	panic("BUG: unreachable")
+	// Push down the order by.
+	// It's ok to push the original AST down because all references
+	// should point to the route. Only aggregate functions are originated
+	// by oa, and we currently don't allow the ORDER BY to reference them.
+	_, err := oa.input.PushOrderBy(orderBy)
+	if err != nil {
+		return nil, err
+	}
+	return oa, nil
 }
 
 // SetUpperLimit satisfies the builder interface.
