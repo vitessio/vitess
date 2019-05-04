@@ -26,7 +26,7 @@ import (
 var _ builder = (*mergeSort)(nil)
 
 // mergeSort is a pseudo-primitive. It amends the
-// the underlying Route to performa a merge sort.
+// the underlying Route to perform a merge sort.
 // It's differentiated as a separate primitive
 // because some operations cannot be pushed down,
 // which would otherwise be possible with a simple route.
@@ -90,9 +90,9 @@ func (ms *mergeSort) PushGroupBy(groupBy sqlparser.GroupBy) error {
 	return ms.input.PushGroupBy(groupBy)
 }
 
-// PushGroupBy satisfies the builder interface.
+// PushOrderBy satisfies the builder interface.
 // A merge sort is created due to the push of an ORDER BY clause.
-// So, the function should never get called.
+// So, this function should never get called.
 func (ms *mergeSort) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	return nil, errors.New("mergeSort.PushOrderBy: unreachable")
 }
