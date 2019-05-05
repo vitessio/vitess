@@ -569,32 +569,6 @@ func TestExecutorAutocommit(t *testing.T) {
 	}
 }
 
-func TestExecutorLegacyAutocommit(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: false})
-
-	// If legacy is on, there should be no implicit transaction.
-	executor.legacyAutocommit = true
-	startCount := sbclookup.BeginCount.Get()
-	_, err := executor.Execute(context.Background(), "TestExecute", session, "update main1 set id=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := sbclookup.BeginCount.Get(), startCount; got != want {
-		t.Errorf("Begin count: %d, want %d", got, want)
-	}
-
-	// If legacy is off, there should be an implicit begin.
-	executor.legacyAutocommit = false
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "update main1 set id=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := sbclookup.BeginCount.Get(), startCount+1; got != want {
-		t.Errorf("Begin count: %d, want %d", got, want)
-	}
-}
-
 func TestExecutorShow(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})

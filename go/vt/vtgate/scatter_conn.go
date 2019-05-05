@@ -740,7 +740,9 @@ func (stc *ScatterConn) multiGo(
 	oneShard := func(rs *srvtopo.ResolvedShard, i int) {
 		var err error
 		startTime, statsKey := stc.startAction(name, rs.Target)
-		defer stc.endAction(startTime, allErrors, statsKey, &err, nil)
+		// Send a dummy session.
+		// TODO(sougou): plumb a real session through this call.
+		defer stc.endAction(startTime, allErrors, statsKey, &err, NewSafeSession(nil))
 		err = action(rs, i)
 	}
 

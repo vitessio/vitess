@@ -65,6 +65,9 @@ const (
 
 // NewSafeSession returns a new SafeSession based on the Session
 func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
+	if sessn == nil {
+		sessn = &vtgatepb.Session{}
+	}
 	return &SafeSession{Session: sessn}
 }
 
@@ -78,6 +81,17 @@ func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
 	return NewSafeSession(newSession)
 }
 
+// Reset clears the session
+func (session *SafeSession) Reset() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.mustRollback = false
+	session.autocommitState = notAutocommittable
+	session.Session.InTransaction = false
+	session.SingleDb = false
+	session.ShardSessions = nil
+}
+
 // SetAutocommitable sets the state to autocommitable if true.
 // Otherwise, it's notAutocommitable.
 func (session *SafeSession) SetAutocommitable(flag bool) {
@@ -85,7 +99,8 @@ func (session *SafeSession) SetAutocommitable(flag bool) {
 	defer session.mu.Unlock()
 
 	if session.autocommitState == autocommitted {
-		panic("BUG: SetAutocommitable: unexpected autocommit state")
+		// Unreachable.
+		return
 	}
 
 	if flag {
@@ -103,10 +118,11 @@ func (session *SafeSession) AutocommitApproval() bool {
 	defer session.mu.Unlock()
 
 	if session.autocommitState == autocommitted {
-		panic("BUG: AutocommitToken: unexpected autocommit state")
+		// Unreachable.
+		return false
 	}
 
-	if session.autocommitState == autocommittable && len(session.ShardSessions) == 0 {
+	if session.autocommitState == autocommittable {
 		session.autocommitState = autocommitted
 		return true
 	}
@@ -115,9 +131,6 @@ func (session *SafeSession) AutocommitApproval() bool {
 
 // InTransaction returns true if we are in a transaction
 func (session *SafeSession) InTransaction() bool {
-	if session == nil || session.Session == nil {
-		return false
-	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.Session.InTransaction
@@ -125,9 +138,6 @@ func (session *SafeSession) InTransaction() bool {
 
 // Find returns the transactionId, if any, for a session
 func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) int64 {
-	if session == nil {
-		return 0
-	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	for _, shardSession := range session.ShardSessions {
@@ -144,8 +154,14 @@ func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession, 
 	defer session.mu.Unlock()
 
 	if session.autocommitState == autocommitted {
-		panic("BUG: SafeSession.Append: unexpected autocommit state")
+		// Unreachable.
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.Append: unexpected autocommit state")
 	}
+	if !session.Session.InTransaction {
+		// Unreachable.
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.Append: not in transaction")
+	}
+	session.autocommitState = notAutocommittable
 
 	// Always append, in order for rollback to succeed.
 	session.ShardSessions = append(session.ShardSessions, shardSession)
@@ -165,19 +181,15 @@ func (session *SafeSession) isSingleDB(txMode vtgatepb.TransactionMode) bool {
 // SetRollback sets the flag indicating that the transaction must be rolled back.
 // The call is a no-op if the session is not in a transaction.
 func (session *SafeSession) SetRollback() {
-	if session == nil || session.Session == nil || !session.Session.InTransaction {
-		return
-	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.mustRollback = true
+	if session.Session.InTransaction {
+		session.mustRollback = true
+	}
 }
 
 // MustRollback returns true if the transaction must be rolled back.
 func (session *SafeSession) MustRollback() bool {
-	if session == nil {
-		return false
-	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.mustRollback
@@ -195,18 +207,4 @@ func (session *SafeSession) ClearWarnings() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Session.Warnings = nil
-}
-
-// Reset clears the session
-func (session *SafeSession) Reset() {
-	if session == nil || session.Session == nil {
-		return
-	}
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	session.mustRollback = false
-	session.autocommitState = notAutocommittable
-	session.Session.InTransaction = false
-	session.SingleDb = false
-	session.ShardSessions = nil
 }
