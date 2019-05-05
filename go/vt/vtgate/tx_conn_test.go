@@ -85,15 +85,8 @@ func TestTxConnBeginDisallowed(t *testing.T) {
 
 func TestTxConnCommitRollbackIncorrectSession(t *testing.T) {
 	sc, _, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
-	// nil session
-	err := sc.txConn.Rollback(context.Background(), nil)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// not in transaction
 	session := NewSafeSession(&vtgatepb.Session{})
-	err = sc.txConn.Commit(context.Background(), session)
+	err := sc.txConn.Commit(context.Background(), session)
 	if err != nil {
 		t.Error(err)
 	}
