@@ -84,6 +84,12 @@ message Session {
 
   // warnings contains non-fatal warnings from the previous query
   repeated query.QueryWarning warnings = 8;
+
+  // pre_sessions contains sessions that have to be committed first.
+  repeated ShardSession pre_sessions = 9;
+
+  // post_sessions contains sessions that have to be committed last.
+  repeated ShardSession post_sessions = 10;
 }
 
 // ExecuteRequest is the payload to Execute.

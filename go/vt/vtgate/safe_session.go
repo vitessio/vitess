@@ -36,6 +36,7 @@ type SafeSession struct {
 	mu              sync.Mutex
 	mustRollback    bool
 	autocommitState autocommitState
+	commitOrder     commitOrder
 	*vtgatepb.Session
 }
 
@@ -48,8 +49,8 @@ type SafeSession struct {
 // and this should cause the state to become notAutocommitable.
 //
 // SafeSession lets you request a commit token, which will
-// be issued if the state is autocommitable, and ShardSessions
-// is empty, implying that no intermediate transactions were started.
+// be issued if the state is autocommitable,
+// implying that no intermediate transactions were started.
 // If so, the state transitions to autocommited, which is terminal.
 // If the token is succesfully issued, the caller has to perform
 // the commit. If a token cannot be issued, then a traditional
@@ -61,6 +62,17 @@ const (
 	notAutocommittable = autocommitState(iota)
 	autocommittable
 	autocommitted
+)
+
+// commitOrder specifies the commitOrder for the subsequent
+// statements. The appropriate shard sessions will be chosen
+// depending on this value.
+type commitOrder int
+
+const (
+	commitOrderNormal = commitOrder(iota)
+	commitOrderPre
+	commitOrderPost
 )
 
 // NewSafeSession returns a new SafeSession based on the Session
@@ -77,7 +89,10 @@ func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
 	newSession := proto.Clone(sessn).(*vtgatepb.Session)
 	newSession.InTransaction = false
 	newSession.ShardSessions = nil
+	newSession.PreSessions = nil
+	newSession.PostSessions = nil
 	newSession.Autocommit = true
+	newSession.Warnings = nil
 	return NewSafeSession(newSession)
 }
 
@@ -90,6 +105,9 @@ func (session *SafeSession) Reset() {
 	session.Session.InTransaction = false
 	session.SingleDb = false
 	session.ShardSessions = nil
+	session.PreSessions = nil
+	session.PostSessions = nil
+	session.commitOrder = commitOrderNormal
 }
 
 // SetAutocommitable sets the state to autocommitable if true.
@@ -129,6 +147,13 @@ func (session *SafeSession) AutocommitApproval() bool {
 	return false
 }
 
+// SetCommitOrder sets the commit order.
+func (session *SafeSession) SetCommitOrder(co commitOrder) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.commitOrder = co
+}
+
 // InTransaction returns true if we are in a transaction
 func (session *SafeSession) InTransaction() bool {
 	session.mu.Lock()
@@ -140,7 +165,14 @@ func (session *SafeSession) InTransaction() bool {
 func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) int64 {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	for _, shardSession := range session.ShardSessions {
+	sessions := session.ShardSessions
+	switch session.commitOrder {
+	case commitOrderPre:
+		sessions = session.PreSessions
+	case commitOrderPost:
+		sessions = session.PostSessions
+	}
+	for _, shardSession := range sessions {
 		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
 			return shardSession.TransactionId
 		}
@@ -164,10 +196,18 @@ func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession, 
 	session.autocommitState = notAutocommittable
 
 	// Always append, in order for rollback to succeed.
-	session.ShardSessions = append(session.ShardSessions, shardSession)
-	if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
-		session.mustRollback = true
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction attempted: %v", session.ShardSessions)
+	switch session.commitOrder {
+	case commitOrderNormal:
+		session.ShardSessions = append(session.ShardSessions, shardSession)
+		// isSingle is enforced only for normmal commit order operations.
+		if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
+			session.mustRollback = true
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction attempted: %v", session.ShardSessions)
+		}
+	case commitOrderPre:
+		session.PreSessions = append(session.PreSessions, shardSession)
+	case commitOrderPost:
+		session.PostSessions = append(session.PostSessions, shardSession)
 	}
 	return nil
 }
