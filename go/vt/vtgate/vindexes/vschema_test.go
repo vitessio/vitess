@@ -97,13 +97,37 @@ func NewSTLU(name string, params map[string]string) (Vindex, error) {
 	return &stLU{name: name, Params: params}, nil
 }
 
-var _ Vindex = (*stLU)(nil)
-var _ Lookup = (*stLU)(nil)
+// stLO is a Lookup Vindex that wants owner columns.
+type stLO struct {
+	name string
+	cols []sqlparser.ColIdent
+}
+
+func (v *stLO) String() string                                                    { return v.name }
+func (*stLO) Cost() int                                                           { return 2 }
+func (*stLO) IsUnique() bool                                                      { return true }
+func (*stLO) IsFunctional() bool                                                  { return false }
+func (*stLO) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
+func (*stLO) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
+func (*stLO) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
+func (*stLO) Delete(VCursor, [][]sqltypes.Value, []byte) error                    { return nil }
+func (*stLO) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error    { return nil }
+func (v *stLO) SetOwnerColumns(cols []sqlparser.ColIdent) {
+	v.cols = cols
+}
+
+func NewSTLO(name string, _ map[string]string) (Vindex, error) {
+	return &stLO{name: name}, nil
+}
+
+var _ Vindex = (*stLO)(nil)
+var _ Lookup = (*stLO)(nil)
 
 func init() {
 	Register("stfu", NewSTFU)
 	Register("stln", NewSTLN)
 	Register("stlu", NewSTLU)
+	Register("stlo", NewSTLO)
 }
 
 func TestUnshardedVSchema(t *testing.T) {
@@ -474,6 +498,90 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
 		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
+	}
+}
+
+func TestShardedVSchemaOwnerColumns(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu": {
+						Type: "stfu",
+					},
+					"stlo1": {
+						Type:  "stlo",
+						Owner: "t1",
+					},
+					"stlo2": {
+						Type:  "stlo",
+						Owner: "t2",
+					},
+					"stlo3": {
+						Type:  "stlo",
+						Owner: "none",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Column: "id",
+							Name:   "stfu",
+						}, {
+							Column: "c1",
+							Name:   "stlo1",
+						}},
+					},
+					"t2": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Column: "id",
+							Name:   "stfu",
+						}, {
+							Columns: []string{"c1", "c2"},
+							Name:    "stlo2",
+						}},
+					},
+					"t3": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Column: "id",
+							Name:   "stfu",
+						}, {
+							Columns: []string{"c1", "c2"},
+							Name:    "stlo3",
+						}},
+					},
+				},
+			},
+		},
+	}
+	got, _ := BuildVSchema(&good)
+	err := got.Keyspaces["sharded"].Error
+	if err != nil {
+		t.Error(err)
+	}
+	results := []struct {
+		name string
+		cols []string
+	}{{
+		name: "stlo1",
+		cols: []string{"c1"},
+	}, {
+		name: "stlo2",
+		cols: []string{"c1", "c2"},
+	}, {
+		name: "stlo3",
+		cols: nil,
+	}}
+	for _, want := range results {
+		var gotcols []string
+		cols := got.Keyspaces["sharded"].Vindexes[want.name].(*stLO).cols
+		for _, col := range cols {
+			gotcols = append(gotcols, col.String())
+		}
+		if !reflect.DeepEqual(gotcols, want.cols) {
+			t.Errorf("Cols(%s): %v, want %v", want.name, gotcols, want.cols)
+		}
 	}
 }
 
