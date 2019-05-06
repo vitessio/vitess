@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -81,7 +82,7 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 	switch session.TransactionMode {
 	case vtgatepb.TransactionMode_TWOPC:
 		if txc.mode != vtgatepb.TransactionMode_TWOPC {
-			txc.Rollback(ctx, session)
+			_ = txc.Rollback(ctx, session)
 			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "2pc transaction disallowed")
 		}
 		twopc = true
@@ -95,21 +96,36 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 }
 
 func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error {
-	var err error
-	committing := true
-	for _, shardSession := range session.ShardSessions {
-		if !committing {
-			txc.gateway.Rollback(ctx, shardSession.Target, shardSession.TransactionId)
-			continue
-		}
-		if err = txc.gateway.Commit(ctx, shardSession.Target, shardSession.TransactionId); err != nil {
-			committing = false
-		}
+	if err := txc.runSessions(session.PreSessions, func(s *vtgatepb.Session_ShardSession) error {
+		defer func() { s.TransactionId = 0 }()
+		return txc.gateway.Commit(ctx, s.Target, s.TransactionId)
+	}); err != nil {
+		_ = txc.Rollback(ctx, session)
+		return err
 	}
-	return err
+	if err := txc.runSessions(session.ShardSessions, func(s *vtgatepb.Session_ShardSession) error {
+		defer func() { s.TransactionId = 0 }()
+		return txc.gateway.Commit(ctx, s.Target, s.TransactionId)
+	}); err != nil {
+		_ = txc.Rollback(ctx, session)
+		return err
+	}
+	if err := txc.runSessions(session.PostSessions, func(s *vtgatepb.Session_ShardSession) error {
+		defer func() { s.TransactionId = 0 }()
+		return txc.gateway.Commit(ctx, s.Target, s.TransactionId)
+	}); err != nil {
+		// If last commit fails, there will be nothing to rollback.
+		session.RecordWarning(&querypb.QueryWarning{Message: fmt.Sprintf("post-operation transaction had an error: %v", err)})
+	}
+	return nil
 }
 
 func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
+	if len(session.PreSessions) != 0 || len(session.PostSessions) != 0 {
+		_ = txc.Rollback(ctx, session)
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "pre or post actions not allowed for 2PC commits")
+	}
+
 	// If the number of participants is one or less, then it's a normal commit.
 	if len(session.ShardSessions) <= 1 {
 		return txc.commitNormal(ctx, session)
@@ -124,7 +140,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	err := txc.gateway.CreateTransaction(ctx, mmShard.Target, dtid, participants)
 	if err != nil {
 		// Normal rollback is safe because nothing was prepared yet.
-		txc.Rollback(ctx, session)
+		_ = txc.Rollback(ctx, session)
 		return err
 	}
 
@@ -163,7 +179,13 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 	}
 	defer session.Reset()
 
-	return txc.runSessions(session.ShardSessions, func(s *vtgatepb.Session_ShardSession) error {
+	allsessions := append(session.PreSessions, session.ShardSessions...)
+	allsessions = append(allsessions, session.PostSessions...)
+
+	return txc.runSessions(allsessions, func(s *vtgatepb.Session_ShardSession) error {
+		if s.TransactionId == 0 {
+			return nil
+		}
 		return txc.gateway.Rollback(ctx, s.Target, s.TransactionId)
 	})
 }

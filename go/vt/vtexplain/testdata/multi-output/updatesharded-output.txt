@@ -13,8 +13,8 @@ update user set nickname='alice' where name='alice'
 2 ks_sharded/-40: begin
 2 ks_sharded/-40: select id from user where name = 'alice' limit 10001 for update /* vtgate:: keyspace_id:166b40b44aba4bd6 */
 2 ks_sharded/-40: update user set nickname = 'alice' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+3 ks_sharded/-40: commit
 3 ks_sharded/40-80: commit
-4 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 update user set pet='fido' where id=1
@@ -34,8 +34,8 @@ update user set name='alicia' where id=1
 3 ks_sharded/c0-: insert into name_user_map(name, user_id) values ('alicia', 1) /* vtgate:: keyspace_id:e2821261367fbee90bb5cf72955146c6 */
 4 ks_sharded/-40: update user set name = 'alicia' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
 5 ks_sharded/-40: commit
-6 ks_sharded/80-c0: commit
-7 ks_sharded/c0-: commit
+5 ks_sharded/80-c0: commit
+5 ks_sharded/c0-: commit
 
 ----------------------------------------------------------------------
 update user set name='alicia' where name='alice'
@@ -50,10 +50,10 @@ update user set name='alicia' where name='alice'
 4 ks_sharded/c0-: insert into name_user_map(name, user_id) values ('alicia', 1) /* vtgate:: keyspace_id:e2821261367fbee90bb5cf72955146c6 */
 5 ks_sharded/-40: select id from user where name = 'alice' limit 10001 for update /* vtgate:: keyspace_id:166b40b44aba4bd6 */
 5 ks_sharded/-40: update user set name = 'alicia' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+6 ks_sharded/-40: commit
 6 ks_sharded/40-80: commit
-7 ks_sharded/-40: commit
-8 ks_sharded/80-c0: commit
-9 ks_sharded/c0-: commit
+6 ks_sharded/80-c0: commit
+6 ks_sharded/c0-: commit
 
 ----------------------------------------------------------------------
 update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ name_info set has_nickname=1 where nickname != ''
@@ -83,8 +83,8 @@ update user set pet='rover' where name='alice'
 2 ks_sharded/-40: begin
 2 ks_sharded/-40: select id from user where name = 'alice' limit 10001 for update /* vtgate:: keyspace_id:166b40b44aba4bd6 */
 2 ks_sharded/-40: update user set pet = 'rover' where id in (1) /* vtgate:: keyspace_id:166b40b44aba4bd6 */
+3 ks_sharded/-40: commit
 3 ks_sharded/40-80: commit
-4 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 begin
@@ -126,6 +126,6 @@ update user set nickname='bob' where id=3
 commit
 
 3 ks_sharded/-40: commit
-4 ks_sharded/40-80: commit
+3 ks_sharded/40-80: commit
 
 ----------------------------------------------------------------------
