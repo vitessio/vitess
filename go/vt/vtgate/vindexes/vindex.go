@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -100,6 +101,13 @@ type Lookup interface {
 
 	// Update replaces the mapping of old values with new values for a keyspace id.
 	Update(vc VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error
+}
+
+// WantOwnerColumns defines the interface that a vindex must
+// satisfy to accept owner column names. This information can
+// be used to query the owner's table for the owning row's presence.
+type WantOwnerColumns interface {
+	SetOwnerColumns(cols []sqlparser.ColIdent)
 }
 
 // A NewVindexFunc is a function that creates a Vindex based on the
