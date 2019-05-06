@@ -329,30 +329,5 @@
   }
 }
 
-# limit and order by null clauses
-"select keyspace_id from user_index where id = :id order by null limit 1"
-{
-  "Original": "select keyspace_id from user_index where id = :id order by null limit 1",
-  "Instructions": {
-    "Opcode": "Limit",
-    "Count": 1,
-    "Offset": null,
-    "Input": {
-      "Opcode": "VindexMap",
-      "Fields": [
-        {
-          "name": "keyspace_id",
-          "type": 10262
-        }
-      ],
-      "Cols": [
-        1
-      ],
-      "Vindex": "user_index",
-      "Value": ":id"
-    }
-  }
-}
-
 "select none from user_index where id = :id"
 "symbol none not found in table or subquery"

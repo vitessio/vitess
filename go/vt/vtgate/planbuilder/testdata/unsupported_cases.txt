@@ -53,7 +53,7 @@
 
 # order by on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t order by id"
-"unsupported: cannot order by on a cross-shard subquery"
+"unsupported: order by on cross-shard subquery"
 
 # order by on a cross-shard query. Note: this is only a problem when an order by column is from the second table
 "select user.col1 as a, user.col2 b, music.col3 c from user, music where user.id = music.id and user.id = 1 order by c"
@@ -137,7 +137,7 @@
 
 # scatter aggregate symtab lookup error
 "select id, b as id, count(*) from user order by id"
-"invalid order by: ambiguous symbol reference: id"
+"ambiguous symbol reference: id"
 
 # scatter aggregate with ambiguous aliases
 "select distinct a, b as a from user"
@@ -175,9 +175,13 @@
 "select user.id from user, user_extra group by id"
 "unsupported: cross-shard query with aggregates"
 
+# if subquery scatter and ordering, then we don't allow outer constructs to be pushed down.
+"select count(*) from (select col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
+"unsupported: cross-shard query with aggregates"
+
 # subqueries not supported in group by
 "select id from user group by id, (select id from user_extra)"
-"unsupported: in group by: subqueries disallowed"
+"unsupported: subqueries disallowed in GROUP or ORDER BY"
 
 # Order by uses cross-shard expression
 "select id from user order by id+1"
@@ -201,7 +205,7 @@
 
 # Order by has subqueries
 "select id from unsharded order by (select id from unsharded)"
-"unsupported: order by has subquery"
+"unsupported: subqueries disallowed in GROUP or ORDER BY"
 
 # subqueries in update
 "update user set col = (select id from unsharded)"

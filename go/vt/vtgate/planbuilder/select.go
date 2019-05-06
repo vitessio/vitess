@@ -99,11 +99,10 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 			return err
 		}
 	}
-	grouper, err := pb.checkAggregates(sel)
-	if err != nil {
+	if err := pb.checkAggregates(sel); err != nil {
 		return err
 	}
-	if err := pb.pushSelectExprs(sel, grouper); err != nil {
+	if err := pb.pushSelectExprs(sel); err != nil {
 		return err
 	}
 	if sel.Having != nil {
@@ -168,18 +167,19 @@ func (pb *primitiveBuilder) addPullouts(pullouts []*pulloutSubquery) {
 	for _, pullout := range pullouts {
 		pullout.setUnderlying(pb.bldr)
 		pb.bldr = pullout
+		pb.bldr.Reorder(0)
 	}
 }
 
 // pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
-func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select, grouper groupByHandler) error {
+func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select) error {
 	resultColumns, err := pb.pushSelectRoutes(sel.SelectExprs)
 	if err != nil {
 		return err
 	}
 	pb.st.SetResultColumns(resultColumns)
-	return pb.pushGroupBy(sel, grouper)
+	return pb.pushGroupBy(sel)
 }
 
 // pusheSelectRoutes is a convenience function that pushes all the select

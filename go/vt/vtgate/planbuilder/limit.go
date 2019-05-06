@@ -17,11 +17,14 @@ limitations under the License.
 package planbuilder
 
 import (
+	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
+
+var _ builder = (*limit)(nil)
 
 // limit is the builder for engine.Limit.
 // This gets built if a limit needs to be applied
@@ -38,7 +41,6 @@ type limit struct {
 // newLimit builds a new limit.
 func newLimit(bldr builder) *limit {
 	return &limit{
-		order:         bldr.Order() + 1,
 		resultColumns: bldr.ResultColumns(),
 		input:         bldr,
 		elimit:        &engine.Limit{},
@@ -74,32 +76,30 @@ func (l *limit) ResultColumns() []*resultColumn {
 
 // PushFilter satisfies the builder interface.
 func (l *limit) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
-	panic("BUG: unreachable")
+	return errors.New("limit.PushFilter: unreachable")
 }
 
 // PushSelect satisfies the builder interface.
 func (l *limit) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
-	panic("BUG: unreachable")
+	return nil, 0, errors.New("limit.PushSelect: unreachable")
 }
 
 // MakeDistinct satisfies the builder interface.
 func (l *limit) MakeDistinct() error {
-	panic("BUG: unreachable")
+	return errors.New("limit.MakeDistinct: unreachable")
 }
 
-// SetGroupBy satisfies the builder interface.
-func (l *limit) SetGroupBy(groupBy sqlparser.GroupBy) (builder, error) {
-	panic("BUG: unreachable")
+// PushGroupBy satisfies the builder interface.
+func (l *limit) PushGroupBy(_ sqlparser.GroupBy) error {
+	return errors.New("limit.PushGroupBy: unreachable")
 }
 
-// PushOrderByNull satisfies the builder interface.
-func (l *limit) PushOrderByNull() {
-	panic("BUG: unreachable")
-}
-
-// PushOrderByRand satisfies the builder interface.
-func (l *limit) PushOrderByRand() {
-	panic("BUG: unreachable")
+// PushGroupBy satisfies the builder interface.
+func (l *limit) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
+	if len(orderBy) == 0 {
+		return l, nil
+	}
+	return nil, errors.New("limit.PushOrderBy: unreachable")
 }
 
 // SetLimit sets the limit for the primitive. It calls the underlying
