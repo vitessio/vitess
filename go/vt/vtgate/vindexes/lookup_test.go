@@ -39,9 +39,20 @@ type vcursor struct {
 	result      *sqltypes.Result
 	queries     []*querypb.BoundQuery
 	autocommits int
+	pre, post   int
 }
 
 func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+	return vc.execute(method, query, bindvars, isDML)
+}
+
+func (vc *vcursor) ExecutePre(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+	vc.pre++
+	return vc.execute(method, query, bindvars, isDML)
+}
+
+func (vc *vcursor) ExecutePost(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+	vc.post++
 	return vc.execute(method, query, bindvars, isDML)
 }
 

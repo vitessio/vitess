@@ -53,6 +53,14 @@ func (t noopVCursor) Execute(method string, query string, bindvars map[string]*q
 	panic("unimplemented")
 }
 
+func (t noopVCursor) ExecutePre(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+	panic("unimplemented")
+}
+
+func (t noopVCursor) ExecutePost(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+	panic("unimplemented")
+}
+
 func (t noopVCursor) ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
@@ -114,6 +122,16 @@ func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {
 
 func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("Execute %s %v %v", query, printBindVars(bindvars), isDML))
+	return f.nextResult()
+}
+
+func (f *loggingVCursor) ExecutePre(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+	f.log = append(f.log, fmt.Sprintf("ExecutePre %s %v %v", query, printBindVars(bindvars), isDML))
+	return f.nextResult()
+}
+
+func (f *loggingVCursor) ExecutePost(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+	f.log = append(f.log, fmt.Sprintf("ExecutePost %s %v %v", query, printBindVars(bindvars), isDML))
 	return f.nextResult()
 }
 
