@@ -515,7 +515,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select col from user order by rand()",
+    "Query": "select col from user order by RAND()",
     "FieldQuery": "select col from user where 1 != 1"
   }
 }
@@ -532,7 +532,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by rand()",
+      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by RAND()",
       "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
       "Vindex": "user_index",
       "Values": [1]
@@ -543,7 +543,7 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select music.col3 from music where music.id = :user_id order by rand()",
+      "Query": "select music.col3 from music where music.id = :user_id order by RAND()",
       "FieldQuery": "select music.col3 from music where 1 != 1",
       "Vindex": "music_user_map",
       "Values": [":user_id"]

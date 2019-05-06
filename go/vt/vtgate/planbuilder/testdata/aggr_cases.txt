@@ -922,7 +922,7 @@
 
 # invalid order by column numner for scatter
 "select col, count(*) from user group by col order by 5 limit 10"
-"invalid order by: column number out of range: 5"
+"column number out of range: 5"
 
 # aggregate with limit
 "select col, count(*) from user group by col limit 10"

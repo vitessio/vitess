@@ -45,7 +45,6 @@ type subquery struct {
 // newSubquery builds a new subquery.
 func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab, error) {
 	sq := &subquery{
-		order:     bldr.Order() + 1,
 		input:     bldr,
 		esubquery: &engine.Subquery{},
 	}
@@ -120,12 +119,22 @@ func (sq *subquery) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *resu
 	return rc, len(sq.resultColumns) - 1, nil
 }
 
-// PushOrderByNull satisfies the builder interface.
-func (sq *subquery) PushOrderByNull() {
+// MakeDistinct satisfies the builder interface.
+func (sq *subquery) MakeDistinct() error {
+	return errors.New("unsupported: distinct on cross-shard subquery")
 }
 
-// PushOrderByRand satisfies the builder interface.
-func (sq *subquery) PushOrderByRand() {
+// PushGroupBy satisfies the builder interface.
+func (sq *subquery) PushGroupBy(_ sqlparser.GroupBy) error {
+	return errors.New("unsupported: group by on cross-shard subquery")
+}
+
+// PushOrderBy satisfies the builder interface.
+func (sq *subquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
+	if len(orderBy) == 0 {
+		return sq, nil
+	}
+	return nil, errors.New("unsupported: order by on cross-shard subquery")
 }
 
 // SetUpperLimit satisfies the builder interface.
