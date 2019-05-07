@@ -364,9 +364,9 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	pos, err := agent.MysqlDaemon.DemoteMaster()
+	pos, err := agent.MysqlDaemon.MasterPosition()
 	if err != nil {
-		// if DemoteMaster failed, undo all the steps before
+		// if MasterPosition failed, undo all the steps before
 		// 1. set server back to read-only false
 		// setting read_only OFF will also set super_read_only OFF if it was set
 		if err1 := agent.MysqlDaemon.SetReadOnly(false); err1 != nil {
