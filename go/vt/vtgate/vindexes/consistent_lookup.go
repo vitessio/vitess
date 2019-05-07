@@ -236,7 +236,7 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 	}
 	switch len(qr.Rows) {
 	case 0:
-		if _, err := vcursor.ExecutePre("VindexCreate", lu.insertLookupQuery, bindVars, false /* isDML */); err != nil {
+		if _, err := vcursor.ExecutePre("VindexCreate", lu.insertLookupQuery, bindVars, true /* isDML */); err != nil {
 			return err
 		}
 	case 1:
@@ -252,7 +252,7 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 		if bytes.Equal(existingksid, ksid) {
 			return nil
 		}
-		if _, err := vcursor.ExecutePre("VindexCreate", lu.updateLookupQuery, bindVars, false /* isDML */); err != nil {
+		if _, err := vcursor.ExecutePre("VindexCreate", lu.updateLookupQuery, bindVars, true /* isDML */); err != nil {
 			return err
 		}
 	default:
@@ -334,6 +334,7 @@ func (lu *clCommon) generateUpdateLookup() string {
 }
 
 func (lu *clCommon) addWhere(buf *bytes.Buffer, cols []string) {
+	buf.WriteString(" where ")
 	for colIdx, column := range cols {
 		if colIdx != 0 {
 			buf.WriteString(" and ")
