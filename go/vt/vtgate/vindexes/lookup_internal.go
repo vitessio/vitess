@@ -93,9 +93,9 @@ func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value)
 		var err error
 		var result *sqltypes.Result
 		if lkp.Autocommit {
-			result, err = vcursor.ExecuteAutocommit("VindexVerify", lkp.ver, bindVars, true /* isDML */)
+			result, err = vcursor.ExecuteAutocommit("VindexVerify", lkp.ver, bindVars, false /* isDML */)
 		} else {
-			result, err = vcursor.Execute("VindexVerify", lkp.ver, bindVars, true /* isDML */)
+			result, err = vcursor.Execute("VindexVerify", lkp.ver, bindVars, false /* isDML */)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Verify: %v", err)
@@ -188,7 +188,7 @@ func (lkp *lookupInternal) createCustom(executor executorFunc, rowsColValues [][
 //
 // A call to Delete would look like this:
 // Delete(vcursor, [[valuea, valueb]], 52CB7B1B31B2222E)
-func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, value sqltypes.Value) error {
+func (lkp *lookupInternal) Delete(executor executorFunc, rowsColValues [][]sqltypes.Value, value sqltypes.Value) error {
 	// In autocommit mode, it's not safe to delete. So, it's a no-op.
 	if lkp.Autocommit {
 		return nil
@@ -208,7 +208,7 @@ func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 			bindVars[lkp.FromColumns[colIdx]] = sqltypes.ValueBindVariable(columnValue)
 		}
 		bindVars[lkp.To] = sqltypes.ValueBindVariable(value)
-		_, err := vcursor.Execute("VindexDelete", lkp.del, bindVars, true /* isDML */)
+		_, err := executor("VindexDelete", lkp.del, bindVars, true /* isDML */)
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}
@@ -218,7 +218,7 @@ func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 
 // Update implements the update functionality.
 func (lkp *lookupInternal) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid sqltypes.Value, newValues []sqltypes.Value) error {
-	if err := lkp.Delete(vcursor, [][]sqltypes.Value{oldValues}, ksid); err != nil {
+	if err := lkp.Delete(vcursor.Execute, [][]sqltypes.Value{oldValues}, ksid); err != nil {
 		return err
 	}
 	return lkp.Create(vcursor, [][]sqltypes.Value{newValues}, []sqltypes.Value{ksid}, false /* ignoreMode */)

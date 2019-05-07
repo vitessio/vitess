@@ -20,10 +20,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -52,20 +53,12 @@ type ConsistentLookup struct {
 //   table: name of the backing table. It can be qualified by the keyspace.
 //   from: list of columns in the table that have the 'from' values of the lookup vindex.
 //   to: The 'to' column name of the table.
-//
-// The following fields are optional:
-//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewConsistentLookup(name string, m map[string]string) (Vindex, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {
 		return nil, err
 	}
 	return &ConsistentLookup{clCommon: clc}, nil
-}
-
-// String returns the name of the vindex.
-func (lu *ConsistentLookup) String() string {
-	return lu.name
 }
 
 // Cost returns the cost of this vindex as 20.
@@ -81,12 +74,6 @@ func (lu *ConsistentLookup) IsUnique() bool {
 // Map can map ids to key.Destination objects.
 func (lu *ConsistentLookup) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
-	if lu.writeOnly {
-		for range ids {
-			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
-		}
-		return out, nil
-	}
 
 	results, err := lu.lkp.Lookup(vcursor, ids)
 	if err != nil {
@@ -120,9 +107,6 @@ type ConsistentLookupUnique struct {
 //   table: name of the backing table. It can be qualified by the keyspace.
 //   from: list of columns in the table that have the 'from' values of the lookup vindex.
 //   to: The 'to' column name of the table.
-//
-// The following fields are optional:
-//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewConsistentLookupUnique(name string, m map[string]string) (Vindex, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {
@@ -144,12 +128,6 @@ func (lu *ConsistentLookupUnique) IsUnique() bool {
 // Map can map ids to key.Destination objects.
 func (lu *ConsistentLookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
-	if lu.writeOnly {
-		for range ids {
-			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
-		}
-		return out, nil
-	}
 	results, err := lu.lkp.Lookup(vcursor, ids)
 	if err != nil {
 		return nil, err
@@ -174,7 +152,6 @@ func (lu *ConsistentLookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]
 // Unique and a Lookup.
 type clCommon struct {
 	name         string
-	writeOnly    bool
 	lkp          lookupInternal
 	keyspace     string
 	ownerTable   string
@@ -190,20 +167,9 @@ type clCommon struct {
 func newCLCommon(name string, m map[string]string) (*clCommon, error) {
 	lu := &clCommon{name: name}
 
-	wo, err := boolFromMap(m, "write_only")
-	if err != nil {
-		return nil, err
-	}
-	lu.writeOnly = wo
-
 	if err := lu.lkp.Init(m, false /* autocommit */, false /* upsert */); err != nil {
 		return nil, err
 	}
-
-	lu.lockLookupQuery = lu.generateLockLookup()
-	lu.lockOwnerQuery = lu.generateLockOwner()
-	lu.insertLookupQuery = lu.generateInsertLookup()
-	lu.updateLookupQuery = lu.generateUpdateLookup()
 	return lu, nil
 }
 
@@ -217,6 +183,10 @@ func (lu *clCommon) SetOwnerInfo(keyspace, table string, cols []sqlparser.ColIde
 	for i, col := range cols {
 		lu.ownerColumns[i] = col.String()
 	}
+	lu.lockLookupQuery = lu.generateLockLookup()
+	lu.lockOwnerQuery = lu.generateLockOwner()
+	lu.insertLookupQuery = lu.generateInsertLookup()
+	lu.updateLookupQuery = lu.generateUpdateLookup()
 	return nil
 }
 
@@ -232,13 +202,6 @@ func (lu *clCommon) IsFunctional() bool {
 
 // Verify returns true if ids maps to ksids.
 func (lu *clCommon) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	if lu.writeOnly {
-		out := make([]bool, len(ids))
-		for i := range ids {
-			out[i] = true
-		}
-		return out, nil
-	}
 	return lu.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
 }
 
@@ -248,16 +211,77 @@ func (lu *clCommon) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ks
 	if err == nil {
 		return nil
 	}
-	return err
+	if !strings.Contains(err.Error(), "Duplicate entry") {
+		return err
+	}
+	for i, row := range rowsColValues {
+		if err := lu.handleDup(vcursor, row, ksids[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []byte) error {
+	bindVars := make(map[string]*querypb.BindVariable, len(values))
+	for colnum, val := range values {
+		bindVars[lu.lkp.FromColumns[colnum]] = sqltypes.ValueBindVariable(val)
+	}
+	bindVars[lu.lkp.To] = sqltypes.BytesBindVariable(ksid)
+
+	// Lock the lookup row using pre priority.
+	qr, err := vcursor.ExecutePre("VindexCreate", lu.lockLookupQuery, bindVars, false /* isDML */)
+	if err != nil {
+		return err
+	}
+	switch len(qr.Rows) {
+	case 0:
+		if _, err := vcursor.ExecutePre("VindexCreate", lu.insertLookupQuery, bindVars, false /* isDML */); err != nil {
+			return err
+		}
+	case 1:
+		existingksid := qr.Rows[0][0].ToBytes()
+		// Lock the target row using normal transaction priority.
+		qr, err = vcursor.ExecuteKeyspaceID(lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* isDML */, false /* autocommit */)
+		if err != nil {
+			return err
+		}
+		if len(qr.Rows) >= 1 {
+			return fmt.Errorf("duplicate entry %v", values)
+		}
+		if bytes.Equal(existingksid, ksid) {
+			return nil
+		}
+		if _, err := vcursor.ExecutePre("VindexCreate", lu.updateLookupQuery, bindVars, false /* isDML */); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unexpected rows: %v from consistent lookup vindex", qr.Rows)
+	}
+	return nil
 }
 
 // Delete deletes the entry from the vindex table.
 func (lu *clCommon) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
-	return lu.lkp.Delete(vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
+	return lu.lkp.Delete(vcursor.ExecutePost, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
 }
 
 // Update updates the entry in the vindex table.
 func (lu *clCommon) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
+	equal := true
+	for i := range oldValues {
+		result, err := sqltypes.NullsafeCompare(oldValues[i], newValues[i])
+		if err != nil {
+			return err
+		}
+		if result != 0 {
+			equal = false
+			break
+		}
+	}
+	if equal {
+		return nil
+	}
 	if err := lu.Delete(vcursor, [][]sqltypes.Value{oldValues}, ksid); err != nil {
 		return err
 	}
@@ -314,6 +338,6 @@ func (lu *clCommon) addWhere(buf *bytes.Buffer, cols []string) {
 		if colIdx != 0 {
 			buf.WriteString(" and ")
 		}
-		buf.WriteString(column + " = :" + column)
+		buf.WriteString(column + " = :" + lu.lkp.FromColumns[colIdx])
 	}
 }
