@@ -41,7 +41,7 @@ var (
 	enforceTableACLConfig = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
 	tableACLConfig        = flag.String("table-acl-config", "", "path to table access checker config file; send SIGHUP to reload this file")
 	tabletPath            = flag.String("tablet-path", "", "tablet alias")
-	tabletBackupOnly      = flag.Bool("tablet_backup_only", false, "if set this tablet will come on line and then take a backup then stop")
+	tabletBackupAndExit   = flag.Bool("backup_and_exit", false, "if set this tablet will come on line and then take a backup then stop")
 
 	agent *tabletmanager.ActionAgent
 )
@@ -143,7 +143,7 @@ func main() {
 		ts.Close()
 	})
 
-	if *tabletBackupOnly {
+	if *tabletBackupAndExit {
 		go func() {
 			delay, err := agent.Healthy()
 			for err != nil || delay > 0 {
