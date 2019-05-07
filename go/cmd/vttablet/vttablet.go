@@ -19,10 +19,13 @@ package main
 
 import (
 	"flag"
+	"syscall"
+	"time"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -38,6 +41,7 @@ var (
 	enforceTableACLConfig = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
 	tableACLConfig        = flag.String("table-acl-config", "", "path to table access checker config file; send SIGHUP to reload this file")
 	tabletPath            = flag.String("tablet-path", "", "tablet alias")
+	tabletBackupOnly      = flag.Bool("tablet_backup_only", false, "if set this tablet will come on line and then take a backup then stop")
 
 	agent *tabletmanager.ActionAgent
 )
@@ -138,5 +142,22 @@ func main() {
 		// to update our state, so closing it in OnClose()
 		ts.Close()
 	})
+
+	if *tabletBackupOnly {
+		go func() {
+			delay, err := agent.Healthy()
+			for err != nil || delay > 0 {
+				time.Sleep(time.Second)
+				delay, err = agent.Healthy()
+			}
+
+			err = agent.Backup(context.Background(), 1, logutil.NewConsoleLogger(), false)
+			if err != nil {
+				log.Fatalf("Backup() failed: %v", err)
+			}
+			// The only way to stop servenv is to SIGUSR1 it
+			syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
+		}()
+	}
 	servenv.RunDefault()
 }
