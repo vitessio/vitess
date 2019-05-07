@@ -36,6 +36,8 @@ type VCursor interface {
 	ExecutePre(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
 	ExecutePost(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
 	ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
+
+	ExecuteKeyspaceID(keyspace string, ksid []byte, query *querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, error)
 }
 
 // Vindex defines the interface required to register a vindex.
@@ -105,11 +107,11 @@ type Lookup interface {
 	Update(vc VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error
 }
 
-// WantOwnerColumns defines the interface that a vindex must
-// satisfy to accept owner column names. This information can
+// WantOwnerInfo defines the interface that a vindex must
+// satisfy to info about the owner table. This information can
 // be used to query the owner's table for the owning row's presence.
-type WantOwnerColumns interface {
-	SetOwnerColumns(cols []sqlparser.ColIdent)
+type WantOwnerInfo interface {
+	SetOwnerInfo(keyspace, table string, cols []sqlparser.ColIdent) error
 }
 
 // A NewVindexFunc is a function that creates a Vindex based on the

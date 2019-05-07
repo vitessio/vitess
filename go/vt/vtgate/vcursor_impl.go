@@ -210,6 +210,22 @@ func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedS
 	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.tabletType, vc.safeSession.Options, callback)
 }
 
+// ExecuteKeyspaceID is part of the engine.VCursor interface.
+func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query *querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, error) {
+	atomic.AddUint32(&vc.logStats.ShardQueries, 1)
+	rss, _, err := vc.ResolveDestinations(keyspace, nil, []key.Destination{key.DestinationKeyspaceID(ksid)})
+	if err != nil {
+		return nil, err
+	}
+	qr, errs := vc.ExecuteMultiShard(rss, []*querypb.BoundQuery{query}, isDML, autocommit)
+
+	if len(errs) == 0 {
+		vc.hasPartialDML = true
+		return qr, nil
+	}
+	return nil, errs[0]
+}
+
 func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	return vc.executor.resolver.resolver.ResolveDestinations(vc.ctx, keyspace, vc.tabletType, ids, destinations)
 }

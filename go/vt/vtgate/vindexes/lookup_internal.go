@@ -27,6 +27,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+type executorFunc func(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
+
 // lookupInternal implements the functions for the Lookup vindexes.
 type lookupInternal struct {
 	Table         string   `json:"table"`
@@ -114,6 +116,13 @@ func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value)
 // Create(vcursor, [[value_a0, value_b0,], [value_a1, value_b1]], [binary(value_c0), binary(value_c1)])
 // Notice that toValues contains the computed binary value of the keyspace_id.
 func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool) error {
+	if lkp.Autocommit {
+		return lkp.createCustom(vcursor.ExecuteAutocommit, rowsColValues, toValues, ignoreMode)
+	}
+	return lkp.createCustom(vcursor.Execute, rowsColValues, toValues, ignoreMode)
+}
+
+func (lkp *lookupInternal) createCustom(executor executorFunc, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool) error {
 	if len(rowsColValues) == 0 {
 		// This code is unreachable. It's just a failsafe.
 		return nil
@@ -158,13 +167,7 @@ func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Va
 		fmt.Fprintf(buf, "%s=values(%s)", lkp.To, lkp.To)
 	}
 
-	var err error
-	if lkp.Autocommit {
-		_, err = vcursor.ExecuteAutocommit("VindexCreate", buf.String(), bindVars, true /* isDML */)
-	} else {
-		_, err = vcursor.Execute("VindexCreate", buf.String(), bindVars, true /* isDML */)
-	}
-	if err != nil {
+	if _, err := executor("VindexCreate", buf.String(), bindVars, true /* isDML */); err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
 	return nil
