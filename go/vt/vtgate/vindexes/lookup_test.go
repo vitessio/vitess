@@ -61,6 +61,10 @@ func (vc *vcursor) ExecuteAutocommit(method string, query string, bindvars map[s
 	return vc.execute(method, query, bindvars, isDML)
 }
 
+func (vc *vcursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query *querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, error) {
+	return vc.execute("ExecuteKeyspaceID", query.Sql, query.BindVariables, isDML)
+}
+
 func (vc *vcursor) execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
 	vc.queries = append(vc.queries, &querypb.BoundQuery{
 		Sql:           query,
