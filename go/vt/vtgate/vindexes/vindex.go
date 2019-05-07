@@ -37,7 +37,7 @@ type VCursor interface {
 	ExecutePost(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
 	ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
 
-	ExecuteKeyspaceID(keyspace string, ksid []byte, query *querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, error)
+	ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error)
 }
 
 // Vindex defines the interface required to register a vindex.

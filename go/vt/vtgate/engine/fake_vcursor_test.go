@@ -81,7 +81,7 @@ func (t noopVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedSha
 	panic("unimplemented")
 }
 
-func (t noopVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query *querypb.BoundQuery, isDML, autocommit bool) (*sqltypes.Result, error) {
+func (t noopVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 

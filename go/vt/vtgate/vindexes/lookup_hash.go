@@ -172,7 +172,7 @@ func (lh *LookupHash) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
-	return lh.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v))
+	return lh.lkp.Delete(vcursor.Execute, rowsColValues, sqltypes.NewUint64(v))
 }
 
 // MarshalJSON returns a JSON representation of LookupHash.
@@ -317,7 +317,7 @@ func (lhu *LookupHashUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
-	return lhu.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v))
+	return lhu.lkp.Delete(vcursor.Execute, rowsColValues, sqltypes.NewUint64(v))
 }
 
 // Update updates the entry in the vindex table.

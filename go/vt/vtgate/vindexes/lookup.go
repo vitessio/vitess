@@ -112,7 +112,7 @@ func (ln *LookupNonUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Va
 
 // Delete deletes the entry from the vindex table.
 func (ln *LookupNonUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
-	return ln.lkp.Delete(vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
+	return ln.lkp.Delete(vcursor.Execute, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
 }
 
 // Update updates the entry in the vindex table.
@@ -270,7 +270,7 @@ func (lu *LookupUnique) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid
 
 // Delete deletes the entry from the vindex table.
 func (lu *LookupUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
-	return lu.lkp.Delete(vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
+	return lu.lkp.Delete(vcursor.Execute, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
 }
 
 // MarshalJSON returns a JSON representation of LookupUnique.
