@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 const (
@@ -39,43 +39,43 @@ func utcDate(year, month, day int) time.Time {
 }
 
 var tests = []struct {
-	pt *logutilpb.Time
+	pt *vttime.Time
 	t  time.Time
 }{
 	// The timestamp representing the Unix epoch date.
-	{pt: &logutilpb.Time{Seconds: 0, Nanoseconds: 0},
+	{pt: &vttime.Time{Seconds: 0, Nanoseconds: 0},
 		t: utcDate(1970, 1, 1)},
 
 	// The smallest representable timestamp with non-negative nanos.
-	{pt: &logutilpb.Time{Seconds: math.MinInt64, Nanoseconds: 0},
+	{pt: &vttime.Time{Seconds: math.MinInt64, Nanoseconds: 0},
 		t: time.Unix(math.MinInt64, 0).UTC()},
 
 	// The earliest valid timestamp.
-	{pt: &logutilpb.Time{Seconds: minValidSeconds, Nanoseconds: 0},
+	{pt: &vttime.Time{Seconds: minValidSeconds, Nanoseconds: 0},
 		t: utcDate(1, 1, 1)},
 
 	// The largest representable timestamp with nanos in range.
-	{pt: &logutilpb.Time{Seconds: math.MaxInt64, Nanoseconds: 1e9 - 1},
+	{pt: &vttime.Time{Seconds: math.MaxInt64, Nanoseconds: 1e9 - 1},
 		t: time.Unix(math.MaxInt64, 1e9-1).UTC()},
 
 	// The largest valid timestamp.
-	{pt: &logutilpb.Time{Seconds: maxValidSeconds - 1, Nanoseconds: 1e9 - 1},
+	{pt: &vttime.Time{Seconds: maxValidSeconds - 1, Nanoseconds: 1e9 - 1},
 		t: time.Date(9999, 12, 31, 23, 59, 59, 1e9-1, time.UTC)},
 
 	// The smallest invalid timestamp that is larger than the valid range.
-	{pt: &logutilpb.Time{Seconds: maxValidSeconds, Nanoseconds: 0},
+	{pt: &vttime.Time{Seconds: maxValidSeconds, Nanoseconds: 0},
 		t: time.Unix(maxValidSeconds, 0).UTC()},
 
 	// A date before the epoch.
-	{pt: &logutilpb.Time{Seconds: -281836800, Nanoseconds: 0},
+	{pt: &vttime.Time{Seconds: -281836800, Nanoseconds: 0},
 		t: utcDate(1961, 1, 26)},
 
 	// A date after the epoch.
-	{pt: &logutilpb.Time{Seconds: 1296000000, Nanoseconds: 0},
+	{pt: &vttime.Time{Seconds: 1296000000, Nanoseconds: 0},
 		t: utcDate(2011, 1, 26)},
 
 	// A date after the epoch, in the middle of the day.
-	{pt: &logutilpb.Time{Seconds: 1296012345, Nanoseconds: 940483},
+	{pt: &vttime.Time{Seconds: 1296012345, Nanoseconds: 940483},
 		t: time.Date(2011, 1, 26, 3, 25, 45, 940483, time.UTC)},
 }
 

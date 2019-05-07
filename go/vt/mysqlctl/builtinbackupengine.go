@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -28,6 +27,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/klauspost/pgzip"
 	"vitess.io/vitess/go/mysql"
@@ -72,6 +72,10 @@ type builtinBackupManifest struct {
 	// backups that don't have this flag are assumed to be
 	// compressed.
 	SkipCompress bool
+
+	// BackupTime is when the backup was taken in UTC time
+	// format: "2006-01-02.150405"
+	BackupTime time.Time
 }
 
 // FileEntry is one file to backup
@@ -236,7 +240,7 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, error) {
 
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
-func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error) {
+func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string, backupTime time.Time) (bool, error) {
 
 	logger.Infof("Hook: %v, Compress: %v", *backupStorageHook, *backupStorageCompress)
 
@@ -298,7 +302,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, my
 	}
 
 	// Backup everything, capture the error.
-	backupErr := be.backupFiles(ctx, cnf, mysqld, logger, bh, replicationPosition, backupConcurrency, hookExtraEnv)
+	backupErr := be.backupFiles(ctx, cnf, mysqld, logger, bh, replicationPosition, backupConcurrency, hookExtraEnv, backupTime)
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
@@ -340,7 +344,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, my
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
-func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition mysql.Position, backupConcurrency int, hookExtraEnv map[string]string) (err error) {
+func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition mysql.Position, backupConcurrency int, hookExtraEnv map[string]string, backupTime time.Time) (err error) {
 	// Get the files to backup.
 	fes, err := findFilesToBackup(cnf)
 	if err != nil {
@@ -393,6 +397,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 		Position:      replicationPosition,
 		TransformHook: *backupStorageHook,
 		SkipCompress:  !*backupStorageCompress,
+		BackupTime:    backupTime,
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
@@ -515,12 +520,14 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	dir string,
 	bhs []backupstorage.BackupHandle,
 	restoreConcurrency int,
-	hookExtraEnv map[string]string) (mysql.Position, error) {
+	hookExtraEnv map[string]string,
+	snapshotTime time.Time) (mysql.Position, error) {
 
 	var bh backupstorage.BackupHandle
 	var bm builtinBackupManifest
 	var toRestore int
 
+	unixZeroTime := time.Unix(0, 0).UTC()
 	for toRestore = len(bhs) - 1; toRestore >= 0; toRestore-- {
 		bh = bhs[toRestore]
 		rc, err := bh.ReadFile(ctx, backupManifest)
@@ -535,15 +542,19 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
 			continue
 		}
-
-		logger.Infof("Restore: found backup %v %v to restore with %v files", bh.Directory(), bh.Name(), len(bm.FileEntries))
-		break
+		if snapshotTime.Equal(unixZeroTime) /* uninitialized or not snapshot */ || bm.BackupTime.Before(snapshotTime) {
+			logger.Infof("Restore: found backup %v %v to restore with %v files", bh.Directory(), bh.Name(), len(bm.FileEntries))
+			break
+		}
 	}
 	if toRestore < 0 {
+		if snapshotTime.After(unixZeroTime) {
+			return mysql.Position{}, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "No valid backup found before time %v", snapshotTime.Format("2006-01-02.150405"))
+		}
 		// There is at least one attempted backup, but none could be read.
 		// This implies there is data we ought to have, so it's not safe to start
 		// up empty.
-		return mysql.Position{}, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
+		return mysql.Position{}, vterrors.New(vtrpc.Code_NOT_FOUND, "backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
 	}
 
 	// Starting from here we won't be able to recover if we get stopped by a cancelled

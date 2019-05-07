@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/klauspost/pgzip"
 	"vitess.io/vitess/go/mysql"
@@ -70,15 +71,23 @@ const (
 type xtraBackupManifest struct {
 	// Name of the backup file
 	FileName string
+
 	// BackupMethod, set to xtrabackup
 	BackupMethod string
+
 	// Position at which the backup was taken
 	Position mysql.Position
+
 	// SkipCompress can be set if the backup files were not run
 	// through gzip.
 	SkipCompress bool
+
 	// Params are the parameters that backup was run with
 	Params string `json:"ExtraCommandLineParams"`
+
+	// BackupTime is when the backup was taken in UTC time
+	// format: "2006-01-02.150405"
+	BackupTime time.Time
 }
 
 func (be *XtrabackupEngine) backupFileName() string {
@@ -95,7 +104,7 @@ func (be *XtrabackupEngine) backupFileName() string {
 
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
-func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error) {
+func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string, backupTime time.Time) (bool, error) {
 
 	if *xtrabackupUser == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
@@ -217,6 +226,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 		Position:     replicationPosition,
 		SkipCompress: !*backupStorageCompress,
 		Params:       *xtrabackupBackupFlags,
+		BackupTime:   backupTime,
 	}
 
 	data, err := json.MarshalIndent(bm, "", "  ")
@@ -239,7 +249,8 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	dir string,
 	bhs []backupstorage.BackupHandle,
 	restoreConcurrency int,
-	hookExtraEnv map[string]string) (mysql.Position, error) {
+	hookExtraEnv map[string]string,
+	snapshotTime time.Time) (mysql.Position, error) {
 
 	var bh backupstorage.BackupHandle
 	var bm xtraBackupManifest
@@ -261,8 +272,10 @@ func (be *XtrabackupEngine) ExecuteRestore(
 			continue
 		}
 
-		logger.Infof("Restore: found backup %v %v to restore with %v file", bh.Directory(), bh.Name(), bm.FileName)
-		break
+		if bm.BackupTime.Before(snapshotTime) {
+			logger.Infof("Restore: found backup %v %v to restore with %v file", bh.Directory(), bh.Name(), bm.FileName)
+			break
+		}
 	}
 	if index < 0 {
 		// There is at least one attempted backup, but none could be read.

@@ -224,10 +224,12 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		if err != nil {
 			return err
 		}
-		if _, ok := vschema.uniqueVindexes[vname]; ok {
-			vschema.uniqueVindexes[vname] = nil
-		} else {
-			vschema.uniqueVindexes[vname] = vindex
+		if ks.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
+			if _, ok := vschema.uniqueVindexes[vname]; ok {
+				vschema.uniqueVindexes[vname] = nil
+			} else {
+				vschema.uniqueVindexes[vname] = vindex
+			}
 		}
 		ksvschema.Vindexes[vname] = vindex
 	}
@@ -326,10 +328,12 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		t.Ordered = colVindexSorted(t.ColumnVindexes)
 
 		// Add the table to the map entries.
-		if _, ok := vschema.uniqueTables[tname]; ok {
-			vschema.uniqueTables[tname] = nil
-		} else {
-			vschema.uniqueTables[tname] = t
+		if ks.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
+			if _, ok := vschema.uniqueTables[tname]; ok {
+				vschema.uniqueTables[tname] = nil
+			} else {
+				vschema.uniqueTables[tname] = t
+			}
 		}
 		ksvschema.Tables[tname] = t
 	}

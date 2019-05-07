@@ -19,33 +19,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"xtrabackup": {
-			"File": "xtrabackup.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"xtrabackup_xbstream": {
-			"File": "xtrabackup_xbstream.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"xtrabackup_xtra": {
-			"File": "xtrabackup_xtra.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"binlog": {
 			"File": "binlog.py",
 			"Args": [],
@@ -64,6 +37,39 @@
 			"Manual": false,
 			"Shard": 1,
 			"RetryMax": 0,
+			"Tags": []
+		},
+		"cell_aliases": {
+			"File": "cell_aliases.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"cell_no_aliases": {
+			"File": "cell_no_aliases.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"check_make_parser": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"tools/check_make_parser.sh"
+			],
+			"Manual": false,
+			"Shard": 0,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"custom_sharding": {
@@ -126,39 +132,6 @@
 				"worker_test"
 			]
 		},
-		"legacy_resharding": {
-			"File": "legacy_resharding.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
-		},
-		"merge_sharding": {
-			"File": "merge_sharding.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
-		},
-		"merge_sharding_bytes": {
-			"File": "merge_sharding_bytes.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
-		},
 		"java": {
 			"File": "",
 			"Args": [],
@@ -195,6 +168,17 @@
 				"site_test"
 			]
 		},
+		"legacy_resharding": {
+			"File": "legacy_resharding.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
 		"local_example": {
 			"File": "",
 			"Args": [],
@@ -206,27 +190,36 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"cell_no_aliases": {
-			"File": "cell_no_aliases.py",
+		"merge_sharding": {
+			"File": "merge_sharding.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": [
-				"site_test"
+				"worker_test"
 			]
 		},
-		"cell_aliases": {
-			"File": "cell_aliases.py",
+		"merge_sharding_bytes": {
+			"File": "merge_sharding_bytes.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": [
-				"site_test"
+				"worker_test"
 			]
+		},
+		"messaging": {
+			"File": "messaging.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"mysql_server": {
 			"File": "mysql_server_test.py",
@@ -248,23 +241,21 @@
 				"site_test"
 			]
 		},
-		"check_make_parser": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"tools/check_make_parser.sh"
-			],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"python_client": {
 			"File": "python_client_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
 			"Shard": 0,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"recovery": {
+			"File": "recovery.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -482,15 +473,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"messaging": {
-			"File": "messaging.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"vttest_sample": {
 			"File": "vttest_sample_test.py",
 			"Args": [],
@@ -510,6 +492,33 @@
 			"Tags": [
 				"worker_test"
 			]
+		},
+		"xtrabackup": {
+			"File": "xtrabackup.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"xtrabackup_xbstream": {
+			"File": "xtrabackup_xbstream.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"xtrabackup_xtra": {
+			"File": "xtrabackup_xtra.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
 		}
 	}
 }

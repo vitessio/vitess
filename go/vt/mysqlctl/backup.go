@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -83,7 +84,7 @@ var (
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
-func Backup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
+func Backup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir, name string, backupConcurrency int, hookExtraEnv map[string]string, backupTime time.Time) error {
 	// Start the backup with the BackupStorage.
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
@@ -101,7 +102,7 @@ func Backup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.
 	}
 
 	// Take the backup, and either AbortBackup or EndBackup.
-	usable, err := be.ExecuteBackup(ctx, cnf, mysqld, logger, bh, backupConcurrency, hookExtraEnv)
+	usable, err := be.ExecuteBackup(ctx, cnf, mysqld, logger, bh, backupConcurrency, hookExtraEnv, backupTime)
 	var finishErr error
 	if usable {
 		finishErr = bh.EndBackup(ctx)
@@ -218,7 +219,8 @@ func Restore(
 	localMetadata map[string]string,
 	logger logutil.Logger,
 	deleteBeforeRestore bool,
-	dbName string) (mysql.Position, error) {
+	dbName string,
+	snapshotTime time.Time) (mysql.Position, error) {
 
 	rval := mysql.Position{}
 
@@ -274,7 +276,7 @@ func Restore(
 	if err != nil {
 		return mysql.Position{}, vterrors.Wrap(err, "Failed to find backup engine")
 	}
-	if rval, err = be.ExecuteRestore(ctx, cnf, mysqld, logger, dir, bhs, restoreConcurrency, hookExtraEnv); err != nil {
+	if rval, err = be.ExecuteRestore(ctx, cnf, mysqld, logger, dir, bhs, restoreConcurrency, hookExtraEnv, snapshotTime); err != nil {
 		return rval, err
 	}
 
