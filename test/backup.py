@@ -32,7 +32,9 @@ stream_mode = 'tar'
 tablet_master = None
 tablet_replica1 = None
 tablet_replica2 = None
+tablet_replica3 = None
 xtrabackup_args = []
+
 new_init_db = ''
 db_credentials_file = ''
 
@@ -48,13 +50,15 @@ def setUpModule():
                    '--password=VtDbaPass']
 
   global new_init_db, db_credentials_file
-  global tablet_master, tablet_replica1, tablet_replica2
+  global tablet_master, tablet_replica1, tablet_replica2, tablet_replica3
 
   tablet_master = tablet.Tablet(use_mysqlctld=use_mysqlctld,
                                 vt_dba_passwd='VtDbaPass')
   tablet_replica1 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
                                   vt_dba_passwd='VtDbaPass')
   tablet_replica2 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
+                                  vt_dba_passwd='VtDbaPass')
+  tablet_replica3 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
                                   vt_dba_passwd='VtDbaPass')
 
   try:
@@ -99,11 +103,15 @@ FLUSH PRIVILEGES;
         tablet_replica2.init_mysql(init_db=new_init_db,
                                    extra_args=['-db-credentials-file',
                                                db_credentials_file]),
+        tablet_replica3.init_mysql(init_db=new_init_db,
+                                   extra_args=['-db-credentials-file',
+                                               db_credentials_file]),      
     ]
     if use_mysqlctld:
       tablet_master.wait_for_mysqlctl_socket()
       tablet_replica1.wait_for_mysqlctl_socket()
       tablet_replica2.wait_for_mysqlctl_socket()
+      tablet_replica3.wait_for_mysqlctl_socket()      
     else:
       utils.wait_procs(setup_procs)
   except:
@@ -123,6 +131,8 @@ def tearDownModule():
                                                  db_credentials_file]),
       tablet_replica2.teardown_mysql(extra_args=['-db-credentials-file',
                                                  db_credentials_file]),
+      tablet_replica3.teardown_mysql(extra_args=['-db-credentials-file',
+                                                 db_credentials_file]),    
   ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -133,6 +143,7 @@ def tearDownModule():
   tablet_master.remove_tree()
   tablet_replica1.remove_tree()
   tablet_replica2.remove_tree()
+  tablet_replica3.remove_tree()  
 
 
 class TestBackup(unittest.TestCase):
@@ -154,7 +165,7 @@ class TestBackup(unittest.TestCase):
                      tablet_master.tablet_alias])
 
   def tearDown(self):
-    for t in tablet_master, tablet_replica1, tablet_replica2:
+    for t in tablet_master, tablet_replica1, tablet_replica2, tablet_replica3:
       t.kill_vttablet()
 
     tablet.Tablet.check_vttablet_count()
@@ -195,7 +206,7 @@ class TestBackup(unittest.TestCase):
         # does not exist exception in some rare cases)
         logging.exception('exception waiting for data to replicate')
       timeout = utils.wait_step(msg, timeout)
-
+      
   def _restore(self, t, tablet_type='replica'):
     """Erase mysql/tablet dir, then start tablet with restore enabled."""
     self._reset_tablet_dir(t)
@@ -245,13 +256,36 @@ class TestBackup(unittest.TestCase):
         tablet.get_backup_storage_flags() +
         ['RemoveBackup', 'test_keyspace/0', backup],
         auto_log=True, mode=utils.VTCTL_VTCTL)
+    
+  def _backup_only(self, t, tablet_type='replica'):
+    """Erase mysql/tablet dir, then start tablet with restore only."""
+    logging.debug('starting backup only tablet %s',t.tablet_alias)
+    self._reset_tablet_dir(t)
+    
+    logging.debug('building command line')
 
+    xtra_args = ['-db-credentials-file', db_credentials_file,'-tablet_backup_only']
+    if use_xtrabackup:
+      xtra_args.extend(xtrabackup_args)      
+    
+    proc = t.start_vttablet(wait_for_state=False,
+                     init_tablet_type=tablet_type,
+                     init_keyspace='test_keyspace',
+                     init_shard='0',
+                     supports_backups=True,
+                     extra_args=xtra_args)
+    logging.debug('tablet started waiting for process to end %s',proc)    
+    utils.wait_procs([proc],True)
+    
   def test_backup_rdonly(self):
-    self._test_backup('rdonly')
+    self._test_backup('rdonly', False)
 
   def test_backup_replica(self):
-    self._test_backup('replica')
+    self._test_backup('replica', False)
 
+  def test_tablet_backup_only(self):
+    self._test_backup('replica', True)
+    
   def test_backup_master(self):
     """Test backup flow.
 
@@ -313,10 +347,10 @@ class TestBackup(unittest.TestCase):
     backups = self._list_backups()
     logging.debug('list of backups after remove: %s', backups)
     self.assertEqual(len(backups), 0)
-
+    
     tablet_replica2.kill_vttablet()
 
-  def _test_backup(self, tablet_type):
+  def _test_backup(self, tablet_type, backup_only):
     """Test backup flow.
 
     test_backup will:
@@ -339,17 +373,24 @@ class TestBackup(unittest.TestCase):
     self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
 
     # backup the slave
-    utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
+    alias = tablet_replica1.tablet_alias
+    logging.debug("taking backup")
+    if not backup_only:
+      utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
+    else:
+      self._backup_only(tablet_replica3)
+      alias = tablet_replica3.tablet_alias
+    # end if
 
     # check that the backup shows up in the listing
     backups = self._list_backups()
     logging.debug('list of backups: %s', backups)
     self.assertEqual(len(backups), 1)
-    self.assertTrue(backups[0].endswith(tablet_replica1.tablet_alias))
+    self.assertTrue(backups[0].endswith(alias))
 
     # insert more data on the master
     self._insert_data(tablet_master, 2)
-
+    
     # now bring up the other slave, letting it restore from backup.
     self._restore(tablet_replica2, tablet_type=tablet_type)
 
@@ -369,15 +410,25 @@ class TestBackup(unittest.TestCase):
     else:
       self.assertEqual(metadata['PromotionRule'], 'must_not')
 
+
+    # Test that a backup restore from backup cycle works
+    if backup_only:
+      self._backup_only(tablet_replica3)
+      backups = self._list_backups()    
+      self.assertEqual(len(backups), 2)
+      self.assertTrue(backups[1].endswith(tablet_replica3.tablet_alias))      
     # remove the backup and check that the list is empty
-    self._remove_backup(backups[0])
+
+    for backup in backups:
+      self._remove_backup(backup)
+     
     backups = self._list_backups()
     logging.debug('list of backups after remove: %s', backups)
     self.assertEqual(len(backups), 0)
 
     tablet_replica2.kill_vttablet()
 
-  def test_master_slave_same_backup(self):
+  def test_master_slave_same_backup(self):    
     """Test a master and slave from the same backup.
 
     Check that a slave and master both restored from the same backup
