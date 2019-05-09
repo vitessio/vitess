@@ -197,7 +197,8 @@ VSchema:
   "vindexes": {
     "hash": {
       "type": "hash"
-    },
+    }
+  },
   "tables": {
     "user": {
       "column_vindexes": [
@@ -246,7 +247,8 @@ VSchema:
   "vindexes": {
     "hash": {
       "type": "hash"
-    },
+    }
+  },
   "tables": {
     "user": {
       "column_vindexes": [
@@ -298,7 +300,8 @@ VSchema:
         "to": "user_id"
       },
       "owner": "user"
-    },
+    }
+  },
   "tables": {
     "user": {
       "column_vindexes": [
