@@ -549,7 +549,7 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	}
 	if toRestore < 0 {
 		if snapshotTime.After(unixZeroTime) {
-			return mysql.Position{}, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "No valid backup found before time %v", snapshotTime.Format("2006-01-02.150405"))
+			return mysql.Position{}, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "No valid backup found before time %v", snapshotTime.Format(time.RFC3339))
 		}
 		// There is at least one attempted backup, but none could be read.
 		// This implies there is data we ought to have, so it's not safe to start

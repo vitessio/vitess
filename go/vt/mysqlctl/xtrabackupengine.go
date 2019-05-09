@@ -256,6 +256,7 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	var bm xtraBackupManifest
 	var index int
 	zeroPosition := mysql.Position{}
+	unixZeroTime := time.Unix(0, 0).UTC()
 
 	for index = len(bhs) - 1; index >= 0; index-- {
 		bh = bhs[index]
@@ -271,13 +272,15 @@ func (be *XtrabackupEngine) ExecuteRestore(
 			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
 			continue
 		}
-
-		if bm.BackupTime.Before(snapshotTime) {
+		if snapshotTime.Equal(unixZeroTime) /* uninitialized or not snapshot */ || bm.BackupTime.Before(snapshotTime) {
 			logger.Infof("Restore: found backup %v %v to restore with %v file", bh.Directory(), bh.Name(), bm.FileName)
 			break
 		}
 	}
 	if index < 0 {
+		if snapshotTime.After(unixZeroTime) {
+			return mysql.Position{}, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "No valid backup found before time %v", snapshotTime.Format(time.RFC3339))
+		}
 		// There is at least one attempted backup, but none could be read.
 		// This implies there is data we ought to have, so it's not safe to start
 		// up empty.
