@@ -448,11 +448,6 @@ type bv struct {
 	Name string
 	Bv   string
 }
-type bvlist []bv
-
-func (bvl bvlist) Len() int           { return len(bvl) }
-func (bvl bvlist) Less(i, j int) bool { return bvl[i].Name < bvl[j].Name }
-func (bvl bvlist) Swap(i, j int)      { bvl[i], bvl[j] = bvl[j], bvl[i] }
 
 func (vc *loggingVCursor) AddResult(qr *sqltypes.Result, err error) {
 	vc.results = append(vc.results, qr)
@@ -487,7 +482,7 @@ func (vc *loggingVCursor) execute(method string, query string, bindvars map[stri
 	for k, v := range bindvars {
 		bvl = append(bvl, bv{Name: k, Bv: string(v.Value)})
 	}
-	sort.Sort(bvlist(bvl))
+	sort.Slice(bvl, func(i, j int) bool { return bvl[i].Name < bvl[j].Name })
 	vc.log = append(vc.log, fmt.Sprintf("%s %s %v %v", method, query, bvl, isDML))
 	idx := vc.index
 	vc.index++

@@ -135,7 +135,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 
 	// Write in the vschema if set.
 	if vschema != nil {
-		vschemaFilePath := path.Join(tempSchemaDir, "vschema.json")
+		vschemaFilePath := path.Join(tempSchemaDir, keyspace, "vschema.json")
 		vschemaJSON, err := json.Marshal(vschema)
 		if err != nil {
 			return err
