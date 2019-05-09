@@ -24,9 +24,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -105,6 +107,14 @@ func TestAPI(t *testing.T) {
 	realtimeStats.StatsUpdate(ts5)
 	realtimeStats.StatsUpdate(ts6)
 
+	sTime := logutil.TimeToProto(time.Unix(0, 0).UTC())
+
+	ts.CreateKeyspace(ctx, "ks3", &topodatapb.Keyspace{
+		ShardingColumnName: "shardcol",
+		KeyspaceType:       topodatapb.KeyspaceType_SNAPSHOT,
+		SnapshotTime:       sTime,
+	})
+
 	// Test cases.
 	table := []struct {
 		method, path, body, want string
@@ -113,7 +123,7 @@ func TestAPI(t *testing.T) {
 		{"GET", "cells", "", `["cell1","cell2"]`},
 
 		// Keyspaces
-		{"GET", "keyspaces", "", `["ks1"]`},
+		{"GET", "keyspaces", "", `["ks1", "ks3"]`},
 		{"GET", "keyspaces/ks1", "", `{
 				"sharding_column_name": "shardcol",
 				"sharding_column_type": 0,
@@ -257,6 +267,10 @@ func TestAPI(t *testing.T) {
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
 		   "Error": "",
 		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 0,\n  \"snapshot_time\": null\n}\n\n"
+		}`},
+		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
+		   "Error": "",
+		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 1,\n  \"snapshot_time\": {\n    \"seconds\": \"0\",\n    \"nanoseconds\": 0\n  }\n}\n\n"
 		}`},
 		{"POST", "vtctl/", `["GetKeyspace","does_not_exist"]`, `{
 			"Error": "node doesn't exist: keyspaces/does_not_exist/Keyspace",
