@@ -5,8 +5,8 @@ insert into user (id, name) values(1, 'alice')
 1 ks_sharded/40-80: insert into name_user_map(name, user_id) values ('alice', 1) /* vtgate:: keyspace_id:475e26c086f437f36bd72ecd883504a7 */
 2 ks_sharded/-40: begin
 2 ks_sharded/-40: insert into user(id, name) values (1, 'alice') /* vtgate:: keyspace_id:166b40b44aba4bd6 */
-3 ks_sharded/-40: commit
 3 ks_sharded/40-80: commit
+4 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 insert into user (id, name) values(2, 'bob')
@@ -15,8 +15,8 @@ insert into user (id, name) values(2, 'bob')
 1 ks_sharded/c0-: insert into name_user_map(name, user_id) values ('bob', 2) /* vtgate:: keyspace_id:da8a82595aa28154c17717955ffeed8b */
 2 ks_sharded/-40: begin
 2 ks_sharded/-40: insert into user(id, name) values (2, 'bob') /* vtgate:: keyspace_id:06e7ea22ce92708f */
-3 ks_sharded/-40: commit
 3 ks_sharded/c0-: commit
+4 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 insert ignore into user (id, name) values(2, 'bob')
@@ -26,8 +26,8 @@ insert ignore into user (id, name) values(2, 'bob')
 2 ks_sharded/c0-: select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
 3 ks_sharded/-40: begin
 3 ks_sharded/-40: insert ignore into user(id, name) values (2, 'bob') /* vtgate:: keyspace_id:06e7ea22ce92708f */
-4 ks_sharded/-40: commit
 4 ks_sharded/c0-: commit
+5 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 insert ignore into user (id, name, nickname) values(2, 'bob', 'bob')
@@ -37,8 +37,8 @@ insert ignore into user (id, name, nickname) values(2, 'bob', 'bob')
 2 ks_sharded/c0-: select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
 3 ks_sharded/-40: begin
 3 ks_sharded/-40: insert ignore into user(id, name, nickname) values (2, 'bob', 'bob') /* vtgate:: keyspace_id:06e7ea22ce92708f */
-4 ks_sharded/-40: commit
 4 ks_sharded/c0-: commit
+5 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 insert into user (id, name, nickname) values(2, 'bob', 'bobby') on duplicate key update nickname='bobby'
@@ -48,8 +48,8 @@ insert into user (id, name, nickname) values(2, 'bob', 'bobby') on duplicate key
 2 ks_sharded/c0-: select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
 3 ks_sharded/-40: begin
 3 ks_sharded/-40: insert into user(id, name, nickname) values (2, 'bob', 'bobby') on duplicate key update nickname = 'bobby' /* vtgate:: keyspace_id:06e7ea22ce92708f */
-4 ks_sharded/-40: commit
 4 ks_sharded/c0-: commit
+5 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 main st') on duplicate key update nickname=values(nickname), address=values(address)
@@ -59,8 +59,8 @@ insert into user (id, name, nickname, address) values(2, 'bob', 'bobby', '123 ma
 2 ks_sharded/c0-: select name from name_user_map where name = 'bob' and user_id = 2 limit 10001
 3 ks_sharded/-40: begin
 3 ks_sharded/-40: insert into user(id, name, nickname, address) values (2, 'bob', 'bobby', '123 main st') on duplicate key update nickname = values(nickname), address = values(address) /* vtgate:: keyspace_id:06e7ea22ce92708f */
-4 ks_sharded/-40: commit
 4 ks_sharded/c0-: commit
+5 ks_sharded/-40: commit
 
 ----------------------------------------------------------------------
 insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_extra (id, extra) values (1, 'a'), (2, 'b'), (3, 'c')
