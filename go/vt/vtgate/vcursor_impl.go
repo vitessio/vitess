@@ -158,16 +158,15 @@ func (vc *vcursorImpl) executeByOrder(method string, query string, bindVars map[
 	defer vc.safeSession.SetCommitOrder(commitOrderNormal)
 
 	qr, err := vc.executor.Execute(vc.ctx, method, vc.safeSession, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
-	if err == nil {
-		vc.hasPartialDML = true
-	}
+	// We don't set hasPartialDML for v3 level calls because the engine will eventually
+	// call the lower level functions which will set the flag as neded.
 	return qr, err
 }
 
 // ExecuteAutocommit performs a V3 level execution of the query in a separate autocommit session.
 func (vc *vcursorImpl) ExecuteAutocommit(method string, query string, bindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
 	qr, err := vc.executor.Execute(vc.ctx, method, NewAutocommitSession(vc.safeSession.Session), vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
-	if err == nil {
+	if err == nil && isDML {
 		vc.hasPartialDML = true
 	}
 	return qr, err
@@ -178,7 +177,7 @@ func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries [
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
 	qr, errs := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.tabletType, vc.safeSession, false, autocommit)
 
-	if errs == nil {
+	if errs == nil && isDML {
 		vc.hasPartialDML = true
 	}
 	return qr, errs
@@ -224,7 +223,9 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 	qr, errs := vc.ExecuteMultiShard(rss, queries, isDML, autocommit)
 
 	if len(errs) == 0 {
-		vc.hasPartialDML = true
+		if isDML {
+			vc.hasPartialDML = true
+		}
 		return qr, nil
 	}
 	return nil, errs[0]

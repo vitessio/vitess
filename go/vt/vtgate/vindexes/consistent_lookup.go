@@ -25,7 +25,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -247,7 +249,7 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 			return err
 		}
 		if len(qr.Rows) >= 1 {
-			return fmt.Errorf("duplicate entry %v", values)
+			return vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "duplicate entry %v", values)
 		}
 		if bytes.Equal(existingksid, ksid) {
 			return nil
