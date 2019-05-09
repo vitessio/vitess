@@ -257,6 +257,20 @@ func TestQueryRule(t *testing.T) {
 		t.Errorf("want error")
 	}
 
+	err = qr.SetCallerIDCond("alice")
+	if err != nil {
+		t.Errorf("unexpected: %v", err)
+	}
+	if !qr.callerID.MatchString("alice") {
+		t.Errorf("want match")
+	}
+	if qr.callerID.MatchString("alices") {
+		t.Errorf("want no match")
+	}
+	if qr.callerID.MatchString("alic") {
+		t.Errorf("want no match")
+	}
+
 	qr.AddPlanCond(planbuilder.PlanPassSelect)
 	qr.AddPlanCond(planbuilder.PlanInsertPK)
 
@@ -642,12 +656,14 @@ var invalidjsons = []InvalidJSONCase{
 	{`[{"Name": 1 }]`, "want string for Name"},
 	{`[{"Description": 1 }]`, "want string for Description"},
 	{`[{"RequestIP": 1 }]`, "want string for RequestIP"},
+	{`[{"CallerID": 1 }]`, "want string for CallerID"},
 	{`[{"User": 1 }]`, "want string for User"},
 	{`[{"Query": 1 }]`, "want string for Query"},
 	{`[{"Plans": 1 }]`, "want list for Plans"},
 	{`[{"TableNames": 1 }]`, "want list for TableNames"},
 	{`[{"BindVarConds": 1 }]`, "want list for BindVarConds"},
 	{`[{"RequestIP": "[" }]`, "could not set IP condition: ["},
+	{`[{"CallerID": "[" }]`, "could not set CallerID condition: ["},
 	{`[{"User": "[" }]`, "could not set User condition: ["},
 	{`[{"Query": "[" }]`, "could not set Query condition: ["},
 	{`[{"Plans": [1] }]`, "want string for Plans"},

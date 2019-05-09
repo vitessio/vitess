@@ -342,7 +342,13 @@ func (qre *QueryExecutor) checkPermissions() error {
 		remoteAddr = ci.RemoteAddr()
 		username = ci.Username()
 	}
-	action, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars)
+	callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
+	callerIDusername := ""
+	if callerID != nil {
+		callerIDusername = callerID.Username
+	}
+
+	action, desc := qre.plan.Rules.GetAction(remoteAddr, callerIDusername, username, qre.bindVars)
 	switch action {
 	case rules.QRFail:
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
@@ -362,7 +368,6 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return nil
 	}
 
-	callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 	if callerID == nil {
 		if qre.tsv.qe.strictTableACL {
 			return vterrors.Errorf(vtrpcpb.Code_UNAUTHENTICATED, "missing caller id")

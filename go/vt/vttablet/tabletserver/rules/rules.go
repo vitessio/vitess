@@ -154,9 +154,9 @@ func (qrs *Rules) FilterByPlan(query string, planid planbuilder.PlanType, tableN
 }
 
 // GetAction runs the input against the rules engine and returns the action to be performed.
-func (qrs *Rules) GetAction(ip, user string, bindVars map[string]*querypb.BindVariable) (action Action, desc string) {
+func (qrs *Rules) GetAction(ip, callerID, user string, bindVars map[string]*querypb.BindVariable) (action Action, desc string) {
 	for _, qr := range qrs.rules {
-		if act := qr.GetAction(ip, user, bindVars); act != QRContinue {
+		if act := qr.GetAction(ip, callerID, user, bindVars); act != QRContinue {
 			return act, qr.Description
 		}
 	}
@@ -180,7 +180,7 @@ type Rule struct {
 	// All defined conditions must match for the rule to fire (AND).
 
 	// Regexp conditions. nil conditions are ignored (TRUE).
-	requestIP, user, query namedRegexp
+	requestIP, callerID, user, query namedRegexp
 
 	// Any matched plan will make this condition true (OR)
 	plans []planbuilder.PlanType
@@ -227,6 +227,7 @@ func (qr *Rule) Equal(other *Rule) bool {
 	return (qr.Description == other.Description &&
 		qr.Name == other.Name &&
 		qr.requestIP.Equal(other.requestIP) &&
+		qr.callerID.Equal(other.callerID) &&
 		qr.user.Equal(other.user) &&
 		qr.query.Equal(other.query) &&
 		reflect.DeepEqual(qr.plans, other.plans) &&
@@ -241,6 +242,7 @@ func (qr *Rule) Copy() (newqr *Rule) {
 		Description: qr.Description,
 		Name:        qr.Name,
 		requestIP:   qr.requestIP,
+		callerID:    qr.callerID,
 		user:        qr.user,
 		query:       qr.query,
 		act:         qr.act,
@@ -267,6 +269,9 @@ func (qr *Rule) MarshalJSON() ([]byte, error) {
 	safeEncode(b, `,"Name":`, qr.Name)
 	if qr.requestIP.Regexp != nil {
 		safeEncode(b, `,"RequestIP":`, qr.requestIP)
+	}
+	if qr.callerID.Regexp != nil {
+		safeEncode(b, `,"CallerID":`, qr.callerID)
 	}
 	if qr.user.Regexp != nil {
 		safeEncode(b, `,"User":`, qr.user)
@@ -295,6 +300,14 @@ func (qr *Rule) MarshalJSON() ([]byte, error) {
 func (qr *Rule) SetIPCond(pattern string) (err error) {
 	qr.requestIP.name = pattern
 	qr.requestIP.Regexp, err = regexp.Compile(makeExact(pattern))
+	return err
+}
+
+// SetCallerIDCond adds a regular expression condition for the callerID.
+// It has to be a full match (not substring).
+func (qr *Rule) SetCallerIDCond(pattern string) (err error) {
+	qr.callerID.name = pattern
+	qr.callerID.Regexp, err = regexp.Compile(makeExact(pattern))
 	return err
 }
 
@@ -412,8 +425,11 @@ func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableNam
 }
 
 // GetAction returns the action for a single rule.
-func (qr *Rule) GetAction(ip, user string, bindVars map[string]*querypb.BindVariable) Action {
+func (qr *Rule) GetAction(ip, callerID, user string, bindVars map[string]*querypb.BindVariable) Action {
 	if !reMatch(qr.requestIP.Regexp, ip) {
+		return QRContinue
+	}
+	if !reMatch(qr.callerID.Regexp, callerID) {
 		return QRContinue
 	}
 	if !reMatch(qr.user.Regexp, user) {
@@ -779,7 +795,7 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 		var lv []interface{}
 		var ok bool
 		switch k {
-		case "Name", "Description", "RequestIP", "User", "Query", "Action":
+		case "Name", "Description", "RequestIP", "CallerID", "User", "Query", "Action":
 			sv, ok = v.(string)
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "want string for %s", k)
@@ -801,6 +817,11 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 			err = qr.SetIPCond(sv)
 			if err != nil {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not set IP condition: %v", sv)
+			}
+		case "CallerID":
+			err = qr.SetCallerIDCond(sv)
+			if err != nil {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not set CallerID condition: %v", sv)
 			}
 		case "User":
 			err = qr.SetUserCond(sv)
