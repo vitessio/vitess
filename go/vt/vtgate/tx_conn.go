@@ -103,13 +103,17 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 		_ = txc.Rollback(ctx, session)
 		return err
 	}
-	if err := txc.runSessions(session.ShardSessions, func(s *vtgatepb.Session_ShardSession) error {
-		defer func() { s.TransactionId = 0 }()
-		return txc.gateway.Commit(ctx, s.Target, s.TransactionId)
-	}); err != nil {
-		_ = txc.Rollback(ctx, session)
-		return err
+
+	// Retain backward compatibility on commit order for the normal session.
+	for _, shardSession := range session.ShardSessions {
+		if err := txc.gateway.Commit(ctx, shardSession.Target, shardSession.TransactionId); err != nil {
+			shardSession.TransactionId = 0
+			_ = txc.Rollback(ctx, session)
+			return err
+		}
+		shardSession.TransactionId = 0
 	}
+
 	if err := txc.runSessions(session.PostSessions, func(s *vtgatepb.Session_ShardSession) error {
 		defer func() { s.TransactionId = 0 }()
 		return txc.gateway.Commit(ctx, s.Target, s.TransactionId)
