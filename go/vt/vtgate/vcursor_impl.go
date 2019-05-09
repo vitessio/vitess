@@ -158,8 +158,9 @@ func (vc *vcursorImpl) executeByOrder(method string, query string, bindVars map[
 	defer vc.safeSession.SetCommitOrder(commitOrderNormal)
 
 	qr, err := vc.executor.Execute(vc.ctx, method, vc.safeSession, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
-	// We don't set hasPartialDML for v3 level calls because the engine will eventually
-	// call the lower level functions which will set the flag as neded.
+	if err == nil && isDML {
+		vc.hasPartialDML = true
+	}
 	return qr, err
 }
 
