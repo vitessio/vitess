@@ -146,7 +146,8 @@ func main() {
 	if *tabletBackupAndExit {
 		go func() {
 			delay, err := agent.Healthy()
-			for err != nil || delay > 0 {
+			for err != nil && delay > 0 {
+				log.Infof("Sleeping due to current delay (%v) or error (%v)", delay, err)
 				time.Sleep(time.Second)
 				delay, err = agent.Healthy()
 			}

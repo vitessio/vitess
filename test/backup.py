@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import unittest
+import datetime
 
 import MySQLdb
 
@@ -91,7 +92,7 @@ FLUSH PRIVILEGES;
     db_credentials_file = environment.tmproot+'/db_credentials.json'
     with open(db_credentials_file, 'w') as fd:
       fd.write(json.dumps(credentials))
-
+    logging.debug("initilizing mysql %s",str(datetime.datetime.now()))
     # start mysql instance external to the test
     setup_procs = [
         tablet_master.init_mysql(init_db=new_init_db,
@@ -103,17 +104,14 @@ FLUSH PRIVILEGES;
         tablet_replica2.init_mysql(init_db=new_init_db,
                                    extra_args=['-db-credentials-file',
                                                db_credentials_file]),
-        tablet_replica3.init_mysql(init_db=new_init_db,
-                                   extra_args=['-db-credentials-file',
-                                               db_credentials_file]),
     ]
     if use_mysqlctld:
       tablet_master.wait_for_mysqlctl_socket()
       tablet_replica1.wait_for_mysqlctl_socket()
       tablet_replica2.wait_for_mysqlctl_socket()
-      tablet_replica3.wait_for_mysqlctl_socket()
     else:
       utils.wait_procs(setup_procs)
+    logging.debug("done initilizing mysql %s",str(datetime.datetime.now()))      
   except:
     tearDownModule()
     raise
@@ -209,6 +207,7 @@ class TestBackup(unittest.TestCase):
 
   def _restore(self, t, tablet_type='replica'):
     """Erase mysql/tablet dir, then start tablet with restore enabled."""
+    logging.debug("restoring tablet %s",str(datetime.datetime.now()))
     self._reset_tablet_dir(t)
 
     xtra_args = ['-db-credentials-file', db_credentials_file]
@@ -229,19 +228,24 @@ class TestBackup(unittest.TestCase):
     else:
       t.check_db_var('rpl_semi_sync_slave_enabled', 'OFF')
       t.check_db_status('rpl_semi_sync_slave_status', 'OFF')
-
-  def _reset_tablet_dir(self, t):
+    logging.debug("done restoring tablet %s",str(datetime.datetime.now()))
+    
+  def _reset_tablet_dir(self, t, teardown=True):
     """Stop mysql, delete everything including tablet dir, restart mysql."""
-    extra_args = ['-db-credentials-file', db_credentials_file]
-    utils.wait_procs([t.teardown_mysql(extra_args=extra_args)])
+
+    extra_args = ['-db-credentials-file', db_credentials_file]    
+    if teardown:
+      utils.wait_procs([t.teardown_mysql(extra_args=extra_args)])
     # Specify ignore_options because we want to delete the tree even
     # if the test's -k / --keep-logs was specified on the command line.
     t.remove_tree(ignore_options=True)
+    logging.debug("starting mysql %s",str(datetime.datetime.now()))    
     proc = t.init_mysql(init_db=new_init_db, extra_args=extra_args)
     if use_mysqlctld:
       t.wait_for_mysqlctl_socket()
     else:
       utils.wait_procs([proc])
+    logging.debug("done starting mysql %s",str(datetime.datetime.now()))          
 
   def _list_backups(self):
     """Get a list of backup names for the test shard."""
@@ -257,34 +261,11 @@ class TestBackup(unittest.TestCase):
         ['RemoveBackup', 'test_keyspace/0', backup],
         auto_log=True, mode=utils.VTCTL_VTCTL)
 
-  def _backup_only(self, t, tablet_type='replica'):
-    """Erase mysql/tablet dir, then start tablet with restore only."""
-    logging.debug('starting backup only tablet %s',t.tablet_alias)
-    self._reset_tablet_dir(t)
-
-    logging.debug('building command line')
-
-    xtra_args = ['-db-credentials-file', db_credentials_file,'-backup_and_exit']
-    if use_xtrabackup:
-      xtra_args.extend(xtrabackup_args)
-
-    proc = t.start_vttablet(wait_for_state=False,
-                     init_tablet_type=tablet_type,
-                     init_keyspace='test_keyspace',
-                     init_shard='0',
-                     supports_backups=True,
-                     extra_args=xtra_args)
-    logging.debug('tablet started waiting for process to end %s',proc)
-    utils.wait_procs([proc],True)
-
   def test_backup_rdonly(self):
     self._test_backup('rdonly', False)
 
   def test_backup_replica(self):
     self._test_backup('replica', False)
-
-  def test_tablet_backup_only(self):
-    self._test_backup('replica', True)
 
   def test_backup_master(self):
     """Test backup flow.
@@ -366,7 +347,7 @@ class TestBackup(unittest.TestCase):
     Args:
       tablet_type: 'replica' or 'rdonly'.
     """
-
+    
     # insert data on master, wait for slave to get it
     tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
     self._insert_data(tablet_master, 1)
@@ -374,12 +355,13 @@ class TestBackup(unittest.TestCase):
 
     # backup the slave
     alias = tablet_replica1.tablet_alias
-    logging.debug("taking backup")
+    logging.debug("taking backup %s",str(datetime.datetime.now()))
     if not backup_only:
       utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
     else:
-      self._backup_only(tablet_replica3)
+      self._backup_only(tablet_replica3,tablet_type='backup')
       alias = tablet_replica3.tablet_alias
+    logging.debug("done taking backup %s",str(datetime.datetime.now()))      
     # end if
 
     # check that the backup shows up in the listing
@@ -409,15 +391,6 @@ class TestBackup(unittest.TestCase):
       self.assertEqual(metadata['PromotionRule'], 'neutral')
     else:
       self.assertEqual(metadata['PromotionRule'], 'must_not')
-
-
-    # Test that a backup restore from backup cycle works
-    if backup_only:
-      self._backup_only(tablet_replica3)
-      backups = self._list_backups()
-      self.assertEqual(len(backups), 2)
-      self.assertTrue(backups[1].endswith(tablet_replica3.tablet_alias))
-    # remove the backup and check that the list is empty
 
     for backup in backups:
       self._remove_backup(backup)

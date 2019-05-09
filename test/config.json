@@ -10,6 +10,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+  	        "backup_only": {
+                	"File": "backup_only.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 2,
+			"RetryMax": 0,
+			"Tags": []
+	        },
 		"backup_mysqlctld": {
 			"File": "backup_mysqlctld.py",
 			"Args": [],
