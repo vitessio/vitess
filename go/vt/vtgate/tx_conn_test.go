@@ -154,10 +154,10 @@ func TestTxConnCommitOrderFailure1(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(context.Background(), rss0, queries, topodatapb.TabletType_MASTER, session, false, false)
 
-	session.SetCommitOrder(commitOrderPre)
+	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
 	sc.ExecuteMultiShard(context.Background(), rss0, queries, topodatapb.TabletType_MASTER, session, false, false)
 
-	session.SetCommitOrder(commitOrderPost)
+	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
 	sc.ExecuteMultiShard(context.Background(), rss1, queries, topodatapb.TabletType_MASTER, session, false, false)
 
 	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
@@ -194,10 +194,10 @@ func TestTxConnCommitOrderFailure2(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(context.Background(), rss1, queries, topodatapb.TabletType_MASTER, session, false, false)
 
-	session.SetCommitOrder(commitOrderPre)
+	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
 	sc.ExecuteMultiShard(context.Background(), rss0, queries, topodatapb.TabletType_MASTER, session, false, false)
 
-	session.SetCommitOrder(commitOrderPost)
+	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
 	sc.ExecuteMultiShard(context.Background(), rss1, queries, topodatapb.TabletType_MASTER, session, false, false)
 
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
@@ -234,10 +234,10 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(context.Background(), rss0, queries, topodatapb.TabletType_MASTER, session, false, false)
 
-	session.SetCommitOrder(commitOrderPre)
+	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
 	sc.ExecuteMultiShard(context.Background(), rss0, queries, topodatapb.TabletType_MASTER, session, false, false)
 
-	session.SetCommitOrder(commitOrderPost)
+	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
 	sc.ExecuteMultiShard(context.Background(), rss1, queries, topodatapb.TabletType_MASTER, session, false, false)
 
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
@@ -288,7 +288,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 
-	session.SetCommitOrder(commitOrderPre)
+	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
 	sc.ExecuteMultiShard(context.Background(), rss0, queries, topodatapb.TabletType_MASTER, session, false, false)
 	wantSession = vtgatepb.Session{
 		InTransaction: true,
@@ -313,7 +313,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 
-	session.SetCommitOrder(commitOrderPost)
+	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
 	sc.ExecuteMultiShard(context.Background(), rss1, queries, topodatapb.TabletType_MASTER, session, false, false)
 	wantSession = vtgatepb.Session{
 		InTransaction: true,

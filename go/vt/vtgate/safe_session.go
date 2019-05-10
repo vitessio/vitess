@@ -36,7 +36,7 @@ type SafeSession struct {
 	mu              sync.Mutex
 	mustRollback    bool
 	autocommitState autocommitState
-	commitOrder     commitOrder
+	commitOrder     vtgatepb.CommitOrder
 	*vtgatepb.Session
 }
 
@@ -62,17 +62,6 @@ const (
 	notAutocommittable = autocommitState(iota)
 	autocommittable
 	autocommitted
-)
-
-// commitOrder specifies the commitOrder for the subsequent
-// statements. The appropriate shard sessions will be chosen
-// depending on this value.
-type commitOrder int
-
-const (
-	commitOrderNormal = commitOrder(iota)
-	commitOrderPre
-	commitOrderPost
 )
 
 // NewSafeSession returns a new SafeSession based on the Session
@@ -107,7 +96,7 @@ func (session *SafeSession) Reset() {
 	session.ShardSessions = nil
 	session.PreSessions = nil
 	session.PostSessions = nil
-	session.commitOrder = commitOrderNormal
+	session.commitOrder = vtgatepb.CommitOrder_NORMAL
 }
 
 // SetAutocommitable sets the state to autocommitable if true.
@@ -148,7 +137,7 @@ func (session *SafeSession) AutocommitApproval() bool {
 }
 
 // SetCommitOrder sets the commit order.
-func (session *SafeSession) SetCommitOrder(co commitOrder) {
+func (session *SafeSession) SetCommitOrder(co vtgatepb.CommitOrder) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.commitOrder = co
@@ -167,9 +156,9 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 	defer session.mu.Unlock()
 	sessions := session.ShardSessions
 	switch session.commitOrder {
-	case commitOrderPre:
+	case vtgatepb.CommitOrder_PRE:
 		sessions = session.PreSessions
-	case commitOrderPost:
+	case vtgatepb.CommitOrder_POST:
 		sessions = session.PostSessions
 	}
 	for _, shardSession := range sessions {
@@ -197,16 +186,16 @@ func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession, 
 
 	// Always append, in order for rollback to succeed.
 	switch session.commitOrder {
-	case commitOrderNormal:
+	case vtgatepb.CommitOrder_NORMAL:
 		session.ShardSessions = append(session.ShardSessions, shardSession)
 		// isSingle is enforced only for normmal commit order operations.
 		if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
 			session.mustRollback = true
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction attempted: %v", session.ShardSessions)
 		}
-	case commitOrderPre:
+	case vtgatepb.CommitOrder_PRE:
 		session.PreSessions = append(session.PreSessions, shardSession)
-	case commitOrderPost:
+	case vtgatepb.CommitOrder_POST:
 		session.PostSessions = append(session.PostSessions, shardSession)
 	}
 	return nil

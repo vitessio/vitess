@@ -32,6 +32,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -139,34 +140,17 @@ func (vc *vcursorImpl) TargetString() string {
 }
 
 // Execute is part of the engine.VCursor interface.
-func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	return vc.executeByOrder(method, query, bindVars, isDML, commitOrderNormal)
-}
-
-// ExecutePre is part of the engine.VCursor interface.
-func (vc *vcursorImpl) ExecutePre(method string, query string, bindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	return vc.executeByOrder(method, query, bindVars, isDML, commitOrderPre)
-}
-
-// ExecutePost is part of the engine.VCursor interface.
-func (vc *vcursorImpl) ExecutePost(method string, query string, bindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	return vc.executeByOrder(method, query, bindVars, isDML, commitOrderPost)
-}
-
-func (vc *vcursorImpl) executeByOrder(method string, query string, bindVars map[string]*querypb.BindVariable, isDML bool, co commitOrder) (*sqltypes.Result, error) {
-	vc.safeSession.SetCommitOrder(co)
-	defer vc.safeSession.SetCommitOrder(commitOrderNormal)
-
-	qr, err := vc.executor.Execute(vc.ctx, method, vc.safeSession, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
-	if err == nil && isDML {
-		vc.hasPartialDML = true
+func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+	session := vc.safeSession
+	if co == vtgatepb.CommitOrder_AUTOCOMMIT {
+		// For autocommit, we have to create an independent session.
+		session = NewAutocommitSession(vc.safeSession.Session)
+	} else {
+		session.SetCommitOrder(co)
+		defer session.SetCommitOrder(vtgatepb.CommitOrder_NORMAL)
 	}
-	return qr, err
-}
 
-// ExecuteAutocommit performs a V3 level execution of the query in a separate autocommit session.
-func (vc *vcursorImpl) ExecuteAutocommit(method string, query string, bindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	qr, err := vc.executor.Execute(vc.ctx, method, NewAutocommitSession(vc.safeSession.Session), vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
+	qr, err := vc.executor.Execute(vc.ctx, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
 	if err == nil && isDML {
 		vc.hasPartialDML = true
 	}

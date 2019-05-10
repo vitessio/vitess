@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 var (
@@ -172,7 +173,7 @@ func (lh *LookupHash) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
-	return lh.lkp.Delete(vcursor.Execute, rowsColValues, sqltypes.NewUint64(v))
+	return lh.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
 }
 
 // MarshalJSON returns a JSON representation of LookupHash.
@@ -317,7 +318,7 @@ func (lhu *LookupHashUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
-	return lhu.lkp.Delete(vcursor.Execute, rowsColValues, sqltypes.NewUint64(v))
+	return lhu.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
 }
 
 // Update updates the entry in the vindex table.

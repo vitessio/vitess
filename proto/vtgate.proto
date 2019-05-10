@@ -40,6 +40,20 @@ enum TransactionMode {
   TWOPC = 3;
 }
 
+
+// CommitOrder is used to designate which of the ShardSessions
+// get used for transactions.
+enum CommitOrder {
+  // NORMAL is the default commit order.
+  NORMAL = 0;
+  // PRE is used to designate pre_sessions.
+  PRE = 1;
+  // POST is used to designate post_sessions.
+  POST = 2;
+  // AUTOCOMMIT is used to run the statement as autocommitted transaction.
+  AUTOCOMMIT = 3;
+}
+
 // Session objects are exchanged like cookies through various
 // calls to VTGate. The behavior differs between V2 & V3 APIs.
 // V3 APIs are Execute, ExecuteBatch and StreamExecute. All
