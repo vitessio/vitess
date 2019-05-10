@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 // lookupInternal implements the functions for the Lookup vindexes.
@@ -67,11 +68,11 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 		}
 		var err error
 		var result *sqltypes.Result
+		co := vtgatepb.CommitOrder_NORMAL
 		if lkp.Autocommit {
-			result, err = vcursor.ExecuteAutocommit("VindexLookup", lkp.sel, bindVars, false /* isDML */)
-		} else {
-			result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* isDML */)
+			co = vtgatepb.CommitOrder_AUTOCOMMIT
 		}
+		result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* isDML */, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -90,11 +91,11 @@ func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value)
 		}
 		var err error
 		var result *sqltypes.Result
+		co := vtgatepb.CommitOrder_NORMAL
 		if lkp.Autocommit {
-			result, err = vcursor.ExecuteAutocommit("VindexVerify", lkp.ver, bindVars, true /* isDML */)
-		} else {
-			result, err = vcursor.Execute("VindexVerify", lkp.ver, bindVars, true /* isDML */)
+			co = vtgatepb.CommitOrder_AUTOCOMMIT
 		}
+		result, err = vcursor.Execute("VindexVerify", lkp.ver, bindVars, false /* isDML */, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Verify: %v", err)
 		}
@@ -114,6 +115,13 @@ func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value)
 // Create(vcursor, [[value_a0, value_b0,], [value_a1, value_b1]], [binary(value_c0), binary(value_c1)])
 // Notice that toValues contains the computed binary value of the keyspace_id.
 func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool) error {
+	if lkp.Autocommit {
+		return lkp.createCustom(vcursor, rowsColValues, toValues, ignoreMode, vtgatepb.CommitOrder_AUTOCOMMIT)
+	}
+	return lkp.createCustom(vcursor, rowsColValues, toValues, ignoreMode, vtgatepb.CommitOrder_NORMAL)
+}
+
+func (lkp *lookupInternal) createCustom(vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool, co vtgatepb.CommitOrder) error {
 	if len(rowsColValues) == 0 {
 		// This code is unreachable. It's just a failsafe.
 		return nil
@@ -158,13 +166,7 @@ func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Va
 		fmt.Fprintf(buf, "%s=values(%s)", lkp.To, lkp.To)
 	}
 
-	var err error
-	if lkp.Autocommit {
-		_, err = vcursor.ExecuteAutocommit("VindexCreate", buf.String(), bindVars, true /* isDML */)
-	} else {
-		_, err = vcursor.Execute("VindexCreate", buf.String(), bindVars, true /* isDML */)
-	}
-	if err != nil {
+	if _, err := vcursor.Execute("VindexCreate", buf.String(), bindVars, true /* isDML */, co); err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
 	return nil
@@ -185,7 +187,7 @@ func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Va
 //
 // A call to Delete would look like this:
 // Delete(vcursor, [[valuea, valueb]], 52CB7B1B31B2222E)
-func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, value sqltypes.Value) error {
+func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, value sqltypes.Value, co vtgatepb.CommitOrder) error {
 	// In autocommit mode, it's not safe to delete. So, it's a no-op.
 	if lkp.Autocommit {
 		return nil
@@ -205,7 +207,7 @@ func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 			bindVars[lkp.FromColumns[colIdx]] = sqltypes.ValueBindVariable(columnValue)
 		}
 		bindVars[lkp.To] = sqltypes.ValueBindVariable(value)
-		_, err := vcursor.Execute("VindexDelete", lkp.del, bindVars, true /* isDML */)
+		_, err := vcursor.Execute("VindexDelete", lkp.del, bindVars, true /* isDML */, co)
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}
@@ -215,7 +217,7 @@ func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 
 // Update implements the update functionality.
 func (lkp *lookupInternal) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid sqltypes.Value, newValues []sqltypes.Value) error {
-	if err := lkp.Delete(vcursor, [][]sqltypes.Value{oldValues}, ksid); err != nil {
+	if err := lkp.Delete(vcursor, [][]sqltypes.Value{oldValues}, ksid, vtgatepb.CommitOrder_NORMAL); err != nil {
 		return err
 	}
 	return lkp.Create(vcursor, [][]sqltypes.Value{newValues}, []sqltypes.Value{ksid}, false /* ignoreMode */)

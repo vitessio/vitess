@@ -1069,9 +1069,9 @@ var _Vitess_serviceDesc = grpc.ServiceDesc{
 	Metadata: "vtgateservice.proto",
 }
 
-func init() { proto.RegisterFile("vtgateservice.proto", fileDescriptor_vtgateservice_6694e3d05903167c) }
+func init() { proto.RegisterFile("vtgateservice.proto", fileDescriptor_vtgateservice_4e2a872de1158985) }
 
-var fileDescriptor_vtgateservice_6694e3d05903167c = []byte{
+var fileDescriptor_vtgateservice_4e2a872de1158985 = []byte{
 	// 579 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x95, 0xdb, 0x6f, 0xd3, 0x30,
 	0x14, 0xc6, 0xe1, 0x81, 0x82, 0x0e, 0xed, 0x84, 0xbc, 0xad, 0xdb, 0xca, 0x75, 0x05, 0x36, 0xc4,

@@ -48,7 +48,7 @@ func TestScatterConnExecute(t *testing.T) {
 			return nil, err
 		}
 
-		return sc.Execute(context.Background(), "query", nil, rss, topodatapb.TabletType_REPLICA, nil, false, nil)
+		return sc.Execute(context.Background(), "query", nil, rss, topodatapb.TabletType_REPLICA, NewSafeSession(nil), false, nil)
 	})
 }
 
@@ -68,7 +68,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 			}
 		}
 
-		qr, errs := sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, nil, false, false)
+		qr, errs := sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, NewSafeSession(nil), false, false)
 		return qr, vterrors.Aggregate(errs)
 	})
 }
@@ -88,7 +88,7 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		qrs, err := sc.ExecuteBatch(context.Background(), scatterRequest, topodatapb.TabletType_REPLICA, false, nil, nil)
+		qrs, err := sc.ExecuteBatch(context.Background(), scatterRequest, topodatapb.TabletType_REPLICA, false, NewSafeSession(nil), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -133,6 +133,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 // verifyScatterConnError checks that a returned error has the expected message,
 // type, and error code.
 func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
+	t.Helper()
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("wanted error: %s, got error: %v", wantErr, err)
 	}
@@ -285,7 +286,7 @@ func TestMultiExecs(t *testing.T) {
 		},
 	}
 
-	_, _ = sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, nil, false, false)
+	_, _ = sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, NewSafeSession(nil), false, false)
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
 	}
