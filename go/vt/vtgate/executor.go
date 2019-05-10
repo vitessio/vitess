@@ -198,7 +198,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		// do is likely not final.
 		// The control flow is such that autocommitable can only be turned on
 		// at the beginning, but never after.
-		safeSession.SetAutocommitable(mustCommit)
+		safeSession.SetAutocommittable(mustCommit)
 
 		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats)
 		if err != nil {

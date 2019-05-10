@@ -99,9 +99,9 @@ func (session *SafeSession) Reset() {
 	session.commitOrder = vtgatepb.CommitOrder_NORMAL
 }
 
-// SetAutocommitable sets the state to autocommitable if true.
+// SetAutocommittable sets the state to autocommitable if true.
 // Otherwise, it's notAutocommitable.
-func (session *SafeSession) SetAutocommitable(flag bool) {
+func (session *SafeSession) SetAutocommittable(flag bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
