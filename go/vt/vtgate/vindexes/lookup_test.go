@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 // LookupNonUnique tests are more comprehensive than others.
@@ -42,22 +43,15 @@ type vcursor struct {
 	pre, post   int
 }
 
-func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	return vc.execute(method, query, bindvars, isDML)
-}
-
-func (vc *vcursor) ExecutePre(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	vc.pre++
-	return vc.execute(method, query, bindvars, isDML)
-}
-
-func (vc *vcursor) ExecutePost(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	vc.post++
-	return vc.execute(method, query, bindvars, isDML)
-}
-
-func (vc *vcursor) ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	vc.autocommits++
+func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+	switch co {
+	case vtgatepb.CommitOrder_PRE:
+		vc.pre++
+	case vtgatepb.CommitOrder_POST:
+		vc.post++
+	case vtgatepb.CommitOrder_AUTOCOMMIT:
+		vc.autocommits++
+	}
 	return vc.execute(method, query, bindvars, isDML)
 }
 

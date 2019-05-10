@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 // This file defines interfaces and registration for vindexes.
@@ -32,11 +33,7 @@ import (
 // in the current context and session of a VTGate request. Vindexes
 // can use this interface to execute lookup queries.
 type VCursor interface {
-	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
-	ExecutePre(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
-	ExecutePost(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
-	ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
-
+	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 	ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error)
 }
 
@@ -108,7 +105,7 @@ type Lookup interface {
 }
 
 // WantOwnerInfo defines the interface that a vindex must
-// satisfy to info about the owner table. This information can
+// satisfy to request info about the owner table. This information can
 // be used to query the owner's table for the owning row's presence.
 type WantOwnerInfo interface {
 	SetOwnerInfo(keyspace, table string, cols []sqlparser.ColIdent) error

@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -454,20 +455,19 @@ func (vc *loggingVCursor) AddResult(qr *sqltypes.Result, err error) {
 	vc.errors = append(vc.errors, err)
 }
 
-func (vc *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	return vc.execute("Execute", query, bindvars, isDML)
-}
-
-func (vc *loggingVCursor) ExecutePre(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	return vc.execute("ExecutePre", query, bindvars, isDML)
-}
-
-func (vc *loggingVCursor) ExecutePost(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	return vc.execute("ExecutePost", query, bindvars, isDML)
-}
-
-func (vc *loggingVCursor) ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	return vc.execute("ExecuteAutocommit", query, bindvars, isDML)
+func (vc *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+	name := "Unknown"
+	switch co {
+	case vtgatepb.CommitOrder_NORMAL:
+		name = "Execute"
+	case vtgatepb.CommitOrder_PRE:
+		name = "ExecutePre"
+	case vtgatepb.CommitOrder_POST:
+		name = "ExecutePost"
+	case vtgatepb.CommitOrder_AUTOCOMMIT:
+		name = "ExecuteAutocommit"
+	}
+	return vc.execute(name, query, bindvars, isDML)
 }
 
 func (vc *loggingVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {

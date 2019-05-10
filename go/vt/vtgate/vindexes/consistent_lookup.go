@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -209,7 +210,7 @@ func (lu *clCommon) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte
 
 // Create reserves the id by inserting it into the vindex table.
 func (lu *clCommon) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
-	err := lu.lkp.createCustom(vcursor.ExecutePre, rowsColValues, ksidsToValues(ksids), ignoreMode)
+	err := lu.lkp.createCustom(vcursor, rowsColValues, ksidsToValues(ksids), ignoreMode, vtgatepb.CommitOrder_PRE)
 	if err == nil {
 		return nil
 	}
@@ -232,13 +233,13 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 	bindVars[lu.lkp.To] = sqltypes.BytesBindVariable(ksid)
 
 	// Lock the lookup row using pre priority.
-	qr, err := vcursor.ExecutePre("VindexCreate", lu.lockLookupQuery, bindVars, false /* isDML */)
+	qr, err := vcursor.Execute("VindexCreate", lu.lockLookupQuery, bindVars, false /* isDML */, vtgatepb.CommitOrder_PRE)
 	if err != nil {
 		return err
 	}
 	switch len(qr.Rows) {
 	case 0:
-		if _, err := vcursor.ExecutePre("VindexCreate", lu.insertLookupQuery, bindVars, true /* isDML */); err != nil {
+		if _, err := vcursor.Execute("VindexCreate", lu.insertLookupQuery, bindVars, true /* isDML */, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	case 1:
@@ -254,7 +255,7 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 		if bytes.Equal(existingksid, ksid) {
 			return nil
 		}
-		if _, err := vcursor.ExecutePre("VindexCreate", lu.updateLookupQuery, bindVars, true /* isDML */); err != nil {
+		if _, err := vcursor.Execute("VindexCreate", lu.updateLookupQuery, bindVars, true /* isDML */, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	default:
@@ -265,7 +266,7 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 
 // Delete deletes the entry from the vindex table.
 func (lu *clCommon) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
-	return lu.lkp.Delete(vcursor.ExecutePost, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid))
+	return lu.lkp.Delete(vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), vtgatepb.CommitOrder_POST)
 }
 
 // Update updates the entry in the vindex table.
