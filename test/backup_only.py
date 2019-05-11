@@ -25,6 +25,7 @@ import MySQLdb
 
 import environment
 import tablet
+import vtbackup
 import utils
 
 use_mysqlctld = False
@@ -33,7 +34,7 @@ stream_mode = 'tar'
 tablet_master = None
 tablet_replica1 = None
 tablet_replica2 = None
-tablet_replica3 = None
+backup_tablet = None
 xtrabackup_args = []
 
 new_init_db = ''
@@ -51,7 +52,7 @@ def setUpModule():
                    '--password=VtDbaPass']
 
   global new_init_db, db_credentials_file
-  global tablet_master, tablet_replica1, tablet_replica2, tablet_replica3
+  global tablet_master, tablet_replica1, tablet_replica2, backup_tablet
 
   tablet_master = tablet.Tablet(use_mysqlctld=use_mysqlctld,
                                 vt_dba_passwd='VtDbaPass')
@@ -59,7 +60,7 @@ def setUpModule():
                                   vt_dba_passwd='VtDbaPass')
   tablet_replica2 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
                                   vt_dba_passwd='VtDbaPass')
-  tablet_replica3 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
+  backup_tablet = vtbackup.Vtbackup(use_mysqlctld=use_mysqlctld,
                                   vt_dba_passwd='VtDbaPass')
 
   try:
@@ -104,6 +105,9 @@ FLUSH PRIVILEGES;
         tablet_replica2.init_mysql(init_db=new_init_db,
                                    extra_args=['-db-credentials-file',
                                                db_credentials_file]),
+        backup_tablet.init_mysql(init_db=new_init_db,
+                                   extra_args=['-db-credentials-file',
+                                               db_credentials_file]),      
     ]
     if use_mysqlctld:
       tablet_master.wait_for_mysqlctl_socket()
@@ -129,8 +133,8 @@ def tearDownModule():
                                                  db_credentials_file]),
       tablet_replica2.teardown_mysql(extra_args=['-db-credentials-file',
                                                  db_credentials_file]),
-      tablet_replica3.teardown_mysql(extra_args=['-db-credentials-file',
-                                                 db_credentials_file]),
+      backup_tablet.teardown_mysql(extra_args=['-db-credentials-file',
+                                                 db_credentials_file]),    
   ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -141,8 +145,7 @@ def tearDownModule():
   tablet_master.remove_tree()
   tablet_replica1.remove_tree()
   tablet_replica2.remove_tree()
-  tablet_replica3.remove_tree()
-
+  backup_tablet.remove_tree()
 
 class TestBackup(unittest.TestCase):
 
@@ -163,7 +166,7 @@ class TestBackup(unittest.TestCase):
                      tablet_master.tablet_alias])
 
   def tearDown(self):
-    for t in tablet_master, tablet_replica1, tablet_replica2, tablet_replica3:
+    for t in tablet_master, tablet_replica1, tablet_replica2:
       t.kill_vttablet()
 
     tablet.Tablet.check_vttablet_count()
@@ -261,29 +264,38 @@ class TestBackup(unittest.TestCase):
         ['RemoveBackup', 'test_keyspace/0', backup],
         auto_log=True, mode=utils.VTCTL_VTCTL)
 
+  def _reset_tablet_dir(self, t, teardown=True):
+    """Stop mysql, delete everything including tablet dir, restart mysql."""
+
+    extra_args = ['-db-credentials-file', db_credentials_file]    
+    if teardown:
+      utils.wait_procs([t.teardown_mysql(extra_args=extra_args)])
+    # Specify ignore_options because we want to delete the tree even
+    # if the test's -k / --keep-logs was specified on the command line.
+    t.remove_tree(ignore_options=True)
+    logging.debug("starting mysql %s",str(datetime.datetime.now()))    
+    proc = t.init_mysql(init_db=new_init_db, extra_args=extra_args)
+    if use_mysqlctld:
+      t.wait_for_mysqlctl_socket()
+    else:
+      utils.wait_procs([proc])
+    logging.debug("done starting mysql %s",str(datetime.datetime.now()))          
+    
   def _backup_only(self, t, tablet_type='replica'):
     """Erase mysql/tablet dir, then start tablet with restore only."""
     logging.debug('starting backup only tablet %s',t.tablet_alias)
-    xtra_args = ['-db-credentials-file', db_credentials_file]    
-    self._reset_tablet_dir(t,False)
-
-    logging.debug('building command line')
-
-    extra_args = ['-db-credentials-file', db_credentials_file,'-backup_and_exit']
+    self._reset_tablet_dir(t)
+    
+    extra_args = ['-db-credentials-file', db_credentials_file]
     if use_xtrabackup:
       extra_args.extend(xtrabackup_args)
     logging.debug("starting backup tablet %s",str(datetime.datetime.now()))    
-    proc = t.start_vttablet(wait_for_state=False,
-                     init_tablet_type=tablet_type,
-                     init_keyspace='test_keyspace',
+    proc = t.start_vtbackup(init_keyspace='test_keyspace',
                      init_shard='0',
-                     supports_backups=True,
                      extra_args=extra_args)
-
     logging.debug('tablet started waiting for process to end %s',proc)
     utils.wait_procs([proc],True)
     logging.debug("backup tablet done %s",str(datetime.datetime.now()))        
-    utils.wait_procs([t.teardown_mysql(extra_args=xtra_args)])    
 
   def test_tablet_backup_only(self):
     self._test_backup('replica', True)
@@ -316,8 +328,8 @@ class TestBackup(unittest.TestCase):
     if not backup_only:
       utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
     else:
-      self._backup_only(tablet_replica3,tablet_type='backup')
-      alias = tablet_replica3.tablet_alias
+      self._backup_only(backup_tablet)
+      alias = backup_tablet.tablet_alias
     logging.debug("done taking backup %s",str(datetime.datetime.now()))      
     # end if
 
