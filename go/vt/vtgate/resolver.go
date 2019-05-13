@@ -22,14 +22,18 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/gateway"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -337,6 +341,106 @@ func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard st
 		}
 		return callback(se, timestamp)
 	})
+}
+
+type vStreamController struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+	mu     sync.Mutex
+	ch     chan []*binlogdatapb.VEvent
+	err    error
+}
+
+func newVStreamController(ctx context.Context, res *Resolver, shardPositions map[topo.KeyspaceShard]string, tabletType topodatapb.TabletType, filter *binlogdatapb.Filter) *vStreamController {
+	ctx, cancel := context.WithCancel(ctx)
+	vsc := &vStreamController{
+		ctx:    ctx,
+		cancel: cancel,
+		ch:     make(chan []*binlogdatapb.VEvent),
+	}
+	vsc.wg.Add(len(shardPositions))
+	for ks, pos := range shardPositions {
+		go vsc.vstream(res, ks.Keyspace, ks.Shard, tabletType, pos, filter)
+	}
+	go func() {
+		vsc.wg.Wait()
+		close(vsc.ch)
+	}()
+	return vsc
+}
+
+func (vsc *vStreamController) vstream(res *Resolver, keyspace, shard string, tabletType topodatapb.TabletType, startPos string, filter *binlogdatapb.Filter) {
+	err := res.VStream(vsc.ctx, keyspace, shard, tabletType, startPos, filter, func(eventss [][]*binlogdatapb.VEvent) error {
+		vsc.mu.Lock()
+		defer vsc.mu.Unlock()
+
+		for _, evs := range eventss {
+			select {
+			case <-vsc.ctx.Done():
+				return vsc.ctx.Err()
+			case vsc.ch <- evs:
+			}
+		}
+		return nil
+	})
+	vsc.setErr(err)
+}
+
+func (vsc *vStreamController) setErr(err error) {
+	vsc.mu.Lock()
+	defer vsc.mu.Unlock()
+	if vsc.err == nil {
+		vsc.err = err
+		vsc.cancel()
+	}
+}
+
+// VStream streams events from one target.
+func (res *Resolver) VStream(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, startPos string, filter *binlogdatapb.Filter, send func(eventss [][]*binlogdatapb.VEvent) error) error {
+	errCount := 0
+	for {
+		var eventss [][]*binlogdatapb.VEvent
+		rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, key.DestinationShard(shard))
+		if err != nil {
+			return err
+		}
+		if len(rss) != 1 {
+			// Unreachable.
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected number or shards: %v", rss)
+		}
+		err = rss[0].QueryService.VStream(ctx, rss[0].Target, startPos, filter, func(events []*binlogdatapb.VEvent) error {
+			if len(events) == 0 {
+				return nil
+			}
+			// We received a valid event. Reset error count.
+			errCount = 0
+
+			eventss = append(eventss, events)
+			lastEvent := events[len(events)-1]
+			switch lastEvent.Type {
+			case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL:
+				if err := send(eventss); err != nil {
+					return err
+				}
+				eventss = nil
+			}
+			return nil
+		})
+		if err == nil {
+			// Unreachable.
+			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstream ended unexpectedly")
+		}
+		if !isRetryableError(err) {
+			log.Errorf("vstream for %s/%s error: %v", keyspace, shard, err)
+			return err
+		}
+		errCount++
+		if errCount >= 3 {
+			log.Errorf("vstream for %s/%s had three consecutive failures: %v", keyspace, shard, err)
+			return err
+		}
+	}
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
