@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -1045,35 +1044,11 @@ func (vtg *VTGate) UpdateStream(ctx context.Context, keyspace string, shard stri
 
 // VStream streams binlog events.
 func (vtg *VTGate) VStream(ctx context.Context, position string, tabletType topodatapb.TabletType, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	shardPositions, err := parsePosition(position)
+	sp, err := newShardPositions(position)
 	if err != nil {
 		return err
 	}
-	vsc := newVStreamController(ctx, vtg.resolver, shardPositions, tabletType, filter)
-	for ev := range vsc.ch {
-		if err := send(ev); err != nil {
-			vsc.cancel()
-			return err
-		}
-	}
-	return vsc.err
-}
-
-func parsePosition(pos string) (map[topo.KeyspaceShard]string, error) {
-	positions := strings.Split(pos, "|")
-	shardPositions := make(map[topo.KeyspaceShard]string, len(positions))
-	for _, shardPos := range positions {
-		parts := strings.Split(shardPos, "@")
-		if len(parts) != 2 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid position %s", pos)
-		}
-		ks, shard, err := topoproto.ParseKeyspaceShard(parts[0])
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid position %s: %v", pos, err)
-		}
-		shardPositions[topo.KeyspaceShard{Keyspace: ks, Shard: shard}] = parts[1]
-	}
-	return shardPositions, nil
+	return vtg.resolver.VStream(ctx, sp, tabletType, filter, send)
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
