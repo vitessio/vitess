@@ -343,63 +343,80 @@ func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard st
 	})
 }
 
-type vStreamController struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
-	mu     sync.Mutex
-	ch     chan []*binlogdatapb.VEvent
-	err    error
-}
-
-func newVStreamController(ctx context.Context, res *Resolver, shardPositions map[topo.KeyspaceShard]string, tabletType topodatapb.TabletType, filter *binlogdatapb.Filter) *vStreamController {
-	ctx, cancel := context.WithCancel(ctx)
-	vsc := &vStreamController{
-		ctx:    ctx,
-		cancel: cancel,
-		ch:     make(chan []*binlogdatapb.VEvent),
-	}
-	vsc.wg.Add(len(shardPositions))
-	for ks, pos := range shardPositions {
-		go vsc.vstream(res, ks.Keyspace, ks.Shard, tabletType, pos, filter)
-	}
-	go func() {
-		vsc.wg.Wait()
-		close(vsc.ch)
-	}()
-	return vsc
-}
-
-func (vsc *vStreamController) vstream(res *Resolver, keyspace, shard string, tabletType topodatapb.TabletType, startPos string, filter *binlogdatapb.Filter) {
-	err := res.VStream(vsc.ctx, keyspace, shard, tabletType, startPos, filter, func(eventss [][]*binlogdatapb.VEvent) error {
-		vsc.mu.Lock()
-		defer vsc.mu.Unlock()
-
-		for _, evs := range eventss {
-			select {
-			case <-vsc.ctx.Done():
-				return vsc.ctx.Err()
-			case vsc.ch <- evs:
-			}
-		}
-		return nil
-	})
-	vsc.setErr(err)
-}
-
-func (vsc *vStreamController) setErr(err error) {
-	vsc.mu.Lock()
-	defer vsc.mu.Unlock()
-	if vsc.err == nil {
-		vsc.err = err
-		vsc.cancel()
-	}
-}
-
 // VStream streams events from one target.
-func (res *Resolver) VStream(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, startPos string, filter *binlogdatapb.Filter, send func(eventss [][]*binlogdatapb.VEvent) error) error {
+func (res *Resolver) VStream(ctx context.Context, sp *shardPositions, tabletType topodatapb.TabletType, filter *binlogdatapb.Filter, send func(events []*binlogdatapb.VEvent) error) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// mu protects sending on ch, err and updates to sp.
+	// mu is needed for sending because transactions can come
+	// in separate chunks. If so, we have to send all the
+	// chunks together.
+	var mu sync.Mutex
+	ch := make(chan []*binlogdatapb.VEvent)
+	var outerErr error
+
+	var wg sync.WaitGroup
+	for ks, pos := range sp.positions {
+		wg.Add(1)
+		go func(ks topo.KeyspaceShard, pos string) {
+			defer wg.Done()
+			err := res.vstreamOneShard(ctx, ks.Keyspace, ks.Shard, tabletType, pos, filter, func(eventss [][]*binlogdatapb.VEvent) error {
+				mu.Lock()
+				defer mu.Unlock()
+
+				// Send all chunks while holding the lock.
+				for _, evs := range eventss {
+					// Replace GTID events with our own.
+					for _, ev := range evs {
+						if ev.Type == binlogdatapb.VEventType_GTID {
+							sp.positions[ks] = ev.Gtid
+							ev.Gtid = sp.String()
+						}
+					}
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case ch <- evs:
+					}
+				}
+				return nil
+			})
+
+			// Set the error on exit. First one wins.
+			mu.Lock()
+			defer mu.Unlock()
+			if err == nil {
+				outerErr = err
+				cancel()
+			}
+		}(ks, pos)
+	}
+
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	for ev := range ch {
+		if err := send(ev); err != nil {
+			return err
+		}
+	}
+
+	return outerErr
+}
+
+// vstreamOneShard streams from one shard. If transactions come in separate chunks, they are grouped and sent.
+func (res *Resolver) vstreamOneShard(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, startPos string, filter *binlogdatapb.Filter, send func(eventss [][]*binlogdatapb.VEvent) error) error {
 	errCount := 0
 	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		var eventss [][]*binlogdatapb.VEvent
 		rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, key.DestinationShard(shard))
 		if err != nil {
