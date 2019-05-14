@@ -102,14 +102,14 @@ func createDiscoveryGateway(ctx context.Context, hc discovery.HealthCheck, serv 
 		retryCount:        retryCount,
 		tabletsWatchers:   make([]*discovery.TopologyWatcher, 0, 1),
 		statusAggregators: make(map[string]*TabletStatusAggregator),
-		buffer:            buffer.New(),
+		buffer:            buffer.New(ctx),
 	}
 
 	// Set listener which will update TabletStatsCache and MasterBuffer.
 	// We set sendDownEvents=true because it's required by TabletStatsCache.
 	hc.SetListener(dg, true /* sendDownEvents */)
 
-	log.Infof("loading tablets for cells: %v", *cellsToWatch)
+	log.InfofC(ctx, "loading tablets for cells: %v", *cellsToWatch)
 	for _, c := range strings.Split(*cellsToWatch, ",") {
 		if c == "" {
 			continue
@@ -174,11 +174,11 @@ func (dg *discoveryGateway) topologyWatcherChecksum() int64 {
 
 // StatsUpdate forwards HealthCheck updates to TabletStatsCache and MasterBuffer.
 // It is part of the discovery.HealthCheckStatsListener interface.
-func (dg *discoveryGateway) StatsUpdate(ts *discovery.TabletStats) {
-	dg.tsc.StatsUpdate(ts)
+func (dg *discoveryGateway) StatsUpdate(ctx context.Context, ts *discovery.TabletStats) {
+	dg.tsc.StatsUpdate(ctx, ts)
 
 	if ts.Target.TabletType == topodatapb.TabletType_MASTER {
-		dg.buffer.StatsUpdate(ts)
+		dg.buffer.StatsUpdate(ctx, ts)
 	}
 }
 

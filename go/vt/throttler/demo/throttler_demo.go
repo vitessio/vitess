@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
@@ -276,7 +277,7 @@ func (c *client) stop() {
 // StatsUpdate implements discovery.HealthCheckStatsListener.
 // It gets called by the healthCheck instance every time a tablet broadcasts
 // a health update.
-func (c *client) StatsUpdate(ts *discovery.TabletStats) {
+func (c *client) StatsUpdate(_ context.Context, ts *discovery.TabletStats) {
 	// Ignore unless REPLICA or RDONLY.
 	if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {
 		return

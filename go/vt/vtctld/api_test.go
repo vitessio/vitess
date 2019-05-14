@@ -98,12 +98,12 @@ func TestAPI(t *testing.T) {
 	ts5 := tabletStats("ks2", "cell1", "0", topodatapb.TabletType_REPLICA, 500)
 	ts6 := tabletStats("ks2", "cell2", "0", topodatapb.TabletType_REPLICA, 600)
 
-	realtimeStats.StatsUpdate(ts1)
-	realtimeStats.StatsUpdate(ts2)
-	realtimeStats.StatsUpdate(ts3)
-	realtimeStats.StatsUpdate(ts4)
-	realtimeStats.StatsUpdate(ts5)
-	realtimeStats.StatsUpdate(ts6)
+	realtimeStats.StatsUpdate(ctx, ts1)
+	realtimeStats.StatsUpdate(ctx, ts2)
+	realtimeStats.StatsUpdate(ctx, ts3)
+	realtimeStats.StatsUpdate(ctx, ts4)
+	realtimeStats.StatsUpdate(ctx, ts5)
+	realtimeStats.StatsUpdate(ctx, ts6)
 
 	// Test cases.
 	table := []struct {

@@ -211,7 +211,7 @@ func (tc *TabletStatsCache) getAliasByCell(cell string) string {
 }
 
 // StatsUpdate is part of the HealthCheckStatsListener interface.
-func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
+func (tc *TabletStatsCache) StatsUpdate(_ context.Context, ts *TabletStats) {
 	if ts.Target.TabletType != topodatapb.TabletType_MASTER &&
 		ts.Tablet.Alias.Cell != tc.cell &&
 		tc.getAliasByCell(ts.Tablet.Alias.Cell) != tc.getAliasByCell(tc.cell) {

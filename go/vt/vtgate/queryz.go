@@ -23,6 +23,7 @@ import (
 	"sort"
 	"time"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
@@ -115,7 +116,7 @@ func (s *queryzSorter) Len() int           { return len(s.rows) }
 func (s *queryzSorter) Swap(i, j int)      { s.rows[i], s.rows[j] = s.rows[j], s.rows[i] }
 func (s *queryzSorter) Less(i, j int) bool { return s.less(s.rows[i], s.rows[j]) }
 
-func queryzHandler(e *Executor, w http.ResponseWriter, r *http.Request) {
+func queryzHandler(ctx context.Context, e *Executor, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
@@ -157,7 +158,7 @@ func queryzHandler(e *Executor, w http.ResponseWriter, r *http.Request) {
 	sort.Sort(&sorter)
 	for _, Value := range sorter.rows {
 		if err := queryzTmpl.Execute(w, Value); err != nil {
-			log.Errorf("queryz: couldn't execute template: %v", err)
+			log.ErrorfC(ctx, "queryz: couldn't execute template: %v", err)
 		}
 	}
 }

@@ -80,7 +80,7 @@ func TestGRPCDiscovery(t *testing.T) {
 			"grpc": int32(port),
 		},
 	}, "test_tablet")
-	err = gateway.WaitForTablets(dg, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
+	err = gateway.WaitForTablets(context.Background(), dg, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
 	if err != nil {
 		t.Fatalf("WaitForTablets failed: %v", err)
 	}

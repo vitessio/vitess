@@ -35,27 +35,27 @@ const (
 	jsonContentType = "application/json; charset=utf-8"
 )
 
-func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
+func httpErrorf(ctx context.Context, w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
 	errMsg := fmt.Sprintf(format, args...)
-	log.Errorf("HTTP error on %v: %v, request: %#v", r.URL.Path, errMsg, r)
+	log.ErrorfC(ctx, "HTTP error on %v: %v, request: %#v", r.URL.Path, errMsg, r)
 	http.Error(w, errMsg, http.StatusInternalServerError)
 }
 
-func handleAPI(apiPath string, handlerFunc func(w http.ResponseWriter, r *http.Request) error) {
+func handleAPI(ctx context.Context, apiPath string, handlerFunc func(w http.ResponseWriter, r *http.Request) error) {
 	http.HandleFunc(apiPrefix+apiPath, func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if x := recover(); x != nil {
-				httpErrorf(w, r, "uncaught panic: %v", x)
+				httpErrorf(ctx, w, r, "uncaught panic: %v", x)
 			}
 		}()
 		if err := handlerFunc(w, r); err != nil {
-			httpErrorf(w, r, "%v", err)
+			httpErrorf(ctx, w, r, "%v", err)
 		}
 	})
 }
 
-func handleCollection(collection string, getFunc func(*http.Request) (interface{}, error)) {
-	handleAPI(collection+"/", func(w http.ResponseWriter, r *http.Request) error {
+func handleCollection(ctx context.Context, collection string, getFunc func(*http.Request) (interface{}, error)) {
+	handleAPI(ctx, collection+"/", func(w http.ResponseWriter, r *http.Request) error {
 		// Get the requested object.
 		obj, err := getFunc(r)
 		if err != nil {
@@ -90,7 +90,7 @@ func getItemPath(url string) string {
 
 func initAPI(ctx context.Context, hc discovery.HealthCheck) {
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
-	handleCollection("health-check", func(r *http.Request) (interface{}, error) {
+	handleCollection(ctx, "health-check", func(r *http.Request) (interface{}, error) {
 		cacheStatus := hc.CacheStatus()
 
 		itemPath := getItemPath(r.URL.Path)

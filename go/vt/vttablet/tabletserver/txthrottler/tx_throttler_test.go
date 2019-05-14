@@ -22,6 +22,7 @@ package txthrottler
 //go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -125,14 +126,15 @@ func TestEnabledThrottler(t *testing.T) {
 	if result := throttler.Throttle(); result != false {
 		t.Errorf("want: false, got: %v", result)
 	}
-	hcListener.StatsUpdate(tabletStats)
+	ctx := context.Background()
+	hcListener.StatsUpdate(ctx, tabletStats)
 	rdonlyTabletStats := &discovery.TabletStats{
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_RDONLY,
 		},
 	}
 	// This call should not be forwarded to the go/vt/throttler.Throttler object.
-	hcListener.StatsUpdate(rdonlyTabletStats)
+	hcListener.StatsUpdate(ctx, rdonlyTabletStats)
 	// The second throttle call should reject.
 	if result := throttler.Throttle(); result != true {
 		t.Errorf("want: true, got: %v", result)

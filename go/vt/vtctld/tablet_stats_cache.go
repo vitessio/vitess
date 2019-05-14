@@ -21,6 +21,7 @@ import (
 	"sort"
 	"sync"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -107,7 +108,7 @@ func newTabletStatsCache() *tabletStatsCache {
 
 // StatsUpdate is part of the discovery.HealthCheckStatsListener interface.
 // Upon receiving a new TabletStats, it updates the two maps in tablet_stats_cache.
-func (c *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
+func (c *tabletStatsCache) StatsUpdate(_ context.Context, stats *discovery.TabletStats) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

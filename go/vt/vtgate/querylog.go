@@ -20,6 +20,7 @@ import (
 	"flag"
 	"net/http"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/streamlog"
 )
 
@@ -40,17 +41,17 @@ var (
 	queryLogToFile = flag.String("log_queries_to_file", "", "Enable query logging to the specified file")
 )
 
-func initQueryLogger(vtg *VTGate) error {
+func initQueryLogger(ctx context.Context, vtg *VTGate) error {
 	QueryLogger.ServeLogs(QueryLogHandler, streamlog.GetFormatter(QueryLogger))
 
 	http.HandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {
 		ch := QueryLogger.Subscribe("querylogz")
 		defer QueryLogger.Unsubscribe(ch)
-		querylogzHandler(ch, w, r)
+		querylogzHandler(ctx, ch, w, r)
 	})
 
 	http.HandleFunc(QueryzHandler, func(w http.ResponseWriter, r *http.Request) {
-		queryzHandler(vtg.executor, w, r)
+		queryzHandler(ctx, vtg.executor, w, r)
 	})
 
 	if *queryLogToFile != "" {

@@ -652,7 +652,7 @@ func newListener() *listener {
 	return &listener{output: make(chan *TabletStats, 2)}
 }
 
-func (l *listener) StatsUpdate(ts *TabletStats) {
+func (l *listener) StatsUpdate(ctx context.Context, ts *TabletStats) {
 	l.output <- ts
 }
 

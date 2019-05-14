@@ -34,7 +34,7 @@ func TestQuerylogzHandlerInvalidLogStats(t *testing.T) {
 	response := httptest.NewRecorder()
 	ch := make(chan interface{}, 1)
 	ch <- "test msg"
-	querylogzHandler(ch, response, req)
+	querylogzHandler(context.Background(), ch, response, req)
 	close(ch)
 	if !strings.Contains(response.Body.String(), "error") {
 		t.Fatalf("should show an error page for an non LogStats")
@@ -81,7 +81,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	response := httptest.NewRecorder()
 	ch := make(chan interface{}, 1)
 	ch <- logStats
-	querylogzHandler(ch, response, req)
+	querylogzHandler(context.Background(), ch, response, req)
 	close(ch)
 	body, _ := ioutil.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, fastQueryPattern, logStats, body)
@@ -110,7 +110,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	response = httptest.NewRecorder()
 	ch = make(chan interface{}, 1)
 	ch <- logStats
-	querylogzHandler(ch, response, req)
+	querylogzHandler(context.Background(), ch, response, req)
 	close(ch)
 	body, _ = ioutil.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, mediumQueryPattern, logStats, body)
@@ -138,7 +138,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	logStats.EndTime = logStats.StartTime.Add(500 * time.Millisecond)
 	ch = make(chan interface{}, 1)
 	ch <- logStats
-	querylogzHandler(ch, response, req)
+	querylogzHandler(context.Background(), ch, response, req)
 	close(ch)
 	body, _ = ioutil.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)

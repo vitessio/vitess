@@ -32,7 +32,7 @@ func TestVariables(t *testing.T) {
 	defer resetFlagsForTesting()
 
 	// Create new buffer which will the flags.
-	New()
+	New(context.Background())
 
 	if got, want := bufferSize.Get(), int64(23); got != want {
 		t.Fatalf("BufferSize variable not set during initilization: got = %v, want = %v", got, want)
@@ -42,7 +42,7 @@ func TestVariables(t *testing.T) {
 func TestVariablesAreInitialized(t *testing.T) {
 	// Create a new buffer and make a call which will create the shardBuffer object.
 	// After that, the variables should be initialized for that shard.
-	b := New()
+	b := New(context.Background())
 	_, err := b.WaitForFailoverEnd(context.Background(), "init_test", "0", nil /* err */)
 	if err != nil {
 		t.Fatalf("buffer should just passthrough and not return an error: %v", err)

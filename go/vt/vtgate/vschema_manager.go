@@ -84,7 +84,7 @@ func (vm *VSchemaManager) watchSrvVSchema(ctx context.Context, cell string) {
 		if v != nil {
 			vschema, err = vindexes.BuildVSchema(v)
 			if err != nil {
-				log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", cell, err)
+				log.WarningfC(ctx, "Error creating VSchema for cell %v (will try again next update): %v", cell, err)
 				err = fmt.Errorf("error creating VSchema for cell %v: %v", cell, err)
 				if vschemaCounters != nil {
 					vschemaCounters.Add("Parsing", 1)
@@ -143,7 +143,7 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 		cellErr := topoServer.UpdateSrvVSchema(ctx, cell, vschema)
 		if cellErr != nil {
 			err = cellErr
-			log.Errorf("error updating vschema in cell %s: %v", cell, cellErr)
+			log.ErrorfC(ctx, "error updating vschema in cell %s: %v", cell, cellErr)
 		}
 	}
 

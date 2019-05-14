@@ -215,7 +215,7 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 			return nil, nil
 		}
 
-		sb.startBufferingLocked(err)
+		sb.startBufferingLocked(ctx, err)
 	}
 
 	if sb.mode == bufferDryRun {
@@ -259,7 +259,7 @@ func (sb *shardBuffer) shouldBufferLocked(failoverDetected bool) bool {
 	panic("BUG: All possible states must be covered by the switch expression above.")
 }
 
-func (sb *shardBuffer) startBufferingLocked(err error) {
+func (sb *shardBuffer) startBufferingLocked(ctx context.Context, err error) {
 	// Reset monitoring data from previous failover.
 	lastRequestsInFlightMax.Set(sb.statsKey, 0)
 	lastRequestsDryRunMax.Set(sb.statsKey, 0)
@@ -277,7 +277,7 @@ func (sb *shardBuffer) startBufferingLocked(err error) {
 		msg = "Dry-run: Would have started buffering"
 	}
 	starts.Add(sb.statsKey, 1)
-	log.Infof("%v for shard: %s (window: %v, size: %v, max failover duration: %v) (A failover was detected by this seen error: %v.)",
+	log.InfofC(ctx, "%v for shard: %s (window: %v, size: %v, max failover duration: %v) (A failover was detected by this seen error: %v.)",
 		msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), *window, *size, *maxFailoverDuration, err)
 }
 
@@ -468,7 +468,7 @@ func (sb *shardBuffer) remove(toRemove *entry) {
 	// Entry was already removed. Keep the queue as it is.
 }
 
-func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64, alias *topodatapb.TabletAlias) {
+func (sb *shardBuffer) recordExternallyReparentedTimestamp(ctx context.Context, timestamp int64, alias *topodatapb.TabletAlias) {
 	// Fast path (read lock): Check if new timestamp is higher.
 	sb.mu.RLock()
 	if timestamp <= sb.externallyReparented {

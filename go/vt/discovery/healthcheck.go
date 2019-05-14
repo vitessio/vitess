@@ -145,7 +145,7 @@ type HealthCheckStatsListener interface {
 	//   (ts.Up false on the old type, ts.Up true on the new type).
 	//   If it is false, only one event is sent (ts.Up true on the new
 	//   type).
-	StatsUpdate(*TabletStats)
+	StatsUpdate(context.Context, *TabletStats)
 }
 
 // TabletStats is returned when getting the set of tablets.
@@ -442,11 +442,11 @@ func (hc *HealthCheckImpl) stateChecksum() int64 {
 
 // updateHealth updates the tabletHealth record and transmits the tablet stats
 // to the listener.
-func (hc *HealthCheckImpl) updateHealth(ts *TabletStats, conn queryservice.QueryService) {
+func (hc *HealthCheckImpl) updateHealth(ctx context.Context, ts *TabletStats, conn queryservice.QueryService) {
 	// Unconditionally send the received update at the end.
 	defer func() {
 		if hc.listener != nil {
-			hc.listener.StatsUpdate(ts)
+			hc.listener.StatsUpdate(ctx, ts)
 		}
 	}()
 
@@ -471,7 +471,7 @@ func (hc *HealthCheckImpl) updateHealth(ts *TabletStats, conn queryservice.Query
 			oldts.Name, topotools.TabletIdent(oldts.Tablet), topotools.TargetIdent(oldts.Target), topotools.TargetIdent(ts.Target), ts.TabletExternallyReparentedTimestamp)
 		if hc.listener != nil && hc.sendDownEvents {
 			oldts.Up = false
-			hc.listener.StatsUpdate(&oldts)
+			hc.listener.StatsUpdate(ctx, &oldts)
 		}
 
 		// Track how often a tablet gets promoted to master. It is used for
@@ -485,13 +485,13 @@ func (hc *HealthCheckImpl) updateHealth(ts *TabletStats, conn queryservice.Query
 // finalizeConn closes the health checking connection and sends the final
 // notification about the tablet to downstream. To be called only on exit from
 // checkConn().
-func (hc *HealthCheckImpl) finalizeConn(hcc *healthCheckConn) {
+func (hc *HealthCheckImpl) finalizeConn(ctx context.Context, hcc *healthCheckConn) {
 	hcc.tabletStats.Up = false
 	hcc.setServingState(false, "finalizeConn closing connection")
 	// Note: checkConn() exits only when hcc.ctx.Done() is closed. Thus it's
 	// safe to simply get Err() value here and assign to LastError.
 	hcc.tabletStats.LastError = hcc.ctx.Err()
-	hc.updateHealth(hcc.tabletStats.Copy(), nil)
+	hc.updateHealth(ctx, hcc.tabletStats.Copy(), nil)
 	if hcc.conn != nil {
 		// Don't use hcc.ctx because it's already closed.
 		// Use a separate context, and add a timeout to prevent unbounded waits.
@@ -503,12 +503,12 @@ func (hc *HealthCheckImpl) finalizeConn(hcc *healthCheckConn) {
 }
 
 // checkConn performs health checking on the given tablet.
-func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
+func (hc *HealthCheckImpl) checkConn(ctx context.Context, hcc *healthCheckConn, name string) {
 	defer hc.connsWG.Done()
-	defer hc.finalizeConn(hcc)
+	defer hc.finalizeConn(ctx, hcc)
 
 	// Initial notification for downstream about the tablet existence.
-	hc.updateHealth(hcc.tabletStats.Copy(), hcc.conn)
+	hc.updateHealth(ctx, hcc.tabletStats.Copy(), hcc.conn)
 	hc.initialUpdatesWG.Done()
 
 	retryDelay := hc.retryDelay
@@ -562,7 +562,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 		if timedout.Get() {
 			hcc.tabletStats.LastError = fmt.Errorf("healthcheck timed out (latest %v)", hcc.lastResponseTimestamp)
 			hcc.setServingState(false, hcc.tabletStats.LastError.Error())
-			hc.updateHealth(hcc.tabletStats.Copy(), hcc.conn)
+			hc.updateHealth(ctx, hcc.tabletStats.Copy(), hcc.conn)
 			hcErrorCounters.Add([]string{hcc.tabletStats.Target.Keyspace, hcc.tabletStats.Target.Shard, topoproto.TabletTypeLString(hcc.tabletStats.Target.TabletType)}, 1)
 		}
 
@@ -624,7 +624,7 @@ func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, cal
 		hcc.setServingState(false, err.Error())
 		hcc.tabletStats.LastError = err
 		// Send nil because we intend to close the connection.
-		hc.updateHealth(hcc.tabletStats.Copy(), nil)
+		hc.updateHealth(ctx, hcc.tabletStats.Copy(), nil)
 		hcc.conn.Close(ctx)
 		hcc.conn = nil
 	}
@@ -675,7 +675,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 		reason = "healthCheck update error: " + healthErr.Error()
 	}
 	hcc.setServingState(serving, reason)
-	hc.updateHealth(hcc.tabletStats.Copy(), hcc.conn)
+	hc.updateHealth(hcc.ctx, hcc.tabletStats.Copy(), hcc.conn)
 	return nil
 }
 
@@ -746,7 +746,7 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 	hc.connsWG.Add(1)
 	hc.mu.Unlock()
 
-	go hc.checkConn(hcc, name)
+	go hc.checkConn(ctx, hcc, name)
 }
 
 // RemoveTablet removes the tablet, and stops the health check.

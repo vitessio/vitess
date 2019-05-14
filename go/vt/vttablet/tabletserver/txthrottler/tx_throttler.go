@@ -317,7 +317,7 @@ func (ts *txThrottlerState) deallocateResources() {
 }
 
 // StatsUpdate is part of the HealthCheckStatsListener interface.
-func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.TabletStats) {
+func (ts *txThrottlerState) StatsUpdate(_ context.Context, tabletStats *discovery.TabletStats) {
 	// Ignore MASTER and RDONLY stats.
 	// We currently do not monitor RDONLY tablets for replication lag. RDONLY tablets are not
 	// candidates for becoming master during failover, and it's acceptable to serve somewhat

@@ -100,11 +100,11 @@ type Buffer struct {
 }
 
 // New creates a new Buffer object.
-func New() *Buffer {
-	return newWithNow(time.Now)
+func New(ctx context.Context) *Buffer {
+	return newWithNow(ctx, time.Now)
 }
 
-func newWithNow(now func() time.Time) *Buffer {
+func newWithNow(ctx context.Context, now func() time.Time) *Buffer {
 	if err := verifyFlags(); err != nil {
 		log.Fatalf("Invalid buffer configuration: %v", err)
 	}
@@ -112,11 +112,11 @@ func newWithNow(now func() time.Time) *Buffer {
 	keyspaces, shards := keyspaceShardsToSets(*shards)
 
 	if *enabledDryRun {
-		log.Infof("vtgate buffer in dry-run mode enabled for all requests. Dry-run bufferings will log failovers but not buffer requests.")
+		log.InfofC(ctx, "vtgate buffer in dry-run mode enabled for all requests. Dry-run bufferings will log failovers but not buffer requests.")
 	}
 
 	if *enabled {
-		log.Infof("vtgate buffer enabled. MASTER requests will be buffered during detected failovers.")
+		log.InfofC(ctx, "vtgate buffer enabled. MASTER requests will be buffered during detected failovers.")
 
 		// Log a second line if it's only enabled for some keyspaces or shards.
 		header := "Buffering limited to configured "
@@ -136,12 +136,12 @@ func newWithNow(now func() time.Time) *Buffer {
 			if *enabledDryRun {
 				dryRunOverride = " Dry-run mode is overriden for these entries and actual buffering will take place."
 			}
-			log.Infof("%v.%v", limited, dryRunOverride)
+			log.InfofC(ctx, "%v.%v", limited, dryRunOverride)
 		}
 	}
 
 	if !*enabledDryRun && !*enabled {
-		log.Infof("vtgate buffer not enabled.")
+		log.InfofC(ctx, "vtgate buffer not enabled.")
 	}
 
 	return &Buffer{
@@ -216,7 +216,7 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 // StatsUpdate keeps track of the "tablet_externally_reparented_timestamp" of
 // each master. This way we can detect the end of a failover.
 // It is part of the discovery.HealthCheckStatsListener interface.
-func (b *Buffer) StatsUpdate(ts *discovery.TabletStats) {
+func (b *Buffer) StatsUpdate(ctx context.Context, ts *discovery.TabletStats) {
 	if ts.Target.TabletType != topodatapb.TabletType_MASTER {
 		panic(fmt.Sprintf("BUG: non MASTER TabletStats object must not be forwarded: %#v", ts))
 	}
@@ -233,7 +233,7 @@ func (b *Buffer) StatsUpdate(ts *discovery.TabletStats) {
 		// Buffer is shut down. Ignore all calls.
 		return
 	}
-	sb.recordExternallyReparentedTimestamp(timestamp, ts.Tablet.Alias)
+	sb.recordExternallyReparentedTimestamp(ctx, timestamp, ts.Tablet.Alias)
 }
 
 // causedByFailover returns true if "err" was supposedly caused by a failover.

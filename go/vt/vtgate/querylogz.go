@@ -25,6 +25,7 @@ import (
 	"text/template"
 	"time"
 
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
@@ -82,7 +83,7 @@ var (
 
 // querylogzHandler serves a human readable snapshot of the
 // current query log.
-func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Request) {
+func querylogzHandler(ctx context.Context, ch chan interface{}, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
@@ -108,7 +109,7 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 				io.WriteString(w, `<tr class="error">`)
 				io.WriteString(w, err.Error())
 				io.WriteString(w, "</tr>")
-				log.Error(err)
+				log.ErrorfC(ctx, "%v", err)
 				continue
 			}
 			var level string
@@ -124,7 +125,7 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 				ColorLevel string
 			}{stats, level}
 			if err := querylogzTmpl.Execute(w, tmplData); err != nil {
-				log.Errorf("querylogz: couldn't execute template: %v", err)
+				log.ErrorfC(ctx, "querylogz: couldn't execute template: %v", err)
 			}
 		case <-tmr.C:
 			return

@@ -73,7 +73,7 @@ func TestTabletStatsCache(t *testing.T) {
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
-	tsc.StatsUpdate(ts1)
+	tsc.StatsUpdate(context.Background(), ts1)
 
 	// check it's there
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
@@ -94,7 +94,7 @@ func TestTabletStatsCache(t *testing.T) {
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 2, CpuUsage: 0.2},
 	}
-	tsc.StatsUpdate(stillHealthyTs1)
+	tsc.StatsUpdate(context.Background(), stillHealthyTs1)
 
 	// check the previous ts1 is still there, as the new one is ignored.
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
@@ -115,7 +115,7 @@ func TestTabletStatsCache(t *testing.T) {
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 35, CpuUsage: 0.2},
 	}
-	tsc.StatsUpdate(notHealthyTs1)
+	tsc.StatsUpdate(context.Background(), notHealthyTs1)
 
 	// check it's there
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
@@ -137,7 +137,7 @@ func TestTabletStatsCache(t *testing.T) {
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
 	}
-	tsc.StatsUpdate(ts2)
+	tsc.StatsUpdate(context.Background(), ts2)
 
 	// check it's there
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
@@ -165,7 +165,7 @@ func TestTabletStatsCache(t *testing.T) {
 
 	// one tablet goes unhealthy
 	ts2.Serving = false
-	tsc.StatsUpdate(ts2)
+	tsc.StatsUpdate(context.Background(), ts2)
 
 	// check we only have one left in healthy version
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
@@ -187,11 +187,11 @@ func TestTabletStatsCache(t *testing.T) {
 	// second tablet turns into a master, we receive down + up
 	ts2.Serving = true
 	ts2.Up = false
-	tsc.StatsUpdate(ts2)
+	tsc.StatsUpdate(context.Background(), ts2)
 	ts2.Up = true
 	ts2.Target.TabletType = topodatapb.TabletType_MASTER
 	ts2.TabletExternallyReparentedTimestamp = 10
-	tsc.StatsUpdate(ts2)
+	tsc.StatsUpdate(context.Background(), ts2)
 
 	// check we only have one replica left
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
@@ -207,11 +207,11 @@ func TestTabletStatsCache(t *testing.T) {
 
 	// reparent: old replica goes into master
 	ts1.Up = false
-	tsc.StatsUpdate(ts1)
+	tsc.StatsUpdate(context.Background(), ts1)
 	ts1.Up = true
 	ts1.Target.TabletType = topodatapb.TabletType_MASTER
 	ts1.TabletExternallyReparentedTimestamp = 20
-	tsc.StatsUpdate(ts1)
+	tsc.StatsUpdate(context.Background(), ts1)
 
 	// check we lost all replicas, and master is new one
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
@@ -224,7 +224,7 @@ func TestTabletStatsCache(t *testing.T) {
 	}
 
 	// old master sending an old ping should be ignored
-	tsc.StatsUpdate(ts2)
+	tsc.StatsUpdate(context.Background(), ts2)
 	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_MASTER)
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
@@ -240,7 +240,7 @@ func TestTabletStatsCache(t *testing.T) {
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
 	}
-	tsc.StatsUpdate(ts3)
+	tsc.StatsUpdate(context.Background(), ts3)
 	// check it's there
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
 	if len(a) != 1 {
@@ -261,7 +261,7 @@ func TestTabletStatsCache(t *testing.T) {
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
 	}
-	tsc.StatsUpdate(ts4)
+	tsc.StatsUpdate(context.Background(), ts4)
 	// check it's *NOT* there
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
 	if len(a) != 1 {

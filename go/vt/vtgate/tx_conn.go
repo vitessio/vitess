@@ -155,7 +155,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		// TODO(sougou): Perform a more fine-grained cleanup
 		// including unprepared transactions.
 		if resumeErr := txc.Resolve(ctx, dtid); resumeErr != nil {
-			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
+			log.WarningfC(ctx, "Rollback failed after Prepare failure: %v", resumeErr)
 		}
 		// Return the original error even if the previous operation fails.
 		return err

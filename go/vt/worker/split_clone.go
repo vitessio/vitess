@@ -1357,8 +1357,8 @@ func (scw *SplitCloneWorker) createKeyResolver(td *tabletmanagerdatapb.TableDefi
 // and forwards them to the respective throttler instance.
 // It also forwards any update to the TabletStatsCache to keep it up to date.
 // It is part of the discovery.HealthCheckStatsListener interface.
-func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.TabletStats) {
-	scw.tsc.StatsUpdate(ts)
+func (scw *SplitCloneWorker) StatsUpdate(ctx context.Context, ts *discovery.TabletStats) {
+	scw.tsc.StatsUpdate(ctx, ts)
 
 	// Ignore unless REPLICA or RDONLY.
 	if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {

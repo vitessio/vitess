@@ -620,7 +620,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for wait_timeout: %T", v)
 			}
 		case "sql_mode", "net_write_timeout", "net_read_timeout", "lc_messages", "collation_connection":
-			log.Warningf("Ignored inapplicable SET %v = %v", k, v)
+			log.WarningfC(ctx, "Ignored inapplicable SET %v = %v", k, v)
 			warnings.Add("IgnoredSet", 1)
 		case "charset", "names":
 			val, ok := v.(string)

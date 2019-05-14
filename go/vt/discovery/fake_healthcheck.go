@@ -17,6 +17,7 @@ limitations under the License.
 package discovery
 
 import (
+	"context"
 	"sort"
 	"sync"
 
@@ -95,7 +96,7 @@ func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet, name string) {
 	fhc.items[key] = item
 
 	if fhc.listener != nil {
-		fhc.listener.StatsUpdate(item.ts)
+		fhc.listener.StatsUpdate(context.Background(), item.ts)
 	}
 }
 
@@ -195,7 +196,7 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 	item.conn = conn
 
 	if fhc.listener != nil {
-		fhc.listener.StatsUpdate(item.ts)
+		fhc.listener.StatsUpdate(context.Background(), item.ts)
 	}
 	return conn
 }

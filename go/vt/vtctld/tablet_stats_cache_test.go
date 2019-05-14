@@ -17,6 +17,7 @@ limitations under the License.
 package vtctld
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -34,22 +35,24 @@ func TestStatsUpdate(t *testing.T) {
 	tablet1Stats2 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 200)
 	tablet2Stats1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 100)
 
+	ctx := context.Background()
+
 	// Insert tablet1.
-	tabletStatsCache.StatsUpdate(tablet1Stats1)
+	tabletStatsCache.StatsUpdate(ctx, tablet1Stats1)
 	results1 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
 	if got, want := results1[0], tablet1Stats1; !got.DeepEqual(want) {
 		t.Errorf("got: %v, want: %v", got, want)
 	}
 
 	// Update tablet1.
-	tabletStatsCache.StatsUpdate(tablet1Stats2)
+	tabletStatsCache.StatsUpdate(ctx, tablet1Stats2)
 	results2 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
 	if got, want := results2[0], tablet1Stats2; !got.DeepEqual(want) {
 		t.Errorf("got: %v, want: %v", got, want)
 	}
 
 	// Insert tablet. List of tablets will be resorted.
-	tabletStatsCache.StatsUpdate(tablet2Stats1)
+	tabletStatsCache.StatsUpdate(ctx, tablet2Stats1)
 	results3 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
 	if got, want := results3[0], tablet2Stats1; !got.DeepEqual(want) {
 		t.Errorf("got: %v, want: %v", got, want)
@@ -62,7 +65,7 @@ func TestStatsUpdate(t *testing.T) {
 
 	// Delete tablet2.
 	tablet2Stats1.Up = false
-	tabletStatsCache.StatsUpdate(tablet2Stats1)
+	tabletStatsCache.StatsUpdate(ctx, tablet2Stats1)
 	results5 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
 	for _, stat := range results5 {
 		if stat.DeepEqual(tablet2Stats1) {
@@ -77,7 +80,7 @@ func TestStatsUpdate(t *testing.T) {
 
 	// Delete tablet1. List of known cells should be empty now.
 	tablet1Stats2.Up = false
-	tabletStatsCache.StatsUpdate(tablet1Stats2)
+	tabletStatsCache.StatsUpdate(ctx, tablet1Stats2)
 	if ok {
 		t.Errorf("not deleted from cells")
 	}
@@ -108,25 +111,25 @@ func TestHeatmapData(t *testing.T) {
 	ts18 := tabletStats("ks2", "cell2", "80-", topodatapb.TabletType_REPLICA, 1800)
 
 	tabletStatsCache := newTabletStatsCache()
-
-	tabletStatsCache.StatsUpdate(ts1)
-	tabletStatsCache.StatsUpdate(ts2)
-	tabletStatsCache.StatsUpdate(ts3)
-	tabletStatsCache.StatsUpdate(ts4)
-	tabletStatsCache.StatsUpdate(ts5)
-	tabletStatsCache.StatsUpdate(ts6)
-	tabletStatsCache.StatsUpdate(ts7)
-	tabletStatsCache.StatsUpdate(ts8)
-	tabletStatsCache.StatsUpdate(ts9)
-	tabletStatsCache.StatsUpdate(ts10)
-	tabletStatsCache.StatsUpdate(ts11)
-	tabletStatsCache.StatsUpdate(ts12)
-	tabletStatsCache.StatsUpdate(ts13)
-	tabletStatsCache.StatsUpdate(ts14)
-	tabletStatsCache.StatsUpdate(ts15)
-	tabletStatsCache.StatsUpdate(ts16)
-	tabletStatsCache.StatsUpdate(ts17)
-	tabletStatsCache.StatsUpdate(ts18)
+	ctx := context.Background()
+	tabletStatsCache.StatsUpdate(ctx, ts1)
+	tabletStatsCache.StatsUpdate(ctx, ts2)
+	tabletStatsCache.StatsUpdate(ctx, ts3)
+	tabletStatsCache.StatsUpdate(ctx, ts4)
+	tabletStatsCache.StatsUpdate(ctx, ts5)
+	tabletStatsCache.StatsUpdate(ctx, ts6)
+	tabletStatsCache.StatsUpdate(ctx, ts7)
+	tabletStatsCache.StatsUpdate(ctx, ts8)
+	tabletStatsCache.StatsUpdate(ctx, ts9)
+	tabletStatsCache.StatsUpdate(ctx, ts10)
+	tabletStatsCache.StatsUpdate(ctx, ts11)
+	tabletStatsCache.StatsUpdate(ctx, ts12)
+	tabletStatsCache.StatsUpdate(ctx, ts13)
+	tabletStatsCache.StatsUpdate(ctx, ts14)
+	tabletStatsCache.StatsUpdate(ctx, ts15)
+	tabletStatsCache.StatsUpdate(ctx, ts16)
+	tabletStatsCache.StatsUpdate(ctx, ts17)
+	tabletStatsCache.StatsUpdate(ctx, ts18)
 
 	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell=all, type="all").
 	got, err := tabletStatsCache.heatmapData("ks1", "all", "all", "lag")
@@ -337,10 +340,10 @@ func TestTabletStats(t *testing.T) {
 	ts1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_MASTER, 200)
 	ts2 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 100)
 	ts3 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 300)
-
+	ctx := context.Background()
 	tabletStatsCache := newTabletStatsCache()
-	tabletStatsCache.StatsUpdate(ts1)
-	tabletStatsCache.StatsUpdate(ts2)
+	tabletStatsCache.StatsUpdate(ctx, ts1)
+	tabletStatsCache.StatsUpdate(ctx, ts2)
 
 	// Test 1: tablet1 and tablet2 are updated with the stats received by the HealthCheck module.
 	got1, err := tabletStatsCache.tabletStats(ts1.Tablet.Alias)
@@ -372,14 +375,15 @@ func TestTopologyInfo(t *testing.T) {
 	ts6 := tabletStats("ks1", "cell3", "0", topodatapb.TabletType_RDONLY, 600)
 	ts7 := tabletStats("ks2", "cell1", "0", topodatapb.TabletType_MASTER, 700)
 
+	ctx := context.Background()
 	tabletStatsCache := newTabletStatsCache()
-	tabletStatsCache.StatsUpdate(ts1)
-	tabletStatsCache.StatsUpdate(ts2)
-	tabletStatsCache.StatsUpdate(ts3)
-	tabletStatsCache.StatsUpdate(ts4)
-	tabletStatsCache.StatsUpdate(ts5)
-	tabletStatsCache.StatsUpdate(ts6)
-	tabletStatsCache.StatsUpdate(ts7)
+	tabletStatsCache.StatsUpdate(ctx, ts1)
+	tabletStatsCache.StatsUpdate(ctx, ts2)
+	tabletStatsCache.StatsUpdate(ctx, ts3)
+	tabletStatsCache.StatsUpdate(ctx, ts4)
+	tabletStatsCache.StatsUpdate(ctx, ts5)
+	tabletStatsCache.StatsUpdate(ctx, ts6)
+	tabletStatsCache.StatsUpdate(ctx, ts7)
 
 	var testcases = []struct {
 		keyspace string

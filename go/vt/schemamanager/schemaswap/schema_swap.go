@@ -792,7 +792,7 @@ func (shardSwap *shardSchemaSwap) checkWaitingTabletHealthiness(tabletStats *dis
 // that when a change of tablet health happens it's recorded in allTablets list, and if
 // this is the tablet that is being waited for after restore, the function wakes up the
 // waiting go routine.
-func (shardSwap *shardSchemaSwap) StatsUpdate(newTabletStats *discovery.TabletStats) {
+func (shardSwap *shardSchemaSwap) StatsUpdate(_ context.Context, newTabletStats *discovery.TabletStats) {
 	shardSwap.allTabletsLock.Lock()
 	defer shardSwap.allTabletsLock.Unlock()
 

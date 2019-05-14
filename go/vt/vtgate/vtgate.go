@@ -61,19 +61,19 @@ var (
 	disableLocalGateway = flag.Bool("disable_local_gateway", false, "if specified, this process will not route any queries to local tablets in the local cell")
 )
 
-func getTxMode() vtgatepb.TransactionMode {
+func getTxMode(ctx context.Context) vtgatepb.TransactionMode {
 	switch *transactionMode {
 	case "SINGLE":
-		log.Infof("Transaction mode: '%s'", *transactionMode)
+		log.InfofC(ctx, "Transaction mode: '%s'", *transactionMode)
 		return vtgatepb.TransactionMode_SINGLE
 	case "MULTI":
-		log.Infof("Transaction mode: '%s'", *transactionMode)
+		log.InfofC(ctx, "Transaction mode: '%s'", *transactionMode)
 		return vtgatepb.TransactionMode_MULTI
 	case "TWOPC":
-		log.Infof("Transaction mode: '%s'", *transactionMode)
+		log.InfofC(ctx, "Transaction mode: '%s'", *transactionMode)
 		return vtgatepb.TransactionMode_TWOPC
 	default:
-		log.Warningf("Unrecognized transactionMode '%s'. Continuing with default 'MULTI'", *transactionMode)
+		log.WarningfC(ctx, "Unrecognized transactionMode '%s'. Continuing with default 'MULTI'", *transactionMode)
 		return vtgatepb.TransactionMode_MULTI
 	}
 }
@@ -160,7 +160,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	if !*disableLocalGateway {
 		gw = gateway.GetCreator()(ctx, hc, serv, cell, retryCount)
 		gw.RegisterStats()
-		if err := gateway.WaitForTablets(gw, tabletTypesToWait); err != nil {
+		if err := gateway.WaitForTablets(ctx, gw, tabletTypesToWait); err != nil {
 			log.Fatalf("gateway.WaitForTablets failed: %v", err)
 		}
 	}
@@ -173,7 +173,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
 	if len(gateway.KeyspacesToWatch) > 0 {
-		log.Infof("Keyspace filtering enabled, selecting %v", gateway.KeyspacesToWatch)
+		log.InfofC(ctx, "Keyspace filtering enabled, selecting %v", gateway.KeyspacesToWatch)
 		var err error
 		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, gateway.KeyspacesToWatch)
 		if err != nil {
@@ -181,7 +181,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 		}
 	}
 
-	tc := NewTxConn(gw, getTxMode())
+	tc := NewTxConn(gw, getTxMode(ctx))
 	// ScatterConn depends on TxConn to perform forced rollbacks.
 	sc := NewScatterConn("VttabletCall", tc, gw, hc)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
@@ -235,7 +235,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 		}
 	})
 	rpcVTGate.registerDebugHealthHandler()
-	err := initQueryLogger(rpcVTGate)
+	err := initQueryLogger(ctx, rpcVTGate)
 	if err != nil {
 		log.Fatalf("error initializing query logger: %v", err)
 	}
