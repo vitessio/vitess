@@ -21,6 +21,7 @@ package trace
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"strings"
 
@@ -78,10 +79,12 @@ func CopySpan(parentCtx, spanCtx context.Context) context.Context {
 	return parentCtx
 }
 
+// AddGrpcServerOptions adds tracing interceptors to incoming server connections
 func AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
 	spanFactory.AddGrpcServerOptions(addInterceptors)
 }
 
+// AddGrpcClientOptions adds tracing interceptors to outgoing client connections
 func AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {
 	spanFactory.AddGrpcClientOptions(addInterceptors)
 }
@@ -104,10 +107,10 @@ type tracingService interface {
 	AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor))
 }
 
-type TracerFactory func(serviceName string) (tracingService, io.Closer, error)
+type tracerFactory func(serviceName string) (tracingService, io.Closer, error)
 
 // tracingBackendFactories should be added to by a plugin during init() to install itself
-var tracingBackendFactories = make(map[string]TracerFactory)
+var tracingBackendFactories = make(map[string]tracerFactory)
 
 var spanFactory tracingService = fakeSpanFactory{}
 
@@ -130,7 +133,10 @@ func StartTracing(serviceName string) io.Closer {
 
 	spanFactory = tracer
 
-	log.Infof("successfully started tracing with [%s]", *tracingServer)
+	if *tracingServer != "noop" {
+		log.Infof("successfully started tracing with [%s]", *tracingServer)
+		log.Subscribe(tracingListener{})
+	}
 
 	return closer
 }
@@ -149,3 +155,15 @@ type nilCloser struct {
 }
 
 func (c *nilCloser) Close() error { return nil }
+
+var _ log.Listener = (*tracingListener)(nil)
+
+type tracingListener struct{}
+
+// Listen receives log events
+func (tracingListener) Listen(ctx context.Context, level, format string, args ...interface{}) {
+	span, ok := FromContext(ctx)
+	if ok {
+		span.Annotate(level, fmt.Sprintf(format, args...))
+	}
+}
