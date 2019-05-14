@@ -344,11 +344,16 @@ func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard st
 }
 
 // VStream streams events from one target.
-func (res *Resolver) VStream(ctx context.Context, sp *shardPositions, tabletType topodatapb.TabletType, filter *binlogdatapb.Filter, send func(events []*binlogdatapb.VEvent) error) error {
+func (res *Resolver) VStream(ctx context.Context, position string, tabletType topodatapb.TabletType, filter *binlogdatapb.Filter, send func(events []*binlogdatapb.VEvent) error) error {
+	sp, err := newShardPositions(position)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// mu protects sending on ch, err and updates to sp.
+	// mu protects sending on ch, err and sp.
 	// mu is needed for sending because transactions can come
 	// in separate chunks. If so, we have to send all the
 	// chunks together.
@@ -367,11 +372,16 @@ func (res *Resolver) VStream(ctx context.Context, sp *shardPositions, tabletType
 
 				// Send all chunks while holding the lock.
 				for _, evs := range eventss {
-					// Replace GTID events with our own.
+					// Replace GTID and table names.
 					for _, ev := range evs {
-						if ev.Type == binlogdatapb.VEventType_GTID {
+						switch ev.Type {
+						case binlogdatapb.VEventType_GTID:
 							sp.positions[ks] = ev.Gtid
 							ev.Gtid = sp.String()
+						case binlogdatapb.VEventType_FIELD:
+							ev.FieldEvent.TableName = ks.Keyspace + "." + ev.FieldEvent.TableName
+						case binlogdatapb.VEventType_ROW:
+							ev.RowEvent.TableName = ks.Keyspace + "." + ev.RowEvent.TableName
 						}
 					}
 					select {
@@ -386,7 +396,7 @@ func (res *Resolver) VStream(ctx context.Context, sp *shardPositions, tabletType
 			// Set the error on exit. First one wins.
 			mu.Lock()
 			defer mu.Unlock()
-			if err == nil {
+			if outerErr == nil {
 				outerErr = err
 				cancel()
 			}

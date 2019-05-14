@@ -1044,11 +1044,7 @@ func (vtg *VTGate) UpdateStream(ctx context.Context, keyspace string, shard stri
 
 // VStream streams binlog events.
 func (vtg *VTGate) VStream(ctx context.Context, position string, tabletType topodatapb.TabletType, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	sp, err := newShardPositions(position)
-	if err != nil {
-		return err
-	}
-	return vtg.resolver.VStream(ctx, sp, tabletType, filter, send)
+	return vtg.resolver.VStream(ctx, position, tabletType, filter, send)
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
