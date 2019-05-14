@@ -344,7 +344,7 @@ func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard st
 }
 
 // VStream streams events from one target.
-func (res *Resolver) VStream(ctx context.Context, position string, tabletType topodatapb.TabletType, filter *binlogdatapb.Filter, send func(events []*binlogdatapb.VEvent) error) error {
+func (res *Resolver) VStream(ctx context.Context, tabletType topodatapb.TabletType, position string, filter *binlogdatapb.Filter, send func(events []*binlogdatapb.VEvent) error) error {
 	sp, err := newShardPositions(position)
 	if err != nil {
 		return err
