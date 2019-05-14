@@ -185,7 +185,7 @@ type LocalCluster struct {
 // This connection should be used for debug/introspection purposes; normal
 // cluster access should be performed through the vtgate port.
 func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
-	return db.mysql.Params(db.DbName())
+	return db.mysql.Params("")
 }
 
 // MySQLAppDebugConnParams returns a mysql.ConnParams struct that can be used
