@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -483,6 +484,22 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *vtgatepb.GetSrvK
 	return &vtgatepb.GetSrvKeyspaceResponse{
 		SrvKeyspace: sk,
 	}, nil
+}
+
+// VStream is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservicepb.Vitess_VStreamServer) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+	vtgErr := vtg.server.VStream(ctx,
+		request.TabletType,
+		request.Position,
+		request.Filter,
+		func(events []*binlogdatapb.VEvent) error {
+			return stream.Send(&vtgatepb.VStreamResponse{
+				Events: events,
+			})
+		})
+	return vterrors.ToGRPC(vtgErr)
 }
 
 // UpdateStream is the RPC version of vtgateservice.VTGateService method

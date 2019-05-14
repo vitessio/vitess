@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -882,6 +883,10 @@ func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string)
 		f.t.Errorf("GetSrvKeyspace has wrong input: got %v wanted %v", keyspace, getSrvKeyspaceKeyspace)
 	}
 	return getSrvKeyspaceResult, nil
+}
+
+func (f *fakeVTGateService) VStream(ctx context.Context, tabletType topodatapb.TabletType, position string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	panic("unimplemented")
 }
 
 // queryUpdateStream contains all the fields we use to test UpdateStream

@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -383,6 +384,11 @@ func (conn *FakeVTGateConn) SplitQuery(
 
 // GetSrvKeyspace please see vtgateconn.Impl.GetSrvKeyspace
 func (conn *FakeVTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
+	return nil, fmt.Errorf("NYI")
+}
+
+// VStream streams binlog events.
+func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, position string, filter *binlogdatapb.Filter) (vtgateconn.VStreamReader, error) {
 	return nil, fmt.Errorf("NYI")
 }
 

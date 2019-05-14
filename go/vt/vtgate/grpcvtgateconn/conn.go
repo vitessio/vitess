@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -504,6 +505,34 @@ func (conn *vtgateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*t
 		return nil, vterrors.FromGRPC(err)
 	}
 	return response.SrvKeyspace, nil
+}
+
+type vstreamAdapter struct {
+	stream vtgateservicepb.Vitess_VStreamClient
+}
+
+func (a *vstreamAdapter) Recv() ([]*binlogdatapb.VEvent, error) {
+	r, err := a.stream.Recv()
+	if err != nil {
+		return nil, vterrors.FromGRPC(err)
+	}
+	return r.Events, nil
+}
+
+func (conn *vtgateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, position string, filter *binlogdatapb.Filter) (vtgateconn.VStreamReader, error) {
+	req := &vtgatepb.VStreamRequest{
+		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
+		TabletType: tabletType,
+		Position:   position,
+		Filter:     filter,
+	}
+	stream, err := conn.c.VStream(ctx, req)
+	if err != nil {
+		return nil, vterrors.FromGRPC(err)
+	}
+	return &vstreamAdapter{
+		stream: stream,
+	}, nil
 }
 
 type updateStreamAdapter struct {

@@ -560,7 +560,7 @@ func TestResolverVStream(t *testing.T) {
 	defer cancel()
 
 	count := 1
-	err := res.VStream(ctx, fmt.Sprintf("%s:-20@pos", name), topodatapb.TabletType_MASTER, nil, func(events []*binlogdatapb.VEvent) error {
+	err := res.VStream(ctx, topodatapb.TabletType_MASTER, fmt.Sprintf("%s:-20@pos", name), nil, func(events []*binlogdatapb.VEvent) error {
 		defer func() { count++ }()
 
 		got := &binlogdatapb.VStreamResponse{Events: events}
@@ -605,7 +605,7 @@ func TestResolverVStreamChunks(t *testing.T) {
 	doneCounting := false
 	rowCount := 0
 	ddlCount := 0
-	_ = res.VStream(ctx, fmt.Sprintf("%s:-20@pos|%s:20-40@pos", name, name), topodatapb.TabletType_MASTER, nil, func(events []*binlogdatapb.VEvent) error {
+	_ = res.VStream(ctx, topodatapb.TabletType_MASTER, fmt.Sprintf("%s:-20@pos|%s:20-40@pos", name, name), nil, func(events []*binlogdatapb.VEvent) error {
 		switch events[0].Type {
 		case binlogdatapb.VEventType_ROW:
 			if doneCounting {
@@ -668,7 +668,7 @@ func TestResolverVStreamMulti(t *testing.T) {
 
 	var gtid string
 	i := 0
-	_ = res.VStream(ctx, fmt.Sprintf("%s:-20@pos|%s:20-40@pos", name, name), topodatapb.TabletType_MASTER, nil, func(events []*binlogdatapb.VEvent) error {
+	_ = res.VStream(ctx, topodatapb.TabletType_MASTER, fmt.Sprintf("%s:-20@pos|%s:20-40@pos", name, name), nil, func(events []*binlogdatapb.VEvent) error {
 		defer func() { i++ }()
 		for _, ev := range events {
 			if ev.Type == binlogdatapb.VEventType_GTID {
@@ -711,7 +711,7 @@ func TestResolverVStreamRetry(t *testing.T) {
 	defer cancel()
 
 	count := 0
-	err := res.VStream(ctx, fmt.Sprintf("%s:-20@pos", name), topodatapb.TabletType_MASTER, nil, func(events []*binlogdatapb.VEvent) error {
+	err := res.VStream(ctx, topodatapb.TabletType_MASTER, fmt.Sprintf("%s:-20@pos", name), nil, func(events []*binlogdatapb.VEvent) error {
 		count++
 		return nil
 	})
