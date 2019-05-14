@@ -56,6 +56,9 @@ var (
 // JAEGER_AGENT_PORT
 func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error) {
 	cfg, err := config.FromEnv()
+	if err != nil {
+		return nil, nil, err
+	}
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = serviceName
 	}
@@ -72,7 +75,6 @@ func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error
 	log.Infof("Tracing sampling rate: %v", *samplingRate)
 
 	tracer, closer, err := cfg.NewTracer()
-
 	if err != nil {
 		return nil, &nilCloser{}, err
 	}
