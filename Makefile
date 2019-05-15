@@ -172,6 +172,10 @@ docker_base:
 	chmod -R o=g *
 	docker build -f docker/base/Dockerfile -t vitess/base .
 
+docker_debug:
+	chmod -R o=g *
+	docker build -f docker/debug/Dockerfile.debug -t vitess/debug .
+
 docker_base_mysql56:
 	chmod -R o=g *
 	docker build -f docker/base/Dockerfile.mysql56 -t vitess/base:mysql56 .
