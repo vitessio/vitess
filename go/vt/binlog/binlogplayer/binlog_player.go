@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -445,7 +446,7 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 		var sql string
 		switch stmt.Category {
 		case binlogdatapb.BinlogTransaction_Statement_BL_INSERT:
-			ins, err := sqlparser.Parse(string(stmt.Sql))
+			ins, err := sqlparser.Parse(string(stmt.Sql)) //ALEX: this might be unsafe as well ... Sql is a byte[]
 			if err != nil {
 				return false, err
 			}
@@ -474,7 +475,11 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				}
 				values[j] = row
 			}
-			sql = sqlparser.String(insert)
+			pq := sqlparser.NewParsedQuery(insert)
+			sql, err = pq.GenerateQuery(nil, nil)
+			if err != nil {
+				return false, err
+			}
 		case binlogdatapb.BinlogTransaction_Statement_BL_UPDATE:
 			upd, err := sqlparser.Parse(string(stmt.Sql))
 			if err != nil {
@@ -499,9 +504,16 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				idx = indexesToDrop[i]
 				update.Exprs = append(update.Exprs[:idx], update.Exprs[idx+1:]...)
 			}
-			sql = sqlparser.String(update)
+			pq := sqlparser.NewParsedQuery(update)
+			sql, err = pq.GenerateQuery(nil, nil)
+			if err != nil {
+				return false, err
+			}
 		default:
 			sql = string(stmt.Sql)
+		}
+		if strings.Contains(sql, "0001") {
+			log.Infof("DEBUG(acharis): ")
 		}
 		if _, err = blp.exec(sql); err == nil {
 			continue

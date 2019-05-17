@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -223,9 +222,6 @@ func (iqb *InsertsQueryBuilder) WriteRow(buffer *bytes.Buffer, row []sqltypes.Va
 			buffer.WriteByte(',')
 		}
 		value.EncodeSQL(buffer)
-		if bytes.Contains(buffer.Bytes(), []byte("createMetadata")) {
-			log.Infof("DEBUG(acharis): %s", buffer.String())
-		}
 		written = true
 	}
 	buffer.WriteByte(')')
