@@ -2321,7 +2321,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		wr.Logger().Warningf("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
 		return nil
 	}
-	return topotools.RebuildVSchema(ctx, wr.Logger(), wr.TopoServer(), cells)
+	return wr.TopoServer().RebuildVSchema(ctx, cells)
 }
 
 func commandApplyRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
