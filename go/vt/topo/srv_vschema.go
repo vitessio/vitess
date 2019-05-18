@@ -141,7 +141,7 @@ func (ts *Server) DeleteSrvVSchema(ctx context.Context, cell string) error {
 
 // RebuildVSchema rebuilds the SrvVSchema for the provided cell list
 // (or all cells if cell list is empty).
-func (ts *Server) RebuildVSchema(ctx context.Context, cells []string) error {
+func (ts *Server) RebuildSrvVSchema(ctx context.Context, cells []string) error {
 	// get the actual list of cells
 	if len(cells) == 0 {
 		var err error
