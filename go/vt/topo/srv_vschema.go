@@ -17,8 +17,12 @@ limitations under the License.
 package topo
 
 import (
+	"fmt"
+	"sync"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -133,4 +137,79 @@ func (ts *Server) DeleteSrvVSchema(ctx context.Context, cell string) error {
 
 	nodePath := SrvVSchemaFile
 	return conn.Delete(ctx, nodePath, nil)
+}
+
+// RebuildVSchema rebuilds the SrvVSchema for the provided cell list
+// (or all cells if cell list is empty).
+func (ts *Server) RebuildVSchema(ctx context.Context, cells []string) error {
+	// get the actual list of cells
+	if len(cells) == 0 {
+		var err error
+		cells, err = ts.GetKnownCells(ctx)
+		if err != nil {
+			return fmt.Errorf("GetKnownCells failed: %v", err)
+		}
+	}
+
+	// get the keyspaces
+	keyspaces, err := ts.GetKeyspaces(ctx)
+	if err != nil {
+		return fmt.Errorf("GetKeyspaces failed: %v", err)
+	}
+
+	// build the SrvVSchema in parallel, protected by mu
+	wg := sync.WaitGroup{}
+	mu := sync.Mutex{}
+	var finalErr error
+	srvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{},
+	}
+	for _, keyspace := range keyspaces {
+		wg.Add(1)
+		go func(keyspace string) {
+			defer wg.Done()
+
+			k, err := ts.GetVSchema(ctx, keyspace)
+			if IsErrType(err, NoNode) {
+				err = nil
+				k = &vschemapb.Keyspace{}
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				log.Errorf("%v: GetVSchema(%v) failed", err, keyspace)
+				finalErr = err
+				return
+			}
+			srvVSchema.Keyspaces[keyspace] = k
+		}(keyspace)
+	}
+	wg.Wait()
+	if finalErr != nil {
+		return finalErr
+	}
+
+	rr, err := ts.GetRoutingRules(ctx)
+	if err != nil {
+		return fmt.Errorf("GetRoutingRules failed: %v", err)
+	}
+	srvVSchema.RoutingRules = rr
+
+	// now save the SrvVSchema in all cells in parallel
+	for _, cell := range cells {
+		wg.Add(1)
+		go func(cell string) {
+			defer wg.Done()
+			if err := ts.UpdateSrvVSchema(ctx, cell, srvVSchema); err != nil {
+				log.Errorf("%v: UpdateSrvVSchema(%v) failed", err, cell)
+				mu.Lock()
+				finalErr = err
+				mu.Unlock()
+			}
+		}(cell)
+	}
+	wg.Wait()
+
+	return finalErr
 }

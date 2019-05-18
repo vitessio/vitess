@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/events"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 // This file contains keyspace utility functions
@@ -164,6 +165,18 @@ func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *to
 	if _, err := ts.globalCell.Create(ctx, keyspacePath, data); err != nil {
 		return err
 	}
+
+	vschemaPath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
+	_, _, err = ts.globalCell.Get(ctx, vschemaPath)
+	if err != nil {
+		data, _ = proto.Marshal(&vschemapb.Keyspace{})
+
+		if _, err := ts.globalCell.Create(ctx, vschemaPath, data); err != nil {
+			return err
+		}
+		_ = ts.RebuildVSchema(ctx, []string{})
+	}
+
 	event.Dispatch(&events.KeyspaceChange{
 		KeyspaceName: keyspace,
 		Keyspace:     value,
