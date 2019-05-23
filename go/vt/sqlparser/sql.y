@@ -2454,23 +2454,7 @@ function_call_keyword:
   {
     $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
   }
-| SUBSTR openb column_name ',' value_expression closeb
-  {
-    $$ = &SubstrExpr{Name: $3, From: $5, To: nil}
-  }
-| SUBSTR openb column_name ',' value_expression ',' value_expression closeb
-  {
-    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
-  }
 | SUBSTR openb column_name FROM value_expression FOR value_expression closeb
-  {
-    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
-  }
-| SUBSTRING openb column_name ',' value_expression closeb
-  {
-    $$ = &SubstrExpr{Name: $3, From: $5, To: nil}
-  }
-| SUBSTRING openb column_name ',' value_expression ',' value_expression closeb
   {
     $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
   }
@@ -2478,23 +2462,7 @@ function_call_keyword:
   {
     $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
   }
-| SUBSTR openb STRING ',' value_expression closeb
-  {
-    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: nil}
-  }
-| SUBSTR openb STRING ',' value_expression ',' value_expression closeb
-  {
-    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
-  }
 | SUBSTR openb STRING FROM value_expression FOR value_expression closeb
-  {
-    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
-  }
-| SUBSTRING openb STRING ',' value_expression closeb
-  {
-    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: nil}
-  }
-| SUBSTRING openb STRING ',' value_expression ',' value_expression closeb
   {
     $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
   }
@@ -2629,6 +2597,14 @@ function_call_conflict:
 | REPLACE openb select_expression_list closeb
   {
     $$ = &FuncExpr{Name: NewColIdent("replace"), Exprs: $3}
+  }
+| SUBSTR openb select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
+  }
+| SUBSTRING openb select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
   }
 
 match_option:
