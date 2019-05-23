@@ -246,8 +246,12 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 			uc.param.UnixSocket = defaultSocketFile
 		}
 
-		uc.param.Charset = baseConfig.Charset
-		uc.param.Flags = baseConfig.Flags
+		if baseConfig.Charset != "" {
+			uc.param.Charset = baseConfig.Charset
+		}
+		if baseConfig.Flags != 0 {
+			uc.param.Flags = baseConfig.Flags
+		}
 		if uc.useSSL {
 			uc.param.SslCa = baseConfig.SslCa
 			uc.param.SslCaPath = baseConfig.SslCaPath
