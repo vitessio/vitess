@@ -162,14 +162,8 @@ func (rp *ResourcePool) closeIdleResources() {
 
 			if wrapper.resource != nil && idleTimeout > 0 && time.Until(wrapper.timeUsed.Add(idleTimeout)) < 0 {
 				wrapper.resource.Close()
-				// Always good to create a new resource to replace the old one.
-				if r, err := rp.factory(); err != nil {
-					wrapper.resource = nil
-				} else {
-					wrapper.resource = r
-				}
 				rp.idleClosed.Add(1)
-				rp.active.Add(-1)
+				rp.reopenResource(&wrapper)
 			}
 		}()
 
@@ -187,10 +181,10 @@ func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) 
 	span.Annotate("available", rp.available.Get())
 	span.Annotate("active", rp.active.Get())
 	defer span.Finish()
-	return rp.get(ctx, true)
+	return rp.get(ctx)
 }
 
-func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, err error) {
+func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) {
 	// If ctx has already expired, avoid racing with rp's resource channel.
 	select {
 	case <-ctx.Done():
@@ -204,9 +198,6 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 	select {
 	case wrapper, ok = <-rp.resources:
 	default:
-		if !wait {
-			return nil, nil
-		}
 		startTime := time.Now()
 		select {
 		case wrapper, ok = <-rp.resources:
@@ -238,13 +229,16 @@ func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, 
 // Put will return a resource to the pool. For every successful Get,
 // a corresponding Put is required. If you no longer need a resource,
 // you will need to call Put(nil) instead of returning the closed resource.
-// The will eventually cause a new resource to be created in its place.
+// The will cause a new resource to be created in its place.
 func (rp *ResourcePool) Put(resource Resource) {
 	var wrapper resourceWrapper
 	if resource != nil {
-		wrapper = resourceWrapper{resource, time.Now()}
+		wrapper = resourceWrapper{
+			resource: resource,
+			timeUsed: time.Now(),
+		}
 	} else {
-		rp.active.Add(-1)
+		rp.reopenResource(&wrapper)
 	}
 	select {
 	case rp.resources <- wrapper:
@@ -253,6 +247,16 @@ func (rp *ResourcePool) Put(resource Resource) {
 	}
 	rp.inUse.Add(-1)
 	rp.available.Add(1)
+}
+
+func (rp *ResourcePool) reopenResource(wrapper *resourceWrapper) {
+	if r, err := rp.factory(); err == nil {
+		wrapper.resource = r
+		wrapper.timeUsed = time.Now()
+	} else {
+		wrapper.resource = nil
+		rp.active.Add(-1)
+	}
 }
 
 // SetCapacity changes the capacity of the pool.
