@@ -67,6 +67,7 @@ func NewEngine(tsv TabletService, se *schema.Engine, config tabletenv.TabletConf
 		conns: connpool.New(
 			config.PoolNamePrefix+"MessagerPool",
 			config.MessagePoolSize,
+			config.MessagePoolPrefillParallelism,
 			time.Duration(config.IdleTimeout*1e9),
 			tsv,
 		),
