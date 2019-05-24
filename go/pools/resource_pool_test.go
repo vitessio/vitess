@@ -123,7 +123,7 @@ func TestOpen(t *testing.T) {
 	}
 	r.Close()
 	p.Put(nil)
-	if count.Get() != 4 {
+	if count.Get() != 5 {
 		t.Errorf("Expecting 4, received %d", count.Get())
 	}
 	for i := 0; i < 5; i++ {
@@ -191,6 +191,21 @@ func TestOpen(t *testing.T) {
 	}
 	if count.Get() != 0 {
 		t.Errorf("Expecting 0, received %d", count.Get())
+	}
+}
+
+func TestPrefill(t *testing.T) {
+	lastID.Set(0)
+	count.Set(0)
+	p := NewPrefilledResourcePool(PoolFactory, 5, 5, time.Second, 1)
+	defer p.Close()
+	if p.Active() != 5 {
+		t.Errorf("p.Active(): %d, want 5", p.Active())
+	}
+	p = NewPrefilledResourcePool(FailFactory, 5, 5, time.Second, 1)
+	defer p.Close()
+	if p.Active() != 0 {
+		t.Errorf("p.Active(): %d, want 0", p.Active())
 	}
 }
 
@@ -414,10 +429,10 @@ func TestIdleTimeout(t *testing.T) {
 	if p.IdleClosed() != 0 {
 		t.Errorf("Expecting 0, received %d", p.IdleClosed())
 	}
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(15 * time.Millisecond)
 
-	if count.Get() != 0 {
-		t.Errorf("Expecting 0, received %d", count.Get())
+	if count.Get() != 1 {
+		t.Errorf("Expecting 1, received %d", count.Get())
 	}
 	if p.IdleClosed() != 1 {
 		t.Errorf("Expecting 1, received %d", p.IdleClosed())
@@ -438,7 +453,7 @@ func TestIdleTimeout(t *testing.T) {
 
 	// sleep to let the idle closer run while all resources are in use
 	// then make sure things are still as we expect
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(15 * time.Millisecond)
 	if lastID.Get() != 2 {
 		t.Errorf("Expecting 2, received %d", count.Get())
 	}
@@ -468,7 +483,7 @@ func TestIdleTimeout(t *testing.T) {
 	p.SetIdleTimeout(1000 * time.Millisecond)
 	p.Put(r)
 
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(15 * time.Millisecond)
 	if lastID.Get() != 2 {
 		t.Errorf("Expecting 2, received %d", count.Get())
 	}
@@ -479,16 +494,43 @@ func TestIdleTimeout(t *testing.T) {
 		t.Errorf("Expecting 1, received %d", p.IdleClosed())
 	}
 
-	p.SetIdleTimeout(10 * time.Millisecond)
-	time.Sleep(20 * time.Millisecond)
-	if lastID.Get() != 2 {
-		t.Errorf("Expecting 2, received %d", count.Get())
+	// Get and Put to refresh timeUsed
+	r, err = p.Get(ctx)
+	if err != nil {
+		t.Errorf("Unexpected error %v", err)
 	}
-	if count.Get() != 0 {
+	p.Put(r)
+	p.SetIdleTimeout(10 * time.Millisecond)
+	time.Sleep(15 * time.Millisecond)
+	if lastID.Get() != 3 {
+		t.Errorf("Expecting 3, received %d", lastID.Get())
+	}
+	if count.Get() != 1 {
 		t.Errorf("Expecting 1, received %d", count.Get())
 	}
 	if p.IdleClosed() != 2 {
 		t.Errorf("Expecting 2, received %d", p.IdleClosed())
+	}
+}
+
+func TestIdleTimeoutCreateFail(t *testing.T) {
+	ctx := context.Background()
+	lastID.Set(0)
+	count.Set(0)
+	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond)
+	defer p.Close()
+	r, err := p.Get(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Change the factory before putting back
+	// to prevent race with the idle closer, who will
+	// try to use it.
+	p.factory = FailFactory
+	p.Put(r)
+	time.Sleep(15 * time.Millisecond)
+	if p.Active() != 0 {
+		t.Errorf("p.Active(): %d, want 0", p.Active())
 	}
 }
 
@@ -505,6 +547,23 @@ func TestCreateFail(t *testing.T) {
 	expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0}`
 	if stats != expected {
 		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
+	}
+}
+
+func TestCreateFailOnPut(t *testing.T) {
+	ctx := context.Background()
+	lastID.Set(0)
+	count.Set(0)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second)
+	defer p.Close()
+	_, err := p.Get(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.factory = FailFactory
+	p.Put(nil)
+	if p.Active() != 0 {
+		t.Errorf("p.Active(): %d, want 0", p.Active())
 	}
 }
 
