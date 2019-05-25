@@ -361,10 +361,14 @@ func (res *Resolver) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 	ch := make(chan []*binlogdatapb.VEvent)
 	var outerErr error
 
-	var wg sync.WaitGroup
+	var loopwg, wg sync.WaitGroup
+	// Make sure goroutines don't start until loop has exited.
+	// Otherwise there's a race because the goroutines update the map.
+	loopwg.Add(1)
 	for ks, pos := range sp.positions {
 		wg.Add(1)
 		go func(ks topo.KeyspaceShard, pos string) {
+			loopwg.Wait()
 			defer wg.Done()
 			err := res.vstreamOneShard(ctx, ks.Keyspace, ks.Shard, tabletType, pos, filter, func(eventss [][]*binlogdatapb.VEvent) error {
 				mu.Lock()
@@ -402,6 +406,8 @@ func (res *Resolver) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 			}
 		}(ks, pos)
 	}
+	// Allow goroutines to start.
+	loopwg.Done()
 
 	go func() {
 		wg.Wait()
