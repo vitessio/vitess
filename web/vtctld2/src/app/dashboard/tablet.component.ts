@@ -33,7 +33,6 @@ export class TabletComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private tabletService: TabletService,
-    private vtctlService: VtctlService,
     private sanitizer: DomSanitizationService) {}
 
   ngOnInit() {
