@@ -45,7 +45,7 @@ export class StatusComponent implements OnInit, OnDestroy {
   // Needed to keep track of which data is being polled.
   statusService: any;
 
-  constructor(private componentResolver: ComponentResolver, private tabletService: TabletStatusService,
+  constructor(private tabletService: TabletStatusService,
               private router: Router, private route: ActivatedRoute, private zone: NgZone,
               private topoInfoService: TopologyInfoService) {}
 
