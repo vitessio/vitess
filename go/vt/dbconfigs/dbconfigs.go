@@ -94,7 +94,7 @@ func registerBaseFlags() {
 	flag.StringVar(&baseConfig.UnixSocket, "db_socket", "", "The unix socket to connect on. If this is specifed, host and port will not be used.")
 	flag.StringVar(&baseConfig.Host, "db_host", "", "The host name for the tcp connection.")
 	flag.IntVar(&baseConfig.Port, "db_port", 0, "tcp port")
-	flag.StringVar(&baseConfig.Charset, "db_charset", "utf8", "Character set. Only utf8 or latin1 based character sets are supported.")
+	flag.StringVar(&baseConfig.Charset, "db_charset", "", "Character set. Only utf8 or latin1 based character sets are supported.")
 	flag.Uint64Var(&baseConfig.Flags, "db_flags", 0, "Flag values as defined by MySQL.")
 	flag.StringVar(&baseConfig.SslCa, "db_ssl_ca", "", "connection ssl ca")
 	flag.StringVar(&baseConfig.SslCaPath, "db_ssl_ca_path", "", "connection ssl ca path")
