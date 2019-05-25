@@ -11,11 +11,11 @@ export class DialogSettings {
   public respText: string;
   public errMsg: string;
   public logText: string;
-  public open= false;
-  public dialogForm= true;
-  public dialogLog= false;
-  public pending= false;
-  public onCloseFunction= undefined;
+  public open = false;
+  public dialogForm = true;
+  public dialogLog = false;
+  public pending = false;
+  public onCloseFunction = undefined;
 
   constructor(actionWord = '', dialogTitle = '', dialogSubtitle = '', errMsg = '') {
     this.actionWord = actionWord;
