@@ -78,15 +78,12 @@ type resourceWrapper struct {
 // maxCap specifies the extent to which the pool can be resized
 // in the future through the SetCapacity function.
 // You cannot resize the pool beyond maxCap.
-// If a resource is unused beyond idleTimeout, it's discarded.
+// If a resource is unused beyond idleTimeout, it's replaced
+// with a new one.
 // An idleTimeout of 0 means that there is no timeout.
-func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration) *ResourcePool {
-	return NewPrefilledResourcePool(factory, capacity, maxCap, idleTimeout, 0)
-}
-
-// NewPrefilledResourcePool creates a pre-filled resource pool.
-// prefillParallelism specifies how many resources can be opened in parallel.
-func NewPrefilledResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int) *ResourcePool {
+// A non-zero value of prefillParallism causes the pool to be pre-filled.
+// The value specifies how many resources can be opened in parallel.
+func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
@@ -229,7 +226,7 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 // Put will return a resource to the pool. For every successful Get,
 // a corresponding Put is required. If you no longer need a resource,
 // you will need to call Put(nil) instead of returning the closed resource.
-// The will cause a new resource to be created in its place.
+// This will cause a new resource to be created in its place.
 func (rp *ResourcePool) Put(resource Resource) {
 	var wrapper resourceWrapper
 	if resource != nil {
