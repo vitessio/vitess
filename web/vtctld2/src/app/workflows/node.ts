@@ -12,7 +12,7 @@ export const enum ActionStyle {
   TRIGGERED,
 }
 
-/* 
+/*
   Object for any action buttons you want the UI to display to the user.
   Default behavior should be that Action.message appears as a tooltip.
 */
@@ -71,14 +71,14 @@ export class Node {
   public name: string;
   public path: string; // Path to element Ex, “GrandparentID/ParentId/ID”.
   public children: Node[];
-  public lastChanged= 0; // Time last changed in seconds.
-  public progress= 0; // Should be an int from 0-100 for percentage
-  public progressMsg= ''; // Ex. “34/256” “25%” “calculating”  
-  public state= State.NOT_STARTED;
-  public display= Display.NONE;
-  public message= ''; // Instructions for user
-  public log= ''; // Log from command
-  public disabled= false; // Use for blocking further actions
+  public lastChanged = 0; // Time last changed in seconds.
+  public progress = 0; // Should be an int from 0-100 for percentage
+  public progressMsg = ''; // Ex. “34/256” “25%” “calculating”
+  public state = State.NOT_STARTED;
+  public display = Display.NONE;
+  public message = ''; // Instructions for user
+  public log = ''; // Log from command
+  public disabled = false; // Use for blocking further actions
   public actions: Action[];
 
   constructor(name: string, path: string, children: any) {
