@@ -47,13 +47,11 @@ export class HeatmapComponent implements AfterViewInit, OnInit {
 
   // Needed for the popup.
   showPopup = true;
-  popupTitle: string;
   popupAlias: any;
   popupData: Array<any>;
   popupKeyspace: string;
   popupShard: string;
   popupCell: string;
-  popupTabletType: string;
   popupClickState: boolean;
   clicked = false;
 

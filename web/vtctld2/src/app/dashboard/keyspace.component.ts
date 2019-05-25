@@ -33,8 +33,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
 
   constructor(
     private route: ActivatedRoute,
-    private keyspaceService: KeyspaceService,
-    private vtctlService: VtctlService) {}
+    private keyspaceService: KeyspaceService) {}
 
   ngOnInit() {
     this.dialogContent = new DialogContent();

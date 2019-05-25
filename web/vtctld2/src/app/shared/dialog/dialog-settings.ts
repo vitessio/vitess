@@ -5,7 +5,6 @@
 
 export class DialogSettings {
   public actionWord: string;
-  public actionFunction: any;
   public dialogTitle: string;
   public dialogSubtitle: string;
   public respText: string;
