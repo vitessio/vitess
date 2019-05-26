@@ -149,6 +149,23 @@ func (upd *Update) RouteType() string {
 	return updName[upd.Opcode]
 }
 
+// KeyspaceTableNames specifies the table that this primitive routes to
+func (upd *Update) KeyspaceTableNames() []*KeyspaceTableName {
+	if upd.Table != nil {
+		return []*KeyspaceTableName{
+			&KeyspaceTableName{
+				Keyspace: upd.Keyspace.Name,
+				Table:    upd.Table.Name.String(),
+			},
+		}
+	}
+	return []*KeyspaceTableName{
+		&KeyspaceTableName{
+			Keyspace: upd.Keyspace.Name,
+		},
+	}
+}
+
 // Execute performs a non-streaming exec.
 func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if upd.QueryTimeout != 0 {

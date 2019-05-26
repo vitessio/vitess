@@ -247,6 +247,9 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			eroute.Vindex, _ = vindexes.NewBinary("binary", nil)
 			eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vst.Pinned)}}
 		}
+		// set table name into route
+		eroute.Table = vst.Name.String()
+
 		rb.routeOptions = append(rb.routeOptions, newRouteOption(rb, vst, sub, vindexMaps[i], eroute))
 	}
 	return nil

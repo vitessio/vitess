@@ -96,6 +96,11 @@ func (oa *OrderedAggregate) RouteType() string {
 	return oa.Input.RouteType()
 }
 
+// KeyspaceTableNames specifies the table that this primitive routes to
+func (oa *OrderedAggregate) KeyspaceTableNames() []*KeyspaceTableName {
+	return oa.Input.KeyspaceTableNames()
+}
+
 // Execute is a Primitive function.
 func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := oa.execute(vcursor, bindVars, wantfields)

@@ -49,6 +49,16 @@ func (f *fakePrimitive) RouteType() string {
 	return "Fake"
 }
 
+// KeyspaceTableNames specifies the table that this primitive routes to
+func (f *fakePrimitive) KeyspaceTableNames() []*KeyspaceTableName {
+	return []*KeyspaceTableName{
+		&KeyspaceTableName{
+			Keyspace: "fakeKs",
+			Table:    "fakeTable",
+		},
+	}
+}
+
 func (f *fakePrimitive) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))
 	if f.results == nil {

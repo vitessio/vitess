@@ -57,6 +57,11 @@ func (l *Limit) RouteType() string {
 	return l.Input.RouteType()
 }
 
+// KeyspaceTableNames specifies the table that this primitive routes to
+func (l *Limit) KeyspaceTableNames() []*KeyspaceTableName {
+	return l.Input.KeyspaceTableNames()
+}
+
 // Execute satisfies the Primtive interface.
 func (l *Limit) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := l.fetchCount(bindVars)

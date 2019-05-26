@@ -145,6 +145,24 @@ func (del *Delete) RouteType() string {
 	return delName[del.Opcode]
 }
 
+// KeyspaceTableNames specifies the table that this primitive routes to
+func (del *Delete) KeyspaceTableNames() []*KeyspaceTableName {
+	if del.Table != nil {
+		return []*KeyspaceTableName{
+			&KeyspaceTableName{
+				Keyspace: del.Keyspace.Name,
+				Table:    del.Table.Name.String(),
+			},
+		}
+	}
+
+	return []*KeyspaceTableName{
+		&KeyspaceTableName{
+			Keyspace: del.Keyspace.Name,
+		},
+	}
+}
+
 // Execute performs a non-streaming exec.
 func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if del.QueryTimeout != 0 {

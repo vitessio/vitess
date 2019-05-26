@@ -223,6 +223,11 @@ func (jn *Join) RouteType() string {
 	return "Join"
 }
 
+// KeyspaceTableNames specifies the table that this primitive routes to
+func (jn *Join) KeyspaceTableNames() []*KeyspaceTableName {
+	return append(jn.Left.KeyspaceTableNames(), jn.Right.KeyspaceTableNames()...)
+}
+
 func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
 	out := make(map[string]*querypb.BindVariable)
 	for k, v := range bv1 {
