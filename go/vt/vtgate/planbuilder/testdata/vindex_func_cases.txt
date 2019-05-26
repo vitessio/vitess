@@ -154,7 +154,8 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
     "Cols": [-1, 1]
   }
@@ -173,7 +174,8 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
     "Right": {
       "Opcode": "VindexMap",
@@ -228,7 +230,8 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
     "Cols": [
       -1,
@@ -273,7 +276,8 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
     "Cols": [
       -1,
@@ -317,7 +321,8 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded where unsharded.id = :ui_id",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
     "Cols": [
       -1,
