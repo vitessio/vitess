@@ -59,7 +59,7 @@ var (
 	errNoKeyspace     = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspace in database name specified. Supported database name format (items in <> are optional): keyspace<:shard><@type> or keyspace<[range]><@type>")
 	defaultTabletType topodatapb.TabletType
 
-	queriesProcessed = stats.NewCountersWithSingleLabel("QueriesProcessed", "Queries processed at vtgate by plan type", "Plan")
+	queriesProcessed = stats.NewCountersWithMultiLabels("QueriesProcessed", "Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 	queriesRouted    = stats.NewCountersWithSingleLabel("QueriesRouted", "Queries routed from vtgate to vttablet by plan type", "Plan")
 )
 
@@ -249,7 +249,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		// TODO(sougou): change this flow to go through V3 functions
 		// which will allow us to benefit from the autocommitable flag.
 
-		queriesProcessed.Add("ShardDirect", 1)
+		queriesProcessed.Add([]string{"ShardDirect", "", ""}, 1)
 
 		if destKeyspace == "" {
 			return nil, errNoKeyspace
@@ -307,7 +307,16 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
 
 	logStats.ExecuteTime = time.Since(execStart)
-	queriesProcessed.Add(plan.Instructions.RouteType(), 1)
+
+	// TODO (@rafael): For now only report in the first ks/table in the primitive.
+	// Update this code to report all keyspaces/tables.
+	var tableName string
+	if len(plan.Instructions.KeyspaceTableNames()) > 0 {
+		destKeyspace = plan.Instructions.KeyspaceTableNames()[0].Keyspace
+		tableName = plan.Instructions.KeyspaceTableNames()[0].Table
+	}
+
+	queriesProcessed.Add([]string{plan.Instructions.RouteType(), destKeyspace, tableName}, 1)
 	queriesRouted.Add(plan.Instructions.RouteType(), int64(logStats.ShardQueries))
 
 	var errCount uint64
@@ -370,7 +379,7 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 	logStats.ExecuteTime = time.Since(execStart)
 
-	queriesProcessed.Add("DDL", 1)
+	queriesProcessed.Add([]string{"DDL", "", ""}, 1)
 	queriesRouted.Add("DDL", int64(logStats.ShardQueries))
 
 	return result, err
@@ -421,8 +430,7 @@ func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, sq
 	err := e.txConn.Begin(ctx, safeSession)
 	logStats.ExecuteTime = time.Since(execStart)
 
-	queriesProcessed.Add("Begin", 1)
-
+	queriesProcessed.Add([]string{"Begin", "", ""}, 1)
 	return &sqltypes.Result{}, err
 }
 
@@ -430,7 +438,7 @@ func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, s
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
-	queriesProcessed.Add("Commit", 1)
+	queriesProcessed.Add([]string{"Commit", "", ""}, 1)
 	queriesRouted.Add("Commit", int64(logStats.ShardQueries))
 	err := e.txConn.Commit(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
@@ -441,7 +449,7 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
-	queriesProcessed.Add("Rollback", 1)
+	queriesProcessed.Add([]string{"Rollback", "", ""}, 1)
 	queriesRouted.Add("Rollback", int64(logStats.ShardQueries))
 	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
@@ -1043,7 +1051,7 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 	execStart := time.Now()
 	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 
-	queriesProcessed.Add("Other", 1)
+	queriesProcessed.Add([]string{"Other", "", ""}, 1)
 	queriesRouted.Add("Other", int64(logStats.ShardQueries))
 
 	logStats.ExecuteTime = time.Since(execStart)

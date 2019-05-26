@@ -195,6 +195,24 @@ func (ins *Insert) RouteType() string {
 	return insName[ins.Opcode]
 }
 
+// KeyspaceTableNames specifies the table that this primitive routes to
+func (ins *Insert) KeyspaceTableNames() []*KeyspaceTableName {
+	if ins.Table != nil {
+		return []*KeyspaceTableName{
+			&KeyspaceTableName{
+				Keyspace: ins.Keyspace.Name,
+				Table:    ins.Table.Name.String(),
+			},
+		}
+	}
+
+	return []*KeyspaceTableName{
+		&KeyspaceTableName{
+			Keyspace: ins.Keyspace.Name,
+		},
+	}
+}
+
 // Execute performs a non-streaming exec.
 func (ins *Insert) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if ins.QueryTimeout != 0 {
