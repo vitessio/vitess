@@ -43,7 +43,7 @@ func TestParsing(t *testing.T) {
 	}
 }
 
-func TestPurge(t *testing.T) {
+func TestPurgeByTimestamp(t *testing.T) {
 	logDir := path.Join(os.TempDir(), fmt.Sprintf("%v-%v", os.Args[0], os.Getpid()))
 	if err := os.MkdirAll(logDir, 0777); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
@@ -67,7 +67,7 @@ func TestPurge(t *testing.T) {
 		t.Fatalf("os.Symlink: %v", err)
 	}
 
-	purgeLogsOnce(now, logDir, "zkocc", 30*time.Minute)
+	purgeLogsByTimestamp(now, logDir, "zkocc", 30*time.Minute)
 
 	left, err := filepath.Glob(path.Join(logDir, "zkocc.*"))
 	if err != nil {
@@ -81,4 +81,73 @@ func TestPurge(t *testing.T) {
 		t.Errorf("wrong number of files remain: want %v, got %v", 2, len(left))
 	}
 
+}
+
+func TestPurgeByIndex(t *testing.T) {
+	logDir := path.Join(os.TempDir(), fmt.Sprintf("%v-%v", os.Args[0], os.Getpid()))
+	if err := os.MkdirAll(logDir, 0777); err != nil {
+		t.Fatalf("os.MkdirAll: %v", err)
+	}
+	defer os.RemoveAll(logDir)
+
+	files := []string{
+		"vtadam.localhost.vitess.log.INFO.20200104-000000.00000",
+		"vtadam.localhost.vitess.log.INFO.20200103-000000.00000",
+		"vtadam.localhost.vitess.log.INFO.20200102-000000.00000",
+		"vtadam.localhost.vitess.log.INFO.20200101-000000.00000",
+		"vtadam.localhost.vitess.log.ERROR.20200104-000000.00000",
+		"vtadam.localhost.vitess.log.ERROR.20200103-000000.00000",
+		"vtadam.localhost.vitess.log.ERROR.20200102-000000.00000",
+		"vtadam.localhost.vitess.log.ERROR.20200101-000000.00000",
+	}
+
+	for _, file := range files {
+		if _, err := os.Create(path.Join(logDir, file)); err != nil {
+			t.Fatalf("os.Create: %v", err)
+		}
+	}
+	if err := os.Symlink(files[0], path.Join(logDir, "vtadam.INFO")); err != nil {
+		// vtadam.INFO -> vtadam.localhost.vitess.log.INFO.20200104-000000.00000
+		t.Fatalf("os.Symlink: %v", err)
+	}
+	if err := os.Symlink(files[4], path.Join(logDir, "vtadam.ERROR")); err != nil {
+		// vtadam.ERROR -> vtadam.localhost.vitess.log.ERROR.20200104-000000.00000
+		t.Fatalf("os.Symlink: %v", err)
+	}
+
+	purgeLogsByIndex(logDir, "vtadam", 3)
+
+	remaining, err := filepath.Glob(path.Join(logDir, "vtadam.*"))
+	if err != nil {
+		t.Fatalf("filepath.Glob: %v", err)
+	}
+
+	expectedRemainingLogs := map[string]bool{
+		path.Join(logDir, files[0]):       true,
+		path.Join(logDir, files[1]):       true,
+		path.Join(logDir, files[2]):       true,
+		path.Join(logDir, files[4]):       true,
+		path.Join(logDir, files[5]):       true,
+		path.Join(logDir, files[6]):       true,
+		path.Join(logDir, "vtadam.INFO"):  true,
+		path.Join(logDir, "vtadam.ERROR"): true,
+	}
+
+	for _, remainingLog := range remaining {
+		if !expectedRemainingLogs[remainingLog] {
+			t.Errorf("unexpected remaining log file: got %v", remainingLog)
+		}
+	}
+
+	for expectedRemainingLog, _ := range expectedRemainingLogs {
+		found := false
+		for _, remainingLog := range remaining {
+			if remainingLog == expectedRemainingLog {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("expected remaining log file: want %v", expectedRemainingLog)
+		}
+	}
 }

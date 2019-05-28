@@ -22,12 +22,14 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
 
 var (
 	keepLogs          = flag.Duration("keep_logs", 0*time.Second, "keep logs for this long (zero to keep forever)")
+	keepLatestNLogs   = flag.Int("keep_latest_n_logs", 0, "keep the latest N log files per error level (zero to keep all)")
 	purgeLogsInterval = flag.Duration("purge_logs_interval", 1*time.Hour, "how often try to remove old logs")
 )
 
@@ -44,18 +46,10 @@ func parseTimestamp(filename string) (timestamp time.Time, err error) {
 
 var levels = []string{"INFO", "ERROR", "WARNING", "FATAL"}
 
-// purgeLogsOnce removes logfiles for program for dir, if their age
+// purgeLogsByTimestamp removes log files for program for dir, if their age
 // relative to now is greater than keep.
-func purgeLogsOnce(now time.Time, dir, program string, keep time.Duration) {
-	current := make(map[string]bool)
-	for _, level := range levels {
-		c, err := os.Readlink(path.Join(dir, fmt.Sprintf("%s.%s", program, level)))
-		if err != nil {
-			continue
-		}
-		current[c] = true
-	}
-
+func purgeLogsByTimestamp(now time.Time, dir, program string, keep time.Duration) {
+	current := getCurrentLogMap(dir, program)
 	files, err := filepath.Glob(path.Join(dir, fmt.Sprintf("%s.*", program)))
 	if err != nil {
 		return
@@ -74,22 +68,87 @@ func purgeLogsOnce(now time.Time, dir, program string, keep time.Duration) {
 	}
 }
 
-// PurgeLogs removes any log files that were started more than
-// keepLogs ago and that aren't the current log.
+// purgeLogsByIndex removes all except the latest keepLogCount log files for
+// program in dir
+func purgeLogsByIndex(dir, program string, keepLogCount int) {
+	current := getCurrentLogMap(dir, program)
+	for _, level := range levels {
+		files, err := filepath.Glob(path.Join(dir, fmt.Sprintf("%s.*.%s.*", program, level)))
+		if err != nil {
+			return
+		}
+		sort.Sort(byTimestamp(files))
+		for fileIdx, file := range files {
+			if current[file] {
+				continue
+			}
+			if fileIdx >= keepLogCount {
+				os.Remove(file)
+			}
+		}
+	}
+}
+
+// getCurrentLogMap returns a map of current log files (current meaning
+// currently being written to)
+func getCurrentLogMap(dir, program string) map[string]bool {
+	current := make(map[string]bool)
+	for _, level := range levels {
+		c, err := os.Readlink(path.Join(dir, fmt.Sprintf("%s.%s", program, level)))
+		if err != nil {
+			continue
+		}
+		current[c] = true
+	}
+	return current
+}
+
+// byTimestamp is a sort.Interface for sorting a []string of file paths by
+// their timestamp
+type byTimestamp []string
+
+func (s byTimestamp) Len() int {
+	return len(s)
+}
+func (s byTimestamp) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s byTimestamp) Less(i, j int) bool {
+	createdI, errI := parseTimestamp(s[i])
+	createdJ, errJ := parseTimestamp(s[j])
+	if errI != nil && errJ != nil {
+		return false
+	} else if errI != nil {
+		return false // send parseTimestamp errors to bottom of list
+	} else if errJ != nil {
+		return true // send parseTimestamp errors to bottom of list
+	}
+	return createdJ.Before(createdI)
+}
+
+// PurgeLogs removes old log files according to `-keep_logs` and
+// `-keep_latest_n_logs` flags. Current log files are never removed.
 func PurgeLogs() {
 	f := flag.Lookup("log_dir")
 	if f == nil {
 		panic("the logging module doesn't specify a log_dir flag")
 	}
 
-	if *keepLogs == 0*time.Second {
+	if *keepLogs == 0*time.Second && *keepLatestNLogs == 0 {
+		// We will never purge anything; bail early
 		return
 	}
+
+	// Run purge routines every `-purge_logs_interval` seconds
 	logDir := f.Value.String()
 	program := filepath.Base(os.Args[0])
-
 	timer := time.NewTimer(*purgeLogsInterval)
 	for range timer.C {
-		purgeLogsOnce(time.Now(), logDir, program, *keepLogs)
+		if *keepLogs != 0*time.Second {
+			purgeLogsByTimestamp(time.Now(), logDir, program, *keepLogs)
+		}
+		if *keepLatestNLogs != 0 {
+			purgeLogsByIndex(logDir, program, *keepLatestNLogs)
+		}
 	}
 }
