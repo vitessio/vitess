@@ -245,6 +245,21 @@
             "sequence": "seq"
           }
         },
+        "unsharded_authoritative": {
+          "columns": [
+            {
+              "name": "col1"
+            },
+            {
+              "name": "col2"
+            }
+          ],
+          "auto_increment": {
+            "column": "col1",
+            "sequence": "seq"
+          },
+          "column_list_authoritative": true
+        },
         "seq": {
           "type": "sequence"
         }
