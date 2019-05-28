@@ -40,7 +40,7 @@ export class SchemaComponent implements OnInit {
       this.keyspaces = keyspaceNames.map(keyspaceName => {
         return {label: keyspaceName, value: keyspaceName};
       });
-      this.keyspaces.sort(this.cmp);
+      this.keyspaces.sort(SchemaComponent.cmp);
       if (this.keyspaces.length > 0 ) {
         this.selectedKeyspace = this.keyspaces[0].value;
         this.getShards(this.selectedKeyspace);
@@ -48,7 +48,7 @@ export class SchemaComponent implements OnInit {
     });
   }
 
-  cmp(a, b): number {
+  static cmp(a, b): number {
     let aLowercase = a.label.toLowerCase();
     let bLowercase = b.label.toLowerCase();
     if (aLowercase > bLowercase) {
