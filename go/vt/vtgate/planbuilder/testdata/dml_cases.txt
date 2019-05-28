@@ -531,6 +531,31 @@
   }
 }
 
+# unsharded insert, no col list with auto-inc and authoritative column list
+"insert into unsharded_authoritative values(1,1)"
+{
+  "Original": "insert into unsharded_authoritative values(1,1)",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded_authoritative(col1, col2) values (:__seq0, 1)",
+    "Table": "unsharded_authoritative",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [
+        1
+      ]
+    }
+  }
+}
+
 # sharded upsert with sharding key set to vindex column
 "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)"
 {
@@ -795,13 +820,35 @@
   }
 }
 
-# insert no column list
-"insert into user values(1, 2, 3)"
-"no column list"
-
 # insert with mimatched column list
 "insert into user(id) values (1, 2)"
 "column list doesn't match values"
+
+# insert no column list for sharded authoritative table
+"insert into authoritative values(1, 2, 3)"
+{
+  "Original": "insert into authoritative values(1, 2, 3)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id0, 2, 3)",
+    "Values": [
+      [
+        [
+          1
+        ]
+      ]
+    ],
+    "Table": "authoritative",
+    "Prefix": "insert into authoritative(user_id, col1, col2) values ",
+    "Mid": [
+      "(:_user_id0, 2, 3)"
+    ]
+  }
+}
 
 # insert sharded, no values
 "insert into user values()"
