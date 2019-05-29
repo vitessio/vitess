@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,13 +26,12 @@ import environment
 import tablet
 import utils
 
+from vtdb import vtgate_client
+
 use_mysqlctld = False
-use_xtrabackup = False
-stream_mode = 'tar'
 tablet_master = None
 tablet_replica1 = None
 tablet_replica2 = None
-xtrabackup_args = []
 new_init_db = ''
 db_credentials_file = ''
 
@@ -125,6 +124,13 @@ def tearDownModule():
   tablet_replica1.remove_tree()
   tablet_replica2.remove_tree()
 
+def get_connection(timeout=15.0):
+  protocol, endpoint = utils.vtgate.rpc_endpoint(python=True)
+  try:
+    return vtgate_client.connect(protocol, endpoint, timeout)
+  except Exception:
+    logging.exception('Connection to vtgate (timeout=%s) failed.', timeout)
+    raise
 
 class TestVttabletRecovery(unittest.TestCase):
 
@@ -153,8 +159,8 @@ class TestVttabletRecovery(unittest.TestCase):
       t.set_semi_sync_enabled(master=False, slave=False)
       t.clean_dbs()
 
-    #for backup in self._list_backups():
-      #self._remove_backup(backup)
+    for backup in self._list_backups():
+      self._remove_backup(backup)
 
   _create_vt_insert_test = '''create table vt_insert_test (
   id bigint auto_increment,
@@ -192,20 +198,19 @@ class TestVttabletRecovery(unittest.TestCase):
     # create a recovery keyspace
     utils.run_vtctl(['CreateKeyspace',
                      '-keyspace_type=SNAPSHOT',
+                     '-base_keyspace=test_keyspace',
                      '-snapshot_time',
                      datetime.datetime.utcnow().isoformat("T")+"Z",
                      'recovery_keyspace'])
     
+    # set disable_active_reparents to true, otherwise replication_reporter will
+    # try to restart replication
     xtra_args = ['-db-credentials-file',
                  db_credentials_file,
                  '-disable_active_reparents',
-                 '-enable_replication_reporter=false',
-                 '-recovery_keyspace',
-                 'test_keyspace']
+                 '-enable_replication_reporter=false']
     xtra_args.extend(tablet.get_backup_storage_flags())
 
-    # set disable_active_reparents to true, otherwise replication_reporter will
-    # try to restart replication
     t.start_vttablet(wait_for_state='SERVING',
                      init_tablet_type='replica',
                      init_keyspace='recovery_keyspace',
@@ -256,7 +261,10 @@ class TestVttabletRecovery(unittest.TestCase):
     """
 
     # insert data on master, wait for slave to get it
-    tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
+    utils.run_vtctl(['ApplySchema',
+                     '-sql=' + self._create_vt_insert_test,
+                     'test_keyspace'],
+                    auto_log=True)
     self._insert_data(tablet_master, 1)
     self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
 
@@ -287,11 +295,41 @@ class TestVttabletRecovery(unittest.TestCase):
     self.assertEqual(metadata['ClusterAlias'], 'recovery_keyspace.0')
     self.assertEqual(metadata['DataCenter'], 'test_nj')
 
-    # TODO start vtgate
+    for t in [tablet_master, tablet_replica1, tablet_replica2]:
+      utils.run_vtctl(['ReloadSchema', t.tablet_alias], auto_log=True)
 
-    # TODO check that vtgate doesn't route queries to new tablet
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'recovery_keyspace'], auto_log=True)
 
-    # TODO check that new tablet is accessible by using ks:0.table
+    # start vtgate
+    utils.VtGate().start(tablets=[
+      tablet_master, tablet_replica1, tablet_replica2
+      ], tablet_types_to_wait='REPLICA')
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.master', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.0.replica', 1)
+    utils.vtgate.wait_for_endpoints('recovery_keyspace.0.replica', 1)
+    
+    # check that vtgate doesn't route queries to new tablet
+    vtgate_conn = get_connection()
+    cursor = vtgate_conn.cursor(
+        tablet_type='replica', keyspace=None, writable=True)
+
+    cursor.execute('select count(*) from vt_insert_test', {})
+    result = cursor.fetchall()
+    if not result:
+      self.fail('Result cannot be null')
+    else:
+      self.assertEqual(result[0][0], 2)
+
+    # check that new tablet is accessible by using ks.table
+
+    #cursor.execute('select count(*) from recovery_keyspace.vt_insert_test', {})
+    #result = cursor.fetchall()
+    #if not result:
+      #self.fail('Result cannot be null')
+    #else:
+      #self.assertEqual(result[0][0], 1)
+    #conn.close()
     
     tablet_replica2.kill_vttablet()
 

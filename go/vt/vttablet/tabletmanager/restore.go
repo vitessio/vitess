@@ -43,7 +43,6 @@ var (
 	restoreFromBackup     = flag.Bool("restore_from_backup", false, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
 	restoreConcurrency    = flag.Int("restore_concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
 	waitForBackupInterval = flag.Duration("wait_for_backup_interval", 0, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
-	recoveryKeyspace      = flag.String("recovery_keyspace", "", "(init restore parameter) which keyspace to recover this tablet from")
 )
 
 // RestoreData is the main entry point for backup restore.
@@ -86,16 +85,16 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	tablet := agent.Tablet()
 
 	keyspaceDir := tablet.Keyspace
-	if *recoveryKeyspace != "" {
-		keyspaceDir = *recoveryKeyspace
-	}
-	dir := fmt.Sprintf("%v/%v", keyspaceDir, tablet.Shard)
 	keyspaceName := tablet.Keyspace
 	keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, keyspaceName)
 	if err != nil {
 		return err
 	}
 	keyspace := keyspaceInfo.Keyspace
+	if keyspace.BaseKeyspace != "" {
+		keyspaceDir = keyspace.BaseKeyspace
+	}
+	dir := fmt.Sprintf("%v/%v", keyspaceDir, tablet.Shard)
 
 	params := mysqlctl.RestoreParams{
 		Cnf:                 agent.Cnf,
