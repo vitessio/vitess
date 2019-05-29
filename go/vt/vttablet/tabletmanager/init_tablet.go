@@ -64,10 +64,6 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	if *initKeyspace == "" || *initShard == "" || *initTabletType == "" {
 		return fmt.Errorf("either need all of init_keyspace, init_shard and init_tablet_type, or none")
 	}
-	// if we are recovering from a snapshot we need to set initDbNameOverride
-	if *recoveryKeyspace != "" && *initDbNameOverride == "" {
-		*initDbNameOverride = topoproto.VtDbPrefix + *recoveryKeyspace
-	}
 
 	// parse init_tablet_type
 	tabletType, err := topoproto.ParseTabletType(*initTabletType)
@@ -155,6 +151,16 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		log.Infof("Using detected machine hostname: %v To change this, fix your machine network configuration or override it with -tablet_hostname.", hostname)
 	}
 
+	// if we are recovering from a snapshot we need to set initDbNameOverride
+	keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, *initKeyspace)
+	if err != nil {
+		return vterrors.Wrapf(err, "Error getting keyspace: %v", *initKeyspace)
+	}
+	baseKeyspace := keyspaceInfo.Keyspace.BaseKeyspace
+	if baseKeyspace != "" {
+		*initDbNameOverride = topoproto.VtDbPrefix + baseKeyspace
+	}
+
 	// create and populate tablet record
 	tablet := &topodatapb.Tablet{
 		Alias:          agent.TabletAlias,
@@ -199,7 +205,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		// instance of a startup timeout). Upon running this code
 		// again, we want to fix ShardReplication.
 		if updateErr := topo.UpdateTabletReplicationData(ctx, agent.TopoServer, tablet); updateErr != nil {
-			return updateErr
+			return vterrors.Wrap(updateErr, "UpdateTabletReplicationData failed")
 		}
 
 		// Then overwrite everything, ignoring version mismatch.

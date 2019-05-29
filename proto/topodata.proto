@@ -284,10 +284,14 @@ message Keyspace {
   // by explicit addresssing or by calling "use keyspace" first
   KeyspaceType keyspace_type = 5;
 
+  // base_keyspace is the base keyspace from which a snapshot
+  // keyspace is created. empty for normal keyspaces
+  string base_keyspace = 6;
+  
   // snapshot_time (in UTC) is a property of snapshot
   // keyspaces which tells us what point in time
   // the snapshot is of
-  vttime.Time snapshot_time = 6;  
+  vttime.Time snapshot_time = 7;  
 }
 
 // ShardReplication describes the MySQL replication relationships
