@@ -168,6 +168,13 @@ class TestVttabletRecovery(unittest.TestCase):
   primary key (id)
   ) Engine=InnoDB'''
 
+  _vschema_json = '''{
+    "tables": {
+        "vt_insert_test": {}
+    }
+}'''
+
+
   def _insert_data(self, t, index):
     """Add a single row with value 'index' to the given tablet."""
     t.mquery(
@@ -262,7 +269,7 @@ class TestVttabletRecovery(unittest.TestCase):
 
     # insert data on master, wait for slave to get it
     utils.run_vtctl(['ApplySchema',
-                     '-sql=' + self._create_vt_insert_test,
+                     '-sql', self._create_vt_insert_test,
                      'test_keyspace'],
                     auto_log=True)
     self._insert_data(tablet_master, 1)
@@ -280,9 +287,21 @@ class TestVttabletRecovery(unittest.TestCase):
     # insert more data on the master
     self._insert_data(tablet_master, 2)
 
+    utils.run_vtctl(['ApplyVSchema',
+                     '-vschema', self._vschema_json,
+                     'test_keyspace'],
+                    auto_log=True)
+
+    vs, _ = utils.run_vtctl(['GetVSchema', 'test_keyspace'],
+                                 mode=utils.VTCTL_VTCTL, trap_output=True)
+    logging.debug('test_keyspace vschema: %s', vs.splitlines())
+
     # now bring up the other slave, letting it restore from backup.
     self._restore(tablet_replica2)
 
+    vs, _ = utils.run_vtctl(['GetVSchema', 'recovery_keyspace'],
+                            mode=utils.VTCTL_VTCTL, trap_output=True)
+    logging.debug('recovery_keyspace vschema: %s', vs.splitlines())
     # check the new slave does not have the data
     self._check_data(tablet_replica2, 1, 'replica2 tablet should not have new data')
 
@@ -294,12 +313,6 @@ class TestVttabletRecovery(unittest.TestCase):
     self.assertEqual(metadata['Alias'], 'test_nj-0000062346')
     self.assertEqual(metadata['ClusterAlias'], 'recovery_keyspace.0')
     self.assertEqual(metadata['DataCenter'], 'test_nj')
-
-    for t in [tablet_master, tablet_replica1, tablet_replica2]:
-      utils.run_vtctl(['ReloadSchema', t.tablet_alias], auto_log=True)
-
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'recovery_keyspace'], auto_log=True)
 
     # start vtgate
     utils.VtGate().start(tablets=[
@@ -322,15 +335,33 @@ class TestVttabletRecovery(unittest.TestCase):
       self.assertEqual(result[0][0], 2)
 
     # check that new tablet is accessible by using ks.table
+    cursor.execute('select count(*) from recovery_keyspace.vt_insert_test', {})
+    result = cursor.fetchall()
+    if not result:
+      self.fail('Result cannot be null')
+    else:
+      self.assertEqual(result[0][0], 1)
 
-    #cursor.execute('select count(*) from recovery_keyspace.vt_insert_test', {})
+    # check that new tablet is accessible with 'use ks'
+    cursor.execute('use recovery_keyspace@replica', {})
+    cursor.execute('select count(*) from vt_insert_test', {})
+    result = cursor.fetchall()
+    if not result:
+      self.fail('Result cannot be null')
+    else:
+      self.assertEqual(result[0][0], 1)
+
+    # TODO check that new tablet is accessible with 'use ks:shard'
+    # this currently does not work through the python client, though it works from mysql client
+    #cursor.execute('use recovery_keyspace:0@replica', {})
+    #cursor.execute('select count(*) from vt_insert_test', {})
     #result = cursor.fetchall()
     #if not result:
       #self.fail('Result cannot be null')
     #else:
       #self.assertEqual(result[0][0], 1)
-    #conn.close()
-    
+
+    vtgate_conn.close()
     tablet_replica2.kill_vttablet()
 
 if __name__ == '__main__':
