@@ -112,6 +112,7 @@ func TestAPI(t *testing.T) {
 	ts.CreateKeyspace(ctx, "ks3", &topodatapb.Keyspace{
 		ShardingColumnName: "shardcol",
 		KeyspaceType:       topodatapb.KeyspaceType_SNAPSHOT,
+		BaseKeyspace:       "ks1",
 		SnapshotTime:       sTime,
 	})
 
@@ -129,6 +130,7 @@ func TestAPI(t *testing.T) {
 				"sharding_column_type": 0,
 				"served_froms": [],
                                 "keyspace_type":0,
+                                "base_keyspace":"",
                                 "snapshot_time":null
 			}`},
 		{"GET", "keyspaces/nonexistent", "", "404 page not found"},
@@ -266,11 +268,11 @@ func TestAPI(t *testing.T) {
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 0,\n  \"snapshot_time\": null\n}\n\n"
+		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null\n}\n\n"
 		}`},
 		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 1,\n  \"snapshot_time\": {\n    \"seconds\": \"0\",\n    \"nanoseconds\": 0\n  }\n}\n\n"
+		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"0\",\n    \"nanoseconds\": 0\n  }\n}\n\n"
 		}`},
 		{"POST", "vtctl/", `["GetKeyspace","does_not_exist"]`, `{
 			"Error": "node doesn't exist: keyspaces/does_not_exist/Keyspace",

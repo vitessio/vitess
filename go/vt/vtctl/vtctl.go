@@ -1611,26 +1611,29 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	// copy vschema from base keyspace
-	vs, err := wr.TopoServer().GetVSchema(ctx, *baseKeyspace)
-	if err != nil {
-		wr.Logger().Infof("error from GetVSchema for keyspace: %v, %v", *baseKeyspace, err)
-		if topo.IsErrType(err, topo.NoNode) {
-			vs = &vschemapb.Keyspace{
-				Sharded:      false,
-				Tables:       make(map[string]*vschemapb.Table),
-				Vindexes:     make(map[string]*vschemapb.Vindex),
-				KeyspaceType: ktype,
+	if ktype == topodatapb.KeyspaceType_SNAPSHOT {
+		// copy vschema from base keyspace
+		vs, err := wr.TopoServer().GetVSchema(ctx, *baseKeyspace)
+		if err != nil {
+			wr.Logger().Infof("error from GetVSchema for keyspace: %v, %v", *baseKeyspace, err)
+			if topo.IsErrType(err, topo.NoNode) {
+				vs = &vschemapb.Keyspace{
+					Sharded:      false,
+					Tables:       make(map[string]*vschemapb.Table),
+					Vindexes:     make(map[string]*vschemapb.Vindex),
+					KeyspaceType: ktype,
+				}
 			}
+		} else {
+			vs.KeyspaceType = ktype
 		}
-	} else {
-		vs.KeyspaceType = ktype
+		if err := wr.TopoServer().SaveVSchema(ctx, keyspace, vs); err != nil {
+			wr.Logger().Infof("error from SaveVSchema %v:%v", vs, err)
+			return err
+		}
+		return topotools.RebuildVSchema(ctx, wr.Logger(), wr.TopoServer(), nil)
 	}
-	if err := wr.TopoServer().SaveVSchema(ctx, keyspace, vs); err != nil {
-		wr.Logger().Infof("error from SaveVSchema %v:%v", vs, err)
-		return err
-	}
-	return topotools.RebuildVSchema(ctx, wr.Logger(), wr.TopoServer(), nil)
+	return nil
 }
 
 func commandDeleteKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
