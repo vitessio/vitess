@@ -304,7 +304,6 @@ gotools=" \
        golang.org/x/tools/cmd/cover \
        golang.org/x/tools/cmd/goimports \
        golang.org/x/tools/cmd/goyacc \
-       honnef.co/go/tools/cmd/unused \
 "
 echo "Installing dev tools with 'go get'..."
 # shellcheck disable=SC2086
