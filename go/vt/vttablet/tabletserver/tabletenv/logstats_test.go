@@ -150,7 +150,7 @@ func TestLogStatsFormat(t *testing.T) {
 }
 
 func TestLogStatsFilter(t *testing.T) {
-	defer func() { *streamlog.FilterTag = "" }()
+	defer func() { *streamlog.QueryLogFilterTag = "" }()
 
 	logStats := NewLogStats(context.Background(), "test")
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
@@ -168,14 +168,14 @@ func TestLogStatsFilter(t *testing.T) {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
 	}
 
-	*streamlog.FilterTag = "LOG_THIS_QUERY"
+	*streamlog.QueryLogFilterTag = "LOG_THIS_QUERY"
 	got = testFormat(logStats, url.Values(params))
 	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\" ]\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t1\t\"\"\t\n"
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
 	}
 
-	*streamlog.FilterTag = "NOT_THIS_QUERY"
+	*streamlog.QueryLogFilterTag = "NOT_THIS_QUERY"
 	got = testFormat(logStats, url.Values(params))
 	want = ""
 	if got != want {
