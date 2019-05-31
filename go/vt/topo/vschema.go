@@ -41,11 +41,6 @@ func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vsc
 		return err
 	}
 
-	if len(data) == 0 {
-		// No vschema, remove it. So we can remove the keyspace.
-		return ts.globalCell.Delete(ctx, nodePath, nil)
-	}
-
 	_, err = ts.globalCell.Update(ctx, nodePath, data, nil)
 	return err
 }
