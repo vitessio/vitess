@@ -171,8 +171,8 @@ type BackupManifest struct {
 	Position mysql.Position
 
 	// BackupTime is when the backup was taken in UTC time
-	// format: "2006-01-02.150405"
-	BackupTime time.Time
+	// format: "2006-01-02T15:04:05Z00:00"
+	BackupTime string
 	// FinishedTime is the time (in RFC 3339 format, UTC) at which the backup finished, if known.
 	// Some backups may not set this field if they were created before the field was added.
 	FinishedTime string
@@ -195,7 +195,8 @@ func FindBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, lo
 			continue
 		}
 
-		if snapshotTime.Equal(unixZeroTime) /* uninitialized or not snapshot */ || bm.BackupTime.Before(snapshotTime) {
+		backupTime, _ := time.Parse(time.RFC3339, bm.BackupTime)
+		if snapshotTime.Equal(unixZeroTime) /* uninitialized or not snapshot */ || bm.BackupTime == "" /* restoring an older backup where MANIFEST does not have backupTime */ || backupTime.Before(snapshotTime) {
 			logger.Infof("Restore: found backup %v %v to restore", bh.Directory(), bh.Name())
 			break
 		}
