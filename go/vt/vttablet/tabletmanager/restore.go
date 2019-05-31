@@ -90,7 +90,7 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		keyspaceDir = keyspace.BaseKeyspace
 	}
 	dir := fmt.Sprintf("%v/%v", keyspaceDir, tablet.Shard)
-	pos, err := mysqlctl.Restore(ctx, agent.Cnf, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore, topoproto.TabletDbName(tablet), logutil.ProtoToTime(keyspace.SnapshotTime))
+	pos, backupTime, err := mysqlctl.Restore(ctx, agent.Cnf, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore, topoproto.TabletDbName(tablet), logutil.ProtoToTime(keyspace.SnapshotTime))
 	switch err {
 	case nil:
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
@@ -130,6 +130,8 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	// Change type back to original type if we're ok to serve.
 	if _, err := agent.TopoServer.UpdateTabletFields(context.Background(), tablet.Alias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = originalType
+		tablet.BackupTime = backupTime
+		tablet.RestorePosition = pos.String()
 		return nil
 	}); err != nil {
 		return vterrors.Wrapf(err, "Cannot change type back to %v", originalType)

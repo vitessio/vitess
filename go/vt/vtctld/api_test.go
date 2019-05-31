@@ -188,7 +188,9 @@ func TestAPI(t *testing.T) {
 				"db_name_override": "",
 				"tags": {},
 				"mysql_hostname":"",
-				"mysql_port":0
+				"mysql_port":0,
+                                "backup_time":"",
+                                "restore_position":""
 			}`},
 		{"GET", "tablets/nonexistent-999", "", "404 page not found"},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", "", `{

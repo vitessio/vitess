@@ -521,13 +521,14 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	bhs []backupstorage.BackupHandle,
 	restoreConcurrency int,
 	hookExtraEnv map[string]string,
-	snapshotTime time.Time) (mysql.Position, error) {
+	snapshotTime time.Time) (mysql.Position, string, error) {
 
 	var bh backupstorage.BackupHandle
 	var bm builtinBackupManifest
 	var toRestore int
 	zeroPosition := mysql.Position{}
 	unixZeroTime := time.Unix(0, 0).UTC()
+	var s string
 
 	for toRestore = len(bhs) - 1; toRestore >= 0; toRestore-- {
 		bh = bhs[toRestore]
@@ -546,17 +547,27 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 		backupTime, _ := time.Parse(time.RFC3339, bm.BackupTime)
 		if snapshotTime.Equal(unixZeroTime) /* uninitialized or not snapshot */ || bm.BackupTime == "" /* restoring an older backup where MANIFEST does not have backupTime */ || backupTime.Before(snapshotTime) {
 			logger.Infof("Restore: found backup %v %v to restore with %v files", bh.Directory(), bh.Name(), len(bm.FileEntries))
+			// older backups don't have backupTime
+			if bm.BackupTime == "" {
+				// backup Name is of the format 2006-01-02.150405.cell-tabletAlias
+				if bhTime, err := time.Parse("2006-01-02.150405", bh.Name()[:17]); err == nil {
+					bm.BackupTime = bhTime.Format(time.RFC3339)
+					logger.Infof("Setting backup time to %v", bm.BackupTime)
+				} else {
+					logger.Warningf("error parsing time from backup handle name: %v, %v", bh.Name(), err)
+				}
+			}
 			break
 		}
 	}
 	if toRestore < 0 {
 		if snapshotTime.After(unixZeroTime) {
-			return zeroPosition, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "No valid backup found before time %v", snapshotTime.Format(time.RFC3339))
+			return zeroPosition, s, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "No valid backup found before time %v", snapshotTime.Format(time.RFC3339))
 		}
 		// There is at least one attempted backup, but none could be read.
 		// This implies there is data we ought to have, so it's not safe to start
 		// up empty.
-		return zeroPosition, vterrors.New(vtrpc.Code_NOT_FOUND, "backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
+		return zeroPosition, s, vterrors.New(vtrpc.Code_NOT_FOUND, "backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
 	}
 
 	// Starting from here we won't be able to recover if we get stopped by a cancelled
@@ -565,26 +576,26 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	logger.Infof("Restore: shutdown mysqld")
 	err := mysqld.Shutdown(context.Background(), cnf, true)
 	if err != nil {
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
 	logger.Infof("Restore: deleting existing files")
 	if err := removeExistingFiles(cnf); err != nil {
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
 	logger.Infof("Restore: reinit config file")
 	err = mysqld.ReinitConfig(context.Background(), cnf)
 	if err != nil {
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
 	logger.Infof("Restore: copying all files")
 	if err := be.restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv); err != nil {
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
-	return bm.Position, nil
+	return bm.Position, bm.BackupTime, nil
 }
 
 // restoreFiles will copy all the files from the BackupStorage to the

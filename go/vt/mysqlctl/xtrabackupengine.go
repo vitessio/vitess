@@ -250,13 +250,14 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	bhs []backupstorage.BackupHandle,
 	restoreConcurrency int,
 	hookExtraEnv map[string]string,
-	snapshotTime time.Time) (mysql.Position, error) {
+	snapshotTime time.Time) (mysql.Position, string, error) {
 
 	var bh backupstorage.BackupHandle
 	var bm xtraBackupManifest
 	var index int
 	zeroPosition := mysql.Position{}
 	unixZeroTime := time.Unix(0, 0).UTC()
+	var s string
 
 	for index = len(bhs) - 1; index >= 0; index-- {
 		bh = bhs[index]
@@ -280,12 +281,12 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	}
 	if index < 0 {
 		if snapshotTime.After(unixZeroTime) {
-			return mysql.Position{}, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "No valid backup found before time %v", snapshotTime.Format(time.RFC3339))
+			return zeroPosition, s, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "No valid backup found before time %v", snapshotTime.Format(time.RFC3339))
 		}
 		// There is at least one attempted backup, but none could be read.
 		// This implies there is data we ought to have, so it's not safe to start
 		// up empty.
-		return zeroPosition, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
+		return zeroPosition, s, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
 	}
 
 	// Starting from here we won't be able to recover if we get stopped by a cancelled
@@ -294,18 +295,18 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	logger.Infof("Restore: shutdown mysqld")
 	err := mysqld.Shutdown(context.Background(), cnf, true)
 	if err != nil {
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
 	logger.Infof("Restore: deleting existing files")
 	if err := removeExistingFiles(cnf); err != nil {
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
 	logger.Infof("Restore: reinit config file")
 	err = mysqld.ReinitConfig(context.Background(), cnf)
 	if err != nil {
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
 	// copy / extract files
@@ -315,7 +316,7 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	// extract all the files
 	if err := be.restoreFile(ctx, cnf, logger, bh, !bm.SkipCompress, be.backupFileName()); err != nil {
 		logger.Errorf("error restoring backup file %v:%v", be.backupFileName(), err)
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
 	// copy / extract files
@@ -330,7 +331,7 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	prepareOut, _ := prepareCmd.StdoutPipe()
 	prepareErr, _ := prepareCmd.StderrPipe()
 	if err = prepareCmd.Start(); err != nil {
-		return zeroPosition, vterrors.Wrap(err, "unable to start prepare")
+		return zeroPosition, s, vterrors.Wrap(err, "unable to start prepare")
 	}
 
 	errOutput, _ := ioutil.ReadAll(prepareErr)
@@ -345,7 +346,7 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	}
 
 	if err != nil {
-		return zeroPosition, vterrors.Wrap(err, "prepare step failed")
+		return zeroPosition, s, vterrors.Wrap(err, "prepare step failed")
 	}
 
 	// then copy-back
@@ -360,7 +361,7 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	copybackOut, _ := copybackCmd.StdoutPipe()
 
 	if err = copybackCmd.Start(); err != nil {
-		return zeroPosition, vterrors.Wrap(err, "unable to start copy-back")
+		return zeroPosition, s, vterrors.Wrap(err, "unable to start copy-back")
 	}
 
 	errOutput, _ = ioutil.ReadAll(copybackErr)
@@ -375,12 +376,12 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	}
 
 	if err != nil {
-		return zeroPosition, vterrors.Wrap(err, "copy-back step failed")
+		return zeroPosition, s, vterrors.Wrap(err, "copy-back step failed")
 	}
 
 	// now find the slave position and return that
 	logger.Infof("Returning replication position %v", bm.Position)
-	return bm.Position, nil
+	return bm.Position, bm.BackupTime, nil
 }
 
 // restoreFile restores an individual file.
