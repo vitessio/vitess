@@ -683,10 +683,8 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 
 	// Decode connection attributes send by the client
 	if clientFlags&CapabilityClientConnAttr != 0 {
-		var err error
-		_, _, err = parseConnAttrs(data, pos)
-		if err != nil {
-			return "", "", nil, err
+		if _, _, err := parseConnAttrs(data, pos); err != nil {
+			log.Warningf("Decode connection attributes send by the client: %v", err)
 		}
 	}
 
