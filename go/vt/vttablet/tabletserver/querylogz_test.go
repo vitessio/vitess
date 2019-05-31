@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -142,6 +143,16 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td></td>`,
 	}
 	logStats.EndTime = logStats.StartTime.Add(500 * time.Millisecond)
+	ch = make(chan interface{}, 1)
+	ch <- logStats
+	querylogzHandler(ch, response, req)
+	close(ch)
+	body, _ = ioutil.ReadAll(response.Body)
+	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
+
+	// ensure querylogz is not affected by the filter tag
+	*streamlog.FilterTag = "XXX_SKIP_ME"
+	defer func() { *streamlog.FilterTag = "" }()
 	ch = make(chan interface{}, 1)
 	ch <- logStats
 	querylogzHandler(ch, response, req)
