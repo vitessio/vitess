@@ -86,8 +86,8 @@ type xtraBackupManifest struct {
 	Params string `json:"ExtraCommandLineParams"`
 
 	// BackupTime is when the backup was taken in UTC time
-	// format: "2006-01-02.150405"
-	BackupTime time.Time
+	// format: "2006-01-02T15:04:05Z00:00"
+	BackupTime string
 }
 
 func (be *XtrabackupEngine) backupFileName() string {
@@ -226,7 +226,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 		Position:     replicationPosition,
 		SkipCompress: !*backupStorageCompress,
 		Params:       *xtrabackupBackupFlags,
-		BackupTime:   backupTime,
+		BackupTime:   backupTime.Format(time.RFC3339),
 	}
 
 	data, err := json.MarshalIndent(bm, "", "  ")
@@ -272,7 +272,8 @@ func (be *XtrabackupEngine) ExecuteRestore(
 			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
 			continue
 		}
-		if snapshotTime.Equal(unixZeroTime) /* uninitialized or not snapshot */ || bm.BackupTime.Before(snapshotTime) {
+		backupTime, _ := time.Parse(time.RFC3339, bm.BackupTime)
+		if snapshotTime.Equal(unixZeroTime) /* uninitialized or not snapshot */ || backupTime.Before(snapshotTime) {
 			logger.Infof("Restore: found backup %v %v to restore with %v file", bh.Directory(), bh.Name(), bm.FileName)
 			break
 		}
