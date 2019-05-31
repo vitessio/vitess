@@ -561,7 +561,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 // ExecuteRestore restores from a backup. If the restore is successful
 // we return the position from which replication should start
 // otherwise an error is returned
-func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, error) {
+func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, string, error) {
 
 	cnf := params.Cnf
 	mysqld := params.Mysqld
@@ -570,30 +570,31 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 	hookExtraEnv := params.HookExtraEnv
 
 	zeroPosition := mysql.Position{}
+	var s string
 	var bm builtinBackupManifest
 
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
 	// mark restore as in progress
 	if err := createStateFile(cnf); err != nil {
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
 	if err := prepareToRestore(ctx, cnf, mysqld, logger); err != nil {
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
 	logger.Infof("Restore: copying %v files", len(bm.FileEntries))
 
 	if err := be.restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv, logger); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
-		return zeroPosition, vterrors.Wrap(err, "failed to restore files")
+		return zeroPosition, s, vterrors.Wrap(err, "failed to restore files")
 	}
 
 	logger.Infof("Restore: returning replication position %v", bm.Position)
-	return bm.Position, nil
+	return bm.Position, bm.BackupTime, nil
 }
 
 // restoreFiles will copy all the files from the BackupStorage to the

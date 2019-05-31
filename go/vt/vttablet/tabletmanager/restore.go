@@ -110,8 +110,9 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 
 	// Loop until a backup exists, unless we were told to give up immediately.
 	var pos mysql.Position
+	var backupTime string
 	for {
-		pos, err = mysqlctl.Restore(ctx, params, logutil.ProtoToTime(keyspace.SnapshotTime))
+		pos, backupTime, err = mysqlctl.Restore(ctx, params, logutil.ProtoToTime(keyspace.SnapshotTime))
 		if waitForBackupInterval == 0 {
 			break
 		}
@@ -167,6 +168,8 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	// Change type back to original type if we're ok to serve.
 	if _, err := agent.TopoServer.UpdateTabletFields(context.Background(), tablet.Alias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = originalType
+		tablet.BackupTime = backupTime
+		tablet.RestorePosition = pos.String()
 		return nil
 	}); err != nil {
 		return vterrors.Wrapf(err, "Cannot change type back to %v", originalType)
