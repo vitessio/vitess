@@ -1581,7 +1581,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 
 	vschema, err := wr.TopoServer().GetVSchema(ctx, keyspace)
-	if *allowEmptyVSchema == false && (vschema == nil || err != nil) {
+	if !*allowEmptyVSchema && (vschema == nil || topo.IsErrType(err, topo.NoNode)) {
 		err = wr.TopoServer().SaveVSchema(ctx, keyspace, &vschemapb.Keyspace{
 			Sharded:  false,
 			Vindexes: make(map[string]*vschemapb.Vindex),
