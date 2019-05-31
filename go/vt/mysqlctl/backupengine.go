@@ -85,7 +85,7 @@ type RestoreParams struct {
 
 // RestoreEngine is the interface to restore a backup with a given engine.
 type RestoreEngine interface {
-	ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, error)
+	ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, string, error)
 }
 
 // BackupRestoreEngine is a combination of BackupEngine and RestoreEngine.

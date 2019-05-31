@@ -367,26 +367,27 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, logger 
 }
 
 // ExecuteRestore restores from a backup. Any error is returned.
-func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, error) {
+func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, string, error) {
 
 	cnf := params.Cnf
 	mysqld := params.Mysqld
 	logger := params.Logger
 
 	zeroPosition := mysql.Position{}
+	var s string
 	var bm xtraBackupManifest
 
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
 	// mark restore as in progress
 	if err := createStateFile(cnf); err != nil {
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
 	if err := prepareToRestore(ctx, cnf, mysqld, logger); err != nil {
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 
 	// copy / extract files
@@ -394,11 +395,11 @@ func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestorePa
 
 	if err := be.restoreFromBackup(ctx, cnf, bh, bm, logger); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
-		return zeroPosition, err
+		return zeroPosition, s, err
 	}
 	// now find the slave position and return that
 	logger.Infof("Restore: returning replication position %v", bm.Position)
-	return bm.Position, nil
+	return bm.Position, bm.BackupTime, nil
 }
 
 func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, bm xtraBackupManifest, logger logutil.Logger) error {

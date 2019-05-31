@@ -287,7 +287,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		DbName:              dbName,
 		Dir:                 backupDir,
 	}
-	restorePos, err := mysqlctl.Restore(ctx, params, time.Now())
+	restorePos, _, err := mysqlctl.Restore(ctx, params, time.Now())
 	switch err {
 	case nil:
 		log.Infof("Successfully restored from backup at replication position %v", restorePos)
