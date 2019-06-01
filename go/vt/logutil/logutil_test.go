@@ -32,7 +32,7 @@ func TestParsing(t *testing.T) {
 		"/tmp/something.foo/zkocc.goedel.szopa.test.log.ERROR.20130806-151006.10530"}
 
 	for _, filepath := range path {
-		ts, err := parseTimestamp(filepath)
+		ts, err := parseCreatedTimestamp(filepath)
 		if err != nil {
 			t.Fatalf("parse: %v", err)
 		}
@@ -43,7 +43,7 @@ func TestParsing(t *testing.T) {
 	}
 }
 
-func TestPurge(t *testing.T) {
+func TestPurgeByCtime(t *testing.T) {
 	logDir := path.Join(os.TempDir(), fmt.Sprintf("%v-%v", os.Args[0], os.Getpid()))
 	if err := os.MkdirAll(logDir, 0777); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
@@ -67,18 +67,69 @@ func TestPurge(t *testing.T) {
 		t.Fatalf("os.Symlink: %v", err)
 	}
 
-	purgeLogsOnce(now, logDir, "zkocc", 30*time.Minute)
+	purgeLogsOnce(now, logDir, "zkocc", 30*time.Minute, 0)
 
 	left, err := filepath.Glob(path.Join(logDir, "zkocc.*"))
 	if err != nil {
 		t.Fatalf("filepath.Glob: %v", err)
 	}
 
-	if len(left) != 2 {
-		// 151006 is still good, 131006 is the "current" log
-		// (symlinked to zkocc.INFO), the rest should be
-		// removed.
-		t.Errorf("wrong number of files remain: want %v, got %v", 2, len(left))
+	if len(left) != 3 {
+		// 131006 is current
+		// 151006 is within 30 min
+		// symlink remains
+		// the rest should be removed.
+		t.Errorf("wrong number of files remain: want %v, got %v", 3, len(left))
+	}
+}
+
+func TestPurgeByMtime(t *testing.T) {
+	logDir := path.Join(os.TempDir(), fmt.Sprintf("%v-%v", os.Args[0], os.Getpid()))
+	if err := os.MkdirAll(logDir, 0777); err != nil {
+		t.Fatalf("os.MkdirAll: %v", err)
+	}
+	defer os.RemoveAll(logDir)
+	createFileWithMtime := func(filename, mtimeStr string) {
+		var err error
+		var mtime time.Time
+		filepath := path.Join(logDir, filename)
+		if mtime, err = time.Parse(time.RFC3339, mtimeStr); err != nil {
+			t.Fatalf("time.Parse: %v", err)
+		}
+		if _, err = os.Create(filepath); err != nil {
+			t.Fatalf("os.Create: %v", err)
+		}
+		if err = os.Chtimes(filepath, mtime, mtime); err != nil {
+			t.Fatalf("os.Chtimes: %v", err)
+		}
+	}
+	now := time.Date(2020, 1, 1, 12, 15, 0, 0, time.UTC)
+	filenameMtimeMap := map[string]string{
+		"vtadam.localhost.vitess.log.INFO.20200101-120000.00000": "2020-01-01T12:00:00.000Z",
+		"vtadam.localhost.vitess.log.INFO.20200101-113000.00000": "2020-01-01T11:30:00.000Z",
+		"vtadam.localhost.vitess.log.INFO.20200101-100000.00000": "2020-01-01T10:00:00.000Z",
+		"vtadam.localhost.vitess.log.INFO.20200101-090000.00000": "2020-01-01T09:00:00.000Z",
+		"vtadam.localhost.vitess.log.INFO.20200101-080000.00000": "2020-01-01T08:00:00.000Z",
+	}
+	for filename, mtimeStr := range filenameMtimeMap {
+		createFileWithMtime(filename, mtimeStr)
+	}
+	if err := os.Symlink("vtadam.localhost.vitess.log.INFO.20200101-120000.00000", path.Join(logDir, "vtadam.INFO")); err != nil {
+		t.Fatalf("os.Symlink: %v", err)
 	}
 
+	purgeLogsOnce(now, logDir, "vtadam", 0, 1*time.Hour)
+
+	left, err := filepath.Glob(path.Join(logDir, "vtadam.*"))
+	if err != nil {
+		t.Fatalf("filepath.Glob: %v", err)
+	}
+
+	if len(left) != 3 {
+		// 20200101-120000 is current
+		// 20200101-113000 is within 1 hour
+		// symlink remains
+		// rest are removed
+		t.Errorf("wrong number of files remain: want %v, got %v", 3, len(left))
+	}
 }
