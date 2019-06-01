@@ -95,32 +95,37 @@ func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vi
 
 	vindexMaps = make([]map[*column]vindexes.Vindex, len(vschemaTables))
 	for i, vst := range vschemaTables {
-		// If any input is authoritative, we make the table authoritative.
-		// TODO(sougou): vschema builder should validate that authoritative columns match.
-		if vst.ColumnListAuthoritative {
-			t.isAuthoritative = true
+		// The following logic allows the first table to be authoritative while the rest
+		// are not. But there's no need to reveal this flexibility to the user.
+		if i != 0 && vst.ColumnListAuthoritative && !t.isAuthoritative {
+			return nil, fmt.Errorf("intermixing of authoritative and non-authoritative tables not allowed: %v", vst.Name)
 		}
 
 		for _, col := range vst.Columns {
-			t.addColumn(col.Name, &column{
+			if _, err := t.mergeColumn(col.Name, &column{
 				origin: rb,
 				st:     st,
 				typ:    col.Type,
-			})
+			}); err != nil {
+				return nil, err
+			}
+		}
+		if i == 0 && vst.ColumnListAuthoritative {
+			// This will prevent new columns from being added.
+			t.isAuthoritative = true
 		}
 
 		var vindexMap map[*column]vindexes.Vindex
 		for _, cv := range vst.ColumnVindexes {
-			for i, cvcol := range cv.Columns {
-				col, ok := t.columns[cvcol.Lowered()]
-				if !ok {
-					col = &column{
-						origin: rb,
-						st:     st,
-					}
-					t.addColumn(cvcol, col)
+			for j, cvcol := range cv.Columns {
+				col, err := t.mergeColumn(cvcol, &column{
+					origin: rb,
+					st:     st,
+				})
+				if err != nil {
+					return nil, err
 				}
-				if i == 0 {
+				if j == 0 {
 					// For now, only the first column is used for vindex Map functions.
 					if vindexMap == nil {
 						vindexMap = make(map[*column]vindexes.Vindex)
@@ -133,13 +138,14 @@ func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vi
 
 		if ai := vst.AutoIncrement; ai != nil {
 			if _, ok := t.columns[ai.Column.Lowered()]; !ok {
-				t.addColumn(ai.Column, &column{
+				if _, err := t.mergeColumn(ai.Column, &column{
 					origin: rb,
 					st:     st,
-				})
+				}); err != nil {
+					return nil, err
+				}
 			}
 		}
-
 	}
 	if err := st.AddTable(t); err != nil {
 		return nil, err
@@ -434,6 +440,27 @@ func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
 		t.columns[lowered] = c
 	}
 	t.columnNames = append(t.columnNames, alias)
+}
+
+// mergeColumn merges or creates a new column for the table.
+// If the table is authoritative and the column doesn't already
+// exist, it returns an error. If the table is not authoritative,
+// the column is added if not already present.
+func (t *table) mergeColumn(alias sqlparser.ColIdent, c *column) (*column, error) {
+	if t.columns == nil {
+		t.columns = make(map[string]*column)
+	}
+	lowered := alias.Lowered()
+	if col, ok := t.columns[lowered]; ok {
+		return col, nil
+	}
+	if t.isAuthoritative {
+		return nil, fmt.Errorf("column %v not found in %v", sqlparser.String(alias), sqlparser.String(t.alias))
+	}
+	c.colnum = len(t.columnNames)
+	t.columns[lowered] = c
+	t.columnNames = append(t.columnNames, alias)
+	return c, nil
 }
 
 // Origin returns the route that originates the table.
