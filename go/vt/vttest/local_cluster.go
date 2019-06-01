@@ -150,11 +150,10 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 
 // DbName returns the default name for a database in this cluster.
 // If OnlyMySQL is set, this will be the name of the single database
-// created in MySQL. Otherwise, this will be the database that stores
-// the first keyspace in the topology.
+// created in MySQL. Otherwise, this will be blank.
 func (cfg *Config) DbName() string {
 	ns := cfg.Topology.GetKeyspaces()
-	if len(ns) > 0 {
+	if len(ns) > 0 && cfg.OnlyMySQL {
 		return ns[0].Name
 	}
 	return ""
@@ -185,7 +184,7 @@ type LocalCluster struct {
 // This connection should be used for debug/introspection purposes; normal
 // cluster access should be performed through the vtgate port.
 func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
-	return db.mysql.Params("")
+	return db.mysql.Params(db.DbName())
 }
 
 // MySQLAppDebugConnParams returns a mysql.ConnParams struct that can be used
