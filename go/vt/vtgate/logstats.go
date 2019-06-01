@@ -121,6 +121,10 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 // Logf formats the log record to the given writer, either as
 // tab-separated list of logged fields or as JSON.
 func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
+	if !streamlog.ShouldEmitLog(stats.SQL) {
+		return nil
+	}
+
 	formattedBindVars := "\"[REDACTED]\""
 	if !*streamlog.RedactDebugUIQueries {
 		_, fullBindParams := params["full"]
