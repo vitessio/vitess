@@ -122,9 +122,10 @@ func TestOpen(t *testing.T) {
 		t.Errorf("Unexpected error %v", err)
 	}
 	r.Close()
+	// A nil Put should cause the resource to be reopened.
 	p.Put(nil)
 	if count.Get() != 5 {
-		t.Errorf("Expecting 4, received %d", count.Get())
+		t.Errorf("Expecting 5, received %d", count.Get())
 	}
 	for i := 0; i < 5; i++ {
 		r, err := p.Get(ctx)

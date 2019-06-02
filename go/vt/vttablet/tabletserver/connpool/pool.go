@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -57,6 +58,7 @@ type MySQLChecker interface {
 // Other than the connection type, ConnPool maintains an additional
 // pool of dba connections that are used to kill connections.
 type Pool struct {
+	name               string
 	mu                 sync.Mutex
 	connections        *pools.ResourcePool
 	capacity           int
@@ -76,6 +78,7 @@ func New(
 	idleTimeout time.Duration,
 	checker MySQLChecker) *Pool {
 	cp := &Pool{
+		name:               name,
 		capacity:           capacity,
 		prefillParallelism: prefillParallelism,
 		idleTimeout:        idleTimeout,
@@ -109,6 +112,11 @@ func (cp *Pool) pool() (p *pools.ResourcePool) {
 func (cp *Pool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
+
+	if cp.prefillParallelism != 0 {
+		log.Infof("Opening pool: '%s'", cp.name)
+		defer log.Infof("Done opening pool: '%s'", cp.name)
+	}
 
 	f := func() (pools.Resource, error) {
 		return NewDBConn(cp, appParams)
