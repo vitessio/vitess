@@ -175,6 +175,8 @@ install_dep "protoc" "$protoc_ver" "$VTROOT/dist/vt-protoc-$protoc_ver" install_
 function install_zookeeper() {
   local version="$1"
   local dist="$2"
+  export JAVA_HOME="/usr/lib/jvm/java-7-openjdk-amd64"
+  export PATH="$PATH:$JAVA_HOME"
 
   zk="zookeeper-$version"
   wget "https://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
@@ -379,5 +381,3 @@ else
  echo
  echo "bootstrap finished - run 'source build.env' in your shell before building."
 fi
-
-
