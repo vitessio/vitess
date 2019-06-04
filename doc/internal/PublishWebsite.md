@@ -8,7 +8,7 @@ located in the [`doc/`](https://github.com/vitessio/vitess/tree/master/doc)
 directory.
 
 The generated files will be put in the
-[`docs/`](https://github.com/vitessio/vitess/tree/master/docs) directory (note
+[`docs/`](https://github.com/vitessio/vitess/tree/master/doc) directory (note
 the extra **s**). GitHub serves the website from this directory off the master
 branch.
 
@@ -47,7 +47,7 @@ We have three main directories:
 
 *   [`doc/`](https://github.com/vitessio/vitess/tree/master/doc) - original
     content
-*   [`docs/`](https://github.com/vitessio/vitess/tree/master/docs) - generated
+*   [`docs/`](https://github.com/vitessio/vitess/tree/master/doc) - generated
     website actually served at https://vitess.io/
 *   [`vitess.io/`](https://github.com/vitessio/vitess/tree/master/vitess.io) -
     all relevant files for the website e.g.
@@ -58,7 +58,7 @@ We have three main directories:
         menu](https://github.com/vitessio/vitess/blob/master/vitess.io/_includes/left-nav-menu.html)
     *   boiler plate markdown files which include the actual content from the
         `doc/` directory
-        ([example](https://github.com/vitessio/vitess/blob/master/vitess.io/contributing/github-workflow.md))
+        ([example](https://github.com/vitessio/website/blob/master/content/docs/contributing/github-workflow.md))
 
 The boiler plate markdown files have multiple purposes:
 
@@ -68,7 +68,7 @@ The boiler plate markdown files have multiple purposes:
     [`doc/GitHubWorkFlow.md`](https://github.com/vitessio/vitess/blob/master/doc/GitHubWorkflow.md)
     is actually served as https://vitess.io/docs/contributing/github-workflow/
     because there is the file
-    [`vitess.io/contributing/github-workflow.md`](https://github.com/vitessio/vitess/blob/master/vitess.io/contributing/github-workflow.md).
+    [`vitess.io/contributing/github-workflow.md`](https://github.com/vitessio/website/blob/master/content/docs/contributing/github-workflow.md).
 
 ### Changing Content
 
@@ -96,7 +96,7 @@ If you want to add a new page, you must also:
 *   add it to the left menu:
     [`vitess.io/_includes/left-nav-menu.html`](https://github.com/vitessio/vitess/blob/master/vitess.io/_includes/left-nav-menu.html)
 *   create a boiler plate .md file. Example:
-    [`vitess.io/contributing/github-workflow.md`](https://github.com/vitessio/vitess/blob/master/vitess.io/contributing/github-workflow.md)
+    [`vitess.io/contributing/github-workflow.md`](https://github.com/vitessio/website/blob/master/content/docs/contributing/github-workflow.md)
 
 When you add a new section to the menu, please create a new directory below
 `vitess.io/`. For example, the "Contributing" section is served out of
