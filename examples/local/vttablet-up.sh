@@ -100,7 +100,7 @@ optional_auth_args=''
 if [ "$1" = "--enable-grpc-static-auth" ];
 then
 	  echo "Enabling Auth with static authentication in grpc"
-    optional_auth_args='-grpc_auth_mode static -grpc_auth_static_password_file ./grpc_static_auth.json'
+    optional_auth_args='-grpc_auth_mode static -grpc_auth_static_password_file ./grpc_static_auth.json -grpc_auth_static_client_creds ./grpc_static_client_auth.json'
 fi
 
 # Start all vttablets in background.
