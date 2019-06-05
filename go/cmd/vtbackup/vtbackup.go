@@ -73,6 +73,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -86,6 +87,7 @@ var (
 	// vtbackup-specific flags
 	timeout            = flag.Duration("timeout", 2*time.Hour, "Overall timeout for this whole vtbackup run, including restoring the previous backup, waiting for replication, and uploading files")
 	replicationTimeout = flag.Duration("replication_timeout", 1*time.Hour, "The timeout for the step of waiting for replication to catch up. If progress is made before this timeout is reached, the backup will be taken anyway to save partial progress, but vtbackup will return a non-zero exit code to indicate it should be retried since not all expected data was backed up")
+	initialBackup      = flag.Bool("initial_backup", false, "Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard. This can be used to seed a brand new shard with an initial, empty backup. This can only be done before the shard exists in topology (i.e. before any tablets are deployed), and before any backups exist for the shard")
 
 	// vttablet-like flags
 	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
@@ -159,15 +161,63 @@ func main() {
 		mysqld.Shutdown(ctx, mycnf, false)
 	}()
 
+	extraEnv := map[string]string{
+		"TABLET_ALIAS": topoproto.TabletAliasString(tabletAlias),
+	}
+	dir := fmt.Sprintf("%v/%v", *initKeyspace, *initShard)
+	topoServer := topo.Open()
+	defer topoServer.Close()
+
+	// In initial_backup mode, just take a backup of this empty database.
+	if *initialBackup {
+		// Check that the shard doesn't exist.
+		_, err := topoServer.GetShard(ctx, *initKeyspace, *initShard)
+		if !topo.IsErrType(err, topo.NoNode) {
+			log.Errorf("Refusing to upload initial backup of empty database: the shard %v/%v already exists in topology.", *initKeyspace, *initShard)
+			exit.Return(1)
+		}
+		// Check that no existing backups exist in this backup storage location.
+		bs, err := backupstorage.GetBackupStorage()
+		if err != nil {
+			log.Errorf("Can't get backup storage: %v", err)
+			exit.Return(1)
+		}
+		backups, err := bs.ListBackups(ctx, dir)
+		if err != nil {
+			log.Errorf("Can't list backups: %v", err)
+			exit.Return(1)
+		}
+		if len(backups) > 0 {
+			log.Errorf("Refusing to upload initial backup of empty database: the shard %v/%v already has at least one backup.", *initKeyspace, *initShard)
+			exit.Return(1)
+		}
+
+		// If the checks pass, go ahead and take a backup of this empty DB.
+		// First, initialize it the way InitShardMaster would, so this backup
+		// produces a result that can be used to skip InitShardMaster entirely.
+		// This involves resetting replication (to erase any history) and then
+		// executing a statement to force the creation of a replication position.
+		mysqld.ResetReplication(ctx)
+		cmds := mysqlctl.CreateReparentJournal()
+		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
+			log.Errorf("Can't initialize database with reparent journal: %v", err)
+			exit.Return(1)
+		}
+		// Now we're ready to take the backup.
+		name := backupName(time.Now(), tabletAlias)
+		if err := mysqlctl.Backup(ctx, mycnf, mysqld, logutil.NewConsoleLogger(), dir, name, *concurrency, extraEnv); err != nil {
+			log.Errorf("Error taking backup: %v", err)
+			exit.Return(1)
+		}
+		log.Info("Backup successful")
+		return
+	}
+
 	// Restore from backup.
 	dbName := *initDbNameOverride
 	if dbName == "" {
 		dbName = fmt.Sprintf("vt_%s", *initKeyspace)
 	}
-	extraEnv := map[string]string{
-		"TABLET_ALIAS": topoproto.TabletAliasString(tabletAlias),
-	}
-	dir := fmt.Sprintf("%v/%v", *initKeyspace, *initShard)
 
 	log.Infof("Restoring latest backup from directory %v", dir)
 	restorePos, err := mysqlctl.Restore(ctx, mycnf, mysqld, dir, *concurrency, extraEnv, map[string]string{}, logutil.NewConsoleLogger(), true, dbName)
@@ -190,8 +240,6 @@ func main() {
 		log.Errorf("Error resetting replication %v", err)
 		exit.Return(1)
 	}
-	topoServer := topo.Open()
-	defer topoServer.Close()
 	if err := startReplication(ctx, mysqld, topoServer); err != nil {
 		log.Errorf("Error starting replication %v", err)
 		exit.Return(1)
@@ -267,7 +315,7 @@ func main() {
 	}
 
 	// Now we can take a new backup.
-	name := fmt.Sprintf("%v.%v", backupTime.UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tabletAlias))
+	name := backupName(backupTime, tabletAlias)
 	if err := mysqlctl.Backup(ctx, mycnf, mysqld, logutil.NewConsoleLogger(), dir, name, *concurrency, extraEnv); err != nil {
 		log.Errorf("Error taking backup: %v", err)
 		exit.Return(1)
@@ -279,6 +327,7 @@ func main() {
 		log.Warningf("Replication caught up to %v but didn't make it to the goal of %v. A backup was taken anyway to save partial progress, but the operation should still be retried since not all expected data is backed up.", status.Position, masterPos)
 		exit.Return(1)
 	}
+	log.Info("Backup successful")
 }
 
 func resetReplication(ctx context.Context, pos mysql.Position, mysqld mysqlctl.MysqlDaemon) error {
@@ -344,4 +393,8 @@ func getMasterPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts
 		return mysql.Position{}, fmt.Errorf("can't decode master replication position %q: %v", posStr, err)
 	}
 	return pos, nil
+}
+
+func backupName(backupTime time.Time, tabletAlias *topodatapb.TabletAlias) string {
+	return fmt.Sprintf("%v.%v", backupTime.UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tabletAlias))
 }
