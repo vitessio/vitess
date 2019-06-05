@@ -20,6 +20,7 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -44,6 +45,9 @@ const (
 
 	// the manifest file name
 	backupManifest = "MANIFEST"
+	// RestoreState is the name of the sentinel file used to detect whether a previous restore
+	// terminated abnormally
+	RestoreState = ".restore"
 )
 
 const (
@@ -222,23 +226,27 @@ func Restore(
 
 	rval := mysql.Position{}
 
-	// Wait for mysqld to be ready, in case it was launched in parallel with us.
-	if err := mysqld.Wait(ctx, cnf); err != nil {
-		return mysql.Position{}, err
-	}
-
 	if !deleteBeforeRestore {
-		logger.Infof("Restore: checking no existing data is present")
-		ok, err := checkNoDB(ctx, mysqld, dbName)
-		if err != nil {
-			return mysql.Position{}, err
-		}
-		if !ok {
-			logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
-			if err = PopulateMetadataTables(mysqld, localMetadata, dbName); err == nil {
-				err = ErrExistingDB
+		logger.Infof("Restore: Checking if a restore is in progress")
+		name := path.Join(cnf.TmpDir, RestoreState)
+		if _, err := os.Open(name); err != nil {
+			logger.Infof("Restore: No .restore file found, checking no existing data is present")
+			// Wait for mysqld to be ready, in case it was launched in parallel with us.
+			if err := mysqld.Wait(ctx, cnf); err != nil {
+				return mysql.Position{}, err
 			}
-			return mysql.Position{}, err
+
+			ok, err := checkNoDB(ctx, mysqld, dbName)
+			if err != nil {
+				return mysql.Position{}, err
+			}
+			if !ok {
+				logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
+				if err = PopulateMetadataTables(mysqld, localMetadata, dbName); err == nil {
+					err = ErrExistingDB
+				}
+				return mysql.Position{}, err
+			}
 		}
 	}
 
@@ -258,9 +266,13 @@ func Restore(
 	if len(bhs) == 0 {
 		// There are no backups (not even broken/incomplete ones).
 		logger.Errorf("no backup to restore on BackupStorage for directory %v. Starting up empty.", dir)
+		// Wait for mysqld to be ready, in case it was launched in parallel with us.
+		if err = mysqld.Wait(ctx, cnf); err != nil {
+			logger.Errorf("mysqld is not running: %v", err)
+			return mysql.Position{}, err
+		}
 		// Since this is an empty database make sure we start replication at the beginning
 		if err = mysqld.ResetReplication(ctx); err == nil {
-			logger.Errorf("error reseting slave replication: %v. Continuing", err)
 			err = ErrNoBackup
 		}
 
