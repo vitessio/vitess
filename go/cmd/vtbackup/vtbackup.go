@@ -22,9 +22,8 @@ When run periodically for each shard, vtbackup can ensure these configurable pol
 * Old backups for the shard are removed.
 
 Whatever system launches vtbackup is responsible for the following:
-* Running vtbackup with similar flags that would be used for a vttablet in the
-  target shard to be backed up.
-* Running mysqlctld alongside vtbackup, as it would be alongside vttablet.
+* Running vtbackup with similar flags that would be used for a vttablet and
+  mysqlctld in the target shard to be backed up.
 * Provisioning as much disk space for vtbackup as would be given to vttablet.
   The data directory MUST be empty at startup. Do NOT reuse a persistent disk.
 * Running vtbackup periodically for each shard, for each backup storage location.
@@ -57,8 +56,12 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"flag"
 	"fmt"
+	"math"
+	"math/big"
+	"os"
 	"time"
 
 	"vitess.io/vitess/go/exit"
@@ -67,6 +70,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -74,17 +78,26 @@ import (
 )
 
 var (
-	initDbNameOverride       = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
-	initKeyspace             = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
-	initShard                = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
-	tabletPath               = flag.String("tablet-path", "", "tablet alias")
-	concurrency              = flag.Int("concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
+	// vtbackup-specific flags
 	acceptableReplicationLag = flag.Duration("acceptable_replication_lag", 1*time.Second, "Wait until replication lag is less than or equal to this value before taking a new backup")
 	timeout                  = flag.Duration("timeout", 1*time.Hour, "Overall timeout for this vtbackup run")
+
+	// vttablet-like flags
+	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
+	initKeyspace       = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
+	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
+	concurrency        = flag.Int("concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
+
+	// mysqlctld-like flags
+	mysqlPort     = flag.Int("mysql_port", 3306, "mysql port")
+	mysqlSocket   = flag.String("mysql_socket", "", "path to the mysql socket")
+	mysqlTimeout  = flag.Duration("mysql_timeout", 5*time.Minute, "how long to wait for mysqld startup")
+	initDBSQLFile = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
 )
 
 func main() {
 	defer exit.Recover()
+	defer logutil.Flush()
 
 	dbconfigs.RegisterFlags(dbconfigs.All...)
 	mysqlctl.RegisterFlags()
@@ -94,42 +107,61 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	tabletAlias, err := topoproto.ParseTabletAlias(*tabletPath)
+	// This is an imaginary tablet alias. The value doesn't matter for anything,
+	// except that we generate a random UID to ensure the target backup
+	// directory is unique if multiple vtbackup instances are launched for the
+	// same shard, at exactly the same second, pointed at the same backup
+	// storage location.
+	bigN, err := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
 	if err != nil {
-		log.Errorf("failed to parse -tablet-path: %v", err)
+		log.Errorf("can't generate random tablet UID: %v", err)
 		exit.Return(1)
 	}
+	tabletAlias := &topodatapb.TabletAlias{
+		Cell: "vtbackup",
+		Uid:  uint32(bigN.Uint64()),
+	}
 
+	// Clean up our temporary data dir if we exit for any reason, to make sure
+	// every invocation of vtbackup starts with a clean slate, and it does not
+	// accumulate garbage (and run out of disk space) if it's restarted.
+	tabletDir := mysqlctl.TabletDir(tabletAlias.Uid)
+	defer func() {
+		log.Infof("Removing temporary tablet directory: %v", tabletDir)
+		if err := os.RemoveAll(tabletDir); err != nil {
+			log.Errorf("Failed to remove temporary tablet directory: %v", err)
+		}
+	}()
+
+	// Start up mysqld as if we are mysqlctld provisioning a fresh tablet.
+	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(tabletAlias.Uid, *mysqlSocket, int32(*mysqlPort))
+	if err != nil {
+		log.Errorf("failed to initialize mysql config: %v", err)
+		exit.Return(1)
+	}
+	initCtx, initCancel := context.WithTimeout(ctx, *mysqlTimeout)
+	defer initCancel()
+	if err := mysqld.Init(initCtx, mycnf, *initDBSQLFile); err != nil {
+		log.Errorf("failed to initialize mysql data dir and start mysqld: %v", err)
+		exit.Return(1)
+	}
+	// Shut down mysqld when we're done.
+	defer func() {
+		// Be careful not to use the original context, because we don't want to
+		// skip shutdown just because we timed out waiting for other things.
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		mysqld.Shutdown(ctx, mycnf, false)
+	}()
+
+	// Restore from backup.
 	dbName := *initDbNameOverride
 	if dbName == "" {
 		dbName = fmt.Sprintf("vt_%s", *initKeyspace)
 	}
-
-	var mycnf *mysqlctl.Mycnf
-	var socketFile string
 	extraEnv := map[string]string{
 		"TABLET_ALIAS": topoproto.TabletAliasString(tabletAlias),
 	}
-
-	if dbconfigs.HasConnectionParams() {
-		log.Info("connection parameters were specified. Not loading my.cnf.")
-	} else {
-		var err error
-		if mycnf, err = mysqlctl.NewMycnfFromFlags(tabletAlias.Uid); err != nil {
-			log.Errorf("mycnf read failed: %v", err)
-			exit.Return(1)
-		}
-		socketFile = mycnf.SocketFile
-	}
-
-	dbcfgs, err := dbconfigs.Init(socketFile)
-	if err != nil {
-		log.Errorf("can't initialize dbconfigs: %v", err)
-		exit.Return(1)
-	}
-
-	topoServer := topo.Open()
-	mysqld := mysqlctl.NewMysqld(dbcfgs)
 	dir := fmt.Sprintf("%v/%v", *initKeyspace, *initShard)
 
 	log.Infof("Restoring latest backup from directory %v", dir)
@@ -153,6 +185,8 @@ func main() {
 		log.Errorf("Error resetting replication %v", err)
 		exit.Return(1)
 	}
+	topoServer := topo.Open()
+	defer topoServer.Close()
 	if err := startReplication(ctx, pos, mysqld, topoServer); err != nil {
 		log.Errorf("Error starting replication %v", err)
 		exit.Return(1)
