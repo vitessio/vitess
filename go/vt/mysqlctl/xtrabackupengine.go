@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"io"
 	"io/ioutil"
@@ -30,7 +29,6 @@ import (
 
 	"github.com/klauspost/pgzip"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -241,64 +239,30 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	restoreConcurrency int,
 	hookExtraEnv map[string]string) (mysql.Position, error) {
 
-	var bh backupstorage.BackupHandle
-	var bm xtraBackupManifest
-	var index int
 	zeroPosition := mysql.Position{}
+	var bm xtraBackupManifest
 
-	for index = len(bhs) - 1; index >= 0; index-- {
-		bh = bhs[index]
-		rc, err := bh.ReadFile(ctx, backupManifest)
-		if err != nil {
-			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
-			continue
-		}
-
-		err = json.NewDecoder(rc).Decode(&bm)
-		rc.Close()
-		if err != nil {
-			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
-			continue
-		}
-
-		logger.Infof("Restore: found backup %v %v to restore with %v file", bh.Directory(), bh.Name(), bm.FileName)
-		break
-	}
-	if index < 0 {
-		// There is at least one attempted backup, but none could be read.
-		// This implies there is data we ought to have, so it's not safe to start
-		// up empty.
-		return zeroPosition, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
-	}
-
-	// Starting from here we won't be able to recover if we get stopped by a cancelled
-	// context. Thus we use the background context to get through to the finish.
-
-	logger.Infof("Restore: shutdown mysqld")
-	err := mysqld.Shutdown(context.Background(), cnf, true)
+	bh, err := findBackupToRestore(ctx, cnf, mysqld, logger, dir, bhs, &bm)
 	if err != nil {
 		return zeroPosition, err
 	}
-
-	logger.Infof("Restore: deleting existing files")
-	if err := removeExistingFiles(cnf); err != nil {
-		return zeroPosition, err
-	}
-
-	logger.Infof("Restore: reinit config file")
-	err = mysqld.ReinitConfig(context.Background(), cnf)
-	if err != nil {
-		return zeroPosition, err
-	}
-
 	// copy / extract files
-	logger.Infof("Restore: Extracting all files")
+	logger.Infof("Restore: Extracting files from %v", bm.FileName)
 
-	// first download the file into a tmp dir
-	// extract all the files
-	if err := be.restoreFile(ctx, cnf, logger, bh, !bm.SkipCompress, be.backupFileName()); err != nil {
-		logger.Errorf("error restoring backup file %v:%v", be.backupFileName(), err)
+	if err = be.restoreFromBackup(ctx, cnf, bh, bm, logger); err != nil {
 		return zeroPosition, err
+	}
+	// now find the slave position and return that
+	logger.Infof("Restore: returning replication position %v", bm.Position)
+	return bm.Position, nil
+}
+
+func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, bm xtraBackupManifest, logger logutil.Logger) error {
+	// first download the file into a tmp dir
+	// and extract all the files
+	if err := be.extractFiles(ctx, cnf, logger, bh, !bm.SkipCompress, be.backupFileName()); err != nil {
+		logger.Errorf("error restoring backup file %v:%v", be.backupFileName(), err)
+		return err
 	}
 
 	// copy / extract files
@@ -312,13 +276,13 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	prepareCmd := exec.Command(restoreProgram, flagsToExec...)
 	prepareOut, _ := prepareCmd.StdoutPipe()
 	prepareErr, _ := prepareCmd.StderrPipe()
-	if err = prepareCmd.Start(); err != nil {
-		return zeroPosition, vterrors.Wrap(err, "unable to start prepare")
+	if err := prepareCmd.Start(); err != nil {
+		return vterrors.Wrap(err, "unable to start prepare")
 	}
 
 	errOutput, _ := ioutil.ReadAll(prepareErr)
 	stdOutput, _ := ioutil.ReadAll(prepareOut)
-	err = prepareCmd.Wait()
+	err := prepareCmd.Wait()
 	if string(stdOutput) != "" {
 		logger.Infof("Prepare stdout %v", string(stdOutput))
 	}
@@ -328,7 +292,7 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	}
 
 	if err != nil {
-		return zeroPosition, vterrors.Wrap(err, "prepare step failed")
+		return vterrors.Wrap(err, "prepare step failed")
 	}
 
 	// then copy-back
@@ -343,7 +307,7 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	copybackOut, _ := copybackCmd.StdoutPipe()
 
 	if err = copybackCmd.Start(); err != nil {
-		return zeroPosition, vterrors.Wrap(err, "unable to start copy-back")
+		return vterrors.Wrap(err, "unable to start copy-back")
 	}
 
 	errOutput, _ = ioutil.ReadAll(copybackErr)
@@ -358,16 +322,13 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	}
 
 	if err != nil {
-		return zeroPosition, vterrors.Wrap(err, "copy-back step failed")
+		return vterrors.Wrap(err, "copy-back step failed")
 	}
-
-	// now find the slave position and return that
-	logger.Infof("Returning replication position %v", bm.Position)
-	return bm.Position, nil
+	return nil
 }
 
-// restoreFile restores an individual file.
-func (be *XtrabackupEngine) restoreFile(
+// restoreFile extracts all the files from the backup archive
+func (be *XtrabackupEngine) extractFiles(
 	ctx context.Context,
 	cnf *Mycnf,
 	logger logutil.Logger,

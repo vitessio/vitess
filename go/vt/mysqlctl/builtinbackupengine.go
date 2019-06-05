@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -517,66 +516,26 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	restoreConcurrency int,
 	hookExtraEnv map[string]string) (mysql.Position, error) {
 
-	var bh backupstorage.BackupHandle
+	zeroPosition := mysql.Position{}
 	var bm builtinBackupManifest
-	var toRestore int
 
-	for toRestore = len(bhs) - 1; toRestore >= 0; toRestore-- {
-		bh = bhs[toRestore]
-		rc, err := bh.ReadFile(ctx, backupManifest)
-		if err != nil {
-			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
-			continue
-		}
-
-		err = json.NewDecoder(rc).Decode(&bm)
-		rc.Close()
-		if err != nil {
-			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
-			continue
-		}
-
-		logger.Infof("Restore: found backup %v %v to restore with %v files", bh.Directory(), bh.Name(), len(bm.FileEntries))
-		break
-	}
-	if toRestore < 0 {
-		// There is at least one attempted backup, but none could be read.
-		// This implies there is data we ought to have, so it's not safe to start
-		// up empty.
-		return mysql.Position{}, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
-	}
-
-	// Starting from here we won't be able to recover if we get stopped by a cancelled
-	// context. Thus we use the background context to get through to the finish.
-
-	logger.Infof("Restore: shutdown mysqld")
-	err := mysqld.Shutdown(context.Background(), cnf, true)
+	bh, err := findBackupToRestore(ctx, cnf, mysqld, logger, dir, bhs, &bm)
 	if err != nil {
-		return mysql.Position{}, err
+		return zeroPosition, err
 	}
 
-	logger.Infof("Restore: deleting existing files")
-	if err := removeExistingFiles(cnf); err != nil {
-		return mysql.Position{}, err
+	logger.Infof("Restore: copying %v files", len(bm.FileEntries))
+	if err := be.restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv, logger); err != nil {
+		return zeroPosition, err
 	}
 
-	logger.Infof("Restore: reinit config file")
-	err = mysqld.ReinitConfig(context.Background(), cnf)
-	if err != nil {
-		return mysql.Position{}, err
-	}
-
-	logger.Infof("Restore: copying all files")
-	if err := be.restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv); err != nil {
-		return mysql.Position{}, err
-	}
-
+	logger.Infof("Restore: returning replication position %v", bm.Position)
 	return bm.Position, nil
 }
 
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place.
-func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, transformHook string, compress bool, restoreConcurrency int, hookExtraEnv map[string]string) error {
+func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, transformHook string, compress bool, restoreConcurrency int, hookExtraEnv map[string]string, logger logutil.Logger) error {
 	sema := sync2.NewSemaphore(restoreConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
@@ -595,6 +554,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh 
 
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
+			logger.Infof("Copying file %v: %v", name, fes[i].Name)
 			rec.RecordError(be.restoreFile(ctx, cnf, bh, &fes[i], transformHook, compress, name, hookExtraEnv))
 		}(i)
 	}
