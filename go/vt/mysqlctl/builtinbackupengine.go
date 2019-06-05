@@ -525,7 +525,21 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	}
 
 	logger.Infof("Restore: copying %v files", len(bm.FileEntries))
+
+	fd, err := openStateFile(cnf)
+	if err != nil {
+		logger.Warningf("unable to open/create file: %v", path.Join(cnf.TmpDir, RestoreState))
+		return zeroPosition, err
+	}
+
 	if err := be.restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv, logger); err != nil {
+		// don't delete the file here because that is how we detect an interrupted restore
+		fd.Close()
+		return zeroPosition, err
+	}
+
+	err = closeStateFile(fd)
+	if err != nil {
 		return zeroPosition, err
 	}
 

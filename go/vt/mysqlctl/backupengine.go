@@ -21,12 +21,15 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"os"
+	"path"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -83,24 +86,54 @@ func findBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, lo
 		return nil, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
 	}
 
-	// Starting from here we won't be able to recover if we get stopped by a cancelled
-	// context. Thus we use the background context to get through to the finish.
-
-	logger.Infof("Restore: shutdown mysqld")
-	err := mysqld.Shutdown(context.Background(), cnf, true)
-	if err != nil {
-		return nil, err
+	// shutdown mysqld if it is running
+	// if we are retrying a failed restore, it is possible that mysqld failed to start
+	// so check for that
+	waitCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+	err := mysqld.Wait(waitCtx, cnf)
+	if err != nil || (waitCtx.Err() != nil && waitCtx.Err() == context.DeadlineExceeded) {
+		// do nothing
+	} else {
+		logger.Infof("Restore: shutdown mysqld")
+		// Starting from here we won't be able to recover if we get stopped by a cancelled
+		// context. Thus we use the background context to get through to the finish.
+		if err := mysqld.Shutdown(context.Background(), cnf, true); err != nil {
+			return nil, err
+		}
 	}
-
 	logger.Infof("Restore: deleting existing files")
 	if err := removeExistingFiles(cnf); err != nil {
 		return nil, err
 	}
 
 	logger.Infof("Restore: reinit config file")
-	err = mysqld.ReinitConfig(context.Background(), cnf)
-	if err != nil {
+	if err := mysqld.ReinitConfig(context.Background(), cnf); err != nil {
 		return nil, err
 	}
 	return bh, nil
+}
+
+// open or create .restore file
+func openStateFile(cnf *Mycnf) (*os.File, error) {
+	// change RDONLY to RDWR if we start writing content to this file
+	fname := path.Join(cnf.TmpDir, RestoreState)
+	fd, err := os.OpenFile(fname, os.O_RDONLY|os.O_CREATE, 0666)
+	if err != nil {
+		return nil, err
+	}
+	return fd, nil
+}
+
+// close and delete .restore file
+func closeStateFile(fd *os.File) error {
+	// the following errors can only happen if there is something
+	// wrong with the filesystem, but we have to check anyway
+	if err := fd.Close(); err != nil {
+		return err
+	}
+	if err := os.Remove(fd.Name()); err != nil {
+		return err
+	}
+	return nil
 }
