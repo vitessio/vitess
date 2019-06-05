@@ -37,8 +37,11 @@ The process vtbackup follows to take a new backup is as follows:
 2. Start a mysqld instance (but no vttablet) from the restored data.
 3. Instruct mysqld to connect to the current shard master and replicate any
    transactions that are new since the last backup.
-4. Wait until replication is caught up to the master.
-5. Stop mysqld and take a new backup.
+4. Ask the master for its current replication position and set that as the goal
+   for catching up on replication before taking the backup, so the goalposts
+   don't move.
+5. Wait until replication is caught up to the goal position or beyond.
+6. Stop mysqld and take a new backup.
 
 Aside from additional replication load while vtbackup's mysqld catches up on
 new transactions, the shard should be otherwise unaffected. Existing tablets
@@ -75,12 +78,14 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 var (
 	// vtbackup-specific flags
-	acceptableReplicationLag = flag.Duration("acceptable_replication_lag", 1*time.Second, "Wait until replication lag is less than or equal to this value before taking a new backup")
-	timeout                  = flag.Duration("timeout", 1*time.Hour, "Overall timeout for this vtbackup run")
+	timeout            = flag.Duration("timeout", 2*time.Hour, "Overall timeout for this whole vtbackup run, including restoring the previous backup, waiting for replication, and uploading files")
+	replicationTimeout = flag.Duration("replication_timeout", 1*time.Hour, "The timeout for the step of waiting for replication to catch up. If progress is made before this timeout is reached, the backup will be taken anyway to save partial progress, but vtbackup will return a non-zero exit code to indicate it should be retried since not all expected data was backed up")
 
 	// vttablet-like flags
 	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
@@ -165,10 +170,10 @@ func main() {
 	dir := fmt.Sprintf("%v/%v", *initKeyspace, *initShard)
 
 	log.Infof("Restoring latest backup from directory %v", dir)
-	pos, err := mysqlctl.Restore(ctx, mycnf, mysqld, dir, *concurrency, extraEnv, map[string]string{}, logutil.NewConsoleLogger(), true, dbName)
+	restorePos, err := mysqlctl.Restore(ctx, mycnf, mysqld, dir, *concurrency, extraEnv, map[string]string{}, logutil.NewConsoleLogger(), true, dbName)
 	switch err {
 	case nil:
-		log.Info("Successfully restored from backup at replication position %v", pos)
+		log.Infof("Successfully restored from backup at replication position %v", restorePos)
 	case mysqlctl.ErrNoBackup:
 		log.Error("No backup found. Not starting up empty since -initial_backup flag was not enabled.")
 		exit.Return(1)
@@ -181,15 +186,41 @@ func main() {
 	}
 
 	// We have restored a backup. Now start replication.
-	if err := resetReplication(ctx, pos, mysqld); err != nil {
+	if err := resetReplication(ctx, restorePos, mysqld); err != nil {
 		log.Errorf("Error resetting replication %v", err)
 		exit.Return(1)
 	}
 	topoServer := topo.Open()
 	defer topoServer.Close()
-	if err := startReplication(ctx, pos, mysqld, topoServer); err != nil {
+	if err := startReplication(ctx, mysqld, topoServer); err != nil {
 		log.Errorf("Error starting replication %v", err)
 		exit.Return(1)
+	}
+
+	// Get the current master replication position, and wait until we catch up
+	// to that point. We do this instead of looking at Seconds_Behind_Master
+	// (replication lag reported by SHOW SLAVE STATUS) because that value can
+	// sometimes lie and tell you there's 0 lag when actually replication is
+	// stopped. Also, if replication is making progress but is too slow to ever
+	// catch up to live changes, we'd rather take a backup of something rather
+	// than timing out.
+	tmc := tmclient.NewTabletManagerClient()
+	masterPos, err := getMasterPosition(ctx, tmc, topoServer)
+	if err != nil {
+		log.Errorf("Can't get the master replication position: %v", err)
+		exit.Return(1)
+	}
+
+	// Remember the time when we fetched the master position, not when we caught
+	// up to it, so the timestamp on our backup is honest (assuming we make it
+	// to the goal position).
+	backupTime := time.Now()
+
+	if restorePos.Equal(masterPos) {
+		// Nothing has happened on the master since the last backup, so there's
+		// no point taking a new backup since it would be identical.
+		log.Infof("No backup is necessary. The latest backup is up-to-date with the master.")
+		return
 	}
 
 	// Wait for replication to catch up.
@@ -197,10 +228,11 @@ func main() {
 	for {
 		time.Sleep(time.Second)
 
-		// Check if the context is still good.
-		if err := ctx.Err(); err != nil {
-			log.Errorf("Timed out waiting for replication to catch up to within %v.", *acceptableReplicationLag)
-			exit.Return(1)
+		// Check if the replication context is still good.
+		if time.Since(waitStartTime) > *replicationTimeout {
+			// If we time out on this step, we still might take the backup anyway.
+			log.Errorf("Timed out waiting for replication to catch up to %v.", masterPos)
+			break
 		}
 
 		status, statusErr := mysqld.SlaveStatus()
@@ -208,23 +240,43 @@ func main() {
 			log.Warningf("Error getting replication status: %v", statusErr)
 			continue
 		}
-		if time.Duration(status.SecondsBehindMaster)*time.Second <= *acceptableReplicationLag {
-			// We're caught up on replication.
-			log.Infof("Replication caught up to within %v after %v", *acceptableReplicationLag, time.Since(waitStartTime))
+		if status.Position.AtLeast(masterPos) {
+			// We're caught up on replication to at least the point the master
+			// was at when this vtbackup run started.
+			log.Infof("Replication caught up to %v after %v", status.Position, time.Since(waitStartTime))
 			break
 		}
 		if !status.SlaveRunning() {
 			log.Warning("Replication has stopped before backup could be taken. Trying to restart replication.")
-			if err := startReplication(ctx, pos, mysqld, topoServer); err != nil {
+			if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warningf("Failed to restart replication: %v", err)
 			}
 		}
 	}
 
+	// Did we make any progress?
+	status, err := mysqld.SlaveStatus()
+	if err != nil {
+		log.Errorf("Error getting replication status: %v", err)
+		exit.Return(1)
+	}
+	log.Infof("Replication caught up to at least %v", status.Position)
+	if status.Position.Equal(restorePos) {
+		log.Errorf("Not taking backup: replication did not make any progress from restore point: %v", restorePos)
+		exit.Return(1)
+	}
+
 	// Now we can take a new backup.
-	name := fmt.Sprintf("%v.%v", time.Now().UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tabletAlias))
+	name := fmt.Sprintf("%v.%v", backupTime.UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tabletAlias))
 	if err := mysqlctl.Backup(ctx, mycnf, mysqld, logutil.NewConsoleLogger(), dir, name, *concurrency, extraEnv); err != nil {
 		log.Errorf("Error taking backup: %v", err)
+		exit.Return(1)
+	}
+
+	// Return a non-zero exit code if we didn't meet the replication position
+	// goal, even though we took a backup that pushes the high-water mark up.
+	if !status.Position.AtLeast(masterPos) {
+		log.Warningf("Replication caught up to %v but didn't make it to the goal of %v. A backup was taken anyway to save partial progress, but the operation should still be retried since not all expected data is backed up.", status.Position, masterPos)
 		exit.Return(1)
 	}
 }
@@ -245,19 +297,18 @@ func resetReplication(ctx context.Context, pos mysql.Position, mysqld mysqlctl.M
 	return nil
 }
 
-func startReplication(ctx context.Context, pos mysql.Position, mysqld mysqlctl.MysqlDaemon, topoServer *topo.Server) error {
+func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServer *topo.Server) error {
 	si, err := topoServer.GetShard(ctx, *initKeyspace, *initShard)
 	if err != nil {
 		return vterrors.Wrap(err, "can't read shard")
 	}
-	if si.MasterAlias == nil {
-		// We've restored, but there's no master. This is fine, since we've
-		// already set the position at which to resume when we're later reparented.
-		// If we had instead considered this fatal, all tablets would crash-loop
-		// until a master appears, which would make it impossible to elect a master.
-		log.Warning("Can't start replication after restore: shard has no master.")
-		return nil
+	if topoproto.TabletAliasIsZero(si.MasterAlias) {
+		// Normal tablets will sit around waiting to be reparented in this case.
+		// Since vtbackup is a batch job, we just have to fail.
+		return fmt.Errorf("can't start replication after restore: shard %v/%v has no master", *initKeyspace, *initShard)
 	}
+	// TODO(enisoc): Support replicating from another replica, preferably in the
+	//   same cell, preferably rdonly, to reduce load on the master.
 	ti, err := topoServer.GetTablet(ctx, si.MasterAlias)
 	if err != nil {
 		return vterrors.Wrapf(err, "Cannot read master tablet %v", si.MasterAlias)
@@ -268,4 +319,29 @@ func startReplication(ctx context.Context, pos mysql.Position, mysqld mysqlctl.M
 		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
 	}
 	return nil
+}
+
+func getMasterPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server) (mysql.Position, error) {
+	si, err := ts.GetShard(ctx, *initKeyspace, *initShard)
+	if err != nil {
+		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
+	}
+	if topoproto.TabletAliasIsZero(si.MasterAlias) {
+		// Normal tablets will sit around waiting to be reparented in this case.
+		// Since vtbackup is a batch job, we just have to fail.
+		return mysql.Position{}, fmt.Errorf("shard %v/%v has no master", *initKeyspace, *initShard)
+	}
+	ti, err := ts.GetTablet(ctx, si.MasterAlias)
+	if err != nil {
+		return mysql.Position{}, fmt.Errorf("can't get master tablet record %v: %v", topoproto.TabletAliasString(si.MasterAlias), err)
+	}
+	posStr, err := tmc.MasterPosition(ctx, ti.Tablet)
+	if err != nil {
+		return mysql.Position{}, fmt.Errorf("can't get master replication position: %v", err)
+	}
+	pos, err := mysql.DecodePosition(posStr)
+	if err != nil {
+		return mysql.Position{}, fmt.Errorf("can't decode master replication position %q: %v", posStr, err)
+	}
+	return pos, nil
 }
