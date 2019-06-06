@@ -210,6 +210,24 @@ func TestPrefill(t *testing.T) {
 	}
 }
 
+func TestPrefillTimeout(t *testing.T) {
+	lastID.Set(0)
+	count.Set(0)
+	saveTimeout := prefillTimeout
+	prefillTimeout = 1 * time.Millisecond
+	defer func() { prefillTimeout = saveTimeout }()
+
+	start := time.Now()
+	p := NewResourcePool(SlowFailFactory, 5, 5, time.Second, 1)
+	defer p.Close()
+	if elapsed := time.Since(start); elapsed > 20*time.Millisecond {
+		t.Errorf("elapsed: %v, should be around 10ms", elapsed)
+	}
+	if p.Active() != 0 {
+		t.Errorf("p.Active(): %d, want 0", p.Active())
+	}
+}
+
 func TestShrinking(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)

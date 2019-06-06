@@ -37,6 +37,8 @@ var (
 
 	// ErrTimeout is returned if a resource get times out.
 	ErrTimeout = errors.New("resource pool timed out")
+
+	prefillTimeout = 30 * time.Second
 )
 
 // Factory is a function that can be used to create a resource.
@@ -98,6 +100,8 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		rp.resources <- resourceWrapper{}
 	}
 
+	ctx, cancel := context.WithTimeout(context.TODO(), prefillTimeout)
+	defer cancel()
 	if prefillParallelism != 0 {
 		sem := sync2.NewSemaphore(prefillParallelism, 0 /* timeout */)
 		var wg sync.WaitGroup
@@ -107,7 +111,15 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 				defer wg.Done()
 				_ = sem.Acquire()
 				defer sem.Release()
-				r, err := rp.Get(context.TODO())
+
+				// If context has expired, give up.
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
+				r, err := rp.Get(ctx)
 				if err != nil {
 					return
 				}
