@@ -60,6 +60,7 @@ func TestEmptyStringList(t *testing.T) {
 type pair struct {
 	in  string
 	out map[string]string
+	err error
 }
 
 func TestStringMap(t *testing.T) {
@@ -74,12 +75,20 @@ func TestStringMap(t *testing.T) {
 			in:  `tag1:1:value1\,,tag2:value2`,
 			out: map[string]string{"tag1": "1:value1,", "tag2": "value2"},
 		},
+		{
+			in:  `tag1:1:value1\,,tag2`,
+			err: errInvalidKeyValuePair,
+		},
 	}
 	for _, want := range wanted {
-		if err := v.Set(want.in); err != nil {
-			t.Errorf("v.Set(%v): %v", want.in, err)
+		if err := v.Set(want.in); err != want.err {
+			t.Errorf("v.Set(%v): %v", want.in, want.err)
 			continue
 		}
+		if want.err != nil {
+			continue
+		}
+
 		if len(want.out) != len(v) {
 			t.Errorf("want %#v, got %#v", want.out, v)
 			continue
