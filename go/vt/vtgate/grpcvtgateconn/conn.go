@@ -519,11 +519,11 @@ func (a *vstreamAdapter) Recv() ([]*binlogdatapb.VEvent, error) {
 	return r.Events, nil
 }
 
-func (conn *vtgateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, position string, filter *binlogdatapb.Filter) (vtgateconn.VStreamReader, error) {
+func (conn *vtgateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (vtgateconn.VStreamReader, error) {
 	req := &vtgatepb.VStreamRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
 		TabletType: tabletType,
-		Position:   position,
+		Vgtid:      vgtid,
 		Filter:     filter,
 	}
 	stream, err := conn.c.VStream(ctx, req)

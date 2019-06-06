@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -343,17 +344,13 @@ func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard st
 	})
 }
 
-// VStream streams events from one target.
-func (res *Resolver) VStream(ctx context.Context, tabletType topodatapb.TabletType, position string, filter *binlogdatapb.Filter, send func(events []*binlogdatapb.VEvent) error) error {
-	sp, err := newShardPositions(position)
-	if err != nil {
-		return err
-	}
-
+// VStream streams events from one target. This function ensures that events of each
+// transaction are streamed together, along with the corresponding GTID.
+func (res *Resolver) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func(events []*binlogdatapb.VEvent) error) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// mu protects sending on ch, err and sp.
+	// mu protects sending on ch, err and positions.
 	// mu is needed for sending because transactions can come
 	// in separate chunks. If so, we have to send all the
 	// chunks together.
@@ -361,11 +358,17 @@ func (res *Resolver) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 	ch := make(chan []*binlogdatapb.VEvent)
 	var outerErr error
 
+	positions := make(map[topo.KeyspaceShard]*binlogdatapb.ShardGtid, len(vgtid.ShardGtids))
+	for _, shardPos := range vgtid.ShardGtids {
+		ks := topo.KeyspaceShard{Keyspace: shardPos.Keyspace, Shard: shardPos.Shard}
+		positions[ks] = shardPos
+	}
+
 	var loopwg, wg sync.WaitGroup
 	// Make sure goroutines don't start until loop has exited.
 	// Otherwise there's a race because the goroutines update the map.
 	loopwg.Add(1)
-	for ks, pos := range sp.positions {
+	for ks, pos := range positions {
 		wg.Add(1)
 		go func(ks topo.KeyspaceShard, pos string) {
 			loopwg.Wait()
@@ -380,8 +383,11 @@ func (res *Resolver) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 					for _, ev := range evs {
 						switch ev.Type {
 						case binlogdatapb.VEventType_GTID:
-							sp.positions[ks] = ev.Gtid
-							ev.Gtid = sp.String()
+							// Update the VGtid and send that instead.
+							positions[ks].Gtid = ev.Gtid
+							ev.Type = binlogdatapb.VEventType_VGTID
+							ev.Gtid = ""
+							ev.Vgtid = proto.Clone(vgtid).(*binlogdatapb.VGtid)
 						case binlogdatapb.VEventType_FIELD:
 							ev.FieldEvent.TableName = ks.Keyspace + "." + ev.FieldEvent.TableName
 						case binlogdatapb.VEventType_ROW:
@@ -404,7 +410,7 @@ func (res *Resolver) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 				outerErr = err
 				cancel()
 			}
-		}(ks, pos)
+		}(ks, pos.Gtid)
 	}
 	// Allow goroutines to start.
 	loopwg.Done()

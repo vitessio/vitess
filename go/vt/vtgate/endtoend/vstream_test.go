@@ -54,13 +54,19 @@ func TestVStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pos := fmt.Sprintf("ks:-80@%s/%s\n", mpos.GTIDSet.Flavor(), mpos)
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: "ks",
+			Shard:    "-80",
+			Gtid:     fmt.Sprintf("%s/%s", mpos.GTIDSet.Flavor(), mpos),
+		}},
+	}
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/.*/",
 		}},
 	}
-	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, pos, filter)
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,15 +75,22 @@ func TestVStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// We expect two events because the insert goes to two shards, and they're
-	// both to the same mysql server.
-	// But only one will have rows in it. The other will be an empty transaction.
+	// We expect two events because the insert goes to two shards (-80 and 80-),
+	// and both of them are in the same mysql server.
+	// The row that goes to 80- will have events.
+	// The other will be an empty transaction.
+	// In a real world scenario where every mysql instance hosts only one
+	// keyspace/shard, we should expect only a single event.
+	// The events could come in any order as the scatter insert runs in parallel.
+	emptyEventSkipped := false
 	for i := 0; i < 2; i++ {
 		events, err := reader.Recv()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(events) == 3 {
+		// An empty transaction has three events: begin, gtid and commit.
+		if len(events) == 3 && !emptyEventSkipped {
+			emptyEventSkipped = true
 			continue
 		}
 		if len(events) != 5 {

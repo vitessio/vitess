@@ -538,8 +538,15 @@ func TestResolverVStream(t *testing.T) {
 		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "t0"}},
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}
+	wantvgtid1 := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: name,
+			Shard:    "-20",
+			Gtid:     "gtid01",
+		}},
+	}
 	want1 := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
-		{Type: binlogdatapb.VEventType_GTID, Gtid: "TestResolverVStream:-20@gtid01"},
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: wantvgtid1},
 		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "TestResolverVStream.f0"}},
 		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "TestResolverVStream.t0"}},
 		{Type: binlogdatapb.VEventType_COMMIT},
@@ -550,8 +557,15 @@ func TestResolverVStream(t *testing.T) {
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid02"},
 		{Type: binlogdatapb.VEventType_DDL},
 	}
+	wantvgtid2 := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: name,
+			Shard:    "-20",
+			Gtid:     "gtid02",
+		}},
+	}
 	want2 := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
-		{Type: binlogdatapb.VEventType_GTID, Gtid: "TestResolverVStream:-20@gtid02"},
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: wantvgtid2},
 		{Type: binlogdatapb.VEventType_DDL},
 	}}
 	sbc0.AddVStreamEvents(send2, nil)
@@ -560,7 +574,14 @@ func TestResolverVStream(t *testing.T) {
 	defer cancel()
 
 	count := 1
-	err := res.VStream(ctx, topodatapb.TabletType_MASTER, fmt.Sprintf("%s:-20@pos", name), nil, func(events []*binlogdatapb.VEvent) error {
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: name,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}},
+	}
+	err := res.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
 		defer func() { count++ }()
 
 		got := &binlogdatapb.VStreamResponse{Events: events}
@@ -605,7 +626,18 @@ func TestResolverVStreamChunks(t *testing.T) {
 	doneCounting := false
 	rowCount := 0
 	ddlCount := 0
-	_ = res.VStream(ctx, topodatapb.TabletType_MASTER, fmt.Sprintf("%s:-20@pos|%s:20-40@pos", name, name), nil, func(events []*binlogdatapb.VEvent) error {
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: name,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}, {
+			Keyspace: name,
+			Shard:    "20-40",
+			Gtid:     "pos",
+		}},
+	}
+	_ = res.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
 		switch events[0].Type {
 		case binlogdatapb.VEventType_ROW:
 			if doneCounting {
@@ -666,13 +698,24 @@ func TestResolverVStreamMulti(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var gtid string
+	var got *binlogdatapb.VGtid
 	i := 0
-	_ = res.VStream(ctx, topodatapb.TabletType_MASTER, fmt.Sprintf("%s:-20@pos|%s:20-40@pos", name, name), nil, func(events []*binlogdatapb.VEvent) error {
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: name,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}, {
+			Keyspace: name,
+			Shard:    "20-40",
+			Gtid:     "pos",
+		}},
+	}
+	_ = res.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
 		defer func() { i++ }()
 		for _, ev := range events {
-			if ev.Type == binlogdatapb.VEventType_GTID {
-				gtid = ev.Gtid
+			if ev.Type == binlogdatapb.VEventType_VGTID {
+				got = ev.Vgtid
 			}
 		}
 		if i == 1 {
@@ -680,9 +723,19 @@ func TestResolverVStreamMulti(t *testing.T) {
 		}
 		return nil
 	})
-	want := "TestResolverVStream:-20@gtid01|TestResolverVStream:20-40@gtid02"
-	if gtid != want {
-		t.Errorf("gtid: %s, want %s", gtid, want)
+	want := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: name,
+			Shard:    "-20",
+			Gtid:     "gtid01",
+		}, {
+			Keyspace: name,
+			Shard:    "20-40",
+			Gtid:     "gtid02",
+		}},
+	}
+	if !proto.Equal(got, want) {
+		t.Errorf("VGtid:\n%v, want\n%v", got, want)
 	}
 }
 
@@ -711,7 +764,14 @@ func TestResolverVStreamRetry(t *testing.T) {
 	defer cancel()
 
 	count := 0
-	err := res.VStream(ctx, topodatapb.TabletType_MASTER, fmt.Sprintf("%s:-20@pos", name), nil, func(events []*binlogdatapb.VEvent) error {
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: name,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}},
+	}
+	err := res.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
 		count++
 		return nil
 	})

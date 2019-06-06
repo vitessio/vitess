@@ -134,8 +134,8 @@ func (c fallbackClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*t
 	return c.fallback.GetSrvKeyspace(ctx, keyspace)
 }
 
-func (c fallbackClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, position string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return c.fallback.VStream(ctx, tabletType, position, filter, send)
+func (c fallbackClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	return c.fallback.VStream(ctx, tabletType, vgtid, filter, send)
 }
 
 func (c fallbackClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {

@@ -142,7 +142,7 @@ func (c *terminalClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*
 	return nil, errTerminal
 }
 
-func (c *terminalClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, position string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (c *terminalClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	return errTerminal
 }
 
