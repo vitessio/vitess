@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
@@ -33,6 +34,7 @@ var (
 	cluster     *vttest.LocalCluster
 	vtParams    mysql.ConnParams
 	mysqlParams mysql.ConnParams
+	grpcAddress string
 
 	schema = `
 create table t1(
@@ -45,6 +47,12 @@ create table t1_id2_idx(
 	id2 bigint,
 	keyspace_id varbinary(10),
 	primary key(id2)
+) Engine=InnoDB;
+
+create table vstream_test(
+	id bigint,
+	val bigint,
+	primary key(id)
 ) Engine=InnoDB;
 `
 
@@ -80,6 +88,12 @@ create table t1_id2_idx(
 					Name:   "hash",
 				}},
 			},
+			"vstream_test": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id",
+					Name:   "hash",
+				}},
+			},
 		},
 	}
 )
@@ -99,6 +113,7 @@ func TestMain(m *testing.M) {
 				}},
 			}},
 		}
+		cfg.ExtraMyCnf = []string{path.Join(os.Getenv("VTTOP"), "config/mycnf/rbr.cnf")}
 		if err := cfg.InitSchemas("ks", schema, vschema); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.RemoveAll(cfg.SchemaDir)
@@ -121,6 +136,7 @@ func TestMain(m *testing.M) {
 			Port: cluster.Env.PortForProtocol("vtcombo_mysql_port", ""),
 		}
 		mysqlParams = cluster.MySQLConnParams()
+		grpcAddress = fmt.Sprintf("localhost:%d", cluster.Env.PortForProtocol("vtcombo", "grpc"))
 
 		return m.Run()
 	}()
