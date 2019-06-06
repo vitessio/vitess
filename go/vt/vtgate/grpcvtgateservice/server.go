@@ -492,7 +492,7 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
 	vtgErr := vtg.server.VStream(ctx,
 		request.TabletType,
-		request.Position,
+		request.Vgtid,
 		request.Filter,
 		func(events []*binlogdatapb.VEvent) error {
 			return stream.Send(&vtgatepb.VStreamResponse{

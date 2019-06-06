@@ -885,7 +885,7 @@ func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string)
 	return getSrvKeyspaceResult, nil
 }
 
-func (f *fakeVTGateService) VStream(ctx context.Context, tabletType topodatapb.TabletType, position string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (f *fakeVTGateService) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	panic("unimplemented")
 }
 

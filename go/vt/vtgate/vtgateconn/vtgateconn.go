@@ -180,8 +180,8 @@ type VStreamReader interface {
 }
 
 // VStream streams binlog events.
-func (conn *VTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, position string, filter *binlogdatapb.Filter) (VStreamReader, error) {
-	return conn.impl.VStream(ctx, tabletType, position, filter)
+func (conn *VTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (VStreamReader, error) {
+	return conn.impl.VStream(ctx, tabletType, vgtid, filter)
 }
 
 // UpdateStreamReader is returned by UpdateStream.
@@ -389,7 +389,7 @@ type Impl interface {
 	GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error)
 
 	// VStream streams binlogevents
-	VStream(ctx context.Context, tabletType topodatapb.TabletType, position string, filter *binlogdatapb.Filter) (VStreamReader, error)
+	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (VStreamReader, error)
 
 	// UpdateStream asks for a stream of StreamEvent.
 	UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken) (UpdateStreamReader, error)

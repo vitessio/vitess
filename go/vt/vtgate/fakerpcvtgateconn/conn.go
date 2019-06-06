@@ -388,7 +388,7 @@ func (conn *FakeVTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string)
 }
 
 // VStream streams binlog events.
-func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, position string, filter *binlogdatapb.Filter) (vtgateconn.VStreamReader, error) {
+func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (vtgateconn.VStreamReader, error) {
 	return nil, fmt.Errorf("NYI")
 }
 
