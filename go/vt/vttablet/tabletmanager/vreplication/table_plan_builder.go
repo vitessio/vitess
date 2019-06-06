@@ -289,7 +289,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		references: make(map[string]bool),
 	}
 	if expr, ok := aliased.Expr.(*sqlparser.FuncExpr); ok {
-		if expr.Distinct || len(expr.Exprs) != 1 {
+		if expr.Distinct {
 			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 		}
 		if aliased.As.IsEmpty() {
@@ -303,6 +303,9 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			cexpr.operation = opCount
 			return cexpr, nil
 		case "sum":
+			if len(expr.Exprs) != 1 {
+				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
 			aInner, ok := expr.Exprs[0].(*sqlparser.AliasedExpr)
 			if !ok {
 				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
