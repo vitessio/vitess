@@ -1391,12 +1391,12 @@ func (wr *Wrangler) DeleteKeyspace(ctx context.Context, keyspace string, recursi
 		return err
 	}
 	for _, cell := range cells {
-		if err := wr.ts.DeleteKeyspaceReplication(ctx, cell, keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
-			wr.Logger().Warningf("Cannot delete KeyspaceReplication in cell %v for %v: %v", cell, keyspace, err)
-		}
-
 		if err := wr.ts.DeleteSrvKeyspace(ctx, cell, keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
 			wr.Logger().Warningf("Cannot delete SrvKeyspace in cell %v for %v: %v", cell, keyspace, err)
+		}
+
+		if err := wr.ts.DeleteKeyspaceReplication(ctx, cell, keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
+			wr.Logger().Warningf("Cannot delete KeyspaceReplication in cell %v for %v: %v", cell, keyspace, err)
 		}
 	}
 
