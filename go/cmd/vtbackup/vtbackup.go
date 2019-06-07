@@ -97,7 +97,7 @@ var (
 	minRetentionTime  = flag.Duration("min_retention_time", 0, "Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.")
 	minRetentionCount = flag.Int("min_retention_count", 1, "Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made")
 
-	initialBackup = flag.Bool("initial_backup", false, "Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard. This can be used to seed a brand new shard with an initial, empty backup. This can only be done before the shard exists in topology (i.e. before any tablets are deployed), and before any backups exist for the shard")
+	initialBackup = flag.Bool("initial_backup", false, "Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).")
 
 	// vttablet-like flags
 	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
@@ -473,14 +473,15 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 
 	// Check preconditions for initial_backup mode.
 	if *initialBackup {
-		// Check that no existing backups exist in this backup storage location.
-		if len(backups) > 0 {
-			return false, fmt.Errorf("refusing to upload initial backup of empty database: the shard %v/%v already has at least one backup", *initKeyspace, *initShard)
-		}
 		// Check that the shard doesn't exist.
 		_, err := topoServer.GetShard(ctx, *initKeyspace, *initShard)
 		if !topo.IsErrType(err, topo.NoNode) {
 			return false, fmt.Errorf("refusing to upload initial backup of empty database: the shard %v/%v already exists in topology", *initKeyspace, *initShard)
+		}
+		// Check if any backups for the shard exist in this backup storage location.
+		if len(backups) > 0 {
+			log.Infof("At least one backup already exists, so there's no need to seed an empty backup. Doing nothing.")
+			return false, nil
 		}
 		return true, nil
 	}
