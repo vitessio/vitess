@@ -125,7 +125,10 @@ func (sq *subquery) MakeDistinct() error {
 }
 
 // PushGroupBy satisfies the builder interface.
-func (sq *subquery) PushGroupBy(_ sqlparser.GroupBy) error {
+func (sq *subquery) PushGroupBy(groupBy sqlparser.GroupBy) error {
+	if (groupBy) == nil {
+		return nil
+	}
 	return errors.New("unsupported: group by on cross-shard subquery")
 }
 

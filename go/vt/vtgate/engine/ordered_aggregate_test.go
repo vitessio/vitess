@@ -367,7 +367,7 @@ func TestMerge(t *testing.T) {
 		"1|3|2.8|2|bc",
 	)
 
-	merged, err := oa.merge(fields, r.Rows[0], r.Rows[1])
+	merged, _, err := oa.merge(fields, r.Rows[0], r.Rows[1], sqltypes.NULL)
 	if err != nil {
 		t.Error(err)
 	}
@@ -377,7 +377,7 @@ func TestMerge(t *testing.T) {
 	}
 
 	// swap and retry
-	merged, err = oa.merge(fields, r.Rows[1], r.Rows[0])
+	merged, _, err = oa.merge(fields, r.Rows[1], r.Rows[0], sqltypes.NULL)
 	if err != nil {
 		t.Error(err)
 	}

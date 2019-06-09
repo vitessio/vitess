@@ -156,7 +156,10 @@ func (vf *vindexFunc) MakeDistinct() error {
 }
 
 // PushGroupBy satisfies the builder interface.
-func (vf *vindexFunc) PushGroupBy(_ sqlparser.GroupBy) error {
+func (vf *vindexFunc) PushGroupBy(groupBy sqlparser.GroupBy) error {
+	if (groupBy) == nil {
+		return nil
+	}
 	return errors.New("unupported: group by on vindex function")
 }
 
