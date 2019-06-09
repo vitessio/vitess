@@ -26,6 +26,9 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+// TODO(sougou): change these functions to be more permissive.
+// Most string to number conversions should quietly convert to 0.
+
 // numeric represents a numeric value extracted from
 // a Value, used for arithmetic operations.
 type numeric struct {

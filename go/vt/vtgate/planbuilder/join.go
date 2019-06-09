@@ -183,7 +183,10 @@ func (jb *join) MakeDistinct() error {
 }
 
 // PushGroupBy satisfies the builder interface.
-func (jb *join) PushGroupBy(_ sqlparser.GroupBy) error {
+func (jb *join) PushGroupBy(groupBy sqlparser.GroupBy) error {
+	if (groupBy) == nil {
+		return nil
+	}
 	return errors.New("unupported: group by on cross-shard join")
 }
 
