@@ -108,7 +108,7 @@ func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [
 
 // Create reserves the id by inserting it into the vindex table.
 func (ln *LookupNonUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
-	return ln.lkp.Create(vcursor, rowsColValues, ksidsToValues(ksids), ignoreMode)
+	return ln.lkp.Create(vcursor, rowsColValues, ksids, ksidsToValues(ksids), ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
@@ -118,7 +118,7 @@ func (ln *LookupNonUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 
 // Update updates the entry in the vindex table.
 func (ln *LookupNonUnique) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
-	return ln.lkp.Update(vcursor, oldValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
+	return ln.lkp.Update(vcursor, oldValues, ksid, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
 }
 
 // MarshalJSON returns a JSON representation of LookupHash.
@@ -261,12 +261,12 @@ func (lu *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]
 
 // Create reserves the id by inserting it into the vindex table.
 func (lu *LookupUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
-	return lu.lkp.Create(vcursor, rowsColValues, ksidsToValues(ksids), ignoreMode)
+	return lu.lkp.Create(vcursor, rowsColValues, ksids, ksidsToValues(ksids), ignoreMode)
 }
 
 // Update updates the entry in the vindex table.
 func (lu *LookupUnique) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
-	return lu.lkp.Update(vcursor, oldValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
+	return lu.lkp.Update(vcursor, oldValues, ksid, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
 }
 
 // Delete deletes the entry from the vindex table.
