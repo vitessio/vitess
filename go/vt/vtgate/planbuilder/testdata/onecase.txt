@@ -1,6 +1,1 @@
 # Add your test case here for debugging and run go test -run=One.
-"select a, count(distinct b) from user group by a"
-""
-
-"select count(distinct b) a from user"
-""
