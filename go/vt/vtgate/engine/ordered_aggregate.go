@@ -79,8 +79,8 @@ const (
 
 var (
 	opcodeType = map[AggregateOpcode]querypb.Type{
-		AggregateCount: sqltypes.Int64,
-		AggregateSum:   sqltypes.Decimal,
+		AggregateCountDistinct: sqltypes.Int64,
+		AggregateSumDistinct:   sqltypes.Decimal,
 	}
 	// Some predefined values
 	countZero = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
@@ -136,7 +136,7 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 		return nil, err
 	}
 	out := &sqltypes.Result{
-		Fields: result.Fields,
+		Fields: oa.convertFields(result.Fields),
 		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
 		Extras: result.Extras,
 	}
@@ -145,7 +145,7 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 	var curDistinct sqltypes.Value
 	for _, row := range result.Rows {
 		if current == nil {
-			current = oa.convertRow(row)
+			current, curDistinct = oa.convertRow(row)
 			continue
 		}
 
@@ -162,7 +162,7 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 			continue
 		}
 		out.Rows = append(out.Rows, current)
-		current = oa.convertRow(row)
+		current, curDistinct = oa.convertRow(row)
 	}
 	if current != nil {
 		out.Rows = append(out.Rows, current)
@@ -191,7 +191,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 		// This code is similar to the one in Execute.
 		for _, row := range qr.Rows {
 			if current == nil {
-				current = row
+				current, curDistinct = oa.convertRow(row)
 				continue
 			}
 
@@ -210,7 +210,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 			if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
 				return err
 			}
-			current = row
+			current, curDistinct = oa.convertRow(row)
 		}
 		return nil
 	})
@@ -226,11 +226,10 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 	return nil
 }
 
-func (oa *OrderedAggregate) convertFields(fields []*querypb.Field) []*querypb.Field {
+func (oa *OrderedAggregate) convertFields(fields []*querypb.Field) (newFields []*querypb.Field) {
 	if !oa.HasDistinct {
 		return fields
 	}
-	newFields := make([]*querypb.Field, 0, len(fields))
 	newFields = append(newFields, fields...)
 	for _, aggr := range oa.Aggregates {
 		if !aggr.isDistinct() {
@@ -244,15 +243,15 @@ func (oa *OrderedAggregate) convertFields(fields []*querypb.Field) []*querypb.Fi
 	return newFields
 }
 
-func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) []sqltypes.Value {
+func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.Value, curDistinct sqltypes.Value) {
 	if !oa.HasDistinct {
-		return row
+		return row, sqltypes.NULL
 	}
-	newRow := make([]sqltypes.Value, 0, len(row))
 	newRow = append(newRow, row...)
 	for _, aggr := range oa.Aggregates {
 		switch aggr.Opcode {
 		case AggregateCountDistinct:
+			curDistinct = row[aggr.Col]
 			// Type is int64. Ok to call MakeTrusted.
 			if row[aggr.Col].IsNull() {
 				newRow[aggr.Col] = countZero
@@ -260,6 +259,7 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) []sqltypes.Value {
 				newRow[aggr.Col] = countOne
 			}
 		case AggregateSumDistinct:
+			curDistinct = row[aggr.Col]
 			var err error
 			newRow[aggr.Col], err = sqltypes.Cast(row[aggr.Col], opcodeType[aggr.Opcode])
 			if err != nil {
@@ -267,7 +267,7 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) []sqltypes.Value {
 			}
 		}
 	}
-	return newRow
+	return newRow, curDistinct
 }
 
 // GetFields is a Primitive function.

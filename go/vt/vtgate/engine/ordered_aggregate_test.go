@@ -276,6 +276,296 @@ func TestOrderedAggregateInputFail(t *testing.T) {
 	}
 }
 
+func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"col1|col2|count(*)",
+				"varbinary|decimal|int64",
+			),
+			// Two identical values
+			"a|1|1",
+			"a|1|2",
+			// Single value
+			"b|1|1",
+			// Two different values
+			"c|3|1",
+			"c|4|1",
+			// Single null
+			"d|null|1",
+			// Start with null
+			"e|null|1",
+			"e|1|1",
+			// Null comes after first
+			"f|1|1",
+			"f|null|1",
+			// Identical to non-identical transition
+			"g|1|1",
+			"g|1|1",
+			"g|2|1",
+			"g|3|1",
+			// Non-identical to identical transition
+			"h|1|1",
+			"h|2|1",
+			"h|2|1",
+			"h|3|1",
+			// Key transition, should still count 3
+			"i|3|1",
+			"i|4|1",
+		)},
+	}
+
+	oa := &OrderedAggregate{
+		HasDistinct: true,
+		Aggregates: []AggregateParams{{
+			Opcode: AggregateCountDistinct,
+			Col:    1,
+			Alias:  "count(distinct col2)",
+		}, {
+			// Also add a count(*)
+			Opcode: AggregateCount,
+			Col:    2,
+		}},
+		Keys:  []int{0},
+		Input: fp,
+	}
+
+	result, err := oa.Execute(nil, nil, false)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col1|count(distinct col2)|count(*)",
+			"varbinary|int64|int64",
+		),
+		"a|1|3",
+		"b|1|1",
+		"c|2|2",
+		"d|0|1",
+		"e|1|2",
+		"f|1|2",
+		"g|3|4",
+		"h|3|4",
+		"i|2|2",
+	)
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("oa.Execute:\n%v, want\n%v", result, wantResult)
+	}
+}
+
+func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"col1|col2|count(*)",
+				"varbinary|decimal|int64",
+			),
+			// Two identical values
+			"a|1|1",
+			"a|1|2",
+			// Single value
+			"b|1|1",
+			// Two different values
+			"c|3|1",
+			"c|4|1",
+			// Single null
+			"d|null|1",
+			// Start with null
+			"e|null|1",
+			"e|1|1",
+			// Null comes after first
+			"f|1|1",
+			"f|null|1",
+			// Identical to non-identical transition
+			"g|1|1",
+			"g|1|1",
+			"g|2|1",
+			"g|3|1",
+			// Non-identical to identical transition
+			"h|1|1",
+			"h|2|1",
+			"h|2|1",
+			"h|3|1",
+			// Key transition, should still count 3
+			"i|3|1",
+			"i|4|1",
+		)},
+	}
+
+	oa := &OrderedAggregate{
+		HasDistinct: true,
+		Aggregates: []AggregateParams{{
+			Opcode: AggregateCountDistinct,
+			Col:    1,
+			Alias:  "count(distinct col2)",
+		}, {
+			// Also add a count(*)
+			Opcode: AggregateCount,
+			Col:    2,
+		}},
+		Keys:  []int{0},
+		Input: fp,
+	}
+
+	var results []*sqltypes.Result
+	err := oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantResults := sqltypes.MakeTestStreamingResults(
+		sqltypes.MakeTestFields(
+			"col1|count(distinct col2)|count(*)",
+			"varbinary|int64|int64",
+		),
+		"a|1|3",
+		"-----",
+		"b|1|1",
+		"-----",
+		"c|2|2",
+		"-----",
+		"d|0|1",
+		"-----",
+		"e|1|2",
+		"-----",
+		"f|1|2",
+		"-----",
+		"g|3|4",
+		"-----",
+		"h|3|4",
+		"-----",
+		"i|2|2",
+	)
+	if !reflect.DeepEqual(results, wantResults) {
+		t.Errorf("oa.Execute:\n%v, want\n%v", results, wantResults)
+	}
+}
+
+func TestOrderedAggregateSumDistinctGood(t *testing.T) {
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"col1|col2|sum(col3)",
+				"varbinary|int64|decimal",
+			),
+			// Two identical values
+			"a|1|1",
+			"a|1|2",
+			// Single value
+			"b|1|1",
+			// Two different values
+			"c|3|1",
+			"c|4|1",
+			// Single null
+			"d|null|1",
+			// Start with null
+			"e|null|1",
+			"e|1|1",
+			// Null comes after first
+			"f|1|1",
+			"f|null|1",
+			// Identical to non-identical transition
+			"g|1|1",
+			"g|1|1",
+			"g|2|1",
+			"g|3|1",
+			// Non-identical to identical transition
+			"h|1|1",
+			"h|2|1",
+			"h|2|1",
+			"h|3|1",
+			// Key transition, should still count 3
+			"i|3|1",
+			"i|4|1",
+		)},
+	}
+
+	oa := &OrderedAggregate{
+		HasDistinct: true,
+		Aggregates: []AggregateParams{{
+			Opcode: AggregateSumDistinct,
+			Col:    1,
+			Alias:  "sum(distinct col2)",
+		}, {
+			// Also add a count(*)
+			Opcode: AggregateSum,
+			Col:    2,
+		}},
+		Keys:  []int{0},
+		Input: fp,
+	}
+
+	result, err := oa.Execute(nil, nil, false)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col1|sum(distinct col2)|sum(col3)",
+			"varbinary|decimal|decimal",
+		),
+		"a|1|3",
+		"b|1|1",
+		"c|7|2",
+		"d|null|1",
+		"e|1|2",
+		"f|1|2",
+		"g|6|4",
+		"h|6|4",
+		"i|7|2",
+	)
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("oa.Execute:\n%v, want\n%v", result, wantResult)
+	}
+}
+
+func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"col1|col2",
+				"varbinary|varbinary",
+			),
+			"a|aaa",
+			"a|0",
+			"a|1",
+		)},
+	}
+
+	oa := &OrderedAggregate{
+		HasDistinct: true,
+		Aggregates: []AggregateParams{{
+			Opcode: AggregateSumDistinct,
+			Col:    1,
+			Alias:  "sum(distinct col2)",
+		}},
+		Keys:  []int{0},
+		Input: fp,
+	}
+
+	result, err := oa.Execute(nil, nil, false)
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col1|sum(distinct col2)",
+			"varbinary|decimal",
+		),
+		"a|1",
+	)
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("oa.Execute:\n%v, want\n%v", result, wantResult)
+	}
+}
+
 func TestOrderedAggregateKeysFail(t *testing.T) {
 	fields := sqltypes.MakeTestFields(
 		"col|count(*)",
