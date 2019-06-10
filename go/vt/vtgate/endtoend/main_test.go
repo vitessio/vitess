@@ -54,6 +54,13 @@ create table vstream_test(
 	val bigint,
 	primary key(id)
 ) Engine=InnoDB;
+
+create table aggr_test(
+	id bigint,
+	val1 varbinary(16),
+	val2 bigint,
+	primary key(id)
+) Engine=InnoDB;
 `
 
 	vschema = &vschemapb.Keyspace{
@@ -89,6 +96,12 @@ create table vstream_test(
 				}},
 			},
 			"vstream_test": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id",
+					Name:   "hash",
+				}},
+			},
+			"aggr_test": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "id",
 					Name:   "hash",
