@@ -282,10 +282,10 @@ func (oa *orderedAggregate) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, wh
 // MAX sent to the route will not be added to symtab and will not be reachable by
 // others. This functionality depends on the PushOrderBy to request that
 // the rows be correctly ordered.
-func (oa *orderedAggregate) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+func (oa *orderedAggregate) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
 	if inner, ok := expr.Expr.(*sqlparser.FuncExpr); ok {
 		if _, ok := engine.SupportedAggregates[inner.Name.Lowered()]; ok {
-			return oa.pushAggr(expr, origin)
+			return oa.pushAggr(pb, expr, origin)
 		}
 	}
 
@@ -294,12 +294,12 @@ func (oa *orderedAggregate) PushSelect(expr *sqlparser.AliasedExpr, origin build
 		return nil, 0, errors.New("unsupported: in scatter query: complex aggregate expression")
 	}
 
-	innerRC, _, _ := oa.input.PushSelect(expr, origin)
+	innerRC, _, _ := oa.input.PushSelect(pb, expr, origin)
 	oa.resultColumns = append(oa.resultColumns, innerRC)
 	return innerRC, len(oa.resultColumns) - 1, nil
 }
 
-func (oa *orderedAggregate) pushAggr(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
 	funcExpr := expr.Expr.(*sqlparser.FuncExpr)
 	opcode := engine.SupportedAggregates[funcExpr.Name.Lowered()]
 	if len(funcExpr.Exprs) != 1 {
@@ -307,17 +307,17 @@ func (oa *orderedAggregate) pushAggr(expr *sqlparser.AliasedExpr, origin builder
 	}
 	var innerRC *resultColumn
 	var innerCol int
-	if funcExpr.Distinct && (opcode == engine.AggregateCount || opcode == engine.AggregateSum) {
+	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, funcExpr, opcode)
+	if err != nil {
+		return nil, 0, err
+	}
+	if handleDistinct {
 		if oa.extraDistinct != nil {
 			return nil, 0, fmt.Errorf("unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(funcExpr))
 		}
 		// Push the expression that's inside the aggregate.
 		// The column will eventually get added to the group by and order by clauses.
-		innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
-		if !ok {
-			return nil, 0, fmt.Errorf("syntax error: %s", sqlparser.String(funcExpr))
-		}
-		innerRC, innerCol, _ = oa.input.PushSelect(innerAliased, origin)
+		innerRC, innerCol, _ = oa.input.PushSelect(pb, innerAliased, origin)
 		col, err := oa.input.BuildColName(innerCol)
 		if err != nil {
 			return nil, 0, err
@@ -342,7 +342,7 @@ func (oa *orderedAggregate) pushAggr(expr *sqlparser.AliasedExpr, origin builder
 			Alias:  alias,
 		})
 	} else {
-		innerRC, innerCol, _ = oa.input.PushSelect(expr, origin)
+		innerRC, innerCol, _ = oa.input.PushSelect(pb, expr, origin)
 		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
 			Opcode: opcode,
 			Col:    innerCol,
@@ -354,6 +354,30 @@ func (oa *orderedAggregate) pushAggr(expr *sqlparser.AliasedExpr, origin builder
 	rc = &resultColumn{alias: innerRC.alias, column: &column{origin: oa}}
 	oa.resultColumns = append(oa.resultColumns, rc)
 	return rc, len(oa.resultColumns) - 1, nil
+}
+
+// needDistinctHandling returns true if oa needs to handle the distinct clause.
+// If true, it will also return the aliased expression that needs to be pushed
+// down into the underlying route.
+func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr *sqlparser.FuncExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
+	if !funcExpr.Distinct {
+		return false, nil, nil
+	}
+	if opcode != engine.AggregateCount && opcode != engine.AggregateSum {
+		return false, nil, nil
+	}
+	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
+	if !ok {
+		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(funcExpr))
+	}
+	success := oa.input.removeOptions(func(ro *routeOption) bool {
+		vindex := ro.FindVindex(pb, innerAliased.Expr)
+		if vindex != nil && vindex.IsUnique() {
+			return true
+		}
+		return false
+	})
+	return !success, innerAliased, nil
 }
 
 func (oa *orderedAggregate) MakeDistinct() error {

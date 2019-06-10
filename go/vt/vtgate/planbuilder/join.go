@@ -154,9 +154,9 @@ func (jb *join) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereTyp
 }
 
 // PushSelect satisfies the builder interface.
-func (jb *join) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+func (jb *join) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
 	if jb.isOnLeft(origin.Order()) {
-		rc, colnum, err = jb.Left.PushSelect(expr, origin)
+		rc, colnum, err = jb.Left.PushSelect(pb, expr, origin)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -167,7 +167,7 @@ func (jb *join) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *res
 			return nil, 0, errors.New("unsupported: cross-shard left join and column expressions")
 		}
 
-		rc, colnum, err = jb.Right.PushSelect(expr, origin)
+		rc, colnum, err = jb.Right.PushSelect(pb, expr, origin)
 		if err != nil {
 			return nil, 0, err
 		}

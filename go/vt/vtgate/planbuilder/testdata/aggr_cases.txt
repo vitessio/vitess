@@ -577,6 +577,38 @@
   }
 }
 
+# count with distinct unique vindex
+"select col, count(distinct id) from user group by col"
+{
+  "Original": "select col, count(distinct id) from user group by col",
+  "Instructions": {
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 1
+      }
+    ],
+    "Keys": [
+      0
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col, count(distinct id) from user group by col order by col asc",
+      "FieldQuery": "select col, count(distinct id) from user where 1 != 1 group by col",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
+    }
+  }
+}
+
 # count with distinct no unique vindex
 "select col1, count(distinct col2) from user group by col1"
 {
