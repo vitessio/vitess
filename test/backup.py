@@ -18,6 +18,7 @@
 import json
 import logging
 import os
+import shutil
 import unittest
 
 import MySQLdb
@@ -376,6 +377,78 @@ class TestBackup(unittest.TestCase):
       self.assertEqual(metadata['PromotionRule'], 'neutral')
     else:
       self.assertEqual(metadata['PromotionRule'], 'must_not')
+
+    # remove the backup and check that the list is empty
+    self._remove_backup(backups[0])
+    backups = self._list_backups()
+    logging.debug('list of backups after remove: %s', backups)
+    self.assertEqual(len(backups), 0)
+
+    tablet_replica2.kill_vttablet()
+
+  def test_interrupted_restore(self):
+    """Test backup/restore flow.
+
+    this test will:
+    - create a shard with master and replica1 only
+    - run InitShardMaster
+    - insert some data
+    - take a backup
+    - insert more data on the master
+    - simulate interrupted restore by creating a .restore file
+    - bring up tablet_replica2 let it restore the backup
+    - check all data is right (before+after backup data)
+    - list the backup, remove it
+
+    """
+
+    # insert data on master, wait for slave to get it
+    tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
+    self._insert_data(tablet_master, 1)
+    self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
+
+    # backup the slave
+    utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
+
+    # check that the backup shows up in the listing
+    backups = self._list_backups()
+    logging.debug('list of backups: %s', backups)
+    self.assertEqual(len(backups), 1)
+    self.assertTrue(backups[0].endswith(tablet_replica1.tablet_alias))
+
+    # insert more data on the master
+    self._insert_data(tablet_master, 2)
+
+    # restore from backup.
+    self._restore(tablet_replica2, 'replica')
+
+    tablet_replica2.kill_vttablet()
+
+    # now delete the data dir
+    shutil.rmtree(os.path.join(tablet_replica2.tablet_dir, 'data'))
+
+    # create .restore file
+    restore_file = os.path.join(tablet_replica2.tablet_dir, 'tmp/.restore')
+    open(restore_file, 'a').close()
+
+    # restore from backup again, should work
+    self._restore(tablet_replica2, 'replica')
+
+    # check that restore_file doesn't exist
+    self.assertFalse(os.path.isfile(restore_file))
+
+    # check the new slave has the data
+    self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')
+
+    # check that the restored slave has the right local_metadata
+    result = tablet_replica2.mquery('_vt', 'select * from local_metadata')
+    metadata = {}
+    for row in result:
+      metadata[row[0]] = row[1]
+    self.assertEqual(metadata['Alias'], 'test_nj-0000062346')
+    self.assertEqual(metadata['ClusterAlias'], 'test_keyspace.0')
+    self.assertEqual(metadata['DataCenter'], 'test_nj')
+    self.assertEqual(metadata['PromotionRule'], 'neutral')
 
     # remove the backup and check that the list is empty
     self._remove_backup(backups[0])
