@@ -335,6 +335,9 @@ class TestBackup(unittest.TestCase):
     - take a backup
     - insert more data on the master
     - bring up tablet_replica2 after the fact, let it restore the backup
+    - kill tablet_replica2
+    - simulate interrupted restore by creating a .restore file
+    - bring up tablet_replica2 again
     - check all data is right (before+after backup data)
     - list the backup, remove it
 
@@ -362,66 +365,6 @@ class TestBackup(unittest.TestCase):
     # now bring up the other slave, letting it restore from backup.
     self._restore(tablet_replica2, tablet_type=tablet_type)
 
-    # check the new slave has the data
-    self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')
-
-    # check that the restored slave has the right local_metadata
-    result = tablet_replica2.mquery('_vt', 'select * from local_metadata')
-    metadata = {}
-    for row in result:
-      metadata[row[0]] = row[1]
-    self.assertEqual(metadata['Alias'], 'test_nj-0000062346')
-    self.assertEqual(metadata['ClusterAlias'], 'test_keyspace.0')
-    self.assertEqual(metadata['DataCenter'], 'test_nj')
-    if tablet_type == 'replica':
-      self.assertEqual(metadata['PromotionRule'], 'neutral')
-    else:
-      self.assertEqual(metadata['PromotionRule'], 'must_not')
-
-    # remove the backup and check that the list is empty
-    self._remove_backup(backups[0])
-    backups = self._list_backups()
-    logging.debug('list of backups after remove: %s', backups)
-    self.assertEqual(len(backups), 0)
-
-    tablet_replica2.kill_vttablet()
-
-  def test_interrupted_restore(self):
-    """Test backup/restore flow.
-
-    this test will:
-    - create a shard with master and replica1 only
-    - run InitShardMaster
-    - insert some data
-    - take a backup
-    - insert more data on the master
-    - simulate interrupted restore by creating a .restore file
-    - bring up tablet_replica2 let it restore the backup
-    - check all data is right (before+after backup data)
-    - list the backup, remove it
-
-    """
-
-    # insert data on master, wait for slave to get it
-    tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
-    self._insert_data(tablet_master, 1)
-    self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
-
-    # backup the slave
-    utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
-
-    # check that the backup shows up in the listing
-    backups = self._list_backups()
-    logging.debug('list of backups: %s', backups)
-    self.assertEqual(len(backups), 1)
-    self.assertTrue(backups[0].endswith(tablet_replica1.tablet_alias))
-
-    # insert more data on the master
-    self._insert_data(tablet_master, 2)
-
-    # restore from backup.
-    self._restore(tablet_replica2, 'replica')
-
     tablet_replica2.kill_vttablet()
 
     # now delete the data dir
@@ -432,7 +375,7 @@ class TestBackup(unittest.TestCase):
     open(restore_file, 'a').close()
 
     # restore from backup again, should work
-    self._restore(tablet_replica2, 'replica')
+    self._restore(tablet_replica2, tablet_type=tablet_type)
 
     # check that restore_file doesn't exist
     self.assertFalse(os.path.isfile(restore_file))
@@ -448,7 +391,10 @@ class TestBackup(unittest.TestCase):
     self.assertEqual(metadata['Alias'], 'test_nj-0000062346')
     self.assertEqual(metadata['ClusterAlias'], 'test_keyspace.0')
     self.assertEqual(metadata['DataCenter'], 'test_nj')
-    self.assertEqual(metadata['PromotionRule'], 'neutral')
+    if tablet_type == 'replica':
+      self.assertEqual(metadata['PromotionRule'], 'neutral')
+    else:
+      self.assertEqual(metadata['PromotionRule'], 'must_not')
 
     # remove the backup and check that the list is empty
     self._remove_backup(backups[0])
@@ -585,88 +531,6 @@ class TestBackup(unittest.TestCase):
 
     utils.Vtctld().start()
     self._restore_old_master_test(_terminated_restore)
-
-  def test_backup_transform(self):
-    """Use a transform, tests we backup and restore properly."""
-    if use_xtrabackup:
-      # not supported
-      return
-
-    # Insert data on master, make sure slave gets it.
-    tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
-    self._insert_data(tablet_master, 1)
-    self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
-
-    # Restart the replica with the transform parameter.
-    tablet_replica1.kill_vttablet()
-
-    xtra_args = ['-db-credentials-file', db_credentials_file]
-    if use_xtrabackup:
-      xtra_args.extend(xtrabackup_args)
-
-    hook_args = ['-backup_storage_hook',
-                 'test_backup_transform',
-                 '-backup_storage_compress=false']
-    xtra_args.extend(hook_args)
-
-    tablet_replica1.start_vttablet(supports_backups=True,
-                                   extra_args=xtra_args)
-
-    # Take a backup, it should work.
-    utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
-
-    # Insert more data on the master.
-    self._insert_data(tablet_master, 2)
-
-    # Make sure we have the TransformHook in the MANIFEST, and that
-    # every file starts with 'header'.
-    backups = self._list_backups()
-    self.assertEqual(len(backups), 1, 'invalid backups: %s' % backups)
-    location = os.path.join(environment.tmproot, 'backupstorage',
-                            'test_keyspace', '0', backups[0])
-    with open(os.path.join(location, 'MANIFEST')) as fd:
-      contents = fd.read()
-    manifest = json.loads(contents)
-    self.assertEqual(manifest['TransformHook'], 'test_backup_transform')
-    self.assertEqual(manifest['SkipCompress'], True)
-    for i in xrange(len(manifest['FileEntries'])):
-      name = os.path.join(location, '%d' % i)
-      with open(name) as fd:
-        line = fd.readline()
-        self.assertEqual(line, 'header\n', 'wrong file contents for %s' % name)
-
-    # Then start replica2 from backup, make sure that works.
-    # Note we don't need to pass in the backup_storage_transform parameter,
-    # as it is read from the MANIFEST.
-    self._restore(tablet_replica2)
-
-    # Check the new slave has all the data.
-    self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')
-
-  def test_backup_transform_error(self):
-    """Use a transform, force an error, make sure the backup fails."""
-    if use_xtrabackup:
-      # not supported
-      return
-
-    # Restart the replica with the transform parameter.
-    tablet_replica1.kill_vttablet()
-    xtra_args = ['-db-credentials-file', db_credentials_file]
-    if use_xtrabackup:
-      xtra_args.extend(xtrabackup_args)
-    hook_args = ['-backup_storage_hook','test_backup_error']
-    xtra_args.extend(hook_args)
-    tablet_replica1.start_vttablet(supports_backups=True,
-                                   extra_args=xtra_args)
-
-    # This will fail, make sure we get the right error.
-    _, err = utils.run_vtctl(['Backup', tablet_replica1.tablet_alias],
-                             auto_log=True, expect_fail=True)
-    self.assertIn('backup is not usable, aborting it', err)
-
-    # And make sure there is no backup left.
-    backups = self._list_backups()
-    self.assertEqual(len(backups), 0, 'invalid backups: %s' % backups)
 
 if __name__ == '__main__':
   utils.main()
