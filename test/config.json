@@ -19,6 +19,24 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"backup_transform": {
+			"File": "backup_transform.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_transform_mysqlctld": {
+			"File": "backup_transform_mysqlctld.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"xtrabackup": {
 			"File": "xtrabackup.py",
 			"Args": [],
