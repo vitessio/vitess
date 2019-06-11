@@ -376,7 +376,9 @@ class TestTabletManager(unittest.TestCase):
                      'unexpected master type: %s' % ti['type'])
 
     # stop replication at the mysql level.
-    tablet_62044.mquery('', 'stop slave')
+    # Stop only the IO thread since we shouldn't care
+    # if the SQL thread is running.
+    tablet_62044.mquery('', 'STOP SLAVE IO_THREAD')
     # vttablet replication_reporter should restart it.
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
     # insert something on the master and wait for it on the slave.

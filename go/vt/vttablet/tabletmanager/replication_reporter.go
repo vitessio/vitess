@@ -56,10 +56,12 @@ func (r *replicationReporter) Report(isSlaveType, shouldQueryServiceBeRunning bo
 
 	status, statusErr := r.agent.MysqlDaemon.SlaveStatus()
 	if statusErr == mysql.ErrNotSlave ||
-		(statusErr == nil && !status.SlaveSQLRunning && !status.SlaveIORunning) {
-		// MySQL is up, but slave is either not configured or not running.
-		// Both SQL and IO threads are stopped, so it's probably either
-		// stopped on purpose, or stopped because of a mysqld restart.
+		(statusErr == nil && !status.SlaveIORunning) {
+		// MySQL is up, but replication is either not configured or not running.
+		// The IO thread is stopped, which could be because:
+		// * It's stopped on purpose for Vitess maintenance.
+		// * MySQL restarted and is waiting to be told to start replicating.
+		// * The master changed and we missed the message, perhaps while down ourselves.
 		if !r.agent.slaveStopped() {
 			// As far as we've been told, it isn't stopped on purpose,
 			// so let's try to start it.
