@@ -520,6 +520,8 @@ func (ins *Insert) processOwned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.
 func (ins *Insert) processOwnedIgnore(vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, bv map[string]*querypb.BindVariable, ksids [][]byte) error {
 	var createIndexes []int
 	var createKeys [][]sqltypes.Value
+	// We pass a copy of the keys to the create method as it can mutate the list otherwise.
+	var createKeysCopy [][]sqltypes.Value
 	var createKsids [][]byte
 
 	for rowNum, rowColumnKeys := range vindexColumnsKeys {
@@ -536,12 +538,13 @@ func (ins *Insert) processOwnedIgnore(vcursor VCursor, vindexColumnsKeys [][]sql
 			bv[insertVarName(col, rowNum)] = sqltypes.ValueBindVariable(vindexKey)
 		}
 		createKeys = append(createKeys, rowKeys)
+		createKeysCopy = append(createKeysCopy, rowKeys)
 	}
 	if createKeys == nil {
 		return nil
 	}
 
-	err := colVindex.Vindex.(vindexes.Lookup).Create(vcursor, createKeys, createKsids, true /* ignoreMode */)
+	err := colVindex.Vindex.(vindexes.Lookup).Create(vcursor, createKeysCopy, createKsids, true /* ignoreMode */)
 	if err != nil {
 		return err
 	}
