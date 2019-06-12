@@ -251,11 +251,11 @@ func (lkp *lookupInternal) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Va
 }
 
 // Update implements the update functionality.
-func (lkp *lookupInternal) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, toValue sqltypes.Value, newValues []sqltypes.Value) error {
-	if err := lkp.Delete(vcursor, [][]sqltypes.Value{oldValues}, toValue, vtgatepb.CommitOrder_NORMAL); err != nil {
+func (lkp *lookupInternal) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid sqltypes.Value, newValues []sqltypes.Value) error {
+	if err := lkp.Delete(vcursor, [][]sqltypes.Value{oldValues}, ksid, vtgatepb.CommitOrder_NORMAL); err != nil {
 		return err
 	}
-	return lkp.Create(vcursor, [][]sqltypes.Value{newValues}, []sqltypes.Value{toValue}, false /* ignoreMode */)
+	return lkp.Create(vcursor, [][]sqltypes.Value{newValues}, []sqltypes.Value{ksid}, false /* ignoreMode */)
 }
 
 func (lkp *lookupInternal) initDelStmt() string {

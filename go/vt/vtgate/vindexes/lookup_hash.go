@@ -164,7 +164,7 @@ func (lh *LookupHash) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid [
 	if err != nil {
 		return fmt.Errorf("lookup.Update.vunhash: %v", err)
 	}
-	return lh.lkp.Update(vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
+	return lh.lkp.Update(vcursor, oldValues, sqltypes.NewUint64(v), newValues)
 }
 
 // Delete deletes the entry from the vindex table.
@@ -332,7 +332,7 @@ func (lhu *LookupHashUnique) Update(vcursor VCursor, oldValues []sqltypes.Value,
 	if err != nil {
 		return fmt.Errorf("lookup.Update.vunhash: %v", err)
 	}
-	return lhu.lkp.Update(vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
+	return lhu.lkp.Update(vcursor, oldValues, sqltypes.NewUint64(v), newValues)
 }
 
 // FromValue converts a from value field to what it should be stored as in the Vindex.
