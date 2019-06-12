@@ -168,7 +168,7 @@ func (lh *LookupUnicodeLooseMD5Hash) Create(vcursor VCursor, rowsColValues [][]s
 	if err != nil {
 		return fmt.Errorf("lookup.Create.convert: %v", err)
 	}
-	return lh.lkp.Create(vcursor, rowsColValues, ksids, values, ignoreMode)
+	return lh.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Update updates the entry in the vindex table.
@@ -185,7 +185,7 @@ func (lh *LookupUnicodeLooseMD5Hash) Update(vcursor VCursor, oldValues []sqltype
 	if err != nil {
 		return fmt.Errorf("lookup.Update.convert: %v", err)
 	}
-	return lh.lkp.Update(vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
+	return lh.lkp.Update(vcursor, oldValues, sqltypes.NewUint64(v), newValues)
 }
 
 // Delete deletes the entry from the vindex table.
@@ -333,7 +333,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Create(vcursor VCursor, rowsColValue
 	if err != nil {
 		return fmt.Errorf("lookup.Create.convert: %v", err)
 	}
-	return lhu.lkp.Create(vcursor, rowsColValues, ksids, values, ignoreMode)
+	return lhu.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
@@ -363,7 +363,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Update(vcursor VCursor, oldValues []
 	if err != nil {
 		return fmt.Errorf("lookup.Update.convert: %v", err)
 	}
-	return lhu.lkp.Update(vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
+	return lhu.lkp.Update(vcursor, oldValues, sqltypes.NewUint64(v), newValues)
 }
 
 // MarshalJSON returns a JSON representation of LookupHashUnique.
