@@ -20,7 +20,6 @@ import (
 	"errors"
 	"flag"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -47,7 +46,7 @@ const (
 	backupManifest = "MANIFEST"
 	// RestoreState is the name of the sentinel file used to detect whether a previous restore
 	// terminated abnormally
-	RestoreState = ".restore"
+	RestoreState = ".restore_in_progress"
 )
 
 const (
@@ -228,9 +227,8 @@ func Restore(
 
 	if !deleteBeforeRestore {
 		logger.Infof("Restore: Checking if a restore is in progress")
-		name := path.Join(cnf.TmpDir, RestoreState)
-		if _, err := os.Open(name); err != nil {
-			logger.Infof("Restore: No .restore file found, checking no existing data is present")
+		if !RestoreWasInterrupted(cnf) {
+			logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
 			// Wait for mysqld to be ready, in case it was launched in parallel with us.
 			if err := mysqld.Wait(ctx, cnf); err != nil {
 				return mysql.Position{}, err

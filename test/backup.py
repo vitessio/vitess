@@ -335,9 +335,6 @@ class TestBackup(unittest.TestCase):
     - take a backup
     - insert more data on the master
     - bring up tablet_replica2 after the fact, let it restore the backup
-    - kill tablet_replica2
-    - simulate interrupted restore by creating a .restore file
-    - bring up tablet_replica2 again
     - check all data is right (before+after backup data)
     - list the backup, remove it
 
@@ -364,21 +361,6 @@ class TestBackup(unittest.TestCase):
 
     # now bring up the other slave, letting it restore from backup.
     self._restore(tablet_replica2, tablet_type=tablet_type)
-
-    tablet_replica2.kill_vttablet()
-
-    # now delete the data dir
-    shutil.rmtree(os.path.join(tablet_replica2.tablet_dir, 'data'))
-
-    # create .restore file
-    restore_file = os.path.join(tablet_replica2.tablet_dir, 'tmp/.restore')
-    open(restore_file, 'a').close()
-
-    # restore from backup again, should work
-    self._restore(tablet_replica2, tablet_type=tablet_type)
-
-    # check that restore_file doesn't exist
-    self.assertFalse(os.path.isfile(restore_file))
 
     # check the new slave has the data
     self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')
@@ -495,8 +477,15 @@ class TestBackup(unittest.TestCase):
     # insert more data on new master
     self._insert_data(tablet_replica1, 3)
 
+    # simulate interrupted restore by creating .restore file
+    restore_file = os.path.join(tablet_master.tablet_dir, '.restore_in_progress')
+    open(restore_file, 'a').close()
+
     # force the old master to restore at the latest backup.
     restore_method(tablet_master)
+
+    # check that restore_file doesn't exist
+    self.assertFalse(os.path.isfile(restore_file))
 
     # wait for it to catch up.
     self._check_data(tablet_master, 3, 'former master catches up after restore')

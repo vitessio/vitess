@@ -246,21 +246,22 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	if err != nil {
 		return zeroPosition, err
 	}
+
+	if err = prepareToRestore(ctx, cnf, mysqld, logger); err != nil {
+		return zeroPosition, err
+	}
+
 	// copy / extract files
 	logger.Infof("Restore: Extracting files from %v", bm.FileName)
 
-	fd, err := openStateFile(cnf)
-	if err != nil {
-		logger.Warningf("unable to open/create file: %v", path.Join(cnf.TmpDir, RestoreState))
+	if err = createStateFile(cnf); err != nil {
 		return zeroPosition, err
 	}
 	if err = be.restoreFromBackup(ctx, cnf, bh, bm, logger); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
-		fd.Close()
 		return zeroPosition, err
 	}
-	err = closeStateFile(fd)
-	if err != nil {
+	if err = removeStateFile(cnf); err != nil {
 		return zeroPosition, err
 	}
 	// now find the slave position and return that

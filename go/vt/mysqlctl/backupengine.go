@@ -21,15 +21,15 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -86,54 +86,61 @@ func findBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, lo
 		return nil, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
 	}
 
+	return bh, nil
+}
+
+func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger) error {
 	// shutdown mysqld if it is running
-	// if we are retrying a failed restore, it is possible that mysqld failed to start
-	// so check for that
-	waitCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
-	defer cancel()
-	err := mysqld.Wait(waitCtx, cnf)
-	if err != nil || (waitCtx.Err() != nil && waitCtx.Err() == context.DeadlineExceeded) {
-		// do nothing
-	} else {
-		logger.Infof("Restore: shutdown mysqld")
-		// Starting from here we won't be able to recover if we get stopped by a cancelled
-		// context. Thus we use the background context to get through to the finish.
-		if err := mysqld.Shutdown(context.Background(), cnf, true); err != nil {
-			return nil, err
-		}
+	// Starting from here we won't be able to recover if we get stopped by a cancelled
+	// context. Thus we use the background context to get through to the finish.
+	logger.Infof("Restore: shutdown mysqld")
+	if err := mysqld.Shutdown(context.Background(), cnf, true); err != nil {
+		return err
 	}
+
 	logger.Infof("Restore: deleting existing files")
 	if err := removeExistingFiles(cnf); err != nil {
-		return nil, err
+		return err
 	}
 
 	logger.Infof("Restore: reinit config file")
 	if err := mysqld.ReinitConfig(context.Background(), cnf); err != nil {
-		return nil, err
-	}
-	return bh, nil
-}
-
-// open or create .restore file
-func openStateFile(cnf *Mycnf) (*os.File, error) {
-	// change RDONLY to RDWR if we start writing content to this file
-	fname := path.Join(cnf.TmpDir, RestoreState)
-	fd, err := os.OpenFile(fname, os.O_RDONLY|os.O_CREATE, 0666)
-	if err != nil {
-		return nil, err
-	}
-	return fd, nil
-}
-
-// close and delete .restore file
-func closeStateFile(fd *os.File) error {
-	// the following errors can only happen if there is something
-	// wrong with the filesystem, but we have to check anyway
-	if err := fd.Close(); err != nil {
-		return err
-	}
-	if err := os.Remove(fd.Name()); err != nil {
 		return err
 	}
 	return nil
+}
+
+// create .restore_in_progress file
+func createStateFile(cnf *Mycnf) error {
+	// if we start writing content to this file:
+	// change RD_ONLY to RDWR
+	// change Create to Open
+	// rename func to openStateFile
+	// change to return a *File
+	fname := filepath.Join(cnf.TabletDir(), RestoreState)
+	fd, err := os.Create(fname)
+	if err != nil {
+		return fmt.Errorf("unable to create file: %v", err)
+	}
+	if err = fd.Close(); err != nil {
+		return fmt.Errorf("unable to close file: %v", err)
+	}
+	return nil
+}
+
+// delete .restore_in_progress file
+func removeStateFile(cnf *Mycnf) error {
+	fname := filepath.Join(cnf.TabletDir(), RestoreState)
+	if err := os.Remove(fname); err != nil {
+		return fmt.Errorf("unable to delete file: %v", err)
+	}
+	return nil
+}
+
+// RestoreWasInterrupted tells us whether a previous restore
+// was interrupted and we are now retrying it
+func RestoreWasInterrupted(cnf *Mycnf) bool {
+	name := filepath.Join(cnf.TabletDir(), RestoreState)
+	_, err := os.Stat(name)
+	return err == nil
 }
