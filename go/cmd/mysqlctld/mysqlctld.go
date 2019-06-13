@@ -22,7 +22,6 @@ package main
 import (
 	"flag"
 	"os"
-	"path"
 	"time"
 
 	"golang.org/x/net/context"
@@ -106,9 +105,7 @@ func main() {
 		}
 
 		// check if we were interrupted during a previous restore
-		restoreFile := path.Join(cnf.TmpDir, mysqlctl.RestoreState)
-		if _, statErr := os.Stat(restoreFile); statErr != nil {
-			// assume err means file doesn't exist and continue
+		if !mysqlctl.RestoreWasInterrupted(cnf) {
 			if err := mysqld.Start(ctx, cnf); err != nil {
 				log.Errorf("failed to start mysqld: %v", err)
 				exit.Return(1)
