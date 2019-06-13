@@ -260,6 +260,39 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 	}
 }
 
+func TestInsertIgnoreWithLookup(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	// conn2 is for queries that target shards.
+	conn2, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn2.Close()
+
+	qr := exec(t, conn, "select count(*) from t1_id2_idx")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(0)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	// Try inserting a bunch of ids at once
+	exec(t, conn, "begin")
+	exec(t, conn, "insert ignore into t1(id1, id2) values(1,4), (2,5)")
+	exec(t, conn, "commit")
+	qr = exec(t, conn, "select * from t1")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(4)] [INT64(2) INT64(5)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select count(*) from t1_id2_idx")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+}
+
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
