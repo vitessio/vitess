@@ -473,16 +473,42 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 
 	// Check preconditions for initial_backup mode.
 	if *initialBackup {
-		// Check that the shard doesn't exist.
-		_, err := topoServer.GetShard(ctx, *initKeyspace, *initShard)
-		if !topo.IsErrType(err, topo.NoNode) {
-			return false, fmt.Errorf("refusing to upload initial backup of empty database: the shard %v/%v already exists in topology", *initKeyspace, *initShard)
+		// Check whether the shard exists.
+		_, shardErr := topoServer.GetShard(ctx, *initKeyspace, *initShard)
+		switch {
+		case shardErr == nil:
+			// If the shard exists, we should make sure none of the tablets are
+			// already in a serving state, because then they might have data
+			// that conflicts with the initial backup we're about to take.
+			tablets, err := topoServer.GetTabletMapForShard(ctx, *initKeyspace, *initShard)
+			if err != nil {
+				// We don't know for sure whether any tablets are serving,
+				// so it's not safe to continue.
+				return false, fmt.Errorf("failed to check whether shard %v/%v has serving tablets before doing initial backup: %v", *initKeyspace, *initShard, err)
+			}
+			for tabletAlias, tablet := range tablets {
+				// Check if any tablet has its type set to one of the serving types.
+				// If so, it's too late to do an initial backup.
+				if tablet.IsInServingGraph() {
+					return false, fmt.Errorf("refusing to upload initial backup of empty database: the shard %v/%v already has at least one tablet that may be serving (%v); you must take a backup from a live tablet instead.", *initKeyspace, *initShard, tabletAlias)
+				}
+			}
+			log.Infof("Shard %v/%v exists but has no serving tablets.", *initKeyspace, *initShard)
+		case topo.IsErrType(shardErr, topo.NoNode):
+			// The shard doesn't exist, so we know no tablets are running.
+			log.Infof("Shard %v/%v doesn't exist; assuming it has no serving tablets.", *initKeyspace, *initShard)
+		default:
+			// If we encounter any other error, we don't know for sure whether
+			// the shard exists, so it's not safe to continue.
+			return false, fmt.Errorf("failed to check whether shard %v/%v exists before doing initial backup: %v", *initKeyspace, *initShard, err)
 		}
+
 		// Check if any backups for the shard exist in this backup storage location.
 		if len(backups) > 0 {
 			log.Infof("At least one backup already exists, so there's no need to seed an empty backup. Doing nothing.")
 			return false, nil
 		}
+		log.Infof("Shard %v/%v has no existing backups. Creating initial backup.", *initKeyspace, *initShard)
 		return true, nil
 	}
 
