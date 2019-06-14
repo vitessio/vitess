@@ -70,6 +70,7 @@ import (
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -211,6 +212,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	extraEnv := map[string]string{
 		"TABLET_ALIAS": topoproto.TabletAliasString(tabletAlias),
 	}
+	dbName := *initDbNameOverride
+	if dbName == "" {
+		dbName = fmt.Sprintf("vt_%s", *initKeyspace)
+	}
 
 	// In initial_backup mode, just take a backup of this empty database.
 	if *initialBackup {
@@ -218,11 +223,12 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		// First, initialize it the way InitShardMaster would, so this backup
 		// produces a result that can be used to skip InitShardMaster entirely.
 		// This involves resetting replication (to erase any history) and then
-		// executing a statement to force the creation of a replication position.
+		// creating the main database and some Vitess system tables.
 		mysqld.ResetReplication(ctx)
 		cmds := mysqlctl.CreateReparentJournal()
+		cmds = append(cmds, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(dbName)))
 		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
-			return fmt.Errorf("can't initialize database with reparent journal: %v", err)
+			return fmt.Errorf("can't initialize database: %v", err)
 		}
 		// Now we're ready to take the backup.
 		name := backupName(time.Now(), tabletAlias)
@@ -234,11 +240,6 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	// Restore from backup.
-	dbName := *initDbNameOverride
-	if dbName == "" {
-		dbName = fmt.Sprintf("vt_%s", *initKeyspace)
-	}
-
 	log.Infof("Restoring latest backup from directory %v", backupDir)
 	restorePos, err := mysqlctl.Restore(ctx, mycnf, mysqld, backupDir, *concurrency, extraEnv, map[string]string{}, logutil.NewConsoleLogger(), true, dbName)
 	switch err {
@@ -490,7 +491,7 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 				// Check if any tablet has its type set to one of the serving types.
 				// If so, it's too late to do an initial backup.
 				if tablet.IsInServingGraph() {
-					return false, fmt.Errorf("refusing to upload initial backup of empty database: the shard %v/%v already has at least one tablet that may be serving (%v); you must take a backup from a live tablet instead.", *initKeyspace, *initShard, tabletAlias)
+					return false, fmt.Errorf("refusing to upload initial backup of empty database: the shard %v/%v already has at least one tablet that may be serving (%v); you must take a backup from a live tablet instead", *initKeyspace, *initShard, tabletAlias)
 				}
 			}
 			log.Infof("Shard %v/%v exists but has no serving tablets.", *initKeyspace, *initShard)
