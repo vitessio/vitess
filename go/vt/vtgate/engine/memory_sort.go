@@ -20,6 +20,7 @@ import (
 	"container/heap"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -91,8 +92,11 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 		return err
 	}
 
+	// You have to reverse the ordering because the highest values
+	// must be dropped once the upper limit is reached.
 	sh := &sortHeap{
 		orderBy: ms.OrderBy,
+		reverse: true,
 	}
 	err = ms.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
@@ -101,7 +105,7 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 			}
 		}
 		for _, row := range qr.Rows {
-			heap.Push(sh, streamRow{row: row})
+			heap.Push(sh, row)
 		}
 		for len(sh.rows) > count {
 			_ = heap.Pop(sh)
@@ -117,8 +121,11 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 	if sh.err != nil {
 		return sh.err
 	}
+	// Set ordering to normal for the final ordering.
+	sh.reverse = false
 	sort.Sort(sh)
 	if sh.err != nil {
+		// Unreachable.
 		return sh.err
 	}
 	return callback(&sqltypes.Result{Rows: sh.rows})
@@ -133,6 +140,9 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 	resolved, err := ms.UpperLimit.ResolveValue(bindVars)
 	if err != nil {
 		return 0, err
+	}
+	if resolved.IsNull() {
+		return math.MaxInt64, nil
 	}
 	num, err := sqltypes.ToUint64(resolved)
 	if err != nil {
@@ -150,6 +160,7 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 type sortHeap struct {
 	rows    [][]sqltypes.Value
 	orderBy []OrderbyParams
+	reverse bool
 	err     error
 }
 
@@ -170,7 +181,17 @@ func (sh *sortHeap) Less(i, j int) bool {
 		if cmp == 0 {
 			continue
 		}
-		if order.Desc {
+		// This is equivalent to:
+		//if !sj.reverse {
+		//	if order.Desc {
+		//		cmp = -cmp
+		//	}
+		//} else {
+		//	if !order.Desc {
+		//		cmp = -cmp
+		//	}
+		//}
+		if sh.reverse != order.Desc {
 			cmp = -cmp
 		}
 		return cmp < 0
