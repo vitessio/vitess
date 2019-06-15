@@ -467,7 +467,7 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 			if err != nil {
 				return nil, err
 			}
-			orderByCol = oa.input.ResultColumns()[num].column
+			orderByCol = oa.resultColumns[num].column
 		case *sqlparser.ColName:
 			orderByCol = expr.Metadata.(*column)
 		default:
@@ -477,19 +477,17 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 		// Match orderByCol against the group by columns.
 		found := false
 		for j, key := range oa.eaggr.Keys {
-			inputForKey := oa.input.ResultColumns()[key]
-			if inputForKey.column != orderByCol {
+			if oa.resultColumns[key].column != orderByCol {
 				continue
 			}
 
 			found = true
 			referenced[j] = true
+			selOrderBy = append(selOrderBy, order)
 			break
 		}
 		if !found {
 			postSort = true
-		} else {
-			selOrderBy = append(selOrderBy, order)
 		}
 	}
 
