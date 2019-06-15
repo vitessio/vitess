@@ -159,9 +159,9 @@
 "select col, count(*) from user group by col order by col+1"
 "unsupported: in scatter query: complex order by expression: col + 1"
 
-# scatter aggregate order by does not reference group by
-"select a, b, count(*) from user group by a order by b"
-"unsupported: in scatter query: order by column must reference group by expression: b asc"
+# Scatter order by and aggregation: order by column myst reference column from select list
+"select col, count(*) from user group by col order by c1"
+"unsupported: memory sort: order by must reference a column in the select list: c1 asc"
 
 # Aggregates and joins
 "select count(*) from user join user_extra"
