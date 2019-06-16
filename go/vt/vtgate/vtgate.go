@@ -60,6 +60,7 @@ var (
 	streamBufferSize    = flag.Int("stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
 	queryPlanCacheSize  = flag.Int64("gate_query_cache_size", 10000, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	disableLocalGateway = flag.Bool("disable_local_gateway", false, "if specified, this process will not route any queries to local tablets in the local cell")
+	maxMemoryRows       = flag.Int("max_memory_rows", 30000, "Maximum number of rows that will be held in memory for intermediate results as well as the final result.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
