@@ -44,7 +44,7 @@ type subquery struct {
 // newSubquery builds a new subquery.
 func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab, error) {
 	sq := &subquery{
-		builderCommon: builderCommon{input: bldr},
+		builderCommon: newBuilderCommon(bldr),
 		esubquery:     &engine.Subquery{},
 	}
 

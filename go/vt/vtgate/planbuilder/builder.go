@@ -28,6 +28,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+//-------------------------------------------------------------------------
+
 // builder defines the interface that a primitive must
 // satisfy.
 type builder interface {
@@ -107,11 +109,28 @@ type builder interface {
 	Primitive() engine.Primitive
 }
 
+//-------------------------------------------------------------------------
+
+// ContextVSchema defines the interface for this package to fetch
+// info about tables.
+type ContextVSchema interface {
+	FindTable(tablename sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error)
+	FindTablesOrVindex(tablename sqlparser.TableName) ([]*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
+	DefaultKeyspace() (*vindexes.Keyspace, error)
+	TargetString() string
+}
+
+//-------------------------------------------------------------------------
+
 // builderCommon implements some common functionality of builders.
 // Make sure to override in case behavior needs to be changed.
 type builderCommon struct {
 	order int
 	input builder
+}
+
+func newBuilderCommon(input builder) builderCommon {
+	return builderCommon{input: input}
 }
 
 func (bc *builderCommon) Order() int {
@@ -151,14 +170,7 @@ func (bc *builderCommon) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, co
 	return bc.input.SupplyCol(col)
 }
 
-// ContextVSchema defines the interface for this package to fetch
-// info about tables.
-type ContextVSchema interface {
-	FindTable(tablename sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error)
-	FindTablesOrVindex(tablename sqlparser.TableName) ([]*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
-	DefaultKeyspace() (*vindexes.Keyspace, error)
-	TargetString() string
-}
+//-------------------------------------------------------------------------
 
 // Build builds a plan for a query based on the specified vschema.
 // It's the main entry point for this package.
