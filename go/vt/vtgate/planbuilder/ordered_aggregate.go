@@ -553,7 +553,7 @@ func (oa *orderedAggregate) Wireup(bldr builder, jt *jointab) error {
 
 // SupplyVar satisfies the builder interface.
 func (oa *orderedAggregate) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	panic("BUG: orderedAggregate should only have atomic nodes under it")
+	oa.input.SupplyVar(from, to, col, varname)
 }
 
 // SupplyCol satisfies the builder interface.

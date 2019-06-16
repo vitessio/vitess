@@ -143,5 +143,5 @@ func (ps *pulloutSubquery) SupplyVar(from, to int, col *sqlparser.ColName, varna
 
 // SupplyCol satisfies the builder interface.
 func (ps *pulloutSubquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	panic("BUG: unreachable")
+	return ps.underlying.SupplyCol(col)
 }

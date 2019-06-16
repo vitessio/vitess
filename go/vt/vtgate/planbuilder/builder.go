@@ -209,7 +209,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	case *sqlparser.Rollback:
 		return nil, errors.New("unsupported construct: rollback")
 	default:
-		panic(fmt.Sprintf("BUG: unexpected statement type: %T", stmt))
+		return nil, fmt.Errorf("BUG: unexpected statement type: %T", stmt)
 	}
 	if err != nil {
 		return nil, err
