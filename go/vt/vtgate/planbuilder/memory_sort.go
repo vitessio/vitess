@@ -45,18 +45,18 @@ func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error)
 		eMemorySort:   &engine.MemorySort{},
 	}
 	for _, order := range orderBy {
-		colnum := -1
+		colNumber := -1
 		switch expr := order.Expr.(type) {
 		case *sqlparser.SQLVal:
 			var err error
-			if colnum, err = ResultFromNumber(ms.ResultColumns(), expr); err != nil {
+			if colNumber, err = ResultFromNumber(ms.ResultColumns(), expr); err != nil {
 				return nil, err
 			}
 		case *sqlparser.ColName:
 			c := expr.Metadata.(*column)
 			for i, rc := range ms.ResultColumns() {
 				if rc.column == c {
-					colnum = i
+					colNumber = i
 					break
 				}
 			}
@@ -65,11 +65,11 @@ func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error)
 		}
 		// If column is not found, then the order by is referencing
 		// a column that's not on the select list.
-		if colnum == -1 {
+		if colNumber == -1 {
 			return nil, fmt.Errorf("unsupported: memory sort: order by must reference a column in the select list: %s", sqlparser.String(order))
 		}
 		ob := engine.OrderbyParams{
-			Col:  colnum,
+			Col:  colNumber,
 			Desc: order.Direction == sqlparser.DescScr,
 		}
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, ob)
@@ -94,7 +94,7 @@ func (ms *memorySort) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereTyp
 }
 
 // PushSelect satisfies the builder interface.
-func (ms *memorySort) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+func (ms *memorySort) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	return nil, 0, errors.New("memorySort.PushSelect: unreachable")
 }
 

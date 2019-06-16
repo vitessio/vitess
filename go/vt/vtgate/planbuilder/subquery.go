@@ -90,14 +90,14 @@ func (sq *subquery) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType 
 }
 
 // PushSelect satisfies the builder interface.
-func (sq *subquery) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colnum int, err error) {
+func (sq *subquery) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
 	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
 		return nil, 0, errors.New("unsupported: expression on results of a cross-shard subquery")
 	}
 
-	// colnum should already be set for subquery columns.
-	inner := col.Metadata.(*column).colnum
+	// colNumber should already be set for subquery columns.
+	inner := col.Metadata.(*column).colNumber
 	sq.esubquery.Cols = append(sq.esubquery.Cols, inner)
 
 	// Build a new column reference to represent the result column.
@@ -129,7 +129,7 @@ func (sq *subquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 }
 
 // SupplyCol satisfies the builder interface.
-func (sq *subquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
+func (sq *subquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range sq.resultColumns {
 		if rc.column == c {
@@ -137,9 +137,9 @@ func (sq *subquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum 
 		}
 	}
 
-	// columns that reference subqueries will have their colnum set.
+	// columns that reference subqueries will have their colNumber set.
 	// Let's use it here.
-	sq.esubquery.Cols = append(sq.esubquery.Cols, c.colnum)
+	sq.esubquery.Cols = append(sq.esubquery.Cols, c.colNumber)
 	sq.resultColumns = append(sq.resultColumns, &resultColumn{column: c})
 	return rc, len(sq.resultColumns) - 1
 }

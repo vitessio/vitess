@@ -61,7 +61,7 @@ type builder interface {
 	// a resultColumn entry and return it. The top level caller
 	// must accumulate these result columns and set the symtab
 	// after analysis.
-	PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error)
+	PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error)
 
 	// MakeDistinct makes the primitive handle the distinct clause.
 	MakeDistinct() error
@@ -100,7 +100,7 @@ type builder interface {
 	// is different from PushSelect because it may reuse an existing
 	// resultColumn, whereas PushSelect guarantees the addition of a new
 	// result column and returns a distinct symbol for it.
-	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int)
+	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int)
 
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
@@ -147,7 +147,7 @@ func (bc *builderCommon) SupplyVar(from, to int, col *sqlparser.ColName, varname
 	bc.input.SupplyVar(from, to, col, varname)
 }
 
-func (bc *builderCommon) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
+func (bc *builderCommon) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	return bc.input.SupplyCol(col)
 }
 
