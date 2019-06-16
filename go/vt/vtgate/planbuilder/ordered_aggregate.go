@@ -282,7 +282,7 @@ func (oa *orderedAggregate) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, wh
 // MAX sent to the route will not be added to symtab and will not be reachable by
 // others. This functionality depends on the PushOrderBy to request that
 // the rows be correctly ordered.
-func (oa *orderedAggregate) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+func (oa *orderedAggregate) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	if inner, ok := expr.Expr.(*sqlparser.FuncExpr); ok {
 		if _, ok := engine.SupportedAggregates[inner.Name.Lowered()]; ok {
 			return oa.pushAggr(pb, expr, origin)
@@ -299,7 +299,7 @@ func (oa *orderedAggregate) PushSelect(pb *primitiveBuilder, expr *sqlparser.Ali
 	return innerRC, len(oa.resultColumns) - 1, nil
 }
 
-func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	funcExpr := expr.Expr.(*sqlparser.FuncExpr)
 	opcode := engine.SupportedAggregates[funcExpr.Name.Lowered()]
 	if len(funcExpr.Exprs) != 1 {
@@ -396,7 +396,7 @@ func (oa *orderedAggregate) MakeDistinct() error {
 
 // PushGroupBy satisfies the builder interface.
 func (oa *orderedAggregate) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	colnum := -1
+	colNumber := -1
 	for _, expr := range groupBy {
 		switch node := expr.(type) {
 		case *sqlparser.ColName:
@@ -406,11 +406,11 @@ func (oa *orderedAggregate) PushGroupBy(groupBy sqlparser.GroupBy) error {
 			}
 			for i, rc := range oa.resultColumns {
 				if rc.column == c {
-					colnum = i
+					colNumber = i
 					break
 				}
 			}
-			if colnum == -1 {
+			if colNumber == -1 {
 				return errors.New("unsupported: in scatter query: group by column must reference column in SELECT list")
 			}
 		case *sqlparser.SQLVal:
@@ -418,11 +418,11 @@ func (oa *orderedAggregate) PushGroupBy(groupBy sqlparser.GroupBy) error {
 			if err != nil {
 				return err
 			}
-			colnum = num
+			colNumber = num
 		default:
 			return errors.New("unsupported: in scatter query: only simple references allowed")
 		}
-		oa.eaggr.Keys = append(oa.eaggr.Keys, colnum)
+		oa.eaggr.Keys = append(oa.eaggr.Keys, colNumber)
 	}
 	// Append the distinct aggregate if any.
 	if oa.extraDistinct != nil {
@@ -541,11 +541,11 @@ func (oa *orderedAggregate) PushMisc(sel *sqlparser.Select) {
 // compare those instead. This is because we currently don't have the
 // ability to mimic mysql's collation behavior.
 func (oa *orderedAggregate) Wireup(bldr builder, jt *jointab) error {
-	for i, colnum := range oa.eaggr.Keys {
-		if sqltypes.IsText(oa.resultColumns[colnum].column.typ) {
+	for i, colNumber := range oa.eaggr.Keys {
+		if sqltypes.IsText(oa.resultColumns[colNumber].column.typ) {
 			// len(oa.resultColumns) does not change. No harm using the value multiple times.
 			oa.eaggr.TruncateColumnCount = len(oa.resultColumns)
-			oa.eaggr.Keys[i] = oa.input.SupplyWeightString(colnum)
+			oa.eaggr.Keys[i] = oa.input.SupplyWeightString(colNumber)
 		}
 	}
 	return oa.input.Wireup(bldr, jt)
@@ -557,6 +557,6 @@ func (oa *orderedAggregate) SupplyVar(from, to int, col *sqlparser.ColName, varn
 }
 
 // SupplyCol satisfies the builder interface.
-func (oa *orderedAggregate) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
+func (oa *orderedAggregate) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	panic("BUG: nothing should depend on orderedAggregate")
 }

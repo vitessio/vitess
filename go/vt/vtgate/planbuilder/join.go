@@ -154,24 +154,24 @@ func (jb *join) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereTyp
 }
 
 // PushSelect satisfies the builder interface.
-func (jb *join) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+func (jb *join) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	if jb.isOnLeft(origin.Order()) {
-		rc, colnum, err = jb.Left.PushSelect(pb, expr, origin)
+		rc, colNumber, err = jb.Left.PushSelect(pb, expr, origin)
 		if err != nil {
 			return nil, 0, err
 		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, -colnum-1)
+		jb.ejoin.Cols = append(jb.ejoin.Cols, -colNumber-1)
 	} else {
 		// Pushing of non-trivial expressions not allowed for RHS of left joins.
 		if _, ok := expr.Expr.(*sqlparser.ColName); !ok && jb.ejoin.Opcode == engine.LeftJoin {
 			return nil, 0, errors.New("unsupported: cross-shard left join and column expressions")
 		}
 
-		rc, colnum, err = jb.Right.PushSelect(pb, expr, origin)
+		rc, colNumber, err = jb.Right.PushSelect(pb, expr, origin)
 		if err != nil {
 			return nil, 0, err
 		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, colnum+1)
+		jb.ejoin.Cols = append(jb.ejoin.Cols, colNumber+1)
 	}
 	jb.resultColumns = append(jb.resultColumns, rc)
 	return rc, len(jb.resultColumns) - 1, nil
@@ -316,7 +316,7 @@ func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) 
 }
 
 // SupplyCol satisfies the builder interface.
-func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
+func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range jb.resultColumns {
 		if rc.column == c {

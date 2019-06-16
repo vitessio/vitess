@@ -54,7 +54,7 @@ func (ms *mergeSort) PushFilter(pb *primitiveBuilder, expr sqlparser.Expr, where
 }
 
 // PushSelect satisfies the builder interface.
-func (ms *mergeSort) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+func (ms *mergeSort) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	return ms.input.PushSelect(pb, expr, origin)
 }
 

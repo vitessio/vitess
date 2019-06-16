@@ -87,7 +87,7 @@ func (ps *pulloutSubquery) PushFilter(pb *primitiveBuilder, filter sqlparser.Exp
 }
 
 // PushSelect satisfies the builder interface.
-func (ps *pulloutSubquery) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+func (ps *pulloutSubquery) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	return ps.underlying.PushSelect(pb, expr, origin)
 }
 
@@ -142,6 +142,6 @@ func (ps *pulloutSubquery) SupplyVar(from, to int, col *sqlparser.ColName, varna
 }
 
 // SupplyCol satisfies the builder interface.
-func (ps *pulloutSubquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
+func (ps *pulloutSubquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	panic("BUG: unreachable")
 }

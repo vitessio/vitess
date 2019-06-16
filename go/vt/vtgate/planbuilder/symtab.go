@@ -436,7 +436,7 @@ func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
 	lowered := alias.Lowered()
 	// Dups are allowed, but first one wins if referenced.
 	if _, ok := t.columns[lowered]; !ok {
-		c.colnum = len(t.columnNames)
+		c.colNumber = len(t.columnNames)
 		t.columns[lowered] = c
 	}
 	t.columnNames = append(t.columnNames, alias)
@@ -457,7 +457,7 @@ func (t *table) mergeColumn(alias sqlparser.ColIdent, c *column) (*column, error
 	if t.isAuthoritative {
 		return nil, fmt.Errorf("column %v not found in %v", sqlparser.String(alias), sqlparser.String(t.alias))
 	}
-	c.colnum = len(t.columnNames)
+	c.colNumber = len(t.columnNames)
 	t.columns[lowered] = c
 	t.columnNames = append(t.columnNames, alias)
 	return c, nil
@@ -478,13 +478,13 @@ func (t *table) Origin() builder {
 //
 // Two columns are equal if their pointer values match.
 //
-// For subquery and vindexFunc, the colnum is also set because
+// For subquery and vindexFunc, the colNumber is also set because
 // the column order is known and unchangeable.
 type column struct {
-	origin builder
-	st     *symtab
-	typ    querypb.Type
-	colnum int
+	origin    builder
+	st        *symtab
+	typ       querypb.Type
+	colNumber int
 }
 
 // Origin returns the route that originates the column.
