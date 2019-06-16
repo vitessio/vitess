@@ -39,7 +39,7 @@ type mergeSort struct {
 // newMergeSort builds a new mergeSort.
 func newMergeSort(rb *route) *mergeSort {
 	return &mergeSort{
-		builderCommon: builderCommon{input: rb},
+		builderCommon: newBuilderCommon(rb),
 	}
 }
 

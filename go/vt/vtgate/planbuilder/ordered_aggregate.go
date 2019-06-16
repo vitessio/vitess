@@ -557,6 +557,22 @@ func (oa *orderedAggregate) SupplyVar(from, to int, col *sqlparser.ColName, varn
 }
 
 // SupplyCol satisfies the builder interface.
+// This function is unreachable. It's just a reference implementation for now.
 func (oa *orderedAggregate) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	panic("BUG: nothing should depend on orderedAggregate")
+	c := col.Metadata.(*column)
+	for i, rc := range oa.resultColumns {
+		if rc.column == c {
+			return rc, i
+		}
+	}
+	rc, colNumber = oa.input.SupplyCol(col)
+	if colNumber < len(oa.resultColumns) {
+		return rc, colNumber
+	}
+	// Add result columns from input until colNumber is reached.
+	for colNumber >= len(oa.resultColumns) {
+		oa.resultColumns = append(oa.resultColumns, oa.input.ResultColumns()[len(oa.resultColumns)])
+	}
+	oa.eaggr.TruncateColumnCount = len(oa.resultColumns)
+	return rc, colNumber
 }

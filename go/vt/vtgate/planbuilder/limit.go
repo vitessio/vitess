@@ -39,7 +39,7 @@ type limit struct {
 // newLimit builds a new limit.
 func newLimit(bldr builder) *limit {
 	return &limit{
-		builderCommon: builderCommon{input: bldr},
+		builderCommon: newBuilderCommon(bldr),
 		elimit:        &engine.Limit{},
 	}
 }

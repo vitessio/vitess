@@ -40,7 +40,7 @@ type memorySort struct {
 // newMemorySort builds a new memorySort.
 func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error) {
 	ms := &memorySort{
-		builderCommon: builderCommon{input: bldr},
+		builderCommon: newBuilderCommon(bldr),
 		resultColumns: bldr.ResultColumns(),
 		eMemorySort:   &engine.MemorySort{},
 	}
