@@ -228,7 +228,7 @@ func (jb *join) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 				return nil, err
 			}
 			if jb.ResultColumns()[num].column.Origin().Order() > jb.Left.Order() {
-				return nil, errors.New("unsupported: order by spans across shards")
+				return newMemorySort(jb, orderBy)
 			}
 		} else {
 			// Analyze column references within the expression to make sure they all
@@ -246,7 +246,7 @@ func (jb *join) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 				return true, nil
 			}, order.Expr)
 			if err != nil {
-				return nil, err
+				return newMemorySort(jb, orderBy)
 			}
 		}
 	}

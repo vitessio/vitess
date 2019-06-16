@@ -168,7 +168,7 @@ func (vf *vindexFunc) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	if len(orderBy) == 0 {
 		return vf, nil
 	}
-	return nil, errors.New("unsupported: order by on vindex function")
+	return newMemorySort(vf, orderBy)
 }
 
 // SetUpperLimit satisfies the builder interface.

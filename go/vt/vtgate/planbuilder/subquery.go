@@ -125,7 +125,7 @@ func (sq *subquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	if len(orderBy) == 0 {
 		return sq, nil
 	}
-	return nil, errors.New("unsupported: order by on cross-shard subquery")
+	return newMemorySort(sq, orderBy)
 }
 
 // SupplyCol satisfies the builder interface.
