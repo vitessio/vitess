@@ -107,6 +107,50 @@ type builder interface {
 	Primitive() engine.Primitive
 }
 
+// builderCommon implements some common functionality of builders.
+// Make sure to override in case behavior needs to be changed.
+type builderCommon struct {
+	order int
+	input builder
+}
+
+func (bc *builderCommon) Order() int {
+	return bc.order
+}
+
+func (bc *builderCommon) Reorder(order int) {
+	bc.input.Reorder(order)
+	bc.order = bc.input.Order() + 1
+}
+
+func (bc *builderCommon) First() builder {
+	return bc.input.First()
+}
+
+func (bc *builderCommon) ResultColumns() []*resultColumn {
+	return bc.input.ResultColumns()
+}
+
+func (bc *builderCommon) SetUpperLimit(count *sqlparser.SQLVal) {
+	bc.input.SetUpperLimit(count)
+}
+
+func (bc *builderCommon) PushMisc(sel *sqlparser.Select) {
+	bc.input.PushMisc(sel)
+}
+
+func (bc *builderCommon) Wireup(bldr builder, jt *jointab) error {
+	return bc.input.Wireup(bldr, jt)
+}
+
+func (bc *builderCommon) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
+	bc.input.SupplyVar(from, to, col, varname)
+}
+
+func (bc *builderCommon) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
+	return bc.input.SupplyCol(col)
+}
+
 // ContextVSchema defines the interface for this package to fetch
 // info about tables.
 type ContextVSchema interface {

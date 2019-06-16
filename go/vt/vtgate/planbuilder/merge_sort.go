@@ -33,41 +33,19 @@ var _ builder = (*mergeSort)(nil)
 // Since ORDER BY happens near the end of the SQL processing,
 // most functions of this primitive are unreachable.
 type mergeSort struct {
-	order int
-	input *route
+	builderCommon
 }
 
 // newMergeSort builds a new mergeSort.
 func newMergeSort(rb *route) *mergeSort {
 	return &mergeSort{
-		input: rb,
+		builderCommon: builderCommon{input: rb},
 	}
-}
-
-// Order satisfies the builder interface.
-func (ms *mergeSort) Order() int {
-	return ms.order
-}
-
-// Reorder satisfies the builder interface.
-func (ms *mergeSort) Reorder(order int) {
-	ms.input.Reorder(order)
-	ms.order = ms.input.Order() + 1
 }
 
 // Primitive satisfies the builder interface.
 func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
-}
-
-// First satisfies the builder interface.
-func (ms *mergeSort) First() builder {
-	return ms.input.First()
-}
-
-// ResultColumns satisfies the builder interface.
-func (ms *mergeSort) ResultColumns() []*resultColumn {
-	return ms.input.ResultColumns()
 }
 
 // PushFilter satisfies the builder interface.
@@ -95,29 +73,4 @@ func (ms *mergeSort) PushGroupBy(groupBy sqlparser.GroupBy) error {
 // So, this function should never get called.
 func (ms *mergeSort) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	return nil, errors.New("mergeSort.PushOrderBy: unreachable")
-}
-
-// SetUpperLimit satisfies the builder interface.
-func (ms *mergeSort) SetUpperLimit(count *sqlparser.SQLVal) {
-	ms.input.SetUpperLimit(count)
-}
-
-// PushMisc satisfies the builder interface.
-func (ms *mergeSort) PushMisc(sel *sqlparser.Select) {
-	ms.input.PushMisc(sel)
-}
-
-// Wireup satisfies the builder interface.
-func (ms *mergeSort) Wireup(bldr builder, jt *jointab) error {
-	return ms.input.Wireup(bldr, jt)
-}
-
-// SupplyVar satisfies the builder interface.
-func (ms *mergeSort) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	ms.input.SupplyVar(from, to, col, varname)
-}
-
-// SupplyCol satisfies the builder interface.
-func (ms *mergeSort) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
-	return ms.input.SupplyCol(col)
 }

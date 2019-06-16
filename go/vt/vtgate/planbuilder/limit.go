@@ -32,46 +32,22 @@ var _ builder = (*limit)(nil)
 // operation. Since a limit is the final operation
 // of a SELECT, most pushes are not applicable.
 type limit struct {
-	order         int
-	resultColumns []*resultColumn
-	input         builder
-	elimit        *engine.Limit
+	builderCommon
+	elimit *engine.Limit
 }
 
 // newLimit builds a new limit.
 func newLimit(bldr builder) *limit {
 	return &limit{
-		resultColumns: bldr.ResultColumns(),
-		input:         bldr,
+		builderCommon: builderCommon{input: bldr},
 		elimit:        &engine.Limit{},
 	}
-}
-
-// Order satisfies the builder interface.
-func (l *limit) Order() int {
-	return l.order
-}
-
-// Reorder satisfies the builder interface.
-func (l *limit) Reorder(order int) {
-	l.input.Reorder(order)
-	l.order = l.input.Order() + 1
 }
 
 // Primitive satisfies the builder interface.
 func (l *limit) Primitive() engine.Primitive {
 	l.elimit.Input = l.input.Primitive()
 	return l.elimit
-}
-
-// First satisfies the builder interface.
-func (l *limit) First() builder {
-	return l.input.First()
-}
-
-// ResultColumns satisfies the builder interface.
-func (l *limit) ResultColumns() []*resultColumn {
-	return l.resultColumns
 }
 
 // PushFilter satisfies the builder interface.
@@ -135,24 +111,4 @@ func (l *limit) SetLimit(limit *sqlparser.Limit) error {
 // This is a no-op because we actually call SetLimit for this primitive.
 // In the future, we may have to honor this call for subqueries.
 func (l *limit) SetUpperLimit(count *sqlparser.SQLVal) {
-}
-
-// PushMisc satisfies the builder interface.
-func (l *limit) PushMisc(sel *sqlparser.Select) {
-	l.input.PushMisc(sel)
-}
-
-// Wireup satisfies the builder interface.
-func (l *limit) Wireup(bldr builder, jt *jointab) error {
-	return l.input.Wireup(bldr, jt)
-}
-
-// SupplyVar satisfies the builder interface.
-func (l *limit) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	l.input.SupplyVar(from, to, col, varname)
-}
-
-// SupplyCol satisfies the builder interface.
-func (l *limit) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
-	panic("BUG: nothing should depend on LIMIT")
 }
