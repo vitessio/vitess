@@ -32,17 +32,16 @@ var _ builder = (*memorySort)(nil)
 // operation. Since a limit is the final operation
 // of a SELECT, most pushes are not applicable.
 type memorySort struct {
-	order         int
+	builderCommon
 	resultColumns []*resultColumn
-	input         builder
 	eMemorySort   *engine.MemorySort
 }
 
 // newMemorySort builds a new memorySort.
 func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error) {
 	ms := &memorySort{
+		builderCommon: builderCommon{input: bldr},
 		resultColumns: bldr.ResultColumns(),
-		input:         bldr,
 		eMemorySort:   &engine.MemorySort{},
 	}
 	for _, order := range orderBy {
@@ -78,26 +77,10 @@ func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error)
 	return ms, nil
 }
 
-// Order satisfies the builder interface.
-func (ms *memorySort) Order() int {
-	return ms.order
-}
-
-// Reorder satisfies the builder interface.
-func (ms *memorySort) Reorder(order int) {
-	ms.input.Reorder(order)
-	ms.order = ms.input.Order() + 1
-}
-
 // Primitive satisfies the builder interface.
 func (ms *memorySort) Primitive() engine.Primitive {
 	ms.eMemorySort.Input = ms.input.Primitive()
 	return ms.eMemorySort
-}
-
-// First satisfies the builder interface.
-func (ms *memorySort) First() builder {
-	return ms.input.First()
 }
 
 // ResultColumns satisfies the builder interface.
@@ -140,24 +123,4 @@ func (ms *memorySort) SetLimit(limit *sqlparser.Limit) error {
 // In the future, we may have to honor this call for subqueries.
 func (ms *memorySort) SetUpperLimit(count *sqlparser.SQLVal) {
 	ms.eMemorySort.UpperLimit, _ = sqlparser.NewPlanValue(count)
-}
-
-// PushMisc satisfies the builder interface.
-func (ms *memorySort) PushMisc(sel *sqlparser.Select) {
-	ms.input.PushMisc(sel)
-}
-
-// Wireup satisfies the builder interface.
-func (ms *memorySort) Wireup(bldr builder, jt *jointab) error {
-	return ms.input.Wireup(bldr, jt)
-}
-
-// SupplyVar satisfies the builder interface.
-func (ms *memorySort) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	ms.input.SupplyVar(from, to, col, varname)
-}
-
-// SupplyCol satisfies the builder interface.
-func (ms *memorySort) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
-	panic("BUG: nothing should depend on ORDER BY")
 }

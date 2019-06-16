@@ -36,17 +36,16 @@ var _ builder = (*subquery)(nil)
 // clause, because a route is more versatile than
 // a subquery.
 type subquery struct {
-	order         int
+	builderCommon
 	resultColumns []*resultColumn
-	input         builder
 	esubquery     *engine.Subquery
 }
 
 // newSubquery builds a new subquery.
 func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab, error) {
 	sq := &subquery{
-		input:     bldr,
-		esubquery: &engine.Subquery{},
+		builderCommon: builderCommon{input: bldr},
+		esubquery:     &engine.Subquery{},
 	}
 
 	// Create a 'table' that represents the subquery.
@@ -67,17 +66,6 @@ func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab, 
 	// AddTable will not fail because symtab is empty.
 	_ = st.AddTable(t)
 	return sq, st, nil
-}
-
-// Order satisfies the builder interface.
-func (sq *subquery) Order() int {
-	return sq.order
-}
-
-// Reorder satisfies the builder interface.
-func (sq *subquery) Reorder(order int) {
-	sq.input.Reorder(order)
-	sq.order = sq.input.Order() + 1
 }
 
 // Primitive satisfies the builder interface.
@@ -138,29 +126,6 @@ func (sq *subquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 		return sq, nil
 	}
 	return nil, errors.New("unsupported: order by on cross-shard subquery")
-}
-
-// SetUpperLimit satisfies the builder interface.
-// For now, the call is ignored because the
-// repercussions of pushing this limit down
-// into a subquery have not been studied yet.
-// We can consider doing it in the future.
-// TODO(sougou): this could be improved.
-func (sq *subquery) SetUpperLimit(_ *sqlparser.SQLVal) {
-}
-
-// PushMisc satisfies the builder interface.
-func (sq *subquery) PushMisc(sel *sqlparser.Select) {
-}
-
-// Wireup satisfies the builder interface.
-func (sq *subquery) Wireup(bldr builder, jt *jointab) error {
-	return sq.input.Wireup(bldr, jt)
-}
-
-// SupplyVar satisfies the builder interface.
-func (sq *subquery) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	sq.input.SupplyVar(from, to, col, varname)
 }
 
 // SupplyCol satisfies the builder interface.
