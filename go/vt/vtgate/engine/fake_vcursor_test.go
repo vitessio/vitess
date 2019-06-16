@@ -35,12 +35,18 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
+var testMaxMemoryRows = 100
+
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
 }
 
 func (t noopVCursor) Context() context.Context {
 	return context.Background()
+}
+
+func (t noopVCursor) MaxMemoryRows() int {
+	return testMaxMemoryRows
 }
 
 func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
