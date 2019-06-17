@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttest"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -57,7 +58,7 @@ create table vstream_test(
 
 create table aggr_test(
 	id bigint,
-	val1 varbinary(16),
+	val1 varchar(16),
 	val2 bigint,
 	primary key(id)
 ) Engine=InnoDB;
@@ -144,6 +145,10 @@ create table t2_id4_idx(
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "id",
 					Name:   "hash",
+				}},
+				Columns: []*vschemapb.Column{{
+					Name: "val1",
+					Type: sqltypes.VarChar,
 				}},
 			},
 		},
