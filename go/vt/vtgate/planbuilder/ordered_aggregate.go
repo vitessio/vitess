@@ -283,7 +283,6 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 	if len(funcExpr.Exprs) != 1 {
 		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(funcExpr))
 	}
-	var innerRC *resultColumn
 	var innerCol int
 	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, funcExpr, opcode)
 	if err != nil {
@@ -295,7 +294,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		}
 		// Push the expression that's inside the aggregate.
 		// The column will eventually get added to the group by and order by clauses.
-		innerRC, innerCol, _ = oa.input.PushSelect(pb, innerAliased, origin)
+		_, innerCol, _ = oa.input.PushSelect(pb, innerAliased, origin)
 		col, err := BuildColName(oa.input.ResultColumns(), innerCol)
 		if err != nil {
 			return nil, 0, err
@@ -320,7 +319,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			Alias:  alias,
 		})
 	} else {
-		innerRC, innerCol, _ = oa.input.PushSelect(pb, expr, origin)
+		_, innerCol, _ = oa.input.PushSelect(pb, expr, origin)
 		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
 			Opcode: opcode,
 			Col:    innerCol,
@@ -329,7 +328,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 
 	// Build a new rc with oa as origin because it's semantically different
 	// from the expression we pushed down.
-	rc = &resultColumn{alias: innerRC.alias, column: &column{origin: oa}}
+	rc = newResultColumn(expr, oa)
 	oa.resultColumns = append(oa.resultColumns, rc)
 	return rc, len(oa.resultColumns) - 1, nil
 }
