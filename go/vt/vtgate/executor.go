@@ -1425,8 +1425,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *Safe
 
 func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
 	// Start an implicit transaction if necessary.
-	// TODO(sougou): deprecate legacyMode after all users are migrated out.
-	if !e.legacyAutocommit && !safeSession.Autocommit && !safeSession.InTransaction() {
+	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession); err != nil {
 			return nil, err
 		}
@@ -1464,11 +1463,6 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		safeSession := safeSession
 
-		// In legacy mode, we ignore autocommit settings.
-		if e.legacyAutocommit {
-			return &sqltypes.Result{}, nil
-		}
-
 		mustCommit := false
 		if safeSession.Autocommit && !safeSession.InTransaction() {
 			mustCommit = true
@@ -1488,7 +1482,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 		// do is likely not final.
 		// The control flow is such that autocommitable can only be turned on
 		// at the beginning, but never after.
-		safeSession.SetAutocommitable(mustCommit)
+		safeSession.SetAutocommittable(mustCommit)
 
 		if mustCommit {
 			commitStart := time.Now()
