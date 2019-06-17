@@ -104,6 +104,10 @@ type builder interface {
 	// result column and returns a distinct symbol for it.
 	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int)
 
+	// SupplyWeightString must supply a weight_string expression of the
+	// specified column.
+	SupplyWeightString(colNumber int) (weightcolNumber int, err error)
+
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
@@ -168,6 +172,81 @@ func (bc *builderCommon) SupplyVar(from, to int, col *sqlparser.ColName, varname
 
 func (bc *builderCommon) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	return bc.input.SupplyCol(col)
+}
+
+func (bc *builderCommon) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+	return bc.input.SupplyWeightString(colNumber)
+}
+
+//-------------------------------------------------------------------------
+
+type truncater interface {
+	SetTruncateColumnCount(int)
+}
+
+// resultsBuilder is a superset of builderCommon. It also handles
+// resultsColumn functionality.
+type resultsBuilder struct {
+	builderCommon
+	resultColumns []*resultColumn
+	weightStrings map[*resultColumn]int
+	truncater     truncater
+}
+
+func newResultsBuilder(input builder, truncater truncater) resultsBuilder {
+	return resultsBuilder{
+		builderCommon: newBuilderCommon(input),
+		resultColumns: input.ResultColumns(),
+		weightStrings: make(map[*resultColumn]int),
+		truncater:     truncater,
+	}
+}
+
+func (rsb *resultsBuilder) ResultColumns() []*resultColumn {
+	return rsb.resultColumns
+}
+
+// SupplyCol is currently unreachable because the builders using resultsBuilder
+// are currently above a join, which is the only builder that uses it for now.
+// This can change if we start supporting correlated subqueries.
+func (rsb *resultsBuilder) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
+	c := col.Metadata.(*column)
+	for i, rc := range rsb.resultColumns {
+		if rc.column == c {
+			return rc, i
+		}
+	}
+	rc, colNumber = rsb.input.SupplyCol(col)
+	if colNumber < len(rsb.resultColumns) {
+		return rc, colNumber
+	}
+	// Add result columns from input until colNumber is reached.
+	for colNumber >= len(rsb.resultColumns) {
+		rsb.resultColumns = append(rsb.resultColumns, rsb.input.ResultColumns()[len(rsb.resultColumns)])
+	}
+	rsb.truncater.SetTruncateColumnCount(len(rsb.resultColumns))
+	return rc, colNumber
+}
+
+func (rsb *resultsBuilder) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+	rc := rsb.resultColumns[colNumber]
+	if weightcolNumber, ok := rsb.weightStrings[rc]; ok {
+		return weightcolNumber, nil
+	}
+	weightcolNumber, err = rsb.input.SupplyWeightString(colNumber)
+	if err != nil {
+		return 0, nil
+	}
+	rsb.weightStrings[rc] = weightcolNumber
+	if weightcolNumber < len(rsb.resultColumns) {
+		return weightcolNumber, nil
+	}
+	// Add result columns from input until weightcolNumber is reached.
+	for weightcolNumber >= len(rsb.resultColumns) {
+		rsb.resultColumns = append(rsb.resultColumns, rsb.input.ResultColumns()[len(rsb.resultColumns)])
+	}
+	rsb.truncater.SetTruncateColumnCount(len(rsb.resultColumns))
+	return weightcolNumber, nil
 }
 
 //-------------------------------------------------------------------------

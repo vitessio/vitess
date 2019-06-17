@@ -211,3 +211,8 @@ func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNu
 	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, c.colNumber)
 	return rc, len(vf.resultColumns) - 1
 }
+
+// SupplyWeightString satisfies the builder interface.
+func (vf *vindexFunc) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+	return 0, errors.New("cannot do collation on vindex function")
+}

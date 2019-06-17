@@ -34,6 +34,11 @@ type MemorySort struct {
 	UpperLimit sqltypes.PlanValue
 	OrderBy    []OrderbyParams
 	Input      Primitive
+
+	// TruncateColumnCount specifies the number of columns to return
+	// in the final result. Rest of the columns are truncated
+	// from the result received. If 0, no truncation happens.
+	TruncateColumnCount int `json:",omitempty"`
 }
 
 // MarshalJSON serializes the MemorySort into a JSON representation.
@@ -56,6 +61,11 @@ func (ms *MemorySort) MarshalJSON() ([]byte, error) {
 // RouteType returns a description of the query routing type used by the primitive.
 func (ms *MemorySort) RouteType() string {
 	return ms.Input.RouteType()
+}
+
+// SetTruncateColumnCount sets the truncate column count.
+func (ms *MemorySort) SetTruncateColumnCount(count int) {
+	ms.TruncateColumnCount = count
 }
 
 // Execute satisfies the Primtive interface.
@@ -82,7 +92,7 @@ func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		result.Rows = result.Rows[:count]
 		result.RowsAffected = uint64(count)
 	}
-	return result, nil
+	return result.Truncate(ms.TruncateColumnCount), nil
 }
 
 // StreamExecute satisfies the Primtive interface.
@@ -90,6 +100,10 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 	count, err := ms.fetchCount(bindVars)
 	if err != nil {
 		return err
+	}
+
+	cb := func(qr *sqltypes.Result) error {
+		return callback(qr.Truncate(ms.TruncateColumnCount))
 	}
 
 	// You have to reverse the ordering because the highest values
@@ -100,7 +114,7 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 	}
 	err = ms.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
-			if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
+			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
 			}
 		}
@@ -128,7 +142,7 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 		// Unreachable.
 		return sh.err
 	}
-	return callback(&sqltypes.Result{Rows: sh.rows})
+	return cb(&sqltypes.Result{Rows: sh.rows})
 }
 
 // GetFields satisfies the Primtive interface.

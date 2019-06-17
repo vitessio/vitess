@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -273,43 +272,6 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		}
 	}
 
-	// If rb has to do the ordering, and if any columns are Text,
-	// we have to request the corresponding weight_string from mysql
-	// and use that value instead. This is because we cannot mimic
-	// mysql's collation behavior yet.
-	for i, orderby := range ro.eroute.OrderBy {
-		rc := rb.resultColumns[orderby.Col]
-		if sqltypes.IsText(rc.column.typ) {
-			// If a weight string was previously requested (by OrderedAggregator),
-			// reuse it.
-			if colNumber, ok := rb.weightStrings[rc]; ok {
-				ro.eroute.OrderBy[i].Col = colNumber
-				continue
-			}
-
-			// len(rb.resultColumns) does not change. No harm using the value multiple times.
-			ro.eroute.TruncateColumnCount = len(rb.resultColumns)
-
-			// This code is partially duplicated from SupplyWeightString and PushSelect.
-			// We should not update resultColumns because it's not returned in the result.
-			// This is why we don't call PushSelect (or SupplyWeightString).
-			expr := &sqlparser.AliasedExpr{
-				Expr: &sqlparser.FuncExpr{
-					Name: sqlparser.NewColIdent("weight_string"),
-					Exprs: []sqlparser.SelectExpr{
-						rb.Select.(*sqlparser.Select).SelectExprs[orderby.Col],
-					},
-				},
-			}
-			sel := rb.Select.(*sqlparser.Select)
-			sel.SelectExprs = append(sel.SelectExprs, expr)
-			ro.eroute.OrderBy[i].Col = len(sel.SelectExprs) - 1
-			// We don't really have to update weightStrings, but we're doing it
-			// for good measure.
-			rb.weightStrings[rc] = len(sel.SelectExprs) - 1
-		}
-	}
-
 	// Fix up the AST.
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
@@ -455,10 +417,11 @@ func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber 
 	return rc, len(rb.resultColumns) - 1
 }
 
-func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int) {
+// SupplyWeightString satisfies the builder interface.
+func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	rc := rb.resultColumns[colNumber]
 	if weightcolNumber, ok := rb.weightStrings[rc]; ok {
-		return weightcolNumber
+		return weightcolNumber, nil
 	}
 	expr := &sqlparser.AliasedExpr{
 		Expr: &sqlparser.FuncExpr{
@@ -471,29 +434,7 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int) {
 	// It's ok to pass nil for pb and builder because PushSelect doesn't use them.
 	_, weightcolNumber, _ = rb.PushSelect(nil, expr, nil)
 	rb.weightStrings[rc] = weightcolNumber
-	return weightcolNumber
-}
-
-// BuildColName builds a *sqlparser.ColName for the resultColumn specified
-// by the index. The built ColName will correctly reference the resultColumn
-// it was built from, which is safe to push down into the route.
-func (rb *route) BuildColName(index int) (*sqlparser.ColName, error) {
-	alias := rb.resultColumns[index].alias
-	if alias.IsEmpty() {
-		return nil, errors.New("cannot reference a complex expression")
-	}
-	for i, rc := range rb.resultColumns {
-		if i == index {
-			continue
-		}
-		if rc.alias.Equal(alias) {
-			return nil, fmt.Errorf("ambiguous symbol reference: %v", alias)
-		}
-	}
-	return &sqlparser.ColName{
-		Metadata: rb.resultColumns[index].column,
-		Name:     alias,
-	}, nil
+	return weightcolNumber, nil
 }
 
 // MergeSubquery returns true if the subquery route could successfully be merged

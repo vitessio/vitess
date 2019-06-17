@@ -121,6 +121,11 @@ func (oa *OrderedAggregate) RouteType() string {
 	return oa.Input.RouteType()
 }
 
+// SetTruncateColumnCount sets the truncate column count.
+func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
+	oa.TruncateColumnCount = count
+}
+
 // Execute is a Primitive function.
 func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := oa.execute(vcursor, bindVars, wantfields)
