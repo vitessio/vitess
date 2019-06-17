@@ -432,6 +432,16 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 	return entry.QueryResult, nil
 }
 
+// ComPrepare is part of the mysql.Handler interface.
+func (db *DB) ComPrepare(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
+// ComStmtExecute is part of the mysql.Handler interface.
+func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
 //
 // Methods to add expected queries and results.
 //

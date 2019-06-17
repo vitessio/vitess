@@ -43,6 +43,14 @@ func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes
 	return nil
 }
 
+func (th *testHandler) ComPrepare(c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
+func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
 func (th *testHandler) WarningCount(c *mysql.Conn) uint16 {
 	return 0
 }

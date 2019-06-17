@@ -171,6 +171,14 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 	return nil
 }
 
+func (th *testHandler) ComPrepare(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
+func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
 func (th *testHandler) WarningCount(c *Conn) uint16 {
 	return th.warnings
 }
