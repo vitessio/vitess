@@ -145,3 +145,8 @@ func (ps *pulloutSubquery) SupplyVar(from, to int, col *sqlparser.ColName, varna
 func (ps *pulloutSubquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	return ps.underlying.SupplyCol(col)
 }
+
+// SupplyWeightString satisfies the builder interface.
+func (ps *pulloutSubquery) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+	return ps.underlying.SupplyWeightString(colNumber)
+}

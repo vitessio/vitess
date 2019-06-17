@@ -31,6 +31,7 @@ var _ builder = (*join)(nil)
 type join struct {
 	order         int
 	resultColumns []*resultColumn
+	weightStrings map[*resultColumn]int
 
 	// leftOrder stores the order number of the left node. This is
 	// used for a b-tree style traversal towards the target route.
@@ -98,8 +99,9 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 		}
 	}
 	lpb.bldr = &join{
-		Left:  lpb.bldr,
-		Right: rpb.bldr,
+		weightStrings: make(map[*resultColumn]int),
+		Left:          lpb.bldr,
+		Right:         rpb.bldr,
 		ejoin: &engine.Join{
 			Opcode: opcode,
 			Vars:   make(map[string]int),
@@ -335,6 +337,31 @@ func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber i
 	}
 	jb.resultColumns = append(jb.resultColumns, rc)
 	return rc, len(jb.ejoin.Cols) - 1
+}
+
+// SupplyWeightString satisfies the builder interface.
+func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+	rc := jb.resultColumns[colNumber]
+	if weightcolNumber, ok := jb.weightStrings[rc]; ok {
+		return weightcolNumber, nil
+	}
+	routeNumber := rc.column.Origin().Order()
+	if jb.isOnLeft(routeNumber) {
+		sourceCol, err := jb.Left.SupplyWeightString(-jb.ejoin.Cols[colNumber] - 1)
+		if err != nil {
+			return 0, err
+		}
+		jb.ejoin.Cols = append(jb.ejoin.Cols, -sourceCol-1)
+	} else {
+		sourceCol, err := jb.Right.SupplyWeightString(jb.ejoin.Cols[colNumber] - 1)
+		if err != nil {
+			return 0, err
+		}
+		jb.ejoin.Cols = append(jb.ejoin.Cols, sourceCol+1)
+	}
+	jb.resultColumns = append(jb.resultColumns, rc)
+	jb.weightStrings[rc] = len(jb.ejoin.Cols) - 1
+	return len(jb.ejoin.Cols) - 1, nil
 }
 
 // isOnLeft returns true if the specified route number

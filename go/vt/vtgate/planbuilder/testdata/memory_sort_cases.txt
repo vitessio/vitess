@@ -227,6 +227,63 @@
   }
 }
 
+# scatter aggregate with memory sort and order by number, reuse weight_string
+# we have to use a meaningless construct to test this.
+"select textcol1, count(*) k from user group by textcol1 order by textcol1, k, textcol1"
+{
+  "Original": "select textcol1, count(*) k from user group by textcol1 order by textcol1, k, textcol1",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 2,
+        "Desc": false
+      },
+      {
+        "Col": 1,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Aggregates": [
+        {
+          "Opcode": "count",
+          "Col": 1
+        }
+      ],
+      "Keys": [
+        2
+      ],
+      "TruncateColumnCount": 3,
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select textcol1, count(*) as k, weight_string(textcol1) from user group by textcol1 order by textcol1 asc, textcol1 asc",
+        "FieldQuery": "select textcol1, count(*) as k, weight_string(textcol1) from user where 1 != 1 group by textcol1",
+        "OrderBy": [
+          {
+            "Col": 2,
+            "Desc": false
+          },
+          {
+            "Col": 2,
+            "Desc": false
+          }
+        ],
+        "TruncateColumnCount": 3
+      }
+    }
+  }
+}
+
 # order by on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t order by id"
 {
@@ -383,6 +440,100 @@
       "Vars": {
         "user_id": 2
       }
+    }
+  }
+}
+
+# Order by for join, on text column in LHS.
+"select u.a, u.textcol1, un.col2 from user u join unsharded un order by u.textcol1, un.col2"
+{
+  "Original": "select u.a, u.textcol1, un.col2 from user u join unsharded un order by u.textcol1, un.col2",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 3,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u",
+        "FieldQuery": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select un.col2 from unsharded as un",
+        "FieldQuery": "select un.col2 from unsharded as un where 1 != 1"
+      },
+      "Cols": [
+        -1,
+        -2,
+        1,
+        -3
+      ]
+    }
+  }
+}
+
+# Order by for join, on text column in RHS.
+"select u.a, u.textcol1, un.col2 from unsharded un join user u order by u.textcol1, un.col2"
+{
+  "Original": "select u.a, u.textcol1, un.col2 from unsharded un join user u order by u.textcol1, un.col2",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 3,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select un.col2 from unsharded as un",
+        "FieldQuery": "select un.col2 from unsharded as un where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u",
+        "FieldQuery": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u where 1 != 1"
+      },
+      "Cols": [
+        1,
+        2,
+        -1,
+        3
+      ]
     }
   }
 }

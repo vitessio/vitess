@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -32,17 +33,16 @@ var _ builder = (*memorySort)(nil)
 // operation. Since a limit is the final operation
 // of a SELECT, most pushes are not applicable.
 type memorySort struct {
-	builderCommon
-	resultColumns []*resultColumn
-	eMemorySort   *engine.MemorySort
+	resultsBuilder
+	eMemorySort *engine.MemorySort
 }
 
 // newMemorySort builds a new memorySort.
 func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error) {
+	eMemorySort := &engine.MemorySort{}
 	ms := &memorySort{
-		builderCommon: newBuilderCommon(bldr),
-		resultColumns: bldr.ResultColumns(),
-		eMemorySort:   &engine.MemorySort{},
+		resultsBuilder: newResultsBuilder(bldr, eMemorySort),
+		eMemorySort:    eMemorySort,
 	}
 	for _, order := range orderBy {
 		colNumber := -1
@@ -83,11 +83,6 @@ func (ms *memorySort) Primitive() engine.Primitive {
 	return ms.eMemorySort
 }
 
-// ResultColumns satisfies the builder interface.
-func (ms *memorySort) ResultColumns() []*resultColumn {
-	return ms.resultColumns
-}
-
 // PushFilter satisfies the builder interface.
 func (ms *memorySort) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
 	return errors.New("memorySort.PushFilter: unreachable")
@@ -116,6 +111,32 @@ func (ms *memorySort) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 // SetLimit satisfies the builder interface.
 func (ms *memorySort) SetLimit(limit *sqlparser.Limit) error {
 	return errors.New("memorySort.Limit: unreachable")
+}
+
+// Wireup satisfies the builder interface.
+// If text columns are detected in the keys, then the function modifies
+// the primitive to pull a corresponding weight_string from mysql and
+// compare those instead. This is because we currently don't have the
+// ability to mimic mysql's collation behavior.
+func (ms *memorySort) Wireup(bldr builder, jt *jointab) error {
+	for i, orderby := range ms.eMemorySort.OrderBy {
+		rc := ms.resultColumns[orderby.Col]
+		if sqltypes.IsText(rc.column.typ) {
+			// If a weight string was previously requested, reuse it.
+			if weightcolNumber, ok := ms.weightStrings[rc]; ok {
+				ms.eMemorySort.OrderBy[i].Col = weightcolNumber
+				continue
+			}
+			weightcolNumber, err := ms.input.SupplyWeightString(orderby.Col)
+			if err != nil {
+				return err
+			}
+			ms.weightStrings[rc] = weightcolNumber
+			ms.eMemorySort.OrderBy[i].Col = weightcolNumber
+			ms.eMemorySort.TruncateColumnCount = len(ms.resultColumns)
+		}
+	}
+	return ms.input.Wireup(bldr, jt)
 }
 
 // SetUpperLimit satisfies the builder interface.

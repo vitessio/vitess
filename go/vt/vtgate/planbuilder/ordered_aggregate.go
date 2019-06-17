@@ -54,10 +54,8 @@ var _ builder = (*orderedAggregate)(nil)
 //      Input: (Scatter Route with the order by request),
 //    }
 type orderedAggregate struct {
-	resultColumns []*resultColumn
-	order         int
+	resultsBuilder
 	extraDistinct *sqlparser.ColName
-	input         *route
 	eaggr         *engine.OrderedAggregate
 }
 
@@ -132,9 +130,10 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	}
 
 	// We need an aggregator primitive.
+	eaggr := &engine.OrderedAggregate{}
 	pb.bldr = &orderedAggregate{
-		input: rb,
-		eaggr: &engine.OrderedAggregate{},
+		resultsBuilder: newResultsBuilder(rb, eaggr),
+		eaggr:          eaggr,
 	}
 	pb.bldr.Reorder(0)
 	return nil
@@ -238,31 +237,10 @@ func findAlias(colname *sqlparser.ColName, selects sqlparser.SelectExprs) sqlpar
 	return nil
 }
 
-// Order satisfies the builder interface.
-func (oa *orderedAggregate) Order() int {
-	return oa.order
-}
-
-// Reorder satisfies the builder interface.
-func (oa *orderedAggregate) Reorder(order int) {
-	oa.input.Reorder(order)
-	oa.order = oa.input.Order() + 1
-}
-
 // Primitive satisfies the builder interface.
 func (oa *orderedAggregate) Primitive() engine.Primitive {
 	oa.eaggr.Input = oa.input.Primitive()
 	return oa.eaggr
-}
-
-// First satisfies the builder interface.
-func (oa *orderedAggregate) First() builder {
-	return oa.input.First()
-}
-
-// ResultColumns satisfies the builder interface.
-func (oa *orderedAggregate) ResultColumns() []*resultColumn {
-	return oa.resultColumns
 }
 
 // PushFilter satisfies the builder interface.
@@ -318,7 +296,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		// Push the expression that's inside the aggregate.
 		// The column will eventually get added to the group by and order by clauses.
 		innerRC, innerCol, _ = oa.input.PushSelect(pb, innerAliased, origin)
-		col, err := oa.input.BuildColName(innerCol)
+		col, err := BuildColName(oa.input.ResultColumns(), innerCol)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -370,7 +348,12 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 	if !ok {
 		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(funcExpr))
 	}
-	success := oa.input.removeOptions(func(ro *routeOption) bool {
+	rb, ok := oa.input.(*route)
+	if !ok {
+		// Unreachable
+		return true, innerAliased, nil
+	}
+	success := rb.removeOptions(func(ro *routeOption) bool {
 		vindex := ro.FindVindex(pb, innerAliased.Expr)
 		if vindex != nil && vindex.IsUnique() {
 			return true
@@ -497,7 +480,7 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 			continue
 		}
 		// Build a brand new reference for the key.
-		col, err := oa.input.BuildColName(key)
+		col, err := BuildColName(oa.input.ResultColumns(), key)
 		if err != nil {
 			return nil, fmt.Errorf("generating order by clause: %v", err)
 		}
@@ -513,12 +496,11 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 	// It's ok to push the original AST down because all references
 	// should point to the route. Only aggregate functions are originated
 	// by oa, and we currently don't allow the ORDER BY to reference them.
-	// TODO(sougou): PushOrderBy will return a mergeSort primitive, which
-	// we should ideally replace oa.input with.
-	_, err := oa.input.PushOrderBy(selOrderBy)
+	bldr, err := oa.input.PushOrderBy(selOrderBy)
 	if err != nil {
 		return nil, err
 	}
+	oa.input = bldr
 	if postSort {
 		return newMemorySort(oa, orderBy)
 	}
@@ -542,37 +524,20 @@ func (oa *orderedAggregate) PushMisc(sel *sqlparser.Select) {
 // ability to mimic mysql's collation behavior.
 func (oa *orderedAggregate) Wireup(bldr builder, jt *jointab) error {
 	for i, colNumber := range oa.eaggr.Keys {
-		if sqltypes.IsText(oa.resultColumns[colNumber].column.typ) {
-			// len(oa.resultColumns) does not change. No harm using the value multiple times.
+		rc := oa.resultColumns[colNumber]
+		if sqltypes.IsText(rc.column.typ) {
+			if weightcolNumber, ok := oa.weightStrings[rc]; ok {
+				oa.eaggr.Keys[i] = weightcolNumber
+				continue
+			}
+			weightcolNumber, err := oa.input.SupplyWeightString(colNumber)
+			if err != nil {
+				return err
+			}
+			oa.weightStrings[rc] = weightcolNumber
+			oa.eaggr.Keys[i] = weightcolNumber
 			oa.eaggr.TruncateColumnCount = len(oa.resultColumns)
-			oa.eaggr.Keys[i] = oa.input.SupplyWeightString(colNumber)
 		}
 	}
 	return oa.input.Wireup(bldr, jt)
-}
-
-// SupplyVar satisfies the builder interface.
-func (oa *orderedAggregate) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	oa.input.SupplyVar(from, to, col, varname)
-}
-
-// SupplyCol satisfies the builder interface.
-// This function is unreachable. It's just a reference implementation for now.
-func (oa *orderedAggregate) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	c := col.Metadata.(*column)
-	for i, rc := range oa.resultColumns {
-		if rc.column == c {
-			return rc, i
-		}
-	}
-	rc, colNumber = oa.input.SupplyCol(col)
-	if colNumber < len(oa.resultColumns) {
-		return rc, colNumber
-	}
-	// Add result columns from input until colNumber is reached.
-	for colNumber >= len(oa.resultColumns) {
-		oa.resultColumns = append(oa.resultColumns, oa.input.ResultColumns()[len(oa.resultColumns)])
-	}
-	oa.eaggr.TruncateColumnCount = len(oa.resultColumns)
-	return rc, colNumber
 }
