@@ -145,7 +145,7 @@ func (cp *ConnectionPool) Open(info *mysql.ConnParams, mysqlStats *stats.Timings
 	defer cp.mu.Unlock()
 	cp.info = info
 	cp.mysqlStats = mysqlStats
-	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout)
+	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0)
 	// Check if we need to resolve a hostname (The Host is not just an IP  address).
 	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host) == nil {
 		cp.hostIsNotIP = true
@@ -156,7 +156,7 @@ func (cp *ConnectionPool) Open(info *mysql.ConnParams, mysqlStats *stats.Timings
 			defer cp.wg.Done()
 			for {
 				select {
-				case _ = <-cp.ticker.C:
+				case <-cp.ticker.C:
 					cp.refreshdns()
 				case <-cp.stop:
 					return

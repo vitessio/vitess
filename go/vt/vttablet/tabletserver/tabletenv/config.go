@@ -44,10 +44,14 @@ var (
 )
 
 func init() {
-	flag.IntVar(&Config.PoolSize, "queryserver-config-pool-size", DefaultQsConfig.PoolSize, "query server connection pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
+	flag.IntVar(&Config.PoolSize, "queryserver-config-pool-size", DefaultQsConfig.PoolSize, "query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
+	flag.IntVar(&Config.PoolPrefillParallelism, "queryserver-config-pool-prefill-parallelism", DefaultQsConfig.PoolPrefillParallelism, "query server read pool prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
 	flag.IntVar(&Config.StreamPoolSize, "queryserver-config-stream-pool-size", DefaultQsConfig.StreamPoolSize, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
+	flag.IntVar(&Config.StreamPoolPrefillParallelism, "queryserver-config-stream-pool-prefill-parallelism", DefaultQsConfig.StreamPoolPrefillParallelism, "query server stream pool prefill parallelism, a non-zero value will prefill the pool using the specified parallelism")
 	flag.IntVar(&Config.MessagePoolSize, "queryserver-config-message-conn-pool-size", DefaultQsConfig.MessagePoolSize, "query server message connection pool size, message pool is used by message managers: recommended value is one per message table")
+	flag.IntVar(&Config.MessagePoolPrefillParallelism, "queryserver-config-message-conn-pool-prefill-parallelism", DefaultQsConfig.MessagePoolPrefillParallelism, "query server message pool prefill parallelism, a non-zero value will prefill the pool using the specified parallelism")
 	flag.IntVar(&Config.TransactionCap, "queryserver-config-transaction-cap", DefaultQsConfig.TransactionCap, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
+	flag.IntVar(&Config.TxPoolPrefillParallelism, "queryserver-config-transaction-prefill-parallelism", DefaultQsConfig.TxPoolPrefillParallelism, "query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
 	flag.IntVar(&Config.MessagePostponeCap, "queryserver-config-message-postpone-cap", DefaultQsConfig.MessagePostponeCap, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	flag.IntVar(&Config.FoundRowsPoolSize, "client-found-rows-pool-size", DefaultQsConfig.FoundRowsPoolSize, "size of a special pool that will be used if the client requests that statements be executed with the CLIENT_FOUND_ROWS option of MySQL.")
 	flag.Float64Var(&Config.TransactionTimeout, "queryserver-config-transaction-timeout", DefaultQsConfig.TransactionTimeout, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
@@ -123,38 +127,42 @@ func Init() {
 
 // TabletConfig contains all the configuration for query service
 type TabletConfig struct {
-	PoolSize                int
-	StreamPoolSize          int
-	MessagePoolSize         int
-	TransactionCap          int
-	MessagePostponeCap      int
-	FoundRowsPoolSize       int
-	TransactionTimeout      float64
-	TxShutDownGracePeriod   float64
-	MaxResultSize           int
-	WarnResultSize          int
-	MaxDMLRows              int
-	PassthroughDMLs         bool
-	AllowUnsafeDMLs         bool
-	StreamBufferSize        int
-	QueryPlanCacheSize      int
-	SchemaReloadTime        float64
-	QueryTimeout            float64
-	QueryPoolTimeout        float64
-	TxPoolTimeout           float64
-	IdleTimeout             float64
-	QueryPoolWaiterCap      int
-	TxPoolWaiterCap         int
-	StrictTableACL          bool
-	TerseErrors             bool
-	EnableAutoCommit        bool
-	EnableTableACLDryRun    bool
-	PoolNamePrefix          string
-	TableACLExemptACL       string
-	WatchReplication        bool
-	TwoPCEnable             bool
-	TwoPCCoordinatorAddress string
-	TwoPCAbandonAge         float64
+	PoolSize                      int
+	PoolPrefillParallelism        int
+	StreamPoolSize                int
+	StreamPoolPrefillParallelism  int
+	MessagePoolSize               int
+	MessagePoolPrefillParallelism int
+	TransactionCap                int
+	MessagePostponeCap            int
+	FoundRowsPoolSize             int
+	TxPoolPrefillParallelism      int
+	TransactionTimeout            float64
+	TxShutDownGracePeriod         float64
+	MaxResultSize                 int
+	WarnResultSize                int
+	MaxDMLRows                    int
+	PassthroughDMLs               bool
+	AllowUnsafeDMLs               bool
+	StreamBufferSize              int
+	QueryPlanCacheSize            int
+	SchemaReloadTime              float64
+	QueryTimeout                  float64
+	QueryPoolTimeout              float64
+	TxPoolTimeout                 float64
+	IdleTimeout                   float64
+	QueryPoolWaiterCap            int
+	TxPoolWaiterCap               int
+	StrictTableACL                bool
+	TerseErrors                   bool
+	EnableAutoCommit              bool
+	EnableTableACLDryRun          bool
+	PoolNamePrefix                string
+	TableACLExemptACL             string
+	WatchReplication              bool
+	TwoPCEnable                   bool
+	TwoPCCoordinatorAddress       string
+	TwoPCAbandonAge               float64
 
 	EnableTxThrottler           bool
 	TxThrottlerConfig           string
@@ -195,38 +203,42 @@ type TransactionLimitConfig struct {
 // great (the overhead makes the final packets on the wire about twice
 // bigger than this).
 var DefaultQsConfig = TabletConfig{
-	PoolSize:                16,
-	StreamPoolSize:          200,
-	MessagePoolSize:         5,
-	TransactionCap:          20,
-	MessagePostponeCap:      4,
-	FoundRowsPoolSize:       20,
-	TransactionTimeout:      30,
-	TxShutDownGracePeriod:   0,
-	MaxResultSize:           10000,
-	WarnResultSize:          0,
-	MaxDMLRows:              500,
-	PassthroughDMLs:         false,
-	AllowUnsafeDMLs:         false,
-	QueryPlanCacheSize:      5000,
-	SchemaReloadTime:        30 * 60,
-	QueryTimeout:            30,
-	QueryPoolTimeout:        0,
-	TxPoolTimeout:           1,
-	IdleTimeout:             30 * 60,
-	QueryPoolWaiterCap:      50000,
-	TxPoolWaiterCap:         50000,
-	StreamBufferSize:        32 * 1024,
-	StrictTableACL:          false,
-	TerseErrors:             false,
-	EnableAutoCommit:        false,
-	EnableTableACLDryRun:    false,
-	PoolNamePrefix:          "",
-	TableACLExemptACL:       "",
-	WatchReplication:        false,
-	TwoPCEnable:             false,
-	TwoPCCoordinatorAddress: "",
-	TwoPCAbandonAge:         0,
+	PoolSize:                      16,
+	PoolPrefillParallelism:        0,
+	StreamPoolSize:                200,
+	StreamPoolPrefillParallelism:  0,
+	MessagePoolSize:               5,
+	MessagePoolPrefillParallelism: 0,
+	TransactionCap:                20,
+	MessagePostponeCap:            4,
+	FoundRowsPoolSize:             20,
+	TxPoolPrefillParallelism:      0,
+	TransactionTimeout:            30,
+	TxShutDownGracePeriod:         0,
+	MaxResultSize:                 10000,
+	WarnResultSize:                0,
+	MaxDMLRows:                    500,
+	PassthroughDMLs:               false,
+	AllowUnsafeDMLs:               false,
+	QueryPlanCacheSize:            5000,
+	SchemaReloadTime:              30 * 60,
+	QueryTimeout:                  30,
+	QueryPoolTimeout:              0,
+	TxPoolTimeout:                 1,
+	IdleTimeout:                   30 * 60,
+	QueryPoolWaiterCap:            50000,
+	TxPoolWaiterCap:               50000,
+	StreamBufferSize:              32 * 1024,
+	StrictTableACL:                false,
+	TerseErrors:                   false,
+	EnableAutoCommit:              false,
+	EnableTableACLDryRun:          false,
+	PoolNamePrefix:                "",
+	TableACLExemptACL:             "",
+	WatchReplication:              false,
+	TwoPCEnable:                   false,
+	TwoPCCoordinatorAddress:       "",
+	TwoPCAbandonAge:               0,
 
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),
