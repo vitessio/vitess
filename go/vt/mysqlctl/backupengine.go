@@ -94,7 +94,7 @@ func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logge
 	// Starting from here we won't be able to recover if we get stopped by a cancelled
 	// context. Thus we use the background context to get through to the finish.
 	logger.Infof("Restore: shutdown mysqld")
-	if err := mysqld.Shutdown(context.Background(), cnf, true); err != nil {
+	if err := mysqld.Shutdown(ctx, cnf, true); err != nil {
 		return err
 	}
 
@@ -104,7 +104,7 @@ func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logge
 	}
 
 	logger.Infof("Restore: reinit config file")
-	if err := mysqld.ReinitConfig(context.Background(), cnf); err != nil {
+	if err := mysqld.ReinitConfig(ctx, cnf); err != nil {
 		return err
 	}
 	return nil
