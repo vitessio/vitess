@@ -70,6 +70,7 @@ import (
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -97,7 +98,8 @@ var (
 	minRetentionTime  = flag.Duration("min_retention_time", 0, "Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.")
 	minRetentionCount = flag.Int("min_retention_count", 1, "Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made")
 
-	initialBackup = flag.Bool("initial_backup", false, "Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).")
+	initialBackup    = flag.Bool("initial_backup", false, "Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).")
+	allowFirstBackup = flag.Bool("allow_first_backup", false, "Allow this job to take the first backup of an existing shard.")
 
 	// vttablet-like flags
 	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
@@ -212,6 +214,12 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		"TABLET_ALIAS": topoproto.TabletAliasString(tabletAlias),
 	}
 
+	// Restore from backup.
+	dbName := *initDbNameOverride
+	if dbName == "" {
+		dbName = fmt.Sprintf("vt_%s", *initKeyspace)
+	}
+
 	// In initial_backup mode, just take a backup of this empty database.
 	if *initialBackup {
 		// Take a backup of this empty DB without restoring anything.
@@ -221,6 +229,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		// executing a statement to force the creation of a replication position.
 		mysqld.ResetReplication(ctx)
 		cmds := mysqlctl.CreateReparentJournal()
+
+		// Create the tablet database
+		createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(dbName))
+		cmds = append(cmds, createDB)
 		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
 			return fmt.Errorf("can't initialize database with reparent journal: %v", err)
 		}
@@ -233,19 +245,15 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		return nil
 	}
 
-	// Restore from backup.
-	dbName := *initDbNameOverride
-	if dbName == "" {
-		dbName = fmt.Sprintf("vt_%s", *initKeyspace)
-	}
-
 	log.Infof("Restoring latest backup from directory %v", backupDir)
 	restorePos, err := mysqlctl.Restore(ctx, mycnf, mysqld, backupDir, *concurrency, extraEnv, map[string]string{}, logutil.NewConsoleLogger(), true, dbName)
 	switch err {
 	case nil:
 		log.Infof("Successfully restored from backup at replication position %v", restorePos)
 	case mysqlctl.ErrNoBackup:
-		return fmt.Errorf("no backup found; not starting up empty since -initial_backup flag was not enabled")
+		// There is no backup found, but we may be taking the initial backup of a shard
+		log.Infof("no backup found; not starting up empty since -initial_backup flag was not enabled")
+		restorePos = mysql.Position{}
 	case mysqlctl.ErrExistingDB:
 		return fmt.Errorf("can't run vtbackup because data directory is not empty")
 	default:
@@ -350,9 +358,16 @@ func resetReplication(ctx context.Context, pos mysql.Position, mysqld mysqlctl.M
 		return vterrors.Wrap(err, "failed to reset slave")
 	}
 
-	// Set the position at which to resume from the master.
-	if err := mysqld.SetSlavePosition(ctx, pos); err != nil {
-		return vterrors.Wrap(err, "failed to set slave position")
+	// Check if we have a postion to resume from, if not reset to the beginning of time
+	if !pos.IsZero() {
+		// Set the position at which to resume from the master.
+		if err := mysqld.SetSlavePosition(ctx, pos); err != nil {
+			return vterrors.Wrap(err, "failed to set slave position")
+		}
+	} else {
+		if err := mysqld.ResetReplication(ctx); err != nil {
+			return vterrors.Wrap(err, "failed to reset replication")
+		}
 	}
 	return nil
 }
@@ -486,10 +501,11 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 		return true, nil
 	}
 
-	// We need at least one backup so we can restore first.
-	if len(backups) == 0 {
+	// We need at least one backup so we can restore first, unless the user explicitly says we don't
+	if len(backups) == 0 && !*allowFirstBackup {
 		return false, fmt.Errorf("no existing backups to restore from; backup is not possible since -initial_backup flag was not enabled")
 	}
+
 	// Has it been long enough since the last backup to need a new one?
 	if *minBackupInterval == 0 {
 		// No minimum interval is set, so always backup.

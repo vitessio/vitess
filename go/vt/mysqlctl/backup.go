@@ -259,7 +259,7 @@ func Restore(
 		// There are no backups (not even broken/incomplete ones).
 		logger.Errorf("no backup to restore on BackupStorage for directory %v. Starting up empty.", dir)
 		// Since this is an empty database make sure we start replication at the beginning
-		if err = mysqld.ResetReplication(ctx); err == nil {
+		if err = mysqld.ResetReplication(ctx); err != nil {
 			logger.Errorf("error reseting slave replication: %v. Continuing", err)
 			err = ErrNoBackup
 		}
