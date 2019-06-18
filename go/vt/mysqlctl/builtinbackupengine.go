@@ -523,15 +523,17 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	if err != nil {
 		return zeroPosition, err
 	}
+
+	// mark restore as in progress
+	if err = createStateFile(cnf); err != nil {
+		return zeroPosition, err
+	}
+
 	if err = prepareToRestore(ctx, cnf, mysqld, logger); err != nil {
 		return zeroPosition, err
 	}
 
 	logger.Infof("Restore: copying %v files", len(bm.FileEntries))
-
-	if err = createStateFile(cnf); err != nil {
-		return zeroPosition, err
-	}
 
 	if err := be.restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv, logger); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore

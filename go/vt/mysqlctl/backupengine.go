@@ -91,8 +91,6 @@ func findBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, lo
 
 func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger) error {
 	// shutdown mysqld if it is running
-	// Starting from here we won't be able to recover if we get stopped by a cancelled
-	// context. Thus we use the background context to get through to the finish.
 	logger.Infof("Restore: shutdown mysqld")
 	if err := mysqld.Shutdown(ctx, cnf, true); err != nil {
 		return err

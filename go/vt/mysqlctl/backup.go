@@ -46,7 +46,7 @@ const (
 	backupManifest = "MANIFEST"
 	// RestoreState is the name of the sentinel file used to detect whether a previous restore
 	// terminated abnormally
-	RestoreState = ".restore_in_progress"
+	RestoreState = "restore_in_progress"
 )
 
 const (

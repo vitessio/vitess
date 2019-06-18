@@ -250,6 +250,11 @@ func (be *XtrabackupEngine) ExecuteRestore(
 		return zeroPosition, err
 	}
 
+	// mark restore as in progress
+	if err = createStateFile(cnf); err != nil {
+		return zeroPosition, err
+	}
+
 	if err = prepareToRestore(ctx, cnf, mysqld, logger); err != nil {
 		return zeroPosition, err
 	}
@@ -257,9 +262,6 @@ func (be *XtrabackupEngine) ExecuteRestore(
 	// copy / extract files
 	logger.Infof("Restore: Extracting files from %v", bm.FileName)
 
-	if err = createStateFile(cnf); err != nil {
-		return zeroPosition, err
-	}
 	if err = be.restoreFromBackup(ctx, cnf, bh, bm, logger); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
 		return zeroPosition, err
