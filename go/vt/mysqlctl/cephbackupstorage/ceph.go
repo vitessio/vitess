@@ -88,7 +88,11 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 
 		// Give PutObject() the read end of the pipe.
 		object := objName(bh.dir, bh.name, filename)
-		_, err := bh.client.PutObjectWithContext(ctx, bucket, object, reader, -1, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+		// if filesize is given as 0, pass it as -1 = UNKNOWN
+		if filesize == 0 {
+			filesize = -1
+		}
+		_, err := bh.client.PutObjectWithContext(ctx, bucket, object, reader, filesize, minio.PutObjectOptions{ContentType: "application/octet-stream"})
 		if err != nil {
 			// Signal the writer that an error occurred, in case it's not done writing yet.
 			reader.CloseWithError(err)
