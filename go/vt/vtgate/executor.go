@@ -129,6 +129,9 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	logStats := NewLogStats(ctx, method, sql, bindVars)
 	result, err = e.execute(ctx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
+	if result != nil && len(result.Rows) > *warnMemoryRows {
+		warnings.Add("ResultsExceeded", 1)
+	}
 
 	// The mysql plugin runs an implicit rollback whenever a connection closes.
 	// To avoid spamming the log with no-op rollback records, ignore it if
