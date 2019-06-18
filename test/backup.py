@@ -532,7 +532,7 @@ class TestBackup(unittest.TestCase):
     _terminated_restore(tablet_master)
 
     # check that restore_file has been created but not deleted
-    restore_file = os.path.join(tablet_master.tablet_dir, '.restore_in_progress')
+    restore_file = os.path.join(tablet_master.tablet_dir, 'restore_in_progress')
     self.assertTrue(os.path.isfile(restore_file))
 
     # now retry the restore
