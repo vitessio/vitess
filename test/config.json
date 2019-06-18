@@ -55,15 +55,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"xtrabackup_xtra": {
-			"File": "xtrabackup_xtra.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"binlog": {
 			"File": "binlog.py",
 			"Args": [],

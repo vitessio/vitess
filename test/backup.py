@@ -477,15 +477,8 @@ class TestBackup(unittest.TestCase):
     # insert more data on new master
     self._insert_data(tablet_replica1, 3)
 
-    # simulate interrupted restore by creating .restore file
-    restore_file = os.path.join(tablet_master.tablet_dir, '.restore_in_progress')
-    open(restore_file, 'a').close()
-
     # force the old master to restore at the latest backup.
     restore_method(tablet_master)
-
-    # check that restore_file doesn't exist
-    self.assertFalse(os.path.isfile(restore_file))
 
     # wait for it to catch up.
     self._check_data(tablet_master, 3, 'former master catches up after restore')
@@ -504,22 +497,57 @@ class TestBackup(unittest.TestCase):
     self._restore_old_master_test(_restore_in_place)
 
   def test_terminated_restore(self):
+    stop_restore_msg = 'Copying file 10'
+    if use_xtrabackup:
+      stop_restore_msg = 'Restore: Preparing the files'
     def _terminated_restore(t):
       for e in utils.vtctld_connection.execute_vtctl_command(
           ['RestoreFromBackup', t.tablet_alias]):
         logging.info('%s', e.value)
-        if 'shutdown mysqld' in e.value:
+        if stop_restore_msg in e.value:
           break
-      logging.info('waiting for restore to finish')
-      utils.wait_for_tablet_type(t.tablet_alias, 'replica', timeout=30)
-
-    # this test is run standalone with xtrabackup because it fails when run
-    # with the other master restore tests
-    if use_xtrabackup:
-      return
 
     utils.Vtctld().start()
-    self._restore_old_master_test(_terminated_restore)
+    # insert data on master, wait for slave to get it
+    tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
+    self._insert_data(tablet_master, 1)
+    self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
+
+    # backup the slave
+    utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
+
+    # insert more data on the master
+    self._insert_data(tablet_master, 2)
+
+    # reparent to replica1
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/0',
+                     '-new_master', tablet_replica1.tablet_alias])
+
+    # insert more data on new master
+    self._insert_data(tablet_replica1, 3)
+
+    # force the old master to restore at the latest backup, and terminate the restore
+    # when it is in the middle of copying the files
+    _terminated_restore(tablet_master)
+
+    # check that restore_file has been created but not deleted
+    restore_file = os.path.join(tablet_master.tablet_dir, '.restore_in_progress')
+    self.assertTrue(os.path.isfile(restore_file))
+
+    # now retry the restore
+    for e in utils.vtctld_connection.execute_vtctl_command(
+        ['RestoreFromBackup', tablet_master.tablet_alias]):
+      logging.info('%s', e.value)
+    logging.info('waiting for restore to finish')
+    utils.wait_for_tablet_type(tablet_master.tablet_alias, 'replica', timeout=30)
+
+    # check that restore_file doesn't exist any more
+    self.assertFalse(os.path.isfile(restore_file))
+
+    # wait for it to catch up.
+    self._check_data(tablet_master, 3, 'former master catches up after restore')
+
 
 if __name__ == '__main__':
   utils.main()

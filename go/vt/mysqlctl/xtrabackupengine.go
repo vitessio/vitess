@@ -21,11 +21,14 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/klauspost/pgzip"
 	"vitess.io/vitess/go/mysql"
@@ -147,7 +150,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	}
 	defer closeFile(wc, backupFileName)
 
-	backupCmd := exec.Command(backupProgram, flagsToExec...)
+	backupCmd := exec.CommandContext(ctx, backupProgram, flagsToExec...)
 	backupOut, _ := backupCmd.StdoutPipe()
 	backupErr, _ := backupCmd.StderrPipe()
 	dst := bufio.NewWriterSize(wc, writerBufferSize)
@@ -272,7 +275,14 @@ func (be *XtrabackupEngine) ExecuteRestore(
 func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, bm xtraBackupManifest, logger logutil.Logger) error {
 	// first download the file into a tmp dir
 	// and extract all the files
-	if err := be.extractFiles(ctx, cnf, logger, bh, !bm.SkipCompress, be.backupFileName()); err != nil {
+
+	tempDir := fmt.Sprintf("%v/%v", cnf.TmpDir, time.Now().UTC().Format("2006-01-02.150405"))
+	// create tempDir
+	if err := os.MkdirAll(tempDir, os.ModePerm); err != nil {
+		return err
+	}
+
+	if err := be.extractFiles(ctx, logger, bh, !bm.SkipCompress, be.backupFileName(), tempDir); err != nil {
 		logger.Errorf("error restoring backup file %v:%v", be.backupFileName(), err)
 		return err
 	}
@@ -283,9 +293,9 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	restoreProgram := path.Join(*xtrabackupEnginePath, xtrabackupBinaryName)
 	flagsToExec := []string{"--defaults-file=" + cnf.path,
 		"--prepare",
-		"--target-dir=" + cnf.TmpDir,
+		"--target-dir=" + tempDir,
 	}
-	prepareCmd := exec.Command(restoreProgram, flagsToExec...)
+	prepareCmd := exec.CommandContext(ctx, restoreProgram, flagsToExec...)
 	prepareOut, _ := prepareCmd.StdoutPipe()
 	prepareErr, _ := prepareCmd.StderrPipe()
 	if err := prepareCmd.Start(); err != nil {
@@ -312,9 +322,9 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 
 	flagsToExec = []string{"--defaults-file=" + cnf.path,
 		"--copy-back",
-		"--target-dir=" + cnf.TmpDir,
+		"--target-dir=" + tempDir,
 	}
-	copybackCmd := exec.Command(restoreProgram, flagsToExec...)
+	copybackCmd := exec.CommandContext(ctx, restoreProgram, flagsToExec...)
 	copybackErr, _ := copybackCmd.StderrPipe()
 	copybackOut, _ := copybackCmd.StdoutPipe()
 
@@ -342,11 +352,11 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 // restoreFile extracts all the files from the backup archive
 func (be *XtrabackupEngine) extractFiles(
 	ctx context.Context,
-	cnf *Mycnf,
 	logger logutil.Logger,
 	bh backupstorage.BackupHandle,
 	compress bool,
-	name string) (err error) {
+	name string,
+	tempDir string) (err error) {
 
 	streamMode := *xtrabackupStreamMode
 	// Open the source file for reading.
@@ -382,8 +392,8 @@ func (be *XtrabackupEngine) extractFiles(
 	case streamModeTar:
 		// now extract the files by running tar
 		// error if we can't find tar
-		flagsToExec := []string{"-C", cnf.TmpDir, "-xi"}
-		tarCmd := exec.Command("tar", flagsToExec...)
+		flagsToExec := []string{"-C", tempDir, "-xi"}
+		tarCmd := exec.CommandContext(ctx, "tar", flagsToExec...)
 		logger.Infof("Executing tar cmd with flags %v", flagsToExec)
 		tarCmd.Stdin = reader
 		tarOut, _ := tarCmd.StdoutPipe()
@@ -410,8 +420,8 @@ func (be *XtrabackupEngine) extractFiles(
 		if *xbstreamRestoreFlags != "" {
 			flagsToExec = append(flagsToExec, strings.Fields(*xbstreamRestoreFlags)...)
 		}
-		flagsToExec = append(flagsToExec, "-C", cnf.TmpDir, "-x")
-		xbstreamCmd := exec.Command(xbstreamProgram, flagsToExec...)
+		flagsToExec = append(flagsToExec, "-C", tempDir, "-x")
+		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
 		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
 		xbstreamCmd.Stdin = reader
 		xbstreamOut, _ := xbstreamCmd.StdoutPipe()
