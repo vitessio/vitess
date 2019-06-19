@@ -19,7 +19,6 @@ package mysqlctl
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -83,7 +82,7 @@ func findBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, lo
 		// There is at least one attempted backup, but none could be read.
 		// This implies there is data we ought to have, so it's not safe to start
 		// up empty.
-		return nil, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
+		return nil, ErrNoCompleteBackup
 	}
 
 	return bh, nil
