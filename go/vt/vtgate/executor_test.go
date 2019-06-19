@@ -18,8 +18,11 @@ package vtgate
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"sort"
 	"strings"
@@ -2347,6 +2350,24 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 			KsTestUnsharded,
 			topodatapb.TabletType_REPLICA,
 		)
+	}
+}
+
+func TestDebugVSchema(t *testing.T) {
+	resp := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/debug/vschema", nil)
+
+	executor, _, _, _ := createExecutorEnv()
+	executor.ServeHTTP(resp, req)
+	v := make(map[string]interface{})
+	if err := json.Unmarshal(resp.Body.Bytes(), &v); err != nil {
+		t.Fatalf("Unmarshal on %s failed: %v", resp.Body.String(), err)
+	}
+	if _, ok := v["routing_rules"]; !ok {
+		t.Errorf("routing rules missing: %v", resp.Body.String())
+	}
+	if _, ok := v["keyspaces"]; !ok {
+		t.Errorf("keyspaces missing: %v", resp.Body.String())
 	}
 }
 

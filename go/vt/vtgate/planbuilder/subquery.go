@@ -102,7 +102,7 @@ func (sq *subquery) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType 
 }
 
 // PushSelect satisfies the builder interface.
-func (sq *subquery) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colnum int, err error) {
+func (sq *subquery) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colnum int, err error) {
 	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
 		return nil, 0, errors.New("unsupported: expression on results of a cross-shard subquery")
@@ -125,7 +125,10 @@ func (sq *subquery) MakeDistinct() error {
 }
 
 // PushGroupBy satisfies the builder interface.
-func (sq *subquery) PushGroupBy(_ sqlparser.GroupBy) error {
+func (sq *subquery) PushGroupBy(groupBy sqlparser.GroupBy) error {
+	if (groupBy) == nil {
+		return nil
+	}
 	return errors.New("unsupported: group by on cross-shard subquery")
 }
 

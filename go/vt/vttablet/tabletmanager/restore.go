@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -37,15 +38,16 @@ import (
 // It is only enabled if restore_from_backup is set.
 
 var (
-	restoreFromBackup  = flag.Bool("restore_from_backup", false, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
-	restoreConcurrency = flag.Int("restore_concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
+	restoreFromBackup     = flag.Bool("restore_from_backup", false, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
+	restoreConcurrency    = flag.Int("restore_concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
+	waitForBackupInterval = flag.Duration("wait_for_backup_interval", 0, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
 )
 
 // RestoreData is the main entry point for backup restore.
 // It will either work, fail gracefully, or return
 // an error in case of a non-recoverable error.
 // It takes the action lock so no RPC interferes.
-func (agent *ActionAgent) RestoreData(ctx context.Context, logger logutil.Logger, deleteBeforeRestore bool) error {
+func (agent *ActionAgent) RestoreData(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
@@ -53,10 +55,10 @@ func (agent *ActionAgent) RestoreData(ctx context.Context, logger logutil.Logger
 	if agent.Cnf == nil {
 		return fmt.Errorf("cannot perform restore without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
-	return agent.restoreDataLocked(ctx, logger, deleteBeforeRestore)
+	return agent.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore)
 }
 
-func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.Logger, deleteBeforeRestore bool) error {
+func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
 	// change type to RESTORE (using UpdateTabletFields so it's
 	// always authorized)
 	var originalType topodatapb.TabletType
@@ -80,7 +82,28 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	localMetadata := agent.getLocalMetadataValues(originalType)
 	tablet := agent.Tablet()
 	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
-	pos, err := mysqlctl.Restore(ctx, agent.Cnf, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore, topoproto.TabletDbName(tablet))
+
+	// Loop until a backup exists, unless we were told to give up immediately.
+	var pos mysql.Position
+	var err error
+	for {
+		pos, err = mysqlctl.Restore(ctx, agent.Cnf, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore, topoproto.TabletDbName(tablet))
+		if waitForBackupInterval == 0 {
+			break
+		}
+		// We only retry a specific set of errors. The rest we return immediately.
+		if err != mysqlctl.ErrNoBackup && err != mysqlctl.ErrNoCompleteBackup {
+			break
+		}
+
+		log.Infof("No backup found. Waiting %v (from -wait_for_backup_interval flag) to check again.", waitForBackupInterval)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(waitForBackupInterval):
+		}
+	}
+
 	switch err {
 	case nil:
 		// Starting from here we won't be able to recover if we get stopped by a cancelled

@@ -26,20 +26,22 @@ func TestParseKeyspaceShard(t *testing.T) {
 	zkPath := "/zk/global/ks/sh"
 	keyspace := "key01"
 	shard := "shard0"
-	keyspaceShard := keyspace + "/" + shard
 
-	if _, _, err := ParseKeyspaceShard(zkPath); err == nil {
-		t.Errorf("zk path: %s should cause error.", zkPath)
-	}
-	k, s, err := ParseKeyspaceShard(keyspaceShard)
-	if err != nil {
-		t.Fatalf("Failed to parse valid keyspace/shard pair: %s", keyspaceShard)
-	}
-	if k != keyspace {
-		t.Errorf("keyspace parsed from keyspace/shard pair %s is %s, but expect %s", keyspaceShard, k, keyspace)
-	}
-	if s != shard {
-		t.Errorf("shard parsed from keyspace/shard pair %s is %s, but expect %s", keyspaceShard, s, shard)
+	for _, delim := range []string{"/", ":"} {
+		keyspaceShard := keyspace + delim + shard
+		if _, _, err := ParseKeyspaceShard(zkPath); err == nil {
+			t.Errorf("zk path: %s should cause error.", zkPath)
+		}
+		k, s, err := ParseKeyspaceShard(keyspaceShard)
+		if err != nil {
+			t.Fatalf("Failed to parse valid keyspace%sshard pair: %s", delim, keyspaceShard)
+		}
+		if k != keyspace {
+			t.Errorf("keyspace parsed from keyspace%sshard pair %s is %s, but expect %s", delim, keyspaceShard, k, keyspace)
+		}
+		if s != shard {
+			t.Errorf("shard parsed from keyspace%sshard pair %s is %s, but expect %s", delim, keyspaceShard, s, shard)
+		}
 	}
 }
 

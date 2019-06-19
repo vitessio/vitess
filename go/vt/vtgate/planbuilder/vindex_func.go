@@ -130,7 +130,7 @@ func (vf *vindexFunc) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, wh
 }
 
 // PushSelect satisfies the builder interface.
-func (vf *vindexFunc) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colnum int, err error) {
+func (vf *vindexFunc) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colnum int, err error) {
 	// Catch the case where no where clause was specified. If so, the opcode
 	// won't be set.
 	if vf.eVindexFunc.Opcode == engine.VindexNone {
@@ -156,7 +156,10 @@ func (vf *vindexFunc) MakeDistinct() error {
 }
 
 // PushGroupBy satisfies the builder interface.
-func (vf *vindexFunc) PushGroupBy(_ sqlparser.GroupBy) error {
+func (vf *vindexFunc) PushGroupBy(groupBy sqlparser.GroupBy) error {
+	if (groupBy) == nil {
+		return nil
+	}
 	return errors.New("unupported: group by on vindex function")
 }
 
