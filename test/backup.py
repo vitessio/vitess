@@ -227,6 +227,24 @@ class TestBackup(unittest.TestCase):
       t.check_db_var('rpl_semi_sync_slave_enabled', 'OFF')
       t.check_db_status('rpl_semi_sync_slave_status', 'OFF')
 
+  def _restore_wait_for_backup(self, t, tablet_type='replica'):
+    """Erase mysql/tablet dir, then start tablet with wait_for_restore_interval."""
+    self._reset_tablet_dir(t)
+
+    xtra_args = [
+      '-db-credentials-file', db_credentials_file,
+      '-wait_for_backup_interval', '1s',
+    ]
+    if use_xtrabackup:
+      xtra_args.extend(xtrabackup_args)
+
+    t.start_vttablet(wait_for_state=None,
+                     init_tablet_type=tablet_type,
+                     init_keyspace='test_keyspace',
+                     init_shard='0',
+                     supports_backups=True,
+                     extra_args=xtra_args)
+
   def _reset_tablet_dir(self, t):
     """Stop mysql, delete everything including tablet dir, restart mysql."""
     extra_args = ['-db-credentials-file', db_credentials_file]
@@ -330,16 +348,21 @@ class TestBackup(unittest.TestCase):
     test_backup will:
     - create a shard with master and replica1 only
     - run InitShardMaster
+    - bring up tablet_replica2 concurrently, telling it to wait for a backup
     - insert some data
     - take a backup
     - insert more data on the master
-    - bring up tablet_replica2 after the fact, let it restore the backup
+    - wait for tablet_replica2 to become SERVING
     - check all data is right (before+after backup data)
     - list the backup, remove it
 
     Args:
       tablet_type: 'replica' or 'rdonly'.
     """
+
+    # bring up another replica concurrently, telling it to wait until a backup
+    # is available instead of starting up empty.
+    self._restore_wait_for_backup(tablet_replica2, tablet_type=tablet_type)
 
     # insert data on master, wait for slave to get it
     tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
@@ -358,8 +381,9 @@ class TestBackup(unittest.TestCase):
     # insert more data on the master
     self._insert_data(tablet_master, 2)
 
-    # now bring up the other slave, letting it restore from backup.
-    self._restore(tablet_replica2, tablet_type=tablet_type)
+    # wait for tablet_replica2 to become serving (after restoring)
+    utils.pause('wait_for_backup')
+    tablet_replica2.wait_for_vttablet_state('SERVING')
 
     # check the new slave has the data
     self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')

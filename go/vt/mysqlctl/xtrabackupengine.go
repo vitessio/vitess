@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"io"
 	"io/ioutil"
@@ -268,7 +267,7 @@ func (be *XtrabackupEngine) ExecuteRestore(
 		// There is at least one attempted backup, but none could be read.
 		// This implies there is data we ought to have, so it's not safe to start
 		// up empty.
-		return zeroPosition, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
+		return zeroPosition, ErrNoCompleteBackup
 	}
 
 	// Starting from here we won't be able to recover if we get stopped by a cancelled
