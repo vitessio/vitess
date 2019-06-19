@@ -266,9 +266,6 @@ func (be *XtrabackupEngine) ExecuteRestore(
 		// don't delete the file here because that is how we detect an interrupted restore
 		return zeroPosition, err
 	}
-	if err = removeStateFile(cnf); err != nil {
-		return zeroPosition, err
-	}
 	// now find the slave position and return that
 	logger.Infof("Restore: returning replication position %v", bm.Position)
 	return bm.Position, nil

@@ -327,5 +327,9 @@ func Restore(
 		return mysql.Position{}, err
 	}
 
+	if err = removeStateFile(cnf); err != nil {
+		return mysql.Position{}, err
+	}
+
 	return rval, nil
 }
