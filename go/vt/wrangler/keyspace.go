@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -1402,8 +1401,7 @@ func (wr *Wrangler) DeleteKeyspace(ctx context.Context, keyspace string, recursi
 
 	// Delete the cell-global VSchema path
 	// If not remove this, vtctld web page Dashboard will Display Error
-	vschema := &vschemapb.Keyspace{}
-	if err := wr.ts.SaveVSchema(ctx, keyspace, vschema); err != nil && !topo.IsErrType(err, topo.NoNode) {
+	if err := wr.ts.DeleteVSchema(ctx, keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
 		return err
 	}
 
