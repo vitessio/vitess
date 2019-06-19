@@ -58,6 +58,10 @@ var (
 	// ErrNoBackup is returned when there is no backup.
 	ErrNoBackup = errors.New("no available backup")
 
+	// ErrNoCompleteBackup is returned when there is at least one backup,
+	// but none of them are complete.
+	ErrNoCompleteBackup = errors.New("backup(s) found but none are complete")
+
 	// ErrExistingDB is returned when there's already an active DB.
 	ErrExistingDB = errors.New("skipping restore due to existing database")
 

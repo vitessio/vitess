@@ -61,7 +61,7 @@ type builder interface {
 	// a resultColumn entry and return it. The top level caller
 	// must accumulate these result columns and set the symtab
 	// after analysis.
-	PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error)
+	PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error)
 
 	// MakeDistinct makes the primitive handle the distinct clause.
 	MakeDistinct() error

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,20 +14,29 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package services exposes all the services for the vtgateclienttest binary.
-package services
+package servenv
 
 import (
-	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
+	"testing"
 )
 
-// CreateServices creates the implementation chain of all the test cases
-func CreateServices() vtgateservice.VTGateService {
-	var s vtgateservice.VTGateService
-	s = newTerminalClient()
-	s = newSuccessClient(s)
-	s = newErrorClient(s)
-	s = newCallerIDClient(s)
-	s = newEchoClient(s)
-	return s
+func TestLivenessHandler(t *testing.T) {
+	server := httptest.NewServer(nil)
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/debug/liveness")
+	if err != nil {
+		t.Fatalf("http.Get: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Make sure we can read the body, even though it's empty.
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("ioutil.ReadAll: %v", err)
+	}
+	t.Logf("body: %q", body)
 }

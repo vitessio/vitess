@@ -75,6 +75,11 @@ func (vc *vcursorImpl) Context() context.Context {
 	return vc.ctx
 }
 
+// MaxMemoryRows returns the maxMemoryRows flag value.
+func (vc *vcursorImpl) MaxMemoryRows() int {
+	return *maxMemoryRows
+}
+
 // SetContextTimeout updates context and sets a timeout.
 func (vc *vcursorImpl) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	ctx, cancel := context.WithTimeout(vc.ctx, timeout)

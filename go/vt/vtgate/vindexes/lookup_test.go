@@ -377,9 +377,17 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 
 	// With ignore.
 	vc.queries = nil
-	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NewInt64(1)}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
+	rowsColsValues := [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NewInt64(1)}}
+	ksids := [][]byte{[]byte("test2"), []byte("test1")}
+	err = lookupNonUnique.(Lookup).Create(vc, rowsColsValues, ksids, true /* ignoreMode */)
 	if err != nil {
 		t.Error(err)
+	}
+	if !reflect.DeepEqual(rowsColsValues, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}) {
+		t.Errorf("inserts not reordered. Lookup table inserts get reordered on a bulk insert to avoid locking")
+	}
+	if !reflect.DeepEqual(ksids, [][]byte{[]byte("test1"), []byte("test2")}) {
+		t.Errorf("keyspace ids not reordered. Keyspace ids must also get reordered on a bulk insert")
 	}
 
 	wantqueries[0].Sql = "insert ignore into t(fromc, toc) values(:fromc0, :toc0), (:fromc1, :toc1)"

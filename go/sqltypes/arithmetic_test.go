@@ -37,16 +37,16 @@ func TestAdd(t *testing.T) {
 		// All nulls.
 		v1:  NULL,
 		v2:  NULL,
-		out: NULL,
+		out: NewInt64(0),
 	}, {
 		// First value null.
-		v1:  NewInt64(1),
+		v1:  NewInt32(1),
 		v2:  NULL,
 		out: NewInt64(1),
 	}, {
 		// Second value null.
 		v1:  NULL,
-		v2:  NewInt64(1),
+		v2:  NewInt32(1),
 		out: NewInt64(1),
 	}, {
 		// Normal case.

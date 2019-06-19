@@ -248,6 +248,57 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	}
 }
 
+func TestMaxMemoryRows(t *testing.T) {
+	save := *maxMemoryRows
+	*maxMemoryRows = 3
+	defer func() { *maxMemoryRows = save }()
+
+	createSandbox("TestMaxMemoryRows")
+	hc := discovery.NewFakeHealthCheck()
+	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestMaxMemoryRows", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestMaxMemoryRows", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	tworows := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+		}, {
+			sqltypes.NewInt64(1),
+		}},
+		RowsAffected: 1,
+		InsertID:     1,
+	}
+	sbc0.SetResults([]*sqltypes.Result{tworows, tworows})
+	sbc1.SetResults([]*sqltypes.Result{tworows, tworows})
+
+	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	rss, _, err := res.ResolveDestinations(context.Background(), "TestMaxMemoryRows", topodatapb.TabletType_REPLICA, nil,
+		[]key.Destination{key.DestinationShard("0"), key.DestinationShard("1")})
+	if err != nil {
+		t.Fatalf("ResolveDestination(0) failed: %v", err)
+	}
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+
+	_, err = sc.Execute(context.Background(), "query1", nil, rss, topodatapb.TabletType_REPLICA, session, true, nil)
+	want := "in-memory row count exceeded allowed limit of 3"
+	if err == nil || err.Error() != want {
+		t.Errorf("Execute(): %v, want %v", err, want)
+	}
+
+	queries := []*querypb.BoundQuery{{
+		Sql:           "query1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "query1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	_, errs := sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, session, false, false)
+	err = errs[0]
+	if err == nil || err.Error() != want {
+		t.Errorf("Execute(): %v, want %v", err, want)
+	}
+}
+
 func TestMultiExecs(t *testing.T) {
 	createSandbox("TestMultiExecs")
 	hc := discovery.NewFakeHealthCheck()

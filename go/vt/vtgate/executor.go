@@ -1357,7 +1357,7 @@ func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request
 		}
 	} else if request.URL.Path == "/debug/vschema" {
 		response.Header().Set("Content-Type", "application/json; charset=utf-8")
-		b, err := json.MarshalIndent(e.VSchema().Keyspaces, "", " ")
+		b, err := json.MarshalIndent(e.VSchema(), "", " ")
 		if err != nil {
 			response.Write([]byte(err.Error()))
 			return
