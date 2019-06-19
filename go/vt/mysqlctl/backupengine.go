@@ -108,7 +108,7 @@ func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logge
 	return nil
 }
 
-// create .restore_in_progress file
+// create restore state file
 func createStateFile(cnf *Mycnf) error {
 	// if we start writing content to this file:
 	// change RD_ONLY to RDWR
@@ -126,7 +126,7 @@ func createStateFile(cnf *Mycnf) error {
 	return nil
 }
 
-// delete .restore_in_progress file
+// delete restore state file
 func removeStateFile(cnf *Mycnf) error {
 	fname := filepath.Join(cnf.TabletDir(), RestoreState)
 	if err := os.Remove(fname); err != nil {
