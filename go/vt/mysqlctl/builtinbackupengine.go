@@ -540,10 +540,6 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 		return zeroPosition, err
 	}
 
-	if err = removeStateFile(cnf); err != nil {
-		return zeroPosition, err
-	}
-
 	logger.Infof("Restore: returning replication position %v", bm.Position)
 	return bm.Position, nil
 }
