@@ -1399,12 +1399,6 @@ func (wr *Wrangler) DeleteKeyspace(ctx context.Context, keyspace string, recursi
 		}
 	}
 
-	// Delete the cell-global VSchema path
-	// If not remove this, vtctld web page Dashboard will Display Error
-	if err := wr.ts.DeleteVSchema(ctx, keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
-		return err
-	}
-
 	return wr.ts.DeleteKeyspace(ctx, keyspace)
 }
 
