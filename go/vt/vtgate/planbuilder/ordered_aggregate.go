@@ -56,6 +56,7 @@ var _ builder = (*orderedAggregate)(nil)
 type orderedAggregate struct {
 	resultColumns []*resultColumn
 	order         int
+	extraDistinct *sqlparser.ColName
 	input         *route
 	eaggr         *engine.OrderedAggregate
 }
@@ -281,22 +282,10 @@ func (oa *orderedAggregate) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, wh
 // MAX sent to the route will not be added to symtab and will not be reachable by
 // others. This functionality depends on the PushOrderBy to request that
 // the rows be correctly ordered.
-func (oa *orderedAggregate) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+func (oa *orderedAggregate) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
 	if inner, ok := expr.Expr.(*sqlparser.FuncExpr); ok {
-		if opcode, ok := engine.SupportedAggregates[inner.Name.Lowered()]; ok {
-			innerRC, innerCol, _ := oa.input.PushSelect(expr, origin)
-
-			// Add to Aggregates.
-			oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
-				Opcode: opcode,
-				Col:    innerCol,
-			})
-
-			// Build a new rc with oa as origin because it's semantically different
-			// from the expression we pushed down.
-			rc := &resultColumn{alias: innerRC.alias, column: &column{origin: oa}}
-			oa.resultColumns = append(oa.resultColumns, rc)
-			return rc, len(oa.resultColumns) - 1, nil
+		if _, ok := engine.SupportedAggregates[inner.Name.Lowered()]; ok {
+			return oa.pushAggr(pb, expr, origin)
 		}
 	}
 
@@ -305,9 +294,90 @@ func (oa *orderedAggregate) PushSelect(expr *sqlparser.AliasedExpr, origin build
 		return nil, 0, errors.New("unsupported: in scatter query: complex aggregate expression")
 	}
 
-	innerRC, _, _ := oa.input.PushSelect(expr, origin)
+	innerRC, _, _ := oa.input.PushSelect(pb, expr, origin)
 	oa.resultColumns = append(oa.resultColumns, innerRC)
 	return innerRC, len(oa.resultColumns) - 1, nil
+}
+
+func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+	funcExpr := expr.Expr.(*sqlparser.FuncExpr)
+	opcode := engine.SupportedAggregates[funcExpr.Name.Lowered()]
+	if len(funcExpr.Exprs) != 1 {
+		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(funcExpr))
+	}
+	var innerRC *resultColumn
+	var innerCol int
+	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, funcExpr, opcode)
+	if err != nil {
+		return nil, 0, err
+	}
+	if handleDistinct {
+		if oa.extraDistinct != nil {
+			return nil, 0, fmt.Errorf("unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(funcExpr))
+		}
+		// Push the expression that's inside the aggregate.
+		// The column will eventually get added to the group by and order by clauses.
+		innerRC, innerCol, _ = oa.input.PushSelect(pb, innerAliased, origin)
+		col, err := oa.input.BuildColName(innerCol)
+		if err != nil {
+			return nil, 0, err
+		}
+		oa.extraDistinct = col
+		oa.eaggr.HasDistinct = true
+		var alias string
+		if expr.As.IsEmpty() {
+			alias = sqlparser.String(expr.Expr)
+		} else {
+			alias = expr.As.String()
+		}
+		switch opcode {
+		case engine.AggregateCount:
+			opcode = engine.AggregateCountDistinct
+		case engine.AggregateSum:
+			opcode = engine.AggregateSumDistinct
+		}
+		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
+			Opcode: opcode,
+			Col:    innerCol,
+			Alias:  alias,
+		})
+	} else {
+		innerRC, innerCol, _ = oa.input.PushSelect(pb, expr, origin)
+		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
+			Opcode: opcode,
+			Col:    innerCol,
+		})
+	}
+
+	// Build a new rc with oa as origin because it's semantically different
+	// from the expression we pushed down.
+	rc = &resultColumn{alias: innerRC.alias, column: &column{origin: oa}}
+	oa.resultColumns = append(oa.resultColumns, rc)
+	return rc, len(oa.resultColumns) - 1, nil
+}
+
+// needDistinctHandling returns true if oa needs to handle the distinct clause.
+// If true, it will also return the aliased expression that needs to be pushed
+// down into the underlying route.
+func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr *sqlparser.FuncExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
+	if !funcExpr.Distinct {
+		return false, nil, nil
+	}
+	if opcode != engine.AggregateCount && opcode != engine.AggregateSum {
+		return false, nil, nil
+	}
+	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
+	if !ok {
+		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(funcExpr))
+	}
+	success := oa.input.removeOptions(func(ro *routeOption) bool {
+		vindex := ro.FindVindex(pb, innerAliased.Expr)
+		if vindex != nil && vindex.IsUnique() {
+			return true
+		}
+		return false
+	})
+	return !success, innerAliased, nil
 }
 
 func (oa *orderedAggregate) MakeDistinct() error {
@@ -354,8 +424,13 @@ func (oa *orderedAggregate) PushGroupBy(groupBy sqlparser.GroupBy) error {
 		}
 		oa.eaggr.Keys = append(oa.eaggr.Keys, colnum)
 	}
+	// Append the distinct aggregate if any.
+	if oa.extraDistinct != nil {
+		groupBy = append(groupBy, oa.extraDistinct)
+	}
 
 	_ = oa.input.PushGroupBy(groupBy)
+
 	return nil
 }
 
@@ -425,6 +500,11 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 			return nil, fmt.Errorf("generating order by clause: %v", err)
 		}
 		orderBy = append(orderBy, &sqlparser.Order{Expr: col, Direction: sqlparser.AscScr})
+	}
+
+	// Append the distinct aggregate if any.
+	if oa.extraDistinct != nil {
+		orderBy = append(orderBy, &sqlparser.Order{Expr: oa.extraDistinct, Direction: sqlparser.AscScr})
 	}
 
 	// Push down the order by.

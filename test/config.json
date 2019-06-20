@@ -19,8 +19,17 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"binlog": {
-			"File": "binlog.py",
+		"backup_transform": {
+			"File": "backup_transform.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_transform_mysqlctld": {
+			"File": "backup_transform_mysqlctld.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
@@ -29,6 +38,15 @@
 			"Tags": [
 				"worker_test"
 			]
+		},
+		"binlog": {
+			"File": "binlog.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"cache_invalidation": {
 			"File": "cache_invalidation.py",
@@ -310,6 +328,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vschema": {
+			"File": "vschema.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"sharded": {
 			"File": "sharded.py",
 			"Args": [],
@@ -511,14 +538,5 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"xtrabackup_xtra": {
-			"File": "xtrabackup_xtra.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": []
-		}
 	}
 }

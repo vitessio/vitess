@@ -132,7 +132,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context, logger logutil.
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// now we can run restore
-	err = agent.restoreDataLocked(ctx, l, true /* deleteBeforeRestore */)
+	err = agent.restoreDataLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */)
 
 	// re-run health check to be sure to capture any replication delay
 	agent.runHealthCheckLocked()

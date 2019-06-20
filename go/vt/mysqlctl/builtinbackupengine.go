@@ -523,84 +523,38 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	hookExtraEnv map[string]string,
 	snapshotTime time.Time) (mysql.Position, string, error) {
 
-	var bh backupstorage.BackupHandle
-	var bm builtinBackupManifest
-	var toRestore int
 	zeroPosition := mysql.Position{}
-	unixZeroTime := time.Unix(0, 0).UTC()
+	var bm builtinBackupManifest
 	var s string
 
-	for toRestore = len(bhs) - 1; toRestore >= 0; toRestore-- {
-		bh = bhs[toRestore]
-		rc, err := bh.ReadFile(ctx, backupManifest)
-		if err != nil {
-			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
-			continue
-		}
-
-		err = json.NewDecoder(rc).Decode(&bm)
-		rc.Close()
-		if err != nil {
-			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
-			continue
-		}
-		backupTime, _ := time.Parse(time.RFC3339, bm.BackupTime)
-		if snapshotTime.Equal(unixZeroTime) /* uninitialized or not snapshot */ || bm.BackupTime == "" /* restoring an older backup where MANIFEST does not have backupTime */ || backupTime.Before(snapshotTime) {
-			logger.Infof("Restore: found backup %v %v to restore with %v files", bh.Directory(), bh.Name(), len(bm.FileEntries))
-			// older backups don't have backupTime
-			if bm.BackupTime == "" {
-				// backup Name is of the format 2006-01-02.150405.cell-tabletAlias
-				if bhTime, err := time.Parse("2006-01-02.150405", bh.Name()[:17]); err == nil {
-					bm.BackupTime = bhTime.Format(time.RFC3339)
-					logger.Infof("Setting backup time to %v", bm.BackupTime)
-				} else {
-					logger.Warningf("error parsing time from backup handle name: %v, %v", bh.Name(), err)
-				}
-			}
-			break
-		}
-	}
-	if toRestore < 0 {
-		if snapshotTime.After(unixZeroTime) {
-			return zeroPosition, s, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "No valid backup found before time %v", snapshotTime.Format(time.RFC3339))
-		}
-		// There is at least one attempted backup, but none could be read.
-		// This implies there is data we ought to have, so it's not safe to start
-		// up empty.
-		return zeroPosition, s, vterrors.New(vtrpc.Code_NOT_FOUND, "backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
-	}
-
-	// Starting from here we won't be able to recover if we get stopped by a cancelled
-	// context. Thus we use the background context to get through to the finish.
-
-	logger.Infof("Restore: shutdown mysqld")
-	err := mysqld.Shutdown(context.Background(), cnf, true)
+	bh, err := findBackupToRestore(ctx, cnf, mysqld, logger, dir, bhs, &bm)
 	if err != nil {
 		return zeroPosition, s, err
 	}
 
-	logger.Infof("Restore: deleting existing files")
-	if err := removeExistingFiles(cnf); err != nil {
+	// mark restore as in progress
+	if err = createStateFile(cnf); err != nil {
 		return zeroPosition, s, err
 	}
 
-	logger.Infof("Restore: reinit config file")
-	err = mysqld.ReinitConfig(context.Background(), cnf)
-	if err != nil {
+	if err = prepareToRestore(ctx, cnf, mysqld, logger); err != nil {
 		return zeroPosition, s, err
 	}
 
-	logger.Infof("Restore: copying all files")
-	if err := be.restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv); err != nil {
+	logger.Infof("Restore: copying %v files", len(bm.FileEntries))
+
+	if err := be.restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv, logger); err != nil {
+		// don't delete the file here because that is how we detect an interrupted restore
 		return zeroPosition, s, err
 	}
 
+	logger.Infof("Restore: returning replication position %v", bm.Position)
 	return bm.Position, bm.BackupTime, nil
 }
 
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place.
-func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, transformHook string, compress bool, restoreConcurrency int, hookExtraEnv map[string]string) error {
+func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, transformHook string, compress bool, restoreConcurrency int, hookExtraEnv map[string]string, logger logutil.Logger) error {
 	sema := sync2.NewSemaphore(restoreConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
@@ -619,6 +573,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh 
 
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
+			logger.Infof("Copying file %v: %v", name, fes[i].Name)
 			rec.RecordError(be.restoreFile(ctx, cnf, bh, &fes[i], transformHook, compress, name, hookExtraEnv))
 		}(i)
 	}

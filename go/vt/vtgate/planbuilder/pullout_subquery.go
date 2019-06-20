@@ -87,8 +87,8 @@ func (ps *pulloutSubquery) PushFilter(pb *primitiveBuilder, filter sqlparser.Exp
 }
 
 // PushSelect satisfies the builder interface.
-func (ps *pulloutSubquery) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
-	return ps.underlying.PushSelect(expr, origin)
+func (ps *pulloutSubquery) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+	return ps.underlying.PushSelect(pb, expr, origin)
 }
 
 // MakeDistinct satisfies the builder interface.

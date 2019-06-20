@@ -18,10 +18,15 @@ package mysqlctl
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"time"
+	"fmt"
+	"os"
+	"path/filepath"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -50,4 +55,108 @@ func GetBackupEngine() (BackupEngine, error) {
 		return nil, vterrors.New(vtrpc.Code_NOT_FOUND, "no registered implementation of BackupEngine")
 	}
 	return be, nil
+}
+
+func findBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir string, bhs []backupstorage.BackupHandle, bm interface{}) (backupstorage.BackupHandle, error) {
+
+	var bh backupstorage.BackupHandle
+	var index int
+	unixZeroTime := time.Unix(0, 0).UTC()
+
+	for index = len(bhs) - 1; index >= 0; index-- {
+		bh = bhs[index]
+		rc, err := bh.ReadFile(ctx, backupManifest)
+		if err != nil {
+			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
+			continue
+		}
+
+		err = json.NewDecoder(rc).Decode(&bm)
+		rc.Close()
+		if err != nil {
+			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), dir, err)
+			continue
+		}
+
+		backupTime, _ := time.Parse(time.RFC3339, bm.BackupTime)
+		if snapshotTime.Equal(unixZeroTime) /* uninitialized or not snapshot */ || bm.BackupTime == "" /* restoring an older backup where MANIFEST does not have backupTime */ || backupTime.Before(snapshotTime) {
+		logger.Infof("Restore: found backup %v %v to restore", bh.Directory(), bh.Name())
+			// older backups don't have backupTime
+			if bm.BackupTime == "" {
+				// backup Name is of the format 2006-01-02.150405.cell-tabletAlias
+				if bhTime, err := time.Parse("2006-01-02.150405", bh.Name()[:17]); err == nil {
+					bm.BackupTime = bhTime.Format(time.RFC3339)
+					logger.Infof("Setting backup time to %v", bm.BackupTime)
+				} else {
+					logger.Warningf("error parsing time from backup handle name: %v, %v", bh.Name(), err)
+				}
+			}
+		break
+	}
+	if index < 0 {
+    // There is at least one backup but not for the time we are looking for
+    if snapshotTime.After(unixZeroTime) {
+			return zeroPosition, s, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "No valid backup found before time %v", snapshotTime.Format(time.RFC3339))
+		}
+		// There is at least one attempted backup, but none could be read.
+		// This implies there is data we ought to have, so it's not safe to start
+		// up empty.
+		return nil, ErrNoCompleteBackup
+	}
+
+	return bh, nil
+}
+
+func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger) error {
+	// shutdown mysqld if it is running
+	logger.Infof("Restore: shutdown mysqld")
+	if err := mysqld.Shutdown(ctx, cnf, true); err != nil {
+		return err
+	}
+
+	logger.Infof("Restore: deleting existing files")
+	if err := removeExistingFiles(cnf); err != nil {
+		return err
+	}
+
+	logger.Infof("Restore: reinit config file")
+	if err := mysqld.ReinitConfig(ctx, cnf); err != nil {
+		return err
+	}
+	return nil
+}
+
+// create restore state file
+func createStateFile(cnf *Mycnf) error {
+	// if we start writing content to this file:
+	// change RD_ONLY to RDWR
+	// change Create to Open
+	// rename func to openStateFile
+	// change to return a *File
+	fname := filepath.Join(cnf.TabletDir(), RestoreState)
+	fd, err := os.Create(fname)
+	if err != nil {
+		return fmt.Errorf("unable to create file: %v", err)
+	}
+	if err = fd.Close(); err != nil {
+		return fmt.Errorf("unable to close file: %v", err)
+	}
+	return nil
+}
+
+// delete restore state file
+func removeStateFile(cnf *Mycnf) error {
+	fname := filepath.Join(cnf.TabletDir(), RestoreState)
+	if err := os.Remove(fname); err != nil {
+		return fmt.Errorf("unable to delete file: %v", err)
+	}
+	return nil
+}
+
+// RestoreWasInterrupted tells us whether a previous restore
+// was interrupted and we are now retrying it
+func RestoreWasInterrupted(cnf *Mycnf) bool {
+	name := filepath.Join(cnf.TabletDir(), RestoreState)
+	_, err := os.Stat(name)
+	return err == nil
 }
