@@ -537,6 +537,6 @@
 			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": []
-		},
+		}
 	}
 }

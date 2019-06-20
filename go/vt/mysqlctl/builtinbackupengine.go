@@ -78,6 +78,14 @@ type builtinBackupManifest struct {
 	BackupTime string
 }
 
+func (bm *builtinBackupManifest) GetBackupTime() string {
+	return bm.BackupTime
+}
+
+func (bm *builtinBackupManifest) SetBackupTime(t string) {
+	bm.BackupTime = t
+}
+
 // FileEntry is one file to backup
 type FileEntry struct {
 	// Base is one of:
@@ -381,9 +389,9 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 	}
 
 	// open the MANIFEST
-	wc, err := bh.AddFile(ctx, backupManifest, 0)
+	wc, err := bh.AddFile(ctx, backupManifestFile, 0)
 	if err != nil {
-		return vterrors.Wrapf(err, "cannot add %v to backup", backupManifest)
+		return vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFile)
 	}
 	defer func() {
 		if closeErr := wc.Close(); err == nil {
@@ -401,10 +409,10 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
-		return vterrors.Wrapf(err, "cannot JSON encode %v", backupManifest)
+		return vterrors.Wrapf(err, "cannot JSON encode %v", backupManifestFile)
 	}
 	if _, err := wc.Write([]byte(data)); err != nil {
-		return vterrors.Wrapf(err, "cannot write %v", backupManifest)
+		return vterrors.Wrapf(err, "cannot write %v", backupManifestFile)
 	}
 
 	return nil
@@ -527,7 +535,7 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	var bm builtinBackupManifest
 	var s string
 
-	bh, err := findBackupToRestore(ctx, cnf, mysqld, logger, dir, bhs, &bm)
+	bh, err := findBackupToRestore(ctx, cnf, mysqld, logger, dir, bhs, &bm, snapshotTime)
 	if err != nil {
 		return zeroPosition, s, err
 	}

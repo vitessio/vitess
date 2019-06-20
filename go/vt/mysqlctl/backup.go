@@ -44,7 +44,7 @@ const (
 	backupData                  = "Data"
 
 	// the manifest file name
-	backupManifest = "MANIFEST"
+	backupManifestFile = "MANIFEST"
 	// RestoreState is the name of the sentinel file used to detect whether a previous restore
 	// terminated abnormally
 	RestoreState = "restore_in_progress"
@@ -239,19 +239,19 @@ func Restore(
 			logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
 			// Wait for mysqld to be ready, in case it was launched in parallel with us.
 			if err := mysqld.Wait(ctx, cnf); err != nil {
-				return zeroPosition, err
+				return zeroPosition, t, err
 			}
 
 			ok, err := checkNoDB(ctx, mysqld, dbName)
 			if err != nil {
-				return zeroPosition, err
+				return zeroPosition, t, err
 			}
 			if !ok {
 				logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
 				if err = PopulateMetadataTables(mysqld, localMetadata, dbName); err == nil {
 					err = ErrExistingDB
 				}
-				return zeroPosition, err
+				return zeroPosition, t, err
 			}
 		}
 	}
@@ -275,7 +275,7 @@ func Restore(
 		// Wait for mysqld to be ready, in case it was launched in parallel with us.
 		if err = mysqld.Wait(ctx, cnf); err != nil {
 			logger.Errorf("mysqld is not running: %v", err)
-			return mysql.Position{}, err
+			return zeroPosition, t, err
 		}
 		// Since this is an empty database make sure we start replication at the beginning
 		if err = mysqld.ResetReplication(ctx); err == nil {

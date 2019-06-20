@@ -95,9 +95,9 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 
 	// Loop until a backup exists, unless we were told to give up immediately.
 	var pos mysql.Position
-	var err error
+	var backupTime string
 	for {
-		pos, err = mysqlctl.Restore(ctx, agent.Cnf, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore, topoproto.TabletDbName(tablet))
+		pos, backupTime, err = mysqlctl.Restore(ctx, agent.Cnf, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore, topoproto.TabletDbName(tablet), logutil.ProtoToTime(keyspace.SnapshotTime))
 		if waitForBackupInterval == 0 {
 			break
 		}

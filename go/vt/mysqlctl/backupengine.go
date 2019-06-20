@@ -20,10 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"time"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
@@ -57,7 +57,7 @@ func GetBackupEngine() (BackupEngine, error) {
 	return be, nil
 }
 
-func findBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir string, bhs []backupstorage.BackupHandle, bm interface{}) (backupstorage.BackupHandle, error) {
+func findBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir string, bhs []backupstorage.BackupHandle, bm backupManifest, snapshotTime time.Time) (backupstorage.BackupHandle, error) {
 
 	var bh backupstorage.BackupHandle
 	var index int
@@ -65,7 +65,7 @@ func findBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, lo
 
 	for index = len(bhs) - 1; index >= 0; index-- {
 		bh = bhs[index]
-		rc, err := bh.ReadFile(ctx, backupManifest)
+		rc, err := bh.ReadFile(ctx, backupManifestFile)
 		if err != nil {
 			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
 			continue
@@ -78,25 +78,27 @@ func findBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, lo
 			continue
 		}
 
-		backupTime, _ := time.Parse(time.RFC3339, bm.BackupTime)
-		if snapshotTime.Equal(unixZeroTime) /* uninitialized or not snapshot */ || bm.BackupTime == "" /* restoring an older backup where MANIFEST does not have backupTime */ || backupTime.Before(snapshotTime) {
-		logger.Infof("Restore: found backup %v %v to restore", bh.Directory(), bh.Name())
+		manifestTime := bm.GetBackupTime()
+		backupTime, _ := time.Parse(time.RFC3339, manifestTime)
+		if snapshotTime.Equal(unixZeroTime) /* uninitialized or not snapshot */ || manifestTime == "" /* restoring an older backup where MANIFEST does not have backupTime */ || backupTime.Before(snapshotTime) {
+			logger.Infof("Restore: found backup %v %v to restore", bh.Directory(), bh.Name())
 			// older backups don't have backupTime
-			if bm.BackupTime == "" {
+			if manifestTime == "" {
 				// backup Name is of the format 2006-01-02.150405.cell-tabletAlias
 				if bhTime, err := time.Parse("2006-01-02.150405", bh.Name()[:17]); err == nil {
-					bm.BackupTime = bhTime.Format(time.RFC3339)
-					logger.Infof("Setting backup time to %v", bm.BackupTime)
+					bm.SetBackupTime(bhTime.Format(time.RFC3339))
+					logger.Infof("Setting backup time to %v", bm.GetBackupTime())
 				} else {
 					logger.Warningf("error parsing time from backup handle name: %v, %v", bh.Name(), err)
 				}
 			}
-		break
+			break
+		}
 	}
 	if index < 0 {
-    // There is at least one backup but not for the time we are looking for
-    if snapshotTime.After(unixZeroTime) {
-			return zeroPosition, s, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "No valid backup found before time %v", snapshotTime.Format(time.RFC3339))
+		// There is at least one backup but not for the time we are looking for
+		if snapshotTime.After(unixZeroTime) {
+			return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "No valid backup found before time %v", snapshotTime.Format(time.RFC3339))
 		}
 		// There is at least one attempted backup, but none could be read.
 		// This implies there is data we ought to have, so it's not safe to start

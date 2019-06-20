@@ -90,6 +90,14 @@ type xtraBackupManifest struct {
 	BackupTime string
 }
 
+func (bm *xtraBackupManifest) GetBackupTime() string {
+	return bm.BackupTime
+}
+
+func (bm *xtraBackupManifest) SetBackupTime(t string) {
+	bm.BackupTime = t
+}
+
 func (be *XtrabackupEngine) backupFileName() string {
 	fileName := "backup"
 	if *xtrabackupStreamMode != "" {
@@ -213,11 +221,11 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 		return false, vterrors.Wrap(rerr, "backup failed trying to find replication position")
 	}
 	// open the MANIFEST
-	mwc, err := bh.AddFile(ctx, backupManifest, 0)
+	mwc, err := bh.AddFile(ctx, backupManifestFile, 0)
 	if err != nil {
-		return false, vterrors.Wrapf(err, "cannot add %v to backup", backupManifest)
+		return false, vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFile)
 	}
-	defer closeFile(mwc, backupManifest)
+	defer closeFile(mwc, backupManifestFile)
 
 	// JSON-encode and write the MANIFEST
 	bm := &xtraBackupManifest{
@@ -231,10 +239,10 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
-		return false, vterrors.Wrapf(err, "cannot JSON encode %v", backupManifest)
+		return false, vterrors.Wrapf(err, "cannot JSON encode %v", backupManifestFile)
 	}
 	if _, err := mwc.Write([]byte(data)); err != nil {
-		return false, vterrors.Wrapf(err, "cannot write %v", backupManifest)
+		return false, vterrors.Wrapf(err, "cannot write %v", backupManifestFile)
 	}
 
 	return true, nil
@@ -254,9 +262,9 @@ func (be *XtrabackupEngine) ExecuteRestore(
 
 	zeroPosition := mysql.Position{}
 	var bm xtraBackupManifest
-  var s string
+	var s string
 
-	bh, err := findBackupToRestore(ctx, cnf, mysqld, logger, dir, bhs, &bm)
+	bh, err := findBackupToRestore(ctx, cnf, mysqld, logger, dir, bhs, &bm, snapshotTime)
 	if err != nil {
 		return zeroPosition, s, err
 	}
