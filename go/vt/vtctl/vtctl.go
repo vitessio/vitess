@@ -1542,6 +1542,8 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	shardingColumnName := subFlags.String("sharding_column_name", "", "Specifies the column to use for sharding operations")
 	shardingColumnType := subFlags.String("sharding_column_type", "", "Specifies the type of the column to use for sharding operations")
 	force := subFlags.Bool("force", false, "Proceeds even if the keyspace already exists")
+	allowEmptyVSchema := subFlags.Bool("allow_empty_vschema", false, "If set this will allow a new keyspace to have no vschema")
+
 	var servedFrom flagutil.StringMapValue
 	subFlags.Var(&servedFrom, "served_from", "Specifies a comma-separated list of dbtype:keyspace pairs used to serve traffic")
 	if err := subFlags.Parse(args); err != nil {
@@ -1577,6 +1579,26 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		wr.Logger().Infof("keyspace %v already exists (ignoring error with -force)", keyspace)
 		err = nil
 	}
+
+	vschema, err := wr.TopoServer().GetVSchema(ctx, keyspace)
+	if !*allowEmptyVSchema && (vschema == nil || topo.IsErrType(err, topo.NoNode)) {
+		err = wr.TopoServer().SaveVSchema(ctx, keyspace, &vschemapb.Keyspace{
+			Sharded:  false,
+			Vindexes: make(map[string]*vschemapb.Vindex),
+			Tables:   make(map[string]*vschemapb.Table),
+		})
+		if err != nil {
+			wr.Logger().Errorf("could not create blank vschema: %v", err)
+			return err
+		}
+	}
+
+	err = wr.TopoServer().RebuildSrvVSchema(ctx, []string{} /* cells */)
+	if err != nil {
+		wr.Logger().Errorf("could not rebuild SrvVschema after creating keyspace: %v", err)
+		return err
+	}
+
 	return err
 }
 
@@ -2214,7 +2236,7 @@ func commandRebuildVSchemaGraph(ctx context.Context, wr *wrangler.Wrangler, subF
 		return fmt.Errorf("RebuildVSchemaGraph doesn't take any arguments")
 	}
 
-	return topotools.RebuildVSchema(ctx, wr.Logger(), wr.TopoServer(), cells)
+	return wr.TopoServer().RebuildSrvVSchema(ctx, cells)
 }
 
 func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2321,7 +2343,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		wr.Logger().Warningf("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
 		return nil
 	}
-	return topotools.RebuildVSchema(ctx, wr.Logger(), wr.TopoServer(), cells)
+	return wr.TopoServer().RebuildSrvVSchema(ctx, cells)
 }
 
 func commandApplyRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2369,7 +2391,7 @@ func commandApplyRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFla
 		wr.Logger().Warningf("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
 		return nil
 	}
-	return topotools.RebuildVSchema(ctx, wr.Logger(), wr.TopoServer(), cells)
+	return wr.TopoServer().RebuildSrvVSchema(ctx, cells)
 }
 
 func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

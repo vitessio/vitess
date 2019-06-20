@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,14 +7,13 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
-package topotools
+package topotests
 
 import (
 	"testing"
@@ -22,7 +21,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -31,7 +29,6 @@ import (
 
 func TestRebuildVSchema(t *testing.T) {
 	ctx := context.Background()
-	logger := logutil.NewConsoleLogger()
 	emptySrvVSchema := &vschemapb.SrvVSchema{
 		RoutingRules: &vschemapb.RoutingRules{},
 	}
@@ -41,7 +38,7 @@ func TestRebuildVSchema(t *testing.T) {
 	ts := memorytopo.NewServer(cells...)
 
 	// Rebuild with no keyspace / no vschema
-	if err := RebuildVSchema(ctx, logger, ts, cells); err != nil {
+	if err := ts.RebuildSrvVSchema(ctx, cells); err != nil {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	for _, cell := range cells {
@@ -60,7 +57,7 @@ func TestRebuildVSchema(t *testing.T) {
 	if err := ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace(ks1) failed: %v", err)
 	}
-	if err := RebuildVSchema(ctx, logger, ts, cells); err != nil {
+	if err := ts.RebuildSrvVSchema(ctx, cells); err != nil {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	for _, cell := range cells {
@@ -76,7 +73,7 @@ func TestRebuildVSchema(t *testing.T) {
 	if err := ts.SaveVSchema(ctx, "ks1", keyspace1); err != nil {
 		t.Fatalf("SaveVSchema(ks1) failed: %v", err)
 	}
-	if err := RebuildVSchema(ctx, logger, ts, cells); err != nil {
+	if err := ts.RebuildSrvVSchema(ctx, cells); err != nil {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	wanted1 := &vschemapb.SrvVSchema{
@@ -116,7 +113,7 @@ func TestRebuildVSchema(t *testing.T) {
 	if err := ts.SaveVSchema(ctx, "ks2", keyspace2); err != nil {
 		t.Fatalf("SaveVSchema(ks1) failed: %v", err)
 	}
-	if err := RebuildVSchema(ctx, logger, ts, []string{"cell1"}); err != nil {
+	if err := ts.RebuildSrvVSchema(ctx, []string{"cell1"}); err != nil {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	wanted2 := &vschemapb.SrvVSchema{
@@ -134,7 +131,7 @@ func TestRebuildVSchema(t *testing.T) {
 	}
 
 	// now rebuild everywhere
-	if err := RebuildVSchema(ctx, logger, ts, nil); err != nil {
+	if err := ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	for _, cell := range cells {
@@ -153,7 +150,7 @@ func TestRebuildVSchema(t *testing.T) {
 	if err := ts.SaveRoutingRules(ctx, rr); err != nil {
 		t.Fatalf("SaveRoutingRules() failed: %v", err)
 	}
-	if err := RebuildVSchema(ctx, logger, ts, nil); err != nil {
+	if err := ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	wanted3 := &vschemapb.SrvVSchema{
@@ -179,12 +176,12 @@ func TestRebuildVSchema(t *testing.T) {
 	if err := ts.DeleteKeyspace(ctx, "ks2"); err != nil {
 		t.Fatalf("DeleteKeyspace failed: %v", err)
 	}
-	if err := RebuildVSchema(ctx, logger, ts, nil); err != nil {
+	if err := ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		t.Errorf("RebuildVSchema failed: %v", err)
 	}
 	for _, cell := range cells {
 		if v, err := ts.GetSrvVSchema(ctx, cell); err != nil || !proto.Equal(v, wanted4) {
-			t.Errorf("unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
+			t.Errorf("unexpected GetSrvVSchema(%v) result: %v != %v (err = %v)", cell, v, wanted4, err)
 		}
 	}
 }
