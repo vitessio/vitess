@@ -219,9 +219,9 @@ func skipToEnd(yylex interface{}) {
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
-%type <tableNames> table_name_list
+%type <tableNames> table_name_list delete_table_list
 %type <str> inner_join outer_join straight_join natural_join
-%type <tableName> table_name into_table_name
+%type <tableName> table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
@@ -454,6 +454,10 @@ delete_statement:
   {
     $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
   }
+|DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
+  {
+    $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
+  }
 
 from_or_using:
   FROM {}
@@ -465,6 +469,16 @@ table_name_list:
     $$ = TableNames{$1}
   }
 | table_name_list ',' table_name
+  {
+    $$ = append($$, $3)
+  }
+
+delete_table_list:
+  delete_table_name
+  {
+    $$ = TableNames{$1}
+  }
+| delete_table_list ',' delete_table_name
   {
     $$ = append($$, $3)
   }
@@ -2060,6 +2074,12 @@ table_name:
 | table_id '.' reserved_table_id
   {
     $$ = TableName{Qualifier: $1, Name: $3}
+  }
+
+delete_table_name:
+table_id '.' '*'
+  {
+    $$ = TableName{Name: $1}
   }
 
 index_hint_list:
