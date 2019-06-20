@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 // LookupNonUnique tests are more comprehensive than others.
@@ -39,15 +40,23 @@ type vcursor struct {
 	result      *sqltypes.Result
 	queries     []*querypb.BoundQuery
 	autocommits int
+	pre, post   int
 }
 
-func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+	switch co {
+	case vtgatepb.CommitOrder_PRE:
+		vc.pre++
+	case vtgatepb.CommitOrder_POST:
+		vc.post++
+	case vtgatepb.CommitOrder_AUTOCOMMIT:
+		vc.autocommits++
+	}
 	return vc.execute(method, query, bindvars, isDML)
 }
 
-func (vc *vcursor) ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	vc.autocommits++
-	return vc.execute(method, query, bindvars, isDML)
+func (vc *vcursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {
+	return vc.execute("ExecuteKeyspaceID", query, bindVars, isDML)
 }
 
 func (vc *vcursor) execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
@@ -368,9 +377,17 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 
 	// With ignore.
 	vc.queries = nil
-	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, [][]byte{[]byte("test1"), []byte("test2")}, true /* ignoreMode */)
+	rowsColsValues := [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NewInt64(1)}}
+	ksids := [][]byte{[]byte("test2"), []byte("test1")}
+	err = lookupNonUnique.(Lookup).Create(vc, rowsColsValues, ksids, true /* ignoreMode */)
 	if err != nil {
 		t.Error(err)
+	}
+	if !reflect.DeepEqual(rowsColsValues, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}) {
+		t.Errorf("inserts not reordered. Lookup table inserts get reordered on a bulk insert to avoid locking")
+	}
+	if !reflect.DeepEqual(ksids, [][]byte{[]byte("test1"), []byte("test2")}) {
+		t.Errorf("keyspace ids not reordered. Keyspace ids must also get reordered on a bulk insert")
 	}
 
 	wantqueries[0].Sql = "insert ignore into t(fromc, toc) values(:fromc0, :toc0), (:fromc1, :toc1)"

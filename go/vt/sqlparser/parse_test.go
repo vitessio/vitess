@@ -1844,6 +1844,15 @@ func TestSubStr(t *testing.T) {
 	}, {
 		input:  `select substring("foo", 1, 2) from t`,
 		output: `select substr('foo', 1, 2) from t`,
+	}, {
+		input:  `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
+		output: `select substr(substr('foo', 1, 2), 1, 2) from t`,
+	}, {
+		input:  `select substr(substring("foo", 1, 2), 3, 4) from t`,
+		output: `select substr(substr('foo', 1, 2), 3, 4) from t`,
+	}, {
+		input:  `select substring(substr("foo", 1), 2) from t`,
+		output: `select substr(substr('foo', 1), 2) from t`,
 	}}
 
 	for _, tcase := range validSQL {

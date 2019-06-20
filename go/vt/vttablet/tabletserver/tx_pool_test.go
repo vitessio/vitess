@@ -64,7 +64,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	txConn.RecordQuery(sql)
-	_, err = txConn.Exec(ctx, sql, 1, true)
+	_, _ = txConn.Exec(ctx, sql, 1, true)
 	txConn.Recycle()
 
 	commitSQL, err := txPool.Commit(ctx, transactionID, &fakeMessageCommitter{})
@@ -700,6 +700,7 @@ func newTxPool() *TxPool {
 		poolName,
 		transactionCap,
 		transactionCap,
+		0,
 		transactionTimeout,
 		idleTimeout,
 		waiterCap,

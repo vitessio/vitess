@@ -115,7 +115,7 @@ func TestVtclient(t *testing.T) {
 		},
 		{
 			args:   []string{"SELECT * FROM nonexistent"},
-			errMsg: "table nonexistent not found in schema",
+			errMsg: "table nonexistent not found",
 		},
 	}
 

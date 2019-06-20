@@ -90,9 +90,6 @@ type FakeMysqlDaemon struct {
 	// (as "%v:%v"). If it doesn't match, SetMaster will return an error.
 	SetMasterInput string
 
-	// DemoteMasterPosition is returned by DemoteMaster
-	DemoteMasterPosition mysql.Position
-
 	// WaitMasterPosition is checked by WaitMasterPos, if the
 	// same it returns nil, if different it returns an error
 	WaitMasterPosition mysql.Position
@@ -307,9 +304,9 @@ func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCrea
 	return nil
 }
 
-// DemoteMaster is part of the MysqlDaemon interface
+// Deprecated: use mysqld.MasterPosition() instead
 func (fmd *FakeMysqlDaemon) DemoteMaster() (mysql.Position, error) {
-	return fmd.DemoteMasterPosition, nil
+	return fmd.CurrentMasterPosition, nil
 }
 
 // WaitMasterPos is part of the MysqlDaemon interface

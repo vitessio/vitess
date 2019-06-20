@@ -26,6 +26,7 @@ import MySQLdb
 import environment
 import tablet
 import utils
+from mysql_flavor import mysql_flavor
 
 use_mysqlctld = False
 use_xtrabackup = False
@@ -65,23 +66,6 @@ def setUpModule():
   try:
     environment.topo_server().setup()
 
-    # Create a new init_db.sql file that sets up passwords for all users.
-    # Then we use a db-credentials-file with the passwords.
-    new_init_db = environment.tmproot + '/init_db_with_passwords.sql'
-    with open(environment.vttop + '/config/init_db.sql') as fd:
-      init_db = fd.read()
-    with open(new_init_db, 'w') as fd:
-      fd.write(init_db)
-      fd.write('''
-# Set real passwords for all users.
-ALTER USER 'root'@'localhost' IDENTIFIED BY 'RootPass';
-ALTER USER 'vt_dba'@'localhost' IDENTIFIED BY 'VtDbaPass';
-ALTER USER 'vt_app'@'localhost' IDENTIFIED BY 'VtAppPass';
-ALTER USER 'vt_allprivs'@'localhost' IDENTIFIED BY 'VtAllPrivsPass';
-ALTER USER 'vt_repl'@'%' IDENTIFIED BY 'VtReplPass';
-ALTER USER 'vt_filtered'@'localhost' IDENTIFIED BY 'VtFilteredPass';
-FLUSH PRIVILEGES;
-''')
     credentials = {
         'vt_dba': ['VtDbaPass'],
         'vt_app': ['VtAppPass'],
@@ -92,7 +76,31 @@ FLUSH PRIVILEGES;
     db_credentials_file = environment.tmproot+'/db_credentials.json'
     with open(db_credentials_file, 'w') as fd:
       fd.write(json.dumps(credentials))
-    logging.debug("initilizing mysql %s",str(datetime.datetime.now()))
+
+    # Determine which column is used for user passwords in this MySQL version.
+    proc = tablet_master.init_mysql()
+    if use_mysqlctld:
+      tablet_master.wait_for_mysqlctl_socket()
+    else:
+      utils.wait_procs([proc])
+    try:
+      tablet_master.mquery('mysql', 'select password from mysql.user limit 0',
+                           user='root')
+      password_col = 'password'
+    except MySQLdb.DatabaseError:
+      password_col = 'authentication_string'
+    utils.wait_procs([tablet_master.teardown_mysql()])
+    tablet_master.remove_tree(ignore_options=True)
+
+    # Create a new init_db.sql file that sets up passwords for all users.
+    # Then we use a db-credentials-file with the passwords.
+    new_init_db = environment.tmproot + '/init_db_with_passwords.sql'
+    with open(environment.vttop + '/config/init_db.sql') as fd:
+      init_db = fd.read()
+    with open(new_init_db, 'w') as fd:
+      fd.write(init_db)
+      fd.write(mysql_flavor().change_passwords(password_col))
+
     # start mysql instance external to the test
     setup_procs = [
         tablet_master.init_mysql(init_db=new_init_db,
@@ -228,9 +236,26 @@ class TestBackup(unittest.TestCase):
     else:
       t.check_db_var('rpl_semi_sync_slave_enabled', 'OFF')
       t.check_db_status('rpl_semi_sync_slave_status', 'OFF')
-    logging.debug("done restoring tablet %s",str(datetime.datetime.now()))
-    
-  def _reset_tablet_dir(self, t, teardown=True):
+
+  def _restore_wait_for_backup(self, t, tablet_type='replica'):
+    """Erase mysql/tablet dir, then start tablet with wait_for_restore_interval."""
+    self._reset_tablet_dir(t)
+
+    xtra_args = [
+      '-db-credentials-file', db_credentials_file,
+      '-wait_for_backup_interval', '1s',
+    ]
+    if use_xtrabackup:
+      xtra_args.extend(xtrabackup_args)
+
+    t.start_vttablet(wait_for_state=None,
+                     init_tablet_type=tablet_type,
+                     init_keyspace='test_keyspace',
+                     init_shard='0',
+                     supports_backups=True,
+                     extra_args=xtra_args)
+
+  def _reset_tablet_dir(self, t):
     """Stop mysql, delete everything including tablet dir, restart mysql."""
 
     extra_args = ['-db-credentials-file', db_credentials_file]    
@@ -337,17 +362,22 @@ class TestBackup(unittest.TestCase):
     test_backup will:
     - create a shard with master and replica1 only
     - run InitShardMaster
+    - bring up tablet_replica2 concurrently, telling it to wait for a backup
     - insert some data
     - take a backup
     - insert more data on the master
-    - bring up tablet_replica2 after the fact, let it restore the backup
+    - wait for tablet_replica2 to become SERVING
     - check all data is right (before+after backup data)
     - list the backup, remove it
 
     Args:
       tablet_type: 'replica' or 'rdonly'.
     """
-    
+
+    # bring up another replica concurrently, telling it to wait until a backup
+    # is available instead of starting up empty.
+    self._restore_wait_for_backup(tablet_replica2, tablet_type=tablet_type)
+
     # insert data on master, wait for slave to get it
     tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
     self._insert_data(tablet_master, 1)
@@ -373,8 +403,9 @@ class TestBackup(unittest.TestCase):
     # insert more data on the master
     self._insert_data(tablet_master, 2)
 
-    # now bring up the other slave, letting it restore from backup.
-    self._restore(tablet_replica2, tablet_type=tablet_type)
+    # wait for tablet_replica2 to become serving (after restoring)
+    utils.pause('wait_for_backup')
+    tablet_replica2.wait_for_vttablet_state('SERVING')
 
     # check the new slave has the data
     self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')

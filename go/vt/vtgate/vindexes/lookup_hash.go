@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 var (
@@ -154,7 +155,7 @@ func (lh *LookupHash) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	return lh.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
+	return lh.lkp.Create(vcursor, rowsColValues, ksids, values, ignoreMode)
 }
 
 // Update updates the entry in the vindex table.
@@ -163,7 +164,7 @@ func (lh *LookupHash) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid [
 	if err != nil {
 		return fmt.Errorf("lookup.Update.vunhash: %v", err)
 	}
-	return lh.lkp.Update(vcursor, oldValues, sqltypes.NewUint64(v), newValues)
+	return lh.lkp.Update(vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
 }
 
 // Delete deletes the entry from the vindex table.
@@ -172,7 +173,7 @@ func (lh *LookupHash) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
-	return lh.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v))
+	return lh.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
 }
 
 // MarshalJSON returns a JSON representation of LookupHash.
@@ -308,7 +309,7 @@ func (lhu *LookupHashUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	return lhu.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
+	return lhu.lkp.Create(vcursor, rowsColValues, ksids, values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
@@ -317,7 +318,7 @@ func (lhu *LookupHashUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
-	return lhu.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v))
+	return lhu.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
 }
 
 // Update updates the entry in the vindex table.
@@ -326,7 +327,7 @@ func (lhu *LookupHashUnique) Update(vcursor VCursor, oldValues []sqltypes.Value,
 	if err != nil {
 		return fmt.Errorf("lookup.Update.vunhash: %v", err)
 	}
-	return lhu.lkp.Update(vcursor, oldValues, sqltypes.NewUint64(v), newValues)
+	return lhu.lkp.Update(vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
 }
 
 // MarshalJSON returns a JSON representation of LookupHashUnique.

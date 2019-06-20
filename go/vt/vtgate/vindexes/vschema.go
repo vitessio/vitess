@@ -315,6 +315,11 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 			}
 			t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
 			if owned {
+				if setter, ok := vindex.(WantOwnerInfo); ok {
+					if err := setter.SetOwnerInfo(keyspace.Name, tname, columns); err != nil {
+						return err
+					}
+				}
 				t.Owned = append(t.Owned, columnVindex)
 			}
 		}

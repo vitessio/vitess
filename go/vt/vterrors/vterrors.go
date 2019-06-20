@@ -83,7 +83,7 @@ import (
 var LogErrStacks bool
 
 func init() {
-	flag.BoolVar(&LogErrStacks, "LogErrStacks", false, "log stack traces in errors")
+	flag.BoolVar(&LogErrStacks, "log_err_stacks", false, "log stack traces for errors")
 }
 
 // New returns an error with the supplied message.

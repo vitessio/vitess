@@ -27,20 +27,14 @@ import (
 // and ensures that there are no subqueries.
 func (pb *primitiveBuilder) pushGroupBy(sel *sqlparser.Select) error {
 	if sel.Distinct != "" {
-		// We can be here only if the builder could handle a group by.
 		if err := pb.bldr.MakeDistinct(); err != nil {
 			return err
 		}
 	}
 
-	if len(sel.GroupBy) == 0 {
-		return nil
-	}
 	if err := pb.st.ResolveSymbols(sel.GroupBy); err != nil {
 		return err
 	}
-
-	// We can be here only if the builder could handle a group by.
 	return pb.bldr.PushGroupBy(sel.GroupBy)
 }
 

@@ -86,6 +86,9 @@ type SandboxConn struct {
 
 	MessageIDs []*querypb.Value
 
+	VStreamEvents [][]*binlogdatapb.VEvent
+	VStreamErrors []error
+
 	// transaction id generator
 	TransactionID sync2.AtomicInt64
 }
@@ -358,9 +361,29 @@ func (sbc *SandboxConn) UpdateStream(ctx context.Context, target *querypb.Target
 	return fmt.Errorf("not implemented in test")
 }
 
+// AddVStreamEvents adds a set of VStream events to be returned.
+func (sbc *SandboxConn) AddVStreamEvents(events []*binlogdatapb.VEvent, err error) {
+	sbc.VStreamEvents = append(sbc.VStreamEvents, events)
+	sbc.VStreamErrors = append(sbc.VStreamErrors, err)
+}
+
 // VStream is part of the QueryService interface.
 func (sbc *SandboxConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return fmt.Errorf("not implemented in test")
+	for len(sbc.VStreamEvents) != 0 {
+		ev := sbc.VStreamEvents[0]
+		err := sbc.VStreamErrors[0]
+		sbc.VStreamEvents = sbc.VStreamEvents[1:]
+		sbc.VStreamErrors = sbc.VStreamErrors[1:]
+		if ev == nil {
+			return err
+		}
+		if err := send(ev); err != nil {
+			return err
+		}
+	}
+	// Don't return till context is canceled.
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 // VStreamRows is part of the QueryService interface.
