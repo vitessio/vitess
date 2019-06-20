@@ -18,8 +18,11 @@ package vtgate
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"sort"
 	"strings"
@@ -566,32 +569,6 @@ func TestExecutorAutocommit(t *testing.T) {
 	}
 	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
-	}
-}
-
-func TestExecutorLegacyAutocommit(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: false})
-
-	// If legacy is on, there should be no implicit transaction.
-	executor.legacyAutocommit = true
-	startCount := sbclookup.BeginCount.Get()
-	_, err := executor.Execute(context.Background(), "TestExecute", session, "update main1 set id=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := sbclookup.BeginCount.Get(), startCount; got != want {
-		t.Errorf("Begin count: %d, want %d", got, want)
-	}
-
-	// If legacy is off, there should be an implicit begin.
-	executor.legacyAutocommit = false
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "update main1 set id=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := sbclookup.BeginCount.Get(), startCount+1; got != want {
-		t.Errorf("Begin count: %d, want %d", got, want)
 	}
 }
 
@@ -2373,6 +2350,24 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 			KsTestUnsharded,
 			topodatapb.TabletType_REPLICA,
 		)
+	}
+}
+
+func TestDebugVSchema(t *testing.T) {
+	resp := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/debug/vschema", nil)
+
+	executor, _, _, _ := createExecutorEnv()
+	executor.ServeHTTP(resp, req)
+	v := make(map[string]interface{})
+	if err := json.Unmarshal(resp.Body.Bytes(), &v); err != nil {
+		t.Fatalf("Unmarshal on %s failed: %v", resp.Body.String(), err)
+	}
+	if _, ok := v["routing_rules"]; !ok {
+		t.Errorf("routing rules missing: %v", resp.Body.String())
+	}
+	if _, ok := v["keyspaces"]; !ok {
+		t.Errorf("keyspaces missing: %v", resp.Body.String())
 	}
 }
 

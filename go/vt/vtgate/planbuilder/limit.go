@@ -80,7 +80,7 @@ func (l *limit) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType stri
 }
 
 // PushSelect satisfies the builder interface.
-func (l *limit) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+func (l *limit) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
 	return nil, 0, errors.New("limit.PushSelect: unreachable")
 }
 

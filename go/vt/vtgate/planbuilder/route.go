@@ -124,7 +124,7 @@ func (rb *route) UpdatePlans(pb *primitiveBuilder, filter sqlparser.Expr) {
 }
 
 // PushSelect satisfies the builder interface.
-func (rb *route) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colnum int, err error) {
+func (rb *route) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colnum int, err error) {
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, expr)
 
@@ -468,7 +468,8 @@ func (rb *route) SupplyWeightString(colnum int) (weightColnum int) {
 			},
 		},
 	}
-	_, weightColnum, _ = rb.PushSelect(expr, nil)
+	// It's ok to pass nil for pb and builder because PushSelect doesn't use them.
+	_, weightColnum, _ = rb.PushSelect(nil, expr, nil)
 	rb.weightStrings[rc] = weightColnum
 	return weightColnum
 }

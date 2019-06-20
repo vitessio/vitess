@@ -23,6 +23,7 @@ package vtgate;
 
 option java_package="io.vitess.proto";
 
+import "binlogdata.proto";
 import "query.proto";
 import "topodata.proto";
 import "vtrpc.proto";
@@ -38,6 +39,20 @@ enum TransactionMode {
   MULTI = 2;
   // TWOPC is for distributed transactions with atomic commits.
   TWOPC = 3;
+}
+
+
+// CommitOrder is used to designate which of the ShardSessions
+// get used for transactions.
+enum CommitOrder {
+  // NORMAL is the default commit order.
+  NORMAL = 0;
+  // PRE is used to designate pre_sessions.
+  PRE = 1;
+  // POST is used to designate post_sessions.
+  POST = 2;
+  // AUTOCOMMIT is used to run the statement as autocommitted transaction.
+  AUTOCOMMIT = 3;
 }
 
 // Session objects are exchanged like cookies through various
@@ -84,6 +99,12 @@ message Session {
 
   // warnings contains non-fatal warnings from the previous query
   repeated query.QueryWarning warnings = 8;
+
+  // pre_sessions contains sessions that have to be committed first.
+  repeated ShardSession pre_sessions = 9;
+
+  // post_sessions contains sessions that have to be committed last.
+  repeated ShardSession post_sessions = 10;
 }
 
 // ExecuteRequest is the payload to Execute.
@@ -838,6 +859,24 @@ message GetSrvKeyspaceRequest {
 message GetSrvKeyspaceResponse {
   // srv_keyspace is the topology object for the SrvKeyspace.
   topodata.SrvKeyspace srv_keyspace = 1;
+}
+
+// VStreamRequest is the payload for VStream.
+message VStreamRequest {
+  vtrpc.CallerID caller_id = 1;
+
+  topodata.TabletType tablet_type = 2;
+
+  // position specifies the starting point of the bin log positions
+  // as well as the keyspace-shards to pull events from.
+  // position is of the form 'ks1:0@MySQL56/<mysql_pos>|ks2:-80@MySQL56/<mysql_pos>'.
+  binlogdata.VGtid vgtid = 3;
+  binlogdata.Filter filter = 4;
+}
+
+// VStreamResponse is streamed by VStream.
+message VStreamResponse {
+  repeated binlogdata.VEvent events = 1;
 }
 
 // UpdateStreamRequest is the payload to UpdateStream.

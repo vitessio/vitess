@@ -131,6 +131,14 @@
 "select 1+count(*) from user"
 "unsupported: in scatter query: complex aggregate expression"
 
+# Multi-value aggregates not supported
+"select count(a,b) from user"
+"unsupported: only one expression allowed inside aggregates: count(a, b)"
+
+# Cannot have more than one aggr(distinct...
+"select count(distinct a), count(distinct b) from user"
+"unsupported: only one distinct aggregation allowed in a select: count(distinct b)"
+
 # scatter aggregate group by doesn't reference select list
 "select id from user group by col"
 "unsupported: in scatter query: group by column must reference column in SELECT list"

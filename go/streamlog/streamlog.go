@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -39,6 +40,9 @@ var (
 
 	// QueryLogFormat controls the format of the query log (either text or json)
 	QueryLogFormat = flag.String("querylog-format", "text", "format for query logs (\"text\" or \"json\")")
+
+	// QueryLogFilterTag contains an optional string that must be present in the query for it to be logged
+	QueryLogFilterTag = flag.String("querylog-filter-tag", "", "string that must be present in the query for it to be logged")
 
 	sendCount      = stats.NewCountersWithSingleLabel("StreamlogSend", "stream log send count", "logger_names")
 	deliveredCount = stats.NewCountersWithMultiLabels(
@@ -200,4 +204,13 @@ func GetFormatter(logger *StreamLogger) LogFormatter {
 		}
 		return fmter.Logf(w, params)
 	}
+}
+
+// ShouldEmitLog returns whether the log with the given SQL query
+// should be emitted or filtered
+func ShouldEmitLog(sql string) bool {
+	if *QueryLogFilterTag == "" {
+		return true
+	}
+	return strings.Contains(sql, *QueryLogFilterTag)
 }

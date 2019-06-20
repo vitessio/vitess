@@ -36,6 +36,7 @@ type SafeSession struct {
 	mu              sync.Mutex
 	mustRollback    bool
 	autocommitState autocommitState
+	commitOrder     vtgatepb.CommitOrder
 	*vtgatepb.Session
 }
 
@@ -48,8 +49,8 @@ type SafeSession struct {
 // and this should cause the state to become notAutocommitable.
 //
 // SafeSession lets you request a commit token, which will
-// be issued if the state is autocommitable, and ShardSessions
-// is empty, implying that no intermediate transactions were started.
+// be issued if the state is autocommitable,
+// implying that no intermediate transactions were started.
 // If so, the state transitions to autocommited, which is terminal.
 // If the token is succesfully issued, the caller has to perform
 // the commit. If a token cannot be issued, then a traditional
@@ -65,6 +66,9 @@ const (
 
 // NewSafeSession returns a new SafeSession based on the Session
 func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
+	if sessn == nil {
+		sessn = &vtgatepb.Session{}
+	}
 	return &SafeSession{Session: sessn}
 }
 
@@ -74,18 +78,36 @@ func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
 	newSession := proto.Clone(sessn).(*vtgatepb.Session)
 	newSession.InTransaction = false
 	newSession.ShardSessions = nil
+	newSession.PreSessions = nil
+	newSession.PostSessions = nil
 	newSession.Autocommit = true
+	newSession.Warnings = nil
 	return NewSafeSession(newSession)
 }
 
-// SetAutocommitable sets the state to autocommitable if true.
+// Reset clears the session
+func (session *SafeSession) Reset() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.mustRollback = false
+	session.autocommitState = notAutocommittable
+	session.Session.InTransaction = false
+	session.SingleDb = false
+	session.ShardSessions = nil
+	session.PreSessions = nil
+	session.PostSessions = nil
+	session.commitOrder = vtgatepb.CommitOrder_NORMAL
+}
+
+// SetAutocommittable sets the state to autocommitable if true.
 // Otherwise, it's notAutocommitable.
-func (session *SafeSession) SetAutocommitable(flag bool) {
+func (session *SafeSession) SetAutocommittable(flag bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
 	if session.autocommitState == autocommitted {
-		panic("BUG: SetAutocommitable: unexpected autocommit state")
+		// Unreachable.
+		return
 	}
 
 	if flag {
@@ -103,21 +125,26 @@ func (session *SafeSession) AutocommitApproval() bool {
 	defer session.mu.Unlock()
 
 	if session.autocommitState == autocommitted {
-		panic("BUG: AutocommitToken: unexpected autocommit state")
+		// Unreachable.
+		return false
 	}
 
-	if session.autocommitState == autocommittable && len(session.ShardSessions) == 0 {
+	if session.autocommitState == autocommittable {
 		session.autocommitState = autocommitted
 		return true
 	}
 	return false
 }
 
+// SetCommitOrder sets the commit order.
+func (session *SafeSession) SetCommitOrder(co vtgatepb.CommitOrder) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.commitOrder = co
+}
+
 // InTransaction returns true if we are in a transaction
 func (session *SafeSession) InTransaction() bool {
-	if session == nil || session.Session == nil {
-		return false
-	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.Session.InTransaction
@@ -125,12 +152,16 @@ func (session *SafeSession) InTransaction() bool {
 
 // Find returns the transactionId, if any, for a session
 func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) int64 {
-	if session == nil {
-		return 0
-	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	for _, shardSession := range session.ShardSessions {
+	sessions := session.ShardSessions
+	switch session.commitOrder {
+	case vtgatepb.CommitOrder_PRE:
+		sessions = session.PreSessions
+	case vtgatepb.CommitOrder_POST:
+		sessions = session.PostSessions
+	}
+	for _, shardSession := range sessions {
 		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
 			return shardSession.TransactionId
 		}
@@ -144,14 +175,28 @@ func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession, 
 	defer session.mu.Unlock()
 
 	if session.autocommitState == autocommitted {
-		panic("BUG: SafeSession.Append: unexpected autocommit state")
+		// Unreachable.
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.Append: unexpected autocommit state")
 	}
+	if !session.Session.InTransaction {
+		// Unreachable.
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.Append: not in transaction")
+	}
+	session.autocommitState = notAutocommittable
 
 	// Always append, in order for rollback to succeed.
-	session.ShardSessions = append(session.ShardSessions, shardSession)
-	if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
-		session.mustRollback = true
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction attempted: %v", session.ShardSessions)
+	switch session.commitOrder {
+	case vtgatepb.CommitOrder_NORMAL:
+		session.ShardSessions = append(session.ShardSessions, shardSession)
+		// isSingle is enforced only for normmal commit order operations.
+		if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
+			session.mustRollback = true
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction attempted: %v", session.ShardSessions)
+		}
+	case vtgatepb.CommitOrder_PRE:
+		session.PreSessions = append(session.PreSessions, shardSession)
+	case vtgatepb.CommitOrder_POST:
+		session.PostSessions = append(session.PostSessions, shardSession)
 	}
 	return nil
 }
@@ -165,19 +210,15 @@ func (session *SafeSession) isSingleDB(txMode vtgatepb.TransactionMode) bool {
 // SetRollback sets the flag indicating that the transaction must be rolled back.
 // The call is a no-op if the session is not in a transaction.
 func (session *SafeSession) SetRollback() {
-	if session == nil || session.Session == nil || !session.Session.InTransaction {
-		return
-	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.mustRollback = true
+	if session.Session.InTransaction {
+		session.mustRollback = true
+	}
 }
 
 // MustRollback returns true if the transaction must be rolled back.
 func (session *SafeSession) MustRollback() bool {
-	if session == nil {
-		return false
-	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.mustRollback
@@ -195,18 +236,4 @@ func (session *SafeSession) ClearWarnings() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Session.Warnings = nil
-}
-
-// Reset clears the session
-func (session *SafeSession) Reset() {
-	if session == nil || session.Session == nil {
-		return
-	}
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	session.mustRollback = false
-	session.autocommitState = notAutocommittable
-	session.Session.InTransaction = false
-	session.SingleDb = false
-	session.ShardSessions = nil
 }

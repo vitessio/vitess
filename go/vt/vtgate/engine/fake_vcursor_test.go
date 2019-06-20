@@ -32,7 +32,10 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
+
+var testMaxMemoryRows = 100
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
@@ -42,6 +45,10 @@ func (t noopVCursor) Context() context.Context {
 	return context.Background()
 }
 
+func (t noopVCursor) MaxMemoryRows() int {
+	return testMaxMemoryRows
+}
+
 func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	return func() {}
 }
@@ -49,11 +56,7 @@ func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc
 func (t noopVCursor) RecordWarning(warning *querypb.QueryWarning) {
 }
 
-func (t noopVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	panic("unimplemented")
-}
-
-func (t noopVCursor) ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+func (t noopVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
@@ -70,6 +73,10 @@ func (t noopVCursor) ExecuteStandalone(query string, bindvars map[string]*queryp
 }
 
 func (t noopVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+	panic("unimplemented")
+}
+
+func (t noopVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
@@ -112,8 +119,19 @@ func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {
 	f.warnings = append(f.warnings, warning)
 }
 
-func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	f.log = append(f.log, fmt.Sprintf("Execute %s %v %v", query, printBindVars(bindvars), isDML))
+func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+	name := "Unknown"
+	switch co {
+	case vtgatepb.CommitOrder_NORMAL:
+		name = "Execute"
+	case vtgatepb.CommitOrder_PRE:
+		name = "ExecutePre"
+	case vtgatepb.CommitOrder_POST:
+		name = "ExecutePost"
+	case vtgatepb.CommitOrder_AUTOCOMMIT:
+		name = "ExecuteAutocommit"
+	}
+	f.log = append(f.log, fmt.Sprintf("%s %s %v %v", name, query, printBindVars(bindvars), isDML))
 	return f.nextResult()
 }
 

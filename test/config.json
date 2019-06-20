@@ -328,6 +328,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vschema": {
+			"File": "vschema.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"sharded": {
 			"File": "sharded.py",
 			"Args": [],
