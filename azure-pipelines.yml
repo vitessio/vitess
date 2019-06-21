@@ -2,4 +2,4 @@ pr:
 - master
 
 jobs:
-- template: .azure-pipeline.tmpl.yml
+- template: .azure-pipelines.tmpl.yml
