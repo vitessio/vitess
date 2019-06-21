@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/vitess.io/vitess)](https://goreportcard.com/report/vitess.io/vitess)
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fvitessio%2Fvitess.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fvitessio%2Fvitess?ref=badge_shield)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/1724/badge)](https://bestpractices.coreinfrastructure.org/projects/1724)
-
+[![Azure Build Status](https://dev.azure.com/cncf/vitess/_apis/build/status/vitessio.vitess?branchName=master)](https://dev.azure.com/cncf/vitess/_build/latest?definitionId=6&branchName=master)
 # Vitess 
 
 Vitess is a database clustering system for horizontal scaling of MySQL
