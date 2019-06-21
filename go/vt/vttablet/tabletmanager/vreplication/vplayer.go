@@ -176,14 +176,11 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
 	for _, change := range rowEvent.RowChanges {
-		queries, err := tplan.generateStatements(change)
+		err := tplan.applyChange(change, func(sql string) error {
+			return vp.exec(ctx, sql)
+		})
 		if err != nil {
 			return err
-		}
-		for _, query := range queries {
-			if err := vp.exec(ctx, query); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
@@ -210,7 +207,7 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 }
 
 func (vp *vplayer) exec(ctx context.Context, sql string) error {
-	vp.vr.stats.Timings.Record("query", time.Now())
+	defer vp.vr.stats.Timings.Record("query", time.Now())
 	_, err := vp.vr.dbClient.ExecuteFetch(sql, 0)
 	for err != nil {
 		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock || sqlErr.Number() == mysql.ERLockWaitTimeout {

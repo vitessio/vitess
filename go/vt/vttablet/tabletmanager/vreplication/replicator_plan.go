@@ -182,7 +182,7 @@ func (tp *TablePlan) generateBulkInsert(rows *binlogdatapb.VStreamRowsResponse) 
 	return buf.String(), nil
 }
 
-func (tp *TablePlan) generateStatements(rowChange *binlogdatapb.RowChange) ([]string, error) {
+func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) error) error {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var before, after bool
 	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
@@ -202,45 +202,32 @@ func (tp *TablePlan) generateStatements(rowChange *binlogdatapb.RowChange) ([]st
 	}
 	switch {
 	case !before && after:
-		query, err := tp.Insert.GenerateQuery(bindvars, nil)
-		if err != nil {
-			return nil, err
-		}
-		return []string{query}, nil
+		return execParsedQuery(tp.Insert, bindvars, executor)
 	case before && !after:
 		if tp.Delete == nil {
-			return nil, nil
+			return nil
 		}
-		query, err := tp.Delete.GenerateQuery(bindvars, nil)
-		if err != nil {
-			return nil, err
-		}
-		return []string{query}, nil
+		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
 		if !tp.pkChanged(bindvars) {
-			query, err := tp.Update.GenerateQuery(bindvars, nil)
-			if err != nil {
-				return nil, err
-			}
-			return []string{query}, nil
+			return execParsedQuery(tp.Update, bindvars, executor)
 		}
-
-		queries := make([]string, 0, 2)
 		if tp.Delete != nil {
-			query, err := tp.Delete.GenerateQuery(bindvars, nil)
-			if err != nil {
-				return nil, err
+			if err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
+				return err
 			}
-			queries = append(queries, query)
 		}
-		query, err := tp.Insert.GenerateQuery(bindvars, nil)
-		if err != nil {
-			return nil, err
-		}
-		queries = append(queries, query)
-		return queries, nil
+		return execParsedQuery(tp.Insert, bindvars, executor)
 	}
-	return nil, nil
+	return nil
+}
+
+func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable, executor func(string) error) error {
+	sql, err := pq.GenerateQuery(bindvars, nil)
+	if err != nil {
+		return err
+	}
+	return executor(sql)
 }
 
 func (tp *TablePlan) pkChanged(bindvars map[string]*querypb.BindVariable) bool {
