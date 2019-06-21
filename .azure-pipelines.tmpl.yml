@@ -1,9 +1,10 @@
-variables:
-  flags: "-docker -use_docker_cache -timeout=8m -print-log"
 parameters:
   shards: ['0', '1', '2', '3', '4']
   flavors: ['mysql56', 'mysql57', 'mysql80', 'mariadb', 'mariadb103', 'percona57', 'percona80']
 
+variables:
+  flags: "-docker -use_docker_cache -timeout=8m -print-log"
+  
 pr:
 - master
 
