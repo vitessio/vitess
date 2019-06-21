@@ -1,0 +1,41 @@
+pr:
+- master
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+strategy:
+  matrix:
+    mysql56:
+      flavor: mysql56 
+    mysql57:
+      flavor: mysql57
+    mysql80:
+      flavor: mysql80
+    maraidb:
+      flavor: mariadb
+    mariadb103:
+      flavor: mariadb103
+    percona57:
+      flavor: percona57
+    percona80:
+      flavor: percona80
+
+variables:
+  flags: "-docker -use_docker_cache -timeout=8m -print-log"
+jobs:
+- job: Shard0
+  steps:
+  - script: go run test.go -shard 0 $(flags)
+- job: Shard1
+  steps:
+  - script: go run test.go -shard 1 $(flags)
+- job: Shard2
+  steps:
+  - script: go run test.go -shard 2 $(flags)
+- job: Shard3
+  steps:
+  - script: go run test.go -shard 3 $(flags)
+- job: Shard4
+  steps:
+  - script: go run test.go -shard 4 $(flags)
