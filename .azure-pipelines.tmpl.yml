@@ -1,6 +1,6 @@
 parameters:
   shards: ['0', '1', '2', '3', '4']
-  flavors: ['mysql56', 'mysql57', 'mysql80', 'mariadb', 'mariadb103', 'percona57', 'percona80']
+  flavors: [ 'mysql57']
 
 jobs:
 - job: tests
