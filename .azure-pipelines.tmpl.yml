@@ -4,9 +4,6 @@ parameters:
 
 variables:
   flags: "-docker -use_docker_cache -timeout=8m -print-log"
-  
-pr:
-- master
 
 jobs:
 - job: tests
