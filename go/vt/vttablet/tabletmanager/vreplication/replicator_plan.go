@@ -159,11 +159,11 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&v)
 }
 
-func (tp *TablePlan) generateBulkInsert(rows *binlogdatapb.VStreamRowsResponse) (string, error) {
+func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 	var buf strings.Builder
 	if err := tp.BulkInsertFront.Append(&buf, nil, nil); err != nil {
-		return "", err
+		return nil, err
 	}
 	buf.WriteString(" values ")
 	separator := ""
@@ -179,10 +179,10 @@ func (tp *TablePlan) generateBulkInsert(rows *binlogdatapb.VStreamRowsResponse) 
 	if tp.BulkInsertOnDup != nil {
 		tp.BulkInsertOnDup.Append(&buf, nil, nil)
 	}
-	return buf.String(), nil
+	return executor(buf.String())
 }
 
-func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) error) error {
+func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var before, after bool
 	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
@@ -205,7 +205,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		return execParsedQuery(tp.Insert, bindvars, executor)
 	case before && !after:
 		if tp.Delete == nil {
-			return nil
+			return nil, nil
 		}
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
@@ -213,19 +213,20 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			return execParsedQuery(tp.Update, bindvars, executor)
 		}
 		if tp.Delete != nil {
-			if err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
-				return err
+			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
+				return nil, err
 			}
 		}
 		return execParsedQuery(tp.Insert, bindvars, executor)
 	}
-	return nil
+	// Unreachable.
+	return nil, nil
 }
 
-func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable, executor func(string) error) error {
+func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	sql, err := pq.GenerateQuery(bindvars, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return executor(sql)
 }
