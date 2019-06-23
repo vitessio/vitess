@@ -74,6 +74,11 @@ services:
         -service_map 'grpc-vtgateservice' \
         -pid_file $$VTDATAROOT/tmp/vtgate.pid \
         "]
+    volumes:
+      - ".:/script"
+    environment:
+      - KEYSPACE
+      - DB
     depends_on:
       - vtctld
     depends_on:
@@ -94,6 +99,12 @@ services:
       - GRPC_PORT
       - CELL
       - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
+      - DB_USER
+      - DB_PASS
     command: ["sh", "-c", "/script/vttablet-up.sh 1"]
     depends_on:
       - vtctld
@@ -116,6 +127,10 @@ services:
       - GRPC_PORT
       - CELL
       - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_USER
+      - DB_PASS
     command: ["sh", "-c", "/script/vttablet-up.sh 2"]
     depends_on:
       - vtctld
@@ -133,6 +148,10 @@ services:
       - GRPC_PORT
       - CELL
       - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_USER
+      - DB_PASS
     command: ["sh", "-c", "/script/vttablet-up.sh 3"]
     depends_on:
       - vtctld
