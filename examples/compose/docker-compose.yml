@@ -136,6 +136,7 @@ services:
     command: ["sh", "-c", "/script/vttablet-up.sh 2"]
     depends_on:
       - vtctld
+      - vttablet1
   vttablet3:
     image: vitess/base
     ports:
@@ -158,3 +159,4 @@ services:
     command: ["sh", "-c", "/script/vttablet-up.sh 3"]
     depends_on:
       - vtctld
+      - vttablet1
