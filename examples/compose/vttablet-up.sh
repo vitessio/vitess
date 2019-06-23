@@ -12,8 +12,13 @@ printf -v alias '%s-%010d' $CELL $uid
 printf -v tablet_dir 'vt_%010d' $uid
 
 tablet_role='replica'
+tablet_type='replica'
 if [ "$uid" = "1" ]; then
     tablet_role='master'
+fi
+
+if (( $uid % 3 == 0 )) ; then
+    tablet_type='rdonly'
 fi
 
 init_db_sql_file="$VTROOT/init_db.sql"
