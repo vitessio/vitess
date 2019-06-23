@@ -5,6 +5,8 @@ set -u
 keyspace=${KEYSPACE:-'test_keyspace'}
 shard=${SHARD:-'0'}
 uid=$1
+external=${EXTERNAL_DB:-0}
+db_name=${DB:-"$keyspace"}
 
 printf -v alias '%s-%010d' $CELL $uid
 printf -v tablet_dir 'vt_%010d' $uid
