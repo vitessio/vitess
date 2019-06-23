@@ -7,6 +7,7 @@ shard=${SHARD:-'0'}
 uid=$1
 external=${EXTERNAL_DB:-0}
 db_name=${DB:-"$keyspace"}
+db_charset=${DB_CHARSET:-''}
 
 printf -v alias '%s-%010d' $CELL $uid
 printf -v tablet_dir 'vt_%010d' $uid
@@ -34,7 +35,7 @@ if [[ "$tablet_role" != "master" ]]; then
     if [[ "$external" = "1" ]]; then
         # Add master character set and collation to avoid replication errors
         # Example:CREATE DATABASE IF NOT EXISTS $keyspace CHARACTER SET latin1 COLLATE latin1_swedish_ci
-        echo "CREATE DATABASE IF NOT EXISTS $db_name;" >> $init_db_sql_file
+        echo "CREATE DATABASE IF NOT EXISTS $db_name $db_charset;" >> $init_db_sql_file
         echo "Creating matching user for replicas..."
         echo "CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';" >> $init_db_sql_file
         echo "GRANT ALL ON *.* TO '$DB_USER'@'%';FLUSH PRIVILEGES;" >> $init_db_sql_file

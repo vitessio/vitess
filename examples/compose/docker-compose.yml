@@ -105,6 +105,7 @@ services:
       - DB_HOST
       - DB_USER
       - DB_PASS
+      - DB_CHARSET
     command: ["sh", "-c", "/script/vttablet-up.sh 1"]
     depends_on:
       - vtctld
@@ -131,6 +132,7 @@ services:
       - EXTERNAL_DB
       - DB_USER
       - DB_PASS
+      - DB_CHARSET
     command: ["sh", "-c", "/script/vttablet-up.sh 2"]
     depends_on:
       - vtctld
@@ -152,6 +154,7 @@ services:
       - EXTERNAL_DB
       - DB_USER
       - DB_PASS
+      - DB_CHARSET
     command: ["sh", "-c", "/script/vttablet-up.sh 3"]
     depends_on:
       - vtctld
