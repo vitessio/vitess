@@ -135,4 +135,9 @@ exec $VTROOT/bin/vttablet \
   -grpc_port $GRPC_PORT \
   -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
   -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
-  -vtctld_addr "http://vtctld:$WEB_PORT/"
+  -vtctld_addr "http://vtctld:$WEB_PORT/" \
+  -init_keyspace $keyspace \
+  -init_shard $shard \
+  -init_tablet_type $tablet_type \
+  $external_db_args
+
