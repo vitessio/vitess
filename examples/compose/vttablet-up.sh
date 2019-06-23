@@ -64,6 +64,9 @@ export TABLET_ID=$alias
 export TABLET_DIR=$tablet_dir
 export MYSQL_PORT=3306
 export TABLET_TYPE=$tablet_role
+export DB_PORT=${DB_PORT:-3306}
+export DB_HOST=${DB_HOST:-""}
+export DB_NAME=$db_name
 
 $VTROOT/bin/mysqlctl \
   -log_dir $VTDATAROOT/tmp \
