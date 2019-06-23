@@ -76,6 +76,9 @@ services:
         "]
     depends_on:
       - vtctld
+    depends_on:
+      vttablet1:
+        condition: service_healthy
 
   vttablet1:
     image: vitess/base
