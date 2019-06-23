@@ -68,13 +68,18 @@ export DB_PORT=${DB_PORT:-3306}
 export DB_HOST=${DB_HOST:-""}
 export DB_NAME=$db_name
 
-$VTROOT/bin/mysqlctl \
-  -log_dir $VTDATAROOT/tmp \
-  -tablet_uid $uid \
-  -mysql_port 3306 \
-  $action &
+# Create mysql instances
+# Do not create mysql instance for master if connecting to external mysql database
+if [[ $uid -gt 1 || $external = 0 ]]; then
+    echo "Initing mysql for tablet: $uid.. "
+    $VTROOT/bin/mysqlctl \
+      -log_dir $VTDATAROOT/tmp \
+      -tablet_uid $uid \
+      -mysql_port 3306 \
+      $action &
 
-wait
+    wait
+fi
 
 $VTROOT/bin/vtctl $TOPOLOGY_FLAGS AddCellInfo -root vitess/$CELL -server_address consul1:8500 $CELL
 
