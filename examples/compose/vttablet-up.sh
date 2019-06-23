@@ -23,8 +23,26 @@ fi
 
 init_db_sql_file="$VTROOT/config/init_db.sql"
 
-if [ "$tablet_role" = "master" ]; then
-    echo "CREATE DATABASE vt_$keyspace;" >> $init_db_sql_file
+# Create database on master
+if [[ "$tablet_role" = "master" ]]; then
+    echo "Add create database statement for master tablet:  $uid..."
+    echo "CREATE DATABASE IF NOT EXISTS $db_name;" >> $init_db_sql_file
+fi
+# Create database on replicas
+if [[ "$tablet_role" != "master" ]]; then
+    echo "Add create database statement for replicas tablet:  $uid..."
+    if [[ "$external" = "1" ]]; then
+        # Add master character set and collation to avoid replication errors
+        # Example:CREATE DATABASE IF NOT EXISTS $keyspace CHARACTER SET latin1 COLLATE latin1_swedish_ci
+        echo "CREATE DATABASE IF NOT EXISTS $db_name;" >> $init_db_sql_file
+        echo "Creating matching user for replicas..."
+        echo "CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';" >> $init_db_sql_file
+        echo "GRANT ALL ON *.* TO '$DB_USER'@'%';FLUSH PRIVILEGES;" >> $init_db_sql_file
+        # Prevent replication failures in case external db server has multiple databases which have not been created here
+        echo "replicate-do-db=$keyspace" >> $VTROOT/config/mycnf/rbr.cnf
+    else
+        echo "CREATE DATABASE IF NOT EXISTS $db_name;" >> $init_db_sql_file
+    fi
 fi
 
 export EXTRA_MY_CNF=$VTROOT/config/mycnf/master_mysql56.cnf
