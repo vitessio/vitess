@@ -88,6 +88,40 @@ $VTROOT/bin/vtctl $TOPOLOGY_FLAGS CreateShard $keyspace/$shard
 
 $VTROOT/bin/vtctl $TOPOLOGY_FLAGS InitTablet -shard $shard -keyspace $keyspace -allow_master_override $alias $tablet_role
 
+
+#Populate external db conditional args
+if [[ "$external" = "1" ]]; then
+    if [[ "$uid" = "1" ]]; then
+        echo "Setting external db args for master: $DB_NAME"
+        external_db_args="-db_host $DB_HOST \
+                          -db_port $DB_PORT \
+                          -init_db_name_override $DB_NAME \
+                          -mycnf_server_id $uid \
+                          -db_app_user $DB_USER \
+                          -db_app_password $DB_PASS \
+                          -db_allprivs_user $DB_USER \
+                          -db_allprivs_password $DB_PASS \
+                          -db_appdebug_user $DB_USER \
+                          -db_appdebug_password $DB_PASS \
+                          -db_dba_user $DB_USER \
+                          -db_dba_password $DB_PASS \
+                          -db_filtered_user $DB_USER \
+                          -db_filtered_password $DB_PASS \
+                          -db_repl_user $DB_USER \
+                          -db_repl_password $DB_PASS"
+    else
+        echo "Setting external db args for replicas"
+        external_db_args="-init_db_name_override $DB_NAME \
+                          -db_filtered_user $DB_USER \
+                          -db_filtered_password $DB_PASS \
+                          -db_repl_user $DB_USER \
+                          -db_repl_password $DB_PASS"
+    fi
+else
+    external_db_args="-init_db_name_override $DB_NAME"
+fi
+
+
 echo "Starting vttablet..."
 exec $VTROOT/bin/vttablet \
   $TOPOLOGY_FLAGS \
