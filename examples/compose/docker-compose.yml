@@ -94,6 +94,11 @@ services:
     command: ["sh", "-c", "/script/vttablet-up.sh 1"]
     depends_on:
       - vtctld
+    healthcheck:
+        test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 10
   vttablet2:
     image: vitess/base
     ports:
