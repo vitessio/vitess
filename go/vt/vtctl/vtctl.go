@@ -1612,7 +1612,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		err = nil
 	}
 	if ktype == topodatapb.KeyspaceType_SNAPSHOT {
-		// copy vschema from base keyspace?
+		// copy vschema from base keyspace
 		vs, err := wr.TopoServer().GetVSchema(ctx, *baseKeyspace)
 		if err != nil {
 			wr.Logger().Infof("error from GetVSchema for keyspace: %v, %v", *baseKeyspace, err)
