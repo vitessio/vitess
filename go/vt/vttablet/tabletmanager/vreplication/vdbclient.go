@@ -89,7 +89,8 @@ func (vc *vdbClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, 
 
 // Execute is ExecuteFetch without the maxrows.
 func (vc *vdbClient) Execute(query string) (*sqltypes.Result, error) {
-	return vc.ExecuteFetch(query, 100000)
+	// Number of rows should never exceed relayLogMaxSize.
+	return vc.ExecuteFetch(query, relayLogMaxSize)
 }
 
 func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqltypes.Result, error) {
@@ -124,7 +125,8 @@ func (vc *vdbClient) Retry() (*sqltypes.Result, error) {
 			}
 			continue
 		}
-		result, err := vc.DBClient.ExecuteFetch(q, 100000)
+		// Number of rows should never exceed relayLogMaxSize.
+		result, err := vc.DBClient.ExecuteFetch(q, relayLogMaxSize)
 		if err != nil {
 			return nil, err
 		}
