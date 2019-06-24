@@ -14,5 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Enable tty for Windows users using git-bash or cygwin
+if [[ "$OSTYPE" == "msys" ]]; then
+        # Lightweight shell and GNU utilities compiled for Windows (part of MinGW)
+        tty=winpty
+fi
+
 # This is a convenience script to run vtctlclient against the local example.
-exec docker-compose run vttablet1 vtctlclient -server vtctld:15999 "$@"
+exec $tty docker-compose exec ${CS:-vttablet1} vtctlclient -server vtctld:15999 "$@"
