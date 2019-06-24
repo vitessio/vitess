@@ -36,6 +36,9 @@ function reset_slave() {
 # Retrieve slave status
 get_slave_status
 
+# Exit script if called with argument 'status'
+[ ${1:-''} != 'status' ] || exit 0;
+
 # Check if SLAVE_IO is running
 if [[ $SLAVE_IO_RUNNING = "No" && $LAST_ERRNO = 1236 ]]; then
     
