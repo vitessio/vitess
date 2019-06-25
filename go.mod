@@ -72,3 +72,7 @@ require (
 	gopkg.in/ldap.v2 v2.5.0
 	gopkg.in/yaml.v2 v2.0.0-20160928153709-a5b47d31c556
 )
+
+// This go.mod file was added to support local development. For this to work corectly, you must clone the repo into the correct path.
+// Note that this packge doesn't use the standard github.com/... paths like most go packages hosted on github. To clone the repo::
+// cd $GOPATH/src; git clone git@github.com:liquidata-inc/vitess.git vitess.io/vitess 
