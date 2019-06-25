@@ -719,6 +719,15 @@ func (node *DBDDL) walkSubtree(visit Visit) error {
 type DDL struct {
 	Action string
 
+	// Set for column alter statements
+	ColumnAction string
+
+	// Set for column add / drop / rename statements
+	Column ColIdent
+
+	// Set for column rename
+	ToColumn ColIdent
+
 	// FromTables is set if Action is RenameStr or DropStr.
 	FromTables TableNames
 
@@ -729,7 +738,10 @@ type DDL struct {
 	Table TableName
 
 	// The following fields are set if a DDL was fully analyzed.
-	IfExists      bool
+	IfExists bool
+	IfNotExists bool
+
+	// TableSpec contains the full table spec in case of a create, or a single column in case of an add, drop, or alter.
 	TableSpec     *TableSpec
 	OptLike       *OptLike
 	PartitionSpec *PartitionSpec
@@ -745,6 +757,7 @@ type DDL struct {
 const (
 	CreateStr           = "create"
 	AlterStr            = "alter"
+	AddStr              = "add"
 	DropStr             = "drop"
 	RenameStr           = "rename"
 	TruncateStr         = "truncate"
@@ -761,15 +774,20 @@ const (
 )
 
 // Format formats the node.
+// TODO: add newly added fields here
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
+		notExists := ""
+		if node.IfNotExists {
+			notExists = " if not exists"
+		}
 		if node.OptLike != nil {
-			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.OptLike)
+			buf.Myprintf("%s table%s %v %v", node.Action, notExists, node.Table, node.OptLike)
 		} else if node.TableSpec != nil {
-			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.TableSpec)
+			buf.Myprintf("%s table%s %v %v", node.Action, notExists, node.Table, node.TableSpec)
 		} else {
-			buf.Myprintf("%s table %v", node.Action, node.Table)
+			buf.Myprintf("%s table%s %v", node.Action, notExists, node.Table)
 		}
 	case DropStr:
 		exists := ""
@@ -2523,7 +2541,7 @@ func ExprFromValue(value sqltypes.Value) (Expr, error) {
 		return NewStrVal(value.ToBytes()), nil
 	default:
 		// We cannot support sqltypes.Expression, or any other invalid type.
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot convert value %v to AST", value)
+		return nil, fmt.Errorf("cannot convert value %v to AST", value)
 	}
 }
 
