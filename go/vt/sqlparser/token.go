@@ -374,6 +374,7 @@ var keywords = map[string]int{
 	"unique":              UNIQUE,
 	"unlock":              UNLOCK,
 	"unsigned":            UNSIGNED,
+	"uuid": 							 UUID,
 	"update":              UPDATE,
 	"usage":               UNUSED,
 	"use":                 USE,
@@ -430,7 +431,7 @@ func KeywordString(id int) string {
 	return str
 }
 
-// Lex returns the next token form the Tokenizer.
+// Lex returns the next token from the Tokenizer.
 // This function is used by go yacc.
 func (tkn *Tokenizer) Lex(lval *yySymType) int {
 	if tkn.SkipToEnd {
