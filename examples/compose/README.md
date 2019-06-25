@@ -121,7 +121,7 @@ mysql> show databases;
 | external_db_name   |
 +--------------------+
 1 row in set (0.00 sec)
-mysql> use external_db_name;
+mysql> use external_db_name@master or use external_db_name@replica or use external_db_name@rdonly;
 Reading table information for completion of table and column names
 You can turn off this feature to get a quicker startup with -A
 
@@ -143,4 +143,21 @@ mysql> show tables;
 |                                            |
 +--------------------------------------------+
 29 rows in set (0.00 sec)
+```
+
+## Helper Scripts
+The following helper scripts are included to help you perform various actions easily
+* vitess/examples/compose/lvtctl.sh
+* vitess/examples/compose/lmysql.sh
+* vitess/examples/compose/lfixrepl.sh
+
+You may run them as below
+```
+vitess/examples/compose$ ./lvtctl.sh <args>
+```
+
+To run against a specific compose service/container, use the environment variable **$CS**
+
+```
+vitess/examples/compose$ (export CS=vttablet2; ./lvtctl.sh <args> )
 ```
