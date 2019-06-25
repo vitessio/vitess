@@ -24,8 +24,15 @@ We need to create a few tables into our new cluster. To do that, we can run the 
 vitess/examples/compose$ ./lvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 ```
 
+### Create Vschema
+Create Vschema
+```
+vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"tables": {"messages": {} } }' test_keyspace
+```
+
 ### Run the client to insert and read some data
 This will build and run the `client.go` file. It will insert and read data from the master and from the replica.
+[See Possible Errors.](#common-errors "Go to common errors")
 ```
 vitess/examples/compose$ ./client.sh
 ```
@@ -69,6 +76,7 @@ vitess/examples/compose$ docker-compose rm
 ### External mysql instance
 The compose example has the capability to run against an external mysql instance.
 To start vitess against unsharded external mysql, change the following variables in your .env file to match your external database;
+```
 KEYSPACE=external_db_name
 DB=external_db_name
 EXTERNAL_DB=1
@@ -77,6 +85,7 @@ DB_PORT=external_db_port
 DB_USER=external_db_user
 DB_PASS=external_db_password
 DB_CHARSET=CHARACTER SET utf8 COLLATE utf8_general_ci
+```
 
 Ensure you have log bin enabled on your external database.
 You may add the following configs to your conf.d directory and reload mysqld on your server
@@ -111,7 +120,7 @@ vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded":false, "t
 
 ### Connect to vgate and run queries
 vtgate responds to the MySQL protocol, so we can connect to it using the default MySQL client command line.
-```
+```sh
 vitess/examples/compose$ ./lmysql.sh --port=15306 --host=<host of machine containers are running in e.g. 127.0.0.1, docker-machine ip e.t.c>
 
 mysql> show databases;
@@ -160,4 +169,34 @@ To run against a specific compose service/container, use the environment variabl
 
 ```
 vitess/examples/compose$ (export CS=vttablet2; ./lvtctl.sh <args> )
+```
+
+## Common Errors
+
+1.Running ./client.sh may generate the following error
+```sh
+vitess/examples/compose$ ./client.sh
+Inserting into master...
+exec failed: Code: FAILED_PRECONDITION
+vtgate: ...vttablet: The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) ...
+exit status 1
+```
+To resolve run
+```sh
+vitess/examples/compose$ ./lmysql.sh -u root -S //vt//vtdataroot//vt_0000000001//mysql.sock  -e'set global read_only = off; select @@global.read_only;'
+
++--------------------+
+| @@global.read_only |
++--------------------+
+|                  0 |
++--------------------+
+
+```
+
+1. Running ./lvtctl.sh ApplyVschema -vschema '{"sharded":false }' may result in an error referenced by this [issue](https://github.com/vitessio/vitess/issues/4013 )
+
+
+A quick fix for unsharded db is;
+```
+vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded":false, "tables": {"*": {} } }' external_db_name
 ```
