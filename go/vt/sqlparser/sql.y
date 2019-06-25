@@ -158,7 +158,7 @@ func skipToEnd(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN  SPATIAL FULLTEXT KEY_BLOCK_SIZE
+%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
@@ -169,7 +169,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
 
 // Type Tokens
-%token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
+%token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM UUID
 %token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC
 %token <bytes> TIME TIMESTAMP DATETIME YEAR
 %token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
@@ -259,11 +259,11 @@ func skipToEnd(yylex interface{}) {
 %type <setExpr> set_expression transaction_char
 %type <str> isolation_level
 %type <bytes> for_from
-%type <str> ignore_opt default_opt
+%type <str> ignore_opt column_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
 %type <showFilter> like_or_where_opt
-%type <byt> exists_opt
-%type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
+%type <byt> exists_opt not_exists_opt
+%type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <expr> charset_value
@@ -274,7 +274,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> set_session_or_global show_session_or_global
 %type <convertType> convert_type
 %type <columnType> column_type
-%type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
+%type <columnType> int_type decimal_type numeric_type uuid_type time_type char_type spatial_type
 %type <sqlVal> length_opt column_comment_opt
 %type <optVal> column_default_opt on_update_opt
 %type <str> charset_opt collate_opt
@@ -304,7 +304,7 @@ func skipToEnd(yylex interface{}) {
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> vindex_type vindex_type_opt
-%type <bytes> alter_object_type
+%type <bytes> ignored_alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 
 %start any_command
@@ -627,7 +627,11 @@ vindex_param:
 create_table_prefix:
   CREATE TABLE not_exists_opt table_name
   {
-    $$ = &DDL{Action: CreateStr, Table: $4}
+    var ne bool
+    if $3 != 0 {
+      ne = true
+    }
+    $$ = &DDL{Action: CreateStr, Table: $4, IfNotExists: ne}
     setDDL(yylex, $$)
   }
 
@@ -678,6 +682,7 @@ column_definition:
     $2.Comment = $8
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
+
 column_type:
   numeric_type unsigned_opt zero_fill_opt
   {
@@ -685,6 +690,7 @@ column_type:
     $$.Unsigned = $2
     $$.Zerofill = $3
   }
+| uuid_type
 | char_type
 | time_type
 | spatial_type
@@ -698,6 +704,12 @@ numeric_type:
 | decimal_type
   {
     $$ = $1
+  }
+
+uuid_type:
+  UUID
+  {
+    $$ = ColumnType{Type: string($1)}
   }
 
 int_type:
@@ -1267,13 +1279,28 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4}
   }
-| ALTER ignore_opt TABLE table_name ADD alter_object_type skip_to_end
+| ALTER ignore_opt TABLE table_name ADD column_opt '(' column_definition ')' skip_to_end
+  {
+    ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, Table: $4, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddColumn($8)
+    ddl.Column = $8.Name
+    $$ = ddl
+  }
+| ALTER ignore_opt TABLE table_name ADD ignored_alter_object_type skip_to_end
   {
     $$ = &DDL{Action: AlterStr, Table: $4}
   }
-| ALTER ignore_opt TABLE table_name DROP alter_object_type skip_to_end
+| ALTER ignore_opt TABLE table_name DROP column_opt ID
+  {
+    $$ = &DDL{Action: AlterStr, ColumnAction: DropStr, Column: NewColIdent(string($7)), Table: $4}
+  }
+| ALTER ignore_opt TABLE table_name DROP ignored_alter_object_type skip_to_end
   {
     $$ = &DDL{Action: AlterStr, Table: $4}
+  }
+| ALTER ignore_opt TABLE table_name RENAME column_opt ID to_opt ID
+  {
+    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Table: $4, Column: NewColIdent(string($7)), ToColumn: NewColIdent(string($9))}
   }
 | ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
@@ -1339,12 +1366,15 @@ alter_statement:
       }
   }
 
-alter_object_type:
-  COLUMN
-| CONSTRAINT
+column_opt:
+  { }
+| COLUMN
+  { }
+
+ignored_alter_object_type:
+  CONSTRAINT
 | FOREIGN
 | FULLTEXT
-| ID
 | INDEX
 | KEY
 | PRIMARY
@@ -1697,6 +1727,11 @@ other_statement:
   DESC skip_to_end
   {
     $$ = &OtherRead{}
+  }
+| DESCRIBE table_name
+  // rewrite describe table as show columns from table
+  {
+      $$ = &Show{Type: "columns", OnTable: $2}
   }
 | DESCRIBE skip_to_end
   {
@@ -3065,9 +3100,9 @@ exists_opt:
   { $$ = 1 }
 
 not_exists_opt:
-  { $$ = struct{}{} }
+  { $$ = 0 }
 | IF NOT EXISTS
-  { $$ = struct{}{} }
+  { $$ = 1 }
 
 ignore_opt:
   { $$ = "" }
@@ -3257,6 +3292,7 @@ reserved_keyword:
 | UTC_DATE
 | UTC_TIME
 | UTC_TIMESTAMP
+| UUID
 | VALUES
 | WHEN
 | WHERE
@@ -3367,6 +3403,7 @@ non_reserved_keyword:
 | UNCOMMITTED
 | UNSIGNED
 | UNUSED
+| UUID
 | VARBINARY
 | VARCHAR
 | VARIABLES
