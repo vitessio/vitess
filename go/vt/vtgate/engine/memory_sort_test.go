@@ -164,7 +164,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	}
 }
 
-func TestMemoerySortGetFields(t *testing.T) {
+func TestMemorySortGetFields(t *testing.T) {
 	result := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col2",

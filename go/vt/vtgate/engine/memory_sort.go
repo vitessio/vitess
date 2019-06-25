@@ -182,7 +182,7 @@ func (sh *sortHeap) Less(i, j int) bool {
 			continue
 		}
 		// This is equivalent to:
-		//if !sj.reverse {
+		//if !sh.reverse {
 		//	if order.Desc {
 		//		cmp = -cmp
 		//	}
