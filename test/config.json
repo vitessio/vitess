@@ -23,7 +23,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -32,7 +32,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -157,7 +157,7 @@
 				"java_test"
 			],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": []
 		},
