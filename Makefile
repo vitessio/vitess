@@ -276,3 +276,9 @@ release: docker_base
 	echo "A git tag was created, you can push it with:"
 	echo "git push origin v$(VERSION)"
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
+
+packages: docker_base
+	mkdir -p releases
+	docker build -f docker/packaging/Dockerfile -t vitess/packaging .
+	docker run --rm -v ${PWD}/releases:/vt/releases vitess/packaging --package /vt/releases -t deb --deb-no-default-config-files
+	docker run --rm -v ${PWD}/releases:/vt/releases vitess/packaging --package /vt/releases -t rpm
