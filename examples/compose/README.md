@@ -74,7 +74,7 @@ vitess/examples/compose$ docker-compose rm
 ## Advanced Usage
 
 ### External mysql instance
-The compose example has the capability to run against an external mysql instance.
+The compose example has the capability to run against an external mysql instance. Kindly take care to secure your connection to the database.
 To start vitess against unsharded external mysql, change the following variables in your .env file to match your external database;
 ```
 KEYSPACE=external_db_name
