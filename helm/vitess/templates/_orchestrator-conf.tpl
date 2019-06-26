@@ -35,13 +35,14 @@ data:
     "DetectClusterDomainQuery": "",
     "DetectInstanceAliasQuery": "SELECT value FROM _vt.local_metadata WHERE name='Alias'",
     "DetectPromotionRuleQuery": "SELECT value FROM _vt.local_metadata WHERE name='PromotionRule'",
+    "DetectDataCenterQuery": "SELECT value FROM _vt.local_metadata WHERE name='DataCenter'",
     "DetectPseudoGTIDQuery": "",
     "DetectSemiSyncEnforcedQuery": "SELECT @@global.rpl_semi_sync_master_wait_no_slave AND @@global.rpl_semi_sync_master_timeout > 1000000",
-    "DiscoverByShowSlaveHosts": true,
+    "DiscoverByShowSlaveHosts": false,
     "EnableSyslog": false,
     "ExpiryHostnameResolvesMinutes": 60,
-    "FailMasterPromotionIfSQLThreadNotUpToDate": true,
-    "FailureDetectionPeriodBlockMinutes": 60,
+    "DelayMasterPromotionIfSQLThreadNotUpToDate": true,
+    "FailureDetectionPeriodBlockMinutes": 10,
     "GraphiteAddr": "",
     "GraphiteConvertHostnameDotsToUnderscores": true,
     "GraphitePath": "",
@@ -79,7 +80,7 @@ data:
     ],
     "PostMasterFailoverProcesses": [
         "echo 'Recovered from {failureType} on {failureCluster}. Failed: {failedHost}:{failedPort}; Promoted: {successorHost}:{successorPort}' >> /tmp/recovery.log",
-        "vtctlclient {{ include "format-flags-inline" $defaultVtctlclient.extraFlags | toJson | trimAll "\"" }} -server vtctld.{{ $namespace }}:15999 TabletExternallyReparented {successorAlias}"
+        "n=0; until [ $n -ge 10 ]; do vtctlclient {{ include "format-flags-inline" $defaultVtctlclient.extraFlags | toJson | trimAll "\"" }} -server vtctld.{{ $namespace }}:15999 TabletExternallyReparented {successorAlias} && break; n=$[$n+1]; sleep 5; done"
     ],
     "PostponeSlaveRecoveryOnLagMinutes": 0,
     "PostUnsuccessfulFailoverProcesses": [
