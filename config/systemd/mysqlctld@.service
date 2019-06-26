@@ -1,0 +1,27 @@
+[Unit]
+Description=Mysqlctld Service
+Requires=network.service
+
+[Service]
+Environment="VTROOT=/vt"
+Environment="USER=vitess"
+Environment="MYSQL_FLAVOR=MySQL56"
+Environment="VT_MYSQL_ROOT=/usr"
+Environment="MYSQL_PORT=3306"
+Environment="EXTRA_MYSQLCTLD_FLAGS=-alsologtostderr"
+
+EnvironmentFile=/etc/vitess/conf/vttablet-%i.conf
+Type=simple
+Restart=always
+WorkingDirectory=/vt
+User=vitess
+ExecStart=/bin/bash -c '${VTROOT}/bin/mysqlctld \
+     -alsologtostderr \
+     -log_dir ${VTROOT}/tmp \
+     -tablet_uid %i \
+     -init_db_sql_file ${VTROOT}/config/init_db.sql \
+     -mysql_port ${MYSQL_PORT} \
+     ${EXTRA_MYSQLCTLD_FLAGS}'
+
+[Install]
+WantedBy=vitess-cluster.target

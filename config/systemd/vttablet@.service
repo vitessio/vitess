@@ -1,0 +1,41 @@
+[Unit]
+Description=Vitess Tablet
+Requires=mysqlctld@%i.service
+
+[Service]
+Environment="VTROOT=/vt"
+Environment="USER=vitess"
+Environment="TABLET_TYPE=replica"
+Environment="TABLET_PORT=15002"
+Environment="GRPC_PORT=16002"
+Environment="MYSQL_PORT=3306"
+Environment="MYSQL_FLAVOR=MySQL56"
+Environment="EXTRA_VTTABLET_FLAGS=-alsologtostderr"
+
+EnvironmentFile=/etc/vitess/conf/vttablet-%i.conf
+Type=simple
+Restart=always
+WorkingDirectory=/vt
+User=vitess
+ExecStart=/bin/bash -c '${VTROOT}/bin/vttablet \
+    -tablet_hostname "%H" \
+    -service_map "grpc-queryservice,grpc-tabletmanager,grpc-updatestream" \
+    -binlog_use_v3_resharding_mode \
+    -enable_replication_reporter \
+    -health_check_interval 5s \
+    -alsologtostderr \
+    -init_keyspace ${KEYSPACE} \
+    -init_shard ${SHARD}\
+    -init_tablet_type ${TABLET_TYPE} \
+    -mycnf_mysql_port ${MYSQL_PORT} \
+    -port ${TABLET_PORT} \
+    -grpc_port ${GRPC_PORT} \
+    -tablet-path ${CELL}-%i \
+    -log_dir ${VTROOT}/tmp \
+    -topo_implementation ${TOPO_IMPLEMENTATION} \
+    -topo_global_root ${TOPO_GLOBAL_ROOT} \
+    -topo_global_server_address ${TOPO_GLOBAL_SERVER_ADDRESS} \
+    ${EXTRA_VTTABLET_FLAGS}'
+
+[Install]
+WantedBy=vitess-cluster.target

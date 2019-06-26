@@ -1,0 +1,22 @@
+[Unit]
+Description=Vitess Service to Configure a Cell
+Requires=network.service
+
+[Service]
+Environment="VTROOT=/vt"
+EnvironmentFile=/etc/vitess/conf/vtctld-%i.conf
+Type=oneshot
+User=vitess
+ExecStart=/bin/bash -c '${VTROOT}/bin/vtctl \
+    -topo_implementation ${TOPO_IMPLEMENTATION} \
+    -topo_global_root ${TOPO_GLOBAL_ROOT} \
+    -topo_global_server_address ${TOPO_GLOBAL_SERVER_ADDRESS} \
+    AddCellInfo \
+    -root ${CELL_ROOT} \
+    -server_address ${CELL_TOPO_SERVER} \
+    %i'
+RemainAfterExit=true
+StandardOutput=journal
+
+[Install]
+WantedBy=vtctld@%i.service

@@ -1,0 +1,36 @@
+[Unit]
+Description=Vitess Gateway Service
+Requires=network.service
+
+[Service]
+Environment="VTROOT=/vt"
+Environment="USER=vitess"
+Environment="VTGATE_PORT=15001"
+Environment="MYSQL_PORT=3306"
+Environment="GRPC_PORT=15991"
+Environment="VTGATE_BUFFER_DURATION=0m10s"
+
+EnvironmentFile=/etc/vitess/conf/vtgate.conf
+Type=simple
+Restart=always
+WorkingDirectory=/vt
+User=vitess
+ExecStart=/bin/bash -c '${VTROOT}/bin/vtgate \
+    -gateway_implementation discoverygateway \
+    -service_map "grpc-vtgateservice" \
+    -tablet_types_to_wait MASTER,REPLICA \
+    -alsologtostderr \
+    -enable_buffer \
+    -buffer_max_failover_duration ${VTGATE_BUFFER_DURATION} \
+    -cell ${CELL} \
+    -cells_to_watch ${CELL}${ADDITIONAL_CELLS} \
+    -mysql_server_port ${MYSQL_PORT} \
+    -grpc_port ${GRPC_PORT} \
+    -port ${VTGATE_PORT} \
+    -topo_implementation ${TOPO_IMPLEMENTATION} \
+    -topo_global_root ${TOPO_GLOBAL_ROOT} \
+    -topo_global_server_address ${TOPO_GLOBAL_SERVER_ADDRESS} \
+    ${EXTRA_VTGATE_FLAGS}'
+
+[Install]
+WantedBy=vitess-cluster.target

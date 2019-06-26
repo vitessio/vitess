@@ -1,0 +1,35 @@
+[Unit]
+Description=Vitess Control Daemon Service
+Requires=network.service
+
+[Service]
+Environment="VTROOT=/vt"
+Environment="USER=vitess"
+Environment="VTCTLD_PORT=15000"
+Environment="GRPC_PORT=15999"
+Environment="EXTRA_VTCTLD_FLAGS=-alsologtostderr"
+EnvironmentFile=/etc/vitess/conf/vtctld-%i.conf
+Type=simple
+Restart=always
+WorkingDirectory=/vt
+User=vitess
+ExecStartPre=/bin/bash -c "${TOPO_PREPARE_COMMAND}"
+ExecStart=/bin/bash -c '${VTROOT}/bin/vtctld \
+    -enable_realtime_stats \
+    -workflow_manager_use_election \
+    -service_map "grpc-vtctl" \
+    -workflow_manager_init \
+    -enable_queries \
+    -cell %i \
+    -log_dir ${VTROOT}/tmp \
+    -port ${VTCTLD_PORT} \
+    -grpc_port ${GRPC_PORT} \
+    -topo_implementation ${TOPO_IMPLEMENTATION} \
+    -topo_global_root ${TOPO_GLOBAL_ROOT} \
+    -topo_global_server_address ${TOPO_GLOBAL_SERVER_ADDRESS} \
+    -web_dir ${VTROOT}/src/vitess.io/vitess/web/vtctld \
+    -web_dir2 ${VTROOT}/src/vitess.io/vitess/web/vtctld2/app \
+    ${EXTRA_VTCTLD_FLAGS}'
+
+[Install]
+WantedBy=vitess-cluster.target
