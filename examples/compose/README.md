@@ -173,7 +173,7 @@ vitess/examples/compose$ (export CS=vttablet2; ./lvtctl.sh <args> )
 
 ## Common Errors
 
-1.Running ./client.sh may generate the following error
+1. Running ./client.sh may generate the following error
 ```sh
 vitess/examples/compose$ ./client.sh
 Inserting into master...
@@ -193,7 +193,7 @@ vitess/examples/compose$ ./lmysql.sh -u root -S //vt//vtdataroot//vt_0000000001/
 
 ```
 
-1. Running ./lvtctl.sh ApplyVschema -vschema '{"sharded":false }' may result in an error referenced by this [issue](https://github.com/vitessio/vitess/issues/4013 )
+2. Running ./lvtctl.sh ApplyVschema -vschema '{"sharded":false }' may result in an error referenced by this [issue](https://github.com/vitessio/vitess/issues/4013 )
 
 
 A quick fix for unsharded db is;
