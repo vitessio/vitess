@@ -317,10 +317,20 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 		return plan, nil
 	}
 	tableName := sqlparser.GetTableName(ins.Table)
-	if tableName.IsEmpty() {
+	switch {
+	case tableName.IsTopic():
+		msgTables := getTopicTables()
+		for _, t := range msgTables {
+			// recursively run inserts
+		}
+		plan.Reason = ReasonTopic
+		return plan, nil
+
+	case tableName.IsEmpty():
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
+
 	table, tableErr := plan.setTable(tableName, tables)
 
 	switch {

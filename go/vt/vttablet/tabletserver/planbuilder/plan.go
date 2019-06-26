@@ -154,6 +154,7 @@ const (
 	ReasonReplace
 	ReasonMultiTable
 	NumReasons
+	ReasonTopic
 )
 
 // Must exactly match order of reason constants.
