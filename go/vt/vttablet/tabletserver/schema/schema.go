@@ -99,6 +99,10 @@ type MessageInfo struct {
 	// returned for subscribers.
 	Fields []*querypb.Field
 
+	// Optional topic to subscribe to. Any messages
+	// published to the topic will be added to this table.
+	Topic string
+
 	// AckWaitDuration specifies how long to wait after
 	// the message was first sent. The back-off doubles
 	// every attempt.

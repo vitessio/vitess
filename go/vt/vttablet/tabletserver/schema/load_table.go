@@ -157,6 +157,12 @@ func loadMessageInfo(ta *Table, comment string) error {
 		keyvals[kv[0]] = kv[1]
 	}
 	var err error
+	if ta.MessageInfo.Topic, err = getString(keyvals, "vt_topic"); err != nil {
+		// the topic is an optional value
+		if err.Error() != "attribute vt_topic not specified for message table" {
+			return err
+		}
+	}
 	if ta.MessageInfo.AckWaitDuration, err = getDuration(keyvals, "vt_ack_wait"); err != nil {
 		return err
 	}
@@ -238,4 +244,12 @@ func getNum(in map[string]string, key string) (int, error) {
 		return 0, err
 	}
 	return v, nil
+}
+
+func getString(in map[string]string, key string) (string, error) {
+	sv := in[key]
+	if sv == "" {
+		return 0, fmt.Errorf("attribute %s not specified for message table", key)
+	}
+	return sv, nil
 }
