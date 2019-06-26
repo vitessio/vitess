@@ -181,15 +181,9 @@ exec failed: Code: FAILED_PRECONDITION
 vtgate: ...vttablet: The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) ...
 exit status 1
 ```
-To resolve run
+To resolve use the [SetReadWrite](../../doc/Troubleshooting.md#master-starts-up-read-only) command on master.
 ```sh
-vitess/examples/compose$ ./lmysql.sh -u root -S //vt//vtdataroot//vt_0000000001//mysql.sock  -e'set global read_only = off; select @@global.read_only;'
-
-+--------------------+
-| @@global.read_only |
-+--------------------+
-|                  0 |
-+--------------------+
+vitess/examples/compose$ ./lvtctl.sh SetReadWrite test-1
 
 ```
 
