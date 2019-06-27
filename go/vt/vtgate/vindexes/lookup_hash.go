@@ -155,7 +155,7 @@ func (lh *LookupHash) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	return lh.lkp.Create(vcursor, rowsColValues, ksids, values, ignoreMode)
+	return lh.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Update updates the entry in the vindex table.
@@ -309,7 +309,7 @@ func (lhu *LookupHashUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	return lhu.lkp.Create(vcursor, rowsColValues, ksids, values, ignoreMode)
+	return lhu.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
