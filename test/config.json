@@ -372,7 +372,7 @@
 			],
 			"Manual": false,
 			"Shard": 4,
-			"RetryMax": 1,
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"unit_race": {
