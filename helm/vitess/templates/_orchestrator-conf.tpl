@@ -25,8 +25,8 @@ data:
     "BackendDB": "sqlite",
     "BinlogEventsChunkSize": 10000,
     "CandidateInstanceExpireMinutes": 60,
-    "CoMasterRecoveryMustPromoteOtherCoMaster": true,
-    "DataCenterPattern": "[.]([^.]+)[.][^.]+[.]mydomain[.]com",
+    "CoMasterRecoveryMustPromoteOtherCoMaster": false,
+    "DataCenterPattern": "[.]([^.]+)[.][^.]+[.]vitess[.]com",
     "Debug": true,
     "DefaultInstancePort": 3306,
     "DefaultRaftPort": 10008,
@@ -71,7 +71,7 @@ data:
     ],
     "OSCIgnoreHostnameFilters": [
     ],
-    "PhysicalEnvironmentPattern": "[.]([^.]+[.][^.]+)[.]mydomain[.]com",
+    "PhysicalEnvironmentPattern": "[.]([^.]+[.][^.]+)[.]vitess[.]com",
     "PostFailoverProcesses": [
         "echo '(for all types) Recovered from {failureType} on {failureCluster}. Failed: {failedHost}:{failedPort}; Successor: {successorHost}:{successorPort}' >> /tmp/recovery.log"
     ],
@@ -110,9 +110,6 @@ data:
     "ReadOnly": false,
     "ReasonableMaintenanceReplicationLagSeconds": 20,
     "ReasonableReplicationLagSeconds": 10,
-    "RecoverIntermediateMasterClusterFilters": [
-        "*"
-    ],
     "RecoverMasterClusterFilters": [
         ".*"
     ],
@@ -121,7 +118,7 @@ data:
     "RecoveryPeriodBlockSeconds": 60,
     "ReduceReplicationAnalysisCount": true,
     "RejectHostnameResolvePattern": "",
-    "RemoveTextFromHostnameDisplay": ".mydomain.com:3306",
+    "RemoveTextFromHostnameDisplay": ".vitess.io:3306",
 {{ if $enableHeartbeat }}
     "ReplicationLagQuery": "SELECT unix_timestamp() - floor(ts/1000000000) FROM `_vt`.heartbeat ORDER BY ts DESC LIMIT 1;",
 {{ else }}
