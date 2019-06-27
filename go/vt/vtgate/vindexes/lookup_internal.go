@@ -107,7 +107,6 @@ func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value)
 
 type sorter struct {
 	rowsColValues [][]sqltypes.Value
-	ksids         [][]byte
 	toValues      []sqltypes.Value
 }
 
@@ -133,7 +132,6 @@ func (v *sorter) Less(i, j int) bool {
 
 func (v *sorter) Swap(i, j int) {
 	v.toValues[i], v.toValues[j] = v.toValues[j], v.toValues[i]
-	v.ksids[i], v.ksids[j] = v.ksids[j], v.ksids[i]
 	v.rowsColValues[i], v.rowsColValues[j] = v.rowsColValues[j], v.rowsColValues[i]
 }
 
@@ -147,14 +145,14 @@ func (v *sorter) Swap(i, j int) {
 // If we assume that the primary vindex is on column_c. The call to create will look like this:
 // Create(vcursor, [[value_a0, value_b0,], [value_a1, value_b1]], [binary(value_c0), binary(value_c1)])
 // Notice that toValues contains the computed binary value of the keyspace_id.
-func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, toValues []sqltypes.Value, ignoreMode bool) error {
+func (lkp *lookupInternal) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool) error {
 	if lkp.Autocommit {
-		return lkp.createCustom(vcursor, rowsColValues, ksids, toValues, ignoreMode, vtgatepb.CommitOrder_AUTOCOMMIT)
+		return lkp.createCustom(vcursor, rowsColValues, toValues, ignoreMode, vtgatepb.CommitOrder_AUTOCOMMIT)
 	}
-	return lkp.createCustom(vcursor, rowsColValues, ksids, toValues, ignoreMode, vtgatepb.CommitOrder_NORMAL)
+	return lkp.createCustom(vcursor, rowsColValues, toValues, ignoreMode, vtgatepb.CommitOrder_NORMAL)
 }
 
-func (lkp *lookupInternal) createCustom(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, toValues []sqltypes.Value, ignoreMode bool, co vtgatepb.CommitOrder) error {
+func (lkp *lookupInternal) createCustom(vcursor VCursor, rowsColValues [][]sqltypes.Value, toValues []sqltypes.Value, ignoreMode bool, co vtgatepb.CommitOrder) error {
 	if len(rowsColValues) == 0 {
 		// This code is unreachable. It's just a failsafe.
 		return nil
@@ -176,7 +174,10 @@ func (lkp *lookupInternal) createCustom(vcursor VCursor, rowsColValues [][]sqlty
 	fmt.Fprintf(buf, "%s) values(", lkp.To)
 
 	bindVars := make(map[string]*querypb.BindVariable, 2*len(rowsColValues))
-	sort.Sort(&sorter{rowsColValues: rowsColValues, ksids: ksids, toValues: toValues})
+	// Make a copy before sorting.
+	rowsColValues = append([][]sqltypes.Value(nil), rowsColValues...)
+	toValues = append([]sqltypes.Value(nil), toValues...)
+	sort.Sort(&sorter{rowsColValues: rowsColValues, toValues: toValues})
 	for rowIdx := range toValues {
 		colIds := rowsColValues[rowIdx]
 		if rowIdx != 0 {
@@ -254,7 +255,7 @@ func (lkp *lookupInternal) Update(vcursor VCursor, oldValues []sqltypes.Value, k
 	if err := lkp.Delete(vcursor, [][]sqltypes.Value{oldValues}, toValue, vtgatepb.CommitOrder_NORMAL); err != nil {
 		return err
 	}
-	return lkp.Create(vcursor, [][]sqltypes.Value{newValues}, [][]byte{ksid}, []sqltypes.Value{toValue}, false /* ignoreMode */)
+	return lkp.Create(vcursor, [][]sqltypes.Value{newValues}, []sqltypes.Value{toValue}, false /* ignoreMode */)
 }
 
 func (lkp *lookupInternal) initDelStmt() string {

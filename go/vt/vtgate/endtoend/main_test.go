@@ -61,6 +61,20 @@ create table aggr_test(
 	val2 bigint,
 	primary key(id)
 ) Engine=InnoDB;
+
+create table t2(
+	id3 bigint,
+	id4 bigint,
+	primary key(id3)
+) Engine=InnoDB;
+
+create table t2_id4_idx(
+	id bigint not null auto_increment,
+	id4 bigint,
+	id3 bigint,
+	primary key(id),
+	key idx_id4(id4)
+) Engine=InnoDB;
 `
 
 	vschema = &vschemapb.Keyspace{
@@ -78,6 +92,16 @@ create table aggr_test(
 				},
 				Owner: "t1",
 			},
+			"t2_id4_idx": {
+				Type: "lookup_hash",
+				Params: map[string]string{
+					"table":      "t2_id4_idx",
+					"from":       "id4",
+					"to":         "id3",
+					"autocommit": "true",
+				},
+				Owner: "t2",
+			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
@@ -92,6 +116,21 @@ create table aggr_test(
 			"t1_id2_idx": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "id2",
+					Name:   "hash",
+				}},
+			},
+			"t2": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id3",
+					Name:   "hash",
+				}, {
+					Column: "id4",
+					Name:   "t2_id4_idx",
+				}},
+			},
+			"t2_id4_idx": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id4",
 					Name:   "hash",
 				}},
 			},
