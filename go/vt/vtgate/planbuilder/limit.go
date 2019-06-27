@@ -96,9 +96,6 @@ func (l *limit) PushGroupBy(_ sqlparser.GroupBy) error {
 
 // PushGroupBy satisfies the builder interface.
 func (l *limit) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	if len(orderBy) == 0 {
-		return l, nil
-	}
 	return nil, errors.New("limit.PushOrderBy: unreachable")
 }
 
