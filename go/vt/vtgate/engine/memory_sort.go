@@ -164,10 +164,12 @@ type sortHeap struct {
 	err     error
 }
 
+// Len satisfies sort.Interface and heap.Interface.
 func (sh *sortHeap) Len() int {
 	return len(sh.rows)
 }
 
+// Less satisfies sort.Interface and heap.Interface.
 func (sh *sortHeap) Less(i, j int) bool {
 	for _, order := range sh.orderBy {
 		if sh.err != nil {
@@ -199,14 +201,17 @@ func (sh *sortHeap) Less(i, j int) bool {
 	return true
 }
 
+// Swap satisfies sort.Interface and heap.Interface.
 func (sh *sortHeap) Swap(i, j int) {
 	sh.rows[i], sh.rows[j] = sh.rows[j], sh.rows[i]
 }
 
+// Push satisfies heap.Interface.
 func (sh *sortHeap) Push(x interface{}) {
 	sh.rows = append(sh.rows, x.([]sqltypes.Value))
 }
 
+// Pop satisfies heap.Interface.
 func (sh *sortHeap) Pop() interface{} {
 	n := len(sh.rows)
 	x := sh.rows[n-1]
