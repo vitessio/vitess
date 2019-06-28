@@ -104,9 +104,14 @@ func main() {
 			exit.Return(1)
 		}
 
-		if err := mysqld.Start(ctx, cnf); err != nil {
-			log.Errorf("failed to start mysqld: %v", err)
-			exit.Return(1)
+		// check if we were interrupted during a previous restore
+		if !mysqlctl.RestoreWasInterrupted(cnf) {
+			if err := mysqld.Start(ctx, cnf); err != nil {
+				log.Errorf("failed to start mysqld: %v", err)
+				exit.Return(1)
+			}
+		} else {
+			log.Infof("found interrupted restore, not starting mysqld")
 		}
 	}
 	cancel()

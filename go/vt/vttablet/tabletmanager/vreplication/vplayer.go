@@ -176,14 +176,11 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
 	for _, change := range rowEvent.RowChanges {
-		queries, err := tplan.generateStatements(change)
+		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
+			return vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
+		})
 		if err != nil {
 			return err
-		}
-		for _, query := range queries {
-			if err := vp.exec(ctx, query); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
@@ -191,7 +188,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 
 func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts)
-	if _, err := vp.vr.dbClient.ExecuteFetch(update, 0); err != nil {
+	if _, err := vp.vr.dbClient.Execute(update); err != nil {
 		vp.vr.dbClient.Rollback()
 		return false, fmt.Errorf("error %v updating position", err)
 	}
@@ -207,30 +204,6 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 		}
 	}
 	return posReached, nil
-}
-
-func (vp *vplayer) exec(ctx context.Context, sql string) error {
-	vp.vr.stats.Timings.Record("query", time.Now())
-	_, err := vp.vr.dbClient.ExecuteFetch(sql, 0)
-	for err != nil {
-		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock || sqlErr.Number() == mysql.ERLockWaitTimeout {
-			log.Infof("retryable error: %v, waiting for %v and retrying", sqlErr, dbLockRetryDelay)
-			if err := vp.vr.dbClient.Rollback(); err != nil {
-				return err
-			}
-			time.Sleep(dbLockRetryDelay)
-			// Check context here. Otherwise this can become an infinite loop.
-			select {
-			case <-ctx.Done():
-				return io.EOF
-			default:
-			}
-			err = vp.vr.dbClient.Retry()
-			continue
-		}
-		return err
-	}
-	return nil
 }
 
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
@@ -403,7 +376,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 			return io.EOF
 		case binlogdatapb.OnDDLAction_EXEC:
-			if err := vp.exec(ctx, event.Ddl); err != nil {
+			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Ddl); err != nil {
 				return err
 			}
 			posReached, err := vp.updatePos(event.Timestamp)
@@ -414,7 +387,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return io.EOF
 			}
 		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
-			if err := vp.exec(ctx, event.Ddl); err != nil {
+			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Ddl); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Ddl)
 			}
 			posReached, err := vp.updatePos(event.Timestamp)

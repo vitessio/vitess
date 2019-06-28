@@ -143,7 +143,7 @@ topology:
         # authType can be: none or secret. For secret, perform the following changes:
         # username: myuser
         # this is the secret that will be mounted as the user password
-        # kubectl create secret generic myuser_password --from-literal=password=abc123
+        # kubectl create secret generic myuser-password --from-literal=password=abc123
         # passwordSecret: myuser-password
 
       etcd:
