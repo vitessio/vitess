@@ -318,7 +318,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		return fmt.Errorf("can't get replication status: %v", err)
 	}
 	log.Infof("Replication caught up to at least %v", status.Position)
-	if status.Position.Equal(restorePos) {
+	if !status.Position.AtLeast(masterPos) && status.Position.Equal(restorePos) {
 		return fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
 	}
 
