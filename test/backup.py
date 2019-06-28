@@ -259,10 +259,11 @@ class TestBackup(unittest.TestCase):
     """Stop mysql, delete everything including tablet dir, restart mysql."""
 
     extra_args = ['-db-credentials-file', db_credentials_file]    
-    if teardown:
-      utils.wait_procs([t.teardown_mysql(extra_args=extra_args)])
+
+    utils.wait_procs([t.teardown_mysql(extra_args=extra_args)])
     # Specify ignore_options because we want to delete the tree even
     # if the test's -k / --keep-logs was specified on the command line.
+
     t.remove_tree(ignore_options=True)
     logging.debug("starting mysql %s",str(datetime.datetime.now()))    
     proc = t.init_mysql(init_db=new_init_db, extra_args=extra_args)
