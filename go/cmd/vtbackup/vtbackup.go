@@ -281,13 +281,6 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	// to the goal position).
 	backupTime := time.Now()
 
-	if restorePos.Equal(masterPos) {
-		// Nothing has happened on the master since the last backup, so there's
-		// no point taking a new backup since it would be identical.
-		log.Infof("No backup is necessary. The latest backup is up-to-date with the master.")
-		return nil
-	}
-
 	// Wait for replication to catch up.
 	waitStartTime := time.Now()
 	for {
