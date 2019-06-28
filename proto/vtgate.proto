@@ -748,7 +748,7 @@ message SplitQueryRequest {
   // SELECT <cols> FROM <table> WHERE <filter>.
   // It must not contain subqueries nor any of the keywords
   // JOIN, GROUP BY, ORDER BY, LIMIT, DISTINCT.
-  // Furthermore, <table> must be a single “concrete” table.
+  // Furthermore, <table> must be a single "concrete" table.
   // It cannot be a view.
   query.BoundQuery query = 3;
 

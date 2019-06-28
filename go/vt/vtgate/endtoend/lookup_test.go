@@ -213,6 +213,51 @@ func TestConsistentLookupMultiInsert(t *testing.T) {
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(5)]]"; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
+	exec(t, conn, "delete from t1 where id1=1")
+	exec(t, conn, "delete from t1 where id1=2")
+	exec(t, conn, "delete from t1 where id1=3")
+	exec(t, conn, "delete from t1 where id1=4")
+	exec(t, conn, "delete from t1_id2_idx where id2=4")
+}
+
+func TestHashLookupMultiInsertIgnore(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	// conn2 is for queries that target shards.
+	conn2, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn2.Close()
+
+	// DB should start out clean
+	qr := exec(t, conn, "select count(*) from t2_id4_idx")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(0)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select count(*) from t2")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(0)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	// Try inserting a bunch of ids at once
+	exec(t, conn, "begin")
+	exec(t, conn, "insert ignore into t2(id3, id4) values(50,60), (30,40), (10,20)")
+	exec(t, conn, "commit")
+
+	// Verify
+	qr = exec(t, conn, "select id3, id4 from t2 order by id3")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(10) INT64(20)] [INT64(30) INT64(40)] [INT64(50) INT64(60)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select id3, id4 from t2_id4_idx order by id3")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(10) INT64(20)] [INT64(30) INT64(40)] [INT64(50) INT64(60)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
