@@ -14,7 +14,7 @@ metadata:
   name: orchestrator-cm
 data:
   orchestrator.conf.json: |-
-    {
+     {
     "ActiveNodeExpireSeconds": 5,
     "ApplyMySQLPromotionAfterMasterFailover": true,
     "AuditLogFile": "/tmp/orchestrator-audit.log",
@@ -26,7 +26,7 @@ data:
     "BinlogEventsChunkSize": 10000,
     "CandidateInstanceExpireMinutes": 60,
     "CoMasterRecoveryMustPromoteOtherCoMaster": false,
-    "DataCenterPattern": "[.]([^.]+)[.][^.]+[.]vitess[.]com",
+    "DataCenterPattern": "[.]([^.]+)[.][^.]+[.]vitess[.]io",
     "Debug": true,
     "DefaultInstancePort": 3306,
     "DefaultRaftPort": 10008,
@@ -71,7 +71,7 @@ data:
     ],
     "OSCIgnoreHostnameFilters": [
     ],
-    "PhysicalEnvironmentPattern": "[.]([^.]+[.][^.]+)[.]vitess[.]com",
+    "PhysicalEnvironmentPattern": "[.]([^.]+[.][^.]+)[.]vitess[.]io",
     "PostFailoverProcesses": [
         "echo '(for all types) Recovered from {failureType} on {failureCluster}. Failed: {failedHost}:{failedPort}; Successor: {successorHost}:{successorPort}' >> /tmp/recovery.log"
     ],
