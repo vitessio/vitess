@@ -168,7 +168,7 @@ func (lh *LookupUnicodeLooseMD5Hash) Create(vcursor VCursor, rowsColValues [][]s
 	if err != nil {
 		return fmt.Errorf("lookup.Create.convert: %v", err)
 	}
-	return lh.lkp.Create(vcursor, rowsColValues, ksids, values, ignoreMode)
+	return lh.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Update updates the entry in the vindex table.
@@ -333,7 +333,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Create(vcursor VCursor, rowsColValue
 	if err != nil {
 		return fmt.Errorf("lookup.Create.convert: %v", err)
 	}
-	return lhu.lkp.Create(vcursor, rowsColValues, ksids, values, ignoreMode)
+	return lhu.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.

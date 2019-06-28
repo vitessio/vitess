@@ -69,7 +69,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 			fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vc.vr.id, encodeString(name))
 			prefix = ", "
 		}
-		if _, err := vc.vr.dbClient.ExecuteFetch(buf.String(), 1); err != nil {
+		if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {
 			return err
 		}
 		if err := vc.vr.setState(binlogplayer.VReplicationCopying, ""); err != nil {
@@ -84,7 +84,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 }
 
 func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSettings) error {
-	qr, err := vc.vr.dbClient.ExecuteFetch(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id=%d", vc.vr.id), 10000)
+	qr, err := vc.vr.dbClient.Execute(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id=%d", vc.vr.id))
 	if err != nil {
 		return err
 	}
@@ -232,10 +232,17 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		// to data size, this should map to a uniform amount of pages affected
 		// per statement. A packet size of 30K will roughly translate to 8
 		// mysql pages of 4K each.
-		query, err := vc.tablePlan.generateBulkInsert(rows)
+		if err := vc.vr.dbClient.Begin(); err != nil {
+			return err
+		}
+
+		_, err = vc.tablePlan.applyBulkInsert(rows, func(sql string) (*sqltypes.Result, error) {
+			return vc.vr.dbClient.ExecuteWithRetry(ctx, sql)
+		})
 		if err != nil {
 			return err
 		}
+
 		var buf bytes.Buffer
 		err = proto.CompactText(&buf, &querypb.QueryResult{
 			Fields: pkfields,
@@ -254,15 +261,10 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		if err != nil {
 			return err
 		}
-		if err := vc.vr.dbClient.Begin(); err != nil {
+		if _, err := vc.vr.dbClient.Execute(updateState); err != nil {
 			return err
 		}
-		if _, err := vc.vr.dbClient.ExecuteFetch(query, 0); err != nil {
-			return err
-		}
-		if _, err := vc.vr.dbClient.ExecuteFetch(updateState, 0); err != nil {
-			return err
-		}
+
 		if err := vc.vr.dbClient.Commit(); err != nil {
 			return err
 		}
@@ -279,7 +281,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	}
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("delete from _vt.copy_state where vrepl_id=%s and table_name=%s", strconv.Itoa(int(vc.vr.id)), encodeString(tableName))
-	if _, err := vc.vr.dbClient.ExecuteFetch(buf.String(), 0); err != nil {
+	if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {
 		return err
 	}
 	return nil
@@ -296,7 +298,7 @@ func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltyp
 	}
 	if settings.StartPos.IsZero() {
 		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0)
-		_, err := vc.vr.dbClient.ExecuteFetch(update, 0)
+		_, err := vc.vr.dbClient.Execute(update)
 		return err
 	}
 	return newVPlayer(vc.vr, settings, copyState, pos).play(ctx)

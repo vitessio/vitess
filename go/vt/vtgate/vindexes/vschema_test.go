@@ -32,6 +32,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
@@ -137,6 +138,17 @@ func init() {
 	Register("stln", NewSTLN)
 	Register("stlu", NewSTLU)
 	Register("stlo", NewSTLO)
+}
+
+func TestUnshardedVSchemaValid(t *testing.T) {
+	err := ValidateKeyspace(&vschemapb.Keyspace{
+		Sharded:  false,
+		Vindexes: make(map[string]*vschema.Vindex),
+		Tables:   make(map[string]*vschema.Table),
+	})
+	if err != nil {
+		t.Errorf("TestUnshardedVSchemaValid:\n%v", err)
+	}
 }
 
 func TestUnshardedVSchema(t *testing.T) {

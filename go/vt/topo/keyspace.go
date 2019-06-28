@@ -164,6 +164,7 @@ func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *to
 	if _, err := ts.globalCell.Create(ctx, keyspacePath, data); err != nil {
 		return err
 	}
+
 	event.Dispatch(&events.KeyspaceChange{
 		KeyspaceName: keyspace,
 		Keyspace:     value,
@@ -276,6 +277,13 @@ func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 	if err := ts.globalCell.Delete(ctx, keyspacePath, nil); err != nil {
 		return err
 	}
+
+	// Delete the cell-global VSchema path
+	// If not remove this, vtctld web page Dashboard will Display Error
+	if err := ts.DeleteVSchema(ctx, keyspace); err != nil && !IsErrType(err, NoNode) {
+		return err
+	}
+
 	event.Dispatch(&events.KeyspaceChange{
 		KeyspaceName: keyspace,
 		Keyspace:     nil,
