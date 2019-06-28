@@ -71,7 +71,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close.
 	te.open()
-	c, beginSQL, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period.
 	te.shutdownGracePeriod = 250 * time.Millisecond
 	te.open()
-	c, beginSQL, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period, but pool gets empty early.
 	te.shutdownGracePeriod = 250 * time.Millisecond
 	te.open()
-	c, beginSQL, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close, but connection is in use.
 	te.open()
-	c, beginSQL, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

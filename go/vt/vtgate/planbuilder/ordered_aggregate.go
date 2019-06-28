@@ -456,6 +456,8 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 
 	// referenced tracks the keys referenced by the order by clause.
 	referenced := make([]bool, len(oa.eaggr.Keys))
+	postSort := false
+	selOrderBy := make(sqlparser.OrderBy, 0, len(orderBy))
 	for _, order := range orderBy {
 		// Identify the order by column.
 		var orderByCol *column
@@ -465,7 +467,7 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 			if err != nil {
 				return nil, err
 			}
-			orderByCol = oa.input.ResultColumns()[num].column
+			orderByCol = oa.resultColumns[num].column
 		case *sqlparser.ColName:
 			orderByCol = expr.Metadata.(*column)
 		default:
@@ -475,17 +477,17 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 		// Match orderByCol against the group by columns.
 		found := false
 		for j, key := range oa.eaggr.Keys {
-			inputForKey := oa.input.ResultColumns()[key]
-			if inputForKey.column != orderByCol {
+			if oa.resultColumns[key].column != orderByCol {
 				continue
 			}
 
 			found = true
 			referenced[j] = true
+			selOrderBy = append(selOrderBy, order)
 			break
 		}
 		if !found {
-			return nil, fmt.Errorf("unsupported: in scatter query: order by column must reference group by expression: %v", sqlparser.String(order))
+			postSort = true
 		}
 	}
 
@@ -499,21 +501,26 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 		if err != nil {
 			return nil, fmt.Errorf("generating order by clause: %v", err)
 		}
-		orderBy = append(orderBy, &sqlparser.Order{Expr: col, Direction: sqlparser.AscScr})
+		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: col, Direction: sqlparser.AscScr})
 	}
 
 	// Append the distinct aggregate if any.
 	if oa.extraDistinct != nil {
-		orderBy = append(orderBy, &sqlparser.Order{Expr: oa.extraDistinct, Direction: sqlparser.AscScr})
+		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: oa.extraDistinct, Direction: sqlparser.AscScr})
 	}
 
 	// Push down the order by.
 	// It's ok to push the original AST down because all references
 	// should point to the route. Only aggregate functions are originated
 	// by oa, and we currently don't allow the ORDER BY to reference them.
-	_, err := oa.input.PushOrderBy(orderBy)
+	// TODO(sougou): PushOrderBy will return a mergeSort primitive, which
+	// we should ideally replace oa.input with.
+	_, err := oa.input.PushOrderBy(selOrderBy)
 	if err != nil {
 		return nil, err
+	}
+	if postSort {
+		return newMemorySort(oa, orderBy)
 	}
 	return oa, nil
 }

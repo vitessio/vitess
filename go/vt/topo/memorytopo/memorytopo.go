@@ -172,7 +172,7 @@ func (n *node) PropagateWatchError(err error) {
 func NewServerAndFactory(cells ...string) (*topo.Server, *Factory) {
 	f := &Factory{
 		cells:      make(map[string]*node),
-		generation: uint64(rand.Int63n(2 ^ 60)),
+		generation: uint64(rand.Int63n(1 << 60)),
 	}
 	f.cells[topo.GlobalCell] = f.newDirectory(topo.GlobalCell, nil)
 

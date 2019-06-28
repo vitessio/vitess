@@ -23,10 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/dbconnpool"
-
-	"github.com/golang/glog"
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/log"
 
 	"golang.org/x/net/context"
 )
@@ -61,7 +60,7 @@ func (agent *ActionAgent) LockTables(ctx context.Context) error {
 			return err
 		}
 	}
-	glog.Infof("[%v] Tables locked", conn.ConnectionID)
+	log.Infof("[%v] Tables locked", conn.ConnectionID)
 
 	agent._lockTablesConnection = conn
 	agent._lockTablesTimer = time.AfterFunc(*lockTablesTimeout, func() {
@@ -72,10 +71,10 @@ func (agent *ActionAgent) LockTables(ctx context.Context) error {
 
 		// We need the mutex locked before we check this field
 		if agent._lockTablesConnection == conn {
-			glog.Errorf("table lock timed out and released the lock - something went wrong")
+			log.Errorf("table lock timed out and released the lock - something went wrong")
 			err = agent.unlockTablesHoldingMutex()
 			if err != nil {
-				glog.Errorf("failed to unlock tables: %v", err)
+				log.Errorf("failed to unlock tables: %v", err)
 			}
 		}
 	})
@@ -84,7 +83,7 @@ func (agent *ActionAgent) LockTables(ctx context.Context) error {
 }
 
 func (agent *ActionAgent) lockTablesUsingLockTables(conn *dbconnpool.DBConnection) error {
-	glog.Warningf("failed to lock tables with FTWRL - falling back to LOCK TABLES")
+	log.Warningf("failed to lock tables with FTWRL - falling back to LOCK TABLES")
 
 	// Ensure schema engine is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized. Open() is idempotent, so this
@@ -135,7 +134,7 @@ func (agent *ActionAgent) unlockTablesHoldingMutex() error {
 	if err != nil {
 		return err
 	}
-	glog.Infof("[%v] Tables unlocked", agent._lockTablesConnection.ConnectionID)
+	log.Infof("[%v] Tables unlocked", agent._lockTablesConnection.ConnectionID)
 	agent._lockTablesConnection.Close()
 	agent._lockTablesConnection = nil
 	agent._lockTablesTimer = nil
