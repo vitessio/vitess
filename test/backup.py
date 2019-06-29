@@ -20,6 +20,7 @@ import logging
 import os
 import shutil
 import unittest
+import datetime
 
 import MySQLdb
 
@@ -35,6 +36,7 @@ tablet_master = None
 tablet_replica1 = None
 tablet_replica2 = None
 xtrabackup_args = []
+
 new_init_db = ''
 db_credentials_file = ''
 
@@ -115,6 +117,7 @@ def setUpModule():
       tablet_replica2.wait_for_mysqlctl_socket()
     else:
       utils.wait_procs(setup_procs)
+    logging.debug("done initializing mysql %s",str(datetime.datetime.now()))
   except:
     tearDownModule()
     raise
@@ -131,7 +134,7 @@ def tearDownModule():
       tablet_replica1.teardown_mysql(extra_args=['-db-credentials-file',
                                                  db_credentials_file]),
       tablet_replica2.teardown_mysql(extra_args=['-db-credentials-file',
-                                                 db_credentials_file]),
+                                                 db_credentials_file])
   ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -207,6 +210,7 @@ class TestBackup(unittest.TestCase):
 
   def _restore(self, t, tablet_type='replica'):
     """Erase mysql/tablet dir, then start tablet with restore enabled."""
+    logging.debug("restoring tablet %s",str(datetime.datetime.now()))
     self._reset_tablet_dir(t)
 
     xtra_args = ['-db-credentials-file', db_credentials_file]
@@ -248,16 +252,21 @@ class TestBackup(unittest.TestCase):
 
   def _reset_tablet_dir(self, t):
     """Stop mysql, delete everything including tablet dir, restart mysql."""
-    extra_args = ['-db-credentials-file', db_credentials_file]
+
+    extra_args = ['-db-credentials-file', db_credentials_file]    
+
     utils.wait_procs([t.teardown_mysql(extra_args=extra_args)])
     # Specify ignore_options because we want to delete the tree even
     # if the test's -k / --keep-logs was specified on the command line.
+
     t.remove_tree(ignore_options=True)
+    logging.debug("starting mysql %s",str(datetime.datetime.now()))    
     proc = t.init_mysql(init_db=new_init_db, extra_args=extra_args)
     if use_mysqlctld:
       t.wait_for_mysqlctl_socket()
     else:
       utils.wait_procs([proc])
+    logging.debug("done starting mysql %s",str(datetime.datetime.now()))          
 
   def _list_backups(self):
     """Get a list of backup names for the test shard."""
@@ -274,10 +283,10 @@ class TestBackup(unittest.TestCase):
         auto_log=True, mode=utils.VTCTL_VTCTL)
 
   def test_backup_rdonly(self):
-    self._test_backup('rdonly')
+    self._test_backup('rdonly', False)
 
   def test_backup_replica(self):
-    self._test_backup('replica')
+    self._test_backup('replica', False)
 
   def test_backup_master(self):
     """Test backup flow.
@@ -343,7 +352,7 @@ class TestBackup(unittest.TestCase):
 
     tablet_replica2.kill_vttablet()
 
-  def _test_backup(self, tablet_type):
+  def _test_backup(self, tablet_type, backup_only):
     """Test backup flow.
 
     test_backup will:
@@ -371,13 +380,19 @@ class TestBackup(unittest.TestCase):
     self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
 
     # backup the slave
-    utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
+    alias = tablet_replica1.tablet_alias
+    logging.debug("taking backup %s",str(datetime.datetime.now()))
+
+    utils.run_vtctl(['Backup', alias], auto_log=True)
+
+    logging.debug("done taking backup %s",str(datetime.datetime.now()))      
+    # end if
 
     # check that the backup shows up in the listing
     backups = self._list_backups()
     logging.debug('list of backups: %s', backups)
     self.assertEqual(len(backups), 1)
-    self.assertTrue(backups[0].endswith(tablet_replica1.tablet_alias))
+    self.assertTrue(backups[0].endswith(alias))
 
     # insert more data on the master
     self._insert_data(tablet_master, 2)
@@ -402,8 +417,9 @@ class TestBackup(unittest.TestCase):
     else:
       self.assertEqual(metadata['PromotionRule'], 'must_not')
 
-    # remove the backup and check that the list is empty
-    self._remove_backup(backups[0])
+    for backup in backups:
+      self._remove_backup(backup)
+
     backups = self._list_backups()
     logging.debug('list of backups after remove: %s', backups)
     self.assertEqual(len(backups), 0)
