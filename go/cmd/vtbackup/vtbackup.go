@@ -247,7 +247,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		log.Infof("Successfully restored from backup at replication position %v", restorePos)
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard
-		log.Infof("no backup found; not starting up empty since -initial_backup flag was not enabled")
+		if !*allowFirstBackup {
+			return fmt.Errorf("no backup found; not starting up empty since -initial_backup flag was not enabled")
+		}
 		restorePos = mysql.Position{}
 	case mysqlctl.ErrExistingDB:
 		return fmt.Errorf("can't run vtbackup because data directory is not empty")
