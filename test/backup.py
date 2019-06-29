@@ -117,7 +117,7 @@ def setUpModule():
       tablet_replica2.wait_for_mysqlctl_socket()
     else:
       utils.wait_procs(setup_procs)
-    logging.debug("done initilizing mysql %s",str(datetime.datetime.now()))      
+    logging.debug("done initializing mysql %s",str(datetime.datetime.now()))
   except:
     tearDownModule()
     raise
@@ -382,11 +382,9 @@ class TestBackup(unittest.TestCase):
     # backup the slave
     alias = tablet_replica1.tablet_alias
     logging.debug("taking backup %s",str(datetime.datetime.now()))
-    if not backup_only:
-      utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
-    else:
-      self._backup_only(tablet_replica3,tablet_type='backup')
-      alias = tablet_replica3.tablet_alias
+
+    utils.run_vtctl(['Backup', alias], auto_log=True)
+
     logging.debug("done taking backup %s",str(datetime.datetime.now()))      
     # end if
 

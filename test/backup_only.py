@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2017 Google Inc.
+# Copyright 2017 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@ import tablet
 import vtbackup
 import utils
 
+from mysql_flavor import mysql_flavor
+
 use_mysqlctld = False
 use_xtrabackup = False
 stream_mode = 'tar'
@@ -39,7 +41,6 @@ xtrabackup_args = []
 
 new_init_db = ''
 db_credentials_file = ''
-
 
 def setUpModule():
   global xtrabackup_args
@@ -65,23 +66,6 @@ def setUpModule():
   try:
     environment.topo_server().setup()
 
-    # Create a new init_db.sql file that sets up passwords for all users.
-    # Then we use a db-credentials-file with the passwords.
-    new_init_db = environment.tmproot + '/init_db_with_passwords.sql'
-    with open(environment.vttop + '/config/init_db.sql') as fd:
-      init_db = fd.read()
-    with open(new_init_db, 'w') as fd:
-      fd.write(init_db)
-      fd.write('''
-# Set real passwords for all users.
-ALTER USER 'root'@'localhost' IDENTIFIED BY 'RootPass';
-ALTER USER 'vt_dba'@'localhost' IDENTIFIED BY 'VtDbaPass';
-ALTER USER 'vt_app'@'localhost' IDENTIFIED BY 'VtAppPass';
-ALTER USER 'vt_allprivs'@'localhost' IDENTIFIED BY 'VtAllPrivsPass';
-ALTER USER 'vt_repl'@'%' IDENTIFIED BY 'VtReplPass';
-ALTER USER 'vt_filtered'@'localhost' IDENTIFIED BY 'VtFilteredPass';
-FLUSH PRIVILEGES;
-''')
     credentials = {
         'vt_dba': ['VtDbaPass'],
         'vt_app': ['VtAppPass'],
@@ -92,6 +76,31 @@ FLUSH PRIVILEGES;
     db_credentials_file = environment.tmproot+'/db_credentials.json'
     with open(db_credentials_file, 'w') as fd:
       fd.write(json.dumps(credentials))
+
+    # Determine which column is used for user passwords in this MySQL version.
+    proc = tablet_master.init_mysql()
+    if use_mysqlctld:
+      tablet_master.wait_for_mysqlctl_socket()
+    else:
+      utils.wait_procs([proc])
+    try:
+      tablet_master.mquery('mysql', 'select password from mysql.user limit 0',
+                           user='root')
+      password_col = 'password'
+    except MySQLdb.DatabaseError:
+      password_col = 'authentication_string'
+    utils.wait_procs([tablet_master.teardown_mysql()])
+    tablet_master.remove_tree(ignore_options=True)
+
+    # Create a new init_db.sql file that sets up passwords for all users.
+    # Then we use a db-credentials-file with the passwords.
+    new_init_db = environment.tmproot + '/init_db_with_passwords.sql'
+    with open(environment.vttop + '/config/init_db.sql') as fd:
+      init_db = fd.read()
+    with open(new_init_db, 'w') as fd:
+      fd.write(init_db)
+      fd.write(mysql_flavor().change_passwords(password_col))
+
     logging.debug("initilizing mysql %s",str(datetime.datetime.now()))
     # start mysql instance external to the test
     setup_procs = [
@@ -205,10 +214,10 @@ class TestBackup(unittest.TestCase):
         logging.exception('exception waiting for data to replicate')
       timeout = utils.wait_step(msg, timeout)
 
-  def _restore(self, t, tablet_type='replica',wait_for_state='SERVING',teardown=False):
+  def _restore(self, t, tablet_type='replica',wait_for_state='SERVING'):
     """Erase mysql/tablet dir, then start tablet with restore enabled."""
     logging.debug("restoring tablet %s",str(datetime.datetime.now()))
-    self._reset_tablet_dir(t,teardown)
+    self._reset_tablet_dir(t)
 
     xtra_args = ['-db-credentials-file', db_credentials_file]
     if use_xtrabackup:
@@ -223,12 +232,11 @@ class TestBackup(unittest.TestCase):
 
     logging.debug("done restoring tablet %s",str(datetime.datetime.now()))
     
-  def _reset_tablet_dir(self, t, teardown=True):
+  def _reset_tablet_dir(self, t):
     """Stop mysql, delete everything including tablet dir, restart mysql."""
 
     extra_args = ['-db-credentials-file', db_credentials_file]    
-    if teardown:
-      utils.wait_procs([t.teardown_mysql(extra_args=extra_args)])
+    utils.wait_procs([t.teardown_mysql(extra_args=extra_args)])
     # Specify ignore_options because we want to delete the tree even
     # if the test's -k / --keep-logs was specified on the command line.
     t.remove_tree(ignore_options=True)
@@ -253,25 +261,8 @@ class TestBackup(unittest.TestCase):
         tablet.get_backup_storage_flags() +
         ['RemoveBackup', 'test_keyspace/0', backup],
         auto_log=True, mode=utils.VTCTL_VTCTL)
-
-  def _reset_tablet_dir(self, t, teardown=True):
-    """Stop mysql, delete everything including tablet dir, restart mysql."""
-
-    extra_args = ['-db-credentials-file', db_credentials_file]    
-    if teardown:
-      utils.wait_procs([t.teardown_mysql(extra_args=extra_args)])
-    # Specify ignore_options because we want to delete the tree even
-    # if the test's -k / --keep-logs was specified on the command line.
-    t.remove_tree(ignore_options=True)
-    logging.debug("starting mysql %s",str(datetime.datetime.now()))    
-    proc = t.init_mysql(init_db=new_init_db, extra_args=extra_args)
-    if use_mysqlctld:
-      t.wait_for_mysqlctl_socket()
-    else:
-      utils.wait_procs([proc])
-    logging.debug("done starting mysql %s",str(datetime.datetime.now()))          
     
-  def _backup_only(self, t, tablet_type='replica', initial_backup=False):
+  def _backup_only(self, t, initial_backup=False):
     """Erase mysql/tablet dir, then start tablet with restore only."""
     logging.debug('starting backup only job')
     t.remove_tree(ignore_options=True)
@@ -293,20 +284,20 @@ class TestBackup(unittest.TestCase):
     logging.debug("backup tablet done %s",str(datetime.datetime.now()))        
 
   def test_tablet_initial_backup(self):
-    self._test_initial_backup('replica')
+    self._test_initial_backup()
 
     # Restore the Shard from the inital backup
     self._init_tablets(init=False,start=False)
 
     # Restore the Tablets
-    self._restore(tablet_master, tablet_type='replica',wait_for_state="NOT_SERVING",teardown=True)    
+    self._restore(tablet_master, tablet_type='replica',wait_for_state="NOT_SERVING")
     utils.run_vtctl(['TabletExternallyReparented',tablet_master.tablet_alias])
-    self._restore(tablet_replica1, tablet_type='replica',teardown=True)
+    self._restore(tablet_replica1, tablet_type='replica')
 
     # Run the entire backup test
     self._test_first_backup('replica', True)
 
-  def _test_initial_backup(self, tablet_type):
+  def _test_initial_backup(self):
     """Test Initial Backup Flow
     test_initial_backup will:
     - Create a shard using vtbackup and --initial-backup
@@ -318,7 +309,7 @@ class TestBackup(unittest.TestCase):
     - Bring up a second replica, and restore from the second backup
     - list the backups, remove them
     """
-    self._backup_only(backup_tablet,tablet_type,initial_backup=True)
+    self._backup_only(backup_tablet,initial_backup=True)
     backups = self._list_backups()
     logging.debug('list of backups after initial: %s', backups)
     self.assertEqual(len(backups), 1)
@@ -370,7 +361,7 @@ class TestBackup(unittest.TestCase):
     self._insert_data(tablet_master, 2)
 
     # now bring up the other slave, letting it restore from backup.
-    self._restore(tablet_replica2, tablet_type=tablet_type,teardown=True)
+    self._restore(tablet_replica2, tablet_type=tablet_type)
 
     # check the new slave has the data
     self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')
