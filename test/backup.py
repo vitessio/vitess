@@ -35,7 +35,6 @@ stream_mode = 'tar'
 tablet_master = None
 tablet_replica1 = None
 tablet_replica2 = None
-tablet_replica3 = None
 xtrabackup_args = []
 
 new_init_db = ''
@@ -53,15 +52,13 @@ def setUpModule():
                    '--password=VtDbaPass']
 
   global new_init_db, db_credentials_file
-  global tablet_master, tablet_replica1, tablet_replica2, tablet_replica3
+  global tablet_master, tablet_replica1, tablet_replica2
 
   tablet_master = tablet.Tablet(use_mysqlctld=use_mysqlctld,
                                 vt_dba_passwd='VtDbaPass')
   tablet_replica1 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
                                   vt_dba_passwd='VtDbaPass')
   tablet_replica2 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
-                                  vt_dba_passwd='VtDbaPass')
-  tablet_replica3 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
                                   vt_dba_passwd='VtDbaPass')
 
   try:
@@ -137,9 +134,7 @@ def tearDownModule():
       tablet_replica1.teardown_mysql(extra_args=['-db-credentials-file',
                                                  db_credentials_file]),
       tablet_replica2.teardown_mysql(extra_args=['-db-credentials-file',
-                                                 db_credentials_file]),
-      tablet_replica3.teardown_mysql(extra_args=['-db-credentials-file',
-                                                 db_credentials_file]),
+                                                 db_credentials_file])
   ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -150,7 +145,6 @@ def tearDownModule():
   tablet_master.remove_tree()
   tablet_replica1.remove_tree()
   tablet_replica2.remove_tree()
-  tablet_replica3.remove_tree()
 
 
 class TestBackup(unittest.TestCase):
@@ -172,7 +166,7 @@ class TestBackup(unittest.TestCase):
                      tablet_master.tablet_alias])
 
   def tearDown(self):
-    for t in tablet_master, tablet_replica1, tablet_replica2, tablet_replica3:
+    for t in tablet_master, tablet_replica1, tablet_replica2:
       t.kill_vttablet()
 
     tablet.Tablet.check_vttablet_count()
