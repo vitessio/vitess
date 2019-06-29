@@ -274,15 +274,16 @@ func Restore(
 			return mysql.Position{}, err
 		}
 		// Since this is an empty database make sure we start replication at the beginning
-		err = ErrNoBackup
-		if err = mysqld.ResetReplication(ctx); err != nil {
+		if err := mysqld.ResetReplication(ctx); err != nil {
 			logger.Errorf("error reseting slave replication: %v. Continuing", err)
 		}
 
-		if err2 := PopulateMetadataTables(mysqld, localMetadata, dbName); err2 != nil {
-			err = err2
+		if err := PopulateMetadataTables(mysqld, localMetadata, dbName); err != nil {
+			logger.Errorf("error populating metadata tables: %v. Continuing", err)
+
 		}
-		return mysql.Position{}, err
+		// Always return ErrNoBackup
+		return mysql.Position{}, ErrNoBackup
 	}
 
 	be, err := GetBackupEngine()
