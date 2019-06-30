@@ -331,6 +331,12 @@ class TestKeyspace(unittest.TestCase):
       self.assertEqual(len(partition['shard_references']), 1,
           'RemoveShardCell should have removed one shard from the target cell: ' +
           json.dumps(srv_keyspace))
+    # Make sure the shard is still serving in test_ca.
+    srv_keyspace = utils.run_vtctl_json(['GetSrvKeyspace', 'test_ca', 'test_delete_keyspace'])
+    for partition in srv_keyspace['partitions']:
+      self.assertEqual(len(partition['shard_references']), 2,
+          'RemoveShardCell should not have changed other cells: ' +
+          json.dumps(srv_keyspace))
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_delete_keyspace'])
 
     utils.run_vtctl(['GetKeyspace', 'test_delete_keyspace'])
