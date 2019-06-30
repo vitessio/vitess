@@ -15,6 +15,7 @@ COPY --from=builder /vt/bin/vtctlclient /vt/bin/
 COPY --from=builder /vt/bin/vtgate /vt/bin/
 COPY --from=builder /vt/bin/vttablet /vt/bin/
 COPY --from=builder /vt/bin/vtworker /vt/bin/
+COPY --from=builder /vt/bin/vtbackup /vt/bin/
 
 RUN chown -R vitess:vitess /vt
 
