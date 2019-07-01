@@ -93,6 +93,7 @@ services:
       - "3306"
     volumes:
       - ".:/script"
+      - "./backups:/vt/vtdataroot/backups"
     environment:
       - TOPOLOGY_FLAGS
       - WEB_PORT
@@ -122,6 +123,7 @@ services:
       - "3306"
     volumes:
       - ".:/script"
+      - "./backups:/vt/vtdataroot/backups"
     environment:
       - TOPOLOGY_FLAGS
       - WEB_PORT
@@ -145,6 +147,7 @@ services:
       - "3306"
     volumes:
       - ".:/script"
+      - "./backups:/vt/vtdataroot/backups"
     environment:
       - TOPOLOGY_FLAGS
       - WEB_PORT

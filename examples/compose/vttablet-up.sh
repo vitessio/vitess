@@ -142,5 +142,7 @@ exec $VTROOT/bin/vttablet \
   -init_keyspace $keyspace \
   -init_shard $shard \
   -init_tablet_type $tablet_type \
+  -backup_storage_implementation file \
+  -file_backup_storage_root $VTDATAROOT/backups \
   $external_db_args
 
