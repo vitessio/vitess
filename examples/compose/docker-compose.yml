@@ -60,7 +60,7 @@ services:
       - "15099:$WEB_PORT"
       - "$GRPC_PORT"
       - "15306:$MYSQL_PORT"
-    command: ["sh", "-c", "$$VTROOT/bin/vtgate \
+    command: ["sh", "-c", "vtctl $TOPOLOGY_FLAGS SetReadWrite ${CELL}-1 & $$VTROOT/bin/vtgate \
         $TOPOLOGY_FLAGS \
         -logtostderr=true \
         -port $WEB_PORT \
