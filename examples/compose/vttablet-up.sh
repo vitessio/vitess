@@ -151,5 +151,6 @@ exec $VTROOT/bin/vttablet \
   -init_tablet_type $tablet_type \
   -backup_storage_implementation file \
   -file_backup_storage_root $VTDATAROOT/backups \
+  -queryserver-config-schema-reload-time 60 \
   $external_db_args
 
