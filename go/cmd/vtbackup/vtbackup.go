@@ -231,9 +231,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
 			return fmt.Errorf("can't initialize database: %v", err)
 		}
+		backupTime := time.Now()
 		// Now we're ready to take the backup.
-		name := backupName(time.Now(), tabletAlias)
-		if err := mysqlctl.Backup(ctx, mycnf, mysqld, logutil.NewConsoleLogger(), backupDir, name, *concurrency, extraEnv); err != nil {
+		name := backupName(backupTime, tabletAlias)
+		if err := mysqlctl.Backup(ctx, mycnf, mysqld, logutil.NewConsoleLogger(), backupDir, name, *concurrency, extraEnv, backupTime); err != nil {
 			return fmt.Errorf("backup failed: %v", err)
 		}
 		log.Info("Initial backup successful.")
@@ -241,7 +242,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	log.Infof("Restoring latest backup from directory %v", backupDir)
-	restorePos, err := mysqlctl.Restore(ctx, mycnf, mysqld, backupDir, *concurrency, extraEnv, map[string]string{}, logutil.NewConsoleLogger(), true, dbName)
+	restorePos, _, err := mysqlctl.Restore(ctx, mycnf, mysqld, backupDir, *concurrency, extraEnv, map[string]string{}, logutil.NewConsoleLogger(), true, dbName, time.Unix(0, 0).UTC())
 	switch err {
 	case nil:
 		log.Infof("Successfully restored from backup at replication position %v", restorePos)
@@ -326,7 +327,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 
 	// Now we can take a new backup.
 	name := backupName(backupTime, tabletAlias)
-	if err := mysqlctl.Backup(ctx, mycnf, mysqld, logutil.NewConsoleLogger(), backupDir, name, *concurrency, extraEnv); err != nil {
+	if err := mysqlctl.Backup(ctx, mycnf, mysqld, logutil.NewConsoleLogger(), backupDir, name, *concurrency, extraEnv, backupTime); err != nil {
 		return fmt.Errorf("error taking backup: %v", err)
 	}
 
