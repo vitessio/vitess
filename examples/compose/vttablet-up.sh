@@ -8,6 +8,13 @@ uid=$1
 external=${EXTERNAL_DB:-0}
 db_name=${DB:-"$keyspace"}
 db_charset=${DB_CHARSET:-''}
+tablet_hostname=''
+
+# Use IPs to simplify connections when testing in docker.
+# Otherwise, blank hostname means the tablet auto-detects FQDN.
+if [ $external = 1 ]; then
+  tablet_hostname=`hostname -i`
+fi
 
 printf -v alias '%s-%010d' $CELL $uid
 printf -v tablet_dir 'vt_%010d' $uid
@@ -130,7 +137,7 @@ exec $VTROOT/bin/vttablet \
   $TOPOLOGY_FLAGS \
   -logtostderr=true \
   -tablet-path $alias \
-  -tablet_hostname "" \
+  -tablet_hostname "$tablet_hostname" \
   -health_check_interval 5s \
   -enable_semi_sync \
   -enable_replication_reporter \
