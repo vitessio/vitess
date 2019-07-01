@@ -134,7 +134,7 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	}
 
 	query := fmt.Sprintf("select count(*) from _vt.copy_state where vrepl_id=%d", vr.id)
-	qr, err := vr.dbClient.ExecuteFetch(query, 10)
+	qr, err := vr.dbClient.Execute(query)
 	if err != nil {
 		// If it's a not found error, create it.
 		merr, isSQLErr := err.(*mysql.SQLError)
@@ -143,13 +143,13 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 		}
 		log.Info("Looks like _vt.copy_state table may not exist. Trying to create... ")
 		for _, query := range CreateCopyState {
-			if _, merr := vr.dbClient.ExecuteFetch(query, 0); merr != nil {
+			if _, merr := vr.dbClient.Execute(query); merr != nil {
 				log.Errorf("Failed to ensure _vt.copy_state table exists: %v", merr)
 				return settings, numTablesToCopy, err
 			}
 		}
 		// Redo the read.
-		qr, err = vr.dbClient.ExecuteFetch(query, 10)
+		qr, err = vr.dbClient.Execute(query)
 		if err != nil {
 			return settings, numTablesToCopy, err
 		}
@@ -170,7 +170,7 @@ func (vr *vreplicator) setMessage(message string) error {
 		Message: message,
 	})
 	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(message), vr.id)
-	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
+	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
 	return nil

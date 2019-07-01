@@ -8,6 +8,7 @@ import (
 	"path"
 	"reflect"
 	"testing"
+
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vttls"
 )

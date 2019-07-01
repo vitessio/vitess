@@ -163,7 +163,7 @@ topology:
         enabled: false
         username: myuser
         # this is the secret that will be mounted as the user password
-        # kubectl create secret generic myuser_password --from-literal=password=abc123
+        # kubectl create secret generic myuser-password --from-literal=password=abc123
         passwordSecret: myuser-password
 
       keyspaces:

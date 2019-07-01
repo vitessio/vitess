@@ -275,17 +275,16 @@ func Restore(
 		// Wait for mysqld to be ready, in case it was launched in parallel with us.
 		if err = mysqld.Wait(ctx, cnf); err != nil {
 			logger.Errorf("mysqld is not running: %v", err)
-			return zeroPosition, t, err
 		}
 		// Since this is an empty database make sure we start replication at the beginning
-		if err = mysqld.ResetReplication(ctx); err == nil {
-			err = ErrNoBackup
+		if err := mysqld.ResetReplication(ctx); err != nil {
+			logger.Errorf("error resetting slave replication: %v. Continuing", err)
 		}
 
-		if err2 := PopulateMetadataTables(mysqld, localMetadata, dbName); err2 == nil {
-			err = ErrNoBackup
+		if err := PopulateMetadataTables(mysqld, localMetadata, dbName); err != nil {
+			logger.Errorf("error populating metadata tables: %v. Continuing", err)
 		}
-		return zeroPosition, t, err
+		return zeroPosition, t, ErrNoBackup
 	}
 
 	be, err := GetBackupEngine()

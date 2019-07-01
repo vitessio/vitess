@@ -1,0 +1,228 @@
+# Test cases in this file follow the code in memory_sort.go.
+
+# scatter aggregate order by references ungrouped column
+"select a, b, count(*) from user group by a order by b"
+{
+  "Original": "select a, b, count(*) from user group by a order by b",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 1,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Aggregates": [
+        {
+          "Opcode": "count",
+          "Col": 2
+        }
+      ],
+      "Keys": [
+        0
+      ],
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select a, b, count(*) from user group by a order by a asc",
+        "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by a",
+        "OrderBy": [
+          {
+            "Col": 0,
+            "Desc": false
+          }
+        ]
+      }
+    }
+  }
+}
+
+# scatter aggregate order by references aggregate expression
+"select a, b, count(*) k from user group by a order by k"
+{
+  "Original": "select a, b, count(*) k from user group by a order by k",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Aggregates": [
+        {
+          "Opcode": "count",
+          "Col": 2
+        }
+      ],
+      "Keys": [
+        0
+      ],
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select a, b, count(*) as k from user group by a order by a asc",
+        "FieldQuery": "select a, b, count(*) as k from user where 1 != 1 group by a",
+        "OrderBy": [
+          {
+            "Col": 0,
+            "Desc": false
+          }
+        ]
+      }
+    }
+  }
+}
+
+# scatter aggregate order by references multiple non-group-by expressions
+"select a, b, count(*) k from user group by a order by b, a, k"
+{
+  "Original": "select a, b, count(*) k from user group by a order by b, a, k",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 1,
+        "Desc": false
+      },
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Aggregates": [
+        {
+          "Opcode": "count",
+          "Col": 2
+        }
+      ],
+      "Keys": [
+        0
+      ],
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select a, b, count(*) as k from user group by a order by a asc",
+        "FieldQuery": "select a, b, count(*) as k from user where 1 != 1 group by a",
+        "OrderBy": [
+          {
+            "Col": 0,
+            "Desc": false
+          }
+        ]
+      }
+    }
+  }
+}
+
+# scatter aggregate with memory sort and limit
+"select a, b, count(*) k from user group by a order by k desc limit 10"
+{
+  "Original": "select a, b, count(*) k from user group by a order by k desc limit 10",
+  "Instructions": {
+    "Opcode": "Limit",
+    "Count": 10,
+    "Offset": null,
+    "Input": {
+      "Opcode": "MemorySort",
+      "MaxRows": ":__upper_limit",
+      "OrderBy": [
+        {
+          "Col": 2,
+          "Desc": true
+        }
+      ],
+      "Input": {
+        "Aggregates": [
+          {
+            "Opcode": "count",
+            "Col": 2
+          }
+        ],
+        "Keys": [
+          0
+        ],
+        "Input": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select a, b, count(*) as k from user group by a order by a asc",
+          "FieldQuery": "select a, b, count(*) as k from user where 1 != 1 group by a",
+          "OrderBy": [
+            {
+              "Col": 0,
+              "Desc": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+# scatter aggregate with memory sort and order by number
+"select a, b, count(*) k from user group by a order by 1,3"
+{
+  "Original": "select a, b, count(*) k from user group by a order by 1,3",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Aggregates": [
+        {
+          "Opcode": "count",
+          "Col": 2
+        }
+      ],
+      "Keys": [
+        0
+      ],
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select a, b, count(*) as k from user group by a order by 1 asc",
+        "FieldQuery": "select a, b, count(*) as k from user where 1 != 1 group by a",
+        "OrderBy": [
+          {
+            "Col": 0,
+            "Desc": false
+          }
+        ]
+      }
+    }
+  }
+}

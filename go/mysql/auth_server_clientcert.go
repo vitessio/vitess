@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
