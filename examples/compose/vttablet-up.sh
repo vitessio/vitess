@@ -116,10 +116,12 @@ if [[ "$external" = "1" ]]; then
                           -db_filtered_user $DB_USER \
                           -db_filtered_password $DB_PASS \
                           -db_repl_user $DB_USER \
-                          -db_repl_password $DB_PASS"
+                          -db_repl_password $DB_PASS \
+                          -restore_from_backup"
     fi
 else
-    external_db_args="-init_db_name_override $DB_NAME"
+    external_db_args="-init_db_name_override $DB_NAME \
+                      -restore_from_backup"
 fi
 
 
