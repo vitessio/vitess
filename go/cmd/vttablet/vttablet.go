@@ -138,5 +138,6 @@ func main() {
 		// to update our state, so closing it in OnClose()
 		ts.Close()
 	})
+
 	servenv.RunDefault()
 }
