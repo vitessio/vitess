@@ -1,4 +1,3 @@
-
 {
 	"Tests": {
 		"backup": {
@@ -6,7 +5,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -24,7 +23,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -33,7 +32,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -43,26 +42,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
-		},
-		"binlog": {
-			"File": "binlog.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"cache_invalidation": {
-			"File": "cache_invalidation.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -82,7 +61,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -96,6 +75,39 @@
 			],
 			"Manual": false,
 			"Shard": 0,
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"cell_aliases": {
+			"File": "cell_aliases.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"cell_no_aliases": {
+			"File": "cell_no_aliases.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"check_make_parser": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"tools/check_make_parser.sh"
+			],
+			"Manual": false,
+			"Shard": 4,
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -133,6 +145,17 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
+			"Shard": 2,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
+		"initial_sharding_bytes": {
+			"File": "initial_sharding_bytes.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
 			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": [
@@ -144,20 +167,9 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
-		},
-		"initial_sharding_bytes": {
-			"File": "initial_sharding_bytes.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
 		},
 		"java": {
 			"File": "",
@@ -167,7 +179,7 @@
 				"java_test"
 			],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -178,7 +190,7 @@
 				"test/keyrange_test.py"
 			],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -200,7 +212,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -213,7 +225,7 @@
 				"test/local_example.sh"
 			],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -222,7 +234,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -244,7 +256,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -253,7 +265,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -273,7 +285,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -300,7 +312,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -311,7 +323,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -322,7 +334,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -333,16 +345,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"vschema": {
-			"File": "vschema.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -360,18 +363,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": [
-				"site_test"
-			]
-		},
-		"tabletmanager_etcd2": {
-			"File": "tabletmanager.py",
-			"Args": ["--topo-server-flavor=etcd2"],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -379,10 +371,25 @@
 		},
 		"tabletmanager_consul": {
 			"File": "tabletmanager.py",
-			"Args": ["--topo-server-flavor=consul"],
+			"Args": [
+				"--topo-server-flavor=consul"
+			],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"tabletmanager_etcd2": {
+			"File": "tabletmanager.py",
+			"Args": [
+				"--topo-server-flavor=etcd2"
+			],
+			"Command": [],
+			"Manual": false,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -395,8 +402,8 @@
 				"tools/unit_test_runner.sh"
 			],
 			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 1,
+			"Shard": 4,
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"unit_race": {
@@ -407,7 +414,7 @@
 				"unit_test_race"
 			],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -434,7 +441,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -445,18 +452,27 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
 			]
+		},
+		"vschema": {
+			"File": "vschema.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"vtctld": {
 			"File": "vtctld_test.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -476,7 +492,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -494,7 +510,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -514,7 +530,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -523,7 +539,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -534,7 +550,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": []
 		},
