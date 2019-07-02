@@ -187,6 +187,7 @@ enum VEventType {
   FIELD = 13;
   HEARTBEAT = 14;
   VGTID = 15;
+  JOURNAL = 16;
 }
 
 // RowChange represents one row change
@@ -216,6 +217,19 @@ message VGtid {
   repeated ShardGtid shard_gtids = 1;
 }
 
+message KeyspaceShard {
+  string keyspace = 1;
+  string shard = 2;
+}
+
+message Journal {
+  int64 id = 1;
+  repeated string tables = 2;
+  string local_position = 3;
+  repeated ShardGtid shard_gtids = 4;
+  repeated KeyspaceShard participants = 5;
+}
+
 // VEvent represents a vstream event
 message VEvent {
   VEventType type = 1;
@@ -225,6 +239,7 @@ message VEvent {
   RowEvent row_event = 5;
   FieldEvent field_event = 6;
   VGtid vgtid = 7;
+  Journal journal = 8;
   // current_time specifies the current time to handle clock skew.
   int64 current_time = 20;
 }
