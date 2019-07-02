@@ -150,7 +150,7 @@ function install_grpc() {
 }
 
 if [ "$BUILD_PYTHON" == 1 ] ; then
-    install_dep "gRPC" "1.16.0" "$VTROOT/dist/grpc" install_grpc
+    install_dep "gRPC" "1.23.0" "$VTROOT/dist/grpc" install_grpc
 fi
 
 # Install protoc.
