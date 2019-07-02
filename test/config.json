@@ -358,6 +358,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"sharded_recovery": {
+			"File": "sharded_recovery.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"tabletmanager": {
 			"File": "tabletmanager.py",
 			"Args": [],
