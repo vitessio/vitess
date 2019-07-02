@@ -53,7 +53,7 @@ if [[ $SLAVE_IO_RUNNING = "No" && $LAST_ERRNO = 1236 ]]; then
         if mysqldump -h $MASTER_HOST -P $MASTER_PORT -u$DB_USER -p$DB_PASS --databases $KEYSPACE \
             --triggers --routines --events --hex-blob  --master-data=1 --quick --order-by-primary \
             --no-autocommit --skip-comments --skip-add-drop-table --skip-add-locks \
-            --skip-disable-keys --single-transaction --set-gtid-purged=on --verbose > $KEYSPACE.sql ]]; then
+            --skip-disable-keys --single-transaction --set-gtid-purged=on --verbose > $KEYSPACE.sql ; then
             echo "mysqldump complete for database $KEYSPACE"
             echo "Resetting slave.."
             reset_slave
