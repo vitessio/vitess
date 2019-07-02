@@ -28,13 +28,25 @@ import utils
 
 from vtdb import vtgate_client
 
-# tablets
+# initial shard, covers everything
 tablet_master = tablet.Tablet()
 tablet_replica1 = tablet.Tablet()
+tablet_rdonly = tablet.Tablet()
+# to use for recovery keyspace
 tablet_replica2 = tablet.Tablet()
-tablet_replica3 = tablet.Tablet()
 
-all_tablets = [tablet_master, tablet_replica1, tablet_replica2, tablet_replica3]
+# split shards
+# range '' - 80
+shard_0_master = tablet.Tablet()
+shard_0_replica = tablet.Tablet()
+shard_0_rdonly = tablet.Tablet()
+# range 80 - ''
+shard_1_master = tablet.Tablet()
+shard_1_replica = tablet.Tablet()
+shard_1_rdonly = tablet.Tablet()
+
+all_tablets = [tablet_master, tablet_replica1, tablet_replica2, tablet_rdonly,
+               shard_0_master, shard_0_replica, shard_0_rdonly, shard_1_master, shard_1_replica, shard_1_rdonly]
 
 def setUpModule():
   try:
@@ -65,7 +77,7 @@ def get_connection(timeout=15.0):
     logging.exception('Connection to vtgate (timeout=%s) failed.', timeout)
     raise
 
-class TestRecovery(unittest.TestCase):
+class TestShardedRecovery(unittest.TestCase):
 
   def setUp(self):
     xtra_args = ['-enable_replication_reporter']
@@ -73,6 +85,9 @@ class TestRecovery(unittest.TestCase):
                               supports_backups=True,
                               extra_args=xtra_args)
     tablet_replica1.init_tablet('replica', 'test_keyspace', '0', start=True,
+                                supports_backups=True,
+                                extra_args=xtra_args)
+    tablet_rdonly.init_tablet('rdonly', 'test_keyspace', '0', start=True,
                                 supports_backups=True,
                                 extra_args=xtra_args)
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
@@ -99,11 +114,23 @@ class TestRecovery(unittest.TestCase):
   ) Engine=InnoDB'''
 
   _vschema_json = '''{
+    "sharded": true,
+    "vindexes": {
+      "hash": {
+        "type": "hash"
+      }
+    },
     "tables": {
-        "vt_insert_test": {}
+        "vt_insert_test": {
+        "column_vindexes": [
+          {
+            "column": "id",
+            "name": "hash"
+          }
+        ]
+      }
     }
 }'''
-
 
   def _insert_data(self, t, index):
     """Add a single row with value 'index' to the given tablet."""
@@ -176,7 +203,7 @@ class TestRecovery(unittest.TestCase):
         ['RemoveBackup', 'test_keyspace/0', backup],
         auto_log=True, mode=utils.VTCTL_VTCTL)
 
-  def test_basic_recovery(self):
+  def test_sharded_recovery(self):
     """Test recovery from backup flow.
 
     test_recovery will:
@@ -185,6 +212,7 @@ class TestRecovery(unittest.TestCase):
     - insert some data
     - take a backup
     - insert more data on the master
+    - perform a resharding
     - create a recovery keyspace
     - bring up tablet_replica2 in the new keyspace
     - check that new tablet does not have data created after backup
@@ -199,6 +227,8 @@ class TestRecovery(unittest.TestCase):
                     auto_log=True)
     self._insert_data(tablet_master, 1)
     self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
+    # insert more data on the master
+    self._insert_data(tablet_master, 2)
 
     # backup the replica
     utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
@@ -210,180 +240,117 @@ class TestRecovery(unittest.TestCase):
     self.assertTrue(backups[0].endswith(tablet_replica1.tablet_alias))
 
     # insert more data on the master
-    self._insert_data(tablet_master, 2)
+    self._insert_data(tablet_master, 3)
 
     utils.run_vtctl(['ApplyVSchema',
                      '-vschema', self._vschema_json,
                      'test_keyspace'],
                     auto_log=True)
 
-    vs = utils.run_vtctl_json(['GetVSchema', 'test_keyspace'])
-    logging.debug('test_keyspace vschema: %s', str(vs))
-    ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
-    logging.debug('Serving keyspace before: %s', str(ks))
-    vs = utils.run_vtctl_json(['GetSrvVSchema', 'test_nj'])
-    logging.debug('Serving vschema before recovery: %s', str(vs))
+    # create the split shards
+    shard_0_master.init_tablet(
+        'replica',
+        keyspace='test_keyspace',
+        shard='-80',
+        tablet_index=0)
+    shard_0_replica.init_tablet(
+        'replica',
+        keyspace='test_keyspace',
+        shard='-80',
+        tablet_index=1)
+    shard_0_rdonly.init_tablet(
+        'rdonly',
+        keyspace='test_keyspace',
+        shard='-80',
+        tablet_index=2)
+    shard_1_master.init_tablet(
+        'replica',
+        keyspace='test_keyspace',
+        shard='80-',
+        tablet_index=0)
+    shard_1_replica.init_tablet(
+        'replica',
+        keyspace='test_keyspace',
+        shard='80-',
+        tablet_index=1)
+    shard_1_rdonly.init_tablet(
+        'rdonly',
+        keyspace='test_keyspace',
+        shard='80-',
+        tablet_index=2)
 
-    # now bring up the recovery keyspace with 1 tablet, letting it restore from backup.
+    for t in [shard_0_master, shard_0_replica, shard_0_rdonly,
+              shard_1_master, shard_1_replica, shard_1_rdonly]:
+      t.start_vttablet(wait_for_state=None,
+                       binlog_use_v3_resharding_mode=True)
+
+    for t in [shard_0_master, shard_0_replica, shard_0_rdonly,
+              shard_1_master, shard_1_replica, shard_1_rdonly]:
+      t.wait_for_vttablet_state('NOT_SERVING')
+
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/-80',
+                     shard_0_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/80-',
+                     shard_1_master.tablet_alias], auto_log=True)
+
+    for t in [shard_0_replica, shard_1_replica]:
+      utils.wait_for_tablet_type(t.tablet_alias, 'replica')
+
+    sharded_tablets = [shard_0_master, shard_0_replica, shard_0_rdonly,
+                       shard_1_master, shard_1_replica, shard_1_rdonly]
+    for t in sharded_tablets:
+      t.wait_for_vttablet_state('SERVING')
+
+    # we need to create the schema, and the worker will do data copying
+    for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
+      utils.run_vtctl(['CopySchemaShard',
+                       'test_keyspace/0',
+                       keyspace_shard],
+                       auto_log=True)
+    
+    # Run vtworker as daemon for the following SplitClone commands.
+    worker_proc, worker_port, worker_rpc_port = utils.run_vtworker_bg(
+        ['--cell', 'test_nj', '--command_display_interval', '10ms',
+         '--use_v3_resharding_mode=true'],
+        auto_log=True)
+
+    # Run SplitClone.
+    workerclient_proc = utils.run_vtworker_client_bg(
+        ['SplitClone',
+         '--chunk_count', '10',
+         '--min_rows_per_chunk', '1',
+         '--min_healthy_rdonly_tablets', '1',
+         'test_keyspace/0'],
+        worker_rpc_port)
+    utils.wait_procs([workerclient_proc])
+    
+    # Terminate worker daemon because it is no longer needed.
+    utils.kill_sub_process(worker_proc, soft=True)
+
+    utils.run_vtctl(
+        ['MigrateServedTypes', 'test_keyspace/0', 'rdonly'], auto_log=True)
+    utils.run_vtctl(
+        ['MigrateServedTypes', 'test_keyspace/0', 'replica'], auto_log=True)
+    # then serve master from the split shards
+    utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'master'],
+                    auto_log=True)
+
+    # now bring up the recovery keyspace and a tablet, letting it restore from backup.
     self._restore(tablet_replica2, 'recovery_keyspace')
 
-    vs = utils.run_vtctl_json(['GetSrvVSchema', 'test_nj'])
-    logging.debug('Serving vschema after recovery: %s', str(vs))
-    ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
-    logging.debug('Serving keyspace after: %s', str(ks))
-    vs = utils.run_vtctl_json(['GetVSchema', 'recovery_keyspace'])
-    logging.debug('recovery_keyspace vschema: %s', str(vs))
-
     # check the new replica does not have the data
-    self._check_data(tablet_replica2, 1, 'replica2 tablet should not have new data')
-
-    # check that the restored replica has the right local_metadata
-    result = tablet_replica2.mquery('_vt', 'select * from local_metadata')
-    metadata = {}
-    for row in result:
-      metadata[row[0]] = row[1]
-    self.assertEqual(metadata['Alias'], 'test_nj-0000062346')
-    self.assertEqual(metadata['ClusterAlias'], 'recovery_keyspace.0')
-    self.assertEqual(metadata['DataCenter'], 'test_nj')
+    self._check_data(tablet_replica2, 2, 'replica2 tablet should not have new data')
 
     # start vtgate
     vtgate = utils.VtGate()
     vtgate.start(tablets=[
-      tablet_master, tablet_replica1, tablet_replica2
+      shard_0_master, shard_0_replica, shard_1_master, shard_1_replica, tablet_replica2
       ], tablet_types_to_wait='REPLICA')
-    utils.vtgate.wait_for_endpoints('test_keyspace.0.master', 1)
-    utils.vtgate.wait_for_endpoints('test_keyspace.0.replica', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.-80.master', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.80-.replica', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.-80.master', 1)
+    utils.vtgate.wait_for_endpoints('test_keyspace.80-.replica', 1)
     utils.vtgate.wait_for_endpoints('recovery_keyspace.0.replica', 1)
-    
-    # check that vtgate doesn't route queries to new tablet
-    vtgate_conn = get_connection()
-    cursor = vtgate_conn.cursor(
-        tablet_type='replica', keyspace=None, writable=True)
-
-    cursor.execute('select count(*) from vt_insert_test', {})
-    result = cursor.fetchall()
-    if not result:
-      self.fail('Result cannot be null')
-    else:
-      self.assertEqual(result[0][0], 2)
-
-    # check that new tablet is accessible by using ks.table
-    cursor.execute('select count(*) from recovery_keyspace.vt_insert_test', {})
-    result = cursor.fetchall()
-    if not result:
-      self.fail('Result cannot be null')
-    else:
-      self.assertEqual(result[0][0], 1)
-
-    # check that new tablet is accessible with 'use ks'
-    cursor.execute('use recovery_keyspace@replica', {})
-    cursor.execute('select count(*) from vt_insert_test', {})
-    result = cursor.fetchall()
-    if not result:
-      self.fail('Result cannot be null')
-    else:
-      self.assertEqual(result[0][0], 1)
-
-    # TODO check that new tablet is accessible with 'use ks:shard'
-    # this currently does not work through the python client, though it works from mysql client
-    #cursor.execute('use recovery_keyspace:0@replica', {})
-    #cursor.execute('select count(*) from vt_insert_test', {})
-    #result = cursor.fetchall()
-    #if not result:
-      #self.fail('Result cannot be null')
-    #else:
-      #self.assertEqual(result[0][0], 1)
-
-    vtgate_conn.close()
-    tablet_replica2.kill_vttablet()
-    vtgate.kill()
-
-  def test_multi_recovery(self):
-    """Test recovery from backup flow.
-
-    test_multi_recovery will:
-    - create a shard with master and replica1 only
-    - run InitShardMaster
-    - insert some data
-    - take a backup
-    - insert more data on the master
-    - take another backup
-    - create a recovery keyspace after first backup
-    - bring up tablet_replica2 in the new keyspace
-    - check that new tablet does not have data created after backup1
-    - create second recovery keyspace after second backup
-    - bring up tablet_replica3 in second keyspace
-    - check that new tablet has data created after backup1 but not data created after backup2
-    - check that vtgate queries work correctly
-
-    """
-
-    # insert data on master, wait for replica to get it
-    utils.run_vtctl(['ApplySchema',
-                     '-sql', self._create_vt_insert_test,
-                     'test_keyspace'],
-                    auto_log=True)
-    self._insert_data(tablet_master, 1)
-    self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
-
-    # backup the replica
-    utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
-
-    # check that the backup shows up in the listing
-    backups = self._list_backups()
-    logging.debug('list of backups: %s', backups)
-    self.assertEqual(len(backups), 1)
-    self.assertTrue(backups[0].endswith(tablet_replica1.tablet_alias))
-
-    # insert more data on the master
-    self._insert_data(tablet_master, 2)
-    # wait for it to replicate
-    self._check_data(tablet_replica1, 2, 'replica1 tablet getting data')
-
-    utils.run_vtctl(['ApplyVSchema',
-                     '-vschema', self._vschema_json,
-                     'test_keyspace'],
-                    auto_log=True)
-
-    vs = utils.run_vtctl_json(['GetVSchema', 'test_keyspace'])
-    logging.debug('test_keyspace vschema: %s', str(vs))
-
-    # now bring up the other replica, letting it restore from backup.
-    self._restore(tablet_replica2, 'recovery_ks1')
-
-    # we are not asserting on the contents of vschema here
-    # because the later part of the test (vtgate) will fail
-    # if the vschema is not copied correctly from the base_keyspace
-    vs = utils.run_vtctl_json(['GetVSchema', 'recovery_ks1'])
-    logging.debug('recovery_ks1 vschema: %s', str(vs))
-
-    # check the new replica does not have the data
-    self._check_data(tablet_replica2, 1, 'replica2 tablet should not have new data')
-
-    # take another backup on the replica
-    utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
-
-    # insert more data on the master
-    self._insert_data(tablet_master, 3)
-    # wait for it to replicate
-    self._check_data(tablet_replica1, 3, 'replica1 tablet getting data')
-
-    # now bring up the other replica, letting it restore from backup2.
-    self._restore(tablet_replica3, 'recovery_ks2')
-
-    vs = utils.run_vtctl(['GetVSchema', 'recovery_ks2'])
-    logging.debug('recovery_ks2 vschema: %s', str(vs))
-
-    # check the new replica does not have the latest data
-    self._check_data(tablet_replica3, 2, 'replica3 tablet should not have new data')
-
-    # start vtgate
-    vtgate = utils.VtGate()
-    vtgate.start(tablets=all_tablets, tablet_types_to_wait='REPLICA')
-    utils.vtgate.wait_for_endpoints('test_keyspace.0.master', 1)
-    utils.vtgate.wait_for_endpoints('test_keyspace.0.replica', 1)
-    utils.vtgate.wait_for_endpoints('recovery_ks1.0.replica', 1)
-    utils.vtgate.wait_for_endpoints('recovery_ks2.0.replica', 1)
 
     # check that vtgate doesn't route queries to new tablet
     vtgate_conn = get_connection()
@@ -398,15 +365,16 @@ class TestRecovery(unittest.TestCase):
       self.assertEqual(result[0][0], 3)
 
     # check that new tablet is accessible by using ks.table
-    cursor.execute('select count(*) from recovery_ks1.vt_insert_test', {})
+    cursor.execute('select count(*) from recovery_keyspace.vt_insert_test', {})
     result = cursor.fetchall()
     if not result:
       self.fail('Result cannot be null')
     else:
-      self.assertEqual(result[0][0], 1)
+      self.assertEqual(result[0][0], 2)
 
-    # check that new tablet is accessible by using ks.table
-    cursor.execute('select count(*) from recovery_ks2.vt_insert_test', {})
+    # check that new tablet is accessible with 'use ks'
+    cursor.execute('use recovery_keyspace@replica', {})
+    cursor.execute('select count(*) from vt_insert_test', {})
     result = cursor.fetchall()
     if not result:
       self.fail('Result cannot be null')
@@ -415,7 +383,7 @@ class TestRecovery(unittest.TestCase):
 
     # TODO check that new tablet is accessible with 'use ks:shard'
     # this currently does not work through the python client, though it works from mysql client
-    #cursor.execute('use recovery_ks1:0@replica', {})
+    #cursor.execute('use recovery_keyspace:0@replica', {})
     #cursor.execute('select count(*) from vt_insert_test', {})
     #result = cursor.fetchall()
     #if not result:
@@ -424,6 +392,7 @@ class TestRecovery(unittest.TestCase):
       #self.assertEqual(result[0][0], 1)
 
     vtgate_conn.close()
+    tablet_replica2.kill_vttablet()
     vtgate.kill()
 
 if __name__ == '__main__':
