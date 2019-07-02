@@ -308,24 +308,8 @@ class TestShardedRecovery(unittest.TestCase):
                        keyspace_shard],
                        auto_log=True)
     
-    # Run vtworker as daemon for the following SplitClone commands.
-    worker_proc, worker_port, worker_rpc_port = utils.run_vtworker_bg(
-        ['--cell', 'test_nj', '--command_display_interval', '10ms',
-         '--use_v3_resharding_mode=true'],
-        auto_log=True)
-
-    # Run SplitClone.
-    workerclient_proc = utils.run_vtworker_client_bg(
-        ['SplitClone',
-         '--chunk_count', '10',
-         '--min_rows_per_chunk', '1',
-         '--min_healthy_rdonly_tablets', '1',
-         'test_keyspace/0'],
-        worker_rpc_port)
-    utils.wait_procs([workerclient_proc])
-    
-    # Terminate worker daemon because it is no longer needed.
-    utils.kill_sub_process(worker_proc, soft=True)
+    utils.run_vtctl(
+        ['SplitClone', 'test_keyspace', '0', '-80,80-'], auto_log=True)
 
     utils.run_vtctl(
         ['MigrateServedTypes', 'test_keyspace/0', 'rdonly'], auto_log=True)
@@ -340,6 +324,19 @@ class TestShardedRecovery(unittest.TestCase):
 
     # check the new replica does not have the data
     self._check_data(tablet_replica2, 2, 'replica2 tablet should not have new data')
+
+    # remove the original tablets in the original shard
+    tablet.kill_tablets([tablet_master, tablet_replica1, tablet_rdonly])
+    for t in [tablet_replica1, tablet_rdonly]:
+      utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)
+    utils.run_vtctl(['DeleteTablet', '-allow_master',
+                     tablet_master.tablet_alias], auto_log=True)
+
+    # rebuild the serving graph, all mentions of the old shards should be gone
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+
+    # delete the original shard
+    utils.run_vtctl(['DeleteShard', 'test_keyspace/0'], auto_log=True)
 
     # start vtgate
     vtgate = utils.VtGate()
