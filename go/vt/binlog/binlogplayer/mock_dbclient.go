@@ -17,6 +17,7 @@ limitations under the License.
 package binlogplayer
 
 import (
+	"fmt"
 	"regexp"
 	"testing"
 	"time"
@@ -84,12 +85,17 @@ func (dc *MockDBClient) ExpectRequestRE(queryRE string, result *sqltypes.Result,
 // dc.t.Fatalf is executed on 1 second timeout. Wait should
 // not be called concurrently with ExpectRequest.
 func (dc *MockDBClient) Wait() {
-	dc.t.Helper()
+	if dc.t != nil {
+		dc.t.Helper()
+	}
 	select {
 	case <-dc.done:
 		return
 	case <-time.After(5 * time.Second):
-		dc.t.Fatalf("timeout waiting for requests, want: %v", dc.expect[dc.currentResult].query)
+		if dc.t != nil {
+			dc.t.Fatalf("timeout waiting for requests, want: %v", dc.expect[dc.currentResult].query)
+		}
+		panic("timeout")
 	}
 }
 
@@ -127,19 +133,30 @@ func (dc *MockDBClient) Close() {
 
 // ExecuteFetch is part of the DBClient interface
 func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
-	dc.t.Helper()
-	dc.t.Logf("DBClient query: %v", query)
+	if dc.t != nil {
+		dc.t.Helper()
+		dc.t.Logf("DBClient query: %v", query)
+	}
 	if dc.currentResult >= len(dc.expect) {
-		dc.t.Fatalf("DBClientMock: query: %s, no more requests are expected", query)
+		if dc.t != nil {
+			dc.t.Fatalf("DBClientMock: query: %s, no more requests are expected", query)
+		}
+		return nil, fmt.Errorf("DBClientMock: query: %s, no more requests are expected", query)
 	}
 	result := dc.expect[dc.currentResult]
 	if result.re == nil {
 		if query != result.query {
-			dc.t.Fatalf("DBClientMock: query: %s, want %s", query, result.query)
+			if dc.t != nil {
+				dc.t.Fatalf("DBClientMock: query: %s, want %s", query, result.query)
+			}
+			return nil, fmt.Errorf("DBClientMock: query: %s, want %s", query, result.query)
 		}
 	} else {
 		if !result.re.MatchString(query) {
-			dc.t.Fatalf("DBClientMock: query: %s, must match %s", query, result.query)
+			if dc.t != nil {
+				dc.t.Fatalf("DBClientMock: query: %s, must match %s", query, result.query)
+			}
+			return nil, fmt.Errorf("DBClientMock: query: %s, must match %s", query, result.query)
 		}
 	}
 	dc.currentResult++
