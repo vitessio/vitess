@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -89,8 +90,11 @@ type miSource struct {
 	journaled bool
 }
 
-// MigrateWrites is a generic way of migrating write traffic for a resharding workflow.
+// MigrateReads is a generic way of migrating read traffic for a resharding workflow.
 func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType MigrationType, streams map[topo.KeyspaceShard][]uint32, cells []string, servedType topodatapb.TabletType, direction migrateDirection) error {
+	if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
+		return fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
+	}
 	mi, err := wr.buildMigrater(ctx, migrationType, streams)
 	if err != nil {
 		return err
@@ -98,6 +102,13 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType MigrationTyp
 	if err := mi.validate(ctx); err != nil {
 		return err
 	}
+
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateReads")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+
 	if mi.migrationType == MigrateTables {
 		return mi.migrateTableReads(ctx, cells, servedType, direction)
 	}
@@ -113,6 +124,16 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType MigrationTy
 	if err := mi.validate(ctx); err != nil {
 		return err
 	}
+	if err := mi.validateForWrite(ctx); err != nil {
+		return err
+	}
+
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateWrites")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+
 	journalsExist, err := mi.checkJournals(ctx)
 	if err != nil {
 		return err
@@ -182,48 +203,50 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType MigrationTy
 			if len(qr.Rows) < 1 || len(qr.Rows[0]) < 1 {
 				return nil, fmt.Errorf("VReplication stream %d not found for %s:%s", int(uid), targetks.Keyspace, targetks.Shard)
 			}
-			str := qr.Rows[0][0].ToString()
-			var binlogSource binlogdatapb.BinlogSource
-			if err := proto.UnmarshalText(str, &binlogSource); err != nil {
-				return nil, err
-			}
-			mi.targets[targetks].sources[uid] = &binlogSource
-
-			sourceks := topo.KeyspaceShard{Keyspace: binlogSource.Keyspace, Shard: binlogSource.Shard}
-			if _, ok := mi.sources[sourceks]; !ok {
-				sourceShard, err := mi.wr.ts.GetShard(ctx, binlogSource.Keyspace, binlogSource.Shard)
-				if err != nil {
+			for _, row := range qr.Rows {
+				str := row[0].ToString()
+				var binlogSource binlogdatapb.BinlogSource
+				if err := proto.UnmarshalText(str, &binlogSource); err != nil {
 					return nil, err
 				}
-				sourceMaster, err := mi.wr.ts.GetTablet(ctx, sourceShard.MasterAlias)
-				if err != nil {
-					return nil, err
-				}
-				mi.sources[sourceks] = &miSource{
-					shard:  sourceShard,
-					master: sourceMaster,
-				}
+				mi.targets[targetks].sources[uid] = &binlogSource
 
-				if mi.tables == nil {
-					for _, rule := range binlogSource.Filter.Rules {
-						mi.tables = append(mi.tables, rule.Match)
+				sourceks := topo.KeyspaceShard{Keyspace: binlogSource.Keyspace, Shard: binlogSource.Shard}
+				if _, ok := mi.sources[sourceks]; !ok {
+					sourceShard, err := mi.wr.ts.GetShard(ctx, binlogSource.Keyspace, binlogSource.Shard)
+					if err != nil {
+						return nil, err
 					}
-					sort.Strings(mi.tables)
-				} else {
-					var tables []string
-					for _, rule := range binlogSource.Filter.Rules {
-						tables = append(tables, rule.Match)
+					sourceMaster, err := mi.wr.ts.GetTablet(ctx, sourceShard.MasterAlias)
+					if err != nil {
+						return nil, err
 					}
-					sort.Strings(tables)
-					if !reflect.DeepEqual(mi.tables, tables) {
-						return nil, fmt.Errorf("table lists are mismatched across streams: %v vs %v", mi.tables, tables)
+					mi.sources[sourceks] = &miSource{
+						shard:  sourceShard,
+						master: sourceMaster,
 					}
-				}
 
-				if mi.sourceKeyspace == "" {
-					mi.sourceKeyspace = sourceks.Keyspace
-				} else if mi.sourceKeyspace != sourceks.Keyspace {
-					return nil, fmt.Errorf("source keyspaces are mismatched across streams: %v vs %v", mi.sourceKeyspace, sourceks.Keyspace)
+					if mi.tables == nil {
+						for _, rule := range binlogSource.Filter.Rules {
+							mi.tables = append(mi.tables, rule.Match)
+						}
+						sort.Strings(mi.tables)
+					} else {
+						var tables []string
+						for _, rule := range binlogSource.Filter.Rules {
+							tables = append(tables, rule.Match)
+						}
+						sort.Strings(tables)
+						if !reflect.DeepEqual(mi.tables, tables) {
+							return nil, fmt.Errorf("table lists are mismatched across streams: %v vs %v", mi.tables, tables)
+						}
+					}
+
+					if mi.sourceKeyspace == "" {
+						mi.sourceKeyspace = sourceks.Keyspace
+					} else if mi.sourceKeyspace != sourceks.Keyspace {
+						return nil, fmt.Errorf("source keyspaces are mismatched across streams: %v vs %v", mi.sourceKeyspace, sourceks.Keyspace)
+					}
 				}
 			}
 		}
@@ -261,22 +284,84 @@ func (mi *migrater) validate(ctx context.Context) error {
 		}
 	}
 	if mi.migrationType == MigrateTables {
-		// For table migration, all shards must be present.
+		// All shards must be present.
 		if err := mi.compareShards(ctx, mi.sourceKeyspace, mi.sourceShards()); err != nil {
 			return err
 		}
 		if err := mi.compareShards(ctx, mi.targetKeyspace, mi.targetShards()); err != nil {
 			return err
 		}
-	} else {
-		// For shard migration, source and target keyspace must match, and source and target shards must not match.
+		// Wildcard table names not allowed.
+		for _, table := range mi.tables {
+			if strings.HasPrefix(table, "/") {
+				return fmt.Errorf("cannot migrate streams with wild card table names: %v", table)
+			}
+		}
+	} else { // MigrateShards
+		// Source and target keyspace must match
 		if mi.sourceKeyspace != mi.targetKeyspace {
 			return fmt.Errorf("source and target keyspace must match: %v vs %v", mi.sourceKeyspace, mi.targetKeyspace)
 		}
-		for sourceks, _ := range mi.sources {
+		// Source and target shards must not match.
+		for sourceks := range mi.sources {
 			if _, ok := mi.targets[sourceks]; ok {
 				return fmt.Errorf("target shard matches a source shard: %v", sourceks)
 			}
+		}
+	}
+	return nil
+}
+
+func (mi *migrater) validateForWrite(ctx context.Context) error {
+	if mi.migrationType == MigrateTables {
+		return mi.validateTableForWrite(ctx)
+	}
+	return mi.validateShardForWrite(ctx)
+}
+
+func (mi *migrater) validateTableForWrite(ctx context.Context) error {
+	rules, err := mi.wr.getRoutingRules(ctx)
+	if err != nil {
+		return err
+	}
+	for _, table := range mi.tables {
+		for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
+			tt := strings.ToLower(tabletType.String())
+			if rules[table+"@"+tt] == nil || rules[mi.targetKeyspace+"."+table+"@"+tt] == nil {
+				return fmt.Errorf("missing tablet type specific routing, read-only traffic must be migrated before migrating writes: %v", table)
+			}
+		}
+	}
+	return nil
+}
+
+func (mi *migrater) validateShardForWrite(ctx context.Context) error {
+	srvKeyspaces, err := mi.wr.ts.GetSrvKeyspaceAllCells(ctx, mi.sourceKeyspace)
+	if err != nil {
+		return err
+	}
+
+	// Checking one shard is enough.
+	var si *topo.ShardInfo
+	for _, source := range mi.sources {
+		si = source.shard
+		break
+	}
+
+	for _, srvKeyspace := range srvKeyspaces {
+		var shardServedTypes []string
+		for _, partition := range srvKeyspace.GetPartitions() {
+			if partition.GetServedType() == topodatapb.TabletType_MASTER {
+				continue
+			}
+			for _, shardReference := range partition.GetShardReferences() {
+				if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+					shardServedTypes = append(shardServedTypes, partition.GetServedType().String())
+				}
+			}
+		}
+		if len(shardServedTypes) > 0 {
+			return fmt.Errorf("cannot migrate MASTER away from %v/%v until everything else is migrated. Make sure that the following types are migrated first: %v", si.Keyspace(), si.ShardName(), strings.Join(shardServedTypes, ", "))
 		}
 	}
 	return nil
@@ -304,20 +389,17 @@ func (mi *migrater) migrateTableReads(ctx context.Context, cells []string, serve
 	if err != nil {
 		return err
 	}
-	var fromKeyspace, toKeyspace string
-	if direction == directionForward {
-		fromKeyspace, toKeyspace = mi.sourceKeyspace, mi.targetKeyspace
-	} else {
-		fromKeyspace, toKeyspace = mi.targetKeyspace, mi.sourceKeyspace
-	}
+	// We assume that the following rules were setup when the targets were created:
+	// table -> sourceKeyspace.table
+	// targetKeyspace.table -> sourceKeyspace.table
 	tt := strings.ToLower(servedType.String())
 	for _, table := range mi.tables {
-		for _, fromt := range []string{
-			table + "@" + tt,
-			fromKeyspace + "." + table + "@" + tt,
-			toKeyspace + "." + table + "@" + tt,
-		} {
-			rules[fromt] = []string{toKeyspace + "." + table}
+		if direction == directionForward {
+			rules[table+"@"+tt] = []string{mi.targetKeyspace + "." + table}
+			rules[mi.targetKeyspace+"."+table+"@"+tt] = []string{mi.targetKeyspace + "." + table}
+		} else {
+			delete(rules, table+"@"+tt)
+			delete(rules, mi.targetKeyspace+"."+table+"@"+tt)
 		}
 	}
 	if err := mi.wr.saveRoutingRules(ctx, rules); err != nil {
@@ -460,12 +542,12 @@ func (mi *migrater) createJournals(ctx context.Context) error {
 			for _, tsource := range target.sources {
 				participantMap[topo.KeyspaceShard{Keyspace: tsource.Keyspace, Shard: tsource.Shard}] = true
 			}
-			for ks := range participantMap {
-				journal.Participants = append(journal.Participants, &binlogdatapb.KeyspaceShard{
-					Keyspace: ks.Keyspace,
-					Shard:    ks.Shard,
-				})
-			}
+		}
+		for ks := range participantMap {
+			journal.Participants = append(journal.Participants, &binlogdatapb.KeyspaceShard{
+				Keyspace: ks.Keyspace,
+				Shard:    ks.Shard,
+			})
 		}
 		statement := fmt.Sprintf("insert into _vt.resharding_journal "+
 			"(id, db_name, val) "+
@@ -556,11 +638,19 @@ func (mi *migrater) changeTableRouting(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// We assume that the following rules were setup when the targets were created:
+	// table -> sourceKeyspace.table
+	// targetKeyspace.table -> sourceKeyspace.table
+	// Additionally, MigrateReads would have added rules like this:
+	// table@replica -> targetKeyspace.table
+	// targetKeyspace.table@replica -> targetKeyspace.table
+	// After this step, only the following rules will be left:
+	// table -> targetKeyspace.table
+	// sourceKeyspace.table -> targetKeyspace.table
 	for _, table := range mi.tables {
 		for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
 			tt := strings.ToLower(tabletType.String())
 			delete(rules, table+"@"+tt)
-			delete(rules, mi.sourceKeyspace+"."+table+"@"+tt)
 			delete(rules, mi.targetKeyspace+"."+table+"@"+tt)
 		}
 		delete(rules, mi.targetKeyspace+"."+table)
