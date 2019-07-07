@@ -128,11 +128,19 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType MigrationTy
 		return err
 	}
 
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateWrites")
+	ctx, sourceUnlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateWrites")
 	if lockErr != nil {
 		return lockErr
 	}
-	defer unlock(&err)
+	defer sourceUnlock(&err)
+	if mi.targetKeyspace != mi.sourceKeyspace {
+		tctx, targetUnlock, lockErr := wr.ts.LockKeyspace(ctx, mi.targetKeyspace, "MigrateWrites")
+		if lockErr != nil {
+			return lockErr
+		}
+		ctx = tctx
+		defer targetUnlock(&err)
+	}
 
 	journalsExist, err := mi.checkJournals(ctx)
 	if err != nil {
@@ -524,7 +532,7 @@ func (mi *migrater) createJournals(ctx context.Context) error {
 		}
 		participantMap := make(map[topo.KeyspaceShard]bool)
 		for targetks, target := range mi.targets {
-			found := true
+			found := false
 			for _, tsource := range target.sources {
 				if sourceks == (topo.KeyspaceShard{Keyspace: tsource.Keyspace, Shard: tsource.Shard}) {
 					found = true
@@ -655,7 +663,6 @@ func (mi *migrater) changeTableRouting(ctx context.Context) error {
 		}
 		delete(rules, mi.targetKeyspace+"."+table)
 		rules[table] = []string{mi.targetKeyspace + "." + table}
-		rules[mi.sourceKeyspace+"."+table] = []string{mi.targetKeyspace + "." + table}
 	}
 	if err := mi.wr.saveRoutingRules(ctx, rules); err != nil {
 		return err
