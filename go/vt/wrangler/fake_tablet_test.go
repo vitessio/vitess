@@ -53,11 +53,11 @@ import (
 // We allow the creation of fake tablets, and running their event loop based
 // on a FakeMysqlDaemon.
 
-// FakeTablet keeps track of a fake tablet in memory. It has:
+// fakeTablet keeps track of a fake tablet in memory. It has:
 // - a Tablet record (used for creating the tablet, kept for user's information)
 // - a FakeMysqlDaemon (used by the fake event loop)
 // - a 'done' channel (used to terminate the fake event loop)
-type FakeTablet struct {
+type fakeTablet struct {
 	// Tablet and FakeMysqlDaemon are populated at NewFakeTablet time.
 	// We also create the RPCServer, so users can register more services
 	// before calling StartActionLoop().
@@ -96,12 +96,12 @@ func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
 	}
 }
 
-// NewFakeTablet creates the test tablet in the topology.  'uid'
+// newFakeTablet creates the test tablet in the topology.  'uid'
 // has to be between 0 and 99. All the tablet info will be derived
 // from that. Look at the implementation if you need values.
 // Use TabletOption implementations if you need to change values at creation.
 // 'db' can be nil if the test doesn't use a database at all.
-func NewFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletType topodatapb.TabletType, db *fakesqldb.DB, options ...TabletOption) *FakeTablet {
+func newFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletType topodatapb.TabletType, db *fakesqldb.DB, options ...TabletOption) *fakeTablet {
 	if uid > 99 {
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
@@ -131,7 +131,7 @@ func NewFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletTy
 	fakeMysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(db)
 	fakeMysqlDaemon.MysqlPort = mysqlPort
 
-	return &FakeTablet{
+	return &fakeTablet{
 		Tablet:          tablet,
 		FakeMysqlDaemon: fakeMysqlDaemon,
 		RPCServer:       grpc.NewServer(),
@@ -140,7 +140,7 @@ func NewFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletTy
 
 // StartActionLoop will start the action loop for a fake tablet,
 // using ft.FakeMysqlDaemon as the backing mysqld.
-func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
+func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 	if ft.Agent != nil {
 		t.Fatalf("Agent for %v is already running", ft.Tablet.Alias)
 	}
@@ -198,7 +198,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 }
 
 // StopActionLoop will stop the Action Loop for the given FakeTablet
-func (ft *FakeTablet) StopActionLoop(t *testing.T) {
+func (ft *fakeTablet) StopActionLoop(t *testing.T) {
 	if ft.Agent == nil {
 		t.Fatalf("Agent for %v is not running", ft.Tablet.Alias)
 	}
@@ -213,7 +213,7 @@ func (ft *FakeTablet) StopActionLoop(t *testing.T) {
 }
 
 // Target returns the keyspace/shard/type info of this tablet as Target.
-func (ft *FakeTablet) Target() querypb.Target {
+func (ft *fakeTablet) Target() querypb.Target {
 	return querypb.Target{
 		Keyspace:   ft.Tablet.Keyspace,
 		Shard:      ft.Tablet.Shard,
