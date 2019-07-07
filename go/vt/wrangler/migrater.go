@@ -516,7 +516,6 @@ func (mi *migrater) cancelMigration(ctx context.Context) {
 	})
 	if err != nil {
 		mi.wr.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
-		return
 	}
 }
 

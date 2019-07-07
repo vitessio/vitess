@@ -38,6 +38,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
+// TestTableMigrate tests table mode migrations.
+// This has to be kept in sync with TestShardMigrate.
 func TestTableMigrate(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
@@ -136,8 +138,6 @@ func TestTableMigrate(t *testing.T) {
 	dbDest1Client := newFakeDBClient()
 	dbClientFactory1 := func() binlogplayer.DBClient { return dbDest1Client }
 	dest1Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, dbDest1Client.DBName())
-	dbDest1Client.setResult("use _vt", &sqltypes.Result{}, nil)
-	dbDest1Client.setResult("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	if err := dest1Master.Agent.VREngine.Open(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -145,8 +145,6 @@ func TestTableMigrate(t *testing.T) {
 	dbDest2Client := newFakeDBClient()
 	dbClientFactory2 := func() binlogplayer.DBClient { return dbDest2Client }
 	dest2Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, dbDest2Client.DBName())
-	dbDest2Client.setResult("use _vt", &sqltypes.Result{}, nil)
-	dbDest2Client.setResult("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	if err := dest2Master.Agent.VREngine.Open(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -154,8 +152,6 @@ func TestTableMigrate(t *testing.T) {
 	dbSource1Client := newFakeDBClient()
 	dbClientFactory3 := func() binlogplayer.DBClient { return dbSource1Client }
 	source1Master.Agent.VREngine = vreplication.NewEngine(ts, "", source1Master.FakeMysqlDaemon, dbClientFactory3, dbSource1Client.DBName())
-	dbSource1Client.setResult("use _vt", &sqltypes.Result{}, nil)
-	dbSource1Client.setResult("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	if err := source1Master.Agent.VREngine.Open(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -163,11 +159,11 @@ func TestTableMigrate(t *testing.T) {
 	dbSource2Client := newFakeDBClient()
 	dbClientFactory4 := func() binlogplayer.DBClient { return dbSource2Client }
 	source2Master.Agent.VREngine = vreplication.NewEngine(ts, "", source2Master.FakeMysqlDaemon, dbClientFactory4, dbSource2Client.DBName())
-	dbSource2Client.setResult("use _vt", &sqltypes.Result{}, nil)
-	dbSource2Client.setResult("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	if err := source2Master.Agent.VREngine.Open(ctx); err != nil {
 		t.Fatal(err)
 	}
+
+	allDBClients := []*fakeDBClient{dbDest1Client, dbDest2Client, dbSource1Client, dbSource2Client}
 
 	// Emulate the following replication streams (many-to-many table migration):
 	// -40 -> -80
@@ -187,7 +183,7 @@ func TestTableMigrate(t *testing.T) {
 			}},
 		},
 	}
-	dbDest1Client.setResult("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	dbDest1Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"source",
 		"varchar"),
 		fmt.Sprintf("%v", bls1),
@@ -205,7 +201,7 @@ func TestTableMigrate(t *testing.T) {
 			}},
 		},
 	}
-	dbDest1Client.setResult("select source from _vt.vreplication where id = 2", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	dbDest1Client.addQuery("select source from _vt.vreplication where id = 2", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"source",
 		"varchar"),
 		fmt.Sprintf("%v", bls2),
@@ -223,7 +219,7 @@ func TestTableMigrate(t *testing.T) {
 			}},
 		},
 	}
-	dbDest2Client.setResult("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	dbDest2Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"source",
 		"varchar"),
 		fmt.Sprintf("%v", bls3),
@@ -238,128 +234,6 @@ func TestTableMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	streams := map[topo.KeyspaceShard][]uint32{
-		{Keyspace: "ks2", Shard: "-80"}: {1, 2},
-		{Keyspace: "ks2", Shard: "80-"}: {1},
-	}
-
-	err = wr.MigrateReads(ctx, MigrateTables, streams, []string{"cell1"}, topodatapb.TabletType_RDONLY, directionForward)
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkCellRouting(t, wr, "cell1", map[string][]string{
-		"t1":            {"ks1.t1"},
-		"ks2.t1":        {"ks1.t1"},
-		"t2":            {"ks1.t2"},
-		"ks2.t2":        {"ks1.t2"},
-		"t1@rdonly":     {"ks2.t1"},
-		"ks2.t1@rdonly": {"ks2.t1"},
-		"t2@rdonly":     {"ks2.t2"},
-		"ks2.t2@rdonly": {"ks2.t2"},
-	})
-	checkCellRouting(t, wr, "cell2", map[string][]string{
-		"t1":     {"ks1.t1"},
-		"ks2.t1": {"ks1.t1"},
-		"t2":     {"ks1.t2"},
-		"ks2.t2": {"ks1.t2"},
-	})
-
-	// Migrate is additive. cell2 also migrates rdonly.
-	err = wr.MigrateReads(ctx, MigrateTables, streams, []string{"cell2"}, topodatapb.TabletType_REPLICA, directionForward)
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkCellRouting(t, wr, "cell1", map[string][]string{
-		"t1":            {"ks1.t1"},
-		"ks2.t1":        {"ks1.t1"},
-		"t2":            {"ks1.t2"},
-		"ks2.t2":        {"ks1.t2"},
-		"t1@rdonly":     {"ks2.t1"},
-		"ks2.t1@rdonly": {"ks2.t1"},
-		"t2@rdonly":     {"ks2.t2"},
-		"ks2.t2@rdonly": {"ks2.t2"},
-	})
-	checkCellRouting(t, wr, "cell2", map[string][]string{
-		"t1":             {"ks1.t1"},
-		"ks2.t1":         {"ks1.t1"},
-		"t2":             {"ks1.t2"},
-		"ks2.t2":         {"ks1.t2"},
-		"t1@rdonly":      {"ks2.t1"},
-		"ks2.t1@rdonly":  {"ks2.t1"},
-		"t2@rdonly":      {"ks2.t2"},
-		"ks2.t2@rdonly":  {"ks2.t2"},
-		"t1@replica":     {"ks2.t1"},
-		"ks2.t1@replica": {"ks2.t1"},
-		"t2@replica":     {"ks2.t2"},
-		"ks2.t2@replica": {"ks2.t2"},
-	})
-
-	err = wr.MigrateReads(ctx, MigrateTables, streams, []string{"cell2"}, topodatapb.TabletType_REPLICA, directionBackward)
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkRouting(t, wr, map[string][]string{
-		"t1":            {"ks1.t1"},
-		"ks2.t1":        {"ks1.t1"},
-		"t2":            {"ks1.t2"},
-		"ks2.t2":        {"ks1.t2"},
-		"t1@rdonly":     {"ks2.t1"},
-		"ks2.t1@rdonly": {"ks2.t1"},
-		"t2@rdonly":     {"ks2.t2"},
-		"ks2.t2@rdonly": {"ks2.t2"},
-	})
-
-	err = wr.MigrateReads(ctx, MigrateTables, streams, nil, topodatapb.TabletType_REPLICA, directionForward)
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkRouting(t, wr, map[string][]string{
-		"t1":             {"ks1.t1"},
-		"ks2.t1":         {"ks1.t1"},
-		"t2":             {"ks1.t2"},
-		"ks2.t2":         {"ks1.t2"},
-		"t1@rdonly":      {"ks2.t1"},
-		"ks2.t1@rdonly":  {"ks2.t1"},
-		"t2@rdonly":      {"ks2.t2"},
-		"ks2.t2@rdonly":  {"ks2.t2"},
-		"t1@replica":     {"ks2.t1"},
-		"ks2.t1@replica": {"ks2.t1"},
-		"t2@replica":     {"ks2.t2"},
-		"ks2.t2@replica": {"ks2.t2"},
-	})
-
-	err = wr.MigrateReads(ctx, MigrateTables, streams, nil, topodatapb.TabletType_RDONLY, directionBackward)
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkRouting(t, wr, map[string][]string{
-		"t1":             {"ks1.t1"},
-		"ks2.t1":         {"ks1.t1"},
-		"t2":             {"ks1.t2"},
-		"ks2.t2":         {"ks1.t2"},
-		"t1@replica":     {"ks2.t1"},
-		"ks2.t1@replica": {"ks2.t1"},
-		"t2@replica":     {"ks2.t2"},
-		"ks2.t2@replica": {"ks2.t2"},
-	})
-
-	err = wr.MigrateReads(ctx, MigrateTables, streams, nil, topodatapb.TabletType_MASTER, directionForward)
-	want := "tablet type must be REPLICA or RDONLY: MASTER"
-	if err == nil || err.Error() != want {
-		t.Errorf("MigrateReads(master) err: %v, want %v", err, want)
-	}
-
-	err = wr.MigrateWrites(ctx, MigrateTables, streams, 1*time.Second)
-	want = "missing tablet type specific routing, read-only traffic must be migrated before migrating writes"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("MigrateWrites err: %v, want %v", err, want)
-	}
-
-	err = wr.MigrateReads(ctx, MigrateTables, streams, nil, topodatapb.TabletType_RDONLY, directionForward)
-	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -400,9 +274,172 @@ func TestTableMigrate(t *testing.T) {
 		},
 	}
 
+	streams := map[topo.KeyspaceShard][]uint32{
+		{Keyspace: "ks2", Shard: "-80"}: {1, 2},
+		{Keyspace: "ks2", Shard: "80-"}: {1},
+	}
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Single cell RDONLY migration.
+	err = wr.MigrateReads(ctx, MigrateTables, streams, []string{"cell1"}, topodatapb.TabletType_RDONLY, directionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCellRouting(t, wr, "cell1", map[string][]string{
+		"t1":            {"ks1.t1"},
+		"ks2.t1":        {"ks1.t1"},
+		"t2":            {"ks1.t2"},
+		"ks2.t2":        {"ks1.t2"},
+		"t1@rdonly":     {"ks2.t1"},
+		"ks2.t1@rdonly": {"ks2.t1"},
+		"t2@rdonly":     {"ks2.t2"},
+		"ks2.t2@rdonly": {"ks2.t2"},
+	})
+	checkCellRouting(t, wr, "cell2", map[string][]string{
+		"t1":     {"ks1.t1"},
+		"ks2.t1": {"ks1.t1"},
+		"t2":     {"ks1.t2"},
+		"ks2.t2": {"ks1.t2"},
+	})
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Other cell REPLICA migration.
+	// The global routing already contains redirections for rdonly.
+	// So, adding routes for replica and deploying to cell2 will also cause
+	// cell2 to migrat rdonly. This is a quirk that can be fixed later if necessary.
+	err = wr.MigrateReads(ctx, MigrateTables, streams, []string{"cell2"}, topodatapb.TabletType_REPLICA, directionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCellRouting(t, wr, "cell1", map[string][]string{
+		"t1":            {"ks1.t1"},
+		"ks2.t1":        {"ks1.t1"},
+		"t2":            {"ks1.t2"},
+		"ks2.t2":        {"ks1.t2"},
+		"t1@rdonly":     {"ks2.t1"},
+		"ks2.t1@rdonly": {"ks2.t1"},
+		"t2@rdonly":     {"ks2.t2"},
+		"ks2.t2@rdonly": {"ks2.t2"},
+	})
+	checkCellRouting(t, wr, "cell2", map[string][]string{
+		"t1":             {"ks1.t1"},
+		"ks2.t1":         {"ks1.t1"},
+		"t2":             {"ks1.t2"},
+		"ks2.t2":         {"ks1.t2"},
+		"t1@rdonly":      {"ks2.t1"},
+		"ks2.t1@rdonly":  {"ks2.t1"},
+		"t2@rdonly":      {"ks2.t2"},
+		"ks2.t2@rdonly":  {"ks2.t2"},
+		"t1@replica":     {"ks2.t1"},
+		"ks2.t1@replica": {"ks2.t1"},
+		"t2@replica":     {"ks2.t2"},
+		"ks2.t2@replica": {"ks2.t2"},
+	})
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Single cell backward REPLICA migration.
+	err = wr.MigrateReads(ctx, MigrateTables, streams, []string{"cell2"}, topodatapb.TabletType_REPLICA, directionBackward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkRouting(t, wr, map[string][]string{
+		"t1":            {"ks1.t1"},
+		"ks2.t1":        {"ks1.t1"},
+		"t2":            {"ks1.t2"},
+		"ks2.t2":        {"ks1.t2"},
+		"t1@rdonly":     {"ks2.t1"},
+		"ks2.t1@rdonly": {"ks2.t1"},
+		"t2@rdonly":     {"ks2.t2"},
+		"ks2.t2@rdonly": {"ks2.t2"},
+	})
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Migrate all REPLICA.
+	err = wr.MigrateReads(ctx, MigrateTables, streams, nil, topodatapb.TabletType_REPLICA, directionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkRouting(t, wr, map[string][]string{
+		"t1":             {"ks1.t1"},
+		"ks2.t1":         {"ks1.t1"},
+		"t2":             {"ks1.t2"},
+		"ks2.t2":         {"ks1.t2"},
+		"t1@rdonly":      {"ks2.t1"},
+		"ks2.t1@rdonly":  {"ks2.t1"},
+		"t2@rdonly":      {"ks2.t2"},
+		"ks2.t2@rdonly":  {"ks2.t2"},
+		"t1@replica":     {"ks2.t1"},
+		"ks2.t1@replica": {"ks2.t1"},
+		"t2@replica":     {"ks2.t2"},
+		"ks2.t2@replica": {"ks2.t2"},
+	})
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// All cells RDONLY backward migration.
+	err = wr.MigrateReads(ctx, MigrateTables, streams, nil, topodatapb.TabletType_RDONLY, directionBackward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkRouting(t, wr, map[string][]string{
+		"t1":             {"ks1.t1"},
+		"ks2.t1":         {"ks1.t1"},
+		"t2":             {"ks1.t2"},
+		"ks2.t2":         {"ks1.t2"},
+		"t1@replica":     {"ks2.t1"},
+		"ks2.t1@replica": {"ks2.t1"},
+		"t2@replica":     {"ks2.t2"},
+		"ks2.t2@replica": {"ks2.t2"},
+	})
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Can't migrate master with MigrateReads.
+	err = wr.MigrateReads(ctx, MigrateTables, streams, nil, topodatapb.TabletType_MASTER, directionForward)
+	want := "tablet type must be REPLICA or RDONLY: MASTER"
+	if err == nil || err.Error() != want {
+		t.Errorf("MigrateReads(master) err: %v, want %v", err, want)
+	}
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Can't migrate writes if REPLICA and RDONLY have not fully migrated yet.
+	err = wr.MigrateWrites(ctx, MigrateTables, streams, 1*time.Second)
+	want = "missing tablet type specific routing, read-only traffic must be migrated before migrating writes"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MigrateWrites err: %v, want %v", err, want)
+	}
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Test MigrateWrites cancelation on failure.
+
+	// Migrate all the reads first.
+	err = wr.MigrateReads(ctx, MigrateTables, streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkRouting(t, wr, map[string][]string{
+		"t1":             {"ks1.t1"},
+		"ks2.t1":         {"ks1.t1"},
+		"t2":             {"ks1.t2"},
+		"ks2.t2":         {"ks1.t2"},
+		"t1@replica":     {"ks2.t1"},
+		"ks2.t1@replica": {"ks2.t1"},
+		"t2@replica":     {"ks2.t2"},
+		"ks2.t2@replica": {"ks2.t2"},
+		"t1@rdonly":      {"ks2.t1"},
+		"ks2.t1@rdonly":  {"ks2.t1"},
+		"t2@rdonly":      {"ks2.t2"},
+		"ks2.t2@rdonly":  {"ks2.t2"},
+	})
+
 	// Check for journals.
-	dbSource1Client.setResult("select 1 from _vt.resharding_journal where id = 445516443381867838", &sqltypes.Result{}, nil)
-	dbSource2Client.setResult("select 1 from _vt.resharding_journal where id = 445516443381867838", &sqltypes.Result{}, nil)
+	dbSource1Client.addQuery("select 1 from _vt.resharding_journal where id = 445516443381867838", &sqltypes.Result{}, nil)
+	dbSource2Client.addQuery("select 1 from _vt.resharding_journal where id = 445516443381867838", &sqltypes.Result{}, nil)
 
 	// Wait for position: Reads current state, updates to Stopped, and re-reads.
 	state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -410,39 +447,73 @@ func TestTableMigrate(t *testing.T) {
 		"varchar|varchar|varchar"),
 		"MariaDB/5-456-892|Running|",
 	)
-	dbDest1Client.setResult("select pos, state, message from _vt.vreplication where id=1", state, nil)
-	dbDest2Client.setResult("select pos, state, message from _vt.vreplication where id=1", state, nil)
-	dbDest1Client.setResult("select pos, state, message from _vt.vreplication where id=2", state, nil)
-	dbDest1Client.setResult("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id = 1", &sqltypes.Result{}, nil)
-	dbDest2Client.setResult("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id = 1", &sqltypes.Result{}, nil)
-	dbDest1Client.setResult("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id = 2", &sqltypes.Result{}, nil)
+	dbDest1Client.addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
+	dbDest2Client.addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
+	dbDest1Client.addQuery("select pos, state, message from _vt.vreplication where id=2", state, nil)
+	dbDest1Client.addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id = 1", &sqltypes.Result{}, nil)
+	dbDest2Client.addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id = 1", &sqltypes.Result{}, nil)
+	dbDest1Client.addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id = 2", &sqltypes.Result{}, nil)
 	stopped := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|state",
 		"int64|varchar"),
 		"1|Stopped",
 	)
-	dbDest1Client.setResult("select * from _vt.vreplication where id = 1", stopped, nil)
-	dbDest2Client.setResult("select * from _vt.vreplication where id = 1", stopped, nil)
-	dbDest1Client.setResult("select * from _vt.vreplication where id = 2", stopped, nil)
+	dbDest1Client.addQuery("select * from _vt.vreplication where id = 1", stopped, nil)
+	dbDest2Client.addQuery("select * from _vt.vreplication where id = 1", stopped, nil)
+	dbDest1Client.addQuery("select * from _vt.vreplication where id = 2", stopped, nil)
+
+	// Cancel Migration
+	cancel1 := "update _vt.vreplication set state = 'Running', stop_pos = null where id = 1"
+	cancel2 := "update _vt.vreplication set state = 'Running', stop_pos = null where id = 2"
+	dbDest1Client.addQuery(cancel1, &sqltypes.Result{}, nil)
+	dbDest2Client.addQuery(cancel1, &sqltypes.Result{}, nil)
+	dbDest1Client.addQuery(cancel2, &sqltypes.Result{}, nil)
+
+	err = wr.MigrateWrites(ctx, MigrateTables, streams, 0*time.Second)
+	want = "DeadlineExceeded"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MigrateWrites(0 timeout) err: %v, must contain %v", err, want)
+	}
+	checkRouting(t, wr, map[string][]string{
+		"t1":             {"ks1.t1"},
+		"ks2.t1":         {"ks1.t1"},
+		"t2":             {"ks1.t2"},
+		"ks2.t2":         {"ks1.t2"},
+		"t1@replica":     {"ks2.t1"},
+		"ks2.t1@replica": {"ks2.t1"},
+		"t2@replica":     {"ks2.t2"},
+		"ks2.t2@replica": {"ks2.t2"},
+		"t1@rdonly":      {"ks2.t1"},
+		"ks2.t1@rdonly":  {"ks2.t1"},
+		"t2@rdonly":      {"ks2.t2"},
+		"ks2.t2@rdonly":  {"ks2.t2"},
+	})
+	checkBlacklist(t, ts, "ks1:-40", nil)
+	checkBlacklist(t, ts, "ks1:40-", nil)
+	checkBlacklist(t, ts, "ks2:-80", nil)
+	checkBlacklist(t, ts, "ks2:80-", nil)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Test successful MigrateWrites.
 
 	// Create journals.
 	journal1 := "insert into _vt.resharding_journal.*445516443381867838.*tables.*t1.*t2.*local_position.*MariaDB/5-456-892.*shard_gtids.*-80.*MariaDB/5-456-893.*participants.*40.*40"
-	dbSource1Client.setResultRE(journal1, &sqltypes.Result{}, nil)
+	dbSource1Client.addQueryRE(journal1, &sqltypes.Result{}, nil)
 	journal2 := "insert into _vt.resharding_journal.*445516443381867838.*tables.*t1.*t2.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*80.*participants.*40.*40"
-	dbSource2Client.setResultRE(journal2, &sqltypes.Result{}, nil)
+	dbSource2Client.addQueryRE(journal2, &sqltypes.Result{}, nil)
 
-	// Create reverse replicaions.
-	dbSource1Client.setResultRE("insert into _vt.vreplication.*ks2.*-80.*t1.*in_keyrange.*c1.*hash.*-40.*t2.*-40.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
-	dbSource2Client.setResultRE("insert into _vt.vreplication.*ks2.*-80.*t1.*in_keyrange.*c1.*hash.*40-.*t2.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
-	dbSource2Client.setResultRE("insert into _vt.vreplication.*ks2.*80-.*t1.*in_keyrange.*c1.*hash.*40-.*t2.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
-	dbSource1Client.setResult("select * from _vt.vreplication where id = 1", stopped, nil)
-	dbSource2Client.setResult("select * from _vt.vreplication where id = 1", stopped, nil)
-	dbSource2Client.setResult("select * from _vt.vreplication where id = 2", stopped, nil)
+	// Create backward replicaions.
+	dbSource1Client.addQueryRE("insert into _vt.vreplication.*ks2.*-80.*t1.*in_keyrange.*c1.*hash.*-40.*t2.*-40.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
+	dbSource2Client.addQueryRE("insert into _vt.vreplication.*ks2.*-80.*t1.*in_keyrange.*c1.*hash.*40-.*t2.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
+	dbSource2Client.addQueryRE("insert into _vt.vreplication.*ks2.*80-.*t1.*in_keyrange.*c1.*hash.*40-.*t2.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 2}, nil)
+	dbSource1Client.addQuery("select * from _vt.vreplication where id = 1", stopped, nil)
+	dbSource2Client.addQuery("select * from _vt.vreplication where id = 1", stopped, nil)
+	dbSource2Client.addQuery("select * from _vt.vreplication where id = 2", stopped, nil)
 
 	// Delete the target replications.
-	dbDest1Client.setResult("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
-	dbDest2Client.setResult("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
-	dbDest1Client.setResult("delete from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
+	dbDest1Client.addQuery("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
+	dbDest2Client.addQuery("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
+	dbDest1Client.addQuery("delete from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
 
 	err = wr.MigrateWrites(ctx, MigrateTables, streams, 1*time.Second)
 	if err != nil {
@@ -457,8 +528,12 @@ func TestTableMigrate(t *testing.T) {
 	checkBlacklist(t, ts, "ks1:40-", []string{"t1", "t2"})
 	checkBlacklist(t, ts, "ks2:-80", nil)
 	checkBlacklist(t, ts, "ks2:80-", nil)
+
+	verifyQueries(t, allDBClients)
 }
 
+// TestShardMigrate tests table mode migrations.
+// This has to be kept in sync with TestTableMigrate.
 func TestShardMigrate(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
@@ -529,8 +604,6 @@ func TestShardMigrate(t *testing.T) {
 	dbDest1Client := newFakeDBClient()
 	dbClientFactory1 := func() binlogplayer.DBClient { return dbDest1Client }
 	dest1Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, dbDest1Client.DBName())
-	dbDest1Client.setResult("use _vt", &sqltypes.Result{}, nil)
-	dbDest1Client.setResult("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	if err := dest1Master.Agent.VREngine.Open(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -538,8 +611,6 @@ func TestShardMigrate(t *testing.T) {
 	dbDest2Client := newFakeDBClient()
 	dbClientFactory2 := func() binlogplayer.DBClient { return dbDest2Client }
 	dest2Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, dbDest2Client.DBName())
-	dbDest2Client.setResult("use _vt", &sqltypes.Result{}, nil)
-	dbDest2Client.setResult("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	if err := dest2Master.Agent.VREngine.Open(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -547,8 +618,6 @@ func TestShardMigrate(t *testing.T) {
 	dbSource1Client := newFakeDBClient()
 	dbClientFactory3 := func() binlogplayer.DBClient { return dbSource1Client }
 	source1Master.Agent.VREngine = vreplication.NewEngine(ts, "", source1Master.FakeMysqlDaemon, dbClientFactory3, dbSource1Client.DBName())
-	dbSource1Client.setResult("use _vt", &sqltypes.Result{}, nil)
-	dbSource1Client.setResult("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	if err := source1Master.Agent.VREngine.Open(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -556,11 +625,11 @@ func TestShardMigrate(t *testing.T) {
 	dbSource2Client := newFakeDBClient()
 	dbClientFactory4 := func() binlogplayer.DBClient { return dbSource2Client }
 	source2Master.Agent.VREngine = vreplication.NewEngine(ts, "", source2Master.FakeMysqlDaemon, dbClientFactory4, dbSource2Client.DBName())
-	dbSource2Client.setResult("use _vt", &sqltypes.Result{}, nil)
-	dbSource2Client.setResult("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	if err := source2Master.Agent.VREngine.Open(ctx); err != nil {
 		t.Fatal(err)
 	}
+
+	allDBClients := []*fakeDBClient{dbDest1Client, dbDest2Client, dbSource1Client, dbSource2Client}
 
 	// Emulate the following replication streams (simultaneous split and merge):
 	// -40 -> -80
@@ -577,7 +646,7 @@ func TestShardMigrate(t *testing.T) {
 			}},
 		},
 	}
-	dbDest1Client.setResult("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	dbDest1Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"source",
 		"varchar"),
 		fmt.Sprintf("%v", bls1),
@@ -592,7 +661,7 @@ func TestShardMigrate(t *testing.T) {
 			}},
 		},
 	}
-	dbDest1Client.setResult("select source from _vt.vreplication where id = 2", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	dbDest1Client.addQuery("select source from _vt.vreplication where id = 2", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"source",
 		"varchar"),
 		fmt.Sprintf("%v", bls2),
@@ -607,99 +676,11 @@ func TestShardMigrate(t *testing.T) {
 			}},
 		},
 	}
-	dbDest2Client.setResult("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	dbDest2Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"source",
 		"varchar"),
 		fmt.Sprintf("%v", bls3),
 	), nil)
-
-	streams := map[topo.KeyspaceShard][]uint32{
-		{Keyspace: "ks", Shard: "-80"}: {1, 2},
-		{Keyspace: "ks", Shard: "80-"}: {1},
-	}
-
-	err = wr.MigrateReads(ctx, MigrateShards, streams, []string{"cell1"}, topodatapb.TabletType_RDONLY, directionForward)
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkCellServedTypes(t, ts, "ks:-40", "cell1", 2)
-	checkCellServedTypes(t, ts, "ks:40-", "cell1", 2)
-	checkCellServedTypes(t, ts, "ks:-80", "cell1", 1)
-	checkCellServedTypes(t, ts, "ks:80-", "cell1", 1)
-	checkCellServedTypes(t, ts, "ks:-40", "cell2", 3)
-	checkCellServedTypes(t, ts, "ks:40-", "cell2", 3)
-	checkCellServedTypes(t, ts, "ks:-80", "cell2", 0)
-	checkCellServedTypes(t, ts, "ks:80-", "cell2", 0)
-
-	err = wr.MigrateReads(ctx, MigrateShards, streams, []string{"cell2"}, topodatapb.TabletType_REPLICA, directionForward)
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkCellServedTypes(t, ts, "ks:-40", "cell1", 2)
-	checkCellServedTypes(t, ts, "ks:40-", "cell1", 2)
-	checkCellServedTypes(t, ts, "ks:-80", "cell1", 1)
-	checkCellServedTypes(t, ts, "ks:80-", "cell1", 1)
-	checkCellServedTypes(t, ts, "ks:-40", "cell2", 2)
-	checkCellServedTypes(t, ts, "ks:40-", "cell2", 2)
-	checkCellServedTypes(t, ts, "ks:-80", "cell2", 1)
-	checkCellServedTypes(t, ts, "ks:80-", "cell2", 1)
-
-	err = wr.MigrateReads(ctx, MigrateShards, streams, []string{"cell2"}, topodatapb.TabletType_REPLICA, directionBackward)
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkCellServedTypes(t, ts, "ks:-40", "cell1", 2)
-	checkCellServedTypes(t, ts, "ks:40-", "cell1", 2)
-	checkCellServedTypes(t, ts, "ks:-80", "cell1", 1)
-	checkCellServedTypes(t, ts, "ks:80-", "cell1", 1)
-	checkCellServedTypes(t, ts, "ks:-40", "cell2", 3)
-	checkCellServedTypes(t, ts, "ks:40-", "cell2", 3)
-	checkCellServedTypes(t, ts, "ks:-80", "cell2", 0)
-	checkCellServedTypes(t, ts, "ks:80-", "cell2", 0)
-
-	err = wr.MigrateReads(ctx, MigrateShards, streams, nil, topodatapb.TabletType_RDONLY, directionForward)
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkServedTypes(t, ts, "ks:-40", 2)
-	checkServedTypes(t, ts, "ks:40-", 2)
-	checkServedTypes(t, ts, "ks:-80", 1)
-	checkServedTypes(t, ts, "ks:80-", 1)
-
-	err = wr.MigrateReads(ctx, MigrateShards, streams, nil, topodatapb.TabletType_REPLICA, directionForward)
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkServedTypes(t, ts, "ks:-40", 1)
-	checkServedTypes(t, ts, "ks:40-", 1)
-	checkServedTypes(t, ts, "ks:-80", 2)
-	checkServedTypes(t, ts, "ks:80-", 2)
-
-	err = wr.MigrateReads(ctx, MigrateShards, streams, nil, topodatapb.TabletType_RDONLY, directionBackward)
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkServedTypes(t, ts, "ks:-40", 2)
-	checkServedTypes(t, ts, "ks:40-", 2)
-	checkServedTypes(t, ts, "ks:-80", 1)
-	checkServedTypes(t, ts, "ks:80-", 1)
-
-	err = wr.MigrateReads(ctx, MigrateShards, streams, nil, topodatapb.TabletType_MASTER, directionForward)
-	want := "tablet type must be REPLICA or RDONLY: MASTER"
-	if err == nil || err.Error() != want {
-		t.Errorf("MigrateReads(master) err: %v, want %v", err, want)
-	}
-
-	err = wr.MigrateWrites(ctx, MigrateShards, streams, 1*time.Second)
-	want = "cannot migrate MASTER away"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("MigrateWrites err: %v, want %v", err, want)
-	}
-
-	err = wr.MigrateReads(ctx, MigrateShards, streams, nil, topodatapb.TabletType_RDONLY, directionForward)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	source1Master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
@@ -738,9 +719,136 @@ func TestShardMigrate(t *testing.T) {
 		},
 	}
 
+	streams := map[topo.KeyspaceShard][]uint32{
+		{Keyspace: "ks", Shard: "-80"}: {1, 2},
+		{Keyspace: "ks", Shard: "80-"}: {1},
+	}
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Single cell RDONLY migration.
+	err = wr.MigrateReads(ctx, MigrateShards, streams, []string{"cell1"}, topodatapb.TabletType_RDONLY, directionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCellServedTypes(t, ts, "ks:-40", "cell1", 2)
+	checkCellServedTypes(t, ts, "ks:40-", "cell1", 2)
+	checkCellServedTypes(t, ts, "ks:-80", "cell1", 1)
+	checkCellServedTypes(t, ts, "ks:80-", "cell1", 1)
+	checkCellServedTypes(t, ts, "ks:-40", "cell2", 3)
+	checkCellServedTypes(t, ts, "ks:40-", "cell2", 3)
+	checkCellServedTypes(t, ts, "ks:-80", "cell2", 0)
+	checkCellServedTypes(t, ts, "ks:80-", "cell2", 0)
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Other cell REPLICA migration.
+	err = wr.MigrateReads(ctx, MigrateShards, streams, []string{"cell2"}, topodatapb.TabletType_REPLICA, directionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCellServedTypes(t, ts, "ks:-40", "cell1", 2)
+	checkCellServedTypes(t, ts, "ks:40-", "cell1", 2)
+	checkCellServedTypes(t, ts, "ks:-80", "cell1", 1)
+	checkCellServedTypes(t, ts, "ks:80-", "cell1", 1)
+	checkCellServedTypes(t, ts, "ks:-40", "cell2", 2)
+	checkCellServedTypes(t, ts, "ks:40-", "cell2", 2)
+	checkCellServedTypes(t, ts, "ks:-80", "cell2", 1)
+	checkCellServedTypes(t, ts, "ks:80-", "cell2", 1)
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Single cell backward REPLICA migration.
+	err = wr.MigrateReads(ctx, MigrateShards, streams, []string{"cell2"}, topodatapb.TabletType_REPLICA, directionBackward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCellServedTypes(t, ts, "ks:-40", "cell1", 2)
+	checkCellServedTypes(t, ts, "ks:40-", "cell1", 2)
+	checkCellServedTypes(t, ts, "ks:-80", "cell1", 1)
+	checkCellServedTypes(t, ts, "ks:80-", "cell1", 1)
+	checkCellServedTypes(t, ts, "ks:-40", "cell2", 3)
+	checkCellServedTypes(t, ts, "ks:40-", "cell2", 3)
+	checkCellServedTypes(t, ts, "ks:-80", "cell2", 0)
+	checkCellServedTypes(t, ts, "ks:80-", "cell2", 0)
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Migrate all RDONLY.
+	// This is an extra step that does not exist in the tables test.
+	// The per-cell migration mechanism is different for tables. So, this
+	// extra step is needed to bring things in sync.
+	err = wr.MigrateReads(ctx, MigrateShards, streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkServedTypes(t, ts, "ks:-40", 2)
+	checkServedTypes(t, ts, "ks:40-", 2)
+	checkServedTypes(t, ts, "ks:-80", 1)
+	checkServedTypes(t, ts, "ks:80-", 1)
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Migrate all REPLICA.
+	err = wr.MigrateReads(ctx, MigrateShards, streams, nil, topodatapb.TabletType_REPLICA, directionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkServedTypes(t, ts, "ks:-40", 1)
+	checkServedTypes(t, ts, "ks:40-", 1)
+	checkServedTypes(t, ts, "ks:-80", 2)
+	checkServedTypes(t, ts, "ks:80-", 2)
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// All cells RDONLY backward migration.
+	err = wr.MigrateReads(ctx, MigrateShards, streams, nil, topodatapb.TabletType_RDONLY, directionBackward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkServedTypes(t, ts, "ks:-40", 2)
+	checkServedTypes(t, ts, "ks:40-", 2)
+	checkServedTypes(t, ts, "ks:-80", 1)
+	checkServedTypes(t, ts, "ks:80-", 1)
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Can't migrate master with MigrateReads.
+	err = wr.MigrateReads(ctx, MigrateShards, streams, nil, topodatapb.TabletType_MASTER, directionForward)
+	want := "tablet type must be REPLICA or RDONLY: MASTER"
+	if err == nil || err.Error() != want {
+		t.Errorf("MigrateReads(master) err: %v, want %v", err, want)
+	}
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Can't migrate writes if REPLICA and RDONLY have not fully migrated yet.
+	err = wr.MigrateWrites(ctx, MigrateShards, streams, 1*time.Second)
+	want = "cannot migrate MASTER away"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MigrateWrites err: %v, want %v", err, want)
+	}
+	verifyQueries(t, allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Test MigrateWrites cancelation on failure.
+
+	// Migrate all the reads first.
+	err = wr.MigrateReads(ctx, MigrateShards, streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkServedTypes(t, ts, "ks:-40", 1)
+	checkServedTypes(t, ts, "ks:40-", 1)
+	checkServedTypes(t, ts, "ks:-80", 2)
+	checkServedTypes(t, ts, "ks:80-", 2)
+	checkIsMasterServing(t, ts, "ks:-40", true)
+	checkIsMasterServing(t, ts, "ks:40-", true)
+	checkIsMasterServing(t, ts, "ks:-80", false)
+	checkIsMasterServing(t, ts, "ks:80-", false)
+
 	// Check for journals.
-	dbSource1Client.setResult("select 1 from _vt.resharding_journal where id = 8372031610433464572", &sqltypes.Result{}, nil)
-	dbSource2Client.setResult("select 1 from _vt.resharding_journal where id = 8372031610433464572", &sqltypes.Result{}, nil)
+	dbSource1Client.addQuery("select 1 from _vt.resharding_journal where id = 8372031610433464572", &sqltypes.Result{}, nil)
+	dbSource2Client.addQuery("select 1 from _vt.resharding_journal where id = 8372031610433464572", &sqltypes.Result{}, nil)
 
 	// Wait for position: Reads current state, updates to Stopped, and re-reads.
 	state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -748,39 +856,63 @@ func TestShardMigrate(t *testing.T) {
 		"varchar|varchar|varchar"),
 		"MariaDB/5-456-892|Running|",
 	)
-	dbDest1Client.setResult("select pos, state, message from _vt.vreplication where id=1", state, nil)
-	dbDest2Client.setResult("select pos, state, message from _vt.vreplication where id=1", state, nil)
-	dbDest1Client.setResult("select pos, state, message from _vt.vreplication where id=2", state, nil)
-	dbDest1Client.setResult("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id = 1", &sqltypes.Result{}, nil)
-	dbDest2Client.setResult("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id = 1", &sqltypes.Result{}, nil)
-	dbDest1Client.setResult("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id = 2", &sqltypes.Result{}, nil)
+	dbDest1Client.addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
+	dbDest2Client.addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
+	dbDest1Client.addQuery("select pos, state, message from _vt.vreplication where id=2", state, nil)
+	dbDest1Client.addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id = 1", &sqltypes.Result{}, nil)
+	dbDest2Client.addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id = 1", &sqltypes.Result{}, nil)
+	dbDest1Client.addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id = 2", &sqltypes.Result{}, nil)
 	stopped := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|state",
 		"int64|varchar"),
 		"1|Stopped",
 	)
-	dbDest1Client.setResult("select * from _vt.vreplication where id = 1", stopped, nil)
-	dbDest2Client.setResult("select * from _vt.vreplication where id = 1", stopped, nil)
-	dbDest1Client.setResult("select * from _vt.vreplication where id = 2", stopped, nil)
+	dbDest1Client.addQuery("select * from _vt.vreplication where id = 1", stopped, nil)
+	dbDest2Client.addQuery("select * from _vt.vreplication where id = 1", stopped, nil)
+	dbDest1Client.addQuery("select * from _vt.vreplication where id = 2", stopped, nil)
+
+	// Cancel Migration
+	cancel1 := "update _vt.vreplication set state = 'Running', stop_pos = null where id = 1"
+	cancel2 := "update _vt.vreplication set state = 'Running', stop_pos = null where id = 2"
+	dbDest1Client.addQuery(cancel1, &sqltypes.Result{}, nil)
+	dbDest2Client.addQuery(cancel1, &sqltypes.Result{}, nil)
+	dbDest1Client.addQuery(cancel2, &sqltypes.Result{}, nil)
+
+	err = wr.MigrateWrites(ctx, MigrateShards, streams, 0*time.Second)
+	want = "DeadlineExceeded"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MigrateWrites(0 timeout) err: %v, must contain %v", err, want)
+	}
+	checkServedTypes(t, ts, "ks:-40", 1)
+	checkServedTypes(t, ts, "ks:40-", 1)
+	checkServedTypes(t, ts, "ks:-80", 2)
+	checkServedTypes(t, ts, "ks:80-", 2)
+	checkIsMasterServing(t, ts, "ks:-40", true)
+	checkIsMasterServing(t, ts, "ks:40-", true)
+	checkIsMasterServing(t, ts, "ks:-80", false)
+	checkIsMasterServing(t, ts, "ks:80-", false)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Test successful MigrateWrites.
 
 	// Create journals.
 	journal1 := "insert into _vt.resharding_journal.*8372031610433464572.*local_position.*MariaDB/5-456-892.*shard_gtids.*-80.*MariaDB/5-456-893.*participants.*40.*40"
-	dbSource1Client.setResultRE(journal1, &sqltypes.Result{}, nil)
+	dbSource1Client.addQueryRE(journal1, &sqltypes.Result{}, nil)
 	journal2 := "insert into _vt.resharding_journal.*8372031610433464572.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*shard_gtids.*80.*MariaDB/5-456-893.*participants.*40.*40"
-	dbSource2Client.setResultRE(journal2, &sqltypes.Result{}, nil)
+	dbSource2Client.addQueryRE(journal2, &sqltypes.Result{}, nil)
 
-	// Create reverse replicaions.
-	dbSource1Client.setResultRE("insert into _vt.vreplication.*-80.*-40.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
-	dbSource2Client.setResultRE("insert into _vt.vreplication.*-80.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
-	dbSource2Client.setResultRE("insert into _vt.vreplication.*80-.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 2}, nil)
-	dbSource1Client.setResult("select * from _vt.vreplication where id = 1", stopped, nil)
-	dbSource2Client.setResult("select * from _vt.vreplication where id = 1", stopped, nil)
-	dbSource2Client.setResult("select * from _vt.vreplication where id = 2", stopped, nil)
+	// Create backward replicaions.
+	dbSource1Client.addQueryRE("insert into _vt.vreplication.*-80.*-40.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
+	dbSource2Client.addQueryRE("insert into _vt.vreplication.*-80.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
+	dbSource2Client.addQueryRE("insert into _vt.vreplication.*80-.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 2}, nil)
+	dbSource1Client.addQuery("select * from _vt.vreplication where id = 1", stopped, nil)
+	dbSource2Client.addQuery("select * from _vt.vreplication where id = 1", stopped, nil)
+	dbSource2Client.addQuery("select * from _vt.vreplication where id = 2", stopped, nil)
 
 	// Delete the target replications.
-	dbDest1Client.setResult("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
-	dbDest2Client.setResult("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
-	dbDest1Client.setResult("delete from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
+	dbDest1Client.addQuery("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
+	dbDest2Client.addQuery("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
+	dbDest1Client.addQuery("delete from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
 
 	err = wr.MigrateWrites(ctx, MigrateShards, streams, 1*time.Second)
 	if err != nil {
@@ -796,6 +928,8 @@ func TestShardMigrate(t *testing.T) {
 	checkIsMasterServing(t, ts, "ks:40-", false)
 	checkIsMasterServing(t, ts, "ks:-80", true)
 	checkIsMasterServing(t, ts, "ks:80-", true)
+
+	verifyQueries(t, allDBClients)
 }
 
 func checkRouting(t *testing.T, wr *Wrangler, want map[string][]string) {
