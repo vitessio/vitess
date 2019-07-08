@@ -45,7 +45,8 @@ type testMigraterEnv struct {
 	dbSource1Client, dbSource2Client             *fakeDBClient
 	dbDest1Client, dbDest2Client                 *fakeDBClient
 	allDBClients                                 []*fakeDBClient
-	streams                                      map[topo.KeyspaceShard][]uint32
+	targetKeyspace                               string
+	streams                                      map[string][]uint32
 }
 
 func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
@@ -186,9 +187,10 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 		t.Fatal(err)
 	}
 
-	tme.streams = map[topo.KeyspaceShard][]uint32{
-		{Keyspace: "ks2", Shard: "-80"}: {1, 2},
-		{Keyspace: "ks2", Shard: "80-"}: {1},
+	tme.targetKeyspace = "ks2"
+	tme.streams = map[string][]uint32{
+		"-80": {1, 2},
+		"80-": {1},
 	}
 	return tme
 }
@@ -282,9 +284,10 @@ func newTestShardMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 		fmt.Sprintf("%v", bls3),
 	), nil)
 
-	tme.streams = map[topo.KeyspaceShard][]uint32{
-		{Keyspace: "ks", Shard: "-80"}: {1, 2},
-		{Keyspace: "ks", Shard: "80-"}: {1},
+	tme.targetKeyspace = "ks"
+	tme.streams = map[string][]uint32{
+		"-80": {1, 2},
+		"80-": {1},
 	}
 	return tme
 }
