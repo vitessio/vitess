@@ -64,8 +64,8 @@ type migrater struct {
 	migrationType  binlogdatapb.MigrationType
 	wr             *Wrangler
 	id             int64
-	sources        map[topo.KeyspaceShard]*miSource
-	targets        map[topo.KeyspaceShard]*miTarget
+	sources        map[string]*miSource
+	targets        map[string]*miTarget
 	sourceKeyspace string
 	targetKeyspace string
 	tables         []string
@@ -73,7 +73,7 @@ type migrater struct {
 
 // miTarget contains the metadata for each migration target.
 type miTarget struct {
-	shard    *topo.ShardInfo
+	si       *topo.ShardInfo
 	master   *topo.TabletInfo
 	sources  map[uint32]*binlogdatapb.BinlogSource
 	position string
@@ -81,18 +81,18 @@ type miTarget struct {
 
 // miSource contains the metadata for each migration source.
 type miSource struct {
-	shard     *topo.ShardInfo
+	si        *topo.ShardInfo
 	master    *topo.TabletInfo
 	position  string
 	journaled bool
 }
 
 // MigrateReads is a generic way of migrating read traffic for a resharding workflow.
-func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType binlogdatapb.MigrationType, streams map[topo.KeyspaceShard][]uint32, cells []string, servedType topodatapb.TabletType, direction migrateDirection) error {
+func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType binlogdatapb.MigrationType, targetKeyspace string, streams map[string][]uint32, cells []string, servedType topodatapb.TabletType, direction migrateDirection) error {
 	if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 		return fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
 	}
-	mi, err := wr.buildMigrater(ctx, migrationType, streams)
+	mi, err := wr.buildMigrater(ctx, migrationType, targetKeyspace, streams)
 	if err != nil {
 		return err
 	}
@@ -114,8 +114,8 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType binlogdatapb
 }
 
 // MigrateWrites is a generic way of migrating write traffic for a resharding workflow.
-func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType binlogdatapb.MigrationType, streams map[topo.KeyspaceShard][]uint32, filteredReplicationWaitTime time.Duration) error {
-	mi, err := wr.buildMigrater(ctx, migrationType, streams)
+func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType binlogdatapb.MigrationType, targetKeyspace string, streams map[string][]uint32, filteredReplicationWaitTime time.Duration) error {
+	mi, err := wr.buildMigrater(ctx, migrationType, targetKeyspace, streams)
 	if err != nil {
 		return err
 	}
@@ -181,33 +181,29 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType binlogdatap
 	return nil
 }
 
-func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType binlogdatapb.MigrationType, streams map[topo.KeyspaceShard][]uint32) (*migrater, error) {
+func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType binlogdatapb.MigrationType, targetKeyspace string, streams map[string][]uint32) (*migrater, error) {
 	mi := &migrater{
-		migrationType: migrationType,
-		wr:            wr,
-		id:            hashStreams(streams),
-		targets:       make(map[topo.KeyspaceShard]*miTarget),
-		sources:       make(map[topo.KeyspaceShard]*miSource),
+		migrationType:  migrationType,
+		wr:             wr,
+		id:             hashStreams(targetKeyspace, streams),
+		targets:        make(map[string]*miTarget),
+		sources:        make(map[string]*miSource),
+		targetKeyspace: targetKeyspace,
 	}
 	mi.wr.Logger().Infof("Migration ID for streams %v: %d", streams, mi.id)
-	for targetks, uids := range streams {
-		targetShard, err := mi.wr.ts.GetShard(ctx, targetks.Keyspace, targetks.Shard)
+	for targetShard, uids := range streams {
+		targetsi, err := mi.wr.ts.GetShard(ctx, targetKeyspace, targetShard)
 		if err != nil {
 			return nil, err
 		}
-		targetMaster, err := mi.wr.ts.GetTablet(ctx, targetShard.MasterAlias)
+		targetMaster, err := mi.wr.ts.GetTablet(ctx, targetsi.MasterAlias)
 		if err != nil {
 			return nil, err
 		}
-		mi.targets[targetks] = &miTarget{
-			shard:   targetShard,
+		mi.targets[targetShard] = &miTarget{
+			si:      targetsi,
 			master:  targetMaster,
 			sources: make(map[uint32]*binlogdatapb.BinlogSource),
-		}
-		if mi.targetKeyspace == "" {
-			mi.targetKeyspace = targetks.Keyspace
-		} else if mi.targetKeyspace != targetks.Keyspace {
-			return nil, fmt.Errorf("target keyspaces are mismatched across streams: %v vs %v", mi.targetKeyspace, targetks.Keyspace)
 		}
 		for _, uid := range uids {
 			p3qr, err := mi.wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select source from _vt.vreplication where id=%d", uid))
@@ -216,51 +212,51 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType binlogdatap
 			}
 			qr := sqltypes.Proto3ToResult(p3qr)
 			if len(qr.Rows) < 1 || len(qr.Rows[0]) < 1 {
-				return nil, fmt.Errorf("VReplication stream %d not found for %s:%s", int(uid), targetks.Keyspace, targetks.Shard)
+				return nil, fmt.Errorf("VReplication stream %d not found for %s:%s", int(uid), targetKeyspace, targetShard)
 			}
 			for _, row := range qr.Rows {
 				str := row[0].ToString()
-				var binlogSource binlogdatapb.BinlogSource
-				if err := proto.UnmarshalText(str, &binlogSource); err != nil {
+				var bls binlogdatapb.BinlogSource
+				if err := proto.UnmarshalText(str, &bls); err != nil {
 					return nil, err
 				}
-				mi.targets[targetks].sources[uid] = &binlogSource
+				mi.targets[targetShard].sources[uid] = &bls
 
-				sourceks := topo.KeyspaceShard{Keyspace: binlogSource.Keyspace, Shard: binlogSource.Shard}
-				if _, ok := mi.sources[sourceks]; !ok {
-					sourceShard, err := mi.wr.ts.GetShard(ctx, binlogSource.Keyspace, binlogSource.Shard)
-					if err != nil {
-						return nil, err
-					}
-					sourceMaster, err := mi.wr.ts.GetTablet(ctx, sourceShard.MasterAlias)
-					if err != nil {
-						return nil, err
-					}
-					mi.sources[sourceks] = &miSource{
-						shard:  sourceShard,
-						master: sourceMaster,
-					}
+				if mi.sourceKeyspace == "" {
+					mi.sourceKeyspace = bls.Keyspace
+				} else if mi.sourceKeyspace != bls.Keyspace {
+					return nil, fmt.Errorf("source keyspaces are mismatched across streams: %v vs %v", mi.sourceKeyspace, bls.Keyspace)
+				}
+				if _, ok := mi.sources[bls.Shard]; ok {
+					continue
+				}
 
-					if mi.tables == nil {
-						for _, rule := range binlogSource.Filter.Rules {
-							mi.tables = append(mi.tables, rule.Match)
-						}
-						sort.Strings(mi.tables)
-					} else {
-						var tables []string
-						for _, rule := range binlogSource.Filter.Rules {
-							tables = append(tables, rule.Match)
-						}
-						sort.Strings(tables)
-						if !reflect.DeepEqual(mi.tables, tables) {
-							return nil, fmt.Errorf("table lists are mismatched across streams: %v vs %v", mi.tables, tables)
-						}
-					}
+				sourcesi, err := mi.wr.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
+				if err != nil {
+					return nil, err
+				}
+				sourceMaster, err := mi.wr.ts.GetTablet(ctx, sourcesi.MasterAlias)
+				if err != nil {
+					return nil, err
+				}
+				mi.sources[bls.Shard] = &miSource{
+					si:     sourcesi,
+					master: sourceMaster,
+				}
 
-					if mi.sourceKeyspace == "" {
-						mi.sourceKeyspace = sourceks.Keyspace
-					} else if mi.sourceKeyspace != sourceks.Keyspace {
-						return nil, fmt.Errorf("source keyspaces are mismatched across streams: %v vs %v", mi.sourceKeyspace, sourceks.Keyspace)
+				if mi.tables == nil {
+					for _, rule := range bls.Filter.Rules {
+						mi.tables = append(mi.tables, rule.Match)
+					}
+					sort.Strings(mi.tables)
+				} else {
+					var tables []string
+					for _, rule := range bls.Filter.Rules {
+						tables = append(tables, rule.Match)
+					}
+					sort.Strings(tables)
+					if !reflect.DeepEqual(mi.tables, tables) {
+						return nil, fmt.Errorf("table lists are mismatched across streams: %v vs %v", mi.tables, tables)
 					}
 				}
 			}
@@ -270,15 +266,16 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType binlogdatap
 }
 
 // hashStreams produces a reproduceable hash based on the input parameters.
-func hashStreams(streams map[topo.KeyspaceShard][]uint32) int64 {
+func hashStreams(targetKeyspace string, streams map[string][]uint32) int64 {
 	var expanded []string
-	for ks, uids := range streams {
+	for shard, uids := range streams {
 		for _, uid := range uids {
-			expanded = append(expanded, fmt.Sprintf("%s:%s:%d", ks.Keyspace, ks.Shard, uid))
+			expanded = append(expanded, fmt.Sprintf("%s:%d", shard, uid))
 		}
 	}
 	sort.Strings(expanded)
 	hasher := fnv.New64()
+	hasher.Write([]byte(targetKeyspace))
 	for _, str := range expanded {
 		hasher.Write([]byte(str))
 	}
@@ -289,13 +286,12 @@ func hashStreams(streams map[topo.KeyspaceShard][]uint32) int64 {
 func (mi *migrater) validate(ctx context.Context) error {
 	// Ensure no duplicate sources in each target.
 	for _, target := range mi.targets {
-		uniqueSources := make(map[topo.KeyspaceShard]uint32)
-		for uid, binlogSource := range target.sources {
-			sourceks := topo.KeyspaceShard{Keyspace: binlogSource.Keyspace, Shard: binlogSource.Shard}
-			if suid, ok := uniqueSources[sourceks]; ok {
+		uniqueSources := make(map[string]uint32)
+		for uid, bls := range target.sources {
+			if suid, ok := uniqueSources[bls.Shard]; ok {
 				return fmt.Errorf("duplicate sources for uids: %v and %v", suid, uid)
 			}
-			uniqueSources[sourceks] = uid
+			uniqueSources[bls.Shard] = uid
 		}
 	}
 	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
@@ -318,9 +314,9 @@ func (mi *migrater) validate(ctx context.Context) error {
 			return fmt.Errorf("source and target keyspace must match: %v vs %v", mi.sourceKeyspace, mi.targetKeyspace)
 		}
 		// Source and target shards must not match.
-		for sourceks := range mi.sources {
-			if _, ok := mi.targets[sourceks]; ok {
-				return fmt.Errorf("target shard matches a source shard: %v", sourceks)
+		for sourceShard := range mi.sources {
+			if _, ok := mi.targets[sourceShard]; ok {
+				return fmt.Errorf("target shard matches a source shard: %v", sourceShard)
 			}
 		}
 	}
@@ -359,7 +355,7 @@ func (mi *migrater) validateShardForWrite(ctx context.Context) error {
 	// Checking one shard is enough.
 	var si *topo.ShardInfo
 	for _, source := range mi.sources {
-		si = source.shard
+		si = source.si
 		break
 	}
 
@@ -446,7 +442,7 @@ func (mi *migrater) migrateShardReads(ctx context.Context, cells []string, serve
 
 func (mi *migrater) checkJournals(ctx context.Context) (journalsExist bool, err error) {
 	var exist sync2.AtomicBool
-	err = mi.forAllSources(func(sourceks topo.KeyspaceShard, source *miSource) error {
+	err = mi.forAllSources(func(source *miSource) error {
 		statement := fmt.Sprintf("select 1 from _vt.resharding_journal where id=%v", mi.id)
 		p3qr, err := mi.wr.tmc.VReplicationExec(ctx, source.master.Tablet, statement)
 		if err != nil {
@@ -471,17 +467,17 @@ func (mi *migrater) stopSourceWrites(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return mi.forAllSources(func(sourceks topo.KeyspaceShard, source *miSource) error {
+	return mi.forAllSources(func(source *miSource) error {
 		var err error
 		source.position, err = mi.wr.tmc.MasterPosition(ctx, source.master.Tablet)
-		mi.wr.Logger().Infof("Position for source %v: %v", sourceks, source.position)
+		mi.wr.Logger().Infof("Position for source %v:%v: %v", mi.sourceKeyspace, source.si.ShardName(), source.position)
 		return err
 	})
 }
 
 func (mi *migrater) changeTableSourceWrites(ctx context.Context, access accessType) error {
-	return mi.forAllSources(func(sourceks topo.KeyspaceShard, source *miSource) error {
-		if _, err := mi.wr.ts.UpdateShardFields(ctx, sourceks.Keyspace, sourceks.Shard, func(si *topo.ShardInfo) error {
+	return mi.forAllSources(func(source *miSource) error {
+		if _, err := mi.wr.ts.UpdateShardFields(ctx, mi.sourceKeyspace, source.si.ShardName(), func(si *topo.ShardInfo) error {
 			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, access == allowWrites /* remove */, mi.tables)
 		}); err != nil {
 			return err
@@ -497,7 +493,7 @@ func (mi *migrater) waitForCatchup(ctx context.Context, filteredReplicationWaitT
 	var mu sync.Mutex
 	return mi.forAllUids(func(target *miTarget, uid uint32) error {
 		bls := target.sources[uid]
-		source := mi.sources[topo.KeyspaceShard{Keyspace: bls.Keyspace, Shard: bls.Shard}]
+		source := mi.sources[bls.Shard]
 		if err := mi.wr.tmc.VReplicationWaitForPos(ctx, target.master.Tablet, int(uid), source.position); err != nil {
 			return err
 		}
@@ -541,25 +537,25 @@ func (mi *migrater) cancelMigration(ctx context.Context) {
 }
 
 func (mi *migrater) gatherPositions(ctx context.Context) error {
-	err := mi.forAllSources(func(sourceks topo.KeyspaceShard, source *miSource) error {
+	err := mi.forAllSources(func(source *miSource) error {
 		var err error
 		source.position, err = mi.wr.tmc.MasterPosition(ctx, source.master.Tablet)
-		mi.wr.Logger().Infof("Position for source %v: %v", sourceks, source.position)
+		mi.wr.Logger().Infof("Position for source %v:%v: %v", mi.sourceKeyspace, source.si.ShardName(), source.position)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	return mi.forAllTargets(func(targetks topo.KeyspaceShard, target *miTarget) error {
+	return mi.forAllTargets(func(target *miTarget) error {
 		var err error
 		target.position, err = mi.wr.tmc.MasterPosition(ctx, target.master.Tablet)
-		mi.wr.Logger().Infof("Position for target %v: %v", targetks, target.position)
+		mi.wr.Logger().Infof("Position for target %v:%v: %v", mi.targetKeyspace, target.si.ShardName(), target.position)
 		return err
 	})
 }
 
 func (mi *migrater) createJournals(ctx context.Context) error {
-	return mi.forAllSources(func(sourceks topo.KeyspaceShard, source *miSource) error {
+	return mi.forAllSources(func(source *miSource) error {
 		if source.journaled {
 			return nil
 		}
@@ -569,11 +565,11 @@ func (mi *migrater) createJournals(ctx context.Context) error {
 			Tables:        mi.tables,
 			LocalPosition: source.position,
 		}
-		participantMap := make(map[topo.KeyspaceShard]bool)
-		for targetks, target := range mi.targets {
+		participantMap := make(map[string]bool)
+		for targetShard, target := range mi.targets {
 			found := false
 			for _, tsource := range target.sources {
-				if sourceks == (topo.KeyspaceShard{Keyspace: tsource.Keyspace, Shard: tsource.Shard}) {
+				if source.si.ShardName() == tsource.Shard {
 					found = true
 					break
 				}
@@ -582,18 +578,18 @@ func (mi *migrater) createJournals(ctx context.Context) error {
 				continue
 			}
 			journal.ShardGtids = append(journal.ShardGtids, &binlogdatapb.ShardGtid{
-				Keyspace: targetks.Keyspace,
-				Shard:    targetks.Shard,
+				Keyspace: mi.targetKeyspace,
+				Shard:    targetShard,
 				Gtid:     target.position,
 			})
 			for _, tsource := range target.sources {
-				participantMap[topo.KeyspaceShard{Keyspace: tsource.Keyspace, Shard: tsource.Shard}] = true
+				participantMap[tsource.Shard] = true
 			}
 		}
-		for ks := range participantMap {
+		for shard := range participantMap {
 			journal.Participants = append(journal.Participants, &binlogdatapb.KeyspaceShard{
-				Keyspace: ks.Keyspace,
-				Shard:    ks.Shard,
+				Keyspace: mi.sourceKeyspace,
+				Shard:    shard,
 			})
 		}
 		mi.wr.Logger().Infof("Creating journal: %v", journal)
@@ -619,10 +615,10 @@ func (mi *migrater) createReverseReplication(ctx context.Context) error {
 	}
 	return mi.forAllUids(func(target *miTarget, uid uint32) error {
 		bls := target.sources[uid]
-		source := mi.sources[topo.KeyspaceShard{Keyspace: bls.Keyspace, Shard: bls.Shard}]
+		source := mi.sources[bls.Shard]
 		reverseBls := &binlogdatapb.BinlogSource{
-			Keyspace:   target.shard.Keyspace(),
-			Shard:      target.shard.ShardName(),
+			Keyspace:   mi.targetKeyspace,
+			Shard:      target.si.ShardName(),
 			TabletType: bls.TabletType,
 			Filter:     &binlogdatapb.Filter{},
 		}
@@ -664,8 +660,8 @@ func (mi *migrater) allowTargetWrites(ctx context.Context) error {
 }
 
 func (mi *migrater) allowTableTargetWrites(ctx context.Context) error {
-	return mi.forAllTargets(func(targetks topo.KeyspaceShard, target *miTarget) error {
-		if _, err := mi.wr.ts.UpdateShardFields(ctx, targetks.Keyspace, targetks.Shard, func(si *topo.ShardInfo) error {
+	return mi.forAllTargets(func(target *miTarget) error {
+		if _, err := mi.wr.ts.UpdateShardFields(ctx, mi.targetKeyspace, target.si.ShardName(), func(si *topo.ShardInfo) error {
 			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, true, mi.tables)
 		}); err != nil {
 			return err
@@ -716,8 +712,8 @@ func (mi *migrater) changeTableRouting(ctx context.Context) error {
 }
 
 func (mi *migrater) changeShardRouting(ctx context.Context) error {
-	err := mi.forAllSources(func(sourceks topo.KeyspaceShard, source *miSource) error {
-		_, err := mi.wr.ts.UpdateShardFields(ctx, source.shard.Keyspace(), source.shard.ShardName(), func(si *topo.ShardInfo) error {
+	err := mi.forAllSources(func(source *miSource) error {
+		_, err := mi.wr.ts.UpdateShardFields(ctx, mi.sourceKeyspace, source.si.ShardName(), func(si *topo.ShardInfo) error {
 			si.IsMasterServing = false
 			return nil
 		})
@@ -726,8 +722,8 @@ func (mi *migrater) changeShardRouting(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	err = mi.forAllTargets(func(targetks topo.KeyspaceShard, target *miTarget) error {
-		_, err := mi.wr.ts.UpdateShardFields(ctx, target.shard.Keyspace(), target.shard.ShardName(), func(si *topo.ShardInfo) error {
+	err = mi.forAllTargets(func(target *miTarget) error {
+		_, err := mi.wr.ts.UpdateShardFields(ctx, mi.targetKeyspace, target.si.ShardName(), func(si *topo.ShardInfo) error {
 			si.IsMasterServing = true
 			return nil
 		})
@@ -755,35 +751,35 @@ func (mi *migrater) changeShardsAccess(ctx context.Context, keyspace string, sha
 	return mi.wr.refreshMasters(ctx, shards)
 }
 
-func (mi *migrater) forAllSources(f func(topo.KeyspaceShard, *miSource) error) error {
+func (mi *migrater) forAllSources(f func(*miSource) error) error {
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
-	for sourceks, source := range mi.sources {
+	for _, source := range mi.sources {
 		wg.Add(1)
-		go func(sourceks topo.KeyspaceShard, source *miSource) {
+		go func(source *miSource) {
 			defer wg.Done()
 
-			if err := f(sourceks, source); err != nil {
+			if err := f(source); err != nil {
 				allErrors.RecordError(err)
 			}
-		}(sourceks, source)
+		}(source)
 	}
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
 }
 
-func (mi *migrater) forAllTargets(f func(topo.KeyspaceShard, *miTarget) error) error {
+func (mi *migrater) forAllTargets(f func(*miTarget) error) error {
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
-	for targetks, target := range mi.targets {
+	for _, target := range mi.targets {
 		wg.Add(1)
-		go func(targetks topo.KeyspaceShard, target *miTarget) {
+		go func(target *miTarget) {
 			defer wg.Done()
 
-			if err := f(targetks, target); err != nil {
+			if err := f(target); err != nil {
 				allErrors.RecordError(err)
 			}
-		}(targetks, target)
+		}(target)
 	}
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
@@ -811,7 +807,7 @@ func (mi *migrater) forAllUids(f func(target *miTarget, uid uint32) error) error
 func (mi *migrater) sourceShards() []*topo.ShardInfo {
 	shards := make([]*topo.ShardInfo, 0, len(mi.sources))
 	for _, source := range mi.sources {
-		shards = append(shards, source.shard)
+		shards = append(shards, source.si)
 	}
 	return shards
 }
@@ -819,7 +815,7 @@ func (mi *migrater) sourceShards() []*topo.ShardInfo {
 func (mi *migrater) targetShards() []*topo.ShardInfo {
 	shards := make([]*topo.ShardInfo, 0, len(mi.targets))
 	for _, target := range mi.targets {
-		shards = append(shards, target.shard)
+		shards = append(shards, target.si)
 	}
 	return shards
 }
