@@ -275,5 +275,5 @@ public interface RpcClient extends Closeable {
    * definition for canonical documentation on this VTGate API.
    */
   ListenableFuture<Query.MessageAckResponse> messageAckKeyspaceIds(
-          Context ctx, Vtgate.MessageAckRequest request) throws SQLException;
+          Context ctx, Vtgate.MessageAckKeyspaceIdsRequest request) throws SQLException;
 }

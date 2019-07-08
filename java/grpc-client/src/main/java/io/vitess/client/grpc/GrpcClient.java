@@ -300,12 +300,14 @@ public class GrpcClient implements RpcClient {
 
   @Override
   public ListenableFuture<Query.MessageAckResponse> messageAck(Context ctx, Vtgate.MessageAckRequest request) throws SQLException {
-    return null;
+    return Futures.catchingAsync(getFutureStub(ctx).messageAck(request), Exception.class,
+        new ExceptionConverter<Query.MessageAckResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override
-  public ListenableFuture<Query.MessageAckResponse> messageAckKeyspaceIds(Context ctx, Vtgate.MessageAckRequest request) throws SQLException {
-    return null;
+  public ListenableFuture<Query.MessageAckResponse> messageAckKeyspaceIds(Context ctx, Vtgate.MessageAckKeyspaceIdsRequest request) throws SQLException {
+    return Futures.catchingAsync(getFutureStub(ctx).messageAckKeyspaceIds(request), Exception.class,
+        new ExceptionConverter<Query.MessageAckResponse>(), MoreExecutors.directExecutor());
   }
 
   /**
