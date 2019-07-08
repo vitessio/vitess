@@ -236,7 +236,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		default:
-			panic(fmt.Sprintf("BUG: unexpceted select expression type: %T", node))
+			return nil, fmt.Errorf("BUG: unexpceted select expression type: %T", node)
 		}
 	}
 	return resultColumns, nil
