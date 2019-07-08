@@ -18,6 +18,7 @@ package wrangler
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -25,6 +26,7 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -511,6 +513,7 @@ func TestShardMigrate(t *testing.T) {
 }
 
 // TestMigrateFailJournal tests that cancel doesn't get called after point of no return.
+// No need to test this for shard migrate because code paths are the same.
 func TestMigrateFailJournal(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
@@ -576,6 +579,376 @@ func TestMigrateFailJournal(t *testing.T) {
 	}
 	if tme.dbDest1Client.queries[cancel2].called {
 		t.Errorf("tme.dbDest1Client.queries[cancel1].called: %v, want false", tme.dbDest1Client.queries[cancel1])
+	}
+}
+
+func TestTableMigrateJournalExists(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	err := tme.wr.MigrateReads(ctx, MigrateTables, tme.streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tme.wr.MigrateReads(ctx, MigrateTables, tme.streams, nil, topodatapb.TabletType_REPLICA, directionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Show one journal as created.
+	tme.dbSource1Client.addQuery("select 1 from _vt.resharding_journal where id = 445516443381867838", sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"), nil)
+	tme.dbSource2Client.addQuery("select 1 from _vt.resharding_journal where id = 445516443381867838", &sqltypes.Result{}, nil)
+
+	// Create the missing journal.
+	journal2 := "insert into _vt.resharding_journal.*445516443381867838.*tables.*t1.*t2.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*80.*participants.*40.*40"
+	tme.dbSource2Client.addQueryRE(journal2, &sqltypes.Result{}, nil)
+
+	// Create backward replicaions.
+	tme.dbSource1Client.addQueryRE("insert into _vt.vreplication.*ks2.*-80.*t1.*in_keyrange.*c1.*hash.*-40.*t2.*-40.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
+	tme.dbSource2Client.addQueryRE("insert into _vt.vreplication.*ks2.*-80.*t1.*in_keyrange.*c1.*hash.*40-.*t2.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
+	tme.dbSource2Client.addQueryRE("insert into _vt.vreplication.*ks2.*80-.*t1.*in_keyrange.*c1.*hash.*40-.*t2.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 2}, nil)
+	stopped := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id|state",
+		"int64|varchar"),
+		"1|Stopped",
+	)
+	tme.dbSource1Client.addQuery("select * from _vt.vreplication where id = 1", stopped, nil)
+	tme.dbSource2Client.addQuery("select * from _vt.vreplication where id = 1", stopped, nil)
+	tme.dbSource2Client.addQuery("select * from _vt.vreplication where id = 2", stopped, nil)
+
+	// Delete the target replications.
+	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
+	tme.dbDest2Client.addQuery("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
+	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
+
+	err = tme.wr.MigrateWrites(ctx, MigrateTables, tme.streams, 1*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Routes will be redone.
+	checkRouting(t, tme.wr, map[string][]string{
+		"t1": {"ks2.t1"},
+		"t2": {"ks2.t2"},
+	})
+	// We're showing that there are no blacklisted tables. But in real life,
+	// tables on ks1 should be blacklisted from the previous failed attempt.
+	checkBlacklist(t, tme.ts, "ks1:-40", nil)
+	checkBlacklist(t, tme.ts, "ks1:40-", nil)
+	checkBlacklist(t, tme.ts, "ks2:-80", nil)
+	checkBlacklist(t, tme.ts, "ks2:80-", nil)
+
+	verifyQueries(t, tme.allDBClients)
+}
+
+func TestShardMigrateJournalExists(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestShardMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	err := tme.wr.MigrateReads(ctx, MigrateShards, tme.streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tme.wr.MigrateReads(ctx, MigrateShards, tme.streams, nil, topodatapb.TabletType_REPLICA, directionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Show one journal as created.
+	tme.dbSource1Client.addQuery("select 1 from _vt.resharding_journal where id = 8372031610433464572", sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"), nil)
+	tme.dbSource2Client.addQuery("select 1 from _vt.resharding_journal where id = 8372031610433464572", &sqltypes.Result{}, nil)
+
+	// Create the missing journal.
+	journal2 := "insert into _vt.resharding_journal.*8372031610433464572.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*shard_gtids.*80.*MariaDB/5-456-893.*participants.*40.*40"
+	tme.dbSource2Client.addQueryRE(journal2, &sqltypes.Result{}, nil)
+
+	// Create backward replicaions.
+	tme.dbSource1Client.addQueryRE("insert into _vt.vreplication.*-80.*-40.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
+	tme.dbSource2Client.addQueryRE("insert into _vt.vreplication.*-80.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
+	tme.dbSource2Client.addQueryRE("insert into _vt.vreplication.*80-.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 2}, nil)
+	stopped := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id|state",
+		"int64|varchar"),
+		"1|Stopped",
+	)
+	tme.dbSource1Client.addQuery("select * from _vt.vreplication where id = 1", stopped, nil)
+	tme.dbSource2Client.addQuery("select * from _vt.vreplication where id = 1", stopped, nil)
+	tme.dbSource2Client.addQuery("select * from _vt.vreplication where id = 2", stopped, nil)
+
+	// Delete the target replications.
+	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
+	tme.dbDest2Client.addQuery("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
+	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
+
+	err = tme.wr.MigrateWrites(ctx, MigrateShards, tme.streams, 1*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	checkServedTypes(t, tme.ts, "ks:-40", 0)
+	checkServedTypes(t, tme.ts, "ks:40-", 0)
+	checkServedTypes(t, tme.ts, "ks:-80", 3)
+	checkServedTypes(t, tme.ts, "ks:80-", 3)
+
+	checkIsMasterServing(t, tme.ts, "ks:-40", false)
+	checkIsMasterServing(t, tme.ts, "ks:40-", false)
+	checkIsMasterServing(t, tme.ts, "ks:-80", true)
+	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+
+	verifyQueries(t, tme.allDBClients)
+}
+
+func TestMigrateDistinctTargets(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: "ks1",
+		Shard:    "-40",
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select * from t1 where in_keyrange('-80')",
+			}, {
+				Match:  "t2",
+				Filter: "select * from t2 where in_keyrange('-80')",
+			}},
+		},
+	}
+	tme.dbSource1Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"source",
+		"varchar"),
+		fmt.Sprintf("%v", bls),
+	), nil)
+	tme.streams[topo.KeyspaceShard{Keyspace: "ks1", Shard: "-40"}] = []uint32{1}
+
+	err := tme.wr.MigrateReads(ctx, MigrateTables, tme.streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	want := "target keyspaces are mismatched across streams"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MigrateReads: %v, must contain %v", err, want)
+	}
+}
+
+func TestMigrateDistinctSources(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: "ks2",
+		Shard:    "-80",
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select * from t1 where in_keyrange('-80')",
+			}, {
+				Match:  "t2",
+				Filter: "select * from t2 where in_keyrange('-80')",
+			}},
+		},
+	}
+	tme.dbDest1Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"source",
+		"varchar"),
+		fmt.Sprintf("%v", bls),
+	), nil)
+
+	err := tme.wr.MigrateReads(ctx, MigrateTables, tme.streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	want := "source keyspaces are mismatched across streams"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MigrateReads: %v, must contain %v", err, want)
+	}
+}
+
+func TestMigrateVReplicationStreamNotFound(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	tme.dbDest1Client.addQuery("select source from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
+
+	err := tme.wr.MigrateReads(ctx, MigrateTables, tme.streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	want := "VReplication stream 1 not found for ks2:-80"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MigrateReads: %v, must contain %v", err, want)
+	}
+}
+
+func TestMigrateMismatchedTables(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: "ks1",
+		Shard:    "-40",
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select * from t1 where in_keyrange('-80')",
+			}},
+		},
+	}
+	tme.dbDest1Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"source",
+		"varchar"),
+		fmt.Sprintf("%v", bls),
+	), nil)
+
+	err := tme.wr.MigrateReads(ctx, MigrateTables, tme.streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	want := "table lists are mismatched across streams"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MigrateReads: %v, must contain %v", err, want)
+	}
+}
+
+func TestMigrateDupUidSources(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: "ks1",
+		Shard:    "40-",
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select * from t1 where in_keyrange('80-')",
+			}, {
+				Match:  "t2",
+				Filter: "select * from t2 where in_keyrange('80-')",
+			}},
+		},
+	}
+	tme.dbDest1Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"source",
+		"varchar"),
+		fmt.Sprintf("%v", bls),
+	), nil)
+
+	err := tme.wr.MigrateReads(ctx, MigrateTables, tme.streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	want := "duplicate sources for uids"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MigrateReads: %v, must contain %v", err, want)
+	}
+}
+
+func TestTableMigrateAllShardsNotPresent(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	tme.streams = map[topo.KeyspaceShard][]uint32{
+		{Keyspace: "ks2", Shard: "-80"}: {1, 2},
+	}
+
+	err := tme.wr.MigrateReads(ctx, MigrateTables, tme.streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	want := "mismatched shards for keyspace"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MigrateReads: %v, must contain %v", err, want)
+	}
+}
+
+func TestMigrateNoTableWildcards(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	bls1 := &binlogdatapb.BinlogSource{
+		Keyspace: "ks1",
+		Shard:    "-40",
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "/.*",
+				Filter: "",
+			}},
+		},
+	}
+	tme.dbDest1Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"source",
+		"varchar"),
+		fmt.Sprintf("%v", bls1),
+	), nil)
+	bls2 := &binlogdatapb.BinlogSource{
+		Keyspace: "ks1",
+		Shard:    "40-",
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "/.*",
+				Filter: "",
+			}},
+		},
+	}
+	tme.dbDest1Client.addQuery("select source from _vt.vreplication where id = 2", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"source",
+		"varchar"),
+		fmt.Sprintf("%v", bls2),
+	), nil)
+	bls3 := &binlogdatapb.BinlogSource{
+		Keyspace: "ks1",
+		Shard:    "40-",
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "/.*",
+				Filter: "",
+			}},
+		},
+	}
+	tme.dbDest2Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"source",
+		"varchar"),
+		fmt.Sprintf("%v", bls3),
+	), nil)
+
+	err := tme.wr.MigrateReads(ctx, MigrateTables, tme.streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	want := "cannot migrate streams with wild card table names"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MigrateReads: %v, must contain %v", err, want)
+	}
+}
+
+func TestShardMigrateSourceTargetMismatch(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	err := tme.wr.MigrateReads(ctx, MigrateShards, tme.streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	want := "source and target keyspace must match"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MigrateReads: %v, must contain %v", err, want)
+	}
+}
+
+func TestShardMigrateTargetMatchesSource(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestShardMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: "ks",
+		Shard:    "-80",
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "/.*",
+				Filter: "-80",
+			}},
+		},
+	}
+	tme.dbSource1Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"source",
+		"varchar"),
+		fmt.Sprintf("%v", bls),
+	), nil)
+
+	tme.streams[topo.KeyspaceShard{Keyspace: "ks", Shard: "-40"}] = []uint32{1}
+
+	err := tme.wr.MigrateReads(ctx, MigrateShards, tme.streams, nil, topodatapb.TabletType_RDONLY, directionForward)
+	want := "target shard matches a source shard"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MigrateReads: %v, must contain %v", err, want)
 	}
 }
 
