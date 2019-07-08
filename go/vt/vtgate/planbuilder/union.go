@@ -65,7 +65,7 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, outer *s
 	case *sqlparser.ParenSelect:
 		return pb.processPart(part.Select, outer)
 	}
-	panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", part))
+	return fmt.Errorf("BUG: unexpected SELECT type: %T", part)
 }
 
 func unionRouteMerge(union *sqlparser.Union, left, right builder) error {
