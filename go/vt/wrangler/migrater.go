@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+// migrateDirection specifies the migration direction.
 type migrateDirection int
 
 const (
@@ -49,6 +50,7 @@ const (
 	directionBackward
 )
 
+// accessType specifies the type of access for a shard (allow/disallow writes).
 type accessType int
 
 const (
@@ -56,6 +58,8 @@ const (
 	disallowWrites
 )
 
+// migrater contains the metadata for migrating read and write traffic
+// for vreplication streams.
 type migrater struct {
 	migrationType  binlogdatapb.MigrationType
 	wr             *Wrangler
@@ -67,6 +71,7 @@ type migrater struct {
 	tables         []string
 }
 
+// miTarget contains the metadata for each migration target.
 type miTarget struct {
 	shard    *topo.ShardInfo
 	master   *topo.TabletInfo
@@ -74,6 +79,7 @@ type miTarget struct {
 	position string
 }
 
+// miSource contains the metadata for each migration source.
 type miSource struct {
 	shard     *topo.ShardInfo
 	master    *topo.TabletInfo
@@ -94,6 +100,7 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType binlogdatapb
 		return err
 	}
 
+	// For reads, locking the source keysppace is sufficient.
 	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateReads")
 	if lockErr != nil {
 		return lockErr
@@ -112,6 +119,7 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType binlogdatap
 	if err != nil {
 		return err
 	}
+	mi.wr.Logger().Infof("Built migration metadata: %+v", mi)
 	if err := mi.validate(ctx); err != nil {
 		return err
 	}
@@ -119,6 +127,7 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType binlogdatap
 		return err
 	}
 
+	// Need to lock both source and target keyspaces.
 	ctx, sourceUnlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateWrites")
 	if lockErr != nil {
 		return lockErr
@@ -138,6 +147,7 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType binlogdatap
 		return err
 	}
 	if !journalsExist {
+		mi.wr.Logger().Infof("No previous journals were found. Proceeding normally.")
 		if err := mi.stopSourceWrites(ctx); err != nil {
 			mi.cancelMigration(ctx)
 			return err
@@ -147,11 +157,14 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType binlogdatap
 			return err
 		}
 	} else {
+		mi.wr.Logger().Infof("Journals were found. Completing the left over steps.")
 		// Need to gather positions in case all journals were not created.
 		if err := mi.gatherPositions(ctx); err != nil {
 			return err
 		}
 	}
+	// This is the point of no return. Once a journal is created,
+	// traffic can be redirected to target shards.
 	if err := mi.createJournals(ctx); err != nil {
 		return err
 	}
@@ -394,6 +407,8 @@ func (mi *migrater) migrateTableReads(ctx context.Context, cells []string, serve
 	// We assume that the following rules were setup when the targets were created:
 	// table -> sourceKeyspace.table
 	// targetKeyspace.table -> sourceKeyspace.table
+	// For forward migration, we add tablet type specific rules to redirect traffic to the target.
+	// For backward, we delete them.
 	tt := strings.ToLower(servedType.String())
 	for _, table := range mi.tables {
 		if direction == directionForward {
@@ -459,6 +474,7 @@ func (mi *migrater) stopSourceWrites(ctx context.Context) error {
 	return mi.forAllSources(func(sourceks topo.KeyspaceShard, source *miSource) error {
 		var err error
 		source.position, err = mi.wr.tmc.MasterPosition(ctx, source.master.Tablet)
+		mi.wr.Logger().Infof("Position for source %v: %v", sourceks, source.position)
 		return err
 	})
 }
@@ -497,6 +513,7 @@ func (mi *migrater) waitForCatchup(ctx context.Context, filteredReplicationWaitT
 		}
 		var err error
 		target.position, err = mi.wr.tmc.MasterPosition(ctx, target.master.Tablet)
+		mi.wr.Logger().Infof("Position for uid %v: %v", uid, target.position)
 		return err
 	})
 }
@@ -527,6 +544,7 @@ func (mi *migrater) gatherPositions(ctx context.Context) error {
 	err := mi.forAllSources(func(sourceks topo.KeyspaceShard, source *miSource) error {
 		var err error
 		source.position, err = mi.wr.tmc.MasterPosition(ctx, source.master.Tablet)
+		mi.wr.Logger().Infof("Position for source %v: %v", sourceks, source.position)
 		return err
 	})
 	if err != nil {
@@ -535,6 +553,7 @@ func (mi *migrater) gatherPositions(ctx context.Context) error {
 	return mi.forAllTargets(func(targetks topo.KeyspaceShard, target *miTarget) error {
 		var err error
 		target.position, err = mi.wr.tmc.MasterPosition(ctx, target.master.Tablet)
+		mi.wr.Logger().Infof("Position for target %v: %v", targetks, target.position)
 		return err
 	})
 }
@@ -577,6 +596,7 @@ func (mi *migrater) createJournals(ctx context.Context) error {
 				Shard:    ks.Shard,
 			})
 		}
+		mi.wr.Logger().Infof("Creating journal: %v", journal)
 		statement := fmt.Sprintf("insert into _vt.resharding_journal "+
 			"(id, db_name, val) "+
 			"values (%v, %v, %v)",
@@ -681,10 +701,13 @@ func (mi *migrater) changeTableRouting(ctx context.Context) error {
 			delete(rules, table+"@"+tt)
 			delete(rules, mi.targetKeyspace+"."+table+"@"+tt)
 			delete(rules, mi.sourceKeyspace+"."+table+"@"+tt)
+			mi.wr.Logger().Infof("Delete routing: %v %v %v", table+"@"+tt, mi.targetKeyspace+"."+table+"@"+tt, mi.sourceKeyspace+"."+table+"@"+tt)
 		}
 		delete(rules, mi.targetKeyspace+"."+table)
+		mi.wr.Logger().Infof("Delete routing: %v", mi.targetKeyspace+"."+table)
 		rules[table] = []string{mi.targetKeyspace + "." + table}
 		rules[mi.sourceKeyspace+"."+table] = []string{mi.targetKeyspace + "." + table}
+		mi.wr.Logger().Infof("Add routing: %v %v", table, mi.sourceKeyspace+"."+table)
 	}
 	if err := mi.wr.saveRoutingRules(ctx, rules); err != nil {
 		return err
