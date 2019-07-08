@@ -222,12 +222,20 @@ message KeyspaceShard {
   string shard = 2;
 }
 
+// MigrationType specifies the type of migration for the Journal.
+enum MigrationType {
+  TABLES = 0;
+  SHARDS = 1;
+}
+
 message Journal {
   int64 id = 1;
-  repeated string tables = 2;
-  string local_position = 3;
-  repeated ShardGtid shard_gtids = 4;
-  repeated KeyspaceShard participants = 5;
+  MigrationType migration_type = 2;
+  repeated string tables = 3;
+  string local_position = 4;
+  repeated ShardGtid shard_gtids = 5;
+  repeated KeyspaceShard participants = 6;
+  repeated int64 reversed_ids = 7;
 }
 
 // VEvent represents a vstream event

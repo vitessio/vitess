@@ -42,15 +42,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// MigrationType specifies the type of migration.
-type MigrationType int
-
-// The following constants define the migration type.
-const (
-	MigrateTables = MigrationType(iota)
-	MigrateShards
-)
-
 type migrateDirection int
 
 const (
@@ -66,7 +57,7 @@ const (
 )
 
 type migrater struct {
-	migrationType  MigrationType
+	migrationType  binlogdatapb.MigrationType
 	wr             *Wrangler
 	id             int64
 	sources        map[topo.KeyspaceShard]*miSource
@@ -91,7 +82,7 @@ type miSource struct {
 }
 
 // MigrateReads is a generic way of migrating read traffic for a resharding workflow.
-func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType MigrationType, streams map[topo.KeyspaceShard][]uint32, cells []string, servedType topodatapb.TabletType, direction migrateDirection) error {
+func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType binlogdatapb.MigrationType, streams map[topo.KeyspaceShard][]uint32, cells []string, servedType topodatapb.TabletType, direction migrateDirection) error {
 	if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 		return fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
 	}
@@ -109,14 +100,14 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType MigrationTyp
 	}
 	defer unlock(&err)
 
-	if mi.migrationType == MigrateTables {
+	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		return mi.migrateTableReads(ctx, cells, servedType, direction)
 	}
 	return mi.migrateShardReads(ctx, cells, servedType, direction)
 }
 
 // MigrateWrites is a generic way of migrating write traffic for a resharding workflow.
-func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType MigrationType, streams map[topo.KeyspaceShard][]uint32, filteredReplicationWaitTime time.Duration) error {
+func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType binlogdatapb.MigrationType, streams map[topo.KeyspaceShard][]uint32, filteredReplicationWaitTime time.Duration) error {
 	mi, err := wr.buildMigrater(ctx, migrationType, streams)
 	if err != nil {
 		return err
@@ -177,7 +168,7 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType MigrationTy
 	return nil
 }
 
-func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType MigrationType, streams map[topo.KeyspaceShard][]uint32) (*migrater, error) {
+func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType binlogdatapb.MigrationType, streams map[topo.KeyspaceShard][]uint32) (*migrater, error) {
 	mi := &migrater{
 		migrationType: migrationType,
 		wr:            wr,
@@ -185,6 +176,7 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType MigrationTy
 		targets:       make(map[topo.KeyspaceShard]*miTarget),
 		sources:       make(map[topo.KeyspaceShard]*miSource),
 	}
+	mi.wr.Logger().Infof("Migration ID for streams %v: %d", streams, mi.id)
 	for targetks, uids := range streams {
 		targetShard, err := mi.wr.ts.GetShard(ctx, targetks.Keyspace, targetks.Shard)
 		if err != nil {
@@ -293,7 +285,7 @@ func (mi *migrater) validate(ctx context.Context) error {
 			uniqueSources[sourceks] = uid
 		}
 	}
-	if mi.migrationType == MigrateTables {
+	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		// All shards must be present.
 		if err := mi.compareShards(ctx, mi.sourceKeyspace, mi.sourceShards()); err != nil {
 			return err
@@ -307,7 +299,7 @@ func (mi *migrater) validate(ctx context.Context) error {
 				return fmt.Errorf("cannot migrate streams with wild card table names: %v", table)
 			}
 		}
-	} else { // MigrateShards
+	} else { // binlogdatapb.MigrationType_SHARDS
 		// Source and target keyspace must match
 		if mi.sourceKeyspace != mi.targetKeyspace {
 			return fmt.Errorf("source and target keyspace must match: %v vs %v", mi.sourceKeyspace, mi.targetKeyspace)
@@ -323,7 +315,7 @@ func (mi *migrater) validate(ctx context.Context) error {
 }
 
 func (mi *migrater) validateForWrite(ctx context.Context) error {
-	if mi.migrationType == MigrateTables {
+	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		return mi.validateTableForWrite(ctx)
 	}
 	return mi.validateShardForWrite(ctx)
@@ -456,7 +448,7 @@ func (mi *migrater) checkJournals(ctx context.Context) (journalsExist bool, err 
 
 func (mi *migrater) stopSourceWrites(ctx context.Context) error {
 	var err error
-	if mi.migrationType == MigrateTables {
+	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		err = mi.changeTableSourceWrites(ctx, disallowWrites)
 	} else {
 		err = mi.changeShardsAccess(ctx, mi.sourceKeyspace, mi.sourceShards(), disallowWrites)
@@ -511,7 +503,7 @@ func (mi *migrater) waitForCatchup(ctx context.Context, filteredReplicationWaitT
 
 func (mi *migrater) cancelMigration(ctx context.Context) {
 	var err error
-	if mi.migrationType == MigrateTables {
+	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		err = mi.changeTableSourceWrites(ctx, allowWrites)
 	} else {
 		err = mi.changeShardsAccess(ctx, mi.sourceKeyspace, mi.sourceShards(), allowWrites)
@@ -554,6 +546,7 @@ func (mi *migrater) createJournals(ctx context.Context) error {
 		}
 		journal := &binlogdatapb.Journal{
 			Id:            mi.id,
+			MigrationType: mi.migrationType,
 			Tables:        mi.tables,
 			LocalPosition: source.position,
 		}
@@ -644,7 +637,7 @@ func (mi *migrater) createReverseReplication(ctx context.Context) error {
 }
 
 func (mi *migrater) allowTargetWrites(ctx context.Context) error {
-	if mi.migrationType == MigrateTables {
+	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		return mi.allowTableTargetWrites(ctx)
 	}
 	return mi.changeShardsAccess(ctx, mi.targetKeyspace, mi.targetShards(), allowWrites)
@@ -662,7 +655,7 @@ func (mi *migrater) allowTableTargetWrites(ctx context.Context) error {
 }
 
 func (mi *migrater) changeRouting(ctx context.Context) error {
-	if mi.migrationType == MigrateTables {
+	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		return mi.changeTableRouting(ctx)
 	}
 	return mi.changeShardRouting(ctx)
