@@ -407,9 +407,11 @@ func (mi *migrater) migrateTableReads(ctx context.Context, cells []string, serve
 		if direction == directionForward {
 			rules[table+"@"+tt] = []string{mi.targetKeyspace + "." + table}
 			rules[mi.targetKeyspace+"."+table+"@"+tt] = []string{mi.targetKeyspace + "." + table}
+			rules[mi.sourceKeyspace+"."+table+"@"+tt] = []string{mi.targetKeyspace + "." + table}
 		} else {
 			delete(rules, table+"@"+tt)
 			delete(rules, mi.targetKeyspace+"."+table+"@"+tt)
+			delete(rules, mi.sourceKeyspace+"."+table+"@"+tt)
 		}
 	}
 	if err := mi.wr.saveRoutingRules(ctx, rules); err != nil {
@@ -685,9 +687,11 @@ func (mi *migrater) changeTableRouting(ctx context.Context) error {
 			tt := strings.ToLower(tabletType.String())
 			delete(rules, table+"@"+tt)
 			delete(rules, mi.targetKeyspace+"."+table+"@"+tt)
+			delete(rules, mi.sourceKeyspace+"."+table+"@"+tt)
 		}
 		delete(rules, mi.targetKeyspace+"."+table)
 		rules[table] = []string{mi.targetKeyspace + "." + table}
+		rules[mi.sourceKeyspace+"."+table] = []string{mi.targetKeyspace + "." + table}
 	}
 	if err := mi.wr.saveRoutingRules(ctx, rules); err != nil {
 		return err

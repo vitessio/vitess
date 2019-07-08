@@ -51,8 +51,10 @@ func TestTableMigrate(t *testing.T) {
 		"ks2.t2":        {"ks1.t2"},
 		"t1@rdonly":     {"ks2.t1"},
 		"ks2.t1@rdonly": {"ks2.t1"},
+		"ks1.t1@rdonly": {"ks2.t1"},
 		"t2@rdonly":     {"ks2.t2"},
 		"ks2.t2@rdonly": {"ks2.t2"},
+		"ks1.t2@rdonly": {"ks2.t2"},
 	})
 	checkCellRouting(t, tme.wr, "cell2", map[string][]string{
 		"t1":     {"ks1.t1"},
@@ -78,8 +80,10 @@ func TestTableMigrate(t *testing.T) {
 		"ks2.t2":        {"ks1.t2"},
 		"t1@rdonly":     {"ks2.t1"},
 		"ks2.t1@rdonly": {"ks2.t1"},
+		"ks1.t1@rdonly": {"ks2.t1"},
 		"t2@rdonly":     {"ks2.t2"},
 		"ks2.t2@rdonly": {"ks2.t2"},
+		"ks1.t2@rdonly": {"ks2.t2"},
 	})
 	checkCellRouting(t, tme.wr, "cell2", map[string][]string{
 		"t1":             {"ks1.t1"},
@@ -88,12 +92,16 @@ func TestTableMigrate(t *testing.T) {
 		"ks2.t2":         {"ks1.t2"},
 		"t1@rdonly":      {"ks2.t1"},
 		"ks2.t1@rdonly":  {"ks2.t1"},
+		"ks1.t1@rdonly":  {"ks2.t1"},
 		"t2@rdonly":      {"ks2.t2"},
 		"ks2.t2@rdonly":  {"ks2.t2"},
+		"ks1.t2@rdonly":  {"ks2.t2"},
 		"t1@replica":     {"ks2.t1"},
 		"ks2.t1@replica": {"ks2.t1"},
+		"ks1.t1@replica": {"ks2.t1"},
 		"t2@replica":     {"ks2.t2"},
 		"ks2.t2@replica": {"ks2.t2"},
+		"ks1.t2@replica": {"ks2.t2"},
 	})
 	verifyQueries(t, tme.allDBClients)
 
@@ -110,8 +118,10 @@ func TestTableMigrate(t *testing.T) {
 		"ks2.t2":        {"ks1.t2"},
 		"t1@rdonly":     {"ks2.t1"},
 		"ks2.t1@rdonly": {"ks2.t1"},
+		"ks1.t1@rdonly": {"ks2.t1"},
 		"t2@rdonly":     {"ks2.t2"},
 		"ks2.t2@rdonly": {"ks2.t2"},
+		"ks1.t2@rdonly": {"ks2.t2"},
 	})
 	verifyQueries(t, tme.allDBClients)
 
@@ -128,12 +138,16 @@ func TestTableMigrate(t *testing.T) {
 		"ks2.t2":         {"ks1.t2"},
 		"t1@rdonly":      {"ks2.t1"},
 		"ks2.t1@rdonly":  {"ks2.t1"},
+		"ks1.t1@rdonly":  {"ks2.t1"},
 		"t2@rdonly":      {"ks2.t2"},
 		"ks2.t2@rdonly":  {"ks2.t2"},
+		"ks1.t2@rdonly":  {"ks2.t2"},
 		"t1@replica":     {"ks2.t1"},
 		"ks2.t1@replica": {"ks2.t1"},
+		"ks1.t1@replica": {"ks2.t1"},
 		"t2@replica":     {"ks2.t2"},
 		"ks2.t2@replica": {"ks2.t2"},
+		"ks1.t2@replica": {"ks2.t2"},
 	})
 	verifyQueries(t, tme.allDBClients)
 
@@ -150,8 +164,10 @@ func TestTableMigrate(t *testing.T) {
 		"ks2.t2":         {"ks1.t2"},
 		"t1@replica":     {"ks2.t1"},
 		"ks2.t1@replica": {"ks2.t1"},
+		"ks1.t1@replica": {"ks2.t1"},
 		"t2@replica":     {"ks2.t2"},
 		"ks2.t2@replica": {"ks2.t2"},
+		"ks1.t2@replica": {"ks2.t2"},
 	})
 	verifyQueries(t, tme.allDBClients)
 
@@ -188,12 +204,16 @@ func TestTableMigrate(t *testing.T) {
 		"ks2.t2":         {"ks1.t2"},
 		"t1@replica":     {"ks2.t1"},
 		"ks2.t1@replica": {"ks2.t1"},
+		"ks1.t1@replica": {"ks2.t1"},
 		"t2@replica":     {"ks2.t2"},
 		"ks2.t2@replica": {"ks2.t2"},
+		"ks1.t2@replica": {"ks2.t2"},
 		"t1@rdonly":      {"ks2.t1"},
 		"ks2.t1@rdonly":  {"ks2.t1"},
+		"ks1.t1@rdonly":  {"ks2.t1"},
 		"t2@rdonly":      {"ks2.t2"},
 		"ks2.t2@rdonly":  {"ks2.t2"},
+		"ks1.t2@rdonly":  {"ks2.t2"},
 	})
 
 	// Check for journals.
@@ -240,12 +260,16 @@ func TestTableMigrate(t *testing.T) {
 		"ks2.t2":         {"ks1.t2"},
 		"t1@replica":     {"ks2.t1"},
 		"ks2.t1@replica": {"ks2.t1"},
+		"ks1.t1@replica": {"ks2.t1"},
 		"t2@replica":     {"ks2.t2"},
 		"ks2.t2@replica": {"ks2.t2"},
+		"ks1.t2@replica": {"ks2.t2"},
 		"t1@rdonly":      {"ks2.t1"},
 		"ks2.t1@rdonly":  {"ks2.t1"},
+		"ks1.t1@rdonly":  {"ks2.t1"},
 		"t2@rdonly":      {"ks2.t2"},
 		"ks2.t2@rdonly":  {"ks2.t2"},
+		"ks1.t2@rdonly":  {"ks2.t2"},
 	})
 	checkBlacklist(t, tme.ts, "ks1:-40", nil)
 	checkBlacklist(t, tme.ts, "ks1:40-", nil)
@@ -280,8 +304,10 @@ func TestTableMigrate(t *testing.T) {
 	}
 
 	checkRouting(t, tme.wr, map[string][]string{
-		"t1": {"ks2.t1"},
-		"t2": {"ks2.t2"},
+		"t1":     {"ks2.t1"},
+		"ks1.t1": {"ks2.t1"},
+		"t2":     {"ks2.t2"},
+		"ks1.t2": {"ks2.t2"},
 	})
 	checkBlacklist(t, tme.ts, "ks1:-40", []string{"t1", "t2"})
 	checkBlacklist(t, tme.ts, "ks1:40-", []string{"t1", "t2"})
@@ -629,8 +655,10 @@ func TestTableMigrateJournalExists(t *testing.T) {
 
 	// Routes will be redone.
 	checkRouting(t, tme.wr, map[string][]string{
-		"t1": {"ks2.t1"},
-		"t2": {"ks2.t2"},
+		"t1":     {"ks2.t1"},
+		"ks1.t1": {"ks2.t1"},
+		"t2":     {"ks2.t2"},
+		"ks1.t2": {"ks2.t2"},
 	})
 	// We're showing that there are no blacklisted tables. But in real life,
 	// tables on ks1 should be blacklisted from the previous failed attempt.
