@@ -35,6 +35,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
+const vreplQueryks = "select id, source from _vt.vreplication where workflow = 'test' and db_name = 'vt_ks'"
+const vreplQueryks2 = "select id, source from _vt.vreplication where workflow = 'test' and db_name = 'vt_ks2'"
+
 type testMigraterEnv struct {
 	ts                                           *topo.Server
 	wr                                           *Wrangler
@@ -133,11 +136,6 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 			}},
 		},
 	}
-	tme.dbDest1Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"source",
-		"varchar"),
-		fmt.Sprintf("%v", bls1),
-	), nil)
 	bls2 := &binlogdatapb.BinlogSource{
 		Keyspace: "ks1",
 		Shard:    "40-",
@@ -151,10 +149,11 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 			}},
 		},
 	}
-	tme.dbDest1Client.addQuery("select source from _vt.vreplication where id = 2", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"source",
-		"varchar"),
-		fmt.Sprintf("%v", bls2),
+	tme.dbDest1Client.addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id|source",
+		"int64|varchar"),
+		fmt.Sprintf("1|%v", bls1),
+		fmt.Sprintf("2|%v", bls2),
 	), nil)
 	bls3 := &binlogdatapb.BinlogSource{
 		Keyspace: "ks1",
@@ -169,10 +168,10 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 			}},
 		},
 	}
-	tme.dbDest2Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"source",
-		"varchar"),
-		fmt.Sprintf("%v", bls3),
+	tme.dbDest2Client.addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id|source",
+		"int64|varchar"),
+		fmt.Sprintf("1|%v", bls3),
 	), nil)
 
 	if err := tme.wr.saveRoutingRules(ctx, map[string][]string{
@@ -248,11 +247,6 @@ func newTestShardMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 			}},
 		},
 	}
-	tme.dbDest1Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"source",
-		"varchar"),
-		fmt.Sprintf("%v", bls1),
-	), nil)
 	bls2 := &binlogdatapb.BinlogSource{
 		Keyspace: "ks",
 		Shard:    "40-",
@@ -263,10 +257,11 @@ func newTestShardMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 			}},
 		},
 	}
-	tme.dbDest1Client.addQuery("select source from _vt.vreplication where id = 2", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"source",
-		"varchar"),
-		fmt.Sprintf("%v", bls2),
+	tme.dbDest1Client.addQuery(vreplQueryks, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id|source",
+		"int64|varchar"),
+		fmt.Sprintf("1|%v", bls1),
+		fmt.Sprintf("2|%v", bls2),
 	), nil)
 	bls3 := &binlogdatapb.BinlogSource{
 		Keyspace: "ks",
@@ -278,10 +273,10 @@ func newTestShardMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 			}},
 		},
 	}
-	tme.dbDest2Client.addQuery("select source from _vt.vreplication where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"source",
-		"varchar"),
-		fmt.Sprintf("%v", bls3),
+	tme.dbDest2Client.addQuery(vreplQueryks, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id|source",
+		"int64|varchar"),
+		fmt.Sprintf("1|%v", bls3),
 	), nil)
 
 	tme.targetKeyspace = "ks"
@@ -289,6 +284,8 @@ func newTestShardMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 		"-80": {1, 2},
 		"80-": {1},
 	}
+	tme.dbSource1Client.addQuery(vreplQueryks, &sqltypes.Result{}, nil)
+	tme.dbSource2Client.addQuery(vreplQueryks, &sqltypes.Result{}, nil)
 	return tme
 }
 
