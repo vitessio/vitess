@@ -155,6 +155,11 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType MigrationTy
 			mi.cancelMigration(ctx)
 			return err
 		}
+	} else {
+		// Need to gather positions in case all journals were not created.
+		if err := mi.gatherPositions(ctx); err != nil {
+			return err
+		}
 	}
 	if err := mi.createJournals(ctx); err != nil {
 		return err
@@ -188,9 +193,6 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType MigrationTy
 		targetMaster, err := mi.wr.ts.GetTablet(ctx, targetShard.MasterAlias)
 		if err != nil {
 			return nil, err
-		}
-		if _, ok := mi.targets[targetks]; ok {
-			return nil, fmt.Errorf("duplicate targets: %v", targetks)
 		}
 		mi.targets[targetks] = &miTarget{
 			shard:   targetShard,
@@ -482,6 +484,7 @@ func (mi *migrater) waitForCatchup(ctx context.Context, filteredReplicationWaitT
 	ctx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
 	defer cancel()
 
+	var mu sync.Mutex
 	return mi.forAllUids(func(target *miTarget, uid uint32) error {
 		bls := target.sources[uid]
 		source := mi.sources[topo.KeyspaceShard{Keyspace: bls.Keyspace, Shard: bls.Shard}]
@@ -490,6 +493,13 @@ func (mi *migrater) waitForCatchup(ctx context.Context, filteredReplicationWaitT
 		}
 		if _, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, binlogplayer.StopVReplication(uid, "stopped for cutover")); err != nil {
 			return err
+		}
+
+		// Need lock because a target can have multiple uids.
+		mu.Lock()
+		defer mu.Unlock()
+		if target.position != "" {
+			return nil
 		}
 		var err error
 		target.position, err = mi.wr.tmc.MasterPosition(ctx, target.master.Tablet)
@@ -517,6 +527,22 @@ func (mi *migrater) cancelMigration(ctx context.Context) {
 	if err != nil {
 		mi.wr.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
 	}
+}
+
+func (mi *migrater) gatherPositions(ctx context.Context) error {
+	err := mi.forAllSources(func(sourceks topo.KeyspaceShard, source *miSource) error {
+		var err error
+		source.position, err = mi.wr.tmc.MasterPosition(ctx, source.master.Tablet)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return mi.forAllTargets(func(targetks topo.KeyspaceShard, target *miTarget) error {
+		var err error
+		target.position, err = mi.wr.tmc.MasterPosition(ctx, target.master.Tablet)
+		return err
+	})
 }
 
 func (mi *migrater) createJournals(ctx context.Context) error {
