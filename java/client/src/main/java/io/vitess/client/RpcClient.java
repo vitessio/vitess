@@ -18,6 +18,7 @@ package io.vitess.client;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
+import io.vitess.proto.Query;
 import io.vitess.proto.Query.QueryResult;
 import io.vitess.proto.Vtgate;
 import io.vitess.proto.Vtgate.BeginRequest;
@@ -245,4 +246,34 @@ public interface RpcClient extends Closeable {
    */
   ListenableFuture<GetSrvKeyspaceResponse> getSrvKeyspace(
       Context ctx, GetSrvKeyspaceRequest request) throws SQLException;
+
+  /**
+   * Streams messages from a message table.
+   *
+   * <p>See the
+   * <a href="https://github.com/vitessio/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  StreamIterator<QueryResult> messageStream(
+      Context ctx, Vtgate.MessageStreamRequest request) throws SQLException;
+
+  /**
+   * Acks messages for a table.
+   *
+   * <p>See the
+   * <a href="https://github.com/vitessio/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<Query.MessageAckResponse> messageAck(
+          Context ctx, Vtgate.MessageAckRequest request) throws SQLException;
+
+  /**
+   * Routes message acks using the associated keyspace ids.
+   *
+   * <p>See the
+   * <a href="https://github.com/vitessio/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<Query.MessageAckResponse> messageAckKeyspaceIds(
+          Context ctx, Vtgate.MessageAckRequest request) throws SQLException;
 }

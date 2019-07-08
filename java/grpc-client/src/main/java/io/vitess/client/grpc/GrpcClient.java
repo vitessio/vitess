@@ -29,6 +29,7 @@ import io.vitess.client.Context;
 import io.vitess.client.Proto;
 import io.vitess.client.RpcClient;
 import io.vitess.client.StreamIterator;
+import io.vitess.proto.Query;
 import io.vitess.proto.Query.QueryResult;
 import io.vitess.proto.Vtgate;
 import io.vitess.proto.Vtgate.BeginRequest;
@@ -281,6 +282,30 @@ public class GrpcClient implements RpcClient {
       GetSrvKeyspaceRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).getSrvKeyspace(request), Exception.class,
         new ExceptionConverter<GetSrvKeyspaceResponse>(), MoreExecutors.directExecutor());
+  }
+
+  @Override
+  public StreamIterator<QueryResult> messageStream(Context ctx, Vtgate.MessageStreamRequest request)
+          throws SQLException {
+    GrpcStreamAdapter<Query.MessageStreamResponse, QueryResult> adapter =
+            new GrpcStreamAdapter<Query.MessageStreamResponse, QueryResult>() {
+              @Override
+              QueryResult getResult(Query.MessageStreamResponse response) throws SQLException {
+                return response.getResult();
+              }
+            };
+    getAsyncStub(ctx).messageStream(request, adapter);
+    return adapter;
+  }
+
+  @Override
+  public ListenableFuture<Query.MessageAckResponse> messageAck(Context ctx, Vtgate.MessageAckRequest request) throws SQLException {
+    return null;
+  }
+
+  @Override
+  public ListenableFuture<Query.MessageAckResponse> messageAckKeyspaceIds(Context ctx, Vtgate.MessageAckRequest request) throws SQLException {
+    return null;
   }
 
   /**
