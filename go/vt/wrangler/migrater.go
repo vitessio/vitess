@@ -88,11 +88,11 @@ type miSource struct {
 }
 
 // MigrateReads is a generic way of migrating read traffic for a resharding workflow.
-func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType binlogdatapb.MigrationType, targetKeyspace string, streams map[string][]uint32, cells []string, servedType topodatapb.TabletType, direction migrateDirection) error {
+func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType binlogdatapb.MigrationType, targetKeyspace, workflow string, cells []string, servedType topodatapb.TabletType, direction migrateDirection) error {
 	if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 		return fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
 	}
-	mi, err := wr.buildMigrater(ctx, migrationType, targetKeyspace, streams)
+	mi, err := wr.buildMigrater(ctx, migrationType, targetKeyspace, workflow)
 	if err != nil {
 		return err
 	}
@@ -114,8 +114,8 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType binlogdatapb
 }
 
 // MigrateWrites is a generic way of migrating write traffic for a resharding workflow.
-func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType binlogdatapb.MigrationType, targetKeyspace string, streams map[string][]uint32, filteredReplicationWaitTime time.Duration) error {
-	mi, err := wr.buildMigrater(ctx, migrationType, targetKeyspace, streams)
+func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType binlogdatapb.MigrationType, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration) error {
+	mi, err := wr.buildMigrater(ctx, migrationType, targetKeyspace, workflow)
 	if err != nil {
 		return err
 	}
@@ -181,83 +181,60 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType binlogdatap
 	return nil
 }
 
-func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType binlogdatapb.MigrationType, targetKeyspace string, streams map[string][]uint32) (*migrater, error) {
+func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType binlogdatapb.MigrationType, targetKeyspace, workflow string) (*migrater, error) {
+	targets, err := wr.buildMigrationTargets(ctx, targetKeyspace, workflow)
+	if err != nil {
+		return nil, err
+	}
+
 	mi := &migrater{
 		migrationType:  migrationType,
 		wr:             wr,
-		id:             hashStreams(targetKeyspace, streams),
-		targets:        make(map[string]*miTarget),
+		id:             hashStreams(targetKeyspace, targets),
+		targets:        targets,
 		sources:        make(map[string]*miSource),
 		targetKeyspace: targetKeyspace,
 	}
-	mi.wr.Logger().Infof("Migration ID for streams %v: %d", streams, mi.id)
-	for targetShard, uids := range streams {
-		targetsi, err := mi.wr.ts.GetShard(ctx, targetKeyspace, targetShard)
-		if err != nil {
-			return nil, err
-		}
-		targetMaster, err := mi.wr.ts.GetTablet(ctx, targetsi.MasterAlias)
-		if err != nil {
-			return nil, err
-		}
-		mi.targets[targetShard] = &miTarget{
-			si:      targetsi,
-			master:  targetMaster,
-			sources: make(map[uint32]*binlogdatapb.BinlogSource),
-		}
-		for _, uid := range uids {
-			p3qr, err := mi.wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select source from _vt.vreplication where id=%d", uid))
+	mi.wr.Logger().Infof("Migration ID for workflow %s: %d", workflow, mi.id)
+
+	// Build the sources
+	for _, target := range targets {
+		for _, bls := range target.sources {
+			if mi.sourceKeyspace == "" {
+				mi.sourceKeyspace = bls.Keyspace
+			} else if mi.sourceKeyspace != bls.Keyspace {
+				return nil, fmt.Errorf("source keyspaces are mismatched across streams: %v vs %v", mi.sourceKeyspace, bls.Keyspace)
+			}
+			if _, ok := mi.sources[bls.Shard]; ok {
+				continue
+			}
+
+			sourcesi, err := mi.wr.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
 			if err != nil {
 				return nil, err
 			}
-			qr := sqltypes.Proto3ToResult(p3qr)
-			if len(qr.Rows) < 1 || len(qr.Rows[0]) < 1 {
-				return nil, fmt.Errorf("VReplication stream %d not found for %s:%s", int(uid), targetKeyspace, targetShard)
+			sourceMaster, err := mi.wr.ts.GetTablet(ctx, sourcesi.MasterAlias)
+			if err != nil {
+				return nil, err
 			}
-			for _, row := range qr.Rows {
-				str := row[0].ToString()
-				var bls binlogdatapb.BinlogSource
-				if err := proto.UnmarshalText(str, &bls); err != nil {
-					return nil, err
-				}
-				mi.targets[targetShard].sources[uid] = &bls
+			mi.sources[bls.Shard] = &miSource{
+				si:     sourcesi,
+				master: sourceMaster,
+			}
 
-				if mi.sourceKeyspace == "" {
-					mi.sourceKeyspace = bls.Keyspace
-				} else if mi.sourceKeyspace != bls.Keyspace {
-					return nil, fmt.Errorf("source keyspaces are mismatched across streams: %v vs %v", mi.sourceKeyspace, bls.Keyspace)
+			if mi.tables == nil {
+				for _, rule := range bls.Filter.Rules {
+					mi.tables = append(mi.tables, rule.Match)
 				}
-				if _, ok := mi.sources[bls.Shard]; ok {
-					continue
+				sort.Strings(mi.tables)
+			} else {
+				var tables []string
+				for _, rule := range bls.Filter.Rules {
+					tables = append(tables, rule.Match)
 				}
-
-				sourcesi, err := mi.wr.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
-				if err != nil {
-					return nil, err
-				}
-				sourceMaster, err := mi.wr.ts.GetTablet(ctx, sourcesi.MasterAlias)
-				if err != nil {
-					return nil, err
-				}
-				mi.sources[bls.Shard] = &miSource{
-					si:     sourcesi,
-					master: sourceMaster,
-				}
-
-				if mi.tables == nil {
-					for _, rule := range bls.Filter.Rules {
-						mi.tables = append(mi.tables, rule.Match)
-					}
-					sort.Strings(mi.tables)
-				} else {
-					var tables []string
-					for _, rule := range bls.Filter.Rules {
-						tables = append(tables, rule.Match)
-					}
-					sort.Strings(tables)
-					if !reflect.DeepEqual(mi.tables, tables) {
-						return nil, fmt.Errorf("table lists are mismatched across streams: %v vs %v", mi.tables, tables)
-					}
+				sort.Strings(tables)
+				if !reflect.DeepEqual(mi.tables, tables) {
+					return nil, fmt.Errorf("table lists are mismatched across streams: %v vs %v", mi.tables, tables)
 				}
 			}
 		}
@@ -265,11 +242,58 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType binlogdatap
 	return mi, nil
 }
 
+func (wr *Wrangler) buildMigrationTargets(ctx context.Context, targetKeyspace, workflow string) (targets map[string]*miTarget, err error) {
+	targets = make(map[string]*miTarget)
+	targetShards, err := wr.ts.GetShardNames(ctx, targetKeyspace)
+	if err != nil {
+		return nil, err
+	}
+	for _, targetShard := range targetShards {
+		targetsi, err := wr.ts.GetShard(ctx, targetKeyspace, targetShard)
+		if err != nil {
+			return nil, err
+		}
+		targetMaster, err := wr.ts.GetTablet(ctx, targetsi.MasterAlias)
+		if err != nil {
+			return nil, err
+		}
+		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, source from _vt.vreplication where workflow='%s' and db_name='%s'", workflow, targetMaster.DbName()))
+		if err != nil {
+			return nil, err
+		}
+		if len(p3qr.Rows) < 1 {
+			continue
+		}
+
+		targets[targetShard] = &miTarget{
+			si:      targetsi,
+			master:  targetMaster,
+			sources: make(map[uint32]*binlogdatapb.BinlogSource),
+		}
+		qr := sqltypes.Proto3ToResult(p3qr)
+		for _, row := range qr.Rows {
+			id, err := sqltypes.ToInt64(row[0])
+			if err != nil {
+				return nil, err
+			}
+			var bls binlogdatapb.BinlogSource
+			if err := proto.UnmarshalText(row[1].ToString(), &bls); err != nil {
+				return nil, err
+			}
+			targets[targetShard].sources[uint32(id)] = &bls
+		}
+	}
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("no streams found in keyspace %s for: %s", targetKeyspace, workflow)
+	}
+	return targets, nil
+}
+
 // hashStreams produces a reproduceable hash based on the input parameters.
-func hashStreams(targetKeyspace string, streams map[string][]uint32) int64 {
+func hashStreams(targetKeyspace string, targets map[string]*miTarget) int64 {
 	var expanded []string
-	for shard, uids := range streams {
-		for _, uid := range uids {
+	for shard, target := range targets {
+		for uid := range target.sources {
 			expanded = append(expanded, fmt.Sprintf("%s:%d", shard, uid))
 		}
 	}
@@ -284,16 +308,6 @@ func hashStreams(targetKeyspace string, streams map[string][]uint32) int64 {
 }
 
 func (mi *migrater) validate(ctx context.Context) error {
-	// Ensure no duplicate sources in each target.
-	for _, target := range mi.targets {
-		uniqueSources := make(map[string]uint32)
-		for uid, bls := range target.sources {
-			if suid, ok := uniqueSources[bls.Shard]; ok {
-				return fmt.Errorf("duplicate sources for uids: %v and %v", suid, uid)
-			}
-			uniqueSources[bls.Shard] = uid
-		}
-	}
 	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		// All shards must be present.
 		if err := mi.compareShards(ctx, mi.sourceKeyspace, mi.sourceShards()); err != nil {
