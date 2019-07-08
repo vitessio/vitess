@@ -288,24 +288,26 @@ public class GrpcClient implements RpcClient {
   public StreamIterator<QueryResult> messageStream(Context ctx, Vtgate.MessageStreamRequest request)
           throws SQLException {
     GrpcStreamAdapter<Query.MessageStreamResponse, QueryResult> adapter =
-            new GrpcStreamAdapter<Query.MessageStreamResponse, QueryResult>() {
-              @Override
-              QueryResult getResult(Query.MessageStreamResponse response) throws SQLException {
-                return response.getResult();
-              }
-            };
+        new GrpcStreamAdapter<Query.MessageStreamResponse, QueryResult>() {
+          @Override
+          QueryResult getResult(Query.MessageStreamResponse response) throws SQLException {
+            return response.getResult();
+          }
+        };
     getAsyncStub(ctx).messageStream(request, adapter);
     return adapter;
   }
 
   @Override
-  public ListenableFuture<Query.MessageAckResponse> messageAck(Context ctx, Vtgate.MessageAckRequest request) throws SQLException {
+  public ListenableFuture<Query.MessageAckResponse> messageAck(Context ctx,
+      Vtgate.MessageAckRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).messageAck(request), Exception.class,
         new ExceptionConverter<Query.MessageAckResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override
-  public ListenableFuture<Query.MessageAckResponse> messageAckKeyspaceIds(Context ctx, Vtgate.MessageAckKeyspaceIdsRequest request) throws SQLException {
+  public ListenableFuture<Query.MessageAckResponse> messageAckKeyspaceIds(Context ctx,
+      Vtgate.MessageAckKeyspaceIdsRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).messageAckKeyspaceIds(request), Exception.class,
         new ExceptionConverter<Query.MessageAckResponse>(), MoreExecutors.directExecutor());
   }
