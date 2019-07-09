@@ -42,12 +42,13 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// migrateDirection specifies the migration direction.
-type migrateDirection int
+// MigrateDirection specifies the migration direction.
+type MigrateDirection int
 
+// The following constants define the migration direction.
 const (
-	directionForward = migrateDirection(iota)
-	directionBackward
+	DirectionForward = MigrateDirection(iota)
+	DirectionBackward
 )
 
 // accessType specifies the type of access for a shard (allow/disallow writes).
@@ -88,7 +89,7 @@ type miSource struct {
 }
 
 // MigrateReads is a generic way of migrating read traffic for a resharding workflow.
-func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow string, cells []string, servedType topodatapb.TabletType, direction migrateDirection) error {
+func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow string, servedType topodatapb.TabletType, cells []string, direction MigrateDirection) error {
 	if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 		return fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
 	}
@@ -409,7 +410,7 @@ func (mi *migrater) compareShards(ctx context.Context, keyspace string, sis []*t
 	return nil
 }
 
-func (mi *migrater) migrateTableReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction migrateDirection) error {
+func (mi *migrater) migrateTableReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction MigrateDirection) error {
 	rules, err := mi.wr.getRoutingRules(ctx)
 	if err != nil {
 		return err
@@ -421,7 +422,7 @@ func (mi *migrater) migrateTableReads(ctx context.Context, cells []string, serve
 	// For backward, we delete them.
 	tt := strings.ToLower(servedType.String())
 	for _, table := range mi.tables {
-		if direction == directionForward {
+		if direction == DirectionForward {
 			rules[table+"@"+tt] = []string{mi.targetKeyspace + "." + table}
 			rules[mi.targetKeyspace+"."+table+"@"+tt] = []string{mi.targetKeyspace + "." + table}
 			rules[mi.sourceKeyspace+"."+table+"@"+tt] = []string{mi.targetKeyspace + "." + table}
@@ -437,9 +438,9 @@ func (mi *migrater) migrateTableReads(ctx context.Context, cells []string, serve
 	return mi.wr.ts.RebuildSrvVSchema(ctx, cells)
 }
 
-func (mi *migrater) migrateShardReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction migrateDirection) error {
+func (mi *migrater) migrateShardReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction MigrateDirection) error {
 	var fromShards, toShards []*topo.ShardInfo
-	if direction == directionForward {
+	if direction == DirectionForward {
 		fromShards, toShards = mi.sourceShards(), mi.targetShards()
 	} else {
 		fromShards, toShards = mi.targetShards(), mi.sourceShards()
