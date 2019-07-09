@@ -320,6 +320,12 @@ var commands = []commandGroup{
 			{"MigrateServedFrom", commandMigrateServedFrom,
 				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard> <served tablet type>",
 				"Makes the <destination keyspace/shard> serve the given type. This command also rebuilds the serving graph."},
+			{"MigrateReads", commandMigrateReads,
+				"[-cells=c1,c2,...] [-reverse] <target keyspace> <workflow> <tablet type>",
+				"Migrate read traffic for the specified workflow."},
+			{"MigrateWrites", commandMigrateWrites,
+				"<target keyspace> <workflow>",
+				"Migrate write traffic for the specified workflow."},
 			{"CancelResharding", commandCancelResharding,
 				"<keyspace/shard>",
 				"Permanently cancels a resharding in progress. All resharding related metadata will be deleted."},
@@ -1813,6 +1819,52 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 		cells = strings.Split(*cellsStr, ",")
 	}
 	return wr.MigrateServedFrom(ctx, keyspace, shard, servedType, cells, *reverse, *filteredReplicationWaitTime)
+}
+
+func commandMigrateReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward. Use in case of trouble")
+	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 3 {
+		return fmt.Errorf("the <target keyspace/shard>, <workflow> and <tablet type> arguments are required for the MigrateReads command")
+	}
+
+	keyspace := subFlags.Arg(0)
+	workflow := subFlags.Arg(1)
+	servedType, err := parseTabletType(subFlags.Arg(2), []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
+	if err != nil {
+		return err
+	}
+	var cells []string
+	if *cellsStr != "" {
+		cells = strings.Split(*cellsStr, ",")
+	}
+	direction := wrangler.DirectionForward
+	if *reverse {
+		direction = wrangler.DirectionBackward
+	}
+	return wr.MigrateReads(ctx, keyspace, workflow, servedType, cells, direction)
+}
+
+func commandMigrateWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("the <target keyspace/shard> and <workflow> arguments are required for the MigrateWrites command")
+	}
+
+	keyspace := subFlags.Arg(0)
+	workflow := subFlags.Arg(1)
+	journalID, err := wr.MigrateWrites(ctx, keyspace, workflow, *filteredReplicationWaitTime)
+	if err != nil {
+		return err
+	}
+	wr.Logger().Infof("Migration Journal ID: %v", journalID)
+	return nil
 }
 
 func commandCancelResharding(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
