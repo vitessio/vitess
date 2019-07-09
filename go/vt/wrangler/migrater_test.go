@@ -40,7 +40,7 @@ func TestTableMigrate(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Single cell RDONLY migration.
-	err := tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", []string{"cell1"}, topodatapb.TabletType_RDONLY, directionForward)
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", []string{"cell1"}, topodatapb.TabletType_RDONLY, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestTableMigrate(t *testing.T) {
 	// The global routing already contains redirections for rdonly.
 	// So, adding routes for replica and deploying to cell2 will also cause
 	// cell2 to migrat rdonly. This is a quirk that can be fixed later if necessary.
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", []string{"cell2"}, topodatapb.TabletType_REPLICA, directionForward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", []string{"cell2"}, topodatapb.TabletType_REPLICA, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestTableMigrate(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Single cell backward REPLICA migration.
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", []string{"cell2"}, topodatapb.TabletType_REPLICA, directionBackward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", []string{"cell2"}, topodatapb.TabletType_REPLICA, directionBackward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestTableMigrate(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Migrate all REPLICA.
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", nil, topodatapb.TabletType_REPLICA, directionForward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_REPLICA, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestTableMigrate(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// All cells RDONLY backward migration.
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionBackward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionBackward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestTableMigrate(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't migrate master with MigrateReads.
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", nil, topodatapb.TabletType_MASTER, directionForward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_MASTER, directionForward)
 	want := "tablet type must be REPLICA or RDONLY: MASTER"
 	if err == nil || err.Error() != want {
 		t.Errorf("MigrateReads(master) err: %v, want %v", err, want)
@@ -182,7 +182,7 @@ func TestTableMigrate(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't migrate writes if REPLICA and RDONLY have not fully migrated yet.
-	err = tme.wr.MigrateWrites(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", 1*time.Second)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
 	want = "missing tablet type specific routing, read-only traffic must be migrated before migrating writes"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites err: %v, want %v", err, want)
@@ -193,7 +193,7 @@ func TestTableMigrate(t *testing.T) {
 	// Test MigrateWrites cancelation on failure.
 
 	// Migrate all the reads first.
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +248,7 @@ func TestTableMigrate(t *testing.T) {
 	tme.dbDest2Client.addQuery(cancel1, &sqltypes.Result{}, nil)
 	tme.dbDest1Client.addQuery(cancel2, &sqltypes.Result{}, nil)
 
-	err = tme.wr.MigrateWrites(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", 0*time.Second)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 0*time.Second)
 	want = "DeadlineExceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites(0 timeout) err: %v, must contain %v", err, want)
@@ -298,9 +298,12 @@ func TestTableMigrate(t *testing.T) {
 	tme.dbDest2Client.addQuery("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
 	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
 
-	err = tme.wr.MigrateWrites(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", 1*time.Second)
+	journalID, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if journalID != 9113431017721636330 {
+		t.Errorf("journal id: %d, want 9113431017721636330", journalID)
 	}
 
 	checkRouting(t, tme.wr, map[string][]string{
@@ -332,7 +335,7 @@ func TestShardMigrate(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Single cell RDONLY migration.
-	err := tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", []string{"cell1"}, topodatapb.TabletType_RDONLY, directionForward)
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", []string{"cell1"}, topodatapb.TabletType_RDONLY, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +351,7 @@ func TestShardMigrate(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Other cell REPLICA migration.
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", []string{"cell2"}, topodatapb.TabletType_REPLICA, directionForward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", []string{"cell2"}, topodatapb.TabletType_REPLICA, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +367,7 @@ func TestShardMigrate(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Single cell backward REPLICA migration.
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", []string{"cell2"}, topodatapb.TabletType_REPLICA, directionBackward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", []string{"cell2"}, topodatapb.TabletType_REPLICA, directionBackward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -383,7 +386,7 @@ func TestShardMigrate(t *testing.T) {
 	// This is an extra step that does not exist in the tables test.
 	// The per-cell migration mechanism is different for tables. So, this
 	// extra step is needed to bring things in sync.
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +398,7 @@ func TestShardMigrate(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Migrate all REPLICA.
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", nil, topodatapb.TabletType_REPLICA, directionForward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_REPLICA, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -407,7 +410,7 @@ func TestShardMigrate(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// All cells RDONLY backward migration.
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionBackward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionBackward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,7 +422,7 @@ func TestShardMigrate(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't migrate master with MigrateReads.
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", nil, topodatapb.TabletType_MASTER, directionForward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_MASTER, directionForward)
 	want := "tablet type must be REPLICA or RDONLY: MASTER"
 	if err == nil || err.Error() != want {
 		t.Errorf("MigrateReads(master) err: %v, want %v", err, want)
@@ -428,7 +431,7 @@ func TestShardMigrate(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't migrate writes if REPLICA and RDONLY have not fully migrated yet.
-	err = tme.wr.MigrateWrites(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", 1*time.Second)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
 	want = "cannot migrate MASTER away"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites err: %v, want %v", err, want)
@@ -439,7 +442,7 @@ func TestShardMigrate(t *testing.T) {
 	// Test MigrateWrites cancelation on failure.
 
 	// Migrate all the reads first.
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,7 +487,7 @@ func TestShardMigrate(t *testing.T) {
 	tme.dbDest2Client.addQuery(cancel1, &sqltypes.Result{}, nil)
 	tme.dbDest1Client.addQuery(cancel2, &sqltypes.Result{}, nil)
 
-	err = tme.wr.MigrateWrites(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", 0*time.Second)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 0*time.Second)
 	want = "DeadlineExceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites(0 timeout) err: %v, must contain %v", err, want)
@@ -520,9 +523,12 @@ func TestShardMigrate(t *testing.T) {
 	tme.dbDest2Client.addQuery("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
 	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
 
-	err = tme.wr.MigrateWrites(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", 1*time.Second)
+	journalID, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if journalID != 6432976123657117098 {
+		t.Errorf("journal id: %d, want 6432976123657117098", journalID)
 	}
 
 	checkServedTypes(t, tme.ts, "ks:-40", 0)
@@ -545,11 +551,11 @@ func TestMigrateFailJournal(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	err := tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", nil, topodatapb.TabletType_REPLICA, directionForward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_REPLICA, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -590,7 +596,7 @@ func TestMigrateFailJournal(t *testing.T) {
 	tme.dbSource1Client.addQueryRE("insert into _vt.resharding_journal", nil, errors.New("journaling intentionally failed"))
 	tme.dbSource2Client.addQueryRE("insert into _vt.resharding_journal", nil, errors.New("journaling intentionally failed"))
 
-	err = tme.wr.MigrateWrites(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", 1*time.Second)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
 	want := "journaling intentionally failed"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites(0 timeout) err: %v, must contain %v", err, want)
@@ -613,11 +619,11 @@ func TestTableMigrateJournalExists(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	err := tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", nil, topodatapb.TabletType_REPLICA, directionForward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_REPLICA, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -648,7 +654,7 @@ func TestTableMigrateJournalExists(t *testing.T) {
 	tme.dbDest2Client.addQuery("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
 	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
 
-	err = tme.wr.MigrateWrites(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", 1*time.Second)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -675,11 +681,11 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	err := tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", nil, topodatapb.TabletType_REPLICA, directionForward)
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_REPLICA, directionForward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -710,7 +716,7 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	tme.dbDest2Client.addQuery("delete from _vt.vreplication where id = 1", &sqltypes.Result{}, nil)
 	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
 
-	err = tme.wr.MigrateWrites(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", 1*time.Second)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -736,7 +742,7 @@ func TestMigrateNoStreamsFound(t *testing.T) {
 	tme.dbDest1Client.addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 	tme.dbDest2Client.addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
-	err := tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
 	want := "no streams found in keyspace ks2 for: test"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateReads: %v, must contain %v", err, want)
@@ -767,7 +773,7 @@ func TestMigrateDistinctSources(t *testing.T) {
 		fmt.Sprintf("1|%v", bls),
 	), nil)
 
-	err := tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
 	want := "source keyspaces are mismatched across streams"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateReads: %v, must contain %v", err, want)
@@ -795,7 +801,7 @@ func TestMigrateMismatchedTables(t *testing.T) {
 		fmt.Sprintf("1|%v", bls),
 	), nil)
 
-	err := tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
 	want := "table lists are mismatched across streams"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateReads: %v, must contain %v", err, want)
@@ -809,7 +815,7 @@ func TestTableMigrateAllShardsNotPresent(t *testing.T) {
 
 	tme.dbDest1Client.addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
-	err := tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
 	want := "mismatched shards for keyspace"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateReads: %v, must contain %v", err, want)
@@ -863,20 +869,8 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 		fmt.Sprintf("1|%v", bls3),
 	), nil)
 
-	err := tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_TABLES, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
 	want := "cannot migrate streams with wild card table names"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("MigrateReads: %v, must contain %v", err, want)
-	}
-}
-
-func TestShardMigrateSourceTargetMismatch(t *testing.T) {
-	ctx := context.Background()
-	tme := newTestTableMigrater(ctx, t)
-	defer tme.stopTablets(t)
-
-	err := tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
-	want := "source and target keyspace must match"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateReads: %v, must contain %v", err, want)
 	}
@@ -903,7 +897,7 @@ func TestShardMigrateTargetMatchesSource(t *testing.T) {
 		fmt.Sprintf("1|%v", bls),
 	), nil)
 
-	err := tme.wr.MigrateReads(ctx, binlogdatapb.MigrationType_SHARDS, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", nil, topodatapb.TabletType_RDONLY, directionForward)
 	want := "target shard matches a source shard"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateReads: %v, must contain %v", err, want)

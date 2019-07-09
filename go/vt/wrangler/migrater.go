@@ -88,11 +88,11 @@ type miSource struct {
 }
 
 // MigrateReads is a generic way of migrating read traffic for a resharding workflow.
-func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType binlogdatapb.MigrationType, targetKeyspace, workflow string, cells []string, servedType topodatapb.TabletType, direction migrateDirection) error {
+func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow string, cells []string, servedType topodatapb.TabletType, direction migrateDirection) error {
 	if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 		return fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
 	}
-	mi, err := wr.buildMigrater(ctx, migrationType, targetKeyspace, workflow)
+	mi, err := wr.buildMigrater(ctx, targetKeyspace, workflow)
 	if err != nil {
 		return err
 	}
@@ -114,29 +114,29 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, migrationType binlogdatapb
 }
 
 // MigrateWrites is a generic way of migrating write traffic for a resharding workflow.
-func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType binlogdatapb.MigrationType, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration) error {
-	mi, err := wr.buildMigrater(ctx, migrationType, targetKeyspace, workflow)
+func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration) (journalID int64, err error) {
+	mi, err := wr.buildMigrater(ctx, targetKeyspace, workflow)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	mi.wr.Logger().Infof("Built migration metadata: %+v", mi)
 	if err := mi.validate(ctx); err != nil {
-		return err
+		return 0, err
 	}
 	if err := mi.validateForWrite(ctx); err != nil {
-		return err
+		return 0, err
 	}
 
 	// Need to lock both source and target keyspaces.
 	ctx, sourceUnlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateWrites")
 	if lockErr != nil {
-		return lockErr
+		return 0, lockErr
 	}
 	defer sourceUnlock(&err)
 	if mi.targetKeyspace != mi.sourceKeyspace {
 		tctx, targetUnlock, lockErr := wr.ts.LockKeyspace(ctx, mi.targetKeyspace, "MigrateWrites")
 		if lockErr != nil {
-			return lockErr
+			return 0, lockErr
 		}
 		ctx = tctx
 		defer targetUnlock(&err)
@@ -144,51 +144,50 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, migrationType binlogdatap
 
 	journalsExist, err := mi.checkJournals(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if !journalsExist {
 		mi.wr.Logger().Infof("No previous journals were found. Proceeding normally.")
 		if err := mi.stopSourceWrites(ctx); err != nil {
 			mi.cancelMigration(ctx)
-			return err
+			return 0, err
 		}
 		if err := mi.waitForCatchup(ctx, filteredReplicationWaitTime); err != nil {
 			mi.cancelMigration(ctx)
-			return err
+			return 0, err
 		}
 	} else {
 		mi.wr.Logger().Infof("Journals were found. Completing the left over steps.")
 		// Need to gather positions in case all journals were not created.
 		if err := mi.gatherPositions(ctx); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	// This is the point of no return. Once a journal is created,
 	// traffic can be redirected to target shards.
 	if err := mi.createJournals(ctx); err != nil {
-		return err
+		return 0, err
 	}
 	if err := mi.createReverseReplication(ctx); err != nil {
-		return err
+		return 0, err
 	}
 	if err := mi.allowTargetWrites(ctx); err != nil {
-		return err
+		return 0, err
 	}
 	if err := mi.changeRouting(ctx); err != nil {
-		return err
+		return 0, err
 	}
 	mi.deleteTargetVReplication(ctx)
-	return nil
+	return mi.id, nil
 }
 
-func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType binlogdatapb.MigrationType, targetKeyspace, workflow string) (*migrater, error) {
+func (wr *Wrangler) buildMigrater(ctx context.Context, targetKeyspace, workflow string) (*migrater, error) {
 	targets, err := wr.buildMigrationTargets(ctx, targetKeyspace, workflow)
 	if err != nil {
 		return nil, err
 	}
 
 	mi := &migrater{
-		migrationType:  migrationType,
 		wr:             wr,
 		id:             hashStreams(targetKeyspace, targets),
 		targets:        targets,
@@ -238,6 +237,11 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, migrationType binlogdatap
 				}
 			}
 		}
+	}
+	if mi.sourceKeyspace != mi.targetKeyspace {
+		mi.migrationType = binlogdatapb.MigrationType_TABLES
+	} else {
+		mi.migrationType = binlogdatapb.MigrationType_SHARDS
 	}
 	return mi, nil
 }
@@ -323,10 +327,6 @@ func (mi *migrater) validate(ctx context.Context) error {
 			}
 		}
 	} else { // binlogdatapb.MigrationType_SHARDS
-		// Source and target keyspace must match
-		if mi.sourceKeyspace != mi.targetKeyspace {
-			return fmt.Errorf("source and target keyspace must match: %v vs %v", mi.sourceKeyspace, mi.targetKeyspace)
-		}
 		// Source and target shards must not match.
 		for sourceShard := range mi.sources {
 			if _, ok := mi.targets[sourceShard]; ok {
