@@ -25,7 +25,7 @@ import (
 
 var (
 	// AuthorizedDDLUsers specifies the users that can perform ddl operations
-	AuthorizedDDLUsers = flag.String("vschema_ddl_authorized_users", "", "List of users authorized to execute vschema ddl operations, or '%' to allow all users.")
+	AuthorizedDDLUsers = flag.String("vschema_ddl_authorized_users", "", "List of users+groups authorized to execute vschema ddl operations, or '%' to allow all users.")
 
 	// ddlAllowAll is true if the special value of "*" was specified
 	allowAll bool
@@ -60,5 +60,15 @@ func Authorized(caller *querypb.VTGateCallerID) bool {
 
 	user := caller.GetUsername()
 	_, ok := acl[user]
-	return ok
+	if ok {
+		return true
+	}
+	groups := caller.GetGroups()
+	for _, group := range groups {
+		_, ok := acl[group]
+		if ok {
+			return true
+		}
+	}
+	return false
 }
