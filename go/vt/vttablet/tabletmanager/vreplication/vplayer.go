@@ -403,6 +403,31 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return io.EOF
 			}
 		}
+	case binlogdatapb.VEventType_JOURNAL:
+		switch event.Journal.MigrationType {
+		case binlogdatapb.MigrationType_SHARDS:
+			// no-op
+		case binlogdatapb.MigrationType_TABLES:
+			jtables := make(map[string]bool)
+			for _, table := range event.Journal.Tables {
+				jtables[table] = true
+			}
+			for tableName := range vp.replicatorPlan.TablePlans {
+				if _, ok := jtables[tableName]; !ok {
+					if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("unable to continue stream: %v is absent in the journal", tableName)); err != nil {
+						return err
+					}
+					return io.EOF
+				}
+			}
+		}
+		if err := vp.vr.vre.journalRegister(event.Journal, int(vp.vr.id)); err != nil {
+			if err := vp.vr.setState(binlogplayer.BlpStopped, err.Error()); err != nil {
+				return err
+			}
+			return io.EOF
+		}
+		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		// No-op: heartbeat timings are calculated in outer loop.
 	}

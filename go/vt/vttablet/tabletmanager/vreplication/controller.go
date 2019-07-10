@@ -49,11 +49,13 @@ var (
 // There is no mutex within a controller becaust its members are
 // either read-only or self-synchronized.
 type controller struct {
+	vre             *Engine
 	dbClientFactory func() binlogplayer.DBClient
 	mysqld          mysqlctl.MysqlDaemon
 	blpStats        *binlogplayer.Stats
 
 	id           uint32
+	workflow     string
 	source       binlogdatapb.BinlogSource
 	stopPos      string
 	tabletPicker *discovery.TabletPicker
@@ -67,11 +69,12 @@ type controller struct {
 
 // newController creates a new controller. Unless a stream is explicitly 'Stopped',
 // this function launches a goroutine to perform continuous vreplication.
-func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats) (*controller, error) {
+func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats, vre *Engine) (*controller, error) {
 	if blpStats == nil {
 		blpStats = binlogplayer.NewStats()
 	}
 	ct := &controller{
+		vre:             vre,
 		dbClientFactory: dbClientFactory,
 		mysqld:          mysqld,
 		blpStats:        blpStats,
@@ -84,6 +87,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		return nil, err
 	}
 	ct.id = uint32(id)
+	ct.workflow = params["workflow"]
 
 	// Nothing to do if replication is stopped.
 	if params["state"] == binlogplayer.BlpStopped {
@@ -102,7 +106,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	if v, ok := params["cell"]; ok {
 		cell = v
 	}
-	if v, ok := params["tablet_types"]; ok {
+	if v := params["tablet_types"]; v != "" {
 		tabletTypesStr = v
 	}
 	tp, err := discovery.NewTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, *healthcheckTopologyRefresh, *healthcheckRetryDelay, *healthcheckTimeout)
@@ -205,7 +209,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if _, err := dbClient.ExecuteFetch("set names binary", 10000); err != nil {
 			return err
 		}
-		vreplicator := newVReplicator(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld)
+		vreplicator := newVReplicator(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld, ct.vre)
 		return vreplicator.Replicate(ctx)
 	}
 	return fmt.Errorf("missing source")
