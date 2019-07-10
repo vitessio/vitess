@@ -813,6 +813,45 @@ func TestExternalTable(t *testing.T) {
 	runCases(t, nil, testcases, "")
 }
 
+func TestJournal(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table _vt.resharding_journal(id int, db_name varchar(128), val blob, primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table _vt.resharding_journal",
+	})
+	engine.se.Reload(context.Background())
+
+	journal1 := &binlogdatapb.Journal{
+		Id:            1,
+		MigrationType: binlogdatapb.MigrationType_SHARDS,
+	}
+	journal2 := &binlogdatapb.Journal{
+		Id:            2,
+		MigrationType: binlogdatapb.MigrationType_SHARDS,
+	}
+	testcases := []testcase{{
+		input: []string{
+			"begin",
+			fmt.Sprintf("insert into _vt.resharding_journal values(1, 'vttest', '%v')", journal1.String()),
+			fmt.Sprintf("insert into _vt.resharding_journal values(2, 'nosend', '%v')", journal2.String()),
+			"commit",
+		},
+		// External table events don't get sent.
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:JOURNAL journal:<id:1 migration_type:SHARDS > `,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases)
+}
+
 func TestMinimalMode(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
