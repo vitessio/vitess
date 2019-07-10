@@ -23,6 +23,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog"
@@ -53,9 +54,10 @@ type vstreamer struct {
 	send     func([]*binlogdatapb.VEvent) error
 
 	// A kschema is a VSchema for just one keyspace.
-	kevents chan *vindexes.KeyspaceSchema
-	kschema *vindexes.KeyspaceSchema
-	plans   map[uint64]*streamerPlan
+	kevents        chan *vindexes.KeyspaceSchema
+	kschema        *vindexes.KeyspaceSchema
+	plans          map[uint64]*streamerPlan
+	journalTableID uint64
 
 	// format and pos are updated by parseEvent.
 	format mysql.BinlogFormat
@@ -142,8 +144,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	// If a single row exceeds the packet size, it will be in its own packet.
 	bufferAndTransmit := func(vevent *binlogdatapb.VEvent) error {
 		switch vevent.Type {
-		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD:
-			// We never have to send GTID, BEGIN or FIELD events on their own.
+		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD, binlogdatapb.VEventType_JOURNAL:
+			// We never have to send GTID, BEGIN, FIELD events on their own.
 			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_HEARTBEAT:
 			// COMMIT, DDL, OTHER and HEARTBEAT must be immediately sent.
@@ -343,7 +345,31 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, err
 		}
 		// We have to build a plan only for new ids.
-		if _, ok := vs.plans[id]; ok {
+		if _, ok := vs.plans[id]; ok || id == vs.journalTableID {
+			return nil, nil
+		}
+		if tm.Database == "_vt" && tm.Name == "resharding_journal" {
+			st, err := vs.se.LoadTableBasic(vs.ctx, "_vt.resharding_journal")
+			if err != nil {
+				return nil, err
+			}
+			// Partially duplicated code from below.
+			if len(st.Columns) < len(tm.Types) {
+				return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(st.Columns), ev)
+			}
+			table := &Table{
+				Name:    "_vt.resharding_journal",
+				Columns: st.Columns[:len(tm.Types)],
+			}
+			plan, err := buildREPlan(table, nil, "")
+			if err != nil {
+				return nil, err
+			}
+			vs.plans[id] = &streamerPlan{
+				Plan:     plan,
+				TableMap: tm,
+			}
+			vs.journalTableID = id
 			return nil, nil
 		}
 		if tm.Database != "" && tm.Database != vs.cp.DbName {
@@ -429,36 +455,83 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, err
 		}
-		rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
-		for _, row := range rows.Rows {
-			beforeOK, beforeValues, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
-			if err != nil {
-				return nil, err
+		if id == vs.journalTableID {
+		nextrow:
+			for _, row := range rows.Rows {
+				afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
+				if err != nil {
+					return nil, err
+				}
+				if !afterOK {
+					continue
+				}
+				for i, fld := range plan.fields() {
+					switch fld.Name {
+					case "db_name":
+						if afterValues[i].ToString() != vs.cp.DbName {
+							continue nextrow
+						}
+					case "val":
+						journal := &binlogdatapb.Journal{}
+						if err := proto.UnmarshalText(afterValues[i].ToString(), journal); err != nil {
+							return nil, err
+						}
+						switch journal.MigrationType {
+						case binlogdatapb.MigrationType_SHARDS:
+							vevents = append(vevents, &binlogdatapb.VEvent{
+								Type:    binlogdatapb.VEventType_JOURNAL,
+								Journal: journal,
+							})
+						case binlogdatapb.MigrationType_TABLES:
+							matched := false
+							for _, table := range journal.Tables {
+								tname := sqlparser.TableName{Name: sqlparser.NewTableIdent(table)}
+								if tableMatches(tname, "", vs.filter) {
+									matched = true
+								}
+							}
+							if matched {
+								vevents = append(vevents, &binlogdatapb.VEvent{
+									Type:    binlogdatapb.VEventType_JOURNAL,
+									Journal: journal,
+								})
+							}
+						}
+					}
+				}
 			}
-			afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
-			if err != nil {
-				return nil, err
+		} else {
+			rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
+			for _, row := range rows.Rows {
+				beforeOK, beforeValues, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
+				if err != nil {
+					return nil, err
+				}
+				afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
+				if err != nil {
+					return nil, err
+				}
+				if !beforeOK && !afterOK {
+					continue
+				}
+				rowChange := &binlogdatapb.RowChange{}
+				if beforeOK {
+					rowChange.Before = sqltypes.RowToProto3(beforeValues)
+				}
+				if afterOK {
+					rowChange.After = sqltypes.RowToProto3(afterValues)
+				}
+				rowChanges = append(rowChanges, rowChange)
 			}
-			if !beforeOK && !afterOK {
-				continue
+			if len(rowChanges) != 0 {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_ROW,
+					RowEvent: &binlogdatapb.RowEvent{
+						TableName:  plan.Table.Name,
+						RowChanges: rowChanges,
+					},
+				})
 			}
-			rowChange := &binlogdatapb.RowChange{}
-			if beforeOK {
-				rowChange.Before = sqltypes.RowToProto3(beforeValues)
-			}
-			if afterOK {
-				rowChange.After = sqltypes.RowToProto3(afterValues)
-			}
-			rowChanges = append(rowChanges, rowChange)
-		}
-		if len(rowChanges) != 0 {
-			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type: binlogdatapb.VEventType_ROW,
-				RowEvent: &binlogdatapb.RowEvent{
-					TableName:  plan.Table.Name,
-					RowChanges: rowChanges,
-				},
-			})
 		}
 	}
 	for _, vevent := range vevents {
