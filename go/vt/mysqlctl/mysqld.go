@@ -25,6 +25,7 @@ package mysqlctl
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -37,8 +38,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"bytes"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
@@ -86,6 +85,9 @@ type Mysqld struct {
 	dbaPool *dbconnpool.ConnectionPool
 	appPool *dbconnpool.ConnectionPool
 
+	flavor  string
+	version serverVersion
+
 	// mutex protects the fields below.
 	mutex         sync.Mutex
 	onTermFuncs   []func()
@@ -94,7 +96,7 @@ type Mysqld struct {
 
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
-func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
+func NewMysqld(dbcfgs *dbconfigs.DBConfigs) (*Mysqld, error) {
 	result := &Mysqld{
 		dbcfgs: dbcfgs,
 	}
@@ -107,7 +109,19 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB(), appMysqlStats)
 
-	return result
+	var err error
+	result.flavor, err = result.detectFlavor()
+	if err != nil {
+		return result, err
+	}
+
+	result.version, err = result.detectVersion()
+	if err != nil {
+		return result, err
+	}
+
+	log.Infof("mysqld is flavor: %s, version: %v", result.flavor, result.version)
+	return result, nil
 }
 
 // RunMysqlUpgrade will run the mysql_upgrade program on the current
@@ -123,6 +137,11 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		}
 		defer client.Close()
 		return client.RunMysqlUpgrade(context.TODO())
+	}
+
+	if mysqld.HasCapability(CapabilityMySQLUpgradeInServer) {
+		log.Warningf("MySQL version has built-in upgrade, skipping RunMySQLUpgrade")
+		return nil
 	}
 
 	// Find mysql_upgrade. If not there, we do nothing.
@@ -209,19 +228,31 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 		if err != nil {
 			return err
 		}
-		name, err = binaryPath(dir, "mysqld_safe")
-		if err != nil {
-			// The movement to use systemd means that mysqld_safe is not always provided.
-			// This should not be considered an issue do not generate a warning.
-			log.Infof("%v: trying to launch mysqld instead", err)
+
+		if mysqld.HasCapability(CapabilitySystemd) {
+			// The capabilities system did not detect mysqld_safe.
+			// It is assumed that this mysqld package is systemd enabled.
+			log.Info("launching mysqld instead of mysqld_safe")
 			name, err = binaryPath(dir, "mysqld")
-			// If this also fails, return an error.
+			if err != nil {
+				return err
+			}
+		} else {
+			name, err = binaryPath(dir, "mysqld_safe")
 			if err != nil {
 				return err
 			}
 		}
+
+		mysqlBaseDir, err := vtenv.VtMysqlBaseDir()
+		if err != nil {
+			return err
+		}
+
 		arg := []string{
-			"--defaults-file=" + cnf.path}
+			"--defaults-file=" + cnf.path,
+			"--basedir=" + mysqlBaseDir,
+		}
 		arg = append(arg, mysqldArgs...)
 		env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
 
@@ -534,13 +565,6 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	return nil
 }
 
-// MySQL 5.7 GA and up have deprecated mysql_install_db.
-// Instead, initialization is built into mysqld.
-func useMysqldInitialize(version string) bool {
-	return strings.Contains(version, "Ver 5.7.") ||
-		strings.Contains(version, "Ver 8.0.")
-}
-
 func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 	mysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
@@ -556,15 +580,8 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 		return err
 	}
 
-	// Check mysqld version.
-	_, version, err := execCmd(mysqldPath, []string{"--version"}, nil, mysqlRoot, nil)
-	if err != nil {
-		return err
-	}
-
-	if useMysqldInitialize(version) {
+	if mysqld.HasCapability(CapabilityInitializeInServer) {
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
-
 		args := []string{
 			"--defaults-file=" + cnf.path,
 			"--basedir=" + mysqlBaseDir,
@@ -606,7 +623,7 @@ func (mysqld *Mysqld) initConfig(root string, cnf *Mycnf, outFile string) error 
 	switch hr := hook.NewHookWithEnv("make_mycnf", nil, env).Execute(); hr.ExitStatus {
 	case hook.HOOK_DOES_NOT_EXIST:
 		log.Infof("make_mycnf hook doesn't exist, reading template files")
-		configData, err = cnf.makeMycnf(getMycnfTemplates(root))
+		configData, err = cnf.makeMycnf(mysqld.getMycnfTemplates(root))
 	case hook.HOOK_SUCCESS:
 		configData, err = cnf.fillMycnfTemplate(hr.Stdout)
 	default:
@@ -628,7 +645,8 @@ func contains(haystack []string, needle string) bool {
 	return false
 }
 
-func getMycnfTemplates(root string) []string {
+func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
+
 	if *mycnfTemplateFile != "" {
 		return []string{*mycnfTemplateFile}
 	}
@@ -644,28 +662,16 @@ func getMycnfTemplates(root string) []string {
 		cnfTemplatePaths = append(cnfTemplatePaths, parts...)
 	}
 
-	switch mysqlFlavor := os.Getenv("MYSQL_FLAVOR"); mysqlFlavor {
-	case "MariaDB":
-		path := path.Join(root, "config/mycnf/master_mariadb.cnf")
-		if !contains(cnfTemplatePaths, path) {
-			cnfTemplatePaths = append(cnfTemplatePaths, path)
-		}
-	case "MariaDB103":
-		path := path.Join(root, "config/mycnf/master_mariadb103.cnf")
-		if !contains(cnfTemplatePaths, path) {
-			cnfTemplatePaths = append(cnfTemplatePaths, path)
-		}
-	case "MySQL80":
-		path := path.Join(root, "config/mycnf/master_mysql80.cnf")
-		if !contains(cnfTemplatePaths, path) {
-			cnfTemplatePaths = append(cnfTemplatePaths, path)
-		}
-	default:
-		path := path.Join(root, "config/mycnf/master_mysql56.cnf")
-		// By default we assume Mysql56 compatable
-		if !contains(cnfTemplatePaths, path) {
-			cnfTemplatePaths = append(cnfTemplatePaths, path)
-		}
+	// master_{flavor}.cnf
+	p := path.Join(root, fmt.Sprintf("config/mycnf/master_%s.cnf", mysqld.flavor))
+	if !contains(cnfTemplatePaths, p) {
+		cnfTemplatePaths = append(cnfTemplatePaths, p)
+	}
+
+	// master_{flavor}{major}{minor}.cnf
+	p = path.Join(root, fmt.Sprintf("config/mycnf/master_%s%d%d.cnf", mysqld.flavor, mysqld.MajorVersion(), mysqld.MinorVersion()))
+	if !contains(cnfTemplatePaths, p) {
+		cnfTemplatePaths = append(cnfTemplatePaths, p)
 	}
 
 	return cnfTemplatePaths
