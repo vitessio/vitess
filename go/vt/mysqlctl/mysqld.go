@@ -484,7 +484,7 @@ func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd 
 // binaryPath does a limited path lookup for a command,
 // searching only within sbin and bin in the given root.
 func binaryPath(root, binary string) (string, error) {
-	subdirs := []string{"sbin", "bin", "libexec"}
+	subdirs := []string{"sbin", "bin", "libexec", "scripts"}
 	for _, subdir := range subdirs {
 		binPath := path.Join(root, subdir, binary)
 		if _, err := os.Stat(binPath); err == nil {
@@ -662,15 +662,25 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 		cnfTemplatePaths = append(cnfTemplatePaths, parts...)
 	}
 
+	// Only include these files if they exist.
 	// master_{flavor}.cnf
-	p := path.Join(root, fmt.Sprintf("config/mycnf/master_%s.cnf", mysqld.flavor))
-	if !contains(cnfTemplatePaths, p) {
+	// Percona Server == MySQL in this context
+
+	f := flavorMariaDB
+	if mysqld.IsMySQLLike() {
+		f = flavorMySQL
+	}
+
+	p := path.Join(root, fmt.Sprintf("config/mycnf/master_%s.cnf", f))
+	_, err := os.Stat(p)
+	if err == nil && !contains(cnfTemplatePaths, p) {
 		cnfTemplatePaths = append(cnfTemplatePaths, p)
 	}
 
 	// master_{flavor}{major}{minor}.cnf
-	p = path.Join(root, fmt.Sprintf("config/mycnf/master_%s%d%d.cnf", mysqld.flavor, mysqld.MajorVersion(), mysqld.MinorVersion()))
-	if !contains(cnfTemplatePaths, p) {
+	p = path.Join(root, fmt.Sprintf("config/mycnf/master_%s%d%d.cnf", f, mysqld.MajorVersion(), mysqld.MinorVersion()))
+	_, err = os.Stat(p)
+	if err == nil && !contains(cnfTemplatePaths, p) {
 		cnfTemplatePaths = append(cnfTemplatePaths, p)
 	}
 

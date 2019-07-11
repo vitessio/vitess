@@ -22,7 +22,6 @@ package mysqlctl
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -168,19 +167,6 @@ func (mysqld *Mysqld) getVersionString() (string, error) {
 
 func (mysqld *Mysqld) detectFlavor() (string, error) {
 
-	mysqlFlavor := os.Getenv("MYSQL_FLAVOR")
-	if len(mysqlFlavor) > 0 {
-		mysqlFlavor = strings.ToLower(mysqlFlavor)[0:5]
-
-		if mysqlFlavor == "mysql" {
-			return flavorMySQL, nil
-		} else if mysqlFlavor == "maria" {
-			return flavorMariaDB, nil
-		}
-	}
-
-	// Flavor was either not defined in ENV, or unknown
-
 	version, err := mysqld.getVersionString()
 	if err != nil {
 		return version, err
@@ -202,32 +188,6 @@ func (mysqld *Mysqld) detectFlavor() (string, error) {
 }
 
 func (mysqld *Mysqld) detectVersion() (serverVersion, error) {
-
-	mysqlFlavor := strings.ToLower(os.Getenv("MYSQL_FLAVOR"))
-
-	// Try not to be too smart with version parsing.
-	// Assume GA versions
-	switch mysqlFlavor {
-	case "mysql56":
-		return serverVersion{5, 6, 10}, nil
-	case "mysql57":
-		return serverVersion{5, 7, 9}, nil
-	case "mysql80":
-		return serverVersion{8, 0, 11}, nil
-	case "mariadb10":
-		return serverVersion{10, 0, 10}, nil
-	case "mariadb101":
-		return serverVersion{10, 1, 8}, nil
-	case "mariadb102":
-		return serverVersion{10, 2, 6}, nil
-	case "mariadb103":
-		return serverVersion{10, 3, 7}, nil
-	case "mariadb104":
-		return serverVersion{10, 4, 6}, nil
-	}
-
-	// Could not understand version from ENV
-	// Time to auto-detect instead
 
 	version, err := mysqld.getVersionString()
 	if err != nil {
