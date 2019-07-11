@@ -19,7 +19,7 @@ func addRateLimiting(builder *serverInterceptorBuilder) {
 	logger := NewLogLimitLogger("grpc_server")
 	metricRegistry := &core.EmptyMetricRegistry{}
 	strat := strategy.NewSimpleStrategy(100 /*this number will be overwritten by whatever the Vegas algo thinks is the estimated limit*/)
-	vegasLimit := limit.NewDefaultVegasLimit("le limit", logger, metricRegistry)
+	vegasLimit := limit.NewDefaultVegasLimit("grpc_server", logger, metricRegistry)
 
 	limiterObj, err := limiter.NewDefaultLimiter(vegasLimit, 1000000000, 100000000000, 0, 50, strat, logger, metricRegistry)
 	if err != nil {

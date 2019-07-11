@@ -21,8 +21,8 @@ package grpcclient
 import (
 	"flag"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/grpc-ecosystem/go-grpc-prometheus"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -57,6 +57,14 @@ func RegisterGRPCDialOptions(grpcDialOptionsFunc func(opts []grpc.DialOption) ([
 // failFast is a non-optional parameter because callers are required to specify
 // what that should be.
 func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	return DialWithName(target, target, failFast, opts...)
+}
+
+// DialWithName creates a grpc connection to the given target.
+// name is a unique name identifying the target.
+// failFast is a non-optional parameter because callers are required to specify
+// what that should be.
+func DialWithName(name, target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	grpccommon.EnableTracingOpt()
 	newopts := []grpc.DialOption{
 		grpc.WithDefaultCallOptions(
@@ -97,7 +105,7 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 
 	newopts = append(newopts, interceptors()...)
 
-	newopts = append(newopts, rateLimitingOptions()...)
+	newopts = append(newopts, rateLimitingOptions(name)...)
 
 	return grpc.Dial(target, newopts...)
 }

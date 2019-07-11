@@ -18,6 +18,7 @@ package grpcbinlogplayer
 
 import (
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"google.golang.org/grpc"
 
@@ -52,7 +53,7 @@ func (client *client) Dial(tablet *topodatapb.Tablet) error {
 	if err != nil {
 		return err
 	}
-	client.cc, err = grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
+	client.cc, err = grpcclient.DialWithName(topoproto.TabletAliasString(tablet.Alias), addr, grpcclient.FailFast(false), opt)
 	if err != nil {
 		return err
 	}

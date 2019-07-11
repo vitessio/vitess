@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -73,7 +74,7 @@ func DialTablet(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (querys
 	if err != nil {
 		return nil, err
 	}
-	cc, err := grpcclient.Dial(addr, failFast, opt)
+	cc, err := grpcclient.DialWithName(topoproto.TabletAliasString(tablet.Alias), addr, failFast, opt)
 	if err != nil {
 		return nil, err
 	}
