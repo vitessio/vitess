@@ -1,6 +1,0 @@
-VTROOT="/vt"
-VTTOP="$VTROOT/src/vitess.io/vitess"
-GOTOP="$VTTOP/go"
-GOBIN="$VTROOT/bin"
-GOPATH="$VTROOT"
-PATH="$VTROOT/bin:$PATH"
