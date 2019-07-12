@@ -22,6 +22,7 @@ cat <<EOF >> "${inputs_file}"
 /vt/src/vitess.io/vitess/config/=/etc/vitess
 /vt/src/vitess.io/vitess/web/vtctld2/app=${PREFIX}/lib/vitess/web/vtcld2
 /vt/src/vitess.io/vitess/web/vtctld=${PREFIX}/lib/vitess/web
+/vt/src/vitess.io/vitess/examples/local/=${PREFIX}/share/vitess/examples
 EOF
 
 description='A database clustering system for horizontal scaling of MySQL
