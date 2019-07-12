@@ -16,4 +16,8 @@ RUN mkdir /vt/packaging
 
 COPY docker/packaging/* /vt/packaging/
 
+RUN chown -R vitess:vitess /vt/packaging
+
+USER vitess
+
 ENTRYPOINT ["/bin/bash", "/vt/packaging/package_vitess.sh"]
