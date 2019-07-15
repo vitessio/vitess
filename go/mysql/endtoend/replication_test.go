@@ -1020,6 +1020,15 @@ func TestRowReplicationTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The CREATE TABLE below fails because the timestamp columns
+	// do not specify default values, and MySQL has trouble figuring
+	// out the automatic rules. If we just disable the automatic rules
+	// (the MySQL 8.0+ default) the create table should pass. This is better
+	// than disabling strict mode etc.
+	if _, err := dConn.ExecuteFetch("SET explicit_defaults_for_timestamp=1", 0, false); err != nil {
+		t.Fatal(err)
+	}
+
 	// Create the table with all fields.
 	createTable := "create table replicationtypes(id int"
 	for _, tcase := range testcases {
