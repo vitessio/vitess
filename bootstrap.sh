@@ -23,7 +23,7 @@
 # 3. Detection of installed MySQL and setting MYSQL_FLAVOR.
 # 4. Installation of development related steps e.g. creating Git hooks.
 
-BUILD_TESTS=${BUILD_TESTS:-1}
+BUILD_TESTS=${BUILD_TESTS:0}
 
 #
 # 0. Initialization and helper methods.
