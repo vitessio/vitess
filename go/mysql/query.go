@@ -545,6 +545,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 	if !ok {
 		return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading iteration count failed")
 	}
+	fmt.Printf("IterationCount: %v", iterCount)
 	if iterCount != uint32(1) {
 		return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "iteration count is not equal to 1")
 	}
@@ -1016,7 +1017,7 @@ func (c *Conn) writePrepare(result *sqltypes.Result, prepare *PrepareData) error
 	data := c.startEphemeralPacket(12)
 	pos := 0
 
-	pos = writeByte(data, pos, 0x00)
+	pos = writeByte(data, pos, ComPrepare)
 	pos = writeUint32(data, pos, uint32(prepare.StatementID))
 	pos = writeUint16(data, pos, uint16(columnCount))
 	pos = writeUint16(data, pos, uint16(paramsCount))

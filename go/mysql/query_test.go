@@ -27,7 +27,41 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+func MockPrepareData(t *testing.T) (*PrepareData, *sqltypes.Result) {
+	sql := "SELECT id FROM table_1 WHERE id=?"
+
+	statement, err := sqlparser.Parse(sql)
+	if err != nil {
+		t.Fatalf("Sql parinsg failed: %v", err)
+	}
+
+	result := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "id",
+				Type: querypb.Type_INT32,
+			},
+		},
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.MakeTrusted(querypb.Type_INT32, []byte("10")),
+			},
+		},
+		RowsAffected: 1,
+	}
+
+	prepare := &PrepareData{
+		StatementID: 18,
+		PrepareStmt: sql,
+		ParsedStmt:  &statement,
+		ParamsCount: 1,
+	}
+
+	return prepare, result
+}
 
 func TestComInitDB(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
@@ -73,6 +107,30 @@ func TestComSetOption(t *testing.T) {
 	}
 	if operation != 1 {
 		t.Errorf("parseComSetOption returned unexpected data: %v", operation)
+	}
+}
+
+func TestComStmtPrepare(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	prepare, result := MockPrepareData(t)
+
+	cConn.PrepareData = make(map[uint32]*PrepareData)
+	cConn.PrepareData[prepare.StatementID] = prepare
+	if err := cConn.writePrepare(result, prepare); err != nil {
+		t.Fatalf("writePrepare failed: %v", err)
+	}
+	data, err := sConn.ReadPacket()
+	if err != nil || len(data) == 0 || data[0] != ComPrepare {
+		t.Fatalf("sConn.ReadPacket - ComPrepare failed: %v %v", data, err)
+	}
+	if uint32(data[1]) != prepare.StatementID {
+		t.Fatalf("Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
 	}
 }
 
