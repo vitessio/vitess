@@ -85,8 +85,9 @@ type Mysqld struct {
 	dbaPool *dbconnpool.ConnectionPool
 	appPool *dbconnpool.ConnectionPool
 
-	flavor  string
 	version serverVersion
+	flavor  mysqlFlavor
+    c CapabilitySet
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -96,7 +97,7 @@ type Mysqld struct {
 
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
-func NewMysqld(dbcfgs *dbconfigs.DBConfigs) (*Mysqld, error) {
+func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	result := &Mysqld{
 		dbcfgs: dbcfgs,
 	}
@@ -109,19 +110,17 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) (*Mysqld, error) {
 	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB(), appMysqlStats)
 
-	var err error
-	result.flavor, err = result.detectFlavor()
-	if err != nil {
-		return result, err
-	}
-
-	result.version, err = result.detectVersion()
-	if err != nil {
-		return result, err
-	}
+	result.flavor, result.version = result.DetectFlavorVersion("version string here")
+	result.c = NewCapabilitySet(result)
 
 	log.Infof("mysqld is flavor: %s, version: %v", result.flavor, result.version)
-	return result, nil
+	return result
+
+}
+
+// This becomes part of MySQLd!
+func (mysqld *Mysqld) DetectFlavorVersion(verstring string) (mysqlFlavor, serverVersion) {
+	return flavorMySQL, serverVersion{Major: 8, Minor: 0, Patch: 16}
 }
 
 // RunMysqlUpgrade will run the mysql_upgrade program on the current
@@ -139,7 +138,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		return client.RunMysqlUpgrade(context.TODO())
 	}
 
-	if mysqld.HasCapability(CapabilityMySQLUpgradeInServer) {
+	if mysqld.c.HasMySQLUpgradeInServer() {
 		log.Warningf("MySQL version has built-in upgrade, skipping RunMySQLUpgrade")
 		return nil
 	}
@@ -229,8 +228,9 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 			return err
 		}
 
-		if mysqld.HasCapability(CapabilitySystemd) {
-			// The capabilities system did not detect mysqld_safe.
+		//mysqld.HasCapability(CapabilitySystemd) {
+		if true {
+		// The capabilities system did not detect mysqld_safe.
 			// It is assumed that this mysqld package is systemd enabled.
 			log.Info("launching mysqld instead of mysqld_safe")
 			name, err = binaryPath(dir, "mysqld")
@@ -580,7 +580,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 		return err
 	}
 
-	if mysqld.HasCapability(CapabilityInitializeInServer) {
+	if mysqld.c.HasMySQLUpgradeInServer() {
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
 		args := []string{
 			"--defaults-file=" + cnf.path,
@@ -667,7 +667,7 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 	// Percona Server == MySQL in this context
 
 	f := flavorMariaDB
-	if mysqld.IsMySQLLike() {
+	if mysqld.c.IsMySQLLike() {
 		f = flavorMySQL
 	}
 
@@ -678,7 +678,7 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 	}
 
 	// master_{flavor}{major}{minor}.cnf
-	p = path.Join(root, fmt.Sprintf("config/mycnf/master_%s%d%d.cnf", f, mysqld.MajorVersion(), mysqld.MinorVersion()))
+	p = path.Join(root, fmt.Sprintf("config/mycnf/master_%s%d%d.cnf", f, mysqld.version.Major, mysqld.version.Minor))
 	_, err = os.Stat(p)
 	if err == nil && !contains(cnfTemplatePaths, p) {
 		cnfTemplatePaths = append(cnfTemplatePaths, p)
