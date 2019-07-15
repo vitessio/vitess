@@ -1,41 +1,25 @@
 # basic config parameters for all db instances in the grid
 
-sql_mode = STRICT_TRANS_TABLES
-back_log = 50
-binlog_format = statement
+sql_mode = ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION
+binlog_format = row
 character_set_server = utf8
 collation_server = utf8_general_ci
 connect_timeout = 30
 datadir = {{.DataDir}}
-default-storage-engine = innodb
 expire_logs_days = 3
-innodb_autoextend_increment = 1
 innodb_buffer_pool_size = 64M
-innodb_data_file_path = ibdata1:10M:autoextend
 innodb_data_home_dir = {{.InnodbDataHomeDir}}
-innodb_file_per_table
 innodb_flush_log_at_trx_commit = 2
-innodb_flush_method = O_DIRECT
 innodb_lock_wait_timeout = 20
 innodb_log_buffer_size = 1M
-innodb_log_file_size = 4M
-innodb_log_files_in_group = 2
 innodb_log_group_home_dir = {{.InnodbLogGroupHomeDir}}
-innodb_max_dirty_pages_pct = 75
-innodb_thread_concurrency = 2
-key_buffer_size = 2M
 log-error = {{.ErrorLogPath}}
 long_query_time = 2
-max_allowed_packet = 16M
-max_connections = 200
-net_write_timeout = 60
 pid-file = {{.PidFile}}
 port = {{.MysqlPort}}
 # all db instances should start in read-only mode - once the db is started and
 # fully functional, we'll push it into read-write mode
 read-only
-read_buffer_size = 1M
-read_rnd_buffer_size = 1M
 server-id = {{.ServerID}}
 skip-name-resolve
 # we now need networking for replication. this is a tombstone to simpler times.
@@ -49,9 +33,4 @@ slave_load_tmpdir = {{.SlaveLoadTmpDir}}
 slow-query-log
 slow-query-log-file = {{.SlowLogPath}}
 socket = {{.SocketFile}}
-sort_buffer_size = 2M
-table_open_cache = 2048
-thread_cache_size = 200
 tmpdir = {{.TmpDir}}
-tmp_table_size = 32M
-transaction-isolation = REPEATABLE-READ
