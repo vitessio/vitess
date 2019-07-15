@@ -459,7 +459,7 @@ func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd 
 // binaryPath does a limited path lookup for a command,
 // searching only within sbin and bin in the given root.
 func binaryPath(root, binary string) (string, error) {
-	subdirs := []string{"sbin", "bin", "libexec"}
+	subdirs := []string{"sbin", "bin", "libexec", "scripts"}
 	for _, subdir := range subdirs {
 		binPath := path.Join(root, subdir, binary)
 		if _, err := os.Stat(binPath); err == nil {
