@@ -217,6 +217,20 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 					allowQuery = false
 					disallowQueryReason = "master tablet with filtered replication on"
 				}
+			} else {
+				replicationDelay, healthErr := agent.HealthReporter.Report(true, true)
+				if healthErr != nil {
+					allowQuery = false
+					disallowQueryReason = "Unable to get health"
+				} else {
+					agent.mutex.Lock()
+					agent._replicationDelay = replicationDelay
+					agent.mutex.Unlock()
+					if agent._replicationDelay > *unhealthyThreshold {
+						allowQuery = false
+						disallowQueryReason = "replica tablet with unhealthy replication lag"
+					}
+				}
 			}
 			srvKeyspace, err := agent.TopoServer.GetSrvKeyspace(ctx, newTablet.Alias.Cell, newTablet.Keyspace)
 			if err != nil {
