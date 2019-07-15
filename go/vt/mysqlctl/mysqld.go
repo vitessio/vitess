@@ -220,8 +220,14 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 				return err
 			}
 		}
+		mysqlBaseDir, err := vtenv.VtMysqlBaseDir()
+		if err != nil {
+			return err
+		}
 		arg := []string{
-			"--defaults-file=" + cnf.path}
+			"--defaults-file=" + cnf.path,
+			"--basedir" + mysqlBaseDir,
+		}
 		arg = append(arg, mysqldArgs...)
 		env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
 
