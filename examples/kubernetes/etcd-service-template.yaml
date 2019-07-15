@@ -10,5 +10,5 @@ spec:
     labels:
       component: etcd
       cell: {{cell}}
-      app: vitess
+      application: vitess
     busyboxImage: "busybox:1.28.0-glibc"
