@@ -134,6 +134,72 @@ func TestComStmtPrepare(t *testing.T) {
 	}
 }
 
+func TestComStmtSendLongData(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	prepare, result := MockPrepareData(t)
+	cConn.PrepareData = make(map[uint32]*PrepareData)
+	cConn.PrepareData[prepare.StatementID] = prepare
+	if err := cConn.writePrepare(result, prepare); err != nil {
+		t.Fatalf("writePrepare failed: %v", err)
+	}
+
+	// Since there's no writeComStmtSendLongData, we'll write a prepareStmt and check if we can read the StatementID
+	data, err := sConn.ReadPacket()
+	if err != nil || len(data) == 0 || data[0] != ComPrepare {
+		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
+	}
+	stmtID, paramID, chunkData, ok := sConn.parseComStmtSendLongData(data)
+	if !ok {
+		t.Fatalf("parseComStmtSendLongData failed")
+	}
+	if paramID != 1 {
+		t.Fatalf("Recieved incorrect ParamID, want %v, got %v:", paramID, 1)
+	}
+	if stmtID != prepare.StatementID {
+		t.Fatalf("Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
+	}
+	// Check length of chunkData, Since its a subset of `data` and compare with it after we subtract the number of bytes that was read from it.
+	// sizeof(uint32) + sizeof(uint16) + 1 = 7
+	if len(chunkData) != len(data)-7 {
+		t.Fatalf("Recieved bad chunkData")
+	}
+}
+
+func TestComStmtClose(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	prepare, result := MockPrepareData(t)
+	cConn.PrepareData = make(map[uint32]*PrepareData)
+	cConn.PrepareData[prepare.StatementID] = prepare
+	if err := cConn.writePrepare(result, prepare); err != nil {
+		t.Fatalf("writePrepare failed: %v", err)
+	}
+
+	// Since there's no writeComStmtClose, we'll write a prepareStmt and check if we can read the StatementID
+	data, err := sConn.ReadPacket()
+	if err != nil || len(data) == 0 || data[0] != ComPrepare {
+		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
+	}
+	stmtID, ok := sConn.parseComStmtClose(data)
+	if !ok {
+		t.Fatalf("parseComStmtClose failed")
+	}
+	if stmtID != prepare.StatementID {
+		t.Fatalf("Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
+	}
+}
+
 func TestQueries(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
