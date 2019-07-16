@@ -676,7 +676,6 @@ func contains(haystack []string, needle string) bool {
 }
 
 func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
-
 	if *mycnfTemplateFile != "" {
 		return []string{*mycnfTemplateFile}
 	}
