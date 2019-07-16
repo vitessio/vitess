@@ -23,10 +23,10 @@ set -e
 script_root=$(dirname "${BASH_SOURCE}")
 
 # start topo server
-if [ "${TOPO}" = "etcd2" ]; then
-    CELL=zone1 "$script_root/etcd-up.sh"
-else
+if [ "${TOPO}" = "zk2" ]; then
     CELL=zone1 "$script_root/zk-up.sh"
+else
+    CELL=zone1 "$script_root/etcd-up.sh"
 fi
 
 # start vtctld
