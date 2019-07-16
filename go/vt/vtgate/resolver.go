@@ -449,6 +449,14 @@ func (res *Resolver) vstreamOneShard(ctx context.Context, keyspace, shard string
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected number or shards: %v", rss)
 		}
 		err = rss[0].QueryService.VStream(ctx, rss[0].Target, startPos, filter, func(events []*binlogdatapb.VEvent) error {
+			// Remove all heartbeat events for now.
+			// Otherwise they can accumulate indefinitely if there are no real events.
+			// TODO(sougou): figure out a model for this.
+			for i := 0; i < len(events); i++ {
+				if events[i].Type == binlogdatapb.VEventType_HEARTBEAT {
+					events = append(events[:i], events[i+1:]...)
+				}
+			}
 			if len(events) == 0 {
 				return nil
 			}

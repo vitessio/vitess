@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -124,7 +123,7 @@ func (rb *route) UpdatePlans(pb *primitiveBuilder, filter sqlparser.Expr) {
 }
 
 // PushSelect satisfies the builder interface.
-func (rb *route) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colnum int, err error) {
+func (rb *route) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, expr)
 
@@ -190,18 +189,18 @@ func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 
 	// If it's a scatter, we have to populate the OrderBy field.
 	for _, order := range orderBy {
-		colnum := -1
+		colNumber := -1
 		switch expr := order.Expr.(type) {
 		case *sqlparser.SQLVal:
 			var err error
-			if colnum, err = ResultFromNumber(rb.resultColumns, expr); err != nil {
+			if colNumber, err = ResultFromNumber(rb.resultColumns, expr); err != nil {
 				return nil, err
 			}
 		case *sqlparser.ColName:
 			c := expr.Metadata.(*column)
 			for i, rc := range rb.resultColumns {
 				if rc.column == c {
-					colnum = i
+					colNumber = i
 					break
 				}
 			}
@@ -210,11 +209,11 @@ func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 		}
 		// If column is not found, then the order by is referencing
 		// a column that's not on the select list.
-		if colnum == -1 {
+		if colNumber == -1 {
 			return nil, fmt.Errorf("unsupported: in scatter query: order by must reference a column in the select list: %s", sqlparser.String(order))
 		}
 		ob := engine.OrderbyParams{
-			Col:  colnum,
+			Col:  colNumber,
 			Desc: order.Direction == sqlparser.DescScr,
 		}
 		for _, ro := range rb.routeOptions {
@@ -270,43 +269,6 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 				return err
 			}
 			ro.eroute.Values = []sqltypes.PlanValue{pv}
-		}
-	}
-
-	// If rb has to do the ordering, and if any columns are Text,
-	// we have to request the corresponding weight_string from mysql
-	// and use that value instead. This is because we cannot mimic
-	// mysql's collation behavior yet.
-	for i, orderby := range ro.eroute.OrderBy {
-		rc := rb.resultColumns[orderby.Col]
-		if sqltypes.IsText(rc.column.typ) {
-			// If a weight string was previously requested (by OrderedAggregator),
-			// reuse it.
-			if colnum, ok := rb.weightStrings[rc]; ok {
-				ro.eroute.OrderBy[i].Col = colnum
-				continue
-			}
-
-			// len(rb.resultColumns) does not change. No harm using the value multiple times.
-			ro.eroute.TruncateColumnCount = len(rb.resultColumns)
-
-			// This code is partially duplicated from SupplyWeightString and PushSelect.
-			// We should not update resultColumns because it's not returned in the result.
-			// This is why we don't call PushSelect (or SupplyWeightString).
-			expr := &sqlparser.AliasedExpr{
-				Expr: &sqlparser.FuncExpr{
-					Name: sqlparser.NewColIdent("weight_string"),
-					Exprs: []sqlparser.SelectExpr{
-						rb.Select.(*sqlparser.Select).SelectExprs[orderby.Col],
-					},
-				},
-			}
-			sel := rb.Select.(*sqlparser.Select)
-			sel.SelectExprs = append(sel.SelectExprs, expr)
-			ro.eroute.OrderBy[i].Col = len(sel.SelectExprs) - 1
-			// We don't really have to update weightStrings, but we're doing it
-			// for good measure.
-			rb.weightStrings[rc] = len(sel.SelectExprs) - 1
 		}
 	}
 
@@ -439,7 +401,7 @@ func (rb *route) SupplyVar(from, to int, col *sqlparser.ColName, varname string)
 }
 
 // SupplyCol satisfies the builder interface.
-func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
+func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range rb.resultColumns {
 		if rc.column == c {
@@ -455,45 +417,24 @@ func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int
 	return rc, len(rb.resultColumns) - 1
 }
 
-func (rb *route) SupplyWeightString(colnum int) (weightColnum int) {
-	rc := rb.resultColumns[colnum]
-	if weightColnum, ok := rb.weightStrings[rc]; ok {
-		return weightColnum
+// SupplyWeightString satisfies the builder interface.
+func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+	rc := rb.resultColumns[colNumber]
+	if weightcolNumber, ok := rb.weightStrings[rc]; ok {
+		return weightcolNumber, nil
 	}
 	expr := &sqlparser.AliasedExpr{
 		Expr: &sqlparser.FuncExpr{
 			Name: sqlparser.NewColIdent("weight_string"),
 			Exprs: []sqlparser.SelectExpr{
-				rb.Select.(*sqlparser.Select).SelectExprs[colnum],
+				rb.Select.(*sqlparser.Select).SelectExprs[colNumber],
 			},
 		},
 	}
 	// It's ok to pass nil for pb and builder because PushSelect doesn't use them.
-	_, weightColnum, _ = rb.PushSelect(nil, expr, nil)
-	rb.weightStrings[rc] = weightColnum
-	return weightColnum
-}
-
-// BuildColName builds a *sqlparser.ColName for the resultColumn specified
-// by the index. The built ColName will correctly reference the resultColumn
-// it was built from, which is safe to push down into the route.
-func (rb *route) BuildColName(index int) (*sqlparser.ColName, error) {
-	alias := rb.resultColumns[index].alias
-	if alias.IsEmpty() {
-		return nil, errors.New("cannot reference a complex expression")
-	}
-	for i, rc := range rb.resultColumns {
-		if i == index {
-			continue
-		}
-		if rc.alias.Equal(alias) {
-			return nil, fmt.Errorf("ambiguous symbol reference: %v", alias)
-		}
-	}
-	return &sqlparser.ColName{
-		Metadata: rb.resultColumns[index].column,
-		Name:     alias,
-	}, nil
+	_, weightcolNumber, _ = rb.PushSelect(nil, expr, nil)
+	rb.weightStrings[rc] = weightcolNumber
+	return weightcolNumber, nil
 }
 
 // MergeSubquery returns true if the subquery route could successfully be merged

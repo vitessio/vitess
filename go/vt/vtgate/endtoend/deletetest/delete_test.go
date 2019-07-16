@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -25,10 +26,9 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vttest"
-
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
+	"vitess.io/vitess/go/vt/vttest"
 )
 
 var (
@@ -39,47 +39,34 @@ var (
 
 	schema = `
 create table t1(
-	id1 bigint,
-	id2 bigint,
-	primary key(id1)
-) Engine=InnoDB;
-
+		id1 bigint,
+		id2 bigint,
+		primary key(id1)
+	) Engine=InnoDB;
+	
 create table t1_id2_idx(
-	id2 bigint,
-	keyspace_id varbinary(10),
-	primary key(id2)
-) Engine=InnoDB;
+		id2 bigint,
+		keyspace_id varbinary(10),
+		primary key(id2)
+	) Engine=InnoDB;
 
-create table vstream_test(
+create table del_test_a(
 	id bigint,
-	val bigint,
-	primary key(id)
-) Engine=InnoDB;
-
-create table aggr_test(
-	id bigint,
-	val1 varchar(16),
+	val1 varbinary(16),
 	val2 bigint,
 	primary key(id)
 ) Engine=InnoDB;
 
-create table t2(
-	id3 bigint,
-	id4 bigint,
-	primary key(id3)
-) Engine=InnoDB;
-
-create table t2_id4_idx(
-	id bigint not null auto_increment,
-	id4 bigint,
-	id3 bigint,
-	primary key(id),
-	key idx_id4(id4)
+create table del_test_b(
+	id bigint,
+	val1 varbinary(16),
+	val2 bigint,
+	primary key(id)
 ) Engine=InnoDB;
 `
 
 	vschema = &vschemapb.Keyspace{
-		Sharded: true,
+		Sharded: false,
 		Vindexes: map[string]*vschemapb.Vindex{
 			"hash": {
 				Type: "hash",
@@ -92,16 +79,6 @@ create table t2_id4_idx(
 					"to":    "keyspace_id",
 				},
 				Owner: "t1",
-			},
-			"t2_id4_idx": {
-				Type: "lookup_hash",
-				Params: map[string]string{
-					"table":      "t2_id4_idx",
-					"from":       "id4",
-					"to":         "id3",
-					"autocommit": "true",
-				},
-				Owner: "t2",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
@@ -120,35 +97,16 @@ create table t2_id4_idx(
 					Name:   "hash",
 				}},
 			},
-			"t2": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "id3",
-					Name:   "hash",
-				}, {
-					Column: "id4",
-					Name:   "t2_id4_idx",
-				}},
-			},
-			"t2_id4_idx": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "id4",
-					Name:   "hash",
-				}},
-			},
-			"vstream_test": {
+			"del_test_a": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "id",
 					Name:   "hash",
 				}},
 			},
-			"aggr_test": {
+			"del_test_b": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "id",
 					Name:   "hash",
-				}},
-				Columns: []*vschemapb.Column{{
-					Name: "val1",
-					Type: sqltypes.VarChar,
 				}},
 			},
 		},
@@ -164,9 +122,7 @@ func TestMain(m *testing.M) {
 			Keyspaces: []*vttestpb.Keyspace{{
 				Name: "ks",
 				Shards: []*vttestpb.Shard{{
-					Name: "-80",
-				}, {
-					Name: "80-",
+					Name: "80",
 				}},
 			}},
 		}
@@ -198,4 +154,35 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func TestDelete(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	exec(t, conn, "insert into del_test_a(id, val1, val2) values(1,'a',1), (2,'a',1), (3,'b',1), (4,'c',3), (5,'c',4)")
+	exec(t, conn, "insert into del_test_b(id, val1, val2) values(1,'a',1), (2,'a',1), (3,'a',1), (4,'d',3), (5,'f',4)")
+
+	qr := exec(t, conn, "delete a.*, b.* from del_test_a a, del_test_b b where a.id = b.id and b.val1 = 'a' and a.val1 = 'a'")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	qr = exec(t, conn, "select * from del_test_a")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(3) VARBINARY("b") INT64(1)] [INT64(4) VARBINARY("c") INT64(3)] [INT64(5) VARBINARY("c") INT64(4)]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+}
+
+func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+	t.Helper()
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return qr
 }

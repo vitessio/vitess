@@ -28,6 +28,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+//-------------------------------------------------------------------------
+
 // builder defines the interface that a primitive must
 // satisfy.
 type builder interface {
@@ -61,7 +63,7 @@ type builder interface {
 	// a resultColumn entry and return it. The top level caller
 	// must accumulate these result columns and set the symtab
 	// after analysis.
-	PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error)
+	PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error)
 
 	// MakeDistinct makes the primitive handle the distinct clause.
 	MakeDistinct() error
@@ -100,12 +102,18 @@ type builder interface {
 	// is different from PushSelect because it may reuse an existing
 	// resultColumn, whereas PushSelect guarantees the addition of a new
 	// result column and returns a distinct symbol for it.
-	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int)
+	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int)
+
+	// SupplyWeightString must supply a weight_string expression of the
+	// specified column.
+	SupplyWeightString(colNumber int) (weightcolNumber int, err error)
 
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
 }
+
+//-------------------------------------------------------------------------
 
 // ContextVSchema defines the interface for this package to fetch
 // info about tables.
@@ -115,6 +123,133 @@ type ContextVSchema interface {
 	DefaultKeyspace() (*vindexes.Keyspace, error)
 	TargetString() string
 }
+
+//-------------------------------------------------------------------------
+
+// builderCommon implements some common functionality of builders.
+// Make sure to override in case behavior needs to be changed.
+type builderCommon struct {
+	order int
+	input builder
+}
+
+func newBuilderCommon(input builder) builderCommon {
+	return builderCommon{input: input}
+}
+
+func (bc *builderCommon) Order() int {
+	return bc.order
+}
+
+func (bc *builderCommon) Reorder(order int) {
+	bc.input.Reorder(order)
+	bc.order = bc.input.Order() + 1
+}
+
+func (bc *builderCommon) First() builder {
+	return bc.input.First()
+}
+
+func (bc *builderCommon) ResultColumns() []*resultColumn {
+	return bc.input.ResultColumns()
+}
+
+func (bc *builderCommon) SetUpperLimit(count *sqlparser.SQLVal) {
+	bc.input.SetUpperLimit(count)
+}
+
+func (bc *builderCommon) PushMisc(sel *sqlparser.Select) {
+	bc.input.PushMisc(sel)
+}
+
+func (bc *builderCommon) Wireup(bldr builder, jt *jointab) error {
+	return bc.input.Wireup(bldr, jt)
+}
+
+func (bc *builderCommon) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
+	bc.input.SupplyVar(from, to, col, varname)
+}
+
+func (bc *builderCommon) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
+	return bc.input.SupplyCol(col)
+}
+
+func (bc *builderCommon) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+	return bc.input.SupplyWeightString(colNumber)
+}
+
+//-------------------------------------------------------------------------
+
+type truncater interface {
+	SetTruncateColumnCount(int)
+}
+
+// resultsBuilder is a superset of builderCommon. It also handles
+// resultsColumn functionality.
+type resultsBuilder struct {
+	builderCommon
+	resultColumns []*resultColumn
+	weightStrings map[*resultColumn]int
+	truncater     truncater
+}
+
+func newResultsBuilder(input builder, truncater truncater) resultsBuilder {
+	return resultsBuilder{
+		builderCommon: newBuilderCommon(input),
+		resultColumns: input.ResultColumns(),
+		weightStrings: make(map[*resultColumn]int),
+		truncater:     truncater,
+	}
+}
+
+func (rsb *resultsBuilder) ResultColumns() []*resultColumn {
+	return rsb.resultColumns
+}
+
+// SupplyCol is currently unreachable because the builders using resultsBuilder
+// are currently above a join, which is the only builder that uses it for now.
+// This can change if we start supporting correlated subqueries.
+func (rsb *resultsBuilder) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
+	c := col.Metadata.(*column)
+	for i, rc := range rsb.resultColumns {
+		if rc.column == c {
+			return rc, i
+		}
+	}
+	rc, colNumber = rsb.input.SupplyCol(col)
+	if colNumber < len(rsb.resultColumns) {
+		return rc, colNumber
+	}
+	// Add result columns from input until colNumber is reached.
+	for colNumber >= len(rsb.resultColumns) {
+		rsb.resultColumns = append(rsb.resultColumns, rsb.input.ResultColumns()[len(rsb.resultColumns)])
+	}
+	rsb.truncater.SetTruncateColumnCount(len(rsb.resultColumns))
+	return rc, colNumber
+}
+
+func (rsb *resultsBuilder) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+	rc := rsb.resultColumns[colNumber]
+	if weightcolNumber, ok := rsb.weightStrings[rc]; ok {
+		return weightcolNumber, nil
+	}
+	weightcolNumber, err = rsb.input.SupplyWeightString(colNumber)
+	if err != nil {
+		return 0, nil
+	}
+	rsb.weightStrings[rc] = weightcolNumber
+	if weightcolNumber < len(rsb.resultColumns) {
+		return weightcolNumber, nil
+	}
+	// Add result columns from input until weightcolNumber is reached.
+	for weightcolNumber >= len(rsb.resultColumns) {
+		rsb.resultColumns = append(rsb.resultColumns, rsb.input.ResultColumns()[len(rsb.resultColumns)])
+	}
+	rsb.truncater.SetTruncateColumnCount(len(rsb.resultColumns))
+	return weightcolNumber, nil
+}
+
+//-------------------------------------------------------------------------
 
 // Build builds a plan for a query based on the specified vschema.
 // It's the main entry point for this package.
@@ -165,7 +300,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	case *sqlparser.Rollback:
 		return nil, errors.New("unsupported construct: rollback")
 	default:
-		panic(fmt.Sprintf("BUG: unexpected statement type: %T", stmt))
+		return nil, fmt.Errorf("BUG: unexpected statement type: %T", stmt)
 	}
 	if err != nil {
 		return nil, err

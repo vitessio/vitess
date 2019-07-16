@@ -400,6 +400,28 @@ func ResultFromNumber(rcs []*resultColumn, val *sqlparser.SQLVal) (int, error) {
 	return int(num - 1), nil
 }
 
+// BuildColName builds a *sqlparser.ColName for the resultColumn specified
+// by the index. The built ColName will correctly reference the resultColumn
+// it was built from.
+func BuildColName(rcs []*resultColumn, index int) (*sqlparser.ColName, error) {
+	alias := rcs[index].alias
+	if alias.IsEmpty() {
+		return nil, errors.New("cannot reference a complex expression")
+	}
+	for i, rc := range rcs {
+		if i == index {
+			continue
+		}
+		if rc.alias.Equal(alias) {
+			return nil, fmt.Errorf("ambiguous symbol reference: %v", alias)
+		}
+	}
+	return &sqlparser.ColName{
+		Metadata: rcs[index].column,
+		Name:     alias,
+	}, nil
+}
+
 // ResolveSymbols resolves all column references against symtab.
 // This makes sure that they all have their Metadata initialized.
 // If a symbol cannot be resolved or if the expression contains
@@ -436,7 +458,7 @@ func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
 	lowered := alias.Lowered()
 	// Dups are allowed, but first one wins if referenced.
 	if _, ok := t.columns[lowered]; !ok {
-		c.colnum = len(t.columnNames)
+		c.colNumber = len(t.columnNames)
 		t.columns[lowered] = c
 	}
 	t.columnNames = append(t.columnNames, alias)
@@ -457,7 +479,7 @@ func (t *table) mergeColumn(alias sqlparser.ColIdent, c *column) (*column, error
 	if t.isAuthoritative {
 		return nil, fmt.Errorf("column %v not found in %v", sqlparser.String(alias), sqlparser.String(t.alias))
 	}
-	c.colnum = len(t.columnNames)
+	c.colNumber = len(t.columnNames)
 	t.columns[lowered] = c
 	t.columnNames = append(t.columnNames, alias)
 	return c, nil
@@ -478,13 +500,13 @@ func (t *table) Origin() builder {
 //
 // Two columns are equal if their pointer values match.
 //
-// For subquery and vindexFunc, the colnum is also set because
+// For subquery and vindexFunc, the colNumber is also set because
 // the column order is known and unchangeable.
 type column struct {
-	origin builder
-	st     *symtab
-	typ    querypb.Type
-	colnum int
+	origin    builder
+	st        *symtab
+	typ       querypb.Type
+	colNumber int
 }
 
 // Origin returns the route that originates the column.
